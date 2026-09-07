@@ -1,0 +1,160 @@
+[project]
+name = "emblema"
+version = "0.1.0"
+description = "Label-efficient representation learning on heterogeneous sensor streams: a variable-channel, permutation-invariant encoder pretrained without labels, measured honestly."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Lukasz Stasiak" }]
+# Lower bound = Python of the free GPU platforms the package is installed on (Kaggle and Colab
+# ship 3.12). Local development uses 3.14 (see .python-version); code must stay 3.12-compatible.
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    "pydantic>=2.11",
+    "pydantic-settings>=2.10",
+]
+
+[project.optional-dependencies]
+# ML runtime. Domain and application layers never import these.
+ml = [
+    "numpy>=2.2",
+    "torch>=2.9",
+    "onnxruntime>=1.22",
+]
+
+[project.urls]
+Repository = "https://github.com/lstasiak/emblema"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "hypothesis>=6.100",
+    "ruff>=0.12",
+    "mypy>=1.16",
+    "ty>=0.0.1a1",
+    "import-linter>=2.0",
+    "pre-commit>=4.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"
+
+# ---------------------------------------------------------------------------
+# uv
+# ---------------------------------------------------------------------------
+[tool.uv]
+default-groups = ["dev"]
+# The lock must provide wheels for every target platform, so a missing wheel fails here, not at
+# deploy time: Linux arm64 (local containers on M1), Linux x86_64 (CI, GPU platforms), macOS arm64
+# (native ML worker).
+required-environments = [
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
+# CPU-only PyTorch index: inference targets CPU, and CI and local environments never need CUDA.
+# GPU platforms (Kaggle/Colab) use their preinstalled CUDA torch; pip ignores this section there.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+# ---------------------------------------------------------------------------
+# ruff (replaces isort entirely: rule set I sorts imports)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "N",        # pep8-naming
+    "UP",       # pyupgrade (bounded by target-version = py312)
+    "B",        # bugbear
+    "C4",       # comprehensions
+    "SIM",      # simplify
+    "PT",       # pytest style
+    "RUF",      # ruff-specific
+    "TID",      # tidy imports
+    "D",        # pydocstyle: Google style where a docstring exists
+]
+# Docstrings are required only where they add information; their presence is a review decision,
+# their style is not.
+ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["emblema"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# ---------------------------------------------------------------------------
+# mypy: the authority in CI. Strict for domain and application layers.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/emblema", "tests"]
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+# Adapters, entrypoints and tests talk to third-party code: relax the strictest checks there.
+module = [
+    "emblema.*.adapters.*",
+    "emblema.entrypoints.*",
+    "tests.*",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+# Third-party packages that ship no type information.
+module = ["onnxruntime", "onnxruntime.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# ty: fast checker for the development loop (pre-commit)
+# ---------------------------------------------------------------------------
+[tool.ty.environment]
+python-version = "3.12"
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers -m 'not integration'"
+markers = [
+    "integration: needs external services (Docker, network); skipped by default, run in CI jobs that provide them",
+    "ml: needs the 'ml' extra (torch, onnxruntime)",
+]

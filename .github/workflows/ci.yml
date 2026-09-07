@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # The environment must build on the requires-python floor (GPU platforms) and on the local
+    # development version. CPU-only torch index is configured in pyproject.toml.
+    name: test (python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+
+      - name: Sync environment from lockfile
+        run: uv sync --locked --all-extras --all-groups
+
+      - name: Report stack versions
+        run: uv run python -c "import sys, torch, onnxruntime; print(sys.version); print('torch', torch.__version__); print('onnxruntime', onnxruntime.__version__)"
+
+      - name: Test
+        run: uv run pytest
