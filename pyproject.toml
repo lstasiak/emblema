@@ -44,6 +44,7 @@ dev = [
     "ty>=0.0.1a1",
     "import-linter>=2.0",
     "pre-commit>=4.0",
+    "pytest-cov>=6.0",
 ]
 
 [build-system]
@@ -158,3 +159,103 @@ markers = [
     "integration: needs external services (Docker, network); skipped by default, run in CI jobs that provide them",
     "ml: needs the 'ml' extra (torch, onnxruntime)",
 ]
+
+# ---------------------------------------------------------------------------
+# coverage: measured by pytest-cov in CI (`pytest --cov`), gate on the total
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["emblema"]
+branch = true
+# Paths stored relative to the repository root, so the data file is readable outside the job.
+relative_files = true
+
+[tool.coverage.report]
+fail_under = 92
+show_missing = true
+skip_empty = true
+# Lines that cannot run under test or carry no behaviour: typing-only imports, Protocol and
+# abstract method bodies, overload stubs, script guards.
+exclude_also = [
+    'if TYPE_CHECKING:',
+    '^\s*\.\.\.$',
+    '@(abc\.)?abstractmethod',
+    '@(typing\.)?overload',
+    'raise NotImplementedError',
+    'if __name__ == .__main__.:',
+]
+
+# ---------------------------------------------------------------------------
+# import-linter: architecture rules. Checked in CI per contract id and by tests/architecture,
+# which also proves that each contract breaks on a deliberate violation.
+# ---------------------------------------------------------------------------
+[tool.importlinter]
+root_packages = ["emblema"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+id = "context-independence"
+name = "Bounded contexts import only each other's published contracts"
+type = "independence"
+modules = ["emblema.catalog", "emblema.pretraining", "emblema.evaluation", "emblema.serving"]
+ignore_imports = [
+    "emblema.** -> emblema.*.contracts",
+    "emblema.** -> emblema.*.contracts.**",
+]
+# No context publishes a contracts package yet; the warning disappears with the first one.
+unmatched_ignore_imports_alerting = "warn"
+
+[[tool.importlinter.contracts]]
+id = "hexagonal-layers"
+name = "Inside a context dependencies point inwards: adapters -> application -> domain"
+type = "layers"
+containers = ["emblema.catalog", "emblema.pretraining", "emblema.evaluation", "emblema.serving"]
+# Parentheses mark a layer as optional: each context grows its layers with its first feature.
+layers = ["(adapters)", "(application)", "(domain)"]
+
+[[tool.importlinter.contracts]]
+id = "pure-core"
+name = "Domain, application, contracts and shared code import no framework"
+type = "forbidden"
+# `emblema.shared` holds no adapters yet; once framework adapters live there, narrow this to the
+# framework-free subpackages (kernel, ports, events).
+source_modules = ["emblema.shared", "emblema.*.domain", "emblema.*.application", "emblema.*.contracts"]
+forbidden_modules = [
+    "torch", "numpy", "onnx", "onnxruntime",
+    "sqlalchemy", "alembic",
+    "fastapi", "starlette", "pydantic", "pydantic_settings",
+    "celery", "redis", "mlflow", "boto3", "botocore",
+]
+
+[[tool.importlinter.contracts]]
+id = "config-only-at-the-edges"
+name = "Configuration is read by adapters and entrypoints only"
+type = "forbidden"
+source_modules = ["emblema.shared", "emblema.*.domain", "emblema.*.application", "emblema.*.contracts"]
+forbidden_modules = ["emblema.config"]
+
+[[tool.importlinter.contracts]]
+id = "contracts-depend-only-on-shared"
+name = "Published contracts depend on shared code only"
+type = "forbidden"
+source_modules = ["emblema.*.contracts"]
+forbidden_modules = ["emblema.*.domain", "emblema.*.application", "emblema.*.adapters", "emblema.entrypoints"]
+
+[[tool.importlinter.contracts]]
+id = "shared-imports-no-context"
+name = "Shared code knows no bounded context"
+type = "forbidden"
+source_modules = ["emblema.shared"]
+forbidden_modules = [
+    "emblema.catalog", "emblema.pretraining", "emblema.evaluation", "emblema.serving",
+    "emblema.config", "emblema.entrypoints",
+]
+
+[[tool.importlinter.contracts]]
+id = "entrypoints-are-outermost"
+name = "Nothing imports the entrypoints"
+type = "forbidden"
+source_modules = [
+    "emblema.shared", "emblema.config",
+    "emblema.catalog", "emblema.pretraining", "emblema.evaluation", "emblema.serving",
+]
+forbidden_modules = ["emblema.entrypoints"]

@@ -23,3 +23,10 @@ repos:
         language: system
         types_or: [python, pyi]
         pass_filenames: false
+
+      - id: lint-imports
+        name: import-linter (architecture rules)
+        entry: uv run lint-imports
+        language: system
+        types_or: [python, pyi, toml]
+        pass_filenames: false

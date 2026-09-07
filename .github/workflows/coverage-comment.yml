@@ -1,0 +1,24 @@
+# A pull request from a fork runs CI with a read-only token, so the coverage comment cannot be
+# posted from there. CI stores the comment as an artifact and this workflow, running with the
+# repository's own token, posts it.
+name: Post coverage comment
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  post:
+    name: post coverage comment
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    permissions:
+      pull-requests: write
+      contents: write
+      actions: read
+    steps:
+      - uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_PR_RUN_ID: ${{ github.event.workflow_run.id }}
