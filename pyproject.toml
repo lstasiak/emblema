@@ -166,6 +166,8 @@ markers = [
 [tool.coverage.run]
 source = ["emblema"]
 branch = true
+# Paths stored relative to the repository root, so the data file is readable outside the job.
+relative_files = true
 
 [tool.coverage.report]
 fail_under = 92

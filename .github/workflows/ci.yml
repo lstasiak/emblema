@@ -69,6 +69,11 @@ jobs:
     # development version. CPU-only torch index is configured in pyproject.toml.
     name: test (python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    permissions:
+      # The coverage comment action edits its own PR comment and pushes badge data to the
+      # python-coverage-comment-action-data branch.
+      pull-requests: write
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -91,9 +96,33 @@ jobs:
         # The coverage threshold is `fail_under` in pyproject.toml.
         run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
 
+      - name: Coverage in the job summary
+        if: always()
+        run: |
+          echo "## Coverage (Python ${{ matrix.python }})" >> "$GITHUB_STEP_SUMMARY"
+          uv run coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-python-${{ matrix.python }}
           path: coverage.xml
           retention-days: 14
+
+      # One matrix entry owns the PR comment and the badge data; the other would only race it.
+      - name: Coverage comment and badge data
+        id: coverage_comment
+        if: matrix.python == '3.14'
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
+          MINIMUM_GREEN: 92
+          MINIMUM_ORANGE: 80
+          ANNOTATE_MISSING_LINES: true
+
+      - name: Store the PR comment for the post workflow (forks)
+        if: matrix.python == '3.14' && steps.coverage_comment.outputs.COMMENT_FILE_WRITTEN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage-comment-action
+          path: python-coverage-comment-action.txt
