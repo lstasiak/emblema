@@ -221,3 +221,6 @@ __marimo__/
 /docs/
 /CLAUDE.md
 .claude/settings.local.json
+
+# import-linter graph cache
+.import_linter_cache/
