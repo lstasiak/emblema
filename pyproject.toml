@@ -44,6 +44,7 @@ dev = [
     "ty>=0.0.1a1",
     "import-linter>=2.0",
     "pre-commit>=4.0",
+    "pytest-cov>=6.0",
 ]
 
 [build-system]
@@ -158,3 +159,26 @@ markers = [
     "integration: needs external services (Docker, network); skipped by default, run in CI jobs that provide them",
     "ml: needs the 'ml' extra (torch, onnxruntime)",
 ]
+
+# ---------------------------------------------------------------------------
+# coverage: measured by pytest-cov in CI (`pytest --cov`), gate on the total
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["emblema"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 92
+show_missing = true
+skip_empty = true
+# Lines that cannot run under test or carry no behaviour: typing-only imports, Protocol and
+# abstract method bodies, overload stubs, script guards.
+exclude_also = [
+    'if TYPE_CHECKING:',
+    '^\s*\.\.\.$',
+    '@(abc\.)?abstractmethod',
+    '@(typing\.)?overload',
+    'raise NotImplementedError',
+    'if __name__ == .__main__.:',
+]
+
