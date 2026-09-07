@@ -14,3 +14,5 @@ uv run pytest
 ```
 
 Supported Python: 3.12 and newer. The floor is set by the free GPU platforms the training code runs on.
+
+Architecture rules (framework-free core, inward-pointing layers, bounded contexts that share only published contracts) are [import-linter](https://import-linter.readthedocs.io/) contracts in `pyproject.toml`. `uv run lint-imports` checks them; CI enforces them alongside lint, types and coverage.
