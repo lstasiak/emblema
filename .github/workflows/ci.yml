@@ -10,6 +10,60 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check --output-format=github
+      - name: Format
+        run: uv run ruff format --check
+
+  types:
+    name: types (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --locked --all-extras
+      - name: Type check
+        run: uv run mypy
+
+  architecture:
+    # Static analysis of the import graph: the ML extras are not needed here. Every step runs one
+    # rule family so a red check names the rule that was broken.
+    name: architecture rules (import-linter)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Domain, application and shared code import no framework
+        run: uv run lint-imports --contract pure-core
+      - name: Contexts import only each other's published contracts
+        run: uv run lint-imports --contract context-independence
+      - name: Layers point inwards within each context
+        run: uv run lint-imports --contract hexagonal-layers
+      - name: Remaining dependency rules
+        run: >
+          uv run lint-imports
+          --contract config-only-at-the-edges
+          --contract contracts-depend-only-on-shared
+          --contract shared-imports-no-context
+          --contract entrypoints-are-outermost
+
   test:
     # The environment must build on the requires-python floor (GPU platforms) and on the local
     # development version. CPU-only torch index is configured in pyproject.toml.
@@ -33,5 +87,13 @@ jobs:
       - name: Report stack versions
         run: uv run python -c "import sys, torch, onnxruntime; print(sys.version); print('torch', torch.__version__); print('onnxruntime', onnxruntime.__version__)"
 
-      - name: Test
-        run: uv run pytest
+      - name: Test with coverage
+        # The coverage threshold is `fail_under` in pyproject.toml.
+        run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-python-${{ matrix.python }}
+          path: coverage.xml
+          retention-days: 14
