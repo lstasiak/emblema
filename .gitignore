@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-local working files, not published (docs/ stays local until the project is finished)
+/docs/
+/CLAUDE.md
+.claude/settings.local.json
