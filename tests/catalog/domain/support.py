@@ -12,8 +12,8 @@ from emblema.catalog.domain.licence import Licence
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.timestamps import UtcDateTime
 
-SCHEMA = ChannelSchema((Channel("temperature", "K"), Channel("pressure", "Pa")))
-OTHER_SCHEMA = ChannelSchema((Channel("vibration", "m/s2"),))
+SCHEMA = ChannelSchema(frozenset({Channel("temperature", "K"), Channel("pressure", "Pa")}))
+OTHER_SCHEMA = ChannelSchema(frozenset({Channel("vibration", "m/s2")}))
 LICENCE = Licence("CC-BY-4.0", permits_derivatives=True)
 SOURCE = CorpusSource("NASA PCoE", "https://example.org/cmapss")
 EPOCH = datetime(2026, 9, 8, 12, tzinfo=UTC)

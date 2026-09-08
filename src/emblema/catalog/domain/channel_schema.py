@@ -28,13 +28,17 @@ class Channel:
 
 @dataclass(frozen=True)
 class ChannelSchema:
-    """The channels of a corpus version, in declaration order, with unique names.
+    """The set of channels a corpus version carries, with unique names.
+
+    Declaration order carries no meaning: a channel is identified by its name, and the same bytes
+    described by the same channels in another order are the same data. Iteration and ``names``
+    are sorted by name so that every consumer sees one deterministic order.
 
     Attributes:
         channels: Declared channels; at least one, names unique.
     """
 
-    channels: tuple[Channel, ...]
+    channels: frozenset[Channel]
 
     def __post_init__(self) -> None:
         if not self.channels:
@@ -46,10 +50,10 @@ class ChannelSchema:
 
     @property
     def names(self) -> tuple[str, ...]:
-        return tuple(channel.name for channel in self.channels)
+        return tuple(channel.name for channel in self)
 
     def __len__(self) -> int:
         return len(self.channels)
 
     def __iter__(self) -> Iterator[Channel]:
-        return iter(self.channels)
+        return iter(sorted(self.channels, key=lambda channel: channel.name))
