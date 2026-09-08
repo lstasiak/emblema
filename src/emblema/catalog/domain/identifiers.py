@@ -1,5 +1,3 @@
-"""Identifiers of the Data Catalog aggregates and entities."""
-
 from dataclasses import dataclass
 
 from emblema.shared.kernel.identifiers import EntityId
@@ -7,9 +5,8 @@ from emblema.shared.kernel.identifiers import EntityId
 
 @dataclass(frozen=True)
 class CorpusId(EntityId):
-    pass
+    """Identity of a corpus, private to the Catalog.
 
-
-@dataclass(frozen=True)
-class CorpusVersionId(EntityId):
-    pass
+    Other contexts reference versions, never the corpus, so this identifier stays in the domain
+    while ``CorpusVersionId`` lives in the published language.
+    """

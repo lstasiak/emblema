@@ -2,6 +2,7 @@ from dataclasses import dataclass, replace
 from itertools import combinations
 from typing import Self
 
+from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.domain.channel_schema import ChannelSchema
 from emblema.catalog.domain.corpus_content import CorpusContent
 from emblema.catalog.domain.corpus_source import CorpusSource
@@ -12,7 +13,7 @@ from emblema.catalog.domain.exceptions import (
     InvalidCorpusError,
     SameDataAlreadyFrozenError,
 )
-from emblema.catalog.domain.identifiers import CorpusId, CorpusVersionId
+from emblema.catalog.domain.identifiers import CorpusId
 from emblema.catalog.domain.licence import Licence
 from emblema.shared.kernel.sampling import SamplingRegime
 from emblema.shared.kernel.timestamps import UtcDateTime

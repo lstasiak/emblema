@@ -5,6 +5,7 @@ from hypothesis import settings
 from hypothesis import strategies as st
 from hypothesis.stateful import Bundle, RuleBasedStateMachine, invariant, rule
 
+from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.corpus import Corpus
 from emblema.catalog.domain.corpus_content import CorpusContent
@@ -14,7 +15,6 @@ from emblema.catalog.domain.exceptions import (
     CorpusVersionNotValidatedError,
     SameDataAlreadyFrozenError,
 )
-from emblema.catalog.domain.identifiers import CorpusVersionId
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.sampling import SamplingRegime

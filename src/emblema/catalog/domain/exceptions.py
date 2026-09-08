@@ -49,5 +49,9 @@ class CorpusVersionNotValidatedError(CatalogError):
     pass
 
 
+class CorpusVersionNotFrozenError(CatalogError):
+    pass
+
+
 class SameDataAlreadyFrozenError(CatalogError):
     pass
