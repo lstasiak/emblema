@@ -216,9 +216,11 @@ layers = ["(adapters)", "(application)", "(domain)"]
 id = "pure-core"
 name = "Domain, application, contracts and shared code import no framework"
 type = "forbidden"
-# `emblema.shared` holds no adapters yet; once framework adapters live there, narrow this to the
-# framework-free subpackages (kernel, ports, events).
-source_modules = ["emblema.shared", "emblema.*.domain", "emblema.*.application", "emblema.*.contracts"]
+# Only the framework-free parts of `emblema.shared`; `emblema.shared.adapters` may use frameworks.
+source_modules = [
+    "emblema.shared.kernel", "emblema.shared.ports",
+    "emblema.*.domain", "emblema.*.application", "emblema.*.contracts",
+]
 forbidden_modules = [
     "torch", "numpy", "onnx", "onnxruntime",
     "sqlalchemy", "alembic",
@@ -230,7 +232,10 @@ forbidden_modules = [
 id = "config-only-at-the-edges"
 name = "Configuration is read by adapters and entrypoints only"
 type = "forbidden"
-source_modules = ["emblema.shared", "emblema.*.domain", "emblema.*.application", "emblema.*.contracts"]
+source_modules = [
+    "emblema.shared.kernel", "emblema.shared.ports",
+    "emblema.*.domain", "emblema.*.application", "emblema.*.contracts",
+]
 forbidden_modules = ["emblema.config"]
 
 [[tool.importlinter.contracts]]

@@ -96,6 +96,11 @@ VIOLATIONS = [
         evidence="emblema.shared.kernel.tensor -> numpy",
     ),
     Violation(
+        contract_id="pure-core",
+        modules={"shared/ports/leak.py": "import pydantic\n"},
+        evidence="emblema.shared.ports.leak -> pydantic",
+    ),
+    Violation(
         contract_id="config-only-at-the-edges",
         modules={
             "catalog/application/__init__.py": "",
