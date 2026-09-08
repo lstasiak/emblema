@@ -12,7 +12,7 @@ from emblema.catalog.domain.corpus_version import CorpusVersion
 from emblema.catalog.domain.exceptions import (
     CorpusVersionFrozenError,
     CorpusVersionNotValidatedError,
-    DuplicateCorpusVersionError,
+    SameDataAlreadyFrozenError,
 )
 from emblema.catalog.domain.identifiers import CorpusVersionId
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
@@ -22,7 +22,7 @@ from tests.catalog.domain.support import LICENCE, empty_corpus, instant
 
 # Small vocabularies make collisions (duplicate data, repeated operations on one version) likely.
 schemas = st.lists(st.sampled_from(["a", "b", "c"]), min_size=1, max_size=3, unique=True).map(
-    lambda names: ChannelSchema(tuple(Channel(name) for name in names))
+    lambda names: ChannelSchema(frozenset(Channel(name) for name in names))
 )
 contents = st.builds(
     CorpusContent,
@@ -72,7 +72,7 @@ class CorpusLifecycle(RuleBasedStateMachine):
             with pytest.raises(CorpusVersionNotValidatedError):
                 self.corpus.freeze_version(version_id, at)
         elif fingerprint(version) in {fingerprint(v) for v in self.frozen_snapshots.values()}:
-            with pytest.raises(DuplicateCorpusVersionError):
+            with pytest.raises(SameDataAlreadyFrozenError):
                 self.corpus.freeze_version(version_id, at)
         else:
             self.corpus = self.corpus.freeze_version(version_id, at)

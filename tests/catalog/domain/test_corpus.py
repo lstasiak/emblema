@@ -7,8 +7,8 @@ from emblema.catalog.domain.exceptions import (
     CorpusVersionAlreadyExistsError,
     CorpusVersionFrozenError,
     CorpusVersionNotFoundError,
-    DuplicateCorpusVersionError,
     InvalidCorpusError,
+    SameDataAlreadyFrozenError,
 )
 from emblema.shared.kernel.sampling import SamplingRegime
 from tests.catalog.domain.support import (
@@ -95,7 +95,7 @@ def test_unchanged_data_cannot_become_a_second_frozen_version(with_frozen_v1: Co
         version_id(2), content()
     )
 
-    with pytest.raises(DuplicateCorpusVersionError, match="version 1"):
+    with pytest.raises(SameDataAlreadyFrozenError, match="version 1"):
         twin.freeze_version(version_id(2), instant(1))
 
 

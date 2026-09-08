@@ -9,8 +9,8 @@ from emblema.catalog.domain.corpus_version import CorpusVersion
 from emblema.catalog.domain.exceptions import (
     CorpusVersionAlreadyExistsError,
     CorpusVersionNotFoundError,
-    DuplicateCorpusVersionError,
     InvalidCorpusError,
+    SameDataAlreadyFrozenError,
 )
 from emblema.catalog.domain.identifiers import CorpusId, CorpusVersionId
 from emblema.catalog.domain.licence import Licence
@@ -109,13 +109,13 @@ class Corpus:
             CorpusVersionNotFoundError: If the version does not belong to this corpus.
             CorpusVersionFrozenError: If the version is already frozen.
             CorpusVersionNotValidatedError: If the version has no content.
-            DuplicateCorpusVersionError: If a frozen version has the same checksum, channel schema
+            SameDataAlreadyFrozenError: If a frozen version has the same checksum, channel schema
                 and sampling regime.
         """
         frozen = self.get_version(version_id).freeze(at)
         for other in self.frozen_versions:
             if other.describes_same_data_as(frozen):
-                raise DuplicateCorpusVersionError(
+                raise SameDataAlreadyFrozenError(
                     f"version {frozen.number} describes the same data as frozen version "
                     f"{other.number}"
                 )
