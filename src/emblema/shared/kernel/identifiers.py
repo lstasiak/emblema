@@ -21,15 +21,20 @@ class EntityId:
 
     @classmethod
     def parse(cls, text: str) -> Self:
-        """Build an identifier from its canonical string form.
+        """Build an identifier from its canonical string form, the one ``str()`` produces.
+
+        Other UUID spellings (uppercase, braces, no hyphens, ``urn:uuid:``) are rejected rather
+        than normalised, so that a malformed identifier fails where it originates.
 
         Raises:
-            InvalidEntityIdError: If ``text`` is not a valid UUID.
+            InvalidEntityIdError: If ``text`` is not a UUID in canonical form.
         """
         try:
             value = UUID(text)
         except ValueError as error:
             raise InvalidEntityIdError(f"not a UUID: {text!r}") from error
+        if str(value) != text:
+            raise InvalidEntityIdError(f"not a canonical UUID: {text!r}")
         return cls(value)
 
     def __str__(self) -> str:
