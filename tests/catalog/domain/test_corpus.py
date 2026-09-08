@@ -4,6 +4,7 @@ from emblema.catalog.domain.channel_schema import ChannelSchema
 from emblema.catalog.domain.corpus import Corpus
 from emblema.catalog.domain.corpus_version import CorpusVersion
 from emblema.catalog.domain.exceptions import (
+    CorpusVersionAlreadyExistsError,
     CorpusVersionFrozenError,
     CorpusVersionNotFoundError,
     DuplicateCorpusVersionError,
@@ -123,10 +124,17 @@ def test_a_draft_does_not_count_as_a_duplicate(with_frozen_v1: Corpus) -> None:
     assert len(draft.frozen_versions) == 1
 
 
-@pytest.mark.parametrize("name", ["", "  "])
-def test_corpus_name_must_be_non_blank(name: str) -> None:
+@pytest.mark.parametrize("name", ["", "  ", " C-MAPSS", "C-MAPSS "])
+def test_corpus_name_must_be_non_blank_without_padding(name: str) -> None:
     with pytest.raises(InvalidCorpusError, match="name"):
         Corpus(corpus_id(), name, SOURCE)
+
+
+def test_reusing_a_version_id_is_rejected(corpus: Corpus) -> None:
+    grown = corpus.add_version(version_id(1), SCHEMA, REGULAR, LICENCE)
+
+    with pytest.raises(CorpusVersionAlreadyExistsError):
+        grown.add_version(version_id(1), OTHER_SCHEMA, IRREGULAR, LICENCE)
 
 
 def test_reconstitution_rejects_gaps_in_numbering() -> None:

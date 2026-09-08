@@ -13,9 +13,9 @@ class Licence:
     corpus may be distributed publicly.
 
     Attributes:
-        identifier: Licence name or SPDX identifier, non-blank.
+        identifier: Licence name or SPDX identifier, non-blank without surrounding whitespace.
         permits_derivatives: Whether derivative works may be redistributed.
-        url: Where the licence text lives, when known.
+        url: Where the licence text lives, when known; non-blank without surrounding whitespace.
     """
 
     identifier: str
@@ -23,5 +23,11 @@ class Licence:
     url: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.identifier.strip():
-            raise InvalidLicenceError("licence identifier must be non-blank")
+        if not self.identifier or self.identifier != self.identifier.strip():
+            raise InvalidLicenceError(
+                "licence identifier must be non-blank without surrounding whitespace"
+            )
+        if self.url is not None and (not self.url or self.url != self.url.strip()):
+            raise InvalidLicenceError(
+                "licence url must be non-blank without surrounding whitespace"
+            )

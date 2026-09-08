@@ -4,7 +4,7 @@ from emblema.catalog.domain.corpus_version import CorpusVersion
 from emblema.catalog.domain.exceptions import (
     CorpusVersionFrozenError,
     CorpusVersionNotValidatedError,
-    InvalidCorpusError,
+    InvalidCorpusVersionError,
 )
 from emblema.shared.kernel.sampling import SamplingRegime
 from tests.catalog.domain.support import (
@@ -101,11 +101,11 @@ def test_a_version_without_content_describes_no_data(draft: CorpusVersion) -> No
 
 
 def test_frozen_version_without_content_cannot_exist() -> None:
-    with pytest.raises(InvalidCorpusError, match="content"):
+    with pytest.raises(InvalidCorpusVersionError, match="content"):
         CorpusVersion(version_id(), 1, SCHEMA, SamplingRegime.REGULAR, LICENCE, frozen_at=AT)
 
 
 @pytest.mark.parametrize("number", [0, -1])
 def test_version_number_must_be_positive(number: int) -> None:
-    with pytest.raises(InvalidCorpusError, match="positive"):
+    with pytest.raises(InvalidCorpusVersionError, match="positive"):
         CorpusVersion(version_id(), number, SCHEMA, SamplingRegime.REGULAR, LICENCE)

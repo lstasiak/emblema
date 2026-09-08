@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, replace
 from typing import Self
 
@@ -6,7 +8,7 @@ from emblema.catalog.domain.corpus_content import CorpusContent
 from emblema.catalog.domain.exceptions import (
     CorpusVersionFrozenError,
     CorpusVersionNotValidatedError,
-    InvalidCorpusError,
+    InvalidCorpusVersionError,
 )
 from emblema.catalog.domain.identifiers import CorpusVersionId
 from emblema.catalog.domain.licence import Licence
@@ -44,15 +46,15 @@ class CorpusVersion:
 
     def __post_init__(self) -> None:
         if self.number < 1:
-            raise InvalidCorpusError(f"version number must be positive, got {self.number}")
+            raise InvalidCorpusVersionError(f"version number must be positive, got {self.number}")
         if self.frozen_at is not None and self.content is None:
-            raise InvalidCorpusError(f"frozen version {self.number} must have content")
+            raise InvalidCorpusVersionError(f"frozen version {self.number} must have content")
 
     @property
     def is_frozen(self) -> bool:
         return self.frozen_at is not None
 
-    def describes_same_data_as(self, other: Self) -> bool:
+    def describes_same_data_as(self, other: CorpusVersion) -> bool:
         """Whether both versions carry validated data of equal checksum, schema and regime.
 
         Schema and regime are part of what a version describes: the same bytes read under another

@@ -7,6 +7,7 @@ from emblema.catalog.domain.corpus_content import CorpusContent
 from emblema.catalog.domain.corpus_source import CorpusSource
 from emblema.catalog.domain.corpus_version import CorpusVersion
 from emblema.catalog.domain.exceptions import (
+    CorpusVersionAlreadyExistsError,
     CorpusVersionNotFoundError,
     DuplicateCorpusVersionError,
     InvalidCorpusError,
@@ -30,7 +31,7 @@ class Corpus:
 
     Attributes:
         id: Identity of the corpus.
-        name: Human-readable name, non-blank.
+        name: Human-readable name, non-blank without surrounding whitespace.
         source: Where the data comes from.
         versions: All versions, drafts and frozen, in version order.
     """
@@ -41,8 +42,8 @@ class Corpus:
     versions: tuple[CorpusVersion, ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.name.strip():
-            raise InvalidCorpusError("corpus name must be non-blank")
+        if not self.name or self.name != self.name.strip():
+            raise InvalidCorpusError("corpus name must be non-blank without surrounding whitespace")
         numbers = [version.number for version in self.versions]
         if numbers != list(range(1, len(numbers) + 1)):
             raise InvalidCorpusError(f"version numbers must be 1..n in order, got {numbers}")
@@ -74,7 +75,15 @@ class Corpus:
         sampling_regime: SamplingRegime,
         licence: Licence,
     ) -> Self:
-        """Open a new draft version, numbered after the last one."""
+        """Open a new draft version, numbered after the last one.
+
+        Raises:
+            CorpusVersionAlreadyExistsError: If a version with that identifier already exists.
+        """
+        if any(version.id == version_id for version in self.versions):
+            raise CorpusVersionAlreadyExistsError(
+                f"corpus {self.id} already has version {version_id}"
+            )
         draft = CorpusVersion(
             id=version_id,
             number=len(self.versions) + 1,

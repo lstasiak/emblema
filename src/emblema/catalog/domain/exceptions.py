@@ -29,7 +29,15 @@ class InvalidCorpusError(CatalogError, ValueError):
     pass
 
 
+class InvalidCorpusVersionError(CatalogError, ValueError):
+    pass
+
+
 class CorpusVersionNotFoundError(CatalogError):
+    pass
+
+
+class CorpusVersionAlreadyExistsError(CatalogError):
     pass
 
 

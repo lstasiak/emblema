@@ -1,5 +1,6 @@
 """Channel schema of a corpus version: which measured quantities it carries."""
 
+from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -38,8 +39,8 @@ class ChannelSchema:
     def __post_init__(self) -> None:
         if not self.channels:
             raise InvalidChannelSchemaError("channel schema must declare at least one channel")
-        names = [channel.name for channel in self.channels]
-        duplicates = sorted({name for name in names if names.count(name) > 1})
+        counts = Counter(channel.name for channel in self.channels)
+        duplicates = sorted(name for name, count in counts.items() if count > 1)
         if duplicates:
             raise InvalidChannelSchemaError(f"duplicate channel names: {duplicates}")
 
