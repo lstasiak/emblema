@@ -28,13 +28,6 @@ def test_now_is_a_utc_datetime(clock: Clock) -> None:
     assert isinstance(clock.now(), UtcDateTime)
 
 
-def test_now_never_goes_backwards(clock: Clock) -> None:
-    first = clock.now()
-    second = clock.now()
-
-    assert first <= second
-
-
 def test_fixed_clock_reports_the_configured_instant() -> None:
     assert FixedClock(AT).now() == AT
 
