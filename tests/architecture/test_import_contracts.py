@@ -75,6 +75,16 @@ VIOLATIONS = [
         evidence="emblema.catalog.application.use_case -> emblema.catalog.adapters.persistence",
     ),
     Violation(
+        contract_id="shared-layers",
+        modules={"shared/ports/leak.py": "import emblema.shared.adapters.system.clock\n"},
+        evidence="emblema.shared.ports.leak -> emblema.shared.adapters.system.clock",
+    ),
+    Violation(
+        contract_id="shared-layers",
+        modules={"shared/kernel/leak.py": "import emblema.shared.ports.clock\n"},
+        evidence="emblema.shared.kernel.leak -> emblema.shared.ports.clock",
+    ),
+    Violation(
         contract_id="pure-core",
         modules={
             "catalog/domain/__init__.py": "",
@@ -186,6 +196,14 @@ def test_violation_breaks_its_contract(violation: Violation, tmp_path: Path) -> 
     assert result.returncode != 0, result.stdout
     assert f"{CONTRACT_NAMES[violation.contract_id]} BROKEN" in result.stdout, result.stdout
     assert violation.evidence in result.stdout, result.stdout
+
+
+def test_shared_adapters_may_import_frameworks(tmp_path: Path) -> None:
+    modules = {"shared/adapters/system/settings_reader.py": "import pydantic\n"}
+
+    result = lint_imports(package_copy_with(tmp_path, modules))
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_context_may_import_published_contracts_of_another_context(tmp_path: Path) -> None:
