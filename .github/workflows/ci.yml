@@ -54,8 +54,8 @@ jobs:
         run: uv run lint-imports --contract pure-core
       - name: Contexts import only each other's published contracts
         run: uv run lint-imports --contract context-independence
-      - name: Layers point inwards within each context
-        run: uv run lint-imports --contract hexagonal-layers
+      - name: Layers point inwards within each context and inside shared
+        run: uv run lint-imports --contract hexagonal-layers --contract shared-layers
       - name: Remaining dependency rules
         run: >
           uv run lint-imports
