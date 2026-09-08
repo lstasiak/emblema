@@ -61,6 +61,7 @@ jobs:
           uv run lint-imports
           --contract config-only-at-the-edges
           --contract contracts-depend-only-on-shared
+          --contract domain-shares-only-identity-with-contracts
           --contract shared-imports-no-context
           --contract entrypoints-are-outermost
 

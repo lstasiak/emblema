@@ -3,14 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Self
 
+from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.domain.channel_schema import ChannelSchema
 from emblema.catalog.domain.corpus_content import CorpusContent
 from emblema.catalog.domain.exceptions import (
     CorpusVersionFrozenError,
+    CorpusVersionNotFrozenError,
     CorpusVersionNotValidatedError,
     InvalidCorpusVersionError,
 )
-from emblema.catalog.domain.identifiers import CorpusVersionId
 from emblema.catalog.domain.licence import Licence
 from emblema.shared.kernel.sampling import SamplingRegime
 from emblema.shared.kernel.timestamps import UtcDateTime
@@ -53,6 +54,19 @@ class CorpusVersion:
     @property
     def is_frozen(self) -> bool:
         return self.frozen_at is not None
+
+    def frozen_content(self) -> CorpusContent:
+        """Content of the version once frozen: the only content other contexts may rely on.
+
+        Raises:
+            CorpusVersionNotFrozenError: If the version is still a draft, with or without content.
+        """
+        # A frozen version always has content; the second test only narrows the type.
+        if self.frozen_at is None or self.content is None:
+            raise CorpusVersionNotFrozenError(
+                f"version {self.number} is a draft; only frozen versions are published"
+            )
+        return self.content
 
     def describes_same_data_as(self, other: CorpusVersion) -> bool:
         """Whether both versions carry validated data of equal checksum, schema and regime.

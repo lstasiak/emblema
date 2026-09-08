@@ -3,11 +3,12 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.corpus import Corpus
 from emblema.catalog.domain.corpus_content import CorpusContent
 from emblema.catalog.domain.corpus_source import CorpusSource
-from emblema.catalog.domain.identifiers import CorpusId, CorpusVersionId
+from emblema.catalog.domain.identifiers import CorpusId
 from emblema.catalog.domain.licence import Licence
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.timestamps import UtcDateTime

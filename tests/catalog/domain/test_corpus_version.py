@@ -3,6 +3,7 @@ import pytest
 from emblema.catalog.domain.corpus_version import CorpusVersion
 from emblema.catalog.domain.exceptions import (
     CorpusVersionFrozenError,
+    CorpusVersionNotFrozenError,
     CorpusVersionNotValidatedError,
     InvalidCorpusVersionError,
 )
@@ -66,6 +67,17 @@ def test_frozen_version_rejects_a_second_freeze(draft: CorpusVersion) -> None:
 
     with pytest.raises(CorpusVersionFrozenError):
         frozen.freeze(instant(1))
+
+
+def test_frozen_content_is_the_content_the_version_was_frozen_with(draft: CorpusVersion) -> None:
+    frozen = draft.with_content(content()).freeze(AT)
+
+    assert frozen.frozen_content() == content()
+
+
+def test_frozen_content_is_refused_for_a_draft_even_with_content(draft: CorpusVersion) -> None:
+    with pytest.raises(CorpusVersionNotFrozenError, match="draft"):
+        draft.with_content(content()).frozen_content()
 
 
 def test_versions_with_equal_checksum_schema_and_regime_describe_the_same_data(
