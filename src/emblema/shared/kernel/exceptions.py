@@ -5,6 +5,10 @@ context-level error hierarchy to hang them on.
 """
 
 
+class InvalidEntityIdError(ValueError):
+    pass
+
+
 class InvalidChecksumError(ValueError):
     pass
 

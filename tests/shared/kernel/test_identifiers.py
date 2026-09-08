@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from emblema.shared.kernel.exceptions import InvalidEntityIdError
 from emblema.shared.kernel.identifiers import EntityId
 
 
@@ -23,7 +24,7 @@ def test_parse_round_trips_through_str() -> None:
 
 
 def test_parse_rejects_malformed_text() -> None:
-    with pytest.raises(ValueError, match="badly formed"):
+    with pytest.raises(InvalidEntityIdError):
         SampleId.parse("not-a-uuid")
 
 

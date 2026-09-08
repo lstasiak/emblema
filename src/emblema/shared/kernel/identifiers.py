@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Self
 from uuid import UUID
 
+from emblema.shared.kernel.exceptions import InvalidEntityIdError
+
 
 @dataclass(frozen=True)
 class EntityId:
@@ -22,9 +24,13 @@ class EntityId:
         """Build an identifier from its canonical string form.
 
         Raises:
-            ValueError: If ``text`` is not a valid UUID.
+            InvalidEntityIdError: If ``text`` is not a valid UUID.
         """
-        return cls(UUID(text))
+        try:
+            value = UUID(text)
+        except ValueError as error:
+            raise InvalidEntityIdError(f"not a UUID: {text!r}") from error
+        return cls(value)
 
     def __str__(self) -> str:
         return str(self.value)
