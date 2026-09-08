@@ -81,8 +81,13 @@ VIOLATIONS = [
     ),
     Violation(
         contract_id="shared-layers",
-        modules={"shared/kernel/leak.py": "import emblema.shared.ports.clock\n"},
-        evidence="emblema.shared.kernel.leak -> emblema.shared.ports.clock",
+        modules={"shared/events/leak.py": "import emblema.shared.ports.clock\n"},
+        evidence="emblema.shared.events.leak -> emblema.shared.ports.clock",
+    ),
+    Violation(
+        contract_id="shared-layers",
+        modules={"shared/kernel/leak.py": "import emblema.shared.events.domain_event\n"},
+        evidence="emblema.shared.kernel.leak -> emblema.shared.events.domain_event",
     ),
     Violation(
         contract_id="pure-core",
@@ -128,6 +133,11 @@ VIOLATIONS = [
         evidence="emblema.catalog.contracts.published -> emblema.catalog.domain",
     ),
     Violation(
+        contract_id="domain-shares-only-identity-with-contracts",
+        modules={"catalog/domain/leak.py": "import emblema.catalog.contracts.corpus_version_ref\n"},
+        evidence="emblema.catalog.domain.leak -> emblema.catalog.contracts.corpus_version_ref",
+    ),
+    Violation(
         contract_id="shared-imports-no-context",
         modules={"shared/kernel/leak.py": "import emblema.catalog\n"},
         evidence="emblema.shared.kernel.leak -> emblema.catalog",
@@ -153,6 +163,9 @@ def lint_imports(package_root: Path | None = None) -> subprocess.CompletedProces
     executable = shutil.which("lint-imports", path=str(Path(sys.executable).parent))
     assert executable, "lint-imports must be installed next to the test interpreter"
     env = os.environ.copy()
+    # The report is wrapped to the console width, 80 columns when captured; a wide console keeps
+    # "<name> BROKEN" on one line whatever the length of a contract name.
+    env["COLUMNS"] = "200"
     if package_root is not None:
         env["PYTHONPATH"] = str(package_root)
     return subprocess.run(

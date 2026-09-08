@@ -197,12 +197,8 @@ id = "context-independence"
 name = "Bounded contexts import only each other's published contracts"
 type = "independence"
 modules = ["emblema.catalog", "emblema.pretraining", "emblema.evaluation", "emblema.serving"]
-ignore_imports = [
-    "emblema.** -> emblema.*.contracts",
-    "emblema.** -> emblema.*.contracts.**",
-]
-# No context publishes a contracts package yet; the warning disappears with the first one.
-unmatched_ignore_imports_alerting = "warn"
+# Consumers import contract modules, never the bare `contracts` package: it re-exports nothing.
+ignore_imports = ["emblema.** -> emblema.*.contracts.**"]
 
 [[tool.importlinter.contracts]]
 id = "hexagonal-layers"
@@ -214,19 +210,18 @@ layers = ["(adapters)", "(application)", "(domain)"]
 
 [[tool.importlinter.contracts]]
 id = "shared-layers"
-name = "Inside shared, dependencies point inwards: adapters -> ports -> kernel"
+name = "Shared layers point inwards: adapters -> ports -> events -> kernel"
 type = "layers"
 containers = ["emblema.shared"]
-layers = ["(adapters)", "(ports)", "kernel"]
+layers = ["(adapters)", "(ports)", "(events)", "kernel"]
 
 [[tool.importlinter.contracts]]
 id = "pure-core"
 name = "Domain, application, contracts and shared code import no framework"
 type = "forbidden"
 # Only the framework-free parts of `emblema.shared`; `emblema.shared.adapters` may use frameworks.
-# Add `emblema.shared.events` here when it appears: a source module must exist to be listed.
 source_modules = [
-    "emblema.shared.kernel", "emblema.shared.ports",
+    "emblema.shared.kernel", "emblema.shared.ports", "emblema.shared.events",
     "emblema.*.domain", "emblema.*.application", "emblema.*.contracts",
 ]
 forbidden_modules = [
@@ -241,7 +236,7 @@ id = "config-only-at-the-edges"
 name = "Configuration is read by adapters and entrypoints only"
 type = "forbidden"
 source_modules = [
-    "emblema.shared.kernel", "emblema.shared.ports",
+    "emblema.shared.kernel", "emblema.shared.ports", "emblema.shared.events",
     "emblema.*.domain", "emblema.*.application", "emblema.*.contracts",
 ]
 forbidden_modules = ["emblema.config"]
@@ -252,6 +247,18 @@ name = "Published contracts depend on shared code only"
 type = "forbidden"
 source_modules = ["emblema.*.contracts"]
 forbidden_modules = ["emblema.*.domain", "emblema.*.application", "emblema.*.adapters", "emblema.entrypoints"]
+
+[[tool.importlinter.contracts]]
+id = "domain-shares-only-identity-with-contracts"
+name = "A domain imports nothing from its own published contracts except identifiers"
+type = "forbidden"
+# Identifiers are vocabulary the domain and the published language must agree on; references and
+# events are messages the application layer builds from the domain, so the domain never sees them.
+# One entry per context: a wildcard cannot tell a context's own contracts from another context's,
+# and a listed source module must exist, so each context joins with its first domain module.
+source_modules = ["emblema.catalog.domain"]
+forbidden_modules = ["emblema.catalog.contracts"]
+ignore_imports = ["emblema.catalog.domain.** -> emblema.catalog.contracts.identifiers"]
 
 [[tool.importlinter.contracts]]
 id = "shared-imports-no-context"
