@@ -70,5 +70,8 @@ class Checksum:
             raise InvalidChecksumError(f"unknown hash algorithm {algorithm_name!r}") from error
         return cls(algorithm, digest)
 
+    def matches(self, data: bytes) -> bool:
+        return self == Checksum.of_bytes(data, self.algorithm)
+
     def __str__(self) -> str:
         return f"{self.algorithm}:{self.digest}"
