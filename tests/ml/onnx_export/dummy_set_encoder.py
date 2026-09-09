@@ -36,6 +36,8 @@ class DummySetEncoder(nn.Module):
     of thirty are the same shape of input.
 
     Attributes:
+        attention: Which attention implementation the blocks were built with — part of this model's
+            identity, because the implementations disagree on a fully masked window.
         d_model: Width of the embedding the encoder produces.
         frequencies: Fixed Fourier frequencies the timestamp is encoded with, so the encoding is
             parameter-free and extrapolates beyond the range seen in training.
@@ -53,6 +55,7 @@ class DummySetEncoder(nn.Module):
         n_frequencies: int = 8,
     ) -> None:
         super().__init__()
+        self.attention = attention
         self.d_model = d_model
         self.channel_embedding = nn.Embedding(N_CHANNELS, d_model)
         self.value_projection = nn.Linear(N_FEATURES, d_model)

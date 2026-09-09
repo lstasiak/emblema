@@ -39,13 +39,11 @@ class ExportedEncoder:
     produced it, and the graph itself is inspected to prove which axes stayed dynamic.
 
     Attributes:
-        attention: Which attention implementation this encoder was built with.
         model: The eager model, in evaluation mode, that the graph was exported from.
         graph: The exported model as ONNX protobuf.
         session: An ONNX Runtime session over `graph`, on the CPU provider.
     """
 
-    attention: AttentionKind
     model: DummySetEncoder
     graph: onnx.ModelProto
     session: ort.InferenceSession
@@ -75,32 +73,60 @@ class ExportedEncoder:
             axis for entry in declared for axis in _shape_of(entry) if isinstance(axis, str)
         )
 
+    @property
+    def size_in_bytes(self) -> int:
+        return len(self.graph.SerializeToString())
+
     @classmethod
     def build(cls, attention: AttentionKind, *, seed: int = 1) -> Self:
         torch.manual_seed(seed)
-        model = DummySetEncoder(attention=attention).eval()
-        sample = TokenBatch.random(_SAMPLE_BATCH, _SAMPLE_TOKENS, seed=seed, padding=5)
-        program = torch.onnx.export(
-            model,
-            sample.args,
-            dynamo=True,
-            opset_version=OPSET_VERSION,
-            input_names=list(INPUT_NAMES),
-            output_names=[OUTPUT_NAME],
-            dynamic_shapes=_dynamic_shapes(),
-            optimize=True,
+        return cls.from_model(DummySetEncoder(attention=attention).eval(), seed=seed)
+
+    @classmethod
+    def from_model(
+        cls, model: DummySetEncoder, *, opset: int = OPSET_VERSION, seed: int = 1
+    ) -> Self:
+        """Export a model that already exists — a wider encoder, or one whose weights came from an
+        accelerator and were moved back to the CPU.
+
+        The graph is always traced on CPU tensors and always with the same sample, so a difference
+        between two exports is a difference between the models, not between the calls.
+        """
+        graph = export_graph(model, opset=opset, seed=seed)
+        session = ort.InferenceSession(
+            graph.SerializeToString(), providers=["CPUExecutionProvider"]
         )
-        # `export` hands back nothing only when told to write the graph to a file, which it is not.
-        assert program is not None
-        blob = program.model_proto.SerializeToString()
-        session = ort.InferenceSession(blob, providers=["CPUExecutionProvider"])
-        return cls(attention, model, program.model_proto, session)
+        return cls(model, graph, session)
 
 
 @cache
 def export_dummy_encoder(attention: AttentionKind) -> ExportedEncoder:
     """Export once per process: it takes seconds, and the result is deterministic."""
     return ExportedEncoder.build(attention)
+
+
+def export_graph(
+    model: DummySetEncoder, *, opset: int = OPSET_VERSION, seed: int = 1
+) -> onnx.ModelProto:
+    """Trace and export, without opening a runtime session.
+
+    Exporting, loading and executing are three separate failure modes — a graph can export and load
+    and still fail on every run — so a caller that wants to observe them apart starts here.
+    """
+    sample = TokenBatch.random(_SAMPLE_BATCH, _SAMPLE_TOKENS, seed=seed, padding=5)
+    program = torch.onnx.export(
+        model,
+        sample.args,
+        dynamo=True,
+        opset_version=opset,
+        input_names=list(INPUT_NAMES),
+        output_names=[OUTPUT_NAME],
+        dynamic_shapes=_dynamic_shapes(),
+        optimize=True,
+    )
+    # `export` hands back nothing only when told to write the graph to a file, which it is not.
+    assert program is not None
+    return program.model_proto
 
 
 def _dynamic_shapes() -> dict[str, dict[int, Dim]]:
