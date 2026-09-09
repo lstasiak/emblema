@@ -11,7 +11,9 @@ if [[ -f .env ]]; then
   set +a
 fi
 
-MLFLOW_URL=${MLFLOW_URL:-http://localhost:${MLFLOW_PORT:-5000}}
+# Addressed by IPv4 literal, not `localhost`: compose publishes the port on 127.0.0.1 only, while
+# `localhost` reaches ::1 first. On macOS that socket belongs to AirPlay Receiver, which answers 403.
+MLFLOW_URL=${MLFLOW_URL:-http://127.0.0.1:${MLFLOW_PORT:-5000}}
 BUCKET=${EMBLEMA_ARTIFACT_STORE__BUCKET:-emblema}
 PG_USER=${POSTGRES_USER:?POSTGRES_USER is required (copy env.example to .env)}
 

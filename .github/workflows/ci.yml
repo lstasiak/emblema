@@ -116,7 +116,7 @@ jobs:
     env:
       # The bucket the contract tests reach: the Garage service started below, published on the
       # runner's loopback interface. No field of the store has a default value.
-      EMBLEMA_ARTIFACT_STORE__ENDPOINT_URL: http://localhost:3900
+      EMBLEMA_ARTIFACT_STORE__ENDPOINT_URL: http://127.0.0.1:3900
       EMBLEMA_ARTIFACT_STORE__REGION: garage
       EMBLEMA_ARTIFACT_STORE__BUCKET: emblema
       EMBLEMA_ARTIFACT_STORE__KEY_PREFIX: test
