@@ -31,6 +31,10 @@ ml = [
     "numpy>=2.2",
     "torch>=2.9",
     "onnxruntime>=1.22",
+    # The exporter path through torch.export needs both; onnx also reads the graph back for the
+    # export tests. Wheels: onnx is cp312-abi3, onnxscript is pure Python.
+    "onnx>=1.22",
+    "onnxscript>=0.7",
 ]
 
 [project.urls]
@@ -227,7 +231,7 @@ source_modules = [
     "emblema.*.domain", "emblema.*.application", "emblema.*.contracts",
 ]
 forbidden_modules = [
-    "torch", "numpy", "onnx", "onnxruntime",
+    "torch", "numpy", "onnx", "onnxruntime", "onnxscript",
     "sqlalchemy", "alembic",
     "fastapi", "starlette", "pydantic", "pydantic_settings",
     "celery", "redis", "mlflow", "boto3", "botocore",
