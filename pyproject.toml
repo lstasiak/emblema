@@ -110,6 +110,8 @@ ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D"]
+# A developer script that reaches the test package: the path is set up before the imports run.
+"scripts/onnx_export_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -126,7 +128,7 @@ docstring-code-format = true
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src/emblema", "tests"]
+files = ["src/emblema", "tests", "scripts"]
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 

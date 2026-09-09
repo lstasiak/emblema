@@ -19,7 +19,7 @@ repos:
 
       - id: ty
         name: ty check
-        entry: uv run ty check src tests
+        entry: uv run ty check src tests scripts
         language: system
         types_or: [python, pyi]
         pass_filenames: false
