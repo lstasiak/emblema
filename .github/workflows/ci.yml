@@ -9,14 +9,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Throwaway credentials of the local stack the jobs below start. Nothing in the stack has a
-# default password, so every job that reads `compose.yaml` has to name them, and the jobs that
-# talk to the store read the same variables the application does.
 env:
-  POSTGRES_USER: emblema
-  POSTGRES_PASSWORD: emblema
-  EMBLEMA_ARTIFACT_STORE__ACCESS_KEY: GK0123456789abcdef0123456789abcdef
-  EMBLEMA_ARTIFACT_STORE__SECRET_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  # A role name authenticates nobody. Every secret the local stack needs is minted per run by the
+  # jobs that start it, so no password or access key is written down in this repository.
+  POSTGRES_USER: ci
 
 jobs:
   lint:
@@ -81,6 +77,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Mint credentials for the local stack
+        # The stack lives and dies inside this runner, so its secrets last one run. Garage expects
+        # its access key as `GK` followed by 32 hex digits.
+        run: |
+          {
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "EMBLEMA_ARTIFACT_STORE__ACCESS_KEY=GK$(openssl rand -hex 16)"
+            echo "EMBLEMA_ARTIFACT_STORE__SECRET_KEY=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
       - name: Validate the compose file
         run: docker compose config --quiet
       - name: Bring the stack up
@@ -128,6 +133,15 @@ jobs:
 
       - name: Report stack versions
         run: uv run python -c "import sys, torch, onnxruntime; print(sys.version); print('torch', torch.__version__); print('onnxruntime', onnxruntime.__version__)"
+
+      - name: Mint credentials for the local stack
+        # As in the compose job: minted here, gone with the runner, absent from the repository.
+        run: |
+          {
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "EMBLEMA_ARTIFACT_STORE__ACCESS_KEY=GK$(openssl rand -hex 16)"
+            echo "EMBLEMA_ARTIFACT_STORE__SECRET_KEY=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
 
       - name: Start the S3-compatible store
         run: docker compose up -d --wait garage
