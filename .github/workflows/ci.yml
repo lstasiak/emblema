@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # A role name authenticates nobody. Every secret the local stack needs is minted per run by the
+  # jobs that start it, so no password or access key is written down in this repository.
+  POSTGRES_USER: ci
+
 jobs:
   lint:
     name: lint (ruff)
@@ -65,6 +70,35 @@ jobs:
           --contract shared-imports-no-context
           --contract entrypoints-are-outermost
 
+  compose:
+    # The local stack must come up from a clean machine with one command and pass its smoke test.
+    # This proves it on amd64; arm64 is verified by hand on the development machine.
+    name: local stack (docker compose)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mint credentials for the local stack
+        # The stack lives and dies inside this runner, so its secrets last one run. Garage expects
+        # its access key as `GK` followed by 32 hex digits.
+        run: |
+          {
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "EMBLEMA_ARTIFACT_STORE__ACCESS_KEY=GK$(openssl rand -hex 16)"
+            echo "EMBLEMA_ARTIFACT_STORE__SECRET_KEY=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
+      - name: Validate the compose file
+        run: docker compose config --quiet
+      - name: Bring the stack up
+        run: docker compose up -d --wait --wait-timeout 300
+      - name: Smoke test
+        run: bash scripts/smoke.sh
+      - name: Service logs
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   test:
     # The environment must build on the requires-python floor (GPU platforms) and on the local
     # development version. CPU-only torch index is configured in pyproject.toml.
@@ -79,6 +113,13 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.12", "3.14"]
+    env:
+      # The bucket the contract tests reach: the Garage service started below, published on the
+      # runner's loopback interface. No field of the store has a default value.
+      EMBLEMA_ARTIFACT_STORE__ENDPOINT_URL: http://127.0.0.1:3900
+      EMBLEMA_ARTIFACT_STORE__REGION: garage
+      EMBLEMA_ARTIFACT_STORE__BUCKET: emblema
+      EMBLEMA_ARTIFACT_STORE__KEY_PREFIX: test
     steps:
       - uses: actions/checkout@v4
 
@@ -93,9 +134,26 @@ jobs:
       - name: Report stack versions
         run: uv run python -c "import sys, torch, onnxruntime; print(sys.version); print('torch', torch.__version__); print('onnxruntime', onnxruntime.__version__)"
 
+      - name: Mint credentials for the local stack
+        # As in the compose job: minted here, gone with the runner, absent from the repository.
+        run: |
+          {
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "EMBLEMA_ARTIFACT_STORE__ACCESS_KEY=GK$(openssl rand -hex 16)"
+            echo "EMBLEMA_ARTIFACT_STORE__SECRET_KEY=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
+
+      - name: Start the S3-compatible store
+        run: docker compose up -d --wait garage
+
       - name: Test with coverage
-        # The coverage threshold is `fail_under` in pyproject.toml.
-        run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
+        # Integration tests run here too (the store is up), so the S3 adapter counts towards the
+        # threshold, which is `fail_under` in pyproject.toml. Locally the default addopts skip them.
+        run: uv run pytest -o addopts="-ra --strict-markers" --cov --cov-report=term-missing --cov-report=xml
+
+      - name: Stop the S3-compatible store
+        if: always()
+        run: docker compose down -v
 
       - name: Coverage in the job summary
         if: always()

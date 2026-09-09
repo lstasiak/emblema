@@ -27,3 +27,16 @@ uv run pytest
 Supported Python: 3.12 and newer. The floor is set by the free GPU platforms the training code runs on.
 
 Architecture rules (framework-free core, inward-pointing layers, bounded contexts that share only published contracts) are [import-linter](https://import-linter.readthedocs.io/) contracts in `pyproject.toml`. `uv run lint-imports` checks them; CI enforces them alongside lint, types and coverage.
+
+### Local environment
+
+Postgres, an S3-compatible artifact store ([Garage](https://garagehq.deuxfleurs.fr/)) and MLflow run in Docker. One command brings the stack up, a second checks it, a third runs the adapter contracts against it:
+
+```sh
+cp env.example .env
+docker compose up -d --wait
+bash scripts/smoke.sh
+uv run pytest -m integration
+```
+
+The artifact store speaks S3 to Garage locally and to a Cloudflare R2 bucket that GPU platforms can reach. The same contract tests run against the remote bucket by configuration alone: `uv run --env-file .env.r2 pytest -m integration` (variables in `env.example`). `docker compose down -v` removes the stack and its data.

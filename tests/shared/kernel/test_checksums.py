@@ -25,6 +25,13 @@ def test_parse_round_trips_through_str() -> None:
     assert Checksum.parse(str(checksum)) == checksum
 
 
+def test_matches_only_the_content_it_was_computed_from() -> None:
+    checksum = Checksum.of_bytes(b"emblema")
+
+    assert checksum.matches(b"emblema")
+    assert not checksum.matches(b"emblema ")
+
+
 @pytest.mark.parametrize(
     "digest",
     [DIGEST[:-1], DIGEST + "0", DIGEST.upper(), "g" * 64],
