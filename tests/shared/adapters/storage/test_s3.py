@@ -36,7 +36,7 @@ def stubbed() -> Iterator[Stubbed]:
 
 def test_connect_uses_path_style_and_sends_checksums_only_when_required() -> None:
     store = S3ArtifactStore.connect(
-        endpoint_url="http://localhost:3900",
+        endpoint_url="http://127.0.0.1:3900",
         region="garage",
         access_key="key",
         secret_key="secret",
@@ -55,7 +55,7 @@ def test_connect_uses_path_style_and_sends_checksums_only_when_required() -> Non
 def test_rejects_blank_or_slashed_prefix(prefix: str) -> None:
     with pytest.raises(ValueError, match="key prefix"):
         S3ArtifactStore.connect(
-            endpoint_url="http://localhost:3900",
+            endpoint_url="http://127.0.0.1:3900",
             region="garage",
             access_key="key",
             secret_key="secret",

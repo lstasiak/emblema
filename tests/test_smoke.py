@@ -10,7 +10,7 @@ from emblema.shared.kernel.compute import ComputeTier
 CONTEXTS = ("catalog", "pretraining", "evaluation", "serving")
 # Every process must name its bucket; these tests are about the rest of the settings.
 ARTIFACT_STORE = ArtifactStoreSettings(
-    endpoint_url="http://localhost:3900", region="garage", bucket="emblema", key_prefix="dev"
+    endpoint_url="http://127.0.0.1:3900", region="garage", bucket="emblema", key_prefix="dev"
 )
 
 
