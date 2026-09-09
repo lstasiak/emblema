@@ -1,0 +1,105 @@
+# Minimal local stack: metadata database, S3-compatible artifact store, experiment tracking.
+# `docker compose up -d --wait` brings it up; values come from `.env` (copy `env.example`).
+# The artifact credentials are defined once, as the application reads them, and mapped here onto
+# Garage's default key, MLflow's S3 client and the bootstrap job. Nothing that authenticates has a
+# default: a stack that starts on a fallback password runs with a password anyone can read here.
+name: emblema
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: emblema
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Runs once, on an empty volume: creates the MLflow database and one schema per context.
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?set in .env} -d emblema"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  garage:
+    image: dxflrs/garage:v2.4.1
+    entrypoint: ["/garage", "-c", "/etc/garage.toml"]
+    # Single node, no replication, and the bucket plus its key created from the environment.
+    command: ["server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_DEFAULT_ACCESS_KEY: ${EMBLEMA_ARTIFACT_STORE__ACCESS_KEY:?set in .env}
+      GARAGE_DEFAULT_SECRET_KEY: ${EMBLEMA_ARTIFACT_STORE__SECRET_KEY:?set in .env}
+      GARAGE_DEFAULT_BUCKET: ${EMBLEMA_ARTIFACT_STORE__BUCKET:-emblema}
+    ports:
+      - "127.0.0.1:${GARAGE_S3_PORT:-3900}:3900"
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "-c", "/etc/garage.toml", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  mlflow:
+    build: ./infra/mlflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://garage:3900
+      AWS_ACCESS_KEY_ID: ${EMBLEMA_ARTIFACT_STORE__ACCESS_KEY:?set in .env}
+      AWS_SECRET_ACCESS_KEY: ${EMBLEMA_ARTIFACT_STORE__SECRET_KEY:?set in .env}
+      AWS_DEFAULT_REGION: ${EMBLEMA_ARTIFACT_STORE__REGION:-garage}
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    # Raw training logs and MLflow's own artifacts live under one prefix of the shared bucket;
+    # the platform's content-addressed artifacts live under the environment prefixes.
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql+psycopg://${POSTGRES_USER:?set in .env}:${POSTGRES_PASSWORD:?set in .env}@postgres:5432/mlflow
+      - --artifacts-destination=s3://${EMBLEMA_ARTIFACT_STORE__BUCKET:-emblema}/mlflow
+    ports:
+      - "127.0.0.1:${MLFLOW_PORT:-5000}:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  bootstrap:
+    # One-shot job: makes sure the bucket exists and carries the lifecycle rules. The same script
+    # runs against the remote bucket with `docker compose --env-file .env.r2 run --rm --no-deps bootstrap`.
+    image: amazon/aws-cli:2.36.41
+    depends_on:
+      garage:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${EMBLEMA_ARTIFACT_STORE__ACCESS_KEY:?set in .env}
+      AWS_SECRET_ACCESS_KEY: ${EMBLEMA_ARTIFACT_STORE__SECRET_KEY:?set in .env}
+      AWS_DEFAULT_REGION: ${EMBLEMA_ARTIFACT_STORE__REGION:-garage}
+      AWS_ENDPOINT_URL: ${BOOTSTRAP_ENDPOINT_URL:-http://garage:3900}
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      AWS_PAGER: ""
+      BUCKET: ${EMBLEMA_ARTIFACT_STORE__BUCKET:-emblema}
+      ENVIRONMENT_PREFIXES: ${ARTIFACT_ENVIRONMENT_PREFIXES:-dev test}
+      TRANSIENT_RETENTION_DAYS: ${TRANSIENT_RETENTION_DAYS:-7}
+    entrypoint: ["bash", "/scripts/bootstrap-bucket.sh"]
+    volumes:
+      - ./scripts:/scripts:ro
+    restart: "no"
+
+volumes:
+  postgres-data:
+  garage-meta:
+  garage-data:

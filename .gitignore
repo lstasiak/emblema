@@ -147,8 +147,9 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
-# Environments
+# Environments (dotenv files hold credentials; the published template is env.example)
 .env
+.env.*
 .envrc
 .venv
 env/

@@ -1,0 +1,26 @@
+# Garage for the local stack: one node, one zone, no replication. Started by compose with
+# `server --single-node --default-bucket`, which lays out the cluster and creates the bucket and
+# access key named in the environment.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+# Shared secret of node-to-node RPC. With a single node on a private network it protects nothing
+# and is not a credential: the S3 access key lives in .env.
+rpc_secret = "d4cd89bc5dd1e27df701a4b4b1037f05ccaad8ee581771a6bdf4e17a19e73790"
+
+[s3_api]
+# Requests must be signed for this region; the application's default matches it.
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"
+
+[admin]
+# The admin API stays inside the compose network (port not published). The `garage` CLI, which the
+# health check runs in the container, authenticates to it with this token.
+api_bind_addr = "[::]:3903"
+admin_token = "7c1e9b4d2a6f8e0c3b5d7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e"
