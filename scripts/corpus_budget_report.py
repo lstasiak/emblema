@@ -424,20 +424,19 @@ def campaign_run_hours(campaign: Campaign, budget: Budget, model: Tier, tflops: 
     return gpu_hours(windows * campaign.epochs * flops, tflops)
 
 
+def tokens_per_epoch(budget: Budget, key: str, choice: WindowChoice) -> float:
+    corpus = budget.corpora[key]
+    return window_stats(key, corpus, corpus.pick_window(choice)).tokens_per_epoch
+
+
 def mixed_tokens_per_epoch(budget: Budget, choice: WindowChoice = "default") -> float:
-    return sum(
-        window_stats(
-            key, budget.corpora[key], budget.corpora[key].pick_window(choice)
-        ).tokens_per_epoch
-        for key in budget.eligible()
-    )
+    return sum(tokens_per_epoch(budget, key, choice) for key in budget.eligible())
 
 
 def mixed_tokens_seen(budget: Budget, choice: WindowChoice = "default") -> float:
     return sum(
-        window_stats(key, corpus, corpus.pick_window(choice)).tokens_per_epoch * corpus.epochs
-        for key, corpus in budget.corpora.items()
-        if corpus.verdict in MIXED
+        tokens_per_epoch(budget, key, choice) * budget.corpora[key].epochs
+        for key in budget.eligible()
     )
 
 
