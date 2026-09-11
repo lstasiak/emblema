@@ -10,6 +10,7 @@ import pytest
 
 from emblema.shared.adapters.arrays.token_batch import N_FEATURES
 from tests.ml.onnx_export.batches import (
+    INPUT_NAMES,
     all_timeless,
     fully_padded,
     padded_by,
@@ -36,6 +37,16 @@ pytestmark = [
 # over that.
 ATOL = 1e-5
 RTOL = 1e-4
+
+
+def test_each_input_name_belongs_to_the_argument_it_is_exported_beside() -> None:
+    # The export pairs names with arguments by position, so a name that slid one place would label
+    # every tensor in the graph wrongly while the graph still ran.
+    batch = random_batch(1, 4, seed=1)
+
+    named = tuple(getattr(batch, name) for name in INPUT_NAMES)
+
+    assert all(one is other for one, other in zip(named, batch.args, strict=True))
 
 
 def test_the_graph_takes_the_five_named_tensors(exported: ExportedEncoder) -> None:

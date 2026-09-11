@@ -20,8 +20,10 @@ from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 # Entries in the channel vocabulary the dummy encoder was built with.
 N_CHANNELS = 64
 
-# The graph names its inputs after the fields, in the order the model declares them.
-INPUT_NAMES = tuple(field.name for field in fields(TokenTensors))
+# The graph's inputs, named and ordered as the model is called. Spelled out rather than read off
+# the fields for the reason `TokenTensors.args` is: this is the calling convention, and the export
+# pairs these names with those arguments by position.
+INPUT_NAMES = ("features", "channel_ids", "timestamps", "timeless", "padding_mask")
 
 
 def random_batch(batch: int, tokens: int, *, seed: int, padding: int = 0) -> TokenTensors:
