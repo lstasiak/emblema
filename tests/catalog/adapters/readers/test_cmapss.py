@@ -202,12 +202,19 @@ def test_observations_of_an_engine_are_its_sensor_values_cycle_by_cycle(
     assert observations[-1].time == 128.0
 
 
-@pytest.mark.parametrize("key", ["FD001/7", "FD002/39", "39", "FD001/x", "FD001/39/1", "fd001/39"])
-def test_a_key_that_names_no_engine_of_a_selected_subset_is_unknown(
+@pytest.mark.parametrize("key", ["FD002/39", "39", "FD001/x", "FD001/39/1", "fd001/39"])
+def test_a_key_that_could_name_no_engine_is_unknown_before_the_stream(
     reader: CmapssCorpusReader, key: str
 ) -> None:
     with pytest.raises(UnknownUnitError):
-        list(reader.read_observations(UnitKey(key)))
+        reader.read_observations(UnitKey(key))
+
+
+def test_an_engine_the_file_does_not_hold_is_unknown_by_the_end_of_the_stream(
+    reader: CmapssCorpusReader,
+) -> None:
+    with pytest.raises(UnknownUnitError):
+        list(reader.read_observations(UnitKey("FD001/7")))
 
 
 def test_an_engine_whose_rows_are_interrupted_is_malformed(tmp_path: Path) -> None:
@@ -228,11 +235,7 @@ def test_reading_an_engine_from_a_missing_file_is_missing_data(tmp_path: Path) -
     root = with_subsets(tmp_path, {"FD001": render([1])})
 
     with pytest.raises(CorpusDataNotFoundError, match=r"train_FD002\.txt"):
-        list(
-            CmapssCorpusReader(root, subsets=("FD001", "FD002")).read_observations(
-                UnitKey("FD002/1")
-            )
-        )
+        CmapssCorpusReader(root, subsets=("FD001", "FD002")).read_observations(UnitKey("FD002/1"))
 
 
 def raw_root() -> Path | None:

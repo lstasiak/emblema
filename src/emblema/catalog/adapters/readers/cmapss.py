@@ -104,17 +104,22 @@ class CmapssCorpusReader:
                 number, an engine's cycles do not run 1, 2, 3, ..., an engine's rows are not one
                 contiguous block, or a file holds no engine.
         """
-        contents = {path: self._bytes_of(path) for path in self._files.values()}
-        lengths = [
-            cycles
-            for path, content in contents.items()
-            for cycles in self._cycles_per_engine(path.name, content).values()
-        ]
+        lengths: list[int] = []
+
+        def contents() -> Iterator[bytes]:
+            """The files in subset order, each counted as it passes, then let go."""
+            for path in self._files.values():
+                content = self._bytes_of(path)
+                lengths.extend(self._cycles_per_engine(path.name, content).values())
+                yield content
+
+        # The checksum consumes the files one at a time, so the whole corpus is never in memory.
+        checksum = Checksum.of_chunks(contents())
         return CorpusDescription(
             channel_schema=ChannelSchema(frozenset(SENSORS)),
             sampling_regime=SamplingRegime.REGULAR,
             content=CorpusContent(
-                checksum=Checksum.of_chunks(contents.values()),
+                checksum=checksum,
                 unit_count=len(lengths),
                 observation_count=sum(lengths) * len(SENSORS),
             ),
@@ -135,8 +140,14 @@ class CmapssCorpusReader:
     def read_observations(self, unit: UnitKey) -> Iterator[Observation]:
         """The 21 sensor values of every cycle of one engine, cycle by cycle.
 
+        What is known without reading is settled before the stream is handed over; that a file
+        holds no such engine is known only once it has been scanned, so that one arrives at the
+        end of the stream.
+
         Raises:
-            UnknownUnitError: If the key does not name an engine of a selected subset.
+            UnknownUnitError: If the key does not name an engine of a selected subset — when the
+                key itself cannot name one, before the stream starts; when the file turns out not
+                to hold it, when the stream ends.
             CorpusDataNotFoundError: If the subset's file is missing.
             MalformedCorpusDataError: If a row of the engine is malformed or its cycles do not
                 run 1, 2, 3, ...
@@ -145,17 +156,25 @@ class CmapssCorpusReader:
         path = self._files[name]
         if not path.is_file():
             raise CorpusDataNotFoundError(f"{path} is missing")
+        return self._observations_of(path, engine)
+
+    @classmethod
+    def _observations_of(cls, path: Path, engine: int) -> Iterator[Observation]:
         marker = str(engine)
         expected = 1
         with path.open("rb") as file:
             for number, raw in enumerate(file, 1):
                 line = raw.decode("ascii", errors="replace")
                 first = line.split(None, 1)
-                if not first or first[0] != marker:
+                # A blank line carries nothing, here as in every other scan: it is not the end of
+                # the block, and taking it for one would truncate the engine without a word.
+                if not first:
+                    continue
+                if first[0] != marker:
                     if expected > 1:
                         break
                     continue
-                _, cycle, sensors = self._parse_row(path.name, number, line.split())
+                _, cycle, sensors = cls._parse_row(path.name, number, line.split())
                 if cycle != expected:
                     raise MalformedCorpusDataError(
                         f"{path.name}, line {number}: engine {engine} jumps to cycle {cycle} after "
@@ -183,7 +202,10 @@ class CmapssCorpusReader:
     def _cycles_per_engine(cls, name: str, content: bytes) -> dict[int, int]:
         cycles: dict[int, int] = {}
         current: int | None = None
-        for number, line in enumerate(content.decode("ascii", errors="replace").splitlines(), 1):
+        # Lines break on a newline and nothing else, as they do when the file is streamed; str
+        # splits on more than that, and the two scans must agree on what a line is.
+        lines = content.decode("ascii", errors="replace").split("\n")
+        for number, line in enumerate(lines, 1):
             fields = line.split()
             if not fields:
                 continue

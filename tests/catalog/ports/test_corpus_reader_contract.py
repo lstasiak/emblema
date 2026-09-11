@@ -57,6 +57,9 @@ def cmapss(tmp_path: Path) -> Harness:
     root = tmp_path / "cmapss"
     shutil.copytree(SAMPLE, root)
     file = root / "train_FD001.txt"
+    # The copy is padded with blank lines the released files do not have: a line that carries
+    # nothing must not end a unit early, and only counting what comes out shows that it does not.
+    file.write_bytes(file.read_bytes().replace(b"\n", b"\n\n"))
 
     def change_one_value() -> None:
         file.write_bytes(file.read_bytes().replace(b"518.67", b"518.68", 1))
@@ -126,6 +129,6 @@ def test_static_features_sit_on_timeless_channels(harness: Harness) -> None:
         assert {feature.channel for feature in unit.static_features} <= timeless
 
 
-def test_an_unknown_unit_is_reported(harness: Harness) -> None:
+def test_a_key_the_reader_cannot_resolve_is_reported_before_the_stream(harness: Harness) -> None:
     with pytest.raises(UnknownUnitError):
-        list(harness.reader.read_observations(UnitKey("no-such-unit")))
+        harness.reader.read_observations(UnitKey("no-such-unit"))

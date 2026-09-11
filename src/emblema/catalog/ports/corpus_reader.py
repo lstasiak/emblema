@@ -41,7 +41,10 @@ class CorpusReader(Protocol):
         """The observations of one unit in non-decreasing time order, all inside its extent.
 
         Every channel named is one of the description's timed channels. Summed over all units,
-        the observations are as many as the description counts.
+        the observations are as many as the description counts. What the reader can settle
+        without reading — a key it could never resolve, a source it cannot reach — it settles
+        when the stream is asked for; what only the data can settle surfaces as the stream is
+        consumed, so a caller that never iterates may never learn of it.
 
         Raises:
             UnknownUnitError: If the corpus has no unit with that key.
