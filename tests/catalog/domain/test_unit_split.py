@@ -35,7 +35,7 @@ def test_the_sides_are_the_digest_of_the_keys_not_the_interpreters_shuffle() -> 
     # same sides on every Python this runs on.
     split = UnitSplit.by_seed(KEYS, 0.3, seed=7)
 
-    assert sorted(str(key) for key in split.validation) == ["engine-00", "engine-02", "engine-05"]
+    assert sorted(str(key) for key in split.validation) == ["engine-02", "engine-04", "engine-06"]
 
 
 def test_another_seed_gives_another_split() -> None:

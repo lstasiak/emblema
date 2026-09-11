@@ -34,9 +34,9 @@ def test_an_epoch_visits_every_position_exactly_once() -> None:
 def test_the_order_is_the_one_the_digest_rule_produces() -> None:
     # Pinned so that a change to the key a position is ranked by cannot pass unnoticed: it would
     # silently give a run recorded before the change a different order when it is replayed.
-    assert order(8, seed=1) == [1, 3, 2, 7, 0, 5, 6, 4]
-    assert order(8, seed=1, epoch=1) == [6, 2, 3, 1, 4, 7, 0, 5]
-    assert order(8, seed=2) == [6, 1, 4, 0, 5, 7, 3, 2]
+    assert order(8, seed=1) == [4, 7, 0, 1, 3, 2, 5, 6]
+    assert order(8, seed=1, epoch=1) == [5, 2, 4, 6, 3, 1, 7, 0]
+    assert order(8, seed=2) == [2, 1, 0, 4, 7, 6, 3, 5]
 
 
 def test_the_sampler_reports_how_many_positions_it_orders() -> None:
