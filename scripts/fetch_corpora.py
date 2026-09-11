@@ -187,8 +187,6 @@ class Fetched:
 
 
 class Digests(TypedDict):
-    """Checksums of a file as they are remembered on disk."""
-
     size: int
     sha256: str
     md5: str
@@ -212,7 +210,7 @@ def download(url: str, target: Path) -> None:
         with urllib.request.urlopen(request) as response:
             resumed = response.status == 206
             total = response.headers.get("Content-Length")
-            expected = (offset if resumed else 0) + int(total) if total else None
+            expected = ((offset if resumed else 0) + int(total)) if total else None
             with partial.open("ab" if resumed else "wb") as sink:
                 done = offset if resumed else 0
                 for chunk in iter(lambda: response.read(CHUNK), b""):
@@ -264,7 +262,7 @@ def remember(directory: Path, cache: dict[str, Digests]) -> None:
 
 
 def forget(path: Path) -> None:
-    """Drop a remembered checksum, so a replacement file is hashed on its own merits."""
+    """Drop a remembered checksum, so a replacement file is hashed again."""
     cache = remembered(path.parent)
     if cache.pop(path.name, None) is not None:
         remember(path.parent, cache)
@@ -358,7 +356,6 @@ def member_path(into: Path, member: zipfile.ZipInfo) -> Path:
 
 
 def write_deflate64(archive: Path, member: zipfile.ZipInfo, into: Path) -> Path:
-    """Decompress one Deflate64 member of ``archive`` and write it under ``into``."""
     # inflate64 is needed by this script alone, for one metadata file per ESA mission: imported
     # here so that fetching every other corpus works without it.
     import inflate64
