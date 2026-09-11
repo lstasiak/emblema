@@ -1,4 +1,4 @@
-"""Channel schema of a corpus version: which measured quantities it carries."""
+"""Channel schema of a corpus version: which quantities its tokens come from."""
 
 from collections import Counter
 from collections.abc import Iterator
@@ -9,15 +9,18 @@ from emblema.catalog.domain.exceptions import InvalidChannelSchemaError
 
 @dataclass(frozen=True)
 class Channel:
-    """One measured quantity of a corpus.
+    """One source of tokens in a corpus: a measured quantity, or a static feature of its units.
 
     Attributes:
         name: Identifier of the channel within its corpus, non-blank.
         unit: Physical unit of the values, when the source documents one.
+        timeless: Whether the channel describes a whole unit rather than instants of it, such as a
+            patient's age; its values become timeless tokens and are never counted as observations.
     """
 
     name: str
     unit: str | None = None
+    timeless: bool = False
 
     def __post_init__(self) -> None:
         if not self.name or self.name != self.name.strip():

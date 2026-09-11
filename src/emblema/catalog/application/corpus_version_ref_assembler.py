@@ -22,7 +22,8 @@ class CorpusVersionRefAssembler:
             version_id=version.id,
             checksum=content.checksum,
             channels=tuple(
-                ChannelSpec(channel.name, channel.unit) for channel in version.channel_schema
+                ChannelSpec(channel.name, channel.unit, channel.timeless)
+                for channel in version.channel_schema
             ),
             sampling_regime=version.sampling_regime,
         )

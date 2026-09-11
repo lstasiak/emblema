@@ -34,6 +34,15 @@ def test_channels_are_published_in_name_order() -> None:
     )
 
 
+def test_a_static_channel_is_published_as_timeless() -> None:
+    schema = ChannelSchema(frozenset({Channel("age", "years", timeless=True), Channel("hr")}))
+
+    assert ASSEMBLER.assemble(frozen_version(schema)).channels == (
+        ChannelSpec("age", "years", timeless=True),
+        ChannelSpec("hr"),
+    )
+
+
 def test_a_draft_is_not_published() -> None:
     draft = CorpusVersion(version_id(), 1, SCHEMA, SamplingRegime.REGULAR, LICENCE, content())
 

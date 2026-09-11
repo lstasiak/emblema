@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from uuid import UUID
 
@@ -13,13 +14,15 @@ from emblema.catalog.application.register_corpus_version import (
 )
 from emblema.catalog.contracts.events import CorpusVersionFrozen
 from emblema.catalog.domain.corpus_description import CorpusDescription
+from emblema.catalog.domain.corpus_unit import CorpusUnit
 from emblema.catalog.domain.exceptions import (
     CorpusNotFoundError,
     CorpusReadError,
     MalformedCorpusDataError,
     SameDataAlreadyFrozenError,
 )
-from emblema.catalog.domain.identifiers import CorpusId
+from emblema.catalog.domain.identifiers import CorpusId, UnitKey
+from emblema.catalog.domain.observation import Observation
 from emblema.catalog.ports.corpus_reader import CorpusReader
 from emblema.shared.adapters.in_memory.clock import FixedClock
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
@@ -39,10 +42,18 @@ from tests.catalog.domain.support import (
 
 
 class FailingCorpusReader:
+    """A reader whose source is broken: every operation fails the same way."""
+
     def __init__(self, error: CorpusReadError) -> None:
         self._error = error
 
     def describe(self) -> CorpusDescription:
+        raise self._error
+
+    def read_units(self) -> Iterator[CorpusUnit]:
+        raise self._error
+
+    def read_observations(self, unit: UnitKey) -> Iterator[Observation]:
         raise self._error
 
 

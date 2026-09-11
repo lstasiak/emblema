@@ -8,7 +8,14 @@ from hypothesis import strategies as st
 
 from emblema.catalog.adapters.readers.cmapss import SENSORS, SUBSETS, CmapssCorpusReader
 from emblema.catalog.domain.channel_schema import Channel
-from emblema.catalog.domain.exceptions import CorpusDataNotFoundError, MalformedCorpusDataError
+from emblema.catalog.domain.corpus_unit import TimeExtent
+from emblema.catalog.domain.exceptions import (
+    CorpusDataNotFoundError,
+    MalformedCorpusDataError,
+    UnknownUnitError,
+)
+from emblema.catalog.domain.identifiers import UnitKey
+from emblema.catalog.domain.observation import Observation
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.sampling import SamplingRegime
 
@@ -158,11 +165,74 @@ def test_counts_follow_the_engines_written(
     tmp_path_factory: pytest.TempPathFactory, cycles: list[int]
 ) -> None:
     root = with_subsets(tmp_path_factory.mktemp("cmapss"), {"FD002": render(cycles)})
+    reader = CmapssCorpusReader(root, subsets=("FD002",))
 
-    content = CmapssCorpusReader(root, subsets=("FD002",)).describe().content
+    content = reader.describe().content
 
     assert content.unit_count == len(cycles)
     assert content.observation_count == sum(cycles) * len(SENSORS)
+    assert [unit.extent for unit in reader.read_units()] == [
+        TimeExtent(1.0, length + 1.0) for length in cycles
+    ]
+
+
+def test_engines_are_units_keyed_by_subset_and_number_spanning_their_cycles(
+    reader: CmapssCorpusReader,
+) -> None:
+    units = list(reader.read_units())
+
+    assert [(str(unit.key), unit.extent) for unit in units] == [
+        ("FD001/39", TimeExtent(1.0, 129.0)),
+        ("FD001/91", TimeExtent(1.0, 136.0)),
+    ]
+    assert all(unit.static_features == () for unit in units)
+
+
+def test_observations_of_an_engine_are_its_sensor_values_cycle_by_cycle(
+    reader: CmapssCorpusReader,
+) -> None:
+    observations = list(reader.read_observations(UnitKey("FD001/39")))
+
+    assert len(observations) == 128 * len(SENSORS)
+    assert observations[:3] == [
+        Observation("T2", 1.0, 518.67),
+        Observation("T24", 1.0, 642.72),
+        Observation("T30", 1.0, 1592.37),
+    ]
+    assert observations[-1].time == 128.0
+
+
+@pytest.mark.parametrize("key", ["FD001/7", "FD002/39", "39", "FD001/x", "FD001/39/1", "fd001/39"])
+def test_a_key_that_names_no_engine_of_a_selected_subset_is_unknown(
+    reader: CmapssCorpusReader, key: str
+) -> None:
+    with pytest.raises(UnknownUnitError):
+        list(reader.read_observations(UnitKey(key)))
+
+
+def test_an_engine_whose_rows_are_interrupted_is_malformed(tmp_path: Path) -> None:
+    interrupted = "\n".join([row(1, 1), row(2, 1), row(1, 2)]).encode()
+
+    with pytest.raises(MalformedCorpusDataError, match="engine 1 resumes after engine 2"):
+        read_fd001(tmp_path, interrupted)
+
+
+def test_reading_an_engine_with_a_cycle_gap_is_malformed(tmp_path: Path) -> None:
+    root = with_subsets(tmp_path, {"FD001": "\n".join([row(1, 1), row(1, 3)]).encode()})
+
+    with pytest.raises(MalformedCorpusDataError, match="jumps to cycle 3"):
+        list(CmapssCorpusReader(root, subsets=("FD001",)).read_observations(UnitKey("FD001/1")))
+
+
+def test_reading_an_engine_from_a_missing_file_is_missing_data(tmp_path: Path) -> None:
+    root = with_subsets(tmp_path, {"FD001": render([1])})
+
+    with pytest.raises(CorpusDataNotFoundError, match=r"train_FD002\.txt"):
+        list(
+            CmapssCorpusReader(root, subsets=("FD001", "FD002")).read_observations(
+                UnitKey("FD002/1")
+            )
+        )
 
 
 def raw_root() -> Path | None:

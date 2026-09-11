@@ -19,3 +19,7 @@ class InvalidArtifactRefError(ValueError):
 
 class InvalidUtcDateTimeError(ValueError):
     pass
+
+
+class InvalidTokenWindowError(ValueError):
+    pass
