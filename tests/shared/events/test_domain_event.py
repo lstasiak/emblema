@@ -18,6 +18,7 @@ class SomethingHappened(DomainEvent):
 
 def test_event_fields_are_keyword_only() -> None:
     with pytest.raises(TypeError):
+        # ty: ignore[missing-argument, too-many-positional-arguments]
         SomethingHappened(EVENT_ID, AT, "corpus")  # type: ignore[call-arg]
 
 
@@ -25,4 +26,4 @@ def test_event_is_immutable() -> None:
     event = SomethingHappened(event_id=EVENT_ID, occurred_at=AT, subject="corpus")
 
     with pytest.raises(FrozenInstanceError):
-        event.subject = "other"  # type: ignore[misc]
+        event.subject = "other"  # type: ignore[misc]  # ty: ignore[invalid-assignment]

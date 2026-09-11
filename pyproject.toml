@@ -51,6 +51,7 @@ dev = [
     "pre-commit>=4.0",
     "pytest-cov>=6.0",
     "boto3-stubs[s3]>=1.43",
+    "inflate64>=1.0.4",
 ]
 
 [build-system]
@@ -107,17 +108,20 @@ select = [
 # Docstrings are required only where they add information; their presence is a review decision,
 # their style is not.
 ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]
+# The multiplication sign is deliberate in report output ("d × L"), never a typo for x.
+allowed-confusables = ["×"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D"]
-# A developer script that reaches the test package: the path is set up before the imports run.
+# Developer scripts that import a sibling package: the path is set up before the imports run.
 "scripts/onnx_export_report.py" = ["E402"]
+"scripts/corpus_facts.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.isort]
-known-first-party = ["emblema"]
+known-first-party = ["emblema", "scripts", "tests"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -146,8 +150,9 @@ disallow_any_generics = false
 warn_return_any = false
 
 [[tool.mypy.overrides]]
-# Third-party packages that ship no type information.
-module = ["onnxruntime", "onnxruntime.*"]
+# Third-party packages that ship no type information, or are not installed in the project
+# (pandas is pulled in ad hoc by one data script).
+module = ["onnxruntime", "onnxruntime.*", "pandas", "pandas.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------

@@ -225,3 +225,6 @@ __marimo__/
 
 # import-linter graph cache
 .import_linter_cache/
+
+# Raw corpora downloaded by scripts/fetch_corpora.py (gigabytes; sources of record are in the script)
+/data/

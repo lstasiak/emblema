@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 import onnxruntime as ort
 import torch
+
 from tests.ml.onnx_export.attention import AttentionKind
 from tests.ml.onnx_export.dummy_set_encoder import DummySetEncoder
 from tests.ml.onnx_export.exported_encoder import (
