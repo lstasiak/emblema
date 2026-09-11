@@ -42,8 +42,8 @@ from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTo
 from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.window_spec import WindowSpec
-from emblema.pretraining.adapters.loaders.seeded_shuffle_sampler import SeededShuffleSampler
-from emblema.pretraining.adapters.loaders.window_loader import WindowLoader
+from emblema.shared.adapters.loaders.seeded_shuffle_sampler import SeededShuffleSampler
+from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.kernel.tokens import Token, TokenWindow
 from tests.ml.onnx_export.dummy_set_encoder import DummySetEncoder
 

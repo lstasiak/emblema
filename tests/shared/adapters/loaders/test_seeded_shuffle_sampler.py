@@ -2,7 +2,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from emblema.pretraining.adapters.loaders.seeded_shuffle_sampler import (
+from emblema.shared.adapters.loaders.seeded_shuffle_sampler import (
     SeededShuffleSampler,
 )
 
