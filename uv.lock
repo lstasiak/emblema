@@ -312,6 +312,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "ty" },
+    { name = "typing-extensions" },
 ]
 
 [package.metadata]
@@ -339,6 +340,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.12" },
     { name = "ty", specifier = ">=0.0.1a1" },
+    { name = "typing-extensions", specifier = ">=4.7" },
 ]
 
 [[package]]
@@ -1499,13 +1501,13 @@ resolution-markers = [
     "python_full_version < '3.13' and platform_machine == 'arm64' and sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
+    { name = "filelock", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "fsspec", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "jinja2", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "networkx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "setuptools", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "sympy", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "typing-extensions", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.14.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:ab7e226c18d3cbc134dfa952d18ab1df202055dd33446837c8fd050ad449e6f5", upload-time = "2026-09-02T00:26:12Z" },
@@ -1527,13 +1529,13 @@ resolution-markers = [
     "(python_full_version < '3.13' and platform_machine != 'arm64') or (python_full_version < '3.13' and sys_platform != 'darwin')",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
+    { name = "filelock", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
+    { name = "fsspec", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
+    { name = "jinja2", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
+    { name = "networkx", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
+    { name = "setuptools", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
+    { name = "sympy", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
+    { name = "typing-extensions", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.14.0%2Bcpu-cp312-cp312-linux_s390x.whl", hash = "sha256:07aefe1a437b6f1b41b0cba15e16583e2f43549ec9d062fcea8e7981a78e014a", upload-time = "2026-09-02T18:31:32Z" },

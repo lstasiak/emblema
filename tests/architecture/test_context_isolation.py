@@ -11,7 +11,12 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-INTERIOR = ("emblema.catalog.domain", "emblema.catalog.application", "emblema.catalog.adapters")
+INTERIOR = (
+    "emblema.catalog.domain",
+    "emblema.catalog.ports",
+    "emblema.catalog.application",
+    "emblema.catalog.adapters",
+)
 
 
 def loaded_modules_after_importing(module: str) -> list[str]:

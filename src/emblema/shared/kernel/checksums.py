@@ -1,6 +1,7 @@
 """Content checksums: the hash algorithm vocabulary and the checksum value object."""
 
 import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self
@@ -52,6 +53,21 @@ class Checksum:
     @classmethod
     def of_bytes(cls, data: bytes, algorithm: HashAlgorithm = HashAlgorithm.SHA256) -> Self:
         return cls(algorithm, hashlib.new(algorithm.value, data).hexdigest())
+
+    @classmethod
+    def of_chunks(
+        cls, chunks: Iterable[bytes], algorithm: HashAlgorithm = HashAlgorithm.SHA256
+    ) -> Self:
+        """Checksum of the concatenation of ``chunks``, consumed one at a time.
+
+        Where the chunk boundaries fall makes no difference to the result, so content too large
+        to hold in memory can be hashed from a file or a stream and still compare equal to
+        ``of_bytes`` over the same bytes.
+        """
+        digest = hashlib.new(algorithm.value)
+        for chunk in chunks:
+            digest.update(chunk)
+        return cls(algorithm, digest.hexdigest())
 
     @classmethod
     def parse(cls, text: str) -> Self:

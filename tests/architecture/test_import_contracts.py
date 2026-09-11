@@ -75,6 +75,26 @@ VIOLATIONS = [
         evidence="emblema.catalog.application.use_case -> emblema.catalog.adapters.persistence",
     ),
     Violation(
+        contract_id="hexagonal-layers",
+        modules={
+            "catalog/domain/__init__.py": "",
+            "catalog/domain/entity.py": "import emblema.catalog.ports.leak\n",
+            "catalog/ports/__init__.py": "",
+            "catalog/ports/leak.py": "",
+        },
+        evidence="emblema.catalog.domain.entity -> emblema.catalog.ports.leak",
+    ),
+    Violation(
+        contract_id="hexagonal-layers",
+        modules={
+            "catalog/ports/__init__.py": "",
+            "catalog/ports/leak.py": "import emblema.catalog.application.use_case\n",
+            "catalog/application/__init__.py": "",
+            "catalog/application/use_case.py": "",
+        },
+        evidence="emblema.catalog.ports.leak -> emblema.catalog.application.use_case",
+    ),
+    Violation(
         contract_id="shared-layers",
         modules={"shared/ports/leak.py": "import emblema.shared.adapters.system.clock\n"},
         evidence="emblema.shared.ports.leak -> emblema.shared.adapters.system.clock",
@@ -116,6 +136,11 @@ VIOLATIONS = [
         evidence="emblema.shared.ports.leak -> pydantic",
     ),
     Violation(
+        contract_id="pure-core",
+        modules={"catalog/ports/leak.py": "import pydantic\n"},
+        evidence="emblema.catalog.ports.leak -> pydantic",
+    ),
+    Violation(
         contract_id="config-only-at-the-edges",
         modules={
             "catalog/application/__init__.py": "",
@@ -133,9 +158,23 @@ VIOLATIONS = [
         evidence="emblema.catalog.contracts.published -> emblema.catalog.domain",
     ),
     Violation(
+        contract_id="contracts-depend-only-on-shared",
+        modules={
+            "catalog/contracts/__init__.py": "",
+            "catalog/contracts/published.py": "import emblema.catalog.ports\n",
+            "catalog/ports/__init__.py": "",
+        },
+        evidence="emblema.catalog.contracts.published -> emblema.catalog.ports",
+    ),
+    Violation(
         contract_id="domain-shares-only-identity-with-contracts",
         modules={"catalog/domain/leak.py": "import emblema.catalog.contracts.corpus_version_ref\n"},
         evidence="emblema.catalog.domain.leak -> emblema.catalog.contracts.corpus_version_ref",
+    ),
+    Violation(
+        contract_id="domain-shares-only-identity-with-contracts",
+        modules={"catalog/ports/leak.py": "import emblema.catalog.contracts.corpus_version_ref\n"},
+        evidence="emblema.catalog.ports.leak -> emblema.catalog.contracts.corpus_version_ref",
     ),
     Violation(
         contract_id="shared-imports-no-context",

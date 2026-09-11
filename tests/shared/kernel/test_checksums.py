@@ -15,6 +15,14 @@ def test_of_bytes_matches_hashlib() -> None:
     assert checksum.digest == DIGEST
 
 
+def test_of_chunks_equals_of_bytes_over_the_concatenation() -> None:
+    assert Checksum.of_chunks([b"emb", b"", b"lema"]) == Checksum.of_bytes(b"emblema")
+
+
+def test_of_chunks_of_nothing_is_the_checksum_of_no_bytes() -> None:
+    assert Checksum.of_chunks([]) == Checksum.of_bytes(b"")
+
+
 def test_str_is_algorithm_colon_digest() -> None:
     assert str(Checksum(HashAlgorithm.SHA256, DIGEST)) == f"sha256:{DIGEST}"
 

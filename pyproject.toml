@@ -26,13 +26,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# ML runtime. Domain and application layers never import these.
 ml = [
     "numpy>=2.2",
     "torch>=2.9",
     "onnxruntime>=1.22",
     # The exporter path through torch.export needs both; onnx also reads the graph back for the
-    # export tests. Wheels: onnx is cp312-abi3, onnxscript is pure Python.
+    # export tests.
     "onnx>=1.22",
     "onnxscript>=0.7",
 ]
@@ -52,15 +51,13 @@ dev = [
     "pytest-cov>=6.0",
     "boto3-stubs[s3]>=1.43",
     "inflate64>=1.0.4",
+    "typing-extensions>=4.7",
 ]
 
 [build-system]
 requires = ["uv_build>=0.12.0,<0.13.0"]
 build-backend = "uv_build"
 
-# ---------------------------------------------------------------------------
-# uv
-# ---------------------------------------------------------------------------
 [tool.uv]
 default-groups = ["dev"]
 # The lock must provide wheels for every target platform, so a missing wheel fails here, not at
@@ -82,9 +79,6 @@ explicit = true
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu" }]
 
-# ---------------------------------------------------------------------------
-# ruff (replaces isort entirely: rule set I sorts imports)
-# ---------------------------------------------------------------------------
 [tool.ruff]
 target-version = "py312"
 line-length = 100
@@ -126,9 +120,6 @@ known-first-party = ["emblema", "scripts", "tests"]
 [tool.ruff.format]
 docstring-code-format = true
 
-# ---------------------------------------------------------------------------
-# mypy: the authority in CI. Strict for domain and application layers.
-# ---------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.12"
 strict = true
@@ -155,15 +146,9 @@ warn_return_any = false
 module = ["onnxruntime", "onnxruntime.*", "pandas", "pandas.*"]
 ignore_missing_imports = true
 
-# ---------------------------------------------------------------------------
-# ty: fast checker for the development loop (pre-commit)
-# ---------------------------------------------------------------------------
 [tool.ty.environment]
 python-version = "3.12"
 
-# ---------------------------------------------------------------------------
-# pytest
-# ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
@@ -173,9 +158,6 @@ markers = [
     "ml: needs the 'ml' extra (torch, onnxruntime)",
 ]
 
-# ---------------------------------------------------------------------------
-# coverage: measured by pytest-cov in CI (`pytest --cov`), gate on the total
-# ---------------------------------------------------------------------------
 [tool.coverage.run]
 source = ["emblema"]
 branch = true
@@ -186,8 +168,7 @@ relative_files = true
 fail_under = 92
 show_missing = true
 skip_empty = true
-# Lines that cannot run under test or carry no behaviour: typing-only imports, Protocol and
-# abstract method bodies, overload stubs, script guards.
+# Lines that cannot run under test or carry no behaviour.
 exclude_also = [
     'if TYPE_CHECKING:',
     '^\s*\.\.\.$',
@@ -197,10 +178,7 @@ exclude_also = [
     'if __name__ == .__main__.:',
 ]
 
-# ---------------------------------------------------------------------------
-# import-linter: architecture rules. Checked in CI per contract id and by tests/architecture,
-# which also proves that each contract breaks on a deliberate violation.
-# ---------------------------------------------------------------------------
+# Every contract has a deliberate-violation test in tests/architecture that proves it breaks.
 [tool.importlinter]
 root_packages = ["emblema"]
 include_external_packages = true
@@ -215,11 +193,11 @@ ignore_imports = ["emblema.** -> emblema.*.contracts.**"]
 
 [[tool.importlinter.contracts]]
 id = "hexagonal-layers"
-name = "Inside a context dependencies point inwards: adapters -> application -> domain"
+name = "Inside a context dependencies point inwards: adapters -> application -> ports -> domain"
 type = "layers"
 containers = ["emblema.catalog", "emblema.pretraining", "emblema.evaluation", "emblema.serving"]
 # Parentheses mark a layer as optional: each context grows its layers with its first feature.
-layers = ["(adapters)", "(application)", "(domain)"]
+layers = ["(adapters)", "(application)", "(ports)", "(domain)"]
 
 [[tool.importlinter.contracts]]
 id = "shared-layers"
@@ -230,12 +208,12 @@ layers = ["(adapters)", "(ports)", "(events)", "kernel"]
 
 [[tool.importlinter.contracts]]
 id = "pure-core"
-name = "Domain, application, contracts and shared code import no framework"
+name = "Domain, ports, application, contracts and shared code import no framework"
 type = "forbidden"
 # Only the framework-free parts of `emblema.shared`; `emblema.shared.adapters` may use frameworks.
 source_modules = [
     "emblema.shared.kernel", "emblema.shared.ports", "emblema.shared.events",
-    "emblema.*.domain", "emblema.*.application", "emblema.*.contracts",
+    "emblema.*.domain", "emblema.*.ports", "emblema.*.application", "emblema.*.contracts",
 ]
 forbidden_modules = [
     "torch", "numpy", "onnx", "onnxruntime", "onnxscript",
@@ -250,7 +228,7 @@ name = "Configuration is read by adapters and entrypoints only"
 type = "forbidden"
 source_modules = [
     "emblema.shared.kernel", "emblema.shared.ports", "emblema.shared.events",
-    "emblema.*.domain", "emblema.*.application", "emblema.*.contracts",
+    "emblema.*.domain", "emblema.*.ports", "emblema.*.application", "emblema.*.contracts",
 ]
 forbidden_modules = ["emblema.config"]
 
@@ -259,17 +237,19 @@ id = "contracts-depend-only-on-shared"
 name = "Published contracts depend on shared code only"
 type = "forbidden"
 source_modules = ["emblema.*.contracts"]
-forbidden_modules = ["emblema.*.domain", "emblema.*.application", "emblema.*.adapters", "emblema.entrypoints"]
+forbidden_modules = [
+    "emblema.*.domain", "emblema.*.ports", "emblema.*.application", "emblema.*.adapters",
+    "emblema.entrypoints",
+]
 
 [[tool.importlinter.contracts]]
 id = "domain-shares-only-identity-with-contracts"
-name = "A domain imports nothing from its own published contracts except identifiers"
+name = "A domain and its ports import nothing from their own published contracts except identifiers"
 type = "forbidden"
-# Identifiers are vocabulary the domain and the published language must agree on; references and
-# events are messages the application layer builds from the domain, so the domain never sees them.
-# One entry per context: a wildcard cannot tell a context's own contracts from another context's,
-# and a listed source module must exist, so each context joins with its first domain module.
-source_modules = ["emblema.catalog.domain"]
+# Identifiers are shared vocabulary; references and events are messages the application layer
+# builds, so neither the domain nor its ports see them. One entry per context: a wildcard cannot
+# tell a context's own contracts from another's, and a listed module must exist.
+source_modules = ["emblema.catalog.domain", "emblema.catalog.ports"]
 forbidden_modules = ["emblema.catalog.contracts"]
 ignore_imports = ["emblema.catalog.domain.** -> emblema.catalog.contracts.identifiers"]
 

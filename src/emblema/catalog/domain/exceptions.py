@@ -1,7 +1,8 @@
 """Domain exceptions of the Data Catalog.
 
 Invariant violations of value objects and constructors are also ``ValueError`` so that they
-read naturally at the edge; lifecycle violations of the aggregate are plain domain errors.
+read naturally at the edge; lifecycle violations of the aggregate and failures reported by the
+context's ports are plain domain errors.
 """
 
 
@@ -54,4 +55,24 @@ class CorpusVersionNotFrozenError(CatalogError):
 
 
 class SameDataAlreadyFrozenError(CatalogError):
+    pass
+
+
+class CorpusNotFoundError(CatalogError):
+    pass
+
+
+class CorpusNameTakenError(CatalogError):
+    pass
+
+
+class CorpusReadError(CatalogError):
+    pass
+
+
+class CorpusDataNotFoundError(CorpusReadError):
+    pass
+
+
+class MalformedCorpusDataError(CorpusReadError):
     pass
