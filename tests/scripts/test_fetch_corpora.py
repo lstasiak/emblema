@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import struct
 import tarfile
 import urllib.error
@@ -9,10 +10,12 @@ import zlib
 from collections.abc import Collection
 from email.message import Message
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 
 from scripts import fetch_corpora
+from scripts.corpus_budget_report import DEFAULT_CONFIG, Budget
 from scripts.fetch_corpora import (
     CORPORA,
     DEFLATE64,
@@ -203,14 +206,18 @@ def test_a_thin_wrapper_zip_has_its_inner_zip_extracted(tmp_path: Path):
     assert (into / "wrapper" / "CMAPSSData" / "train_FD001.txt").read_bytes() == b"1 1 0 0 0\n"
 
 
-def test_finder_metadata_in_a_wrapper_is_neither_data_nor_a_nested_zip(tmp_path: Path):
+def test_finder_metadata_does_not_count_towards_the_wrapper_limit(tmp_path: Path):
     inner = zip_with(tmp_path / "inner.zip", {"train_FD001.txt": b"1 1 0 0 0\n"})
     outer = zip_with(
         tmp_path / "outer.zip",
+        # Three files is the whole wrapper; the Finder entries would push it over the limit and
+        # leave the corpus packed.
         {
             "wrapper/CMAPSSData.zip": inner.read_bytes(),
+            "wrapper/readme.txt": b"engine degradation\n",
+            "wrapper/Damage Propagation Modeling.pdf": b"%PDF-1.4\n",
             "__MACOSX/wrapper/._CMAPSSData.zip": b"\x00\x05\x16\x07 resource fork",
-            "wrapper/._readme.zip": b"not a zip either",
+            "__MACOSX/wrapper/._readme.txt": b"\x00\x05\x16\x07 resource fork",
         },
     )
     into = tmp_path / "out"
@@ -218,6 +225,21 @@ def test_finder_metadata_in_a_wrapper_is_neither_data_nor_a_nested_zip(tmp_path:
     unpack(outer, into)
 
     assert (into / "wrapper" / "CMAPSSData" / "train_FD001.txt").exists()
+
+
+def test_a_resource_fork_named_like_a_zip_is_not_unpacked(tmp_path: Path):
+    inner = zip_with(tmp_path / "inner.zip", {"train_FD001.txt": b"1 1 0 0 0\n"})
+    outer = zip_with(
+        tmp_path / "outer.zip",
+        # A resource fork carries the bytes of the file it shadows, so it can read as a zip.
+        {"wrapper/CMAPSSData.zip": inner.read_bytes(), "wrapper/._readme.zip": inner.read_bytes()},
+    )
+    into = tmp_path / "out"
+
+    unpack(outer, into)
+
+    assert (into / "wrapper" / "CMAPSSData" / "train_FD001.txt").exists()
+    assert not (into / "wrapper" / "._readme").exists()
 
 
 def test_an_archive_of_many_zips_is_data_and_stays_compressed(tmp_path: Path):
@@ -291,6 +313,18 @@ def test_fetch_unpacks_a_file_whose_checksum_matches(
 
     assert (row.ok, row.md5_status) == (True, "none published")
     assert (tmp_path / "x" / "file.txt").read_bytes() == b"x"
+
+
+COMMIT = re.compile(r"[0-9a-f]{40}")
+
+
+@pytest.mark.parametrize("corpus", CORPORA, ids=lambda corpus: corpus.key)
+def test_the_budget_file_names_the_source_the_fetcher_downloads_from(corpus: Corpus):
+    source = Budget.load(DEFAULT_CONFIG).corpora[corpus.key].source
+    urls = [archive.url for archive in corpus.archives]
+
+    assert any(urlparse(source).netloc == urlparse(url).netloc for url in urls)
+    assert {sha for url in urls for sha in COMMIT.findall(url)} <= set(COMMIT.findall(source))
 
 
 def test_select_defaults_to_every_corpus_and_rejects_unknown_keys():
