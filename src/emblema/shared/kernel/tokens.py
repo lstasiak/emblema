@@ -19,12 +19,25 @@ from emblema.shared.kernel.exceptions import InvalidTokenWindowError
 PADDING_CHANNEL_ID = 0
 
 
+def canonical_key(
+    channel_id: int, value: float, time: float, gap: float, timeless: bool
+) -> tuple[int, float, int, float, float]:
+    """Where a token belongs in the order a window holds its tokens in.
+
+    The order is one rule, stated once here: whoever lays tokens out, checks them or sorts them
+    asks this function, so a change to it cannot leave a producer and the window disagreeing.
+    """
+    return (0 if timeless else 1, time, channel_id, value, gap)
+
+
 @dataclass(frozen=True)
 class Token:
     """One row of a token window.
 
-    A token is valid because its window is: the window checks every invariant over its columns
-    once, and this row view carries no check of its own.
+    A window keeps its tokens as columns, so its invariants are checked column by column, once
+    per window rather than once per token; a token is the view of one row of them and carries no
+    check of its own. It is also how a window is spelled out when one is built by hand, so a
+    token that breaks a rule is reported by the window it was put into.
 
     Attributes:
         channel_id: Entry of the channel vocabulary the token comes from; positive.
@@ -100,7 +113,7 @@ class TokenWindow:
                 raise InvalidTokenWindowError(
                     f"token {index}: gap must lie in [0, time], got {gap} at time {time}"
                 )
-            key = (0 if timeless else 1, time, channel_id, value, gap)
+            key = canonical_key(channel_id, value, time, gap, timeless)
             if previous is not None and key < previous:
                 raise InvalidTokenWindowError(f"token {index} is out of canonical order")
             previous = key
@@ -108,7 +121,12 @@ class TokenWindow:
     @classmethod
     def of(cls, tokens: Iterable[Token]) -> Self:
         """The window holding ``tokens``, whatever order they arrive in."""
-        ordered = sorted(tokens, key=_canonical_key)
+        ordered = sorted(
+            tokens,
+            key=lambda token: canonical_key(
+                token.channel_id, token.value, token.time, token.gap, token.timeless
+            ),
+        )
         return cls(
             channel_ids=tuple(token.channel_id for token in ordered),
             values=tuple(token.value for token in ordered),
@@ -123,7 +141,3 @@ class TokenWindow:
     def __iter__(self) -> Iterator[Token]:
         rows = zip(self.channel_ids, self.values, self.times, self.gaps, self.timeless, strict=True)
         return (Token(*row) for row in rows)
-
-
-def _canonical_key(token: Token) -> tuple[int, float, int, float, float]:
-    return (0 if token.timeless else 1, token.time, token.channel_id, token.value, token.gap)
