@@ -23,8 +23,9 @@ pytestmark = [
 ]
 
 # float32 through a different set of kernels. The largest deviation observed across the three
-# attention implementations and every case below is 3e-06, at the longest window, where the
-# reduction accumulates the most. The tolerance keeps a factor of three over that.
+# attention implementations, every case below and both development machines is 3.6e-06, at the
+# longest window, where the reduction accumulates the most. The tolerance keeps a factor of three
+# over that.
 ATOL = 1e-5
 RTOL = 1e-4
 
