@@ -29,7 +29,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 DEFAULT_CONFIG = Path(__file__).resolve().with_name("corpus_budget.toml")
 
 Answer = Literal["yes", "no", "unclear"]
-Verdict = Literal["pretraining", "downstream-only", "candidate", "rejected"]
+Verdict = Literal["pretraining", "ingredient", "downstream-only", "candidate", "rejected"]
+MIXED = frozenset({"pretraining", "ingredient"})
 WindowChoice = Literal["default", "longest"]
 Basis = Literal["measured", "estimate"]
 
@@ -234,9 +235,10 @@ class Corpus(Strict):
         return self.unique_observations() * min(self.epochs, repetitions)
 
     def archive_size(self) -> str:
-        if self.measured is not None and self.measured.archive_bytes is not None:
-            return f"{self.measured.archive_bytes / 2**20:,.0f} MiB"
-        return self.download_size
+        if self.measured is None or self.measured.archive_bytes is None:
+            return self.download_size
+        size = self.measured.archive_bytes
+        return f"{size / 2**30:,.1f} GiB" if size >= 2**30 else f"{size / 2**20:,.0f} MiB"
 
     def pick_window(self, choice: WindowChoice) -> Window:
         if choice == "longest":
@@ -247,7 +249,10 @@ class Corpus(Strict):
 class Backbone(Strict):
     name: str
     corpora: tuple[str, ...] | Literal["eligible", "each-eligible"] = Field(
-        description="Named corpora, every eligible one at once, or one backbone per eligible corpus"
+        description=(
+            "Named corpora; 'eligible' = every corpus in the mix at once; 'each-eligible' = one "
+            "backbone per corpus that can stand alone"
+        )
     )
     leave_one_out: bool = Field(
         default=False,
@@ -314,6 +319,11 @@ class Budget(Strict):
         return next(tier for tier in self.tiers if tier.name == name)
 
     def eligible(self) -> list[str]:
+        """Corpora that enter the pretraining mix."""
+        return [key for key, corpus in self.corpora.items() if corpus.verdict in MIXED]
+
+    def standalone(self) -> list[str]:
+        """Corpora with enough independent units to carry a backbone of their own."""
         return [key for key, corpus in self.corpora.items() if corpus.verdict == "pretraining"]
 
 
@@ -387,10 +397,9 @@ def pretraining_hours(key: str, corpus: Corpus, tier: Tier, budget: Budget) -> f
 
 def backbone_corpora(backbone: Backbone, budget: Budget) -> list[list[str]]:
     """The corpus sets this backbone entry expands to, one list per backbone."""
-    eligible = budget.eligible()
     if backbone.corpora == "each-eligible":
-        return [[key] for key in eligible]
-    keys = eligible if backbone.corpora == "eligible" else list(backbone.corpora)
+        return [[key] for key in budget.standalone()]
+    keys = budget.eligible() if backbone.corpora == "eligible" else list(backbone.corpora)
     return [keys for _ in range(backbone.count)]
 
 
@@ -428,7 +437,7 @@ def mixed_tokens_seen(budget: Budget, choice: WindowChoice = "default") -> float
     return sum(
         window_stats(key, corpus, corpus.pick_window(choice)).tokens_per_epoch * corpus.epochs
         for key, corpus in budget.corpora.items()
-        if corpus.verdict == "pretraining"
+        if corpus.verdict in MIXED
     )
 
 
@@ -659,7 +668,8 @@ def render_programme(budget: Budget) -> str:
     )
     return "\n".join(
         [
-            f"Eligible for pretraining: {', '.join(budget.eligible()) or 'none'}.",
+            f"In the mix: {', '.join(budget.eligible()) or 'none'}; with a backbone of their "
+            f"own: {', '.join(budget.standalone()) or 'none'}.",
             "",
             table(header, rows),
         ]
