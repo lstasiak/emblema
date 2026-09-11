@@ -3,9 +3,10 @@
 #
 # Per corpus: `estimate` holds literature figures used until `measured` exists; `measured` is the
 # block corpus_facts.py prints from the raw files. Verdicts: `pretraining` enters the pretraining
-# mix and gets a single-corpus backbone; `downstream-only` hosts a task and is never pretrained on;
-# `candidate` awaits a decision; `rejected` is out. Window `unit` is samples for regular corpora
-# and hours for irregular ones.
+# mix and gets a single-corpus backbone; `ingredient` enters the mix only (too few units for a
+# backbone of its own); `downstream-only` hosts a task and is never pretrained on; `candidate`
+# awaits a decision; `rejected` is out. Window `unit` is samples for regular corpora and hours for
+# irregular ones.
 
 # Both terms count FLOPs with a multiply-add as two operations and backward as twice forward:
 # 2 × 3 = 6 per parameter per token in the dense layers; attention scores and their weighted sum
@@ -64,7 +65,7 @@ download_size = "12.4 MB zip"
 epochs = 50
 pretraining_split = "the four train_FD00x files; the official test files with true RUL are the frozen test set"
 verdict = "pretraining"
-decision = "Tentative: primary corpus, enters the mix and hosts the RUL task; 3.4M unique values make it data-starved on its own."
+decision = "Primary corpus: enters the mix and hosts the RUL task; 3.4M unique values make it data-starved on its own."
 
 [corpora.cmapss.licence]
 terms = "No licence stated (data.nasa.gov: 'License not specified'). A NASA work of the U.S. Government, not subject to copyright in the United States; the PCoE repository asks publications to acknowledge it and disclaims liability."
@@ -99,6 +100,30 @@ unit = "samples"
 length = 100
 stride = 10
 
+[corpora.cmapss.measured]
+measured_on = 2026-09-11
+units = 709
+channels = 21
+observations = 3367539
+archive_bytes = 12429152
+timeless_tokens_per_unit = 0
+notes = "train_FD001: 100 engines; train_FD002: 260 engines; train_FD003: 100 engines; train_FD004: 249 engines; cycles per engine min/median/max 128/207/543; operating-setting columns are not counted as channels"
+
+[[corpora.cmapss.measured.windows]]
+name = "w30s5"
+count = 28231
+tokens = 17785530
+
+[[corpora.cmapss.measured.windows]]
+name = "w50s5"
+count = 25395
+tokens = 26664750
+
+[[corpora.cmapss.measured.windows]]
+name = "w100s10"
+count = 9334
+tokens = 19601400
+
 [corpora.skab]
 name = "SKAB"
 role = "second system: testbed telemetry with anomalies, regular, anomaly-detection task"
@@ -109,7 +134,7 @@ download_size = "repository archive, a few MB"
 epochs = 50
 pretraining_split = "all 35 experiment files; there is no official split, so units are held out by the task definition"
 verdict = "pretraining"
-decision = "Tentative: enough units, far too few tokens; anomaly task corpus and a small ingredient of the mix."
+decision = "Enough units, far too few values: the anomaly task corpus and a small ingredient of the mix; its own backbone is a data-starved control."
 
 [corpora.skab.licence]
 terms = "GPL-3.0 (LICENSE at the repository root); no separate statement for the data files, which sit in the same repository. Derivatives are allowed under the same copyleft licence."
@@ -144,6 +169,30 @@ unit = "samples"
 length = 200
 stride = 20
 
+[corpora.skab.measured]
+measured_on = 2026-09-11
+units = 35
+channels = 8
+observations = 374448
+archive_bytes = 5419930
+timeless_tokens_per_unit = 0
+notes = "files per folder anomaly-free: 1, other: 14, valve1: 16, valve2: 4; rows per file min/median/max 745/1,141/9,405; median spacing 1 s"
+
+[[corpora.skab.measured.windows]]
+name = "w50s10"
+count = 4525
+tokens = 1810000
+
+[[corpora.skab.measured.windows]]
+name = "w100s10"
+count = 4350
+tokens = 3480000
+
+[[corpora.skab.measured.windows]]
+name = "w200s20"
+count = 2011
+tokens = 3217600
+
 [corpora.smd]
 name = "SMD"
 role = "third system: server telemetry, regular, multivariate anomaly-detection task"
@@ -154,7 +203,7 @@ download_size = "repository archive, of the order of 100 MB"
 epochs = 20
 pretraining_split = "the 28 train files (first half of each machine); the test halves with labels stay out"
 verdict = "pretraining"
-decision = "Tentative: the largest classical source, four fifths of the mix's unique values; the licence of the data itself is the open question."
+decision = "The largest classical source, four fifths of the classical values; stays in pretraining, its tokenised derivative stays private because the data's own licence is unstated."
 
 [corpora.smd.licence]
 terms = "The repository is MIT-licensed with the data folder inside it; there is no separate statement for the data, which the authors 'collected from a large Internet company'."
@@ -189,6 +238,30 @@ unit = "samples"
 length = 200
 stride = 40
 
+[corpora.smd.measured]
+measured_on = 2026-09-11
+units = 28
+channels = 38
+observations = 26919390
+archive_bytes = 105339616
+timeless_tokens_per_unit = 0
+notes = "28 machines in groups 1: 8, 2: 9, 3: 11; rows per machine min/median/max 23,687/23,702/28,743; one-minute sampling per the authors; test halves not counted"
+
+[[corpora.smd.measured.windows]]
+name = "w50s10"
+count = 70715
+tokens = 134358500
+
+[[corpora.smd.measured.windows]]
+name = "w100s20"
+count = 35296
+tokens = 134124800
+
+[[corpora.smd.measured.windows]]
+name = "w200s40"
+count = 17586
+tokens = 133653600
+
 [corpora.physionet2012]
 name = "PhysioNet 2012"
 role = "irregular: sparse clinical stream, binary classification task"
@@ -199,7 +272,7 @@ download_size = "22.7 MB (set-a.zip, set-b.zip, set-c.tar.gz, three outcome file
 epochs = 100
 pretraining_split = "set-a (4,000 stays); set-b is validation, set-c the frozen test set"
 verdict = "pretraining"
-decision = "Tentative: the only classical corpus on the irregular axis, so it stays in the mix despite very few tokens."
+decision = "The only classical corpus on the irregular axis: stays in the mix despite very few values, and hosts the classification task."
 
 [corpora.physionet2012.licence]
 terms = "Open Data Commons Attribution License v1.0: share, adapt and build derivative databases with attribution; open access, no credentialing."
@@ -236,17 +309,41 @@ unit = "hours"
 length = 12
 stride = 6
 
+[corpora.physionet2012.measured]
+measured_on = 2026-09-11
+units = 4000
+channels = 37
+observations = 1733980
+archive_bytes = 22735280
+timeless_tokens_per_unit = 5
+notes = "set-a stays counted; other sets present: set-b: 4000, set-c: 4000; observations per stay min/median/max 0/422/1,496; latest observation at 48.0 h; 37 distinct time-series parameters"
+
+[[corpora.physionet2012.measured.windows]]
+name = "h48"
+count = 3997
+tokens = 1733525
+
+[[corpora.physionet2012.measured.windows]]
+name = "h24s12"
+count = 11978
+tokens = 2564509
+
+[[corpora.physionet2012.measured.windows]]
+name = "h12s6"
+count = 27863
+tokens = 3005333
+
 [corpora.esa_ad]
 name = "ESA Anomaly Dataset"
-role = "candidate: satellite telemetry, irregular with varying rates per channel, anomaly-detection task"
+role = "second irregular system: satellite telemetry with varying rates per channel, anomaly-detection task"
 regime = "irregular"
 publisher = "European Space Agency (De Canio, Kotowski, Haskamp)"
 source = "https://zenodo.org/records/15237121"
 download_size = "11.6 GB (three mission zips)"
 epochs = 10
 pretraining_split = "first half of each mission by time, as the benchmark itself splits; the second half is the frozen test set"
-verdict = "candidate"
-decision = "Tentative: two independent units, so an ingredient at most; its ~50M values after subsampling would more than double the mix — decision after the measured count."
+verdict = "ingredient"
+decision = "Enters the mix, never a single-corpus backbone: two independent units, but 64M measured values that triple the mix and carry the reference model over the value threshold."
 
 [corpora.esa_ad.licence]
 terms = "CC BY 3.0 IGO (Zenodo record, version 2 of 2025-04-17): attribution required, derivatives and redistribution allowed."
@@ -297,6 +394,33 @@ name = "h6s6"
 unit = "hours"
 length = 6
 stride = 6
+
+# Measured over the lightweight channels only: `native_observations` is what those channels hold
+# in the training halves before the 30-second binning, not the missions' full 776M points.
+[corpora.esa_ad.measured]
+measured_on = 2026-09-11
+units = 2
+channels = 17
+observations = 64328525
+native_observations = 87112696
+archive_bytes = 11609189449
+timeless_tokens_per_unit = 0
+notes = "ESA-Mission1: 76 channels, 6 selected (lightweight), span 14.0 y, training 7.0 y, native 46,315,104 -> 44,100,966 at <= 1 per 30 s, median native spacing 30 s; ESA-Mission2: 100 channels, 11 selected (lightweight), span 3.5 y, training 1.7 y, native 40,797,592 -> 20,227,559 at <= 1 per 30 s, median native spacing 18 s; ESA-Mission3 (measured, not counted): 48 channels, 24 selected (lightweight), span 8.0 y, training 4.0 y, native 183,767,496 -> 92,102,604 at <= 1 per 30 s, median native spacing 15 s"
+
+[[corpora.esa_ad.measured.windows]]
+name = "h1s1"
+count = 76685
+tokens = 64326491
+
+[[corpora.esa_ad.measured.windows]]
+name = "h3s3"
+count = 25561
+tokens = 64322411
+
+[[corpora.esa_ad.measured.windows]]
+name = "h6s6"
+count = 12780
+tokens = 64316291
 
 # Substitutes for SMD's role, priced from the literature only; downloaded when and if chosen.
 

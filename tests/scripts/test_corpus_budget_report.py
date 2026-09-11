@@ -243,9 +243,11 @@ def test_a_full_budget_campaign_uses_every_window_of_the_task_corpus():
     budget = Budget.load(DEFAULT_CONFIG)
     model = budget.tier("M")
     task = budget.corpora["cmapss"]
-    windows = task.estimate.units * windows_in_series(
-        task.estimate.series_length, task.pick_window("default")
-    )
+    default = task.pick_window("default")
+    if task.measured is not None:
+        windows = next(item.count for item in task.measured.windows if item.name == default.name)
+    else:
+        windows = task.estimate.units * windows_in_series(task.estimate.series_length, default)
     fixed = Campaign(name="fixed", runs=1, budget=windows, epochs=30, task_corpus="cmapss")
     everything = Campaign(name="all", runs=1, budget="all", epochs=30, task_corpus="cmapss")
 
