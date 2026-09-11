@@ -39,6 +39,8 @@ from tests.catalog.domain.support import (
     description,
     grid,
     identity_scheme,
+    measured,
+    occupied_extents,
     scheme_for,
     unit,
 )
@@ -378,6 +380,49 @@ def test_tokenising_needs_statistics_for_every_channel_it_meets(tokeniser: Token
 
     with pytest.raises(MissingChannelStatisticsError, match="temperature"):
         windows_of(tokeniser, UNIT, REGULAR, unfitted)
+
+
+# --- reading windows back ------------------------------------------------------------------------
+
+
+def test_a_window_reads_back_as_the_observations_that_fell_into_it(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR)
+
+    windows = windows_of(tokeniser, UNIT, REGULAR, scheme)
+
+    extents = occupied_extents(UNIT, REGULAR, WINDOW)
+    for extent, window in zip(extents, windows, strict=True):
+        inside = [o for o in REGULAR if extent.contains(o.time)]
+        assert measured(scheme.reconstruct(window, extent).observations) == measured(inside)
+
+
+def test_reading_the_windows_back_recovers_nothing_that_fell_between_them(
+    tokeniser: Tokeniser,
+) -> None:
+    scheme = fitted(tokeniser, REGULAR)
+    # Longer stride than window: the observations from 2 to 4 and from 7 on reach no window.
+    sparse = WindowSpec(length=2, stride=5)
+
+    windows = windows_of(tokeniser, UNIT, REGULAR, scheme, sparse)
+
+    extents = occupied_extents(UNIT, REGULAR, sparse)
+    read_back = chain.from_iterable(
+        scheme.reconstruct(window, extent).observations
+        for extent, window in zip(extents, windows, strict=True)
+    )
+    covered = [o for o in REGULAR if o.time in (0.0, 1.0, 5.0, 6.0)]
+    assert measured(read_back) == measured(covered)
+
+
+def test_a_window_reads_back_the_static_features_of_its_unit(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR, [AGE], STATIC_SCHEMA)
+
+    windows = windows_of(tokeniser, STATIC_UNIT, REGULAR, scheme)
+
+    extents = occupied_extents(STATIC_UNIT, REGULAR, WINDOW)
+    for extent, window in zip(extents, windows, strict=True):
+        features = scheme.reconstruct(window, extent).static_features
+        assert [(f.channel, round(f.value, 6)) for f in features] == [(AGE.channel, AGE.value)]
 
 
 # --- synthetic irregularity ---------------------------------------------------------------------
