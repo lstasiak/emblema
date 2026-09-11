@@ -46,7 +46,7 @@ The artifact store speaks S3 to Garage locally and to a Cloudflare R2 bucket tha
 The raw corpora come from their sources of record into `data/raw/` (not tracked) and are priced before any tokenizer exists: units, windows and tokens are counted from the files, and the GPU-hour budget per compute tier is derived from `scripts/corpus_budget.toml`.
 
 ```sh
-uv run scripts/fetch_corpora.py            # about 12 GB, resumable
+uv run scripts/fetch_corpora.py            # about 12 GB; a re-run skips what is already there
 uv run scripts/corpus_facts.py             # counts, printed as TOML to paste into the budget file
 uv run scripts/corpus_budget_report.py     # the budget tables
 ```

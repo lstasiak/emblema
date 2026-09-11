@@ -1,8 +1,12 @@
 import io
+import json
+import struct
 import tarfile
 import urllib.error
 import urllib.request
 import zipfile
+import zlib
+from collections.abc import Collection
 from email.message import Message
 from pathlib import Path
 
@@ -11,15 +15,24 @@ import pytest
 from scripts import fetch_corpora
 from scripts.fetch_corpora import (
     CORPORA,
+    DEFLATE64,
     Archive,
     Corpus,
+    Fetched,
     checksum_status,
+    checksums,
     download,
     extract,
     fetch,
+    problems,
+    report,
     select,
     unpack,
 )
+
+LOCAL_HEADER = "<4sHHHHHIIIHH"
+CENTRAL_HEADER = "<4sHHHHHHIIIHHHHHII"
+END_OF_DIRECTORY = "<4sHHHHIIH"
 
 
 def zip_with(path: Path, members: dict[str, bytes]) -> Path:
@@ -27,6 +40,65 @@ def zip_with(path: Path, members: dict[str, bytes]) -> Path:
         for name, payload in members.items():
             bundle.writestr(name, payload)
     return path
+
+
+def handmade_zip(
+    path: Path,
+    members: dict[str, bytes],
+    *,
+    deflate64: Collection[str] = (),
+    corrupt: Collection[str] = (),
+) -> Path:
+    """A zip written by hand, because ``zipfile`` can neither write nor read Deflate64.
+
+    Members named in ``deflate64`` use method 9, the rest are stored; a member named in
+    ``corrupt`` gets a CRC that does not match its bytes.
+    """
+    import inflate64
+
+    entries, directory, offset = bytearray(), bytearray(), 0
+    for name, payload in members.items():
+        if name in deflate64:
+            deflater = inflate64.Deflater()
+            body = deflater.deflate(payload) + deflater.flush()
+        else:
+            body = payload
+        method = DEFLATE64 if name in deflate64 else 0
+        crc = zlib.crc32(b"not the payload" if name in corrupt else payload)
+        encoded = name.encode()
+        sizes = (crc, len(body), len(payload), len(encoded))
+        entries += struct.pack(LOCAL_HEADER, b"PK\x03\x04", 20, 0, method, 0, 0, *sizes, 0)
+        entries += encoded + body
+        directory += struct.pack(
+            CENTRAL_HEADER, b"PK\x01\x02", 20, 20, 0, method, 0, 0, *sizes, 0, 0, 0, 0, 0, offset
+        )
+        directory += encoded
+        offset = len(entries)
+    end = struct.pack(
+        END_OF_DIRECTORY,
+        b"PK\x05\x06",
+        0,
+        0,
+        len(members),
+        len(members),
+        len(directory),
+        offset,
+        0,
+    )
+    path.write_bytes(bytes(entries + directory + end))
+    return path
+
+
+def count_hashing(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
+    """Replace the hashing with a counter: what it returns does not matter, how often does."""
+    hashed: list[Path] = []
+
+    def digests(path: Path) -> tuple[str, str]:
+        hashed.append(path)
+        return "sha", "md5"
+
+    monkeypatch.setattr(fetch_corpora, "digests", digests)
+    return hashed
 
 
 class FakeResponse:
@@ -226,3 +298,142 @@ def test_select_defaults_to_every_corpus_and_rejects_unknown_keys():
     assert [corpus.key for corpus in select(["skab", "cmapss"])] == ["skab", "cmapss"]
     with pytest.raises(SystemExit, match="unknown corpus: nope"):
         select(["nope"])
+
+
+def test_a_deflate64_member_is_extracted_where_zipfile_gives_up(tmp_path: Path):
+    table = b"Channel,Target\n" + b"channel_1,NO\n" * 500
+    archive = handmade_zip(
+        tmp_path / "mission.zip",
+        {"ESA-Mission1/channels.csv": table, "ESA-Mission1/channels/channel_1.zip": b"stored"},
+        deflate64=["ESA-Mission1/channels.csv"],
+    )
+    into = tmp_path / "out"
+
+    with pytest.raises(NotImplementedError):
+        zipfile.ZipFile(archive).extractall(tmp_path / "zipfile-says-no")
+    extracted = list(extract(archive, into))
+
+    assert extracted == [
+        into / "ESA-Mission1" / "channels.csv",
+        into / "ESA-Mission1" / "channels" / "channel_1.zip",
+    ]
+    assert (into / "ESA-Mission1" / "channels.csv").read_bytes() == table
+    assert (into / "ESA-Mission1" / "channels" / "channel_1.zip").read_bytes() == b"stored"
+
+
+def test_a_deflate64_member_that_decompresses_wrong_is_refused(tmp_path: Path):
+    archive = handmade_zip(
+        tmp_path / "mission.zip",
+        {"channels.csv": b"Channel,Target\n"},
+        deflate64=["channels.csv"],
+        corrupt=["channels.csv"],
+    )
+
+    with pytest.raises(ValueError, match=r"channels\.csv is corrupt"):
+        list(extract(archive, tmp_path / "out"))
+
+
+def test_checksums_are_remembered_so_a_second_run_hashes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    target = tmp_path / "big.zip"
+    target.write_bytes(b"payload")
+    hashed = count_hashing(monkeypatch)
+
+    first = checksums(target)
+
+    assert checksums(target) == first == ("sha", "md5")
+    assert hashed == [target]
+    assert json.loads((tmp_path / ".digests.json").read_text())["big.zip"]["size"] == 7
+
+
+def test_a_file_of_another_size_is_hashed_again(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    target = tmp_path / "big.zip"
+    target.write_bytes(b"payload")
+    hashed = count_hashing(monkeypatch)
+    checksums(target)
+
+    target.write_bytes(b"a longer payload")
+    checksums(target)
+
+    assert hashed == [target, target]
+
+
+def test_recheck_distrusts_what_was_remembered(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    target = tmp_path / "big.zip"
+    target.write_bytes(b"payload")
+    hashed = count_hashing(monkeypatch)
+    checksums(target)
+
+    checksums(target, recheck=True)
+
+    assert hashed == [target, target]
+
+
+def test_an_unreadable_note_is_no_note_at_all(tmp_path: Path):
+    target = tmp_path / "file.txt"
+    target.write_bytes(b"payload")
+    (tmp_path / ".digests.json").write_text("{ truncated")
+
+    assert checksums(target) == fetch_corpora.digests(target)
+
+
+def test_a_file_set_aside_is_forgotten_so_its_replacement_is_hashed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(fetch_corpora, "DATA_ROOT", tmp_path)
+    monkeypatch.setattr(fetch_corpora, "download", lambda url, target: target.write_bytes(b"data"))
+    corpus = Corpus(
+        key="x",
+        title="x",
+        archives=(Archive(url="https://example.org/a.zip", filename="a.zip", md5="0" * 32),),
+    )
+
+    (row,) = fetch(corpus)
+
+    assert not row.ok
+    assert "a.zip" not in json.loads((tmp_path / "x" / ".digests.json").read_text())
+
+
+def test_an_archive_that_fails_does_not_stop_the_ones_behind_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(fetch_corpora, "DATA_ROOT", tmp_path)
+
+    def flaky(url: str, target: Path) -> None:
+        if target.name == "a.zip":
+            raise urllib.error.URLError("connection reset")
+        target.write_bytes(b"data")
+
+    monkeypatch.setattr(fetch_corpora, "download", flaky)
+    corpus = Corpus(
+        key="x",
+        title="x",
+        archives=(
+            Archive(url="https://example.org/a.zip", filename="a.zip"),
+            Archive(url="https://example.org/b.txt", filename="b.txt"),
+        ),
+    )
+
+    first, second = fetch(corpus)
+
+    assert not first.ok
+    assert "connection reset" in first.problem
+    assert second.ok
+    assert (tmp_path / "x" / "b.txt").read_bytes() == b"data"
+
+
+def test_the_report_holds_what_arrived_and_the_problems_what_did_not():
+    rows = [
+        Fetched("x", "a.zip", 4, "abc", "ok"),
+        Fetched("x", "b.zip", 0, "", "not verified", "connection reset"),
+        Fetched("x", "c.zip", 4, "def", "MISMATCH (got def)"),
+    ]
+
+    table, listing = report(rows), problems(rows)
+
+    assert "a.zip" in table
+    assert "b.zip" not in table
+    assert "- x/b.zip: connection reset" in listing
+    assert "- x/c.zip: MISMATCH (got def)" in listing
+    assert "a.zip" not in listing
