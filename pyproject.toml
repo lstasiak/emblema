@@ -51,6 +51,7 @@ dev = [
     "pytest-cov>=6.0",
     "boto3-stubs[s3]>=1.43",
     "inflate64>=1.0.4",
+    "matplotlib>=3.10",
     "typing-extensions>=4.7",
 ]
 
@@ -111,6 +112,7 @@ allowed-confusables = ["×"]
 "scripts/onnx_export_report.py" = ["E402"]
 "scripts/corpus_facts.py" = ["E402"]
 "scripts/loader_throughput_report.py" = ["E402"]
+"scripts/window_sanity_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
