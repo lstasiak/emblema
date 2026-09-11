@@ -4,7 +4,6 @@ from emblema.shared.kernel.tokens import Token, TokenWindow
 
 pytest.importorskip("torch")
 
-from emblema.shared.adapters.loaders.window_dataset import WindowDataset
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
@@ -112,12 +111,6 @@ def test_an_epoch_with_no_whole_batch_in_it_delivers_nothing() -> None:
 
     assert list(loader.batches_of(0)) == []
     assert len(loader) == 0
-
-
-def test_a_dataset_built_elsewhere_is_loaded_as_it_is() -> None:
-    loader = WindowLoader(WindowDataset(WINDOWS), batch_size=3, seed=1, shuffle=False)
-
-    assert epoch_identities(loader, 0) == [float(index) for index in range(1, 8)]
 
 
 def test_workers_deliver_the_epoch_the_training_process_ordered() -> None:

@@ -27,7 +27,7 @@ class WindowLoader:
 
     def __init__(
         self,
-        windows: WindowDataset | Sequence[TokenWindow],
+        windows: Sequence[TokenWindow],
         *,
         batch_size: int,
         seed: int,
@@ -38,8 +38,8 @@ class WindowLoader:
         """Draw batches of ``batch_size`` windows from ``windows``.
 
         Args:
-            windows: The windows to draw batches from, or a dataset already holding them; at least
-                one either way.
+            windows: The windows to draw batches from; at least one. Any sequence will do, so a
+                store that reads them from a memory map takes this place unchanged.
             batch_size: How many windows a batch holds.
             seed: The run's seed, which with the epoch fixes the order.
             shuffle: Whether the order depends on the seed and the epoch at all. A pass that only
@@ -52,7 +52,7 @@ class WindowLoader:
         Raises:
             ValueError: If no window is given.
         """
-        dataset = windows if isinstance(windows, WindowDataset) else WindowDataset(windows)
+        dataset = WindowDataset(windows)
         self._order = SeededShuffleSampler(len(dataset), seed=seed) if shuffle else None
         self._batches = DataLoader(
             dataset,
