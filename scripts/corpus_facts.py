@@ -331,10 +331,21 @@ def decimate(seconds: NDArray[np.int64], spacing: int) -> DecimatedChannel:
     return DecimatedChannel(int(seconds[0]), int(seconds[-1]), bins, counts, median)
 
 
-def measure_esa_ad(root: Path, corpus: Corpus, today: date) -> Measured:
+def channel_seconds(path: Path) -> NDArray[np.int64]:
+    """Observation times of one satellite channel, in seconds since the epoch.
+
+    A channel is a pandas DataFrame pickled inside a zip; the times are its index, or its first
+    column where the pickle did not keep one.
+    """
     # Imported here: pandas is not a project dependency, it is supplied ad hoc for this corpus.
     import pandas as pd  # ty: ignore[unresolved-import]
 
+    frame = pd.read_pickle(path)
+    index = frame.index if isinstance(frame.index, pd.DatetimeIndex) else frame.iloc[:, 0]
+    return np.asarray(pd.to_datetime(index).values, dtype="datetime64[s]").astype(np.int64)
+
+
+def measure_esa_ad(root: Path, corpus: Corpus, today: date) -> Measured:
     policy = corpus.subsampling
     if policy is None:
         raise SystemExit("esa_ad needs a [corpora.esa_ad.subsampling] table")
@@ -357,14 +368,10 @@ def measure_esa_ad(root: Path, corpus: Corpus, today: date) -> Measured:
         selected = select_channels(policy, mission.name, names, targets)
         if not selected:
             raise SystemExit(f"{mission.name}: the {policy.channel_set} policy selects no channel")
-        channels = []
-        for name in selected:
-            frame = pd.read_pickle(mission / "channels" / f"{name}.zip")
-            index = frame.index if isinstance(frame.index, pd.DatetimeIndex) else frame.iloc[:, 0]
-            seconds = np.asarray(pd.to_datetime(index).values, dtype="datetime64[s]").astype(
-                np.int64
-            )
-            channels.append(decimate(np.sort(seconds), spacing))
+        channels = [
+            decimate(np.sort(channel_seconds(mission / "channels" / f"{name}.zip")), spacing)
+            for name in selected
+        ]
         start = min(channel.first for channel in channels)
         end = max(channel.last for channel in channels)
         cutoff = start + (end - start) // 2 if policy.portion == "first-half" else end + 1

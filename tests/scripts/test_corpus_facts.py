@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from scripts import corpus_facts
 from scripts.corpus_budget_report import (
     DEFAULT_CONFIG,
     Budget,
@@ -17,6 +18,7 @@ from scripts.corpus_budget_report import (
 from scripts.corpus_facts import (
     decimate,
     measure_cmapss,
+    measure_esa_ad,
     measure_physionet2012,
     measure_skab,
     measure_smd,
@@ -222,6 +224,82 @@ def test_channel_table_without_a_channel_column_fails_with_the_columns_seen(tmp_
 
     with pytest.raises(SystemExit, match="no column names the channel"):
         read_channel_table(tmp_path / "channels.csv")
+
+
+H1S1 = Window(name="h1s1", unit="hours", length=1, stride=1, default=True)
+
+
+def mission(root: Path, name: str, channels: dict[str, list[int]], targets: str = "1") -> None:
+    """One unpacked mission: the channel table, the directory the measurer looks for, no pickles."""
+    rows = "".join(f"{channel},{targets}\n" for channel in channels)
+    write(root / name / "channels.csv", "Channel,Target\n" + rows)
+    (root / name / "channels").mkdir(parents=True, exist_ok=True)
+
+
+def serve_channels(monkeypatch: pytest.MonkeyPatch, times: dict[str, dict[str, list[int]]]) -> None:
+    """Stand in for the pandas pickles: the times of each channel, by mission and channel name."""
+
+    def read(path: Path) -> np.ndarray:
+        return np.array(times[path.parent.parent.name][path.stem], dtype=np.int64)
+
+    monkeypatch.setattr(corpus_facts, "channel_seconds", read)
+
+
+def test_esa_counts_the_selected_channels_of_the_training_half(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # Channels 41-46 are Mission1's lightweight set; 50 is outside it. The mission spans two
+    # hours, so the training half ends at 3600 s and the 30-second bins end at index 120.
+    times = {"channel_41": [0, 10, 3000, 5000, 7200], "channel_45": [1800, 5400], "channel_50": [0]}
+    mission(tmp_path, "ESA-Mission1", times)
+    serve_channels(monkeypatch, {"ESA-Mission1": times})
+
+    measured = measure_esa_ad(tmp_path, corpus("esa_ad", H1S1), TODAY)
+
+    assert (measured.units, measured.channels) == (1, 2)
+    assert (measured.observations, measured.native_observations) == (3, 4)
+    assert measured.windows == (MeasuredWindow(name="h1s1", count=1, tokens=3),)
+    assert "3 channels, 2 selected (lightweight)" in measured.notes
+    assert "native 4 -> 3 at <= 1 per 30 s" in measured.notes
+
+
+def test_esa_bins_observations_that_arrive_faster_than_the_spacing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    times = {"channel_41": [0, 1, 2, 3, 3600]}
+    mission(tmp_path, "ESA-Mission1", times)
+    serve_channels(monkeypatch, {"ESA-Mission1": times})
+
+    measured = measure_esa_ad(tmp_path, corpus("esa_ad", H1S1), TODAY)
+
+    assert (measured.observations, measured.native_observations) == (1, 4)
+    assert "median native spacing 1 s" in measured.notes
+
+
+def test_a_mission_outside_the_policy_is_measured_but_not_counted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    first = {"channel_41": [0, 3600]}
+    third = {"channel_1": [0, 3600], "channel_2": [0, 3600]}
+    mission(tmp_path, "ESA-Mission1", first)
+    mission(tmp_path, "ESA-Mission3", third)
+    serve_channels(monkeypatch, {"ESA-Mission1": first, "ESA-Mission3": third})
+
+    measured = measure_esa_ad(tmp_path, corpus("esa_ad", H1S1), TODAY)
+
+    assert (measured.units, measured.channels, measured.observations) == (1, 1, 1)
+    assert "ESA-Mission3 (measured, not counted)" in measured.notes
+
+
+def test_esa_refuses_a_mission_whose_policy_selects_no_channel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    times = {"channel_50": [0, 3600]}
+    mission(tmp_path, "ESA-Mission1", times)
+    serve_channels(monkeypatch, {"ESA-Mission1": times})
+
+    with pytest.raises(SystemExit, match="lightweight policy selects no channel"):
+        measure_esa_ad(tmp_path, corpus("esa_ad", H1S1), TODAY)
 
 
 # --- output -------------------------------------------------------------------------------------
