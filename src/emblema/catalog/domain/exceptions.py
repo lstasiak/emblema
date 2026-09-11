@@ -34,6 +34,46 @@ class InvalidCorpusVersionError(CatalogError, ValueError):
     pass
 
 
+class InvalidUnitKeyError(CatalogError, ValueError):
+    pass
+
+
+class InvalidObservationError(CatalogError, ValueError):
+    pass
+
+
+class InvalidStaticFeatureError(CatalogError, ValueError):
+    pass
+
+
+class InvalidTimeExtentError(CatalogError, ValueError):
+    pass
+
+
+class InvalidCorpusUnitError(CatalogError, ValueError):
+    pass
+
+
+class InvalidWindowSpecError(CatalogError, ValueError):
+    pass
+
+
+class InvalidChannelVocabularyError(CatalogError, ValueError):
+    pass
+
+
+class InvalidChannelStatisticsError(CatalogError, ValueError):
+    pass
+
+
+class InvalidTokenisationSchemeError(CatalogError, ValueError):
+    pass
+
+
+class InvalidUnitSplitError(CatalogError, ValueError):
+    pass
+
+
 class CorpusVersionNotFoundError(CatalogError):
     pass
 
@@ -66,6 +106,22 @@ class CorpusNameTakenError(CatalogError):
     pass
 
 
+class UnknownChannelError(CatalogError):
+    pass
+
+
+class ChannelRedeclaredError(CatalogError):
+    pass
+
+
+class ChannelAlreadyFittedError(CatalogError):
+    pass
+
+
+class MissingChannelStatisticsError(CatalogError):
+    pass
+
+
 class CorpusReadError(CatalogError):
     pass
 
@@ -75,4 +131,24 @@ class CorpusDataNotFoundError(CorpusReadError):
 
 
 class MalformedCorpusDataError(CorpusReadError):
+    pass
+
+
+class UnknownUnitError(CorpusReadError):
+    pass
+
+
+class TokenisationError(CatalogError):
+    pass
+
+
+class ObservationOutOfOrderError(TokenisationError):
+    pass
+
+
+class ObservationOutsideExtentError(TokenisationError):
+    pass
+
+
+class ChannelKindMismatchError(TokenisationError):
     pass

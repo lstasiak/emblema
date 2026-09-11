@@ -49,7 +49,9 @@ class TokenBatch:
         timeless[:, :2] = True
         return cls(
             features=torch.randn(batch, tokens, N_FEATURES, generator=generator),
-            channel_ids=torch.randint(0, N_CHANNELS, (batch, tokens), generator=generator),
+            # Identifier 0 is reserved for padding in the representation, so real tokens draw
+            # from 1 upwards.
+            channel_ids=torch.randint(1, N_CHANNELS, (batch, tokens), generator=generator),
             timestamps=torch.rand(batch, tokens, generator=generator),
             timeless=timeless,
             padding_mask=padding_mask,

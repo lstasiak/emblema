@@ -1,11 +1,18 @@
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.corpus_content import CorpusContent
 from emblema.catalog.domain.corpus_description import CorpusDescription
-from emblema.catalog.domain.exceptions import CorpusDataNotFoundError, MalformedCorpusDataError
+from emblema.catalog.domain.corpus_unit import CorpusUnit, TimeExtent
+from emblema.catalog.domain.exceptions import (
+    CorpusDataNotFoundError,
+    MalformedCorpusDataError,
+    UnknownUnitError,
+)
+from emblema.catalog.domain.identifiers import UnitKey
+from emblema.catalog.domain.observation import Observation
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.sampling import SamplingRegime
 
@@ -40,6 +47,7 @@ SENSORS = (
 
 # Unit number, cycle and the three operational settings precede the sensors on every row.
 LEADING_COLUMNS = 5
+WIDTH = LEADING_COLUMNS + len(SENSORS)
 
 
 class CmapssCorpusReader:
@@ -60,6 +68,12 @@ class CmapssCorpusReader:
     The checksum covers the bytes of the selected files in subset order, whatever order the
     subsets were named in, so it is the provenance of exactly what was read and two readers over
     the same files agree.
+
+    Units are keyed ``<subset>/<engine>`` because engine numbers restart in every subset. The time
+    axis of a unit is its cycle index: an engine of ``L`` cycles spans ``[1, L + 1)``, a cycle
+    occupying the unit interval that starts at its index. The rows of an engine form one
+    contiguous block of its file, which the reader requires, so the observations of one engine are
+    read by scanning its file up to the block and no further.
     """
 
     def __init__(self, root: Path, subsets: Iterable[str] = SUBSETS) -> None:
@@ -79,7 +93,7 @@ class CmapssCorpusReader:
             raise ValueError(f"unknown C-MAPSS subsets {unknown}; expected some of {SUBSETS}")
         if not chosen:
             raise ValueError("at least one C-MAPSS subset is needed")
-        self._files = tuple(root / f"train_{name}.txt" for name in SUBSETS if name in chosen)
+        self._files = {name: root / f"train_{name}.txt" for name in SUBSETS if name in chosen}
 
     def describe(self) -> CorpusDescription:
         """Validate the selected files and describe them.
@@ -87,23 +101,96 @@ class CmapssCorpusReader:
         Raises:
             CorpusDataNotFoundError: If a selected file is missing.
             MalformedCorpusDataError: If a row has the wrong width, a value is not a finite
-                number, an engine's cycles do not run 1, 2, 3, ... or a file holds no engine.
+                number, an engine's cycles do not run 1, 2, 3, ..., an engine's rows are not one
+                contiguous block, or a file holds no engine.
         """
-        contents = [self._bytes_of(path) for path in self._files]
-        lengths = [
-            length
-            for path, content in zip(self._files, contents, strict=True)
-            for length in self._cycles_per_engine(path.name, content)
-        ]
+        lengths: list[int] = []
+
+        def contents() -> Iterator[bytes]:
+            """The files in subset order, each counted as it passes, then let go."""
+            for path in self._files.values():
+                content = self._bytes_of(path)
+                lengths.extend(self._cycles_per_engine(path.name, content).values())
+                yield content
+
+        # The checksum consumes the files one at a time, so the whole corpus is never in memory.
+        checksum = Checksum.of_chunks(contents())
         return CorpusDescription(
             channel_schema=ChannelSchema(frozenset(SENSORS)),
             sampling_regime=SamplingRegime.REGULAR,
             content=CorpusContent(
-                checksum=Checksum.of_chunks(contents),
+                checksum=checksum,
                 unit_count=len(lengths),
                 observation_count=sum(lengths) * len(SENSORS),
             ),
         )
+
+    def read_units(self) -> Iterator[CorpusUnit]:
+        """Every engine of the selected subsets, in file order.
+
+        Raises:
+            CorpusDataNotFoundError: If a selected file is missing.
+            MalformedCorpusDataError: As for ``describe``.
+        """
+        for name, path in self._files.items():
+            engines = self._cycles_per_engine(path.name, self._bytes_of(path))
+            for engine, cycles in engines.items():
+                yield CorpusUnit(UnitKey(f"{name}/{engine}"), TimeExtent(1.0, cycles + 1.0))
+
+    def read_observations(self, unit: UnitKey) -> Iterator[Observation]:
+        """The 21 sensor values of every cycle of one engine, cycle by cycle.
+
+        What is known without reading is settled before the stream is handed over; that a file
+        holds no such engine is known only once it has been scanned, so that one arrives at the
+        end of the stream.
+
+        Raises:
+            UnknownUnitError: If the key does not name an engine of a selected subset — when the
+                key itself cannot name one, before the stream starts; when the file turns out not
+                to hold it, when the stream ends.
+            CorpusDataNotFoundError: If the subset's file is missing.
+            MalformedCorpusDataError: If a row of the engine is malformed or its cycles do not
+                run 1, 2, 3, ...
+        """
+        name, engine = self._locate(unit)
+        path = self._files[name]
+        if not path.is_file():
+            raise CorpusDataNotFoundError(f"{path} is missing")
+        return self._observations_of(path, engine)
+
+    @classmethod
+    def _observations_of(cls, path: Path, engine: int) -> Iterator[Observation]:
+        marker = str(engine)
+        expected = 1
+        with path.open("rb") as file:
+            for number, raw in enumerate(file, 1):
+                line = raw.decode("ascii", errors="replace")
+                first = line.split(None, 1)
+                # A blank line carries nothing, here as in every other scan: it is not the end of
+                # the block, and taking it for one would truncate the engine without a word.
+                if not first:
+                    continue
+                if first[0] != marker:
+                    if expected > 1:
+                        break
+                    continue
+                _, cycle, sensors = cls._parse_row(path.name, number, line.split())
+                if cycle != expected:
+                    raise MalformedCorpusDataError(
+                        f"{path.name}, line {number}: engine {engine} jumps to cycle {cycle} after "
+                        f"cycle {expected - 1}"
+                    )
+                expected += 1
+                for channel, value in zip(SENSORS, sensors, strict=True):
+                    yield Observation(channel.name, float(cycle), value)
+        if expected == 1:
+            raise UnknownUnitError(f"{path.name} has no engine {engine}")
+
+    def _locate(self, unit: UnitKey) -> tuple[str, int]:
+        name, separator, engine = unit.value.partition("/")
+        if not separator or name not in self._files or not (engine.isascii() and engine.isdigit()):
+            raise UnknownUnitError(f"{unit} is not an engine of a selected subset")
+        return name, int(engine)
 
     @staticmethod
     def _bytes_of(path: Path) -> bytes:
@@ -111,32 +198,46 @@ class CmapssCorpusReader:
             raise CorpusDataNotFoundError(f"{path} is missing")
         return path.read_bytes()
 
-    @staticmethod
-    def _cycles_per_engine(name: str, content: bytes) -> list[int]:
+    @classmethod
+    def _cycles_per_engine(cls, name: str, content: bytes) -> dict[int, int]:
         cycles: dict[int, int] = {}
-        width = LEADING_COLUMNS + len(SENSORS)
-        for number, line in enumerate(content.decode("ascii", errors="replace").splitlines(), 1):
+        current: int | None = None
+        # Lines break on a newline and nothing else, as they do when the file is streamed; str
+        # splits on more than that, and the two scans must agree on what a line is.
+        lines = content.decode("ascii", errors="replace").split("\n")
+        for number, line in enumerate(lines, 1):
             fields = line.split()
             if not fields:
                 continue
-            if len(fields) != width:
-                raise MalformedCorpusDataError(
-                    f"{name}, line {number}: expected {width} columns, got {len(fields)}"
-                )
-            try:
-                unit, cycle = int(fields[0]), int(fields[1])
-                values = [float(field) for field in fields[2:]]
-            except ValueError as error:
-                raise MalformedCorpusDataError(f"{name}, line {number}: {error}") from error
-            if not all(math.isfinite(value) for value in values):
-                raise MalformedCorpusDataError(f"{name}, line {number}: non-finite value")
-            expected = cycles.get(unit, 0) + 1
+            engine, cycle, _ = cls._parse_row(name, number, fields)
+            if engine != current:
+                if engine in cycles:
+                    raise MalformedCorpusDataError(
+                        f"{name}, line {number}: engine {engine} resumes after engine {current}"
+                    )
+                current = engine
+            expected = cycles.get(engine, 0) + 1
             if cycle != expected:
                 raise MalformedCorpusDataError(
-                    f"{name}, line {number}: engine {unit} jumps to cycle {cycle} after "
+                    f"{name}, line {number}: engine {engine} jumps to cycle {cycle} after "
                     f"cycle {expected - 1}"
                 )
-            cycles[unit] = cycle
+            cycles[engine] = cycle
         if not cycles:
             raise MalformedCorpusDataError(f"{name}: no engine")
-        return list(cycles.values())
+        return cycles
+
+    @staticmethod
+    def _parse_row(name: str, number: int, fields: list[str]) -> tuple[int, int, list[float]]:
+        if len(fields) != WIDTH:
+            raise MalformedCorpusDataError(
+                f"{name}, line {number}: expected {WIDTH} columns, got {len(fields)}"
+            )
+        try:
+            engine, cycle = int(fields[0]), int(fields[1])
+            values = [float(field) for field in fields[2:]]
+        except ValueError as error:
+            raise MalformedCorpusDataError(f"{name}, line {number}: {error}") from error
+        if not all(math.isfinite(value) for value in values):
+            raise MalformedCorpusDataError(f"{name}, line {number}: non-finite value")
+        return engine, cycle, values[LEADING_COLUMNS - 2 :]

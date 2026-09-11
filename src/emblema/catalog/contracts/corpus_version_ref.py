@@ -19,10 +19,13 @@ class ChannelSpec:
     Attributes:
         name: Identifier of the channel within its corpus, non-blank.
         unit: Physical unit of the values, when the source documents one.
+        timeless: Whether the channel is a static feature of the corpus's units rather than a
+            quantity measured over time.
     """
 
     name: str
     unit: str | None = None
+    timeless: bool = False
 
     def __post_init__(self) -> None:
         if not self.name or self.name != self.name.strip():
