@@ -61,6 +61,15 @@ def test_moving_keeps_the_values_the_batch_held() -> None:
     assert torch.equal(moved.features, tensors.features)
 
 
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="needs Apple-silicon MPS")
+def test_every_tensor_reaches_the_accelerator_the_run_uses() -> None:
+    # Moving to an accelerator is the case `.to("cpu")` cannot fail on: a field left behind would
+    # only surface as a device mismatch inside the model.
+    moved = TokenTensors.from_windows([SHORT, LONG]).to("mps")
+
+    assert {tensor.device.type for tensor in moved.args} == {"mps"}
+
+
 def test_arguments_come_in_the_order_the_model_declares_its_inputs() -> None:
     tensors = TokenTensors.from_windows([SHORT])
 

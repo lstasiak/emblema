@@ -21,12 +21,10 @@ class TokenTensors:
     the codec's floating type and moved by ``to``. Only the floating tensors take a new type there
     — identifiers stay integral and masks stay boolean whatever precision the run uses.
 
-    Attributes:
-        features: ``[batch, tokens, 2]`` — value and gap per token, floating.
-        channel_ids: ``[batch, tokens]`` — vocabulary entry per token, int64.
-        timestamps: ``[batch, tokens]`` — position within the window per token, floating.
-        timeless: ``[batch, tokens]`` — whether the token is a static feature, bool.
-        padding_mask: ``[batch, tokens]`` — ``True`` where the position is padding, bool.
+    The fields are those of ``TokenBatch``, in that order and with that meaning; it describes the
+    layout, and describing it twice would leave two descriptions to keep true. What is fixed here
+    is the type each one reaches the model as: ``features`` and ``timestamps`` floating,
+    ``channel_ids`` int64, ``timeless`` and ``padding_mask`` bool.
     """
 
     features: Tensor
@@ -68,8 +66,18 @@ class TokenTensors:
 
     @property
     def args(self) -> tuple[Tensor, ...]:
-        """The tensors as positional arguments, in the order the model declares its inputs."""
-        return tuple(getattr(self, field.name) for field in fields(self))
+        """The tensors as positional arguments, in the order the model declares its inputs.
+
+        Spelled out rather than read off the fields, because this order is the model's calling
+        convention: reordering the fields must be a visible change here, not a silent one.
+        """
+        return (
+            self.features,
+            self.channel_ids,
+            self.timestamps,
+            self.timeless,
+            self.padding_mask,
+        )
 
     def to(
         self, device: torch.device | str | None = None, dtype: torch.dtype | None = None
