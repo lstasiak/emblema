@@ -4,29 +4,40 @@
 
 | Name                                                               |    Stmts |     Miss |   Branch |   BrPart |   Cover |   Missing |
 |------------------------------------------------------------------- | -------: | -------: | -------: | -------: | ------: | --------: |
-| src/emblema/catalog/adapters/in\_memory/corpus\_reader.py          |        8 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/adapters/in\_memory/corpus\_reader.py          |       29 |        0 |        6 |        0 |    100% |           |
 | src/emblema/catalog/adapters/in\_memory/corpus\_repository.py      |       16 |        0 |        4 |        0 |    100% |           |
-| src/emblema/catalog/adapters/readers/cmapss.py                     |       54 |        0 |       18 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/cmapss.py                     |      110 |        0 |       46 |        0 |    100% |           |
+| src/emblema/catalog/adapters/tokenisation/sliding\_window.py       |      112 |        0 |       32 |        0 |    100% |           |
 | src/emblema/catalog/application/corpus\_version\_ref\_assembler.py |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/application/register\_corpus.py                |       16 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/application/register\_corpus\_version.py       |       33 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/contracts/corpus\_version\_ref.py              |       23 |        0 |        8 |        0 |    100% |           |
+| src/emblema/catalog/contracts/corpus\_version\_ref.py              |       24 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/contracts/events.py                            |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/contracts/exceptions.py                        |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/contracts/identifiers.py                       |        4 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/domain/channel\_schema.py                      |       26 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/domain/channel\_schema.py                      |       27 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/domain/channel\_statistics.py                  |       14 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/domain/channel\_vocabulary.py                  |       48 |        0 |       24 |        0 |    100% |           |
 | src/emblema/catalog/domain/corpus.py                               |       51 |        0 |       20 |        0 |    100% |           |
 | src/emblema/catalog/domain/corpus\_content.py                      |       10 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/domain/corpus\_description.py                  |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/domain/corpus\_source.py                       |        9 |        0 |        4 |        0 |    100% |           |
+| src/emblema/catalog/domain/corpus\_unit.py                         |       26 |        0 |        6 |        0 |    100% |           |
 | src/emblema/catalog/domain/corpus\_version.py                      |       46 |        0 |       12 |        0 |    100% |           |
-| src/emblema/catalog/domain/exceptions.py                           |       36 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/domain/identifiers.py                          |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/domain/exceptions.py                           |       74 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/domain/identifiers.py                          |       12 |        0 |        2 |        0 |    100% |           |
 | src/emblema/catalog/domain/licence.py                              |       10 |        0 |        4 |        0 |    100% |           |
-| src/emblema/catalog/ports/corpus\_reader.py                        |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/domain/observation.py                          |       12 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/domain/static\_feature.py                      |       10 |        0 |        4 |        0 |    100% |           |
+| src/emblema/catalog/domain/tokenisation\_scheme.py                 |       31 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/domain/unit\_split.py                          |       28 |        0 |       10 |        0 |    100% |           |
+| src/emblema/catalog/domain/window\_spec.py                         |       21 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/ports/corpus\_reader.py                        |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/ports/corpus\_repository.py                    |        6 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/ports/tokeniser.py                             |       11 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/artifact\_store\_settings.py                    |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/settings.py                                     |       12 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/adapters/arrays/token\_batch.py                 |       39 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/clock.py                    |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/event\_publisher.py         |        8 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/event\_subscriber.py        |       10 |        0 |        0 |        0 |    100% |           |
@@ -40,19 +51,20 @@
 | src/emblema/shared/kernel/artifacts.py                             |        8 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/kernel/checksums.py                             |       42 |        0 |        8 |        0 |    100% |           |
 | src/emblema/shared/kernel/compute.py                               |        5 |        0 |        0 |        0 |    100% |           |
-| src/emblema/shared/kernel/exceptions.py                            |        8 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/kernel/exceptions.py                            |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/kernel/identifiers.py                           |       17 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/kernel/sampling.py                              |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/kernel/timestamps.py                            |       11 |        0 |        4 |        0 |    100% |           |
+| src/emblema/shared/kernel/tokens.py                                |       46 |        0 |       20 |        0 |    100% |           |
 | src/emblema/shared/ports/artifact\_store.py                        |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/clock.py                                  |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/event\_publisher.py                       |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/event\_subscriber.py                      |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                             |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                          |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                          |  **668** |    **4** |  **114** |    **1** | **99%** |           |
+| **TOTAL**                                                          | **1199** |    **4** |  **274** |    **1** | **99%** |           |
 
-21 empty files skipped.
+23 empty files skipped.
 
 
 ## Setup coverage badge
