@@ -31,6 +31,7 @@ import onnxruntime as ort
 import torch
 
 from tests.ml.onnx_export.attention import AttentionKind
+from tests.ml.onnx_export.batches import feeds, fully_padded, random_batch
 from tests.ml.onnx_export.dummy_set_encoder import DummySetEncoder
 from tests.ml.onnx_export.exported_encoder import (
     MAX_TOKENS,
@@ -39,7 +40,6 @@ from tests.ml.onnx_export.exported_encoder import (
     export_dummy_encoder,
     export_graph,
 )
-from tests.ml.onnx_export.token_batch import TokenBatch
 
 REPETITIONS = 30
 WARMUP = 5
@@ -92,12 +92,12 @@ def report_environment(rows: list[str]) -> None:
 
 def report_export_paths(rows: list[str]) -> None:
     cases = (
-        TokenBatch.random(1, 137, seed=137),
-        TokenBatch.random(1, 512, seed=512),
-        TokenBatch.random(3, 41, seed=41, padding=17),
-        TokenBatch.random(1, MAX_TOKENS + 8, seed=1),
+        random_batch(1, 137, seed=137),
+        random_batch(1, 512, seed=512),
+        random_batch(3, 41, seed=41, padding=17),
+        random_batch(1, MAX_TOKENS + 8, seed=1),
     )
-    empty = TokenBatch.random(1, 16, seed=7).fully_padded()
+    empty = fully_padded(random_batch(1, 16, seed=7))
 
     rows += ["| Check | Result |", "|-------|--------|"]
     for kind in AttentionKind:
@@ -127,7 +127,7 @@ def report_export_paths(rows: list[str]) -> None:
             outcome = f"load: {summarise(error)}"
         else:
             try:
-                session.run(None, cases[0].feeds)
+                session.run(None, feeds(cases[0]))
             except Exception as error:
                 outcome = f"loads, then execution: {summarise(error)}"
             else:
@@ -150,8 +150,8 @@ def report_export_paths(rows: list[str]) -> None:
 def report_alternatives(rows: list[str], label: str, model: DummySetEncoder) -> None:
     model.eval()
     parameters = sum(tensor.numel() for tensor in model.parameters())
-    sample = TokenBatch.random(2, 137, seed=SEED, padding=5)
-    batch = TokenBatch.random(1, LATENCY_TOKENS, seed=LATENCY_TOKENS)
+    sample = random_batch(2, 137, seed=SEED, padding=5)
+    batch = random_batch(1, LATENCY_TOKENS, seed=LATENCY_TOKENS)
 
     with quiet():
         started = time.perf_counter()
@@ -172,7 +172,7 @@ def report_alternatives(rows: list[str], label: str, model: DummySetEncoder) -> 
         with torch.no_grad():
             traced_deviation = float((model(*batch.args) - traced(*batch.args)).abs().max())
 
-        onnx_ms = measure_latency(lambda: exported.session.run(None, batch.feeds))
+        onnx_ms = measure_latency(lambda: exported.session.run(None, feeds(batch)))
         traced_ms = measure_latency(lambda: traced(*batch.args))
         eager_ms = measure_latency(lambda: model(*batch.args))
 
