@@ -8,12 +8,21 @@ also guards the answer, until the real export replaces it.
 import numpy as np
 import pytest
 
+from emblema.shared.adapters.arrays.token_batch import N_FEATURES
+from tests.ml.onnx_export.batches import (
+    INPUT_NAMES,
+    all_timeless,
+    fully_padded,
+    padded_by,
+    permuted,
+    random_batch,
+    with_timestamps,
+)
 from tests.ml.onnx_export.exported_encoder import (
     MAX_TOKENS,
     OUTPUT_NAME,
     ExportedEncoder,
 )
-from tests.ml.onnx_export.token_batch import N_FEATURES, TokenBatch
 
 pytestmark = [
     pytest.mark.ml,
@@ -28,6 +37,16 @@ pytestmark = [
 # over that.
 ATOL = 1e-5
 RTOL = 1e-4
+
+
+def test_each_input_name_belongs_to_the_argument_it_is_exported_beside() -> None:
+    # The export pairs names with arguments by position, so a name that slid one place would label
+    # every tensor in the graph wrongly while the graph still ran.
+    batch = random_batch(1, 4, seed=1)
+
+    named = tuple(getattr(batch, name) for name in INPUT_NAMES)
+
+    assert all(one is other for one, other in zip(named, batch.args, strict=True))
 
 
 def test_the_graph_takes_the_five_named_tensors(exported: ExportedEncoder) -> None:
@@ -50,7 +69,7 @@ def test_the_token_count_is_the_only_dynamic_axis_beyond_the_batch(
 def test_output_matches_pytorch_at_different_token_counts(
     exported: ExportedEncoder, tokens: int
 ) -> None:
-    batch = TokenBatch.random(1, tokens, seed=tokens)
+    batch = random_batch(1, tokens, seed=tokens)
 
     np.testing.assert_allclose(
         exported.run_onnx(batch), exported.run_eager(batch), rtol=RTOL, atol=ATOL
@@ -60,7 +79,7 @@ def test_output_matches_pytorch_at_different_token_counts(
 def test_output_matches_pytorch_for_a_batch_of_partly_padded_windows(
     exported: ExportedEncoder,
 ) -> None:
-    batch = TokenBatch.random(3, 41, seed=41, padding=17)
+    batch = random_batch(3, 41, seed=41, padding=17)
 
     np.testing.assert_allclose(
         exported.run_onnx(batch), exported.run_eager(batch), rtol=RTOL, atol=ATOL
@@ -68,26 +87,26 @@ def test_output_matches_pytorch_for_a_batch_of_partly_padded_windows(
 
 
 def test_padding_does_not_change_the_embedding(exported: ExportedEncoder) -> None:
-    batch = TokenBatch.random(1, 64, seed=13)
+    batch = random_batch(1, 64, seed=13)
 
     np.testing.assert_allclose(
-        exported.run_onnx(batch.padded_by(32)), exported.run_onnx(batch), rtol=RTOL, atol=ATOL
+        exported.run_onnx(padded_by(batch, 32)), exported.run_onnx(batch), rtol=RTOL, atol=ATOL
     )
 
 
 def test_reordering_the_tokens_does_not_change_the_embedding(exported: ExportedEncoder) -> None:
-    batch = TokenBatch.random(1, 64, seed=11)
+    batch = random_batch(1, 64, seed=11)
 
     np.testing.assert_allclose(
-        exported.run_onnx(batch.permuted(seed=3)), exported.run_onnx(batch), rtol=RTOL, atol=ATOL
+        exported.run_onnx(permuted(batch, seed=3)), exported.run_onnx(batch), rtol=RTOL, atol=ATOL
     )
 
 
 def test_a_timeless_token_ignores_its_timestamp(exported: ExportedEncoder) -> None:
-    batch = TokenBatch.random(1, 32, seed=5).all_timeless()
+    batch = all_timeless(random_batch(1, 32, seed=5))
 
     np.testing.assert_allclose(
-        exported.run_onnx(batch.with_timestamps(seed=6)),
+        exported.run_onnx(with_timestamps(batch, seed=6)),
         exported.run_onnx(batch),
         rtol=RTOL,
         atol=ATOL,
@@ -100,7 +119,7 @@ def test_a_window_of_nothing_but_padding_yields_finite_values(
     # Attention over an entirely masked window is a softmax over nothing. The exported graph keeps
     # the guard that turns it into zeros; the two mask-by-negative-infinity implementations do not,
     # which is why only this one is held to it.
-    embedding = exported_with_sdpa.run_onnx(TokenBatch.random(1, 16, seed=7).fully_padded())
+    embedding = exported_with_sdpa.run_onnx(fully_padded(random_batch(1, 16, seed=7)))
 
     assert np.isfinite(embedding).all()
 
@@ -110,7 +129,7 @@ def test_more_tokens_than_the_export_declared_still_run(
 ) -> None:
     # The declared upper bound guides the exporter; the runtime does not enforce it. Rejecting an
     # oversized window is therefore the caller's job, not the graph's.
-    batch = TokenBatch.random(1, MAX_TOKENS + 8, seed=1)
+    batch = random_batch(1, MAX_TOKENS + 8, seed=1)
 
     np.testing.assert_allclose(
         exported_with_sdpa.run_onnx(batch),

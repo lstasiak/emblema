@@ -10,9 +10,10 @@ import onnxruntime as ort
 import torch
 from torch.export import Dim
 
+from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from tests.ml.onnx_export.attention import AttentionKind
+from tests.ml.onnx_export.batches import INPUT_NAMES, feeds, random_batch
 from tests.ml.onnx_export.dummy_set_encoder import DummySetEncoder
-from tests.ml.onnx_export.token_batch import INPUT_NAMES, TokenBatch
 
 # Opset 20 keeps attention as explicit MatMul / Softmax / Where nodes. From opset 23 the exporter
 # emits the fused `Attention` operator instead, whose CPU kernel in ONNX Runtime 1.29 rejects a
@@ -48,11 +49,11 @@ class ExportedEncoder:
     graph: onnx.ModelProto
     session: ort.InferenceSession
 
-    def run_onnx(self, batch: TokenBatch) -> np.ndarray[Any, Any]:
+    def run_onnx(self, batch: TokenTensors) -> np.ndarray[Any, Any]:
         # The session signature admits sparse and sequence outputs; this graph has one dense array.
-        return np.asarray(self.session.run(None, batch.feeds)[0])
+        return np.asarray(self.session.run(None, feeds(batch))[0])
 
-    def run_eager(self, batch: TokenBatch) -> np.ndarray[Any, Any]:
+    def run_eager(self, batch: TokenTensors) -> np.ndarray[Any, Any]:
         with torch.no_grad():
             return self.model(*batch.args).numpy()
 
@@ -113,7 +114,7 @@ def export_graph(
     Exporting, loading and executing are three separate failure modes — a graph can export and load
     and still fail on every run — so a caller that wants to observe them apart starts here.
     """
-    sample = TokenBatch.random(_SAMPLE_BATCH, _SAMPLE_TOKENS, seed=seed, padding=5)
+    sample = random_batch(_SAMPLE_BATCH, _SAMPLE_TOKENS, seed=seed, padding=5)
     program = torch.onnx.export(
         model,
         sample.args,

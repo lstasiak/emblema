@@ -9,8 +9,9 @@ exporter while the architecture can still be changed cheaply.
 import torch
 from torch import Tensor, nn
 
+from emblema.shared.adapters.arrays.token_batch import N_FEATURES
 from tests.ml.onnx_export.attention import AttentionKind, build_attention
-from tests.ml.onnx_export.token_batch import N_CHANNELS, N_FEATURES
+from tests.ml.onnx_export.batches import N_CHANNELS
 
 
 class EncoderBlock(nn.Module):

@@ -10,9 +10,9 @@ import numpy as np
 import pytest
 import torch
 
+from tests.ml.onnx_export.batches import random_batch
 from tests.ml.onnx_export.dummy_set_encoder import DummySetEncoder
 from tests.ml.onnx_export.exported_encoder import ExportedEncoder
-from tests.ml.onnx_export.token_batch import TokenBatch
 
 pytestmark = [
     pytest.mark.ml,
@@ -29,7 +29,7 @@ RTOL = 1e-3
 def test_a_model_that_ran_on_mps_exports_once_moved_back_to_the_cpu() -> None:
     torch.manual_seed(1)
     model = DummySetEncoder().eval()
-    batch = TokenBatch.random(1, 512, seed=512)
+    batch = random_batch(1, 512, seed=512)
     with torch.no_grad():
         on_accelerator = model.to("mps")(*(tensor.to("mps") for tensor in batch.args))
 

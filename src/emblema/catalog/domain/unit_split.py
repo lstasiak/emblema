@@ -1,10 +1,10 @@
-import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Self
 
 from emblema.catalog.domain.exceptions import InvalidUnitSplitError
 from emblema.catalog.domain.identifiers import UnitKey
+from emblema.shared.kernel.ordering import seeded_rank
 
 
 @dataclass(frozen=True)
@@ -36,13 +36,11 @@ class UnitSplit:
     def by_seed(cls, keys: Iterable[UnitKey], validation_fraction: float, seed: int) -> Self:
         """A reproducible split: the same units, fraction and seed always give the same sides.
 
-        Each unit is placed by a digest of its own key under the seed, and the validation side
-        takes the whole units that fit the fraction, rounded down. Ranking each unit on its own
-        rather than shuffling the list makes the split independent of the order the reader
-        delivered them in, of the Python version the split was made on, and — for every unit but
-        the one or two either side of the cut — of a later corpus version holding more units.
-        Comparing two versions of a corpus is the point of the project, so a split that reshuffles
-        when a unit is added would quietly take that away.
+        Each unit is placed by ``seeded_rank`` of its own key, and the validation side takes the
+        whole units that fit the fraction, rounded down. Comparing two versions of a corpus is the
+        point of the project, so a split that reshuffled when a unit was added would quietly take
+        that away; ranking each unit on its own is what stops it, and the key is broken by the
+        unit's own name so that two units ranking equal still land in a fixed order.
 
         Raises:
             InvalidUnitSplitError: If a key repeats, the fraction is not strictly between 0 and 1,
@@ -60,10 +58,5 @@ class UnitSplit:
             raise InvalidUnitSplitError(
                 f"{len(units)} units at fraction {validation_fraction} leave no unit for validation"
             )
-        ordered = sorted(units, key=lambda key: (_rank(key, seed), str(key)))
+        ordered = sorted(units, key=lambda key: (seeded_rank(seed, key), str(key)))
         return cls(training=frozenset(ordered[held_out:]), validation=frozenset(ordered[:held_out]))
-
-
-def _rank(key: UnitKey, seed: int) -> bytes:
-    """Where one unit falls in the seeded order, computed from nothing but the unit and the seed."""
-    return hashlib.blake2b(f"{seed}:{key}".encode(), digest_size=16).digest()
