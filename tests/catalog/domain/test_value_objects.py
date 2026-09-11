@@ -39,9 +39,16 @@ def test_source_rejects_blank_or_padded_fields(name: str, uri: str) -> None:
         CorpusSource(name, uri)
 
 
-def test_content_requires_at_least_one_record() -> None:
+@pytest.mark.parametrize(
+    ("units", "observations"), [(0, 5), (1, 0)], ids=["no-unit", "no-observation"]
+)
+def test_content_requires_a_unit_and_an_observation(units: int, observations: int) -> None:
     with pytest.raises(InvalidCorpusContentError, match="positive"):
-        CorpusContent(Checksum.of_bytes(b"x"), 0)
+        CorpusContent(Checksum.of_bytes(b"x"), units, observations)
+
+
+def test_content_allows_units_without_observations() -> None:
+    assert CorpusContent(Checksum.of_bytes(b"x"), 3, 2).unit_count == 3
 
 
 def test_invariant_errors_are_both_catalog_and_value_errors() -> None:

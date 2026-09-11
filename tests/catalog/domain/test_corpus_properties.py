@@ -27,7 +27,8 @@ schemas = st.lists(st.sampled_from(["a", "b", "c"]), min_size=1, max_size=3, uni
 contents = st.builds(
     CorpusContent,
     checksum=st.sampled_from([b"x", b"y", b"z"]).map(Checksum.of_bytes),
-    record_count=st.integers(min_value=1, max_value=3),
+    unit_count=st.integers(min_value=1, max_value=3),
+    observation_count=st.integers(min_value=1, max_value=3),
 )
 
 

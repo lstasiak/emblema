@@ -7,10 +7,12 @@ from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.corpus import Corpus
 from emblema.catalog.domain.corpus_content import CorpusContent
+from emblema.catalog.domain.corpus_description import CorpusDescription
 from emblema.catalog.domain.corpus_source import CorpusSource
 from emblema.catalog.domain.identifiers import CorpusId
 from emblema.catalog.domain.licence import Licence
 from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.sampling import SamplingRegime
 from emblema.shared.kernel.timestamps import UtcDateTime
 
 SCHEMA = ChannelSchema(frozenset({Channel("temperature", "K"), Channel("pressure", "Pa")}))
@@ -25,8 +27,16 @@ def instant(seconds: int) -> UtcDateTime:
     return UtcDateTime(EPOCH + timedelta(seconds=seconds))
 
 
-def content(data: bytes = b"records", record_count: int = 10) -> CorpusContent:
-    return CorpusContent(Checksum.of_bytes(data), record_count)
+def content(data: bytes = b"records", units: int = 10, observations: int = 200) -> CorpusContent:
+    return CorpusContent(Checksum.of_bytes(data), units, observations)
+
+
+def description(
+    data: bytes = b"records",
+    schema: ChannelSchema = SCHEMA,
+    regime: SamplingRegime = SamplingRegime.REGULAR,
+) -> CorpusDescription:
+    return CorpusDescription(schema, regime, content(data))
 
 
 def corpus_id(number: int = 1) -> CorpusId:
