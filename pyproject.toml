@@ -31,6 +31,10 @@ ml = [
     "numpy>=2.2",
     "torch>=2.9",
     "onnxruntime>=1.22",
+    # The exporter path through torch.export needs both; onnx also reads the graph back for the
+    # export tests. Wheels: onnx is cp312-abi3, onnxscript is pure Python.
+    "onnx>=1.22",
+    "onnxscript>=0.7",
 ]
 
 [project.urls]
@@ -50,7 +54,7 @@ dev = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.11.0,<0.12.0"]
+requires = ["uv_build>=0.12.0,<0.13.0"]
 build-backend = "uv_build"
 
 # ---------------------------------------------------------------------------
@@ -106,6 +110,8 @@ ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D"]
+# A developer script that reaches the test package: the path is set up before the imports run.
+"scripts/onnx_export_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -122,7 +128,7 @@ docstring-code-format = true
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src/emblema", "tests"]
+files = ["src/emblema", "tests", "scripts"]
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 
@@ -227,7 +233,7 @@ source_modules = [
     "emblema.*.domain", "emblema.*.application", "emblema.*.contracts",
 ]
 forbidden_modules = [
-    "torch", "numpy", "onnx", "onnxruntime",
+    "torch", "numpy", "onnx", "onnxruntime", "onnxscript",
     "sqlalchemy", "alembic",
     "fastapi", "starlette", "pydantic", "pydantic_settings",
     "celery", "redis", "mlflow", "boto3", "botocore",
