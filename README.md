@@ -30,7 +30,7 @@
 | src/emblema/catalog/domain/observation.py                          |       12 |        0 |        6 |        0 |    100% |           |
 | src/emblema/catalog/domain/static\_feature.py                      |       10 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation\_scheme.py                 |       31 |        0 |        6 |        0 |    100% |           |
-| src/emblema/catalog/domain/unit\_split.py                          |       28 |        0 |       10 |        0 |    100% |           |
+| src/emblema/catalog/domain/unit\_split.py                          |       26 |        0 |       10 |        0 |    100% |           |
 | src/emblema/catalog/domain/window\_spec.py                         |       21 |        0 |        6 |        0 |    100% |           |
 | src/emblema/catalog/ports/corpus\_reader.py                        |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/ports/corpus\_repository.py                    |        6 |        0 |        0 |        0 |    100% |           |
@@ -42,17 +42,22 @@
 | src/emblema/shared/adapters/in\_memory/event\_publisher.py         |        8 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/event\_subscriber.py        |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/id\_generator.py            |        9 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/adapters/loaders/seeded\_shuffle\_sampler.py    |       18 |        0 |        2 |        0 |    100% |           |
+| src/emblema/shared/adapters/loaders/window\_dataset.py             |       12 |        0 |        2 |        0 |    100% |           |
+| src/emblema/shared/adapters/loaders/window\_loader.py              |       20 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/adapters/storage/layout.py                      |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/storage/local\_directory.py            |       45 |        3 |        6 |        0 |     94% |     61-63 |
 | src/emblema/shared/adapters/storage/s3.py                          |       49 |        1 |       10 |        1 |     97% |        80 |
 | src/emblema/shared/adapters/system/clock.py                        |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/system/id\_generator.py                |        5 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/adapters/tensors/token\_tensors.py              |       30 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/events/domain\_event.py                         |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/kernel/artifacts.py                             |        8 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/kernel/checksums.py                             |       42 |        0 |        8 |        0 |    100% |           |
 | src/emblema/shared/kernel/compute.py                               |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/kernel/exceptions.py                            |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/kernel/identifiers.py                           |       17 |        0 |        2 |        0 |    100% |           |
+| src/emblema/shared/kernel/ordering.py                              |       10 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/kernel/sampling.py                              |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/kernel/timestamps.py                            |       11 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/kernel/tokens.py                                |       46 |        0 |       20 |        0 |    100% |           |
@@ -62,9 +67,9 @@
 | src/emblema/shared/ports/event\_subscriber.py                      |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                             |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                          |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                          | **1199** |    **4** |  **274** |    **1** | **99%** |           |
+| **TOTAL**                                                          | **1287** |    **4** |  **284** |    **1** | **99%** |           |
 
-23 empty files skipped.
+25 empty files skipped.
 
 
 ## Setup coverage badge
