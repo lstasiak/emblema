@@ -13,7 +13,7 @@ from emblema.catalog.domain.exceptions import (
 
 @dataclass(frozen=True)
 class TokenisationScheme:
-    """Everything a tokenizer needs to turn raw observations into tokens the same way every time.
+    """Everything a tokeniser needs to turn raw observations into tokens the same way every time.
 
     A scheme is the vocabulary plus the statistics of each channel, fitted on training units only.
     It travels with every tokenised corpus and every model, so that inference normalises a value

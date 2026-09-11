@@ -9,7 +9,7 @@ class Observation:
     """One value of one channel at one instant, as the corpus reader delivers it.
 
     Time is a point on the time axis of the unit the observation belongs to, in whatever unit the
-    reader documents for its corpus (a cycle, an hour, a second); the tokenizer only ever uses
+    reader documents for its corpus (a cycle, an hour, a second); the tokeniser only ever uses
     differences and positions within a window, so the origin of the axis carries no meaning. A
     value that is missing in the source is no observation at all, so every value here is finite.
 

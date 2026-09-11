@@ -1,4 +1,4 @@
-"""Contract of the Tokenizer port, run against every adapter.
+"""Contract of the Tokeniser port, run against every adapter.
 
 The reference the adapters are held to is a brute-force reconstruction of each window from the
 observations that fall inside it, computed here without streaming, so that an adapter's
@@ -14,7 +14,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
-from emblema.catalog.adapters.tokenization.sliding_window import SlidingWindowTokenizer
+from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.corpus_unit import CorpusUnit
 from emblema.catalog.domain.exceptions import (
@@ -30,7 +30,7 @@ from emblema.catalog.domain.static_feature import StaticFeature
 from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.unit_split import UnitSplit
 from emblema.catalog.domain.window_spec import WindowSpec
-from emblema.catalog.ports.tokenizer import Tokenizer
+from emblema.catalog.ports.tokeniser import Tokeniser
 from emblema.shared.kernel.tokens import Token, TokenWindow
 from tests.catalog.domain.support import (
     CORPUS,
@@ -43,7 +43,7 @@ from tests.catalog.domain.support import (
     unit,
 )
 
-ADAPTERS: dict[str, Callable[[], Tokenizer]] = {"sliding_window": SlidingWindowTokenizer}
+ADAPTERS: dict[str, Callable[[], Tokeniser]] = {"sliding_window": SlidingWindowTokeniser}
 CHANNELS = ("temperature", "pressure")
 AGE = StaticFeature("age", 61.0)
 UNIT = unit("u1", 0.0, 10.0)
@@ -53,28 +53,28 @@ WINDOW = WindowSpec(length=4, stride=2)
 
 
 @pytest.fixture(params=list(ADAPTERS.values()), ids=list(ADAPTERS))
-def tokenizer(request: pytest.FixtureRequest) -> Tokenizer:
-    factory: Callable[[], Tokenizer] = request.param
+def tokeniser(request: pytest.FixtureRequest) -> Tokeniser:
+    factory: Callable[[], Tokeniser] = request.param
     return factory()
 
 
 def fitted(
-    tokenizer: Tokenizer,
+    tokeniser: Tokeniser,
     observations: Iterable[Observation],
     statics: Iterable[StaticFeature] = (),
     schema: ChannelSchema = SCHEMA,
 ) -> TokenisationScheme:
-    return tokenizer.fit(CORPUS, observations, statics, scheme_for(schema))
+    return tokeniser.fit(CORPUS, observations, statics, scheme_for(schema))
 
 
 def windows_of(
-    tokenizer: Tokenizer,
+    tokeniser: Tokeniser,
     corpus_unit: CorpusUnit,
     observations: Sequence[Observation],
     scheme: TokenisationScheme,
     window: WindowSpec = WINDOW,
 ) -> list[TokenWindow]:
-    return list(tokenizer.tokenise(CORPUS, corpus_unit, observations, scheme, window))
+    return list(tokeniser.tokenise(CORPUS, corpus_unit, observations, scheme, window))
 
 
 def expected_windows(
@@ -130,9 +130,9 @@ def expected_windows(
 
 
 def test_statistics_are_the_count_mean_and_population_spread_per_channel(
-    tokenizer: Tokenizer,
+    tokeniser: Tokeniser,
 ) -> None:
-    scheme = fitted(tokenizer, REGULAR)
+    scheme = fitted(tokeniser, REGULAR)
 
     for channel in CHANNELS:
         values = [o.value for o in REGULAR if o.channel == channel]
@@ -142,40 +142,40 @@ def test_statistics_are_the_count_mean_and_population_spread_per_channel(
         assert fitted_statistics.std == pytest.approx(statistics.pstdev(values))
 
 
-def test_static_features_are_fitted_on_their_own_channel(tokenizer: Tokenizer) -> None:
-    scheme = fitted(tokenizer, REGULAR, [AGE, StaticFeature("age", 65.0)], STATIC_SCHEMA)
+def test_static_features_are_fitted_on_their_own_channel(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR, [AGE, StaticFeature("age", 65.0)], STATIC_SCHEMA)
 
     age = scheme.statistics_of(scheme.vocabulary.id_of(CORPUS, "age"))
     assert (age.count, age.mean, age.std) == (2, 63.0, 2.0)
 
 
-def test_a_channel_the_data_never_shows_stays_unfitted(tokenizer: Tokenizer) -> None:
-    scheme = fitted(tokenizer, [o for o in REGULAR if o.channel == "pressure"])
+def test_a_channel_the_data_never_shows_stays_unfitted(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, [o for o in REGULAR if o.channel == "pressure"])
 
     with pytest.raises(MissingChannelStatisticsError, match="temperature"):
         scheme.statistics_of(scheme.vocabulary.id_of(CORPUS, "temperature"))
 
 
-def test_fitting_rejects_a_channel_outside_the_vocabulary(tokenizer: Tokenizer) -> None:
+def test_fitting_rejects_a_channel_outside_the_vocabulary(tokeniser: Tokeniser) -> None:
     with pytest.raises(UnknownChannelError, match="vibration"):
-        fitted(tokenizer, [Observation("vibration", 0.0, 1.0)])
+        fitted(tokeniser, [Observation("vibration", 0.0, 1.0)])
 
 
-def test_fitting_rejects_a_static_feature_on_a_timed_channel(tokenizer: Tokenizer) -> None:
+def test_fitting_rejects_a_static_feature_on_a_timed_channel(tokeniser: Tokeniser) -> None:
     with pytest.raises(ChannelKindMismatchError, match="static feature"):
-        fitted(tokenizer, REGULAR, [StaticFeature("pressure", 1.0)])
+        fitted(tokeniser, REGULAR, [StaticFeature("pressure", 1.0)])
 
 
-def test_fitting_rejects_an_observation_on_a_timeless_channel(tokenizer: Tokenizer) -> None:
+def test_fitting_rejects_an_observation_on_a_timeless_channel(tokeniser: Tokeniser) -> None:
     with pytest.raises(ChannelKindMismatchError, match="observation"):
-        fitted(tokenizer, [Observation("age", 0.0, 1.0)], schema=STATIC_SCHEMA)
+        fitted(tokeniser, [Observation("age", 0.0, 1.0)], schema=STATIC_SCHEMA)
 
 
-def test_a_corpus_is_fitted_once(tokenizer: Tokenizer) -> None:
-    scheme = fitted(tokenizer, REGULAR)
+def test_a_corpus_is_fitted_once(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR)
 
     with pytest.raises(ChannelAlreadyFittedError):
-        tokenizer.fit(CORPUS, REGULAR, (), scheme)
+        tokeniser.fit(CORPUS, REGULAR, (), scheme)
 
 
 # --- no leakage across the unit split -----------------------------------------------------------
@@ -200,29 +200,29 @@ def corpus_of(
 
 
 def fit_on_training(
-    tokenizer: Tokenizer, reader: InMemoryCorpusReader, split: UnitSplit
+    tokeniser: Tokeniser, reader: InMemoryCorpusReader, split: UnitSplit
 ) -> TokenisationScheme:
     training = [u for u in reader.read_units() if u.key in split.training]
     observations = chain.from_iterable(reader.read_observations(u.key) for u in training)
-    return tokenizer.fit(CORPUS, observations, (), scheme_for())
+    return tokeniser.fit(CORPUS, observations, (), scheme_for())
 
 
-def test_statistics_ignore_the_validation_units(tokenizer: Tokenizer) -> None:
+def test_statistics_ignore_the_validation_units(tokeniser: Tokeniser) -> None:
     reader, split = corpus_of([1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0])
-    before = fit_on_training(tokenizer, reader, split)
+    before = fit_on_training(tokeniser, reader, split)
 
     perturbed, _ = corpus_of([1.0, 2.0, 3.0, 4.0], [-99.0, 0.0, 99.0, 1e6])
-    after = fit_on_training(tokenizer, perturbed, split)
+    after = fit_on_training(tokeniser, perturbed, split)
 
     assert after == before
 
 
-def test_statistics_follow_the_training_units(tokenizer: Tokenizer) -> None:
+def test_statistics_follow_the_training_units(tokeniser: Tokeniser) -> None:
     reader, split = corpus_of([1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0])
-    before = fit_on_training(tokenizer, reader, split)
+    before = fit_on_training(tokeniser, reader, split)
 
     perturbed, _ = corpus_of([1.0, 2.0, 3.0, 400.0], [10.0, 20.0, 30.0, 40.0])
-    after = fit_on_training(tokenizer, perturbed, split)
+    after = fit_on_training(tokeniser, perturbed, split)
 
     assert after != before
 
@@ -230,47 +230,47 @@ def test_statistics_follow_the_training_units(tokenizer: Tokenizer) -> None:
 # --- tokenising ----------------------------------------------------------------------------------
 
 
-def test_windows_match_the_brute_force_definition_on_a_regular_grid(tokenizer: Tokenizer) -> None:
-    scheme = fitted(tokenizer, REGULAR)
+def test_windows_match_the_brute_force_definition_on_a_regular_grid(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR)
 
-    assert windows_of(tokenizer, UNIT, REGULAR, scheme) == expected_windows(
+    assert windows_of(tokeniser, UNIT, REGULAR, scheme) == expected_windows(
         UNIT, REGULAR, scheme, WINDOW
     )
 
 
-def test_tokenising_twice_gives_equal_windows(tokenizer: Tokenizer) -> None:
-    scheme = fitted(tokenizer, REGULAR)
+def test_tokenising_twice_gives_equal_windows(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR)
 
-    assert windows_of(tokenizer, UNIT, REGULAR, scheme) == windows_of(
-        tokenizer, UNIT, REGULAR, scheme
+    assert windows_of(tokeniser, UNIT, REGULAR, scheme) == windows_of(
+        tokeniser, UNIT, REGULAR, scheme
     )
 
 
-def test_channels_observed_at_one_instant_may_arrive_in_any_order(tokenizer: Tokenizer) -> None:
-    scheme = fitted(tokenizer, REGULAR)
+def test_channels_observed_at_one_instant_may_arrive_in_any_order(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR)
     swapped = tuple(
         chain.from_iterable(
             reversed(REGULAR[i : i + len(CHANNELS)]) for i in range(0, len(REGULAR), 2)
         )
     )
 
-    assert windows_of(tokenizer, UNIT, swapped, scheme) == windows_of(
-        tokenizer, UNIT, REGULAR, scheme
+    assert windows_of(tokeniser, UNIT, swapped, scheme) == windows_of(
+        tokeniser, UNIT, REGULAR, scheme
     )
 
 
 def test_a_regular_grid_gives_the_closed_form_window_count_and_token_count(
-    tokenizer: Tokenizer,
+    tokeniser: Tokeniser,
 ) -> None:
-    windows = windows_of(tokenizer, UNIT, REGULAR, identity_scheme())
+    windows = windows_of(tokeniser, UNIT, REGULAR, identity_scheme())
 
     assert len(windows) == 4
     assert all(len(window) == WINDOW.length * len(CHANNELS) for window in windows)
 
 
-def test_values_are_normalised_with_the_fitted_statistics(tokenizer: Tokenizer) -> None:
-    scheme = fitted(tokenizer, REGULAR)
-    (first, *_) = windows_of(tokenizer, UNIT, REGULAR, scheme)
+def test_values_are_normalised_with_the_fitted_statistics(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR)
+    (first, *_) = windows_of(tokeniser, UNIT, REGULAR, scheme)
 
     pressure = scheme.vocabulary.id_of(CORPUS, "pressure")
     pressure_at_zero = next(o for o in REGULAR if o.channel == "pressure" and o.time == 0.0)
@@ -280,7 +280,7 @@ def test_values_are_normalised_with_the_fitted_statistics(tokenizer: Tokenizer) 
 
 
 def test_time_is_the_position_within_the_window_and_the_gap_the_distance_in_channel(
-    tokenizer: Tokenizer,
+    tokeniser: Tokeniser,
 ) -> None:
     observations = (
         Observation("pressure", 1.0, 0.0),
@@ -289,7 +289,7 @@ def test_time_is_the_position_within_the_window_and_the_gap_the_distance_in_chan
         Observation("pressure", 3.0, 0.0),
     )
     (window,) = windows_of(
-        tokenizer, unit("u", 0.0, 4.0), observations, identity_scheme(), WindowSpec(4, 4)
+        tokeniser, unit("u", 0.0, 4.0), observations, identity_scheme(), WindowSpec(4, 4)
     )
 
     pressure = window.channel_ids.index(identity_scheme().vocabulary.id_of(CORPUS, "pressure"))
@@ -298,11 +298,11 @@ def test_time_is_the_position_within_the_window_and_the_gap_the_distance_in_chan
     assert window.gaps[2:] == (0.125, 0.375)  # then the distance to the previous in channel
 
 
-def test_static_features_enter_every_window_as_timeless_tokens(tokenizer: Tokenizer) -> None:
-    scheme = fitted(tokenizer, REGULAR, [AGE], STATIC_SCHEMA)
+def test_static_features_enter_every_window_as_timeless_tokens(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR, [AGE], STATIC_SCHEMA)
     age = scheme.vocabulary.id_of(CORPUS, "age")
 
-    windows = windows_of(tokenizer, STATIC_UNIT, REGULAR, scheme)
+    windows = windows_of(tokeniser, STATIC_UNIT, REGULAR, scheme)
 
     assert windows == expected_windows(STATIC_UNIT, REGULAR, scheme, WINDOW)
     for window in windows:
@@ -313,71 +313,71 @@ def test_static_features_enter_every_window_as_timeless_tokens(tokenizer: Tokeni
         assert sum(window.timeless) == 1
 
 
-def test_a_unit_with_static_features_only_yields_no_window(tokenizer: Tokenizer) -> None:
-    scheme = fitted(tokenizer, REGULAR, [AGE], STATIC_SCHEMA)
+def test_a_unit_with_static_features_only_yields_no_window(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR, [AGE], STATIC_SCHEMA)
 
-    assert windows_of(tokenizer, STATIC_UNIT, (), scheme) == []
+    assert windows_of(tokeniser, STATIC_UNIT, (), scheme) == []
 
 
-def test_a_unit_shorter_than_a_window_yields_no_window(tokenizer: Tokenizer) -> None:
+def test_a_unit_shorter_than_a_window_yields_no_window(tokeniser: Tokeniser) -> None:
     short = unit("short", 0.0, 3.0)
 
-    assert windows_of(tokenizer, short, grid(CHANNELS, [0.0, 1.0, 2.0]), identity_scheme()) == []
+    assert windows_of(tokeniser, short, grid(CHANNELS, [0.0, 1.0, 2.0]), identity_scheme()) == []
 
 
-def test_a_window_that_falls_into_a_gap_in_the_data_is_skipped(tokenizer: Tokenizer) -> None:
+def test_a_window_that_falls_into_a_gap_in_the_data_is_skipped(tokeniser: Tokeniser) -> None:
     sparse = grid(CHANNELS, [0.0, 9.0])
 
-    windows = windows_of(tokenizer, UNIT, sparse, identity_scheme(), WindowSpec(2, 2))
+    windows = windows_of(tokeniser, UNIT, sparse, identity_scheme(), WindowSpec(2, 2))
 
     assert [window.times for window in windows] == [(0.0, 0.0), (0.5, 0.5)]
 
 
-def test_the_tail_no_full_window_covers_is_left_out(tokenizer: Tokenizer) -> None:
-    windows = windows_of(tokenizer, UNIT, REGULAR, identity_scheme(), WindowSpec(4, 3))
+def test_the_tail_no_full_window_covers_is_left_out(tokeniser: Tokeniser) -> None:
+    windows = windows_of(tokeniser, UNIT, REGULAR, identity_scheme(), WindowSpec(4, 3))
 
     assert len(windows) == 3  # starts 0, 3, 6; a window from 9 would end beyond the extent
     assert max(windows[-1].times) == 0.75  # the observation at 9 reaches the last window
 
 
-def test_observations_must_not_run_backwards(tokenizer: Tokenizer) -> None:
+def test_observations_must_not_run_backwards(tokeniser: Tokeniser) -> None:
     backwards = (Observation("pressure", 2.0, 0.0), Observation("pressure", 1.0, 0.0))
 
     with pytest.raises(ObservationOutOfOrderError, match="follows"):
-        windows_of(tokenizer, UNIT, backwards, identity_scheme())
+        windows_of(tokeniser, UNIT, backwards, identity_scheme())
 
 
 @pytest.mark.parametrize("time", [-0.5, 10.0])
-def test_observations_must_lie_inside_the_extent(tokenizer: Tokenizer, time: float) -> None:
+def test_observations_must_lie_inside_the_extent(tokeniser: Tokeniser, time: float) -> None:
     with pytest.raises(ObservationOutsideExtentError, match="outside"):
-        windows_of(tokenizer, UNIT, (Observation("pressure", time, 0.0),), identity_scheme())
+        windows_of(tokeniser, UNIT, (Observation("pressure", time, 0.0),), identity_scheme())
 
 
-def test_tokenising_rejects_a_channel_outside_the_vocabulary(tokenizer: Tokenizer) -> None:
+def test_tokenising_rejects_a_channel_outside_the_vocabulary(tokeniser: Tokeniser) -> None:
     with pytest.raises(UnknownChannelError, match="vibration"):
-        windows_of(tokenizer, UNIT, (Observation("vibration", 0.0, 0.0),), identity_scheme())
+        windows_of(tokeniser, UNIT, (Observation("vibration", 0.0, 0.0),), identity_scheme())
 
 
-def test_tokenising_rejects_an_observation_on_a_timeless_channel(tokenizer: Tokenizer) -> None:
+def test_tokenising_rejects_an_observation_on_a_timeless_channel(tokeniser: Tokeniser) -> None:
     with pytest.raises(ChannelKindMismatchError, match="timeless"):
-        windows_of(tokenizer, UNIT, (Observation("age", 0.0, 0.0),), identity_scheme(STATIC_SCHEMA))
+        windows_of(tokeniser, UNIT, (Observation("age", 0.0, 0.0),), identity_scheme(STATIC_SCHEMA))
 
 
-def test_tokenising_rejects_a_static_feature_on_a_timed_channel(tokenizer: Tokenizer) -> None:
+def test_tokenising_rejects_a_static_feature_on_a_timed_channel(tokeniser: Tokeniser) -> None:
     with pytest.raises(ChannelKindMismatchError, match="timed"):
         windows_of(
-            tokenizer,
+            tokeniser,
             unit("u", 0.0, 10.0, StaticFeature("pressure", 1.0)),
             REGULAR,
             identity_scheme(),
         )
 
 
-def test_tokenising_needs_statistics_for_every_channel_it_meets(tokenizer: Tokenizer) -> None:
-    unfitted = fitted(tokenizer, [o for o in REGULAR if o.channel == "pressure"])
+def test_tokenising_needs_statistics_for_every_channel_it_meets(tokeniser: Tokeniser) -> None:
+    unfitted = fitted(tokeniser, [o for o in REGULAR if o.channel == "pressure"])
 
     with pytest.raises(MissingChannelStatisticsError, match="temperature"):
-        windows_of(tokenizer, UNIT, REGULAR, unfitted)
+        windows_of(tokeniser, UNIT, REGULAR, unfitted)
 
 
 # --- synthetic irregularity ---------------------------------------------------------------------
@@ -422,9 +422,9 @@ def test_irregular_units_match_the_brute_force_definition(
     corpus_unit, observations, window = case
     scheme = identity_scheme(IRREGULAR_SCHEMA)
     for factory in ADAPTERS.values():
-        tokenizer = factory()
+        tokeniser = factory()
 
-        windows = list(tokenizer.tokenise(CORPUS, corpus_unit, observations, scheme, window))
+        windows = list(tokeniser.tokenise(CORPUS, corpus_unit, observations, scheme, window))
 
         assert windows == expected_windows(corpus_unit, observations, scheme, window)
         for produced in windows:

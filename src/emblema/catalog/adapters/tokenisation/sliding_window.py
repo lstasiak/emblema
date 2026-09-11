@@ -1,6 +1,7 @@
 import math
 from collections import deque
 from collections.abc import Iterable, Iterator, Mapping
+from itertools import chain
 
 from emblema.catalog.domain.channel_statistics import ChannelStatistics
 from emblema.catalog.domain.channel_vocabulary import VocabularyEntry
@@ -15,21 +16,22 @@ from emblema.catalog.domain.observation import Observation
 from emblema.catalog.domain.static_feature import StaticFeature
 from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.window_spec import WindowSpec
-from emblema.shared.kernel.tokens import TokenWindow
+from emblema.shared.kernel.tokens import PADDING_CHANNEL_ID, TokenWindow, canonical_key
 
-# A timed observation once normalised: time on the unit's axis, channel id, value. Tuples sort
-# into the canonical token order by themselves.
-_Timed = tuple[float, int, float]
+# A timed observation once normalised: time on the unit's axis, channel id, value. The fields are
+# in that order so that sorting the tuples is already the canonical token order, as far as it goes
+# without the gap, which is not known until a window is laid.
+_NormalisedObservation = tuple[float, int, float]
 
 
-class SlidingWindowTokenizer:
+class SlidingWindowTokeniser:
     """Streams a unit through a window that slides along its time axis, one observation at a time.
 
     Memory is bounded by the observations one window can hold, never by the unit: a buffer keeps
     the observations of the window currently open, a window is produced when the stream passes its
-    end, and observations that fall before the next window's start are dropped. Statistics are
-    fitted by Welford's running update over the same stream, so a corpus of any size passes through
-    in one pass per operation.
+    end, and observations that fall before the next window's start are dropped. Fitting is a
+    separate pass, over the training units rather than one unit, and holds only Welford's running
+    moments per channel. So a corpus of any size passes through in one pass per operation.
     """
 
     def fit(
@@ -61,9 +63,35 @@ class SlidingWindowTokenizer:
     ) -> Iterator[TokenWindow]:
         entries = _entries_by_channel(scheme, corpus)
         statics = self._static_tokens(unit, entries, corpus, scheme)
-        windows = window.windows_over(unit.extent)
-        current = next(windows, None)
-        buffer: deque[_Timed] = deque()
+        extents = window.windows_over(unit.extent)
+        current = next(extents, None)
+        buffer: deque[_NormalisedObservation] = deque()
+        # A time beyond every extent closes the windows the stream itself never reached.
+        past_every_window: _NormalisedObservation = (math.inf, PADDING_CHANNEL_ID, 0.0)
+        for time, channel_id, value in chain(
+            self._normalised_observations(corpus, unit, observations, scheme, entries),
+            (past_every_window,),
+        ):
+            while current is not None and time >= current.end:
+                if buffer:
+                    yield self._token_window(statics, buffer, current)
+                current = next(extents, None)
+                while current is not None and buffer and buffer[0][0] < current.start:
+                    buffer.popleft()
+            # With a stride longer than the window an observation can fall between two windows
+            # and belongs to neither.
+            if current is not None and time >= current.start:
+                buffer.append((time, channel_id, value))
+
+    @staticmethod
+    def _normalised_observations(
+        corpus: str,
+        unit: CorpusUnit,
+        observations: Iterable[Observation],
+        scheme: TokenisationScheme,
+        entries: Mapping[str, VocabularyEntry],
+    ) -> Iterator[_NormalisedObservation]:
+        """The unit's observations, held to what the unit and the scheme say, in arrival order."""
         last_time = -math.inf
         for observation in observations:
             if observation.time < last_time:
@@ -77,25 +105,8 @@ class SlidingWindowTokenizer:
                     f"[{unit.extent.start}, {unit.extent.end})"
                 )
             entry = _entry(entries, corpus, observation.channel, timeless=False)
-            value = scheme.statistics_of(entry.channel_id).normalise(observation.value)
-            while current is not None and observation.time >= current.end:
-                if buffer:
-                    yield self._window(statics, buffer, current)
-                current = next(windows, None)
-                if current is not None:
-                    while buffer and buffer[0][0] < current.start:
-                        buffer.popleft()
-            # With a stride longer than the window an observation can fall between two windows
-            # and belongs to neither.
-            if current is not None and observation.time >= current.start:
-                buffer.append((observation.time, entry.channel_id, value))
-        while current is not None:
-            if buffer:
-                yield self._window(statics, buffer, current)
-            current = next(windows, None)
-            if current is not None:
-                while buffer and buffer[0][0] < current.start:
-                    buffer.popleft()
+            statistics = scheme.statistics_of(entry.channel_id)
+            yield observation.time, entry.channel_id, statistics.normalise(observation.value)
 
     @staticmethod
     def _static_tokens(
@@ -113,8 +124,10 @@ class SlidingWindowTokenizer:
         return tuple(sorted(tokens))
 
     @staticmethod
-    def _window(
-        statics: tuple[tuple[int, float], ...], buffer: Iterable[_Timed], extent: TimeExtent
+    def _token_window(
+        statics: tuple[tuple[int, float], ...],
+        buffer: Iterable[_NormalisedObservation],
+        extent: TimeExtent,
     ) -> TokenWindow:
         channel_ids = [channel_id for channel_id, _ in statics]
         values = [value for _, value in statics]
@@ -125,20 +138,24 @@ class SlidingWindowTokenizer:
         repeated = False
         for time, channel_id, value in sorted(buffer):
             position = (time - extent.start) / extent.length
-            last = previous.get(channel_id, 0.0)
+            last = previous.get(channel_id)
             repeated = repeated or last == position
             channel_ids.append(channel_id)
             values.append(value)
             times.append(position)
-            gaps.append(position - last)
+            # The first token of a channel measures its gap from the start of the window.
+            gaps.append(position if last is None else position - last)
             timeless.append(False)
             previous[channel_id] = position
         if repeated:
             # A channel observed twice at one instant yields tokens equal in all but gap, and the
-            # one with the smaller gap sorts first; the sorted buffer put it second.
+            # one with the smaller gap sorts first; the buffer, sorted before any gap was known,
+            # put it second.
             order = sorted(
                 range(len(channel_ids)),
-                key=lambda i: (not timeless[i], times[i], channel_ids[i], values[i], gaps[i]),
+                key=lambda i: canonical_key(
+                    channel_ids[i], values[i], times[i], gaps[i], timeless[i]
+                ),
             )
             channel_ids = [channel_ids[i] for i in order]
             values = [values[i] for i in order]

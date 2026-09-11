@@ -9,7 +9,7 @@ from emblema.catalog.domain.window_spec import WindowSpec
 from emblema.shared.kernel.tokens import TokenWindow
 
 
-class Tokenizer(Protocol):
+class Tokeniser(Protocol):
     """Fits a tokenisation scheme on training data and cuts units into token windows under it.
 
     The port is the seam between the domain's rules — what a token is, how a window is laid, how a
