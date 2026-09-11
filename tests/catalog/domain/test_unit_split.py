@@ -20,6 +20,24 @@ def test_the_order_units_arrive_in_does_not_matter() -> None:
     assert UnitSplit.by_seed(reversed(KEYS), 0.3, seed=7) == UnitSplit.by_seed(KEYS, 0.3, seed=7)
 
 
+def test_a_corpus_that_grew_keeps_the_units_it_already_had_where_they_were() -> None:
+    grown = [*KEYS, UnitKey("engine-10")]
+
+    before = UnitSplit.by_seed(KEYS, 0.3, seed=7)
+    after = UnitSplit.by_seed(grown, 0.3, seed=7)
+
+    moved = [key for key in KEYS if (key in before.validation) != (key in after.validation)]
+    assert len(moved) <= 1  # one more unit displaces at most the one at the cut
+
+
+def test_the_sides_are_the_digest_of_the_keys_not_the_interpreters_shuffle() -> None:
+    # Pinned: a split travels with the artefacts fitted under it, so the same seed must give the
+    # same sides on every Python this runs on.
+    split = UnitSplit.by_seed(KEYS, 0.3, seed=7)
+
+    assert sorted(str(key) for key in split.validation) == ["engine-00", "engine-02", "engine-05"]
+
+
 def test_another_seed_gives_another_split() -> None:
     assert UnitSplit.by_seed(KEYS, 0.3, seed=7) != UnitSplit.by_seed(KEYS, 0.3, seed=8)
 
