@@ -12,24 +12,24 @@ from emblema.shared.kernel.tokens import TokenWindow
 class CorpusArchive(Protocol):
     """Puts a tokenised corpus away and finds it again.
 
-    Preprocessing happens once, on a machine that holds the raw data and has no session to run
-    out of; every run afterwards reads what it produced. This is the seam between those two
-    halves. Which bytes a corpus becomes, and which store they land in, is the archive's own
-    business: the application hands over windows and a description of them and receives
-    references, which is all it can say about an artifact without knowing how one is written.
-
-    Windows go in as a stream, because a corpus does not fit in memory, and come back addressed
-    by position, because that is what a training run asks of a dataset. A corpus is written as
-    two artifacts, the windows and the manifest that describes them, so that a run can read the
-    description — and decide whether the corpus suits it — without fetching the corpus.
+    Which bytes a corpus becomes, and which store they land in, is the archive's business; the
+    application hands over windows and a description and receives references. A corpus is two
+    artifacts, the windows and the manifest describing them, so that a run can read the
+    description without fetching the corpus. The manifest is stored in the Catalog's published
+    language, so other contexts read it without this port.
     """
 
     def write_windows(self, windows: Iterable[PlacedWindow]) -> ArchivedCorpus:
-        """Store every window of a corpus and report what was stored.
+        """Store every window of a corpus, in the order given, and report what was stored.
 
-        Windows arrive in the order they were cut, unit by unit; the archive keeps that order.
-        A corpus with no windows at all is archived as an empty block rather than refused: that
-        a corpus yields nothing under a given window is a result, not a failure.
+        A corpus with no windows is archived as an empty block: yielding nothing under a window
+        is a result, not a failure. Windows come back at the precision the archive stores them
+        at; a window that would not be a window at that precision is refused and nothing is
+        stored.
+
+        Raises:
+            WindowNotArchivableError: If a window cannot be stored at the archive's precision
+                without ceasing to be a valid window.
         """
         ...
 
@@ -43,21 +43,23 @@ class CorpusArchive(Protocol):
         Raises:
             ArtifactNotFoundError: If nothing is stored under the reference's key.
             ArtifactIntegrityError: If the stored bytes do not hash to the reference's checksum.
-            MalformedManifestError: If the bytes are not a manifest this can read.
+            MalformedManifestError: If the bytes are not a manifest this can read, or describe a
+                manifest that breaks the Catalog's rules.
         """
         ...
 
     def read_windows(
-        self, manifest: TokenisationManifest, units: Collection[UnitKey]
+        self, archived: ArchivedCorpus, units: Collection[UnitKey]
     ) -> Sequence[TokenWindow]:
-        """The windows an archived corpus holds for those units, in the order the block holds them.
+        """The windows of an archived corpus for those units, in the order the block holds them.
 
-        The units are named rather than defaulted so that reading a side of a split is a decision
-        the caller states: a run that means to train must not be able to read the held-out units
-        by leaving an argument out.
+        Units are named, never defaulted: a run that means to train must not be able to read the
+        held-out units by leaving an argument out. A unit the block does not index selects
+        nothing, so a side of the split can be passed as it is, empty units included.
 
         Raises:
-            ArtifactNotFoundError: If the manifest's block is not in the archive.
+            ArtifactNotFoundError: If the block is not in the archive.
             ArtifactIntegrityError: If the stored bytes do not hash to the block's checksum.
+            UnreadableCorpusBlockError: If the block is not one this archive reads.
         """
         ...

@@ -35,11 +35,20 @@ def loaded_modules_after_importing(module: str) -> list[str]:
 
 
 @pytest.mark.parametrize(
-    "module",
-    ["emblema.catalog.contracts.events", "tests.contracts.downstream"],
+    ("module", "message"),
+    [
+        ("emblema.catalog.contracts.events", "emblema.catalog.contracts.corpus_version_ref"),
+        ("tests.contracts.downstream", "emblema.catalog.contracts.corpus_version_ref"),
+        (
+            "emblema.catalog.contracts.published_corpus_manifest_json",
+            "emblema.catalog.contracts.published_corpus_manifest",
+        ),
+    ],
 )
-def test_importing_the_published_language_loads_no_catalog_interior(module: str) -> None:
+def test_importing_the_published_language_loads_no_catalog_interior(
+    module: str, message: str
+) -> None:
     loaded = loaded_modules_after_importing(module)
 
-    assert "emblema.catalog.contracts.corpus_version_ref" in loaded
+    assert message in loaded
     assert not [name for name in loaded if name.startswith(INTERIOR)]

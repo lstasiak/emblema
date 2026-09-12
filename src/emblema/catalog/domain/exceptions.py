@@ -166,5 +166,9 @@ class InvalidArchivedCorpusError(CatalogError, ValueError):
     pass
 
 
-class MalformedManifestError(CatalogError):
+class WindowNotArchivableError(CatalogError, ValueError):
+    pass
+
+
+class UnreadableCorpusBlockError(CatalogError):
     pass
