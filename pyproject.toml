@@ -113,6 +113,7 @@ allowed-confusables = ["×"]
 "scripts/corpus_facts.py" = ["E402"]
 "scripts/loader_throughput_report.py" = ["E402"]
 "scripts/window_sanity_report.py" = ["E402"]
+"scripts/published_corpus_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
