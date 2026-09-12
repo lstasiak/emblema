@@ -1,12 +1,12 @@
 from collections.abc import Iterable, Iterator
 from typing import Protocol
 
-from emblema.catalog.domain.corpus_unit import CorpusUnit
-from emblema.catalog.domain.observation import Observation
-from emblema.catalog.domain.placed_window import PlacedWindow
-from emblema.catalog.domain.static_feature import StaticFeature
-from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.measurements.static_feature import StaticFeature
+from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
+from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 
 
 class Tokeniser(Protocol):

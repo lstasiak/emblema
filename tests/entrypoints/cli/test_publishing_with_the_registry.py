@@ -9,13 +9,12 @@ import pytest
 from sqlalchemy import Engine
 
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
-from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.config.settings import Settings
 from emblema.entrypoints.cli.composition_root import CompositionRoot
-from emblema.entrypoints.cli.known_corpora import KnownCorpora
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from tests.catalog.domain.support import SCHEMA, description, measured_units
+from tests.support.corpora import CORPUS, publish_command
 from tests.support.database import clear_catalog, migrated_engine
 
 pytestmark = pytest.mark.integration
@@ -46,20 +45,12 @@ def test_a_corpus_published_by_one_process_is_the_corpus_the_next_one_publishes(
     database: Engine, tmp_path: Path
 ) -> None:
     store = InMemoryArtifactStore()
-    known = KnownCorpora.default().named("cmapss")
-    command = PublishCorpusCommand(
-        name=known.name,
-        source=known.source,
-        licence=known.licence,
-        window=WindowSpec(4.0, 2.0),
-        validation_fraction=0.25,
-        seed=1,
-    )
+    command = publish_command(window=WindowSpec(4.0, 2.0), validation_fraction=0.25)
 
     first = process(store, tmp_path / "first").services.publish_corpus(command)
     second = process(store, tmp_path / "second").services.publish_corpus(command)
 
     assert first == second
-    corpus = process(store, tmp_path / "third").adapters.corpora.find_by_name("cmapss")
+    corpus = process(store, tmp_path / "third").adapters.corpora.find_by_name(CORPUS)
     assert corpus is not None
     assert len(corpus.frozen_versions) == 1

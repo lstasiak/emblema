@@ -13,11 +13,11 @@ from emblema.catalog.application.use_cases.tokenise_corpus_version import (
     TokeniseCorpusVersionCommand,
 )
 from emblema.catalog.contracts.identifiers import CorpusVersionId
-from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
-from emblema.catalog.domain.corpus_source import CorpusSource
+from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.identifiers import CorpusId
-from emblema.catalog.domain.licence import Licence
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.registry.corpus_source import CorpusSource
+from emblema.catalog.domain.registry.licence import Licence
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
 from emblema.catalog.ports.corpus_reader import CorpusReader
 from emblema.catalog.ports.corpus_repository import CorpusRepository

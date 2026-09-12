@@ -8,28 +8,21 @@ show. Reconstruction is exact in arithmetic, not in bits, so values are compared
 
 from collections.abc import Sequence
 from itertools import chain
-from pathlib import Path
 
 import pytest
 
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
-from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
-from emblema.catalog.domain.corpus_unit import CorpusUnit
-from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
 from tests.catalog.domain.support import measured
-
-SAMPLE = Path(__file__).resolve().parents[1] / "data" / "cmapss"
-CORPUS = "cmapss"
-# Not the window a run cuts: short enough that the two sample engines yield several windows each,
-# with a stride that leaves a tail beyond the last of them.
-WINDOW = WindowSpec(length=20.0, stride=7.0)
+from tests.support.corpora import CORPUS, SAMPLE, SAMPLE_WINDOW, SUBSET
 
 
 @pytest.fixture(scope="module")
 def reader() -> CmapssCorpusReader:
-    return CmapssCorpusReader(SAMPLE, ("FD001",))
+    return CmapssCorpusReader(SAMPLE, (SUBSET,))
 
 
 @pytest.fixture(scope="module")
@@ -58,7 +51,7 @@ def test_every_window_of_the_sample_reads_back_as_the_rows_that_fell_into_it(
 
     for unit in units:
         observations = list(reader.read_observations(unit.key))
-        placed = list(tokeniser.tokenise(CORPUS, unit, observations, scheme, WINDOW))
+        placed = list(tokeniser.tokenise(CORPUS, unit, observations, scheme, SAMPLE_WINDOW))
 
         assert len(placed) > 1
         for item in placed:
@@ -74,7 +67,7 @@ def test_the_windows_of_an_engine_hold_every_row_but_the_tail_beyond_the_last_of
 
     for unit in units:
         observations = list(reader.read_observations(unit.key))
-        placed = list(tokeniser.tokenise(CORPUS, unit, observations, scheme, WINDOW))
+        placed = list(tokeniser.tokenise(CORPUS, unit, observations, scheme, SAMPLE_WINDOW))
 
         recovered = {
             row

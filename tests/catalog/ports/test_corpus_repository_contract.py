@@ -10,9 +10,9 @@ from sqlalchemy import Engine
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
-from emblema.catalog.domain.corpus import Corpus
-from emblema.catalog.domain.corpus_source import CorpusSource
 from emblema.catalog.domain.exceptions import CorpusNameTakenError, CorpusNotFoundError
+from emblema.catalog.domain.registry.corpus import Corpus
+from emblema.catalog.domain.registry.corpus_source import CorpusSource
 from emblema.catalog.ports.corpus_repository import CorpusRepository
 from emblema.shared.kernel.sampling import SamplingRegime
 from tests.catalog.domain.support import (

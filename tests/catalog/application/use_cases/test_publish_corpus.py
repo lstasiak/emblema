@@ -20,11 +20,11 @@ from emblema.catalog.application.use_cases.publish_corpus import PublishCorpus, 
 from emblema.catalog.application.use_cases.register_corpus import RegisterCorpus
 from emblema.catalog.application.use_cases.register_corpus_version import RegisterCorpusVersion
 from emblema.catalog.application.use_cases.tokenise_corpus_version import TokeniseCorpusVersion
-from emblema.catalog.domain.channel_schema import ChannelSchema
-from emblema.catalog.domain.corpus import Corpus
-from emblema.catalog.domain.corpus_unit import CorpusUnit
-from emblema.catalog.domain.observation import Observation
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.channels.channel_schema import ChannelSchema
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.registry.corpus import Corpus
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber

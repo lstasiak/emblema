@@ -4,9 +4,9 @@ from emblema.catalog.application.assemblers.corpus_version_ref_assembler import 
     CorpusVersionRefAssembler,
 )
 from emblema.catalog.contracts.corpus_version_ref import ChannelSpec, CorpusVersionRef
-from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
-from emblema.catalog.domain.corpus_version import CorpusVersion
+from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.exceptions import CorpusVersionNotFrozenError
+from emblema.catalog.domain.registry.corpus_version import CorpusVersion
 from emblema.shared.kernel.sampling import SamplingRegime
 from tests.catalog.domain.support import AT, LICENCE, SCHEMA, content, version_id
 

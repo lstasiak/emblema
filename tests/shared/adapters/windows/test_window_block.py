@@ -1,4 +1,5 @@
 import json
+import shutil
 import struct
 from pathlib import Path
 from typing import Any
@@ -6,8 +7,10 @@ from typing import Any
 import pytest
 
 from emblema.shared.adapters.storage.files import chunks_of
+from emblema.shared.adapters.windows import window_block_writer
 from emblema.shared.adapters.windows.exceptions import (
     BlockClosedError,
+    HeaderOverflowError,
     MalformedBlockError,
     UnstorableWindowError,
 )
@@ -227,6 +230,44 @@ def test_a_writer_that_fails_leaves_no_block_behind(tmp_path: Path) -> None:
 
     assert not path.exists()
     assert list(tmp_path.iterdir()) == []
+
+
+def test_a_block_whose_final_write_fails_leaves_nothing_behind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The columns are copied into the block after the file has been created, so a failure there
+    # leaves a header describing columns that are not all in the file. It must not survive.
+    path = tmp_path / "corpus.block"
+    writer = WindowBlockWriter(path)
+    writer.add(TIMED, unit=0, start=0.0, end=10.0)
+
+    def refuses(*_: object, **__: object) -> None:
+        raise OSError("the scratch went away")
+
+    monkeypatch.setattr(shutil, "copyfileobj", refuses)
+
+    with pytest.raises(OSError, match="went away"):
+        writer.close()
+
+    assert not path.exists()
+
+
+def test_a_header_that_would_reach_into_the_columns_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The first column starts at a fixed offset, so a column added later could in principle push
+    # the header past it. That has to be caught before the bytes are laid, not read back as a
+    # block whose first column begins inside its own description.
+    path = tmp_path / "corpus.block"
+    monkeypatch.setattr(window_block_writer, "DATA_OFFSET", HEADER_OFFSET + 8)
+
+    with (
+        pytest.raises(HeaderOverflowError, match="does not fit"),
+        WindowBlockWriter(path) as writer,
+    ):
+        writer.add(TIMED, unit=0, start=0.0, end=10.0)
+
+    assert not path.exists()
 
 
 def test_nothing_can_be_added_after_the_block_is_closed(tmp_path: Path) -> None:

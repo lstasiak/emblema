@@ -1,6 +1,6 @@
-from emblema.catalog.domain.corpus import Corpus
 from emblema.catalog.domain.exceptions import CorpusNameTakenError, CorpusNotFoundError
 from emblema.catalog.domain.identifiers import CorpusId
+from emblema.catalog.domain.registry.corpus import Corpus
 
 
 class InMemoryCorpusRepository:

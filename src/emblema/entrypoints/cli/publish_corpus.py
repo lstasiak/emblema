@@ -4,7 +4,7 @@ from pathlib import Path
 
 from emblema.catalog.adapters.readers.cmapss import SUBSETS
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.config.settings import Settings
 from emblema.entrypoints.cli.composition_root import CompositionRoot
 from emblema.entrypoints.cli.known_corpora import KnownCorpora

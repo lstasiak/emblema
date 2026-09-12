@@ -9,22 +9,15 @@ import pytest
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
-from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
-from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
-from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
+from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.ports.corpus_repository import CorpusRepository
 from emblema.entrypoints.cli.composition_root import CompositionRoot
-from emblema.entrypoints.cli.known_corpora import KnownCorpora
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
+from tests.support.corpora import CORPUS, SAMPLE, SAMPLE_WINDOW, SUBSET, publish_command
 from tests.support.settings import unreachable_store
-
-SAMPLE = Path(__file__).resolve().parents[1] / "data" / "cmapss"
-CORPUS = "cmapss"
-# Short enough that the two sample engines yield several windows each.
-WINDOW = WindowSpec(length=20.0, stride=7.0)
 
 
 def published(root: Path, registry: CorpusRepository) -> tuple[CompositionRoot, ArtifactRef]:
@@ -32,25 +25,16 @@ def published(root: Path, registry: CorpusRepository) -> tuple[CompositionRoot, 
         unreachable_store(),
         corpus_root=SAMPLE,
         workspace=root / "blocks",
-        subsets=("FD001",),
+        subsets=(SUBSET,),
         corpora=registry,
         store=LocalDirectoryArtifactStore(root / "store"),
     )
-    known = KnownCorpora.default().named(CORPUS)
-    command = PublishCorpusCommand(
-        name=known.name,
-        source=known.source,
-        licence=known.licence,
-        window=WINDOW,
-        validation_fraction=0.5,
-        seed=1,
-    )
-    return process, process.services.publish_corpus(command)
+    return process, process.services.publish_corpus(publish_command())
 
 
 def tokenised() -> Iterator[TokenWindow]:
     """The windows the reader and the tokeniser produce, without any artifact in between."""
-    reader = CmapssCorpusReader(SAMPLE, ("FD001",))
+    reader = CmapssCorpusReader(SAMPLE, (SUBSET,))
     tokeniser = SlidingWindowTokeniser()
     units = list(reader.read_units())
     scheme = TokenisationScheme.for_vocabulary(ChannelVocabulary()).extended_with(
@@ -64,7 +48,7 @@ def tokenised() -> Iterator[TokenWindow]:
     )
     for unit in units:
         for placed in tokeniser.tokenise(
-            CORPUS, unit, reader.read_observations(unit.key), scheme, WINDOW
+            CORPUS, unit, reader.read_observations(unit.key), scheme, SAMPLE_WINDOW
         ):
             yield placed.window
 

@@ -2,17 +2,18 @@ import math
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
-from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
-from emblema.catalog.domain.corpus_content import CorpusContent
-from emblema.catalog.domain.corpus_description import CorpusDescription
-from emblema.catalog.domain.corpus_unit import CorpusUnit, TimeExtent
+from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.exceptions import (
     CorpusDataNotFoundError,
     MalformedCorpusDataError,
     UnknownUnitError,
 )
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.observation import Observation
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.measurements.time_extent import TimeExtent
+from emblema.catalog.domain.registry.corpus_content import CorpusContent
+from emblema.catalog.domain.registry.corpus_description import CorpusDescription
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.sampling import SamplingRegime
 

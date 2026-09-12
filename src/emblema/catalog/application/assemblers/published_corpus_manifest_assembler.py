@@ -1,14 +1,14 @@
 from emblema.catalog.contracts.published_channel import PublishedChannel
 from emblema.catalog.contracts.published_channel_statistics import PublishedChannelStatistics
 from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
-from emblema.catalog.domain.archived_corpus import ArchivedCorpus
-from emblema.catalog.domain.channel_statistics import ChannelStatistics
-from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary, VocabularyEntry
+from emblema.catalog.domain.channels.channel_statistics import ChannelStatistics
+from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary, VocabularyEntry
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.tokenisation_manifest import TokenisationManifest
-from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
-from emblema.catalog.domain.unit_split import UnitSplit
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.tokenisation.archived_corpus import ArchivedCorpus
+from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
+from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
+from emblema.catalog.domain.tokenisation.unit_split import UnitSplit
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 
 
 class PublishedCorpusManifestAssembler:

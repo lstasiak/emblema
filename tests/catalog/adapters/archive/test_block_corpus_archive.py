@@ -8,10 +8,10 @@ from emblema.catalog.adapters.archive.block_corpus_archive import BlockCorpusArc
 from emblema.catalog.application.assemblers.published_corpus_manifest_assembler import (
     PublishedCorpusManifestAssembler,
 )
-from emblema.catalog.domain.corpus_unit import TimeExtent
 from emblema.catalog.domain.exceptions import WindowNotArchivableError
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.placed_window import PlacedWindow
+from emblema.catalog.domain.measurements.time_extent import TimeExtent
+from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from tests.shared.adapters.windows.support import COLLAPSING, TIMED
 

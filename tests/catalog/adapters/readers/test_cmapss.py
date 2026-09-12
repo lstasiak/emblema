@@ -7,25 +7,22 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from emblema.catalog.adapters.readers.cmapss import SENSORS, SUBSETS, CmapssCorpusReader
-from emblema.catalog.domain.channel_schema import Channel
-from emblema.catalog.domain.corpus_unit import TimeExtent
+from emblema.catalog.domain.channels.channel_schema import Channel
 from emblema.catalog.domain.exceptions import (
     CorpusDataNotFoundError,
     MalformedCorpusDataError,
     UnknownUnitError,
 )
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.observation import Observation
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.measurements.time_extent import TimeExtent
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.sampling import SamplingRegime
+from tests.support.corpora import BUDGET, SAMPLE, raw_root
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
-SAMPLE = REPO_ROOT / "tests" / "data" / "cmapss"
 SAMPLE_BYTES = (SAMPLE / "train_FD001.txt").read_bytes()
 SAMPLE_ENGINES = 2
 SAMPLE_ROWS = 263
-RAW = REPO_ROOT / "data" / "raw" / "cmapss"
-BUDGET = REPO_ROOT / "scripts" / "corpus_budget.toml"
 
 
 def row(unit: int, cycle: int, values: Sequence[str] = ("0.5",) * 24) -> str:
@@ -236,11 +233,6 @@ def test_reading_an_engine_from_a_missing_file_is_missing_data(tmp_path: Path) -
 
     with pytest.raises(CorpusDataNotFoundError, match=r"train_FD002\.txt"):
         CmapssCorpusReader(root, subsets=("FD001", "FD002")).read_observations(UnitKey("FD002/1"))
-
-
-def raw_root() -> Path | None:
-    hits = sorted(RAW.rglob("train_FD001.txt")) if RAW.is_dir() else []
-    return hits[0].parent if hits else None
 
 
 @pytest.mark.skipif(

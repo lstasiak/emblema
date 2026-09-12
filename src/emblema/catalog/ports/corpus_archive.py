@@ -1,10 +1,10 @@
 from collections.abc import Collection, Iterable, Sequence
 from typing import Protocol
 
-from emblema.catalog.domain.archived_corpus import ArchivedCorpus
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.placed_window import PlacedWindow
-from emblema.catalog.domain.tokenisation_manifest import TokenisationManifest
+from emblema.catalog.domain.tokenisation.archived_corpus import ArchivedCorpus
+from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
+from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
 

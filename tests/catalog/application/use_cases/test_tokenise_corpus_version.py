@@ -14,15 +14,16 @@ from emblema.catalog.application.use_cases.tokenise_corpus_version import (
     TokeniseCorpusVersion,
     TokeniseCorpusVersionCommand,
 )
-from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
-from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
-from emblema.catalog.domain.corpus import Corpus
-from emblema.catalog.domain.corpus_unit import CorpusUnit
+from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
+from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.exceptions import (
     ChannelRedeclaredError,
+    CorpusDataChangedError,
 )
-from emblema.catalog.domain.observation import Observation
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.registry.corpus import Corpus
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -62,9 +63,10 @@ class Fixture:
         corpus: Corpus,
         units: Sequence[tuple[CorpusUnit, list[Observation]]],
         workspace: Path,
+        data: bytes = DATA,
     ) -> None:
         told = description(
-            DATA, SCHEMA, units=len(units), observations=sum(len(o) for _, o in units)
+            data, SCHEMA, units=len(units), observations=sum(len(o) for _, o in units)
         )
         self.corpora = InMemoryCorpusRepository()
         self.corpora.save(corpus)
@@ -104,9 +106,11 @@ def wired(tmp_path: Path) -> Callable[..., Fixture]:
     """
 
     def build(
-        corpus: Corpus, units: Sequence[tuple[CorpusUnit, list[Observation]]] = UNITS
+        corpus: Corpus,
+        units: Sequence[tuple[CorpusUnit, list[Observation]]] = UNITS,
+        data: bytes = DATA,
     ) -> Fixture:
-        return Fixture(corpus, units, tmp_path / "workspace")
+        return Fixture(corpus, units, tmp_path / "workspace", data)
 
     return build
 
@@ -188,6 +192,18 @@ def test_a_vocabulary_given_keeps_its_identifiers_and_grows_by_this_corpus(
     assert scheme.vocabulary.id_of("corpus", "pressure") == 2
     assert scheme.vocabulary.id_of("corpus", "temperature") == 3
     assert scheme.statistics[0] is None
+
+
+def test_a_reader_no_longer_showing_the_frozen_data_stops_the_run(
+    wired: Callable[..., Fixture],
+) -> None:
+    # A frozen version stands for particular bytes. If the files under the reader have been
+    # replaced since, the artifact would carry that version's identity over data it never froze,
+    # and every run pinned to the identifier would silently train on something else.
+    fixture = wired(registered(UNITS), data=b"the files were replaced")
+
+    with pytest.raises(CorpusDataChangedError, match="checksum"):
+        fixture.run()
 
 
 def test_a_vocabulary_declaring_a_channel_of_this_corpus_differently_is_refused(

@@ -5,20 +5,21 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from emblema.catalog.contracts.identifiers import CorpusVersionId
-from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
-from emblema.catalog.domain.channel_statistics import ChannelStatistics
-from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
-from emblema.catalog.domain.corpus import Corpus
-from emblema.catalog.domain.corpus_content import CorpusContent
-from emblema.catalog.domain.corpus_description import CorpusDescription
-from emblema.catalog.domain.corpus_source import CorpusSource
-from emblema.catalog.domain.corpus_unit import CorpusUnit, TimeExtent
+from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
+from emblema.catalog.domain.channels.channel_statistics import ChannelStatistics
+from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.identifiers import CorpusId, UnitKey
-from emblema.catalog.domain.licence import Licence
-from emblema.catalog.domain.observation import Observation
-from emblema.catalog.domain.static_feature import StaticFeature
-from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.measurements.static_feature import StaticFeature
+from emblema.catalog.domain.measurements.time_extent import TimeExtent
+from emblema.catalog.domain.registry.corpus import Corpus
+from emblema.catalog.domain.registry.corpus_content import CorpusContent
+from emblema.catalog.domain.registry.corpus_description import CorpusDescription
+from emblema.catalog.domain.registry.corpus_source import CorpusSource
+from emblema.catalog.domain.registry.licence import Licence
+from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.sampling import SamplingRegime
 from emblema.shared.kernel.timestamps import UtcDateTime
@@ -28,6 +29,8 @@ OTHER_SCHEMA = ChannelSchema(frozenset({Channel("vibration", "m/s2")}))
 # The same two measured channels plus one static feature of every unit.
 STATIC_SCHEMA = ChannelSchema(SCHEMA.channels | {Channel("age", "years", timeless=True)})
 CORPUS = "test-corpus"
+NON_FINITE = [float("nan"), float("inf"), float("-inf")]
+BLANK_OR_PADDED = ["", "   ", " x", "x "]
 LICENCE = Licence("CC-BY-4.0", permits_derivatives=True)
 SOURCE = CorpusSource("NASA PCoE", "https://example.org/cmapss")
 EPOCH = datetime(2026, 9, 8, 12, tzinfo=UTC)

@@ -7,7 +7,7 @@ from emblema.catalog.contracts.corpus_version_ref import CorpusVersionRef
 from emblema.catalog.contracts.events import CorpusVersionFrozen
 from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.domain.identifiers import CorpusId
-from emblema.catalog.domain.licence import Licence
+from emblema.catalog.domain.registry.licence import Licence
 from emblema.catalog.ports.corpus_reader import CorpusReader
 from emblema.catalog.ports.corpus_repository import CorpusRepository
 from emblema.shared.events.domain_event import EventId

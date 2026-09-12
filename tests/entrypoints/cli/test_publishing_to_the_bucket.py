@@ -18,23 +18,18 @@ from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusR
 from emblema.catalog.application.assemblers.published_corpus_manifest_assembler import (
     PublishedCorpusManifestAssembler,
 )
-from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
-from emblema.catalog.domain.window_spec import WindowSpec
 from emblema.config.settings import Settings
 from emblema.entrypoints.cli.composition_root import CompositionRoot
-from emblema.entrypoints.cli.known_corpora import KnownCorpora
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import Retention
+from tests.support.corpora import CORPUS, SAMPLE, SUBSET, publish_command
 
 if TYPE_CHECKING:
     from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
 
 pytestmark = pytest.mark.integration
 
-SAMPLE = Path(__file__).resolve().parents[2] / "data" / "cmapss"
-CORPUS = "cmapss"
-WINDOW = WindowSpec(length=20.0, stride=7.0)
 BATCH_SIZE = 4
 
 
@@ -69,21 +64,11 @@ def manifest_ref(store: S3ArtifactStore, tmp_path: Path) -> ArtifactRef:
         Settings(),
         corpus_root=SAMPLE,
         workspace=tmp_path / "publisher",
-        subsets=("FD001",),
+        subsets=(SUBSET,),
         corpora=InMemoryCorpusRepository(),
         store=store,
     )
-    known = KnownCorpora.default().named(CORPUS)
-    return root.services.publish_corpus(
-        PublishCorpusCommand(
-            name=known.name,
-            source=known.source,
-            licence=known.licence,
-            window=WINDOW,
-            validation_fraction=0.5,
-            seed=1,
-        )
-    )
+    return root.services.publish_corpus(publish_command())
 
 
 def reader_elsewhere(store: S3ArtifactStore, tmp_path: Path) -> BlockCorpusArchive:

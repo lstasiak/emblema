@@ -18,8 +18,6 @@ from emblema.catalog.application.use_cases.register_corpus_version import (
     RegisterCorpusVersionCommand,
 )
 from emblema.catalog.contracts.events import CorpusVersionFrozen
-from emblema.catalog.domain.corpus_description import CorpusDescription
-from emblema.catalog.domain.corpus_unit import CorpusUnit
 from emblema.catalog.domain.exceptions import (
     CorpusNotFoundError,
     CorpusReadError,
@@ -27,7 +25,9 @@ from emblema.catalog.domain.exceptions import (
     SameDataAlreadyFrozenError,
 )
 from emblema.catalog.domain.identifiers import CorpusId, UnitKey
-from emblema.catalog.domain.observation import Observation
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.registry.corpus_description import CorpusDescription
 from emblema.catalog.ports.corpus_reader import CorpusReader
 from emblema.shared.adapters.in_memory.clock import FixedClock
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher

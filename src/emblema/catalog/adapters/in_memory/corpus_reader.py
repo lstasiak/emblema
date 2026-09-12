@@ -1,10 +1,10 @@
 from collections.abc import Iterable, Iterator, Sequence
 
-from emblema.catalog.domain.corpus_description import CorpusDescription
-from emblema.catalog.domain.corpus_unit import CorpusUnit
 from emblema.catalog.domain.exceptions import UnknownUnitError
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.observation import Observation
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.registry.corpus_description import CorpusDescription
 
 
 class InMemoryCorpusReader:
