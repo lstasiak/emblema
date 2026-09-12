@@ -2,8 +2,9 @@
 
 Preprocessing happens once and every later run reads the result, so the questions worth answering
 about it are answered once too: how large the artifact is beside the same windows held as Python
-objects, whether publishing twice gives one artifact or two, and what reading a window back out of
-a memory map costs against reading one from a list. Run it where the raw corpus is:
+objects, whether publishing twice into one registry gives one artifact or two, and what reading a
+window back out of a memory map costs against reading one from a list. Run it where the raw corpus
+is:
 
     uv sync --all-extras
     uv run scripts/published_corpus_report.py --corpus cmapss
@@ -29,18 +30,21 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from emblema.catalog.adapters.archive.block_corpus_archive import BlockCorpusArchive
-from emblema.catalog.adapters.archive.manifest_json import encode_manifest
+from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
+from emblema.catalog.adapters.readers.cmapss import SUBSETS
+from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.tokenisation_manifest import TokenisationManifest
-from emblema.config.artifact_store_settings import ArtifactStoreSettings
-from emblema.config.settings import Settings
-from emblema.entrypoints.cli.composition import build_services
-from emblema.entrypoints.cli.publish_corpus import parse as parse_publish
-from emblema.entrypoints.cli.publish_corpus import publish
+from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.ports.corpus_archive import CorpusArchive
+from emblema.catalog.ports.corpus_repository import CorpusRepository
+from emblema.entrypoints.cli.composition_root import CompositionRoot
+from emblema.entrypoints.cli.known_corpora import KnownCorpora
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
+from emblema.shared.adapters.windows.window_block_writer import WindowBlockWriter
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
 from scripts.reporting import dated_heading, machine, table
+from tests.support.settings import unreachable_store
 
 BUDGET = REPO_ROOT / "scripts" / "corpus_budget.toml"
 RAW = REPO_ROOT / "data" / "raw"
@@ -51,13 +55,35 @@ SAMPLED_WINDOWS = 512
 
 @dataclass(frozen=True)
 class Published:
-    """One publication: what went in, what came out and how long it took."""
+    """One publication: what went in, what came out, where it can be read and how long it took."""
 
     manifest: TokenisationManifest
     manifest_ref: ArtifactRef
+    archive: CorpusArchive
     block_bytes: int
     manifest_bytes: int
     seconds: float
+
+
+@dataclass(frozen=True)
+class Writing:
+    """What putting one window into a block costs, and how much of that is checking the window.
+
+    The check is the same one a reader pays, so it is also the yardstick that tells a slower
+    machine from a slower code path between two runs.
+    """
+
+    add_seconds: float
+    check_seconds: float
+    windows: int
+
+    @property
+    def add_ms(self) -> float:
+        return self.add_seconds * 1e3
+
+    @property
+    def check_ms(self) -> float:
+        return self.check_seconds * 1e3
 
 
 @dataclass(frozen=True)
@@ -77,11 +103,11 @@ class ReadBack:
         return self.bytes_as_objects / max(self.windows, 1)
 
 
-def default_window(corpus: str) -> tuple[float, float]:
+def default_window(corpus: str) -> WindowSpec:
     with BUDGET.open("rb") as handle:
         windows = tomllib.load(handle)["corpora"][corpus]["windows"]
     spec = next(window for window in windows if window.get("default"))
-    return float(spec["length"]), float(spec["stride"])
+    return WindowSpec(float(spec["length"]), float(spec["stride"]))
 
 
 def measured_counts(corpus: str) -> dict[str, int] | None:
@@ -99,44 +125,41 @@ def corpus_root(corpus: str) -> Path:
     return hits[0].parent
 
 
-def settings() -> Settings:
-    """Settings with a store that is never reached: the archive below is given its own."""
-    return Settings(
-        artifact_store=ArtifactStoreSettings(
-            endpoint_url="http://127.0.0.1:3900",
-            region="garage",
-            bucket="emblema",
-            key_prefix="dev",
-        )
-    )
-
-
 def publish_once(
-    corpus: str, root: Path, workspace: Path, arguments: argparse.Namespace
+    root: Path,
+    workspace: Path,
+    subsets: Sequence[str] | None,
+    command: PublishCorpusCommand,
+    registry: CorpusRepository,
 ) -> Published:
     store = LocalDirectoryArtifactStore(workspace / "store")
-    archive = BlockCorpusArchive(store, workspace / "blocks")
-    services = build_services(
-        settings(), corpus_root=root, workspace=workspace / "blocks", archive=archive
+    process = CompositionRoot(
+        unreachable_store(),
+        corpus_root=root,
+        workspace=workspace / "blocks",
+        subsets=SUBSETS if subsets is None else tuple(subsets),
+        corpora=registry,
+        store=store,
     )
     started = time.perf_counter()
-    ref = publish(services, arguments)
+    ref = process.services.publish_corpus(command)
     seconds = time.perf_counter() - started
+    archive = process.adapters.archive
     manifest = archive.read_manifest(ref)
     return Published(
         manifest=manifest,
         manifest_ref=ref,
-        block_bytes=(workspace / "store").joinpath(*manifest.block.key.split("/")).stat().st_size,
-        manifest_bytes=len(encode_manifest(manifest)),
+        archive=archive,
+        # The block just published is left in the workspace under its digest, for its reader.
+        block_bytes=(workspace / "blocks" / manifest.block.checksum.digest).stat().st_size,
+        manifest_bytes=len(store.get(ref)),
         seconds=seconds,
     )
 
 
-def read_back(published: Published, workspace: Path) -> ReadBack:
+def read_back(published: Published) -> ReadBack:
     """Read windows out of the published artifact, and weigh what holding them would cost."""
-    store = LocalDirectoryArtifactStore(workspace / "store")
-    archive = BlockCorpusArchive(store, workspace / "blocks")
-    mapped = archive.read_windows(published.manifest, published.manifest.units)
+    mapped = published.archive.read_windows(published.manifest.archived, published.manifest.units)
     count = min(SAMPLED_WINDOWS, len(mapped))
     seconds = _median_seconds(lambda: [mapped[index] for index in range(count)])
     tracemalloc.start()
@@ -146,6 +169,33 @@ def read_back(published: Published, workspace: Path) -> ReadBack:
     tracemalloc.stop()
     del held
     return ReadBack(seconds, bytes_held, count)
+
+
+def writing(published: Published, workspace: Path) -> Writing:
+    """Time the writer on windows of the published corpus, cast and checked as it writes them."""
+    mapped = published.archive.read_windows(published.manifest.archived, published.manifest.units)
+    count = min(SAMPLED_WINDOWS, len(mapped))
+    windows: list[TokenWindow] = [mapped[index] for index in range(count)]
+    with WindowBlockWriter(workspace / "timing" / "sample.block") as writer:
+
+        def add_all() -> None:
+            for window in windows:
+                writer.add(window, unit=0, start=0.0, end=1.0)
+
+        add_seconds = _median_seconds(add_all)
+    check_seconds = _median_seconds(
+        lambda: [
+            TokenWindow(
+                channel_ids=window.channel_ids,
+                values=window.values,
+                times=window.times,
+                gaps=window.gaps,
+                timeless=window.timeless,
+            )
+            for window in windows
+        ]
+    )
+    return Writing(add_seconds / count, check_seconds / count, count)
 
 
 def _median_seconds(step: Callable[[], object], repeats: int = 5) -> float:
@@ -163,14 +213,15 @@ def render(
     first: Published,
     second: Published,
     reading: ReadBack,
-    window: tuple[float, float],
+    writes: Writing,
+    window: WindowSpec,
 ) -> str:
     manifest = first.manifest
     spike = measured_counts(corpus)
     per_window = first.block_bytes / max(manifest.window_count, 1)
     rows = [
         ("Machine", machine()),
-        ("Corpus", f"{corpus}, window length {window[0]:g} stride {window[1]:g}"),
+        ("Corpus", f"{corpus}, window length {window.length:g} stride {window.stride:g}"),
         ("Units", f"{len(manifest.units)} indexed, {len(manifest.empty_units)} yielding no window"),
         (
             "Split",
@@ -197,10 +248,8 @@ def render(
     ]
     if same_block and not same_manifest:
         repeated.append(
-            "The blocks agree, so the data is one artifact. The manifests differ because each run "
-            "registers the corpus afresh and mints a new version identifier: no registration "
-            "outlives the process yet. Once one does, the second run finds the version already "
-            "frozen and describes it rather than minting another."
+            "The blocks agree, so the data is one artifact. The manifests differ, so the second "
+            "run did not find the first run's registration and minted a new version identifier."
         )
     lines = [dated_heading(), "", table(("", ""), rows), ""]
     lines += [
@@ -223,13 +272,25 @@ def render(
                 ),
             ],
         ),
+        "",
+        table(
+            ("Writing", f"over {writes.windows} windows"),
+            [
+                ("One window into the block", f"{writes.add_ms:,.2f} ms"),
+                ("Of which checking it reads back as a window", f"{writes.check_ms:,.2f} ms"),
+                (
+                    "Checking alone, over the whole corpus",
+                    f"{writes.check_seconds * manifest.window_count:,.1f} s",
+                ),
+            ],
+        ),
     ]
     return "\n".join(lines)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--corpus", default="cmapss")
+    parser.add_argument("--corpus", default="cmapss", choices=KnownCorpora.default().names())
     parser.add_argument("--subset", action="append")
     parser.add_argument("--workspace", type=Path, default=REPO_ROOT / "data" / "report")
     parser.add_argument("--validation-fraction", type=float, default=0.2)
@@ -237,27 +298,23 @@ def main(argv: Sequence[str] | None = None) -> None:
     arguments = parser.parse_args(argv)
     root = corpus_root(arguments.corpus)
     window = default_window(arguments.corpus)
-    publish_arguments = parse_publish(
-        [
-            "--corpus",
-            arguments.corpus,
-            "--root",
-            str(root),
-            "--window",
-            str(window[0]),
-            "--stride",
-            str(window[1]),
-            "--validation-fraction",
-            str(arguments.validation_fraction),
-            "--seed",
-            str(arguments.seed),
-            *(argument for subset in arguments.subset or [] for argument in ("--subset", subset)),
-        ]
+    known = KnownCorpora.default().named(arguments.corpus)
+    command = PublishCorpusCommand(
+        name=known.name,
+        source=known.source,
+        licence=known.licence,
+        window=window,
+        validation_fraction=arguments.validation_fraction,
+        seed=arguments.seed,
     )
-    first = publish_once(arguments.corpus, root, arguments.workspace / "first", publish_arguments)
-    second = publish_once(arguments.corpus, root, arguments.workspace / "second", publish_arguments)
-    reading = read_back(first, arguments.workspace / "first")
-    print(render(arguments.corpus, first, second, reading, window))
+    # One registry for both publications, in memory: the report is about the format and the
+    # machine, so it stands in for the database the process would otherwise register into.
+    registry = InMemoryCorpusRepository()
+    first = publish_once(root, arguments.workspace / "first", arguments.subset, command, registry)
+    second = publish_once(root, arguments.workspace / "second", arguments.subset, command, registry)
+    reading = read_back(first)
+    writes = writing(first, arguments.workspace / "first")
+    print(render(arguments.corpus, first, second, reading, writes, window))
 
 
 if __name__ == "__main__":
