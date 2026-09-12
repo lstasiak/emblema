@@ -16,7 +16,7 @@
 | src/emblema/catalog/contracts/exceptions.py                        |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/contracts/identifiers.py                       |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/domain/channel\_schema.py                      |       27 |        0 |        6 |        0 |    100% |           |
-| src/emblema/catalog/domain/channel\_statistics.py                  |       14 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/domain/channel\_statistics.py                  |       19 |        0 |        6 |        0 |    100% |           |
 | src/emblema/catalog/domain/channel\_vocabulary.py                  |       48 |        0 |       24 |        0 |    100% |           |
 | src/emblema/catalog/domain/corpus.py                               |       51 |        0 |       20 |        0 |    100% |           |
 | src/emblema/catalog/domain/corpus\_content.py                      |       10 |        0 |        4 |        0 |    100% |           |
@@ -29,8 +29,9 @@
 | src/emblema/catalog/domain/licence.py                              |       10 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/domain/observation.py                          |       12 |        0 |        6 |        0 |    100% |           |
 | src/emblema/catalog/domain/static\_feature.py                      |       10 |        0 |        4 |        0 |    100% |           |
-| src/emblema/catalog/domain/tokenisation\_scheme.py                 |       31 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/domain/tokenisation\_scheme.py                 |       46 |        0 |       10 |        0 |    100% |           |
 | src/emblema/catalog/domain/unit\_split.py                          |       26 |        0 |       10 |        0 |    100% |           |
+| src/emblema/catalog/domain/window\_reconstruction.py               |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/domain/window\_spec.py                         |       21 |        0 |        6 |        0 |    100% |           |
 | src/emblema/catalog/ports/corpus\_reader.py                        |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/ports/corpus\_repository.py                    |        6 |        0 |        0 |        0 |    100% |           |
@@ -67,7 +68,7 @@
 | src/emblema/shared/ports/event\_subscriber.py                      |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                             |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                          |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                          | **1287** |    **4** |  **284** |    **1** | **99%** |           |
+| **TOTAL**                                                          | **1312** |    **4** |  **288** |    **1** | **99%** |           |
 
 25 empty files skipped.
 
