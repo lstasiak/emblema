@@ -12,7 +12,10 @@ concurrency:
 env:
   # A role name authenticates nobody. Every secret the local stack needs is minted per run by the
   # jobs that start it, so no password or access key is written down in this repository.
-  POSTGRES_USER: ci
+  EMBLEMA_DATABASE__HOST: 127.0.0.1
+  EMBLEMA_DATABASE__PORT: "5432"
+  EMBLEMA_DATABASE__NAME: emblema
+  EMBLEMA_DATABASE__USER: ci
 
 jobs:
   lint:
@@ -82,7 +85,7 @@ jobs:
         # its access key as `GK` followed by 32 hex digits.
         run: |
           {
-            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "EMBLEMA_DATABASE__PASSWORD=$(openssl rand -hex 16)"
             echo "EMBLEMA_ARTIFACT_STORE__ACCESS_KEY=GK$(openssl rand -hex 16)"
             echo "EMBLEMA_ARTIFACT_STORE__SECRET_KEY=$(openssl rand -hex 32)"
           } >> "$GITHUB_ENV"
@@ -138,20 +141,23 @@ jobs:
         # As in the compose job: minted here, gone with the runner, absent from the repository.
         run: |
           {
-            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "EMBLEMA_DATABASE__PASSWORD=$(openssl rand -hex 16)"
             echo "EMBLEMA_ARTIFACT_STORE__ACCESS_KEY=GK$(openssl rand -hex 16)"
             echo "EMBLEMA_ARTIFACT_STORE__SECRET_KEY=$(openssl rand -hex 32)"
           } >> "$GITHUB_ENV"
 
-      - name: Start the S3-compatible store
-        run: docker compose up -d --wait garage
+      - name: Start the artifact store and the metadata database
+        run: docker compose up -d --wait garage postgres
+
+      - name: Migrate the metadata database
+        run: uv run alembic upgrade head
 
       - name: Test with coverage
         # Integration tests run here too (the store is up), so the S3 adapter counts towards the
         # threshold, which is `fail_under` in pyproject.toml. Locally the default addopts skip them.
         run: uv run pytest -o addopts="-ra --strict-markers" --cov --cov-report=term-missing --cov-report=xml
 
-      - name: Stop the S3-compatible store
+      - name: Stop the local services
         if: always()
         run: docker compose down -v
 
