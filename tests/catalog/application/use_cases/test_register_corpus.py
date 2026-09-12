@@ -3,7 +3,10 @@ from uuid import UUID
 import pytest
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
-from emblema.catalog.application.register_corpus import RegisterCorpus, RegisterCorpusCommand
+from emblema.catalog.application.use_cases.register_corpus import (
+    RegisterCorpus,
+    RegisterCorpusCommand,
+)
 from emblema.catalog.domain.corpus import Corpus
 from emblema.catalog.domain.exceptions import CorpusNameTakenError, InvalidCorpusError
 from emblema.catalog.domain.identifiers import CorpusId

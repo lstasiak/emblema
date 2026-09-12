@@ -1,6 +1,8 @@
 import pytest
 
-from emblema.catalog.application.corpus_version_ref_assembler import CorpusVersionRefAssembler
+from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
+    CorpusVersionRefAssembler,
+)
 from emblema.catalog.contracts.corpus_version_ref import ChannelSpec, CorpusVersionRef
 from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.corpus_version import CorpusVersion

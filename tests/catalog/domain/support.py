@@ -114,3 +114,20 @@ def identity_scheme(schema: ChannelSchema = SCHEMA, corpus: str = CORPUS) -> Tok
     for entry in scheme.vocabulary.entries:
         scheme = scheme.with_statistics(entry.channel_id, ChannelStatistics(1, 0.0, 1.0))
     return scheme
+
+
+def measured_units(
+    count: int, channels: Sequence[str] = ("pressure", "temperature"), prefix: str = "u"
+) -> list[tuple[CorpusUnit, list[Observation]]]:
+    """``count`` units, each measured on every channel at every whole instant of eight."""
+    return [
+        (
+            CorpusUnit(UnitKey(f"{prefix}{number}"), TimeExtent(0.0, 8.0)),
+            [
+                Observation(channel, float(time), float(time) + offset)
+                for time in range(8)
+                for offset, channel in enumerate(channels)
+            ],
+        )
+        for number in range(1, count + 1)
+    ]

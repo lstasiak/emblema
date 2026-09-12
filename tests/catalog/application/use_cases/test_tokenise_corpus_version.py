@@ -7,18 +7,20 @@ from emblema.catalog.adapters.archive.block_corpus_archive import BlockCorpusArc
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
-from emblema.catalog.application.tokenise_corpus_version import (
+from emblema.catalog.application.assemblers.published_corpus_manifest_assembler import (
+    PublishedCorpusManifestAssembler,
+)
+from emblema.catalog.application.use_cases.tokenise_corpus_version import (
     TokeniseCorpusVersion,
     TokeniseCorpusVersionCommand,
 )
+from emblema.catalog.domain.channel_schema import Channel, ChannelSchema
+from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.corpus import Corpus
-from emblema.catalog.domain.corpus_unit import CorpusUnit, TimeExtent
+from emblema.catalog.domain.corpus_unit import CorpusUnit
 from emblema.catalog.domain.exceptions import (
-    CorpusDataChangedError,
-    CorpusVersionNotFrozenError,
-    InvalidUnitSplitError,
+    ChannelRedeclaredError,
 )
-from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.observation import Observation
 from emblema.catalog.domain.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
@@ -27,29 +29,18 @@ from emblema.shared.kernel.artifacts import ArtifactRef
 from tests.catalog.domain.support import (
     AT,
     LICENCE,
+    OTHER_SCHEMA,
     SCHEMA,
     SOURCE,
     corpus_id,
     description,
+    measured_units,
     version_id,
 )
 
 DATA = b"records"
 WINDOW = WindowSpec(length=4.0, stride=2.0)
-
-
-def readings(key: str) -> tuple[CorpusUnit, list[Observation]]:
-    """A unit measured on both channels at every whole instant of its extent."""
-    unit = CorpusUnit(UnitKey(key), TimeExtent(0.0, 8.0))
-    observations = [
-        Observation(channel, float(time), float(time) + offset)
-        for time in range(8)
-        for offset, channel in enumerate(("pressure", "temperature"))
-    ]
-    return unit, observations
-
-
-UNITS = [readings(f"u{number}") for number in range(1, 5)]
+UNITS = measured_units(4)
 
 
 def registered(units: Sequence[tuple[CorpusUnit, list[Observation]]] = ()) -> Corpus:
@@ -79,12 +70,19 @@ class Fixture:
         self.corpora.save(corpus)
         self.reader = InMemoryCorpusReader(told, units)
         self.store = InMemoryArtifactStore()
-        self.archive: CorpusArchive = BlockCorpusArchive(self.store, workspace)
+        self.archive: CorpusArchive = BlockCorpusArchive(
+            self.store, workspace, PublishedCorpusManifestAssembler()
+        )
         self.tokenise = TokeniseCorpusVersion(
             self.corpora, self.reader, SlidingWindowTokeniser(), self.archive
         )
 
-    def run(self, fraction: float = 0.25, seed: int = 1) -> ArtifactRef:
+    def run(
+        self,
+        fraction: float = 0.25,
+        seed: int = 1,
+        vocabulary: ChannelVocabulary | None = None,
+    ) -> ArtifactRef:
         return self.tokenise(
             TokeniseCorpusVersionCommand(
                 corpus_id=corpus_id(),
@@ -92,6 +90,7 @@ class Fixture:
                 window=WINDOW,
                 validation_fraction=fraction,
                 seed=seed,
+                vocabulary=ChannelVocabulary() if vocabulary is None else vocabulary,
             )
         )
 
@@ -161,7 +160,7 @@ def test_the_windows_of_the_training_units_come_back_from_the_archive(
     ref = fixture.run()
 
     manifest = fixture.archive.read_manifest(ref)
-    windows = fixture.archive.read_windows(manifest, manifest.split.training)
+    windows = fixture.archive.read_windows(manifest.archived, manifest.split.training)
     assert len(windows) == 3 * len(manifest.split.training)
 
 
@@ -174,45 +173,32 @@ def test_the_same_corpus_and_command_publish_the_same_artifact(
     assert first == second
 
 
-def test_a_unit_that_yields_no_window_is_named_rather_than_dropped_silently(
+def test_a_vocabulary_given_keeps_its_identifiers_and_grows_by_this_corpus(
     wired: Callable[..., Fixture],
 ) -> None:
-    silent: tuple[CorpusUnit, list[Observation]] = (
-        CorpusUnit(UnitKey("u5"), TimeExtent(0.0, 8.0)),
-        [],
-    )
-    units = [*UNITS, silent]
-    fixture = wired(registered(units), units)
+    # Identifiers index a model's embedding table, so a corpus published to be trained on beside
+    # an earlier one takes the identifiers after that one's, and leaves those untouched.
+    prior = ChannelVocabulary().extended_with("other", OTHER_SCHEMA)
+    fixture = wired(registered(UNITS))
 
-    ref = fixture.run()
+    ref = fixture.run(vocabulary=prior)
 
-    manifest = fixture.archive.read_manifest(ref)
-    assert manifest.empty_units == (UnitKey("u5"),)
-    assert UnitKey("u5") not in manifest.units
+    scheme = fixture.archive.read_manifest(ref).scheme
+    assert scheme.vocabulary.entry(1) == prior.entry(1)
+    assert scheme.vocabulary.id_of("corpus", "pressure") == 2
+    assert scheme.vocabulary.id_of("corpus", "temperature") == 3
+    assert scheme.statistics[0] is None
 
 
-def test_data_that_no_longer_matches_the_frozen_version_is_refused(
+def test_a_vocabulary_declaring_a_channel_of_this_corpus_differently_is_refused(
     wired: Callable[..., Fixture],
 ) -> None:
+    # An identifier cannot change meaning: pressure in bar under an identifier that a published
+    # artifact already reads as pressure in pascal would make one embedding stand for two things.
     fixture = wired(registered(UNITS))
-    fixture.reader.replace_data(description(b"other data", SCHEMA, units=4, observations=64), UNITS)
-
-    with pytest.raises(CorpusDataChangedError):
-        fixture.run()
-
-
-def test_a_draft_version_cannot_be_published(wired: Callable[..., Fixture]) -> None:
-    corpus = Corpus(corpus_id(), "corpus", SOURCE).add_version(
-        version_id(), SCHEMA, description().sampling_regime, LICENCE
+    redeclared = ChannelVocabulary().extended_with(
+        "corpus", ChannelSchema(frozenset({Channel("pressure", "bar")}))
     )
-    fixture = wired(corpus)
 
-    with pytest.raises(CorpusVersionNotFrozenError):
-        fixture.run()
-
-
-def test_too_few_units_for_the_fraction_asked_is_refused(wired: Callable[..., Fixture]) -> None:
-    fixture = wired(registered(UNITS))
-
-    with pytest.raises(InvalidUnitSplitError):
-        fixture.run(fraction=0.1)
+    with pytest.raises(ChannelRedeclaredError):
+        fixture.run(vocabulary=redeclared)

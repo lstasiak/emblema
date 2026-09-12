@@ -7,7 +7,9 @@ nothing of the Catalog beyond ``emblema.catalog.contracts``.
 
 from uuid import UUID
 
-from emblema.catalog.application.corpus_version_ref_assembler import CorpusVersionRefAssembler
+from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
+    CorpusVersionRefAssembler,
+)
 from emblema.catalog.contracts.events import CorpusVersionFrozen
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber

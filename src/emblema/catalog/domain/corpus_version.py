@@ -6,6 +6,7 @@ from typing import Self
 from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.domain.channel_schema import ChannelSchema
 from emblema.catalog.domain.corpus_content import CorpusContent
+from emblema.catalog.domain.corpus_description import CorpusDescription
 from emblema.catalog.domain.exceptions import (
     CorpusVersionFrozenError,
     CorpusVersionNotFrozenError,
@@ -68,19 +69,27 @@ class CorpusVersion:
             )
         return self.content
 
-    def describes_same_data_as(self, other: CorpusVersion) -> bool:
-        """Whether both versions carry validated data of equal checksum, schema and regime.
+    def describes(self, description: CorpusDescription) -> bool:
+        """Whether this version carries validated data equal to what ``description`` describes.
 
         Schema and regime are part of what a version describes: the same bytes read under another
         channel schema or sampling regime are different data. A version without content describes
         nothing yet, so it never matches.
         """
-        if self.content is None or other.content is None:
+        if self.content is None:
             return False
         return (
-            self.content.checksum == other.content.checksum
-            and self.channel_schema == other.channel_schema
-            and self.sampling_regime == other.sampling_regime
+            self.content.checksum == description.content.checksum
+            and self.channel_schema == description.channel_schema
+            and self.sampling_regime == description.sampling_regime
+        )
+
+    def describes_same_data_as(self, other: CorpusVersion) -> bool:
+        """Whether both versions carry validated data of equal checksum, schema and regime."""
+        if other.content is None:
+            return False
+        return self.describes(
+            CorpusDescription(other.channel_schema, other.sampling_regime, other.content)
         )
 
     def with_content(self, content: CorpusContent) -> Self:

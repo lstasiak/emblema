@@ -1,5 +1,5 @@
 from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import chain
 
 from emblema.catalog.contracts.identifiers import CorpusVersionId
@@ -31,6 +31,10 @@ class TokeniseCorpusVersionCommand:
         window: How windows are laid over each unit's time axis.
         validation_fraction: Share of units held out from fitting the scheme.
         seed: Seed the split is drawn with; recorded, so the same split can be drawn again.
+        vocabulary: Channels already registered, whose identifiers this corpus's channels are
+            appended after. Corpora tokenised under one growing vocabulary can be trained on
+            together, because no two of their channels share an identifier; a fresh vocabulary
+            is right for the first corpus only.
     """
 
     corpus_id: CorpusId
@@ -38,19 +42,15 @@ class TokeniseCorpusVersionCommand:
     window: WindowSpec
     validation_fraction: float
     seed: int
+    vocabulary: ChannelVocabulary = field(default_factory=ChannelVocabulary)
 
 
 class TokeniseCorpusVersion:
-    """Turns a registered corpus into the artifact a training run reads instead of source files.
+    """Turns a frozen corpus version into the artifact a training run reads instead of source files.
 
-    Preprocessing is done once, where the data is, so that a session on rented hardware spends
-    its time training. The order of work is what keeps the result honest rather than convenient:
-    the units are split before a single window is cut, the scheme is fitted on the training side
-    only, and every unit is then tokenised under that one scheme — so nothing a held-out unit
-    holds can reach the statistics that normalise the data a model sees.
-
-    The artifact is described by a manifest naming every input that decided its bytes, so running
-    this again either yields the same artifact or names what differed.
+    Units are split before a window is cut, the scheme is fitted on the training side only and
+    every unit is tokenised under that one scheme, so nothing a held-out unit holds reaches the
+    statistics that normalise what a model sees.
     """
 
     def __init__(
@@ -70,11 +70,14 @@ class TokeniseCorpusVersion:
 
         Raises:
             CorpusNotFoundError: If the corpus is unknown.
+            ChannelRedeclaredError: If the vocabulary already registers a channel of this corpus
+                with another unit or kind.
             CorpusVersionNotFoundError: If the corpus has no such version.
             CorpusVersionNotFrozenError: If the version is still a draft.
             CorpusDataChangedError: If the reader no longer sees the data that version froze.
             CorpusReadError: If the reader cannot read or validate the data.
             InvalidUnitSplitError: If the corpus holds too few units for the fraction asked.
+            WindowNotArchivableError: If a window cannot be stored at the archive's precision.
         """
         corpus = self._corpora.get(command.corpus_id)
         version = corpus.get_version(command.version_id)
@@ -89,7 +92,7 @@ class TokeniseCorpusVersion:
         split = UnitSplit.by_seed(
             (unit.key for unit in units), command.validation_fraction, command.seed
         )
-        scheme = self._fitted(corpus.name, units, split, version.channel_schema)
+        scheme = self._fitted(corpus.name, units, split, version.channel_schema, command.vocabulary)
         archived = self._archive.write_windows(
             self._placed(corpus.name, units, scheme, command.window)
         )
@@ -98,14 +101,11 @@ class TokeniseCorpusVersion:
             corpus=corpus.name,
             corpus_version=command.version_id,
             corpus_checksum=frozen.checksum,
-            block=archived.block,
+            archived=archived,
             window=command.window,
             scheme=scheme,
-            units=archived.units,
             split=split,
             split_seed=command.seed,
-            window_count=archived.window_count,
-            token_count=archived.token_count,
             empty_units=tuple(unit.key for unit in units if unit.key not in indexed),
         )
         return self._archive.write_manifest(manifest)
@@ -116,12 +116,11 @@ class TokeniseCorpusVersion:
         units: Sequence[CorpusUnit],
         split: UnitSplit,
         schema: ChannelSchema,
+        vocabulary: ChannelVocabulary,
     ) -> TokenisationScheme:
         """The scheme this corpus is tokenised under, fitted on the training units alone."""
         training = [unit for unit in units if unit.key in split.training]
-        unfitted = TokenisationScheme.for_vocabulary(ChannelVocabulary()).extended_with(
-            corpus, schema
-        )
+        unfitted = TokenisationScheme.for_vocabulary(vocabulary).extended_with(corpus, schema)
         return self._tokeniser.fit(
             corpus,
             self._observations(unit.key for unit in training),

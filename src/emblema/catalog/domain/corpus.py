@@ -5,6 +5,7 @@ from typing import Self
 from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.domain.channel_schema import ChannelSchema
 from emblema.catalog.domain.corpus_content import CorpusContent
+from emblema.catalog.domain.corpus_description import CorpusDescription
 from emblema.catalog.domain.corpus_source import CorpusSource
 from emblema.catalog.domain.corpus_version import CorpusVersion
 from emblema.catalog.domain.exceptions import (
@@ -57,6 +58,15 @@ class Corpus:
     @property
     def frozen_versions(self) -> tuple[CorpusVersion, ...]:
         return tuple(version for version in self.versions if version.is_frozen)
+
+    def frozen_version_describing(self, description: CorpusDescription) -> CorpusVersion | None:
+        """The frozen version over exactly the data ``description`` describes, if there is one.
+
+        At most one can: frozen versions describe distinct data.
+        """
+        return next(
+            (version for version in self.frozen_versions if version.describes(description)), None
+        )
 
     def get_version(self, version_id: CorpusVersionId) -> CorpusVersion:
         """Look up a version by identifier.

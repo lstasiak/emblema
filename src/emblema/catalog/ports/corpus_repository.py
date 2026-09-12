@@ -20,6 +20,14 @@ class CorpusRepository(Protocol):
         """
         ...
 
+    def find_by_name(self, name: str) -> Corpus | None:
+        """The corpus registered under ``name``, or ``None`` when there is none.
+
+        Names are unique, so this is a lookup and never a search. It answers with ``None``
+        rather than an error because the caller who asks is deciding whether to register.
+        """
+        ...
+
     def save(self, corpus: Corpus) -> None:
         """Store this state of the corpus, replacing the previous one.
 
