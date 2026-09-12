@@ -7,15 +7,13 @@ from emblema.shared.kernel.artifacts import ArtifactRef
 
 @dataclass(frozen=True)
 class ArchivedCorpus:
-    """What writing the windows of a corpus settled, before anything is said about them.
+    """What the archive settled when it wrote the windows of a corpus.
 
-    An archive decides how it indexes the units it was given — a block addresses them by position,
-    and only units that yielded a window are in it — so the order comes back here rather than
-    going in. A manifest is written afterwards and repeats this order, which is what lets a reader
-    turn the index beside a window back into the name of a unit.
+    The archive decides how it indexes units, so the order comes back from it; the manifest
+    repeats that order, which is what turns an index beside a window back into a unit's name.
 
-    Invariants: units are unique; windows and tokens are counted together, and a corpus with
-    windows has units.
+    Invariants: units are unique; windows and tokens are counted together; a corpus with windows
+    has units.
 
     Attributes:
         block: Reference to the artifact holding the windows.

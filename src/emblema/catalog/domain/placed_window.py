@@ -7,13 +7,10 @@ from emblema.shared.kernel.tokens import TokenWindow
 
 @dataclass(frozen=True)
 class PlacedWindow:
-    """A token window together with where on the corpus it was cut from.
+    """A token window together with the unit and the span of its time axis it was cut from.
 
-    The times a window carries are fractions of its own length, so a window alone cannot say where
-    it sits; and windows no observation falls into are never produced, so a stream of windows
-    cannot be matched against the spans a specification lays over a unit either. Carrying the unit
-    and the span makes the stream say what it holds, which is what lets the windows of a whole
-    corpus flow as one stream into an archive and still be attributable afterwards.
+    A window's times are fractions of its own length and empty spans yield no window, so the
+    stream of windows cannot be matched to the spans laid over a unit; the window has to say.
 
     Attributes:
         unit: Unit of the corpus the window was cut from.
