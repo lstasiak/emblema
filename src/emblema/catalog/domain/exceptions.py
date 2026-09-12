@@ -74,6 +74,10 @@ class InvalidUnitSplitError(CatalogError, ValueError):
     pass
 
 
+class InvalidTokenisationManifestError(CatalogError, ValueError):
+    pass
+
+
 class CorpusVersionNotFoundError(CatalogError):
     pass
 
@@ -95,6 +99,10 @@ class CorpusVersionNotFrozenError(CatalogError):
 
 
 class SameDataAlreadyFrozenError(CatalogError):
+    pass
+
+
+class CorpusDataChangedError(CatalogError):
     pass
 
 
@@ -151,4 +159,12 @@ class ObservationOutsideExtentError(TokenisationError):
 
 
 class ChannelKindMismatchError(TokenisationError):
+    pass
+
+
+class InvalidArchivedCorpusError(CatalogError, ValueError):
+    pass
+
+
+class MalformedManifestError(CatalogError):
     pass
