@@ -81,7 +81,12 @@ class Tier(Strict):
     device: str = Field(description="Hardware and precision the tier runs on")
     tflops: float = Field(gt=0, description="Sustained throughput assumed for the device, TFLOP/s")
     width: int = Field(gt=0, description="Model width")
+    heads: int = Field(gt=0, description="Attention heads per block")
     layers: int = Field(gt=0, description="Encoder layers")
+    feedforward_width: int = Field(
+        gt=0, description="Hidden width of the feed-forward network in each block"
+    )
+    time_frequencies: int = Field(gt=0, description="Fourier frequencies of the time encoding")
     corpus_fraction: float = Field(gt=0, le=1, description="Share of each corpus seen per epoch")
     window: WindowChoice = Field(description="Window variant of each corpus the tier trains on")
 
