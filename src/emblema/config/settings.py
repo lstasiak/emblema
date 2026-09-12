@@ -4,6 +4,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from emblema.config.artifact_store_settings import ArtifactStoreSettings
+from emblema.config.database_settings import DatabaseSettings
 from emblema.shared.kernel.compute import ComputeTier
 
 Environment = Literal["dev", "test", "prod"]
@@ -35,3 +36,4 @@ class Settings(BaseSettings):
         ),
     )
     artifact_store: ArtifactStoreSettings
+    database: DatabaseSettings
