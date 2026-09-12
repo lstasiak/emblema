@@ -42,10 +42,12 @@ from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTo
 from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.corpus_unit import CorpusUnit, TimeExtent
 from emblema.catalog.domain.observation import Observation
+from emblema.catalog.domain.placed_window import PlacedWindow
 from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.window_reconstruction import WindowReconstruction
 from emblema.catalog.domain.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_reader import CorpusReader
+from scripts.reporting import table
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BUDGET = REPO_ROOT / "scripts" / "corpus_budget.toml"
@@ -174,44 +176,12 @@ def diagnose_channels(
     return diagnostics
 
 
-def window_extents(
-    unit: CorpusUnit, times: Sequence[float], window: WindowSpec
-) -> list[TimeExtent]:
-    """The extents of the unit that hold at least one observation, so a window is cut from them."""
-    return [
-        extent
-        for extent in window.windows_over(unit.extent)
-        if any(extent.contains(time) for time in times)
-    ]
-
-
-def spread_over(extents: Sequence[TimeExtent], count: int) -> list[TimeExtent]:
-    """``count`` extents spaced along the unit, so the drawing is not all of one end of its life."""
-    if count >= len(extents):
-        return list(extents)
-    step = (len(extents) - 1) / (count - 1) if count > 1 else 0.0
-    return [extents[round(index * step)] for index in range(count)]
-
-
-def read_back(
-    corpus: str,
-    unit: CorpusUnit,
-    inside: Sequence[Observation],
-    scheme: TokenisationScheme,
-    extent: TimeExtent,
-) -> WindowReconstruction:
-    """Tokenise exactly one window of the unit and read it back.
-
-    The port yields no window for an extent nothing falls into, so a stream of windows cannot be
-    matched to the extents it was cut over. Narrowing the unit to one extent gives back the pair.
-    """
-    narrowed = CorpusUnit(unit.key, extent, unit.static_features)
-    window = next(
-        SlidingWindowTokeniser().tokenise(
-            corpus, narrowed, inside, scheme, WindowSpec(extent.length, extent.length)
-        )
-    )
-    return scheme.reconstruct(window, extent)
+def spread_over(placed: Sequence[PlacedWindow], count: int) -> list[PlacedWindow]:
+    """``count`` windows spaced along the unit, so the drawing is not all of one end of its life."""
+    if count >= len(placed):
+        return list(placed)
+    step = (len(placed) - 1) / (count - 1) if count > 1 else 0.0
+    return [placed[round(index * step)] for index in range(count)]
 
 
 def residual(
@@ -307,23 +277,23 @@ def measure(arguments: argparse.Namespace) -> Report:
     window = chosen_window(arguments, corpus)
     chosen = chosen_unit(units, arguments.unit)
     observations = list(reader.read_observations(chosen.key))
-    extents = window_extents(chosen, [o.time for o in observations], window)
-    if not extents:
+    placed = list(SlidingWindowTokeniser().tokenise(corpus, chosen, observations, scheme, window))
+    if not placed:
         raise SystemExit(f"unit {chosen.key} of {corpus} holds no window of {window}")
     checks = []
-    for number, extent in enumerate(spread_over(extents, arguments.windows), start=1):
-        inside = [o for o in observations if extent.contains(o.time)]
-        reconstruction = read_back(corpus, chosen, inside, scheme, extent)
+    for number, item in enumerate(spread_over(placed, arguments.windows), start=1):
+        inside = [o for o in observations if item.extent.contains(o.time)]
+        reconstruction = scheme.reconstruct(item.window, item.extent)
         values, times = residual(inside, reconstruction)
         figure = draw(
             corpus,
             chosen,
             inside,
             reconstruction,
-            extent,
+            item.extent,
             Path(arguments.out) / f"{corpus}-{str(chosen.key).replace('/', '-')}-w{number}.png",
         )
-        checks.append(WindowCheck(str(chosen.key), extent, len(inside), values, times, figure))
+        checks.append(WindowCheck(str(chosen.key), item.extent, len(inside), values, times, figure))
     return Report(
         corpus=corpus,
         source=source,
@@ -342,12 +312,6 @@ def shown(path: Path) -> str:
         return path.relative_to(REPO_ROOT).as_posix()
     except ValueError:
         return path.as_posix()
-
-
-def table(header: Sequence[str], rows: Iterable[Sequence[str]]) -> str:
-    lines = [" | ".join(header), " | ".join("---" for _ in header)]
-    lines += [" | ".join(row) for row in rows]
-    return "\n".join(f"| {line} |" for line in lines)
 
 
 def heading(report: Report) -> str:

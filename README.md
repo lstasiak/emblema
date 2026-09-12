@@ -30,14 +30,17 @@ Architecture rules (framework-free core, inward-pointing layers, bounded context
 
 ### Local environment
 
-Postgres, an S3-compatible artifact store ([Garage](https://garagehq.deuxfleurs.fr/)) and MLflow run in Docker. One command brings the stack up, a second checks it, a third runs the adapter contracts against it:
+Postgres, an S3-compatible artifact store ([Garage](https://garagehq.deuxfleurs.fr/)) and MLflow run in Docker. One command brings the stack up, a second checks it, a third creates the application's tables, a fourth runs the adapter contracts against it:
 
 ```sh
 cp env.example .env
 docker compose up -d --wait
 bash scripts/smoke.sh
+uv run alembic upgrade head
 uv run pytest -m integration
 ```
+
+The metadata database holds one schema per bounded context and one [Alembic](https://alembic.sqlalchemy.org/) migration tree for all of them (`migrations/`); `uv run alembic check` reports any table the model has and the migrations do not.
 
 The artifact store speaks S3 to Garage locally and to a Cloudflare R2 bucket that GPU platforms can reach. The same contract tests run against the remote bucket by configuration alone: `uv run --env-file .env.r2 pytest -m integration` (variables in `env.example`). `docker compose down -v` removes the stack and its data.
 

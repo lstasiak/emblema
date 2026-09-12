@@ -20,9 +20,12 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "alembic>=1.13",
     "boto3>=1.43",
+    "psycopg[binary]>=3.2",
     "pydantic>=2.11",
     "pydantic-settings>=2.10",
+    "sqlalchemy>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -113,6 +116,7 @@ allowed-confusables = ["×"]
 "scripts/corpus_facts.py" = ["E402"]
 "scripts/loader_throughput_report.py" = ["E402"]
 "scripts/window_sanity_report.py" = ["E402"]
+"scripts/published_corpus_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

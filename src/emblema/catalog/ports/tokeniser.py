@@ -3,10 +3,10 @@ from typing import Protocol
 
 from emblema.catalog.domain.corpus_unit import CorpusUnit
 from emblema.catalog.domain.observation import Observation
+from emblema.catalog.domain.placed_window import PlacedWindow
 from emblema.catalog.domain.static_feature import StaticFeature
 from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.window_spec import WindowSpec
-from emblema.shared.kernel.tokens import TokenWindow
 
 
 class Tokeniser(Protocol):
@@ -48,12 +48,13 @@ class Tokeniser(Protocol):
         observations: Iterable[Observation],
         scheme: TokenisationScheme,
         window: WindowSpec,
-    ) -> Iterator[TokenWindow]:
+    ) -> Iterator[PlacedWindow]:
         """Every window of ``unit`` that holds at least one observation, in time order.
 
         Observations arrive in non-decreasing time order and inside the unit's extent. A window
         that no observation falls into is not produced, so a unit shorter than a window, or one
-        with static features only, yields nothing.
+        with static features only, yields nothing. Each window comes with the span it was cut
+        from, because the stream skips spans and a window's own times are relative to itself.
 
         Raises:
             UnknownChannelError: If a value names a channel the vocabulary has not registered.

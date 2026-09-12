@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
-from emblema.catalog.application.corpus_version_ref_assembler import CorpusVersionRefAssembler
+from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
+    CorpusVersionRefAssembler,
+)
 from emblema.catalog.contracts.corpus_version_ref import CorpusVersionRef
 from emblema.catalog.contracts.events import CorpusVersionFrozen
 from emblema.catalog.contracts.identifiers import CorpusVersionId

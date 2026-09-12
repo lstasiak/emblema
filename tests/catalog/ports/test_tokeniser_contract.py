@@ -26,6 +26,7 @@ from emblema.catalog.domain.exceptions import (
     UnknownChannelError,
 )
 from emblema.catalog.domain.observation import Observation
+from emblema.catalog.domain.placed_window import PlacedWindow
 from emblema.catalog.domain.static_feature import StaticFeature
 from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.unit_split import UnitSplit
@@ -69,6 +70,16 @@ def fitted(
     return tokeniser.fit(CORPUS, observations, statics, scheme_for(schema))
 
 
+def placed_of(
+    tokeniser: Tokeniser,
+    corpus_unit: CorpusUnit,
+    observations: Sequence[Observation],
+    scheme: TokenisationScheme,
+    window: WindowSpec = WINDOW,
+) -> list[PlacedWindow]:
+    return list(tokeniser.tokenise(CORPUS, corpus_unit, observations, scheme, window))
+
+
 def windows_of(
     tokeniser: Tokeniser,
     corpus_unit: CorpusUnit,
@@ -76,7 +87,8 @@ def windows_of(
     scheme: TokenisationScheme,
     window: WindowSpec = WINDOW,
 ) -> list[TokenWindow]:
-    return list(tokeniser.tokenise(CORPUS, corpus_unit, observations, scheme, window))
+    placed = placed_of(tokeniser, corpus_unit, observations, scheme, window)
+    return [item.window for item in placed]
 
 
 def expected_windows(
@@ -382,18 +394,43 @@ def test_tokenising_needs_statistics_for_every_channel_it_meets(tokeniser: Token
         windows_of(tokeniser, UNIT, REGULAR, unfitted)
 
 
+# --- placing windows on the unit ----------------------------------------------------------------
+
+
+def test_every_window_comes_with_the_span_it_was_cut_from(tokeniser: Tokeniser) -> None:
+    scheme = fitted(tokeniser, REGULAR)
+
+    placed = placed_of(tokeniser, UNIT, REGULAR, scheme)
+
+    assert [item.extent for item in placed] == occupied_extents(UNIT, REGULAR, WINDOW)
+
+
+def test_the_spans_skip_those_no_observation_fell_into(tokeniser: Tokeniser) -> None:
+    # A unit measured at both ends of its life and not in between: three of the five windows laid
+    # over it hold nothing, so the spans that come back cannot be the spans the spec lays.
+    interrupted = grid(CHANNELS, [0.0, 1.0, 8.0, 9.0])
+    scheme = fitted(tokeniser, interrupted)
+    back_to_back = WindowSpec(length=2, stride=2)
+
+    placed = placed_of(tokeniser, UNIT, interrupted, scheme, back_to_back)
+
+    assert [item.extent for item in placed] == occupied_extents(UNIT, interrupted, back_to_back)
+    assert len(placed) == 2
+    assert len(list(back_to_back.windows_over(UNIT.extent))) == 5
+
+
 # --- reading windows back ------------------------------------------------------------------------
 
 
 def test_a_window_reads_back_as_the_observations_that_fell_into_it(tokeniser: Tokeniser) -> None:
     scheme = fitted(tokeniser, REGULAR)
 
-    windows = windows_of(tokeniser, UNIT, REGULAR, scheme)
+    placed = placed_of(tokeniser, UNIT, REGULAR, scheme)
 
-    extents = occupied_extents(UNIT, REGULAR, WINDOW)
-    for extent, window in zip(extents, windows, strict=True):
-        inside = [o for o in REGULAR if extent.contains(o.time)]
-        assert measured(scheme.reconstruct(window, extent).observations) == measured(inside)
+    for item in placed:
+        inside = [o for o in REGULAR if item.extent.contains(o.time)]
+        read_back = scheme.reconstruct(item.window, item.extent).observations
+        assert measured(read_back) == measured(inside)
 
 
 def test_reading_the_windows_back_recovers_nothing_that_fell_between_them(
@@ -403,12 +440,10 @@ def test_reading_the_windows_back_recovers_nothing_that_fell_between_them(
     # Longer stride than window: the observations from 2 to 4 and from 7 on reach no window.
     sparse = WindowSpec(length=2, stride=5)
 
-    windows = windows_of(tokeniser, UNIT, REGULAR, scheme, sparse)
+    placed = placed_of(tokeniser, UNIT, REGULAR, scheme, sparse)
 
-    extents = occupied_extents(UNIT, REGULAR, sparse)
     read_back = chain.from_iterable(
-        scheme.reconstruct(window, extent).observations
-        for extent, window in zip(extents, windows, strict=True)
+        scheme.reconstruct(item.window, item.extent).observations for item in placed
     )
     covered = [o for o in REGULAR if o.time in (0.0, 1.0, 5.0, 6.0)]
     assert measured(read_back) == measured(covered)
@@ -417,11 +452,10 @@ def test_reading_the_windows_back_recovers_nothing_that_fell_between_them(
 def test_a_window_reads_back_the_static_features_of_its_unit(tokeniser: Tokeniser) -> None:
     scheme = fitted(tokeniser, REGULAR, [AGE], STATIC_SCHEMA)
 
-    windows = windows_of(tokeniser, STATIC_UNIT, REGULAR, scheme)
+    placed = placed_of(tokeniser, STATIC_UNIT, REGULAR, scheme)
 
-    extents = occupied_extents(STATIC_UNIT, REGULAR, WINDOW)
-    for extent, window in zip(extents, windows, strict=True):
-        features = scheme.reconstruct(window, extent).static_features
+    for item in placed:
+        features = scheme.reconstruct(item.window, item.extent).static_features
         assert [(f.channel, round(f.value, 6)) for f in features] == [(AGE.channel, AGE.value)]
 
 
@@ -469,8 +503,12 @@ def test_irregular_units_match_the_brute_force_definition(
     for factory in ADAPTERS.values():
         tokeniser = factory()
 
-        windows = list(tokeniser.tokenise(CORPUS, corpus_unit, observations, scheme, window))
+        placed = list(tokeniser.tokenise(CORPUS, corpus_unit, observations, scheme, window))
 
+        assert [item.extent for item in placed] == occupied_extents(
+            corpus_unit, observations, window
+        )
+        windows = [item.window for item in placed]
         assert windows == expected_windows(corpus_unit, observations, scheme, window)
         for produced in windows:
             assert any(not timeless for timeless in produced.timeless)

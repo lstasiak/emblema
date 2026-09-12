@@ -6,9 +6,14 @@ import pytest
 
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
-from emblema.catalog.application.corpus_version_ref_assembler import CorpusVersionRefAssembler
-from emblema.catalog.application.register_corpus import RegisterCorpus, RegisterCorpusCommand
-from emblema.catalog.application.register_corpus_version import (
+from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
+    CorpusVersionRefAssembler,
+)
+from emblema.catalog.application.use_cases.register_corpus import (
+    RegisterCorpus,
+    RegisterCorpusCommand,
+)
+from emblema.catalog.application.use_cases.register_corpus_version import (
     RegisterCorpusVersion,
     RegisterCorpusVersionCommand,
 )

@@ -15,6 +15,9 @@ class InMemoryCorpusRepository:
         except KeyError:
             raise CorpusNotFoundError(f"no corpus {corpus_id}") from None
 
+    def find_by_name(self, name: str) -> Corpus | None:
+        return next((corpus for corpus in self._corpora.values() if corpus.name == name), None)
+
     def save(self, corpus: Corpus) -> None:
         for other in self._corpora.values():
             if other.id != corpus.id and other.name == corpus.name:

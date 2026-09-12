@@ -1,0 +1,133 @@
+"""The publishing process assembled and run end to end, on adapters that reach nothing outside.
+
+What is checked is the wiring: that the process the composition root builds publishes a corpus,
+and that every use case received the adapter the process was given rather than a default.
+"""
+
+from pathlib import Path
+from typing import NamedTuple
+
+import pytest
+
+from emblema.catalog.adapters.archive.block_corpus_archive import BlockCorpusArchive
+from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
+from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
+from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
+from emblema.catalog.adapters.readers.cmapss import SUBSETS, CmapssCorpusReader
+from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
+from emblema.entrypoints.cli.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus import PublishCorpusCli
+from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
+from emblema.shared.adapters.storage.s3 import S3ArtifactStore
+from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
+from tests.catalog.domain.support import SCHEMA, description, measured_units
+from tests.support.settings import unreachable_store
+
+DATA = b"records"
+UNITS = measured_units(4)
+ARGUMENTS = ["--corpus", "cmapss", "--root", "data/raw/cmapss", "--window", "4", "--stride", "2"]
+
+
+class Process(NamedTuple):
+    """The assembled process and the store its artifacts were meant to land in."""
+
+    root: CompositionRoot
+    store: InMemoryArtifactStore
+
+
+@pytest.fixture
+def process(tmp_path: Path) -> Process:
+    told = description(DATA, SCHEMA, units=len(UNITS), observations=sum(len(o) for _, o in UNITS))
+    store = InMemoryArtifactStore()
+    root = CompositionRoot(
+        unreachable_store(),
+        corpus_root=tmp_path / "raw",
+        workspace=tmp_path / "workspace",
+        corpora=InMemoryCorpusRepository(),
+        reader=InMemoryCorpusReader(told, UNITS),
+        store=store,
+    )
+    return Process(root, store)
+
+
+def command(*extra: str) -> PublishCorpusCommand:
+    return PublishCorpusCli().parse([*ARGUMENTS, *extra]).command
+
+
+def test_the_process_publishes_a_corpus_that_reads_back(process: Process) -> None:
+    ref = process.root.services.publish_corpus(command("--validation-fraction", "0.25"))
+
+    manifest = process.root.adapters.archive.read_manifest(ref)
+    windows = process.root.adapters.archive.read_windows(manifest.archived, manifest.split.training)
+    assert manifest.corpus == "cmapss"
+    assert len(windows) > 0
+
+
+def test_the_artifacts_land_in_the_store_the_process_was_given(process: Process) -> None:
+    # Every use case holding its own store would leave each of them correct and the process
+    # broken; the corpus would be published where nobody looks for it.
+    ref = process.root.services.publish_corpus(command("--validation-fraction", "0.25"))
+
+    manifest = process.root.adapters.archive.read_manifest(ref)
+    assert process.store.exists(ref)
+    assert process.store.exists(manifest.block)
+
+
+def test_publishing_twice_through_one_process_yields_one_manifest(process: Process) -> None:
+    # The use cases share one repository: were each holding its own, the second publication
+    # would register the corpus again and mint a second manifest for the same data.
+    first = process.root.services.publish_corpus(command("--validation-fraction", "0.25"))
+    second = process.root.services.publish_corpus(command("--validation-fraction", "0.25"))
+
+    assert first == second
+
+
+def test_what_the_command_line_says_is_what_the_corpus_was_cut_with(process: Process) -> None:
+    ref = process.root.services.publish_corpus(
+        command("--validation-fraction", "0.25", "--seed", "7", "--window", "2")
+    )
+
+    manifest = process.root.adapters.archive.read_manifest(ref)
+    assert (manifest.window.length, manifest.window.stride) == (2.0, 2.0)
+    assert manifest.split_seed == 7
+    assert len(manifest.split.validation) == 1
+
+
+def test_without_overrides_the_process_runs_on_what_the_settings_name(tmp_path: Path) -> None:
+    # The overrides above are what every other test here uses, so nothing would otherwise exercise
+    # the wiring a real run gets: the bucket and the database named by the environment, behind a
+    # block archive, over the reader of the corpus asked for.
+    root = CompositionRoot(
+        unreachable_store(), corpus_root=tmp_path / "raw", workspace=tmp_path / "workspace"
+    )
+
+    assert isinstance(root.adapters.store, S3ArtifactStore)
+    assert isinstance(root.adapters.corpora, SqlAlchemyCorpusRepository)
+    assert isinstance(root.adapters.archive, BlockCorpusArchive)
+    assert isinstance(root.adapters.reader, CmapssCorpusReader)
+
+
+def test_the_command_line_states_the_window_it_was_given() -> None:
+    invocation = PublishCorpusCli().parse(ARGUMENTS)
+
+    assert (invocation.command.window.length, invocation.command.window.stride) == (4.0, 2.0)
+    assert invocation.command.seed == 1
+    assert invocation.command.vocabulary_from is None
+    assert invocation.corpus_root == Path("data/raw/cmapss")
+    assert invocation.subsets == SUBSETS
+
+
+def test_the_command_line_names_the_manifest_whose_vocabulary_to_continue() -> None:
+    digest = "0" * 64
+    parsed = command("--vocabulary-from", f"durable/sha256/{digest}", f"sha256:{digest}")
+
+    assert parsed.vocabulary_from == ArtifactRef(
+        f"durable/sha256/{digest}", Checksum.parse(f"sha256:{digest}")
+    )
+
+
+def test_a_subset_asked_for_is_the_only_one_read() -> None:
+    invocation = PublishCorpusCli().parse([*ARGUMENTS, "--subset", "FD001"])
+
+    assert invocation.subsets == ("FD001",)

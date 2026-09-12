@@ -13,6 +13,7 @@ from uuid import uuid4
 import pytest
 
 from emblema.config.settings import Settings
+from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.storage.layout import content_address
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
@@ -32,6 +33,15 @@ class Harness(NamedTuple):
 
     store: ArtifactStore
     corrupt: Callable[[ArtifactRef], None]
+
+
+def in_memory(tmp_path: Path) -> Iterator[Harness]:
+    store = InMemoryArtifactStore()
+
+    def corrupt(ref: ArtifactRef) -> None:
+        store._content[ref.key] = b"tampered"
+
+    yield Harness(store, corrupt)
 
 
 def local_directory(tmp_path: Path) -> Iterator[Harness]:
@@ -74,6 +84,7 @@ def s3(tmp_path: Path) -> Iterator[Harness]:
 
 
 ADAPTERS = [
+    pytest.param(in_memory, id="in_memory"),
     pytest.param(local_directory, id="local_directory"),
     pytest.param(s3, id="s3", marks=pytest.mark.integration),
 ]
@@ -147,3 +158,69 @@ def test_get_rejects_content_that_no_longer_matches_the_reference(harness: Harne
 
     with pytest.raises(ArtifactIntegrityError):
         harness.store.get(ref)
+
+
+# --- artifacts that travel as files --------------------------------------------------------------
+
+
+@pytest.fixture
+def source(tmp_path: Path) -> Path:
+    path = tmp_path / "source.bin"
+    path.write_bytes(CONTENT)
+    return path
+
+
+def test_a_file_and_its_bytes_are_one_artifact(store: ArtifactStore, source: Path) -> None:
+    from_file = store.put_file(source)
+
+    assert from_file == store.put(CONTENT)
+    assert store.get(from_file) == CONTENT
+
+
+def test_get_file_lays_the_artifact_at_the_destination(
+    store: ArtifactStore, source: Path, tmp_path: Path
+) -> None:
+    ref = store.put_file(source)
+    destination = tmp_path / "fetched" / "corpus.bin"
+
+    store.get_file(ref, destination)
+
+    assert destination.read_bytes() == CONTENT
+
+
+def test_get_file_replaces_whatever_was_at_the_destination(
+    store: ArtifactStore, source: Path, tmp_path: Path
+) -> None:
+    ref = store.put_file(source)
+    destination = tmp_path / "fetched.bin"
+    destination.write_bytes(b"older run")
+
+    store.get_file(ref, destination)
+
+    assert destination.read_bytes() == CONTENT
+
+
+def test_put_file_of_a_missing_source_fails(store: ArtifactStore, tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        store.put_file(tmp_path / "never written.bin")
+
+
+def test_get_file_of_an_unknown_reference_fails(store: ArtifactStore, tmp_path: Path) -> None:
+    missing = content_address(b"never stored", Retention.DURABLE)
+
+    with pytest.raises(ArtifactNotFoundError):
+        store.get_file(missing, tmp_path / "fetched.bin")
+
+
+def test_get_file_leaves_nothing_behind_when_the_content_no_longer_matches(
+    harness: Harness, source: Path, tmp_path: Path
+) -> None:
+    ref = harness.store.put_file(source)
+    harness.corrupt(ref)
+    destination = tmp_path / "fetched.bin"
+
+    with pytest.raises(ArtifactIntegrityError):
+        harness.store.get_file(ref, destination)
+
+    # A reader maps this file without hashing it, so a rejected artifact must not be there at all.
+    assert not destination.exists()

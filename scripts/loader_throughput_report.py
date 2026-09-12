@@ -33,6 +33,8 @@ from typing import Any
 # Run from anywhere: the stand-in encoder lives in the test package at the repository root, next to
 # this directory. The imports below follow, which is why this file is exempt from the import-order
 # rule in the lint configuration.
+from scripts.reporting import table
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -113,7 +115,7 @@ def real_windows(root: Path, limit: int) -> Iterator[TokenWindow]:
         tokeniser.tokenise(CORPUS, unit, reader.read_observations(unit.key), scheme, window)
         for unit in units
     )
-    return islice(produced, limit)
+    return islice((placed.window for placed in produced), limit)
 
 
 def synthetic_windows(total: int, window: WindowSpec) -> Iterator[TokenWindow]:
@@ -285,12 +287,6 @@ def measure() -> Measurements:
         },
         tiers=tiers,
     )
-
-
-def table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
-    lines = [" | ".join(header), " | ".join("---" for _ in header)]
-    lines += [" | ".join(row) for row in rows]
-    return "\n".join(f"| {line} |" for line in lines)
 
 
 def heading(measured: Measurements) -> str:

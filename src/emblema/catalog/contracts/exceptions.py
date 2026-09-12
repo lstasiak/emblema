@@ -11,3 +11,11 @@ class InvalidChannelSpecError(ValueError):
 
 class InvalidCorpusVersionRefError(ValueError):
     pass
+
+
+class InvalidPublishedCorpusManifestError(ValueError):
+    pass
+
+
+class MalformedManifestError(ValueError):
+    """Bytes that are not a manifest this codec reads, or a manifest that breaks its own rules."""
