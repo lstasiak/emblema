@@ -1,3 +1,4 @@
+import shutil
 import struct
 import tempfile
 from collections.abc import Iterable, Sequence
@@ -7,6 +8,11 @@ from typing import IO, Self
 
 import numpy as np
 
+from emblema.shared.adapters.windows.exceptions import (
+    BlockClosedError,
+    HeaderOverflowError,
+    UnstorableWindowError,
+)
 from emblema.shared.adapters.windows.format import (
     CHANNEL_COLUMN,
     CHANNEL_DTYPE,
@@ -31,6 +37,7 @@ from emblema.shared.adapters.windows.format import (
     encode_header,
     padded_to_alignment,
 )
+from emblema.shared.kernel.exceptions import InvalidTokenWindowError
 from emblema.shared.kernel.tokens import TokenWindow
 
 # How many tokens a column holds before it goes to its scratch file. Small enough that the writer's
@@ -41,33 +48,42 @@ BUFFERED_TOKENS = 1 << 20
 class WindowBlockWriter:
     """Writes token windows into one block file, holding no more of them than a buffer at a time.
 
-    A corpus is tokenised once and read for the rest of the project, so the writer is built for the
-    size of the corpus rather than the size of memory: token columns go to scratch files as they
-    fill and are concatenated into the block at the end, which is also when the header can state
-    where each column starts. The columns addressed by window stay in memory, being some thousandth
-    of the tokens.
-
-    The writer is a context manager and leaves nothing behind: on an error the scratch files and
-    the half-written block go, so a failed run cannot be mistaken for a corpus.
+    Token columns spill to scratch files beside the block as they fill and are copied into it at
+    the end, so memory does not grow with the corpus; the scratch never goes to the system's
+    temporary directory, which inside a container may be memory. Every window is checked in the
+    form it reads back in, cast to the stored width, so a window that precision would spoil is
+    refused here rather than by the run that reads it. As a context manager the writer leaves
+    nothing behind on an error.
     """
 
-    def __init__(self, destination: Path, *, measurement_dtype: str = DEFAULT_MEASUREMENT_DTYPE):
+    def __init__(
+        self,
+        destination: Path,
+        *,
+        scratch: Path | None = None,
+        measurement_dtype: str = DEFAULT_MEASUREMENT_DTYPE,
+    ) -> None:
         """Prepare to write a block at ``destination``.
 
         Args:
             destination: Where the finished block is laid; replaced if it exists.
+            scratch: Directory the columns spill into on their way to the block; the block's own
+                directory unless given.
             measurement_dtype: Element type of the value, time and gap columns, in the explicit
                 byte order the format requires.
         """
         self._destination = destination
-        self._scratch = tempfile.TemporaryDirectory(prefix="emblema-block-")
-        root = Path(self._scratch.name)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        root = destination.parent if scratch is None else scratch
+        root.mkdir(parents=True, exist_ok=True)
+        self._scratch = tempfile.TemporaryDirectory(prefix="emblema-block-", dir=root)
+        scratch_root = Path(self._scratch.name)
         self._columns = (
-            _ScratchColumn(root / CHANNEL_COLUMN, CHANNEL_DTYPE),
-            _ScratchColumn(root / VALUE_COLUMN, measurement_dtype),
-            _ScratchColumn(root / TIME_COLUMN, measurement_dtype),
-            _ScratchColumn(root / GAP_COLUMN, measurement_dtype),
-            _ScratchColumn(root / TIMELESS_COLUMN, TIMELESS_DTYPE),
+            _ScratchColumn(scratch_root / CHANNEL_COLUMN, CHANNEL_DTYPE),
+            _ScratchColumn(scratch_root / VALUE_COLUMN, measurement_dtype),
+            _ScratchColumn(scratch_root / TIME_COLUMN, measurement_dtype),
+            _ScratchColumn(scratch_root / GAP_COLUMN, measurement_dtype),
+            _ScratchColumn(scratch_root / TIMELESS_COLUMN, TIMELESS_DTYPE),
         )
         self._units: list[int] = []
         self._starts: list[float] = []
@@ -89,20 +105,22 @@ class WindowBlockWriter:
         else:
             self._discard()
 
-    def add(self, unit: int, start: float, end: float, window: TokenWindow) -> None:
+    def add(self, window: TokenWindow, *, unit: int, start: float, end: float) -> None:
         """Append one window, cut from ``[start, end)`` of the unit at index ``unit``.
 
         Raises:
-            ValueError: If the block has been closed.
+            BlockClosedError: If the block has been closed.
+            UnstorableWindowError: If the window, stored at the block's precision, would no
+                longer be a valid window.
         """
         if self._closed:
-            raise ValueError("the block is closed")
+            raise BlockClosedError("the block is closed")
+        stored = self._stored(window)
         self._units.append(unit)
         self._starts.append(start)
         self._ends.append(end)
         self._offsets.append(self._offsets[-1] + len(window))
-        rows = (window.channel_ids, window.values, window.times, window.gaps, window.timeless)
-        for column, values in zip(self._columns, rows, strict=True):
+        for column, values in zip(self._columns, stored, strict=True):
             column.extend(values)
         if self._columns[0].buffered >= BUFFERED_TOKENS:
             for column in self._columns:
@@ -118,6 +136,32 @@ class WindowBlockWriter:
             self._assemble(sizes)
         finally:
             self._scratch.cleanup()
+
+    def _stored(self, window: TokenWindow) -> tuple[list[object], ...]:
+        """The window's columns as the block will give them back, checked to still be a window.
+
+        Casting is monotone but not one-to-one: two tokens ordered by a difference the stored
+        width cannot hold read back out of canonical order.
+        """
+        rows = (window.channel_ids, window.values, window.times, window.gaps, window.timeless)
+        channel_ids, values, times, gaps, timeless = (
+            np.asarray(row, dtype=column.dtype).tolist()
+            for column, row in zip(self._columns, rows, strict=True)
+        )
+        try:
+            TokenWindow(
+                channel_ids=tuple(channel_ids),
+                values=tuple(values),
+                times=tuple(times),
+                gaps=tuple(gaps),
+                timeless=tuple(timeless),
+            )
+        except InvalidTokenWindowError as error:
+            raise UnstorableWindowError(
+                f"a window of {len(window)} tokens is not a window once stored at "
+                f"{self._columns[1].dtype}: {error}"
+            ) from error
+        return channel_ids, values, times, gaps, timeless
 
     def _assemble(self, token_sizes: dict[str, int]) -> None:
         by_window = {
@@ -143,8 +187,9 @@ class WindowBlockWriter:
             }
         )
         if HEADER_OFFSET + len(header) > DATA_OFFSET:
-            raise ValueError(f"header of {len(header)} bytes does not fit before the columns")
-        self._destination.parent.mkdir(parents=True, exist_ok=True)
+            raise HeaderOverflowError(
+                f"header of {len(header)} bytes does not fit before the columns"
+            )
         try:
             with self._destination.open("wb") as block:
                 block.write(MAGIC)
@@ -155,7 +200,8 @@ class WindowBlockWriter:
                     if name in by_window:
                         block.write(by_window[name].tobytes())
                     else:
-                        block.write(Path(self._scratch.name, name).read_bytes())
+                        with Path(self._scratch.name, name).open("rb") as column:
+                            shutil.copyfileobj(column, block)
         except BaseException:
             self._destination.unlink(missing_ok=True)
             raise

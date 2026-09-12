@@ -7,6 +7,7 @@ from typing import overload
 import numpy as np
 from numpy.typing import NDArray
 
+from emblema.shared.adapters.windows.exceptions import MalformedBlockError
 from emblema.shared.adapters.windows.format import (
     CHANNEL_COLUMN,
     END_COLUMN,
@@ -27,35 +28,31 @@ from emblema.shared.kernel.tokens import TokenWindow
 
 
 class WindowBlock(Sequence[TokenWindow]):
-    """A published corpus mapped into memory, addressed by window.
+    """A block of token windows mapped into memory, addressed by window.
 
-    The file is never read into memory: every column is a view of the mapping, so opening a corpus
-    of any size costs the same and only the windows a run actually touches are paged in. Being a
-    ``Sequence`` is the whole of what a map-style dataset asks for, so a dataset built over a block
-    and one built over a list of windows are the same dataset.
-
-    Beside the tokens, a block says which unit each window was cut from and which span of that
-    unit's time axis it covers. Units are indices here: the names belong to the manifest that
-    accompanies the block, because a block holds numbers and nothing a corpus would call a word.
+    Every column is a view of the mapping, so opening a block of any size costs the same and only
+    the windows a run touches are paged in. Being a ``Sequence`` is all a map-style dataset asks
+    for. Units are indices here; their names belong to the manifest beside the block.
     """
 
     def __init__(self, path: Path) -> None:
         """Map the block at ``path``.
 
         Raises:
-            ValueError: If the file is not a block of a version this reads.
+            MalformedBlockError: If the file is not a block of a version this reads, or its header
+                describes a column that does not hold whole elements.
         """
         self._path = path
         with path.open("rb") as handle:
             magic = handle.read(len(MAGIC))
             if magic != MAGIC:
-                raise ValueError(f"{path} is not a window block")
+                raise MalformedBlockError(f"{path} is not a window block")
             handle.seek(HEADER_LENGTH_OFFSET)
             (length,) = struct.unpack("<Q", handle.read(8))
             handle.seek(HEADER_OFFSET)
             header = json.loads(handle.read(length).decode("utf-8"))
         if header.get("format") != FORMAT_NAME or header.get("version") != VERSION:
-            raise ValueError(
+            raise MalformedBlockError(
                 f"{path} is a {header.get('format')} of version {header.get('version')}"
             )
         self._header = header
@@ -130,7 +127,7 @@ class WindowBlock(Sequence[TokenWindow]):
         dtype = np.dtype(description["dtype"])
         count, remainder = divmod(int(description["bytes"]), dtype.itemsize)
         if remainder:
-            raise ValueError(f"column {name!r} does not hold whole elements of {dtype}")
+            raise MalformedBlockError(f"column {name!r} does not hold whole elements of {dtype}")
         return np.memmap(
             self._path, dtype=dtype, mode="r", offset=int(description["offset"]), shape=(count,)
         )

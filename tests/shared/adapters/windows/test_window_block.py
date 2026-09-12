@@ -6,11 +6,11 @@ from typing import Any
 import pytest
 
 from emblema.shared.adapters.storage.files import chunks_of
-from emblema.shared.kernel.checksums import Checksum
-from emblema.shared.kernel.tokens import Token, TokenWindow
-
-pytest.importorskip("numpy")
-
+from emblema.shared.adapters.windows.exceptions import (
+    BlockClosedError,
+    MalformedBlockError,
+    UnstorableWindowError,
+)
 from emblema.shared.adapters.windows.format import (
     ALIGNMENT,
     DATA_OFFSET,
@@ -19,31 +19,28 @@ from emblema.shared.adapters.windows.format import (
     VALUE_COLUMN,
 )
 from emblema.shared.adapters.windows.window_block import WindowBlock
-from emblema.shared.adapters.windows.window_block_writer import (
-    WindowBlockWriter,
+from emblema.shared.adapters.windows.window_block_writer import WindowBlockWriter
+from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.tokens import TokenWindow
+from tests.shared.adapters.windows.support import (
+    COLLAPSING,
+    INEXACT,
+    TIMED,
+    WITH_STATIC,
+    stored_at,
 )
 
-
-def window(*tokens: Token) -> TokenWindow:
-    return TokenWindow.of(tokens)
-
-
-TIMED = window(
-    Token(channel_id=1, value=-0.5, time=0.0, gap=0.0),
-    Token(channel_id=2, value=0.25, time=0.5, gap=0.5),
-    Token(channel_id=1, value=1.5, time=1.0, gap=1.0),
-)
-WITH_STATIC = window(
-    Token(channel_id=7, value=2.0, time=0.0, gap=0.0, timeless=True),
-    Token(channel_id=1, value=0.125, time=0.25, gap=0.25),
-)
 PLACED = [(0, 0.0, 10.0, TIMED), (0, 5.0, 15.0, WITH_STATIC), (3, 1.0, 11.0, TIMED)]
 
 
-def block_of(path: Path, placed: list[tuple[int, float, float, TokenWindow]]) -> WindowBlock:
-    with WindowBlockWriter(path) as writer:
+def block_of(
+    path: Path,
+    placed: list[tuple[int, float, float, TokenWindow]],
+    scratch: Path | None = None,
+) -> WindowBlock:
+    with WindowBlockWriter(path, scratch=scratch) as writer:
         for unit, start, end, tokens in placed:
-            writer.add(unit, start, end, tokens)
+            writer.add(tokens, unit=unit, start=start, end=end)
     return WindowBlock(path)
 
 
@@ -64,6 +61,46 @@ def test_a_timeless_token_survives_the_round_trip(tmp_path: Path) -> None:
     block = block_of(tmp_path / "corpus.block", PLACED)
 
     assert block[1].timeless == (True, False)
+
+
+def test_a_window_reads_back_at_the_stored_precision_not_the_written_one(tmp_path: Path) -> None:
+    # Measurements are stored at the width the encoder reads, so a block is a round trip up to
+    # that width and no further: the test data elsewhere is exact at any width and hides this.
+    block = block_of(tmp_path / "corpus.block", [(0, 0.0, 10.0, INEXACT)])
+
+    assert block[0] == stored_at(INEXACT, "<f4")
+    assert block[0] != INEXACT
+
+
+def test_measurements_stored_wider_read_back_exactly(tmp_path: Path) -> None:
+    path = tmp_path / "corpus.block"
+    with WindowBlockWriter(path, measurement_dtype="<f8") as writer:
+        writer.add(INEXACT, unit=0, start=0.0, end=10.0)
+
+    assert WindowBlock(path)[0] == INEXACT
+    assert header_of(path)["columns"][VALUE_COLUMN]["dtype"] == "<f8"
+
+
+def test_a_window_that_would_not_read_back_as_a_window_is_refused_when_written(
+    tmp_path: Path,
+) -> None:
+    # Rounding is monotone but not one-to-one: the two times of this window become one float32,
+    # and the tokens then stand in the wrong channel order. Refused once here, not at training.
+    path = tmp_path / "corpus.block"
+
+    with pytest.raises(UnstorableWindowError), WindowBlockWriter(path) as writer:  # noqa: PT012
+        writer.add(TIMED, unit=0, start=0.0, end=10.0)
+        writer.add(COLLAPSING, unit=0, start=10.0, end=20.0)
+
+    assert not path.exists()
+
+
+def test_a_window_the_stored_width_can_hold_is_not_refused(tmp_path: Path) -> None:
+    path = tmp_path / "corpus.block"
+    with WindowBlockWriter(path, measurement_dtype="<f8") as writer:
+        writer.add(COLLAPSING, unit=0, start=0.0, end=10.0)
+
+    assert WindowBlock(path)[0] == COLLAPSING
 
 
 def test_the_block_counts_its_windows_and_its_tokens(tmp_path: Path) -> None:
@@ -113,6 +150,33 @@ def test_a_block_written_in_one_flush_and_in_many_is_the_same_block(
     assert piecemeal.read_bytes() == whole.read_bytes()
 
 
+def test_the_columns_spill_into_the_scratch_directory_given(tmp_path: Path) -> None:
+    # Inside a container the system's temporary directory may be memory, which is the one place
+    # a corpus-sized spill must not go; the writer is told where, and goes only there.
+    scratch = tmp_path / "scratch"
+    writer = WindowBlockWriter(tmp_path / "blocks" / "corpus.block", scratch=scratch)
+    writer.add(TIMED, unit=0, start=0.0, end=10.0)
+
+    spilled = list(scratch.iterdir())
+
+    writer.close()
+    assert len(spilled) == 1
+    assert spilled[0].name.startswith("emblema-block-")
+    assert not spilled[0].exists()
+
+
+def test_without_a_scratch_directory_the_columns_spill_beside_the_block(tmp_path: Path) -> None:
+    destination = tmp_path / "blocks" / "corpus.block"
+    writer = WindowBlockWriter(destination)
+    writer.add(TIMED, unit=0, start=0.0, end=10.0)
+
+    spilled = [path for path in destination.parent.iterdir() if path.is_dir()]
+
+    writer.close()
+    assert len(spilled) == 1
+    assert list(destination.parent.iterdir()) == [destination]
+
+
 def header_of(path: Path) -> dict[str, Any]:
     """The header read the way a reader with nothing but the format description would read it."""
     raw = path.read_bytes()
@@ -140,7 +204,7 @@ def test_a_file_that_is_not_a_block_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "not-a-block"
     path.write_bytes(b"\0" * 8192)
 
-    with pytest.raises(ValueError, match="not a window block"):
+    with pytest.raises(MalformedBlockError, match="not a window block"):
         WindowBlock(path)
 
 
@@ -150,7 +214,7 @@ def test_a_block_of_another_version_is_refused(tmp_path: Path) -> None:
     # The version sits in the header and is the same width either way, so the offsets still hold.
     path.write_bytes(path.read_bytes().replace(b'"version":1', b'"version":9'))
 
-    with pytest.raises(ValueError, match="version 9"):
+    with pytest.raises(MalformedBlockError, match="version 9"):
         WindowBlock(path)
 
 
@@ -158,19 +222,20 @@ def test_a_writer_that_fails_leaves_no_block_behind(tmp_path: Path) -> None:
     path = tmp_path / "corpus.block"
 
     with pytest.raises(RuntimeError), WindowBlockWriter(path) as writer:  # noqa: PT012
-        writer.add(0, 0.0, 10.0, TIMED)
+        writer.add(TIMED, unit=0, start=0.0, end=10.0)
         raise RuntimeError("the reader gave up")
 
     assert not path.exists()
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_nothing_can_be_added_after_the_block_is_closed(tmp_path: Path) -> None:
     writer = WindowBlockWriter(tmp_path / "corpus.block")
-    writer.add(0, 0.0, 10.0, TIMED)
+    writer.add(TIMED, unit=0, start=0.0, end=10.0)
     writer.close()
 
-    with pytest.raises(ValueError, match="closed"):
-        writer.add(0, 10.0, 20.0, TIMED)
+    with pytest.raises(BlockClosedError):
+        writer.add(TIMED, unit=0, start=10.0, end=20.0)
 
 
 def test_a_slice_of_a_block_is_a_sequence_of_its_windows(tmp_path: Path) -> None:
@@ -183,7 +248,7 @@ def test_a_slice_of_a_block_is_a_sequence_of_its_windows(tmp_path: Path) -> None
 def test_closing_a_block_twice_changes_nothing(tmp_path: Path) -> None:
     path = tmp_path / "corpus.block"
     writer = WindowBlockWriter(path)
-    writer.add(0, 0.0, 10.0, TIMED)
+    writer.add(TIMED, unit=0, start=0.0, end=10.0)
     writer.close()
     written = path.read_bytes()
 
@@ -205,5 +270,5 @@ def test_a_column_that_does_not_hold_whole_elements_is_refused(tmp_path: Path) -
     )
     path.write_bytes(raw)
 
-    with pytest.raises(ValueError, match="whole elements"):
+    with pytest.raises(MalformedBlockError, match="whole elements"):
         WindowBlock(path)
