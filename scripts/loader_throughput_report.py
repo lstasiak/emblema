@@ -9,9 +9,8 @@ machine, because that is what the numbers depend on:
     uv run scripts/loader_throughput_report.py
 
 The output is markdown, meant to be pasted under a dated heading in the verification note. The
-model is the stand-in encoder from the export suite, sized from the compute tiers of the budget
-file: the real encoder does not exist yet, and a step's cost is set by its width, depth and token
-count rather than by the behaviour it learns.
+model is the encoder at the shape of each compute tier in the budget file: what a step costs is set
+by width, depth and token count, not by what the weights have learned.
 """
 
 import io
@@ -19,22 +18,18 @@ import platform
 import statistics
 import sys
 import time
-import tomllib
 import tracemalloc
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from functools import cache
 from importlib.metadata import version
 from itertools import chain, count, islice
 from pathlib import Path
 from typing import Any
 
-# Run from anywhere: the stand-in encoder lives in the test package at the repository root, next to
-# this directory. The imports below follow, which is why this file is exempt from the import-order
-# rule in the lint configuration.
-from scripts.reporting import table
-
+# Run from anywhere: the sibling script modules live in this directory's package at the repository
+# root. The imports below follow, which is why this file is exempt from the import-order rule in
+# the lint configuration.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -45,12 +40,14 @@ from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTo
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
+from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
+from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.shared.adapters.loaders.seeded_shuffle_sampler import SeededShuffleSampler
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.kernel.tokens import Token, TokenWindow
-from tests.ml.onnx_export.dummy_set_encoder import DummySetEncoder
+from scripts.budget_file import architecture_of, budget
+from scripts.reporting import table
 
-BUDGET = REPO_ROOT / "scripts" / "corpus_budget.toml"
 RAW = REPO_ROOT / "data" / "raw" / "cmapss"
 CORPUS = "cmapss"
 
@@ -70,13 +67,6 @@ WORKER_COUNTS = (0, 2)
 # path. A floor, not a target: it measured between 30x and 65x when this was written, and a fall to
 # single digits is the signal to move the work off the training process.
 MARGIN = 2.0
-
-
-@cache
-def budget() -> dict[str, Any]:
-    """The budget file, parsed once: every section below asks it something."""
-    with BUDGET.open("rb") as handle:
-        return tomllib.load(handle)
 
 
 def default_window() -> WindowSpec:
@@ -231,9 +221,11 @@ def transfer_seconds(windows: Sequence[TokenWindow], *, device: str) -> float:
     return median_seconds(transfer, STEPS)
 
 
-def step_seconds(windows: Sequence[TokenWindow], *, width: int, layers: int, device: str) -> float:
+def step_seconds(
+    windows: Sequence[TokenWindow], *, architecture: EncoderArchitecture, device: str
+) -> float:
     """Seconds for one forward and backward pass over a batch already on ``device``."""
-    model = DummySetEncoder(d_model=width, n_heads=max(1, width // 64), n_layers=layers).to(device)
+    model = SetEncoder.for_vocabulary(architecture, channel_count()).to(device)
     loader = WindowLoader(windows, batch_size=BATCH_SIZE, seed=1, drop_last=True)
     batch = next(loader.batches_of(0)).to(device)
 
@@ -281,7 +273,7 @@ def measure() -> Measurements:
         transfer=transfer_seconds(corpus.windows, device=device),
         steps={
             tier["name"]: step_seconds(
-                corpus.windows, width=tier["width"], layers=tier["layers"], device=device
+                corpus.windows, architecture=architecture_of(tier), device=device
             )
             for tier in tiers
         },
@@ -356,7 +348,7 @@ def steps_section(measured: Measurements) -> str:
         )
         for tier in measured.tiers
     ]
-    return "### Training step, stand-in encoder\n\n" + table(
+    return "### Training step\n\n" + table(
         ("Tier", "Width", "Layers", "s / step", "Windows / s"), rows
     )
 

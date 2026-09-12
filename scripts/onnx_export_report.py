@@ -7,8 +7,8 @@ per machine architecture, because that is what the numbers depend on:
     uv sync --all-extras
     uv run scripts/onnx_export_report.py
 
-The output is markdown, meant to be pasted under a dated heading in the verification note. It reuses
-the stand-in encoder from the test suite rather than carrying a second copy of it.
+The output is markdown, meant to be pasted under a dated heading in the verification note. It
+exports the encoder itself, through the same harness the test suite uses.
 """
 
 import contextlib
@@ -21,7 +21,7 @@ from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
 
-# Run from anywhere: the stand-in encoder lives in the test package at the repository root, next to
+# Run from anywhere: the export harness lives in the test package at the repository root, next to
 # this directory. The imports below follow, which is why this file is exempt from the import-order
 # rule in the lint configuration.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -30,16 +30,19 @@ import numpy as np
 import onnxruntime as ort
 import torch
 
-from tests.ml.onnx_export.attention import AttentionKind
-from tests.ml.onnx_export.batches import feeds, fully_padded, random_batch
-from tests.ml.onnx_export.dummy_set_encoder import DummySetEncoder
+from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
+from scripts.budget_file import architecture_of, tier_named
 from tests.ml.onnx_export.exported_encoder import (
     MAX_TOKENS,
     OPSET_VERSION,
     ExportedEncoder,
-    export_dummy_encoder,
     export_graph,
+    export_small_encoder,
+    feeds,
 )
+from tests.ml.onnx_export.pooled_set_encoder import PooledSetEncoder
+from tests.support.encoders import small_encoder
+from tests.support.token_tensors import VOCABULARY_SIZE, fully_padded, random_batch
 
 REPETITIONS = 30
 WARMUP = 5
@@ -77,6 +80,13 @@ def measure_latency(call: Callable[[], object]) -> float:
     return (time.perf_counter() - started) / REPETITIONS * 1000
 
 
+def tier_encoder(name: str) -> PooledSetEncoder:
+    """The encoder at the shape of compute tier ``name``, pooled, as the export takes it."""
+    torch.manual_seed(SEED)
+    encoder = SetEncoder.for_vocabulary(architecture_of(tier_named(name)), VOCABULARY_SIZE)
+    return PooledSetEncoder(encoder.eval())
+
+
 def report_environment(rows: list[str]) -> None:
     reported = ("torch", "onnxruntime", "onnx", "onnxscript", "numpy")
     packages = ", ".join(f"{name} {version(name)}" for name in reported)
@@ -100,24 +110,21 @@ def report_export_paths(rows: list[str]) -> None:
     empty = fully_padded(random_batch(1, 16, seed=7))
 
     rows += ["| Check | Result |", "|-------|--------|"]
-    for kind in AttentionKind:
-        with quiet():
-            exported = export_dummy_encoder(kind)
-            worst = max(
-                float(np.max(np.abs(exported.run_onnx(case) - exported.run_eager(case))))
-                for case in cases
-            )
-            finite = bool(np.isfinite(exported.run_onnx(empty)).all())
-        rows += [
-            f"| attention `{kind.value}`: opset {OPSET_VERSION}, tokens 41-{MAX_TOKENS + 8}, "
-            f"batch 1-3, padded and unpadded | pass, `max abs diff = {worst:.1e}` |",
-            f"| attention `{kind.value}`: window of nothing but padding "
-            f"| {'finite' if finite else '**NaN**'} |",
-        ]
+    with quiet():
+        exported = export_small_encoder()
+        worst = max(
+            float(np.max(np.abs(exported.run_onnx(case) - exported.run_eager(case))))
+            for case in cases
+        )
+        finite = bool(np.isfinite(exported.run_onnx(empty)).all())
+    rows += [
+        f"| opset {OPSET_VERSION}, tokens 41-{MAX_TOKENS + 8}, batch 1-3, padded and unpadded "
+        f"| pass, `max abs diff = {worst:.1e}` |",
+        f"| window of nothing but padding | {'finite' if finite else '**NaN**'} |",
+    ]
 
     with quiet():
-        torch.manual_seed(SEED)
-        graph = export_graph(DummySetEncoder().eval(), opset=23)
+        graph = export_graph(PooledSetEncoder(small_encoder(seed=SEED)), opset=23)
         fused = "Attention" in {node.op_type for node in graph.graph.node}
         try:
             session = ort.InferenceSession(
@@ -136,9 +143,8 @@ def report_export_paths(rows: list[str]) -> None:
 
     if torch.backends.mps.is_available():
         with quiet():
-            torch.manual_seed(SEED)
             try:
-                export_graph(DummySetEncoder().eval().to("mps"))
+                export_graph(PooledSetEncoder(small_encoder(seed=SEED)).to("mps"))
             except Exception as error:
                 direct = summarise(error)
             else:
@@ -147,7 +153,7 @@ def report_export_paths(rows: list[str]) -> None:
     rows.append("")
 
 
-def report_alternatives(rows: list[str], label: str, model: DummySetEncoder) -> None:
+def report_alternatives(rows: list[str], label: str, model: PooledSetEncoder) -> None:
     model.eval()
     parameters = sum(tensor.numel() for tensor in model.parameters())
     sample = random_batch(2, 137, seed=SEED, padding=5)
@@ -204,15 +210,10 @@ def main() -> None:
     rows: list[str] = []
     report_environment(rows)
     report_export_paths(rows)
-
-    torch.manual_seed(SEED)
-    report_alternatives(rows, "Stand-in encoder, the one the test suite exports", DummySetEncoder())
-    torch.manual_seed(SEED)
     report_alternatives(
-        rows,
-        "Encoder at the planned parameter budget",
-        DummySetEncoder(d_model=256, n_heads=8, n_layers=6, n_frequencies=16),
+        rows, "Encoder the test suite exports", PooledSetEncoder(small_encoder(seed=SEED))
     )
+    report_alternatives(rows, "Encoder at compute tier M", tier_encoder("M"))
     print("\n".join(rows))
 
 
