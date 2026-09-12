@@ -3,20 +3,21 @@ from collections import deque
 from collections.abc import Iterable, Iterator, Mapping
 from itertools import chain
 
-from emblema.catalog.domain.channel_statistics import ChannelStatistics
-from emblema.catalog.domain.channel_vocabulary import VocabularyEntry
-from emblema.catalog.domain.corpus_unit import CorpusUnit, TimeExtent
+from emblema.catalog.domain.channels.channel_statistics import ChannelStatistics
+from emblema.catalog.domain.channels.channel_vocabulary import VocabularyEntry
 from emblema.catalog.domain.exceptions import (
     ChannelKindMismatchError,
     ObservationOutOfOrderError,
     ObservationOutsideExtentError,
     UnknownChannelError,
 )
-from emblema.catalog.domain.observation import Observation
-from emblema.catalog.domain.placed_window import PlacedWindow
-from emblema.catalog.domain.static_feature import StaticFeature
-from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.measurements.static_feature import StaticFeature
+from emblema.catalog.domain.measurements.time_extent import TimeExtent
+from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
+from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.shared.kernel.tokens import PADDING_CHANNEL_ID, TokenWindow, canonical_key
 
 # A timed observation once normalised: time on the unit's axis, channel id, value. The fields are

@@ -39,13 +39,14 @@ import matplotlib.pyplot as plt
 
 from emblema.catalog.adapters.readers.cmapss import SUBSETS, CmapssCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
-from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
-from emblema.catalog.domain.corpus_unit import CorpusUnit, TimeExtent
-from emblema.catalog.domain.observation import Observation
-from emblema.catalog.domain.placed_window import PlacedWindow
-from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
-from emblema.catalog.domain.window_reconstruction import WindowReconstruction
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.measurements.time_extent import TimeExtent
+from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
+from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
+from emblema.catalog.domain.tokenisation.window_reconstruction import WindowReconstruction
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_reader import CorpusReader
 from scripts.reporting import table
 

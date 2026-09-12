@@ -8,14 +8,14 @@ from emblema.catalog.application.assemblers.published_corpus_manifest_assembler 
 )
 from emblema.catalog.contracts.exceptions import MalformedManifestError
 from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
-from emblema.catalog.domain.archived_corpus import ArchivedCorpus
 from emblema.catalog.domain.exceptions import (
     UnreadableCorpusBlockError,
     WindowNotArchivableError,
 )
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.placed_window import PlacedWindow
-from emblema.catalog.domain.tokenisation_manifest import TokenisationManifest
+from emblema.catalog.domain.tokenisation.archived_corpus import ArchivedCorpus
+from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
+from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.shared.adapters.windows.exceptions import MalformedBlockError, UnstorableWindowError
 from emblema.shared.adapters.windows.window_block import WindowBlock
 from emblema.shared.adapters.windows.window_block_writer import WindowBlockWriter

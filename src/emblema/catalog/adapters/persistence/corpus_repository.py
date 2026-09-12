@@ -3,9 +3,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from emblema.catalog.adapters.persistence.corpus_record import CorpusRecord
-from emblema.catalog.domain.corpus import Corpus
 from emblema.catalog.domain.exceptions import CorpusNameTakenError, CorpusNotFoundError
 from emblema.catalog.domain.identifiers import CorpusId
+from emblema.catalog.domain.registry.corpus import Corpus
 
 
 class SqlAlchemyCorpusRepository:

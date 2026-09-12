@@ -16,12 +16,11 @@ from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReade
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.domain.exceptions import UnknownUnitError
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.static_feature import StaticFeature
+from emblema.catalog.domain.measurements.static_feature import StaticFeature
 from emblema.catalog.ports.corpus_reader import CorpusReader
 from tests.catalog.domain.support import STATIC_SCHEMA, description, grid
 from tests.catalog.domain.support import unit as make_unit
-
-SAMPLE = Path(__file__).resolve().parents[2] / "data" / "cmapss"
+from tests.support.corpora import SAMPLE
 
 
 class Harness(NamedTuple):

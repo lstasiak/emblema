@@ -3,17 +3,17 @@ from dataclasses import dataclass, field
 from itertools import chain
 
 from emblema.catalog.contracts.identifiers import CorpusVersionId
-from emblema.catalog.domain.channel_schema import ChannelSchema
-from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
-from emblema.catalog.domain.corpus_unit import CorpusUnit
+from emblema.catalog.domain.channels.channel_schema import ChannelSchema
+from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.exceptions import CorpusDataChangedError
 from emblema.catalog.domain.identifiers import CorpusId, UnitKey
-from emblema.catalog.domain.observation import Observation
-from emblema.catalog.domain.placed_window import PlacedWindow
-from emblema.catalog.domain.tokenisation_manifest import TokenisationManifest
-from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
-from emblema.catalog.domain.unit_split import UnitSplit
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
+from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
+from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
+from emblema.catalog.domain.tokenisation.unit_split import UnitSplit
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
 from emblema.catalog.ports.corpus_reader import CorpusReader
 from emblema.catalog.ports.corpus_repository import CorpusRepository

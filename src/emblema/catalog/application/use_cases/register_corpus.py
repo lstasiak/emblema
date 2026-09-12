@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
-from emblema.catalog.domain.corpus import Corpus
-from emblema.catalog.domain.corpus_source import CorpusSource
 from emblema.catalog.domain.identifiers import CorpusId
+from emblema.catalog.domain.registry.corpus import Corpus
+from emblema.catalog.domain.registry.corpus_source import CorpusSource
 from emblema.catalog.ports.corpus_repository import CorpusRepository
 from emblema.shared.ports.id_generator import IdGenerator
 

@@ -42,9 +42,9 @@ import torch
 
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
-from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
-from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
+from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.shared.adapters.loaders.seeded_shuffle_sampler import SeededShuffleSampler
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.kernel.tokens import Token, TokenWindow

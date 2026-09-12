@@ -10,10 +10,10 @@ import pytest
 
 from emblema.catalog.adapters.readers.cmapss import SENSORS, CmapssCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
-from emblema.catalog.domain.observation import Observation
-from emblema.catalog.domain.window_spec import WindowSpec
-from tests.catalog.adapters.readers.test_cmapss import BUDGET, SAMPLE, raw_root
+from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from tests.catalog.domain.support import CORPUS, scheme_for
+from tests.support.corpora import BUDGET, SAMPLE, raw_root
 
 TOKENISER = SlidingWindowTokeniser()
 

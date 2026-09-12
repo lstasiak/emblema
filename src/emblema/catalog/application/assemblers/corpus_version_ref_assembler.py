@@ -1,5 +1,5 @@
 from emblema.catalog.contracts.corpus_version_ref import ChannelSpec, CorpusVersionRef
-from emblema.catalog.domain.corpus_version import CorpusVersion
+from emblema.catalog.domain.registry.corpus_version import CorpusVersion
 
 
 class CorpusVersionRefAssembler:

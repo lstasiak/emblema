@@ -7,9 +7,9 @@ from emblema.catalog.application.use_cases.register_corpus import (
     RegisterCorpus,
     RegisterCorpusCommand,
 )
-from emblema.catalog.domain.corpus import Corpus
 from emblema.catalog.domain.exceptions import CorpusNameTakenError, InvalidCorpusError
 from emblema.catalog.domain.identifiers import CorpusId
+from emblema.catalog.domain.registry.corpus import Corpus
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from tests.catalog.domain.support import SOURCE
 

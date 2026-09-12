@@ -6,9 +6,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from emblema.catalog.adapters.persistence.corpus_version_record import CorpusVersionRecord
 from emblema.catalog.adapters.persistence.orm import Base
-from emblema.catalog.domain.corpus import Corpus
-from emblema.catalog.domain.corpus_source import CorpusSource
 from emblema.catalog.domain.identifiers import CorpusId
+from emblema.catalog.domain.registry.corpus import Corpus
+from emblema.catalog.domain.registry.corpus_source import CorpusSource
 
 
 class CorpusRecord(Base):

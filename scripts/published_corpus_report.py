@@ -33,8 +33,8 @@ sys.path.insert(0, str(REPO_ROOT))
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.adapters.readers.cmapss import SUBSETS
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
-from emblema.catalog.domain.tokenisation_manifest import TokenisationManifest
-from emblema.catalog.domain.window_spec import WindowSpec
+from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
+from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
 from emblema.catalog.ports.corpus_repository import CorpusRepository
 from emblema.entrypoints.cli.composition_root import CompositionRoot

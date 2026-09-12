@@ -1,7 +1,7 @@
 from typing import Protocol
 
-from emblema.catalog.domain.corpus import Corpus
 from emblema.catalog.domain.identifiers import CorpusId
+from emblema.catalog.domain.registry.corpus import Corpus
 
 
 class CorpusRepository(Protocol):

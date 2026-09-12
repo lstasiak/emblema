@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Self
 
-from emblema.catalog.domain.corpus_source import CorpusSource
-from emblema.catalog.domain.licence import Licence
+from emblema.catalog.domain.registry.corpus_source import CorpusSource
+from emblema.catalog.domain.registry.licence import Licence
 
 
 @dataclass(frozen=True)
