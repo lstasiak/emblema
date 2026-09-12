@@ -18,6 +18,11 @@ from emblema.shared.kernel.exceptions import InvalidTokenWindowError
 # padding position can never be mistaken for a channel even where a mask is mishandled.
 PADDING_CHANNEL_ID = 0
 
+# The continuous features of a token, in the order they occupy the last axis of a features array:
+# the normalised value and the gap since the previous token of the same channel. A fact of the
+# representation rather than of any codec — an encoder's input width follows from it.
+N_FEATURES = 2
+
 
 def canonical_key(
     channel_id: int, value: float, time: float, gap: float, timeless: bool
