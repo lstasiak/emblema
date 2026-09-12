@@ -3,25 +3,11 @@ import importlib
 import pytest
 from pydantic import ValidationError
 
-from emblema.config.artifact_store_settings import ArtifactStoreSettings
-from emblema.config.database_settings import DatabaseSettings
 from emblema.config.settings import Settings
 from emblema.shared.kernel.compute import ComputeTier
+from tests.support.settings import ARTIFACT_STORE, DATABASE
 
 CONTEXTS = ("catalog", "pretraining", "evaluation", "serving")
-# Every process must name its bucket and its database role; these tests are about the rest.
-ARTIFACT_STORE = ArtifactStoreSettings(
-    endpoint_url="http://127.0.0.1:3900", region="garage", bucket="emblema", key_prefix="dev"
-)
-DATABASE = DatabaseSettings(
-    host="127.0.0.1", port=5432, name="emblema", user="emblema", password="unused"
-)
-
-
-def test_package_imports() -> None:
-    import emblema
-
-    assert emblema.__name__ == "emblema"
 
 
 @pytest.mark.parametrize("context", CONTEXTS)
