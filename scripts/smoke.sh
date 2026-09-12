@@ -15,7 +15,8 @@ fi
 # `localhost` reaches ::1 first. On macOS that socket belongs to AirPlay Receiver, which answers 403.
 MLFLOW_URL=${MLFLOW_URL:-http://127.0.0.1:${MLFLOW_PORT:-5000}}
 BUCKET=${EMBLEMA_ARTIFACT_STORE__BUCKET:-emblema}
-PG_USER=${POSTGRES_USER:?POSTGRES_USER is required (copy env.example to .env)}
+PG_USER=${EMBLEMA_DATABASE__USER:?EMBLEMA_DATABASE__USER is required (copy env.example to .env)}
+PG_DB=${EMBLEMA_DATABASE__NAME:?EMBLEMA_DATABASE__NAME is required (copy env.example to .env)}
 
 fail() {
   echo "FAIL: $*" >&2
@@ -23,7 +24,7 @@ fail() {
 }
 
 psql_scalar() {
-  docker compose exec -T postgres psql -U "$PG_USER" -d emblema -tAc "$1"
+  docker compose exec -T postgres psql -U "$PG_USER" -d "$PG_DB" -tAc "$1"
 }
 
 echo "postgres: databases and context schemas"
