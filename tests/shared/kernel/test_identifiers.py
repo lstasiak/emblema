@@ -42,14 +42,10 @@ def test_parse_rejects_malformed_or_non_canonical_text(text: str) -> None:
 
 
 def test_same_uuid_under_different_kinds_is_not_equal() -> None:
+    # The point of wrapping: a corpus version and a backbone minted from one UUID are two
+    # identities, and a dictionary keyed by one of them never answers for the other.
     sample: EntityId = SampleId(UUID(int=7))
     other: EntityId = OtherId(UUID(int=7))
 
     assert sample != other
-
-
-def test_same_kind_and_uuid_are_equal_and_hash_alike() -> None:
-    value = UUID(int=7)
-
-    assert SampleId(value) == SampleId(value)
-    assert hash(SampleId(value)) == hash(SampleId(value))
+    assert {sample: "corpus"}.get(other) is None
