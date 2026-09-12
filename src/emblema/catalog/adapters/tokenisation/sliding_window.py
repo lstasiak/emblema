@@ -13,6 +13,7 @@ from emblema.catalog.domain.exceptions import (
     UnknownChannelError,
 )
 from emblema.catalog.domain.observation import Observation
+from emblema.catalog.domain.placed_window import PlacedWindow
 from emblema.catalog.domain.static_feature import StaticFeature
 from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.window_spec import WindowSpec
@@ -60,7 +61,7 @@ class SlidingWindowTokeniser:
         observations: Iterable[Observation],
         scheme: TokenisationScheme,
         window: WindowSpec,
-    ) -> Iterator[TokenWindow]:
+    ) -> Iterator[PlacedWindow]:
         entries = _entries_by_channel(scheme, corpus)
         statics = self._static_tokens(unit, entries, corpus, scheme)
         extents = window.windows_over(unit.extent)
@@ -74,7 +75,8 @@ class SlidingWindowTokeniser:
         ):
             while current is not None and time >= current.end:
                 if buffer:
-                    yield self._token_window(statics, buffer, current)
+                    tokens = self._token_window(statics, buffer, current)
+                    yield PlacedWindow(unit.key, current, tokens)
                 current = next(extents, None)
                 while current is not None and buffer and buffer[0][0] < current.start:
                     buffer.popleft()

@@ -55,7 +55,7 @@ def tokenise_corpus(root: Path, subsets: tuple[str, ...], window: WindowSpec) ->
             "cmapss", unit, reader.read_observations(unit.key), scheme, window
         ):
             windows += 1
-            tokens += len(produced)
+            tokens += len(produced.window)
     return windows, tokens
 
 

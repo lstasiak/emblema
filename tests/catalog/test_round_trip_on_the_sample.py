@@ -18,7 +18,7 @@ from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.corpus_unit import CorpusUnit
 from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.window_spec import WindowSpec
-from tests.catalog.domain.support import measured, occupied_extents
+from tests.catalog.domain.support import measured
 
 SAMPLE = Path(__file__).resolve().parents[1] / "data" / "cmapss"
 CORPUS = "cmapss"
@@ -58,13 +58,13 @@ def test_every_window_of_the_sample_reads_back_as_the_rows_that_fell_into_it(
 
     for unit in units:
         observations = list(reader.read_observations(unit.key))
-        windows = list(tokeniser.tokenise(CORPUS, unit, observations, scheme, WINDOW))
-        extents = occupied_extents(unit, observations, WINDOW)
+        placed = list(tokeniser.tokenise(CORPUS, unit, observations, scheme, WINDOW))
 
-        assert len(windows) > 1
-        for extent, window in zip(extents, windows, strict=True):
-            inside = [o for o in observations if extent.contains(o.time)]
-            assert measured(scheme.reconstruct(window, extent).observations) == measured(inside)
+        assert len(placed) > 1
+        for item in placed:
+            inside = [o for o in observations if item.extent.contains(o.time)]
+            read_back = scheme.reconstruct(item.window, item.extent).observations
+            assert measured(read_back) == measured(inside)
 
 
 def test_the_windows_of_an_engine_hold_every_row_but_the_tail_beyond_the_last_of_them(
@@ -74,14 +74,13 @@ def test_the_windows_of_an_engine_hold_every_row_but_the_tail_beyond_the_last_of
 
     for unit in units:
         observations = list(reader.read_observations(unit.key))
-        windows = tokeniser.tokenise(CORPUS, unit, observations, scheme, WINDOW)
-        extents = occupied_extents(unit, observations, WINDOW)
+        placed = list(tokeniser.tokenise(CORPUS, unit, observations, scheme, WINDOW))
 
         recovered = {
             row
-            for extent, window in zip(extents, windows, strict=True)
-            for row in measured(scheme.reconstruct(window, extent).observations)
+            for item in placed
+            for row in measured(scheme.reconstruct(item.window, item.extent).observations)
         }
-        last_cycle_covered = extents[-1].end
+        last_cycle_covered = placed[-1].extent.end
         assert recovered == set(measured(o for o in observations if o.time < last_cycle_covered))
         assert any(o.time >= last_cycle_covered for o in observations), "no tail to speak of"
