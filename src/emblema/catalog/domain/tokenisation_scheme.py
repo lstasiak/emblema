@@ -4,11 +4,16 @@ from typing import Self
 from emblema.catalog.domain.channel_schema import ChannelSchema
 from emblema.catalog.domain.channel_statistics import ChannelStatistics
 from emblema.catalog.domain.channel_vocabulary import ChannelVocabulary
+from emblema.catalog.domain.corpus_unit import TimeExtent
 from emblema.catalog.domain.exceptions import (
     ChannelAlreadyFittedError,
     InvalidTokenisationSchemeError,
     MissingChannelStatisticsError,
 )
+from emblema.catalog.domain.observation import Observation
+from emblema.catalog.domain.static_feature import StaticFeature
+from emblema.catalog.domain.window_reconstruction import WindowReconstruction
+from emblema.shared.kernel.tokens import TokenWindow
 
 
 @dataclass(frozen=True)
@@ -82,3 +87,33 @@ class TokenisationScheme:
                 f"observed in the training data"
             )
         return statistics
+
+    def reconstruct(self, window: TokenWindow, extent: TimeExtent) -> WindowReconstruction:
+        """The data ``window`` was cut from, in raw units, on the time axis ``extent`` spans.
+
+        Tokenising one window run backwards: each token's channel by name, its value put back
+        through the statistics that normalised it, and, for a timed token, the instant its
+        position in the window stands for. Time is recovered from positions and never from gaps —
+        the first token of a channel measures its gap from the start of the window, so it says
+        nothing about when that channel was last observed.
+
+        Args:
+            window: Tokens to read back.
+            extent: Span of the unit's time axis the window covers; the same one it was cut over.
+
+        Raises:
+            UnknownChannelError: If a token carries an identifier the vocabulary has not registered.
+            MissingChannelStatisticsError: If a token's channel was never fitted.
+        """
+        observations: list[Observation] = []
+        static_features: list[StaticFeature] = []
+        for token in window:
+            entry = self.vocabulary.entry(token.channel_id)
+            value = self.statistics_of(token.channel_id).denormalise(token.value)
+            if token.timeless:
+                static_features.append(StaticFeature(entry.channel, value))
+            else:
+                observations.append(
+                    Observation(entry.channel, extent.start + token.time * extent.length, value)
+                )
+        return WindowReconstruction(tuple(observations), tuple(static_features))

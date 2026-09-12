@@ -1,6 +1,6 @@
 """Builders shared by the Data Catalog tests."""
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -18,6 +18,7 @@ from emblema.catalog.domain.licence import Licence
 from emblema.catalog.domain.observation import Observation
 from emblema.catalog.domain.static_feature import StaticFeature
 from emblema.catalog.domain.tokenisation_scheme import TokenisationScheme
+from emblema.catalog.domain.window_spec import WindowSpec
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.sampling import SamplingRegime
 from emblema.shared.kernel.timestamps import UtcDateTime
@@ -67,6 +68,30 @@ def unit(
     key: str = "u1", start: float = 0.0, end: float = 10.0, *statics: StaticFeature
 ) -> CorpusUnit:
     return CorpusUnit(UnitKey(key), TimeExtent(start, end), statics)
+
+
+def occupied_extents(
+    corpus_unit: CorpusUnit, observations: Iterable[Observation], window: WindowSpec
+) -> list[TimeExtent]:
+    """The extents a window is produced for, in the order a tokeniser yields them.
+
+    A window that no observation falls into is not produced, so the extents cannot be zipped
+    with the windows of a unit until the empty ones are dropped.
+    """
+    times = [observation.time for observation in observations]
+    return [
+        extent
+        for extent in window.windows_over(corpus_unit.extent)
+        if any(extent.contains(time) for time in times)
+    ]
+
+
+def measured(observations: Iterable[Observation]) -> list[tuple[str, float, float]]:
+    """Observations as comparable triples, to the resolution a round trip through tokens holds."""
+    return sorted(
+        (observation.channel, round(observation.time, 6), round(observation.value, 6))
+        for observation in observations
+    )
 
 
 def grid(channels: Sequence[str], times: Sequence[float]) -> tuple[Observation, ...]:

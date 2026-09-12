@@ -36,4 +36,17 @@ class ChannelStatistics:
             )
 
     def normalise(self, value: float) -> float:
-        return (value - self.mean) / (self.std if self.std > 0.0 else 1.0)
+        return (value - self.mean) / self._scale
+
+    def denormalise(self, value: float) -> float:
+        """The raw value a normalised one was made from.
+
+        The inverse of ``normalise`` in arithmetic, not in bits: a value that goes out and comes
+        back differs in its last places, so whoever compares the two compares them to a tolerance.
+        """
+        return value * self._scale + self.mean
+
+    @property
+    def _scale(self) -> float:
+        """What a deviation is measured in; one raw unit for a channel that never varied."""
+        return self.std if self.std > 0.0 else 1.0
