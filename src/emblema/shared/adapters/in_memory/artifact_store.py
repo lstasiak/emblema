@@ -8,13 +8,7 @@ from emblema.shared.ports.exceptions import ArtifactIntegrityError, ArtifactNotF
 
 
 class InMemoryArtifactStore:
-    """Artifact store in a dictionary, for tests of what happens around artifacts.
-
-    The local directory store is already a fake of the port, but it writes files, so a test of a
-    use case that stores something would be a test that touches the disk. This one does not, at
-    the price of holding every artifact it is given: a test that stores a corpus wants the other
-    one.
-    """
+    """Artifact store in a dictionary, so that an application test touches no disk."""
 
     def __init__(self) -> None:
         self._content: dict[str, bytes] = {}

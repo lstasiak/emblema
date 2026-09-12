@@ -1,10 +1,6 @@
 """Moving an artifact between a store and the local filesystem, a chunk at a time.
 
-Artifacts a reader maps into memory are too large to pass as bytes, so both file-shaped adapters
-read and write them in chunks. The two operations that follow are the same in every adapter: read
-a local file as chunks, and lay a stream of chunks at a path only once it hashes to what the
-reference promised. They live here so that a store adapter is left with the part that is about
-its own technology.
+Shared by every store adapter, so each is left with the part that is about its own technology.
 """
 
 import os
@@ -29,11 +25,10 @@ def chunks_of(source: Path, size: int = CHUNK_SIZE) -> Iterator[bytes]:
 
 
 def write_verified(ref: ArtifactRef, chunks: Iterable[bytes], destination: Path) -> None:
-    """Write ``chunks`` at ``destination``, and only there once they hash to ``ref``'s checksum.
+    """Write ``chunks`` at ``destination``, atomically and only once they hash to the reference.
 
-    The bytes go to a temporary file in the destination's own directory and are moved into place
-    in one step, so nothing ever observes a partial or unverified artifact at the destination —
-    including a reader that maps the file without hashing it again.
+    Nothing observes a partial or unverified artifact at the destination, so a reader may map the
+    file without hashing it again.
 
     Raises:
         ArtifactIntegrityError: If the chunks do not hash to the reference's checksum.
