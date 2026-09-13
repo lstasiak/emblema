@@ -119,6 +119,7 @@ allowed-confusables = ["×"]
 "scripts/published_corpus_report.py" = ["E402"]
 "scripts/encoder_budget_report.py" = ["E402"]
 "scripts/synthetic_control_report.py" = ["E402"]
+"scripts/masked_reconstruction_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
