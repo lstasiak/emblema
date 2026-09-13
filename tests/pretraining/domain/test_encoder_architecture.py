@@ -10,9 +10,10 @@ from emblema.pretraining.domain.exceptions import InvalidEncoderArchitectureErro
 SMALL = EncoderArchitecture(width=32, heads=4, layers=2, feedforward_width=64, time_frequencies=8)
 # The reference shape of the budget arithmetic: 256 wide, 6 blocks, feed-forward four times the
 # width. Its dense parameters come to 12 · 256² · 6 = 4 718 592 there; the exact count below adds
-# the channel table, the input projections, the biases and the normalisations.
+# the channel table, the input projections, the biases and the normalisations. The vocabulary it is
+# counted over is an arbitrary one — how many channels a corpus mix has is not a fact of the domain.
 REFERENCE = EncoderArchitecture(
-    width=256, heads=4, layers=6, feedforward_width=1024, time_frequencies=16
+    width=256, heads=4, layers=6, feedforward_width=1024, time_frequencies=12
 )
 
 architectures = st.builds(
@@ -31,12 +32,8 @@ architectures = st.builds(
 )
 
 
-def test_each_head_attends_over_an_equal_share_of_the_width() -> None:
-    assert SMALL.head_width == 8
-
-
 def test_the_reference_shape_counts_its_parameters_exactly() -> None:
-    assert REFERENCE.parameter_count(64) == 4_764_928
+    assert REFERENCE.parameter_count(64) == 4_762_880
 
 
 # In a process that has already loaded torch the first draw takes over a second — the library's

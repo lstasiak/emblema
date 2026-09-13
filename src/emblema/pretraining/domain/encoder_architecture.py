@@ -43,10 +43,6 @@ class EncoderArchitecture:
                 f"width must be a multiple of heads, got width {self.width} and {self.heads} heads"
             )
 
-    @property
-    def head_width(self) -> int:
-        return self.width // self.heads
-
     def parameter_count(self, vocabulary_size: int) -> int:
         """Parameters of the encoder in its standard composition over ``vocabulary_size`` channels.
 
