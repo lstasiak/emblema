@@ -81,6 +81,13 @@ def test_an_uncoupled_corpus_is_explained_no_better_by_its_own_factors(
     assert measured.holds
 
 
+def test_a_corpus_whose_channels_are_all_too_short_is_refused_rather_than_averaged() -> None:
+    # Averaging no fits at all would hand the verdict a nan, which reads as a corpus that failed
+    # rather than as a corpus that was never measured.
+    with pytest.raises(SystemExit, match="no channel of control-a reached"):
+        recover(CONTROL_PROCESS, CONTROL_A.with_dials(units=2, shortest_unit=1, longest_unit=1))
+
+
 def test_a_corpus_of_one_unit_has_no_baseline_to_shuffle_against() -> None:
     # The other unit a channel is fitted against would be itself, leaving every corpus with an
     # excess of nothing and the coupled ones reported as broken.

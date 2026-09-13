@@ -92,7 +92,7 @@ def cmapss_reader(root: Path, subset: str | None) -> CorpusReader:
 def generated_reader(layout: SensorLayout) -> Callable[[Path, str | None], CorpusReader]:
     """A reader of a generated corpus, which takes neither a directory nor a subset."""
 
-    def read(root: Path, subset: str | None) -> CorpusReader:
+    def read(_root: Path, _subset: str | None) -> CorpusReader:
         return SyntheticCorpusReader(CONTROL_PROCESS, layout)
 
     return read
@@ -337,6 +337,8 @@ def chosen_unit(units: Sequence[CorpusUnit], key: str | None) -> CorpusUnit:
 def measure(arguments: argparse.Namespace) -> Report:
     corpus = arguments.corpus
     root, source = corpus_source(corpus)
+    # Only a generated corpus comes back without a directory, and the reader of one ignores what
+    # it is handed; the placeholder keeps the table's readers alike rather than splitting it.
     reader = READERS[corpus](root or RAW / corpus, arguments.subset)
     units = list(reader.read_units())
     scheme = fitted_scheme(reader, corpus, units)
