@@ -1,7 +1,15 @@
 """Contract of the CorpusReader port, run against every adapter.
 
-The C-MAPSS adapter reads a copy of the sample in the repository, so that the data behind it can
-be changed the way a corpus changes on disk; the in-memory adapter has its data replaced.
+Every adapter is asked for its data, then asked again once that data has changed. What changing
+it means differs: the C-MAPSS adapter reads a copy of the sample in the repository and a byte of
+the copy is edited, the in-memory adapter has its data replaced, and the generated corpus has no
+data to edit — its specification is its data, so a changed specification is a changed corpus and
+a second reader. The harness therefore hands back the reader to ask again, rather than assuming
+the first one still speaks for the corpus.
+
+The data each adapter is given is what its format allows rather than what its corpus happens to
+contain: blank lines the released C-MAPSS files do not have, a unit that reports nothing and a
+channel that stays silent in the generated one.
 """
 
 import math
@@ -14,6 +22,8 @@ import pytest
 
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
+from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.domain.exceptions import UnknownUnitError
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.measurements.static_feature import StaticFeature
@@ -21,13 +31,18 @@ from emblema.catalog.ports.corpus_reader import CorpusReader
 from tests.catalog.domain.support import STATIC_SCHEMA, description, grid
 from tests.catalog.domain.support import unit as make_unit
 from tests.support.corpora import SAMPLE
+from tests.support.synthetic import HOSTILE, PROCESS
 
 
 class Harness(NamedTuple):
-    """A reader under test plus a way to change the data behind it, bypassing the port."""
+    """A reader under test plus a way to change the data behind it, bypassing the port.
+
+    ``change_data`` hands back the reader to ask afterwards: usually the same one, and a new one
+    where the data is the specification it was built from.
+    """
 
     reader: CorpusReader
-    change_data: Callable[[], None]
+    change_data: Callable[[], CorpusReader]
 
 
 def in_memory(tmp_path: Path) -> Harness:
@@ -44,10 +59,11 @@ def in_memory(tmp_path: Path) -> Harness:
         description(schema=STATIC_SCHEMA, units=2, observations=observations), units
     )
 
-    def change_data() -> None:
+    def change_data() -> CorpusReader:
         reader.replace_data(
             description(b"changed", schema=STATIC_SCHEMA, units=2, observations=observations), units
         )
+        return reader
 
     return Harness(reader, change_data)
 
@@ -60,13 +76,26 @@ def cmapss(tmp_path: Path) -> Harness:
     # nothing must not end a unit early, and only counting what comes out shows that it does not.
     file.write_bytes(file.read_bytes().replace(b"\n", b"\n\n"))
 
-    def change_one_value() -> None:
+    def change_one_value() -> CorpusReader:
         file.write_bytes(file.read_bytes().replace(b"518.67", b"518.68", 1))
+        return CmapssCorpusReader(root, subsets=("FD001",))
 
     return Harness(CmapssCorpusReader(root, subsets=("FD001",)), change_one_value)
 
 
-ADAPTERS: dict[str, Callable[[Path], Harness]] = {"in_memory": in_memory, "cmapss": cmapss}
+def synthetic(tmp_path: Path) -> Harness:
+    def change_the_specification() -> CorpusReader:
+        noisier = SensorLayout.model_validate({**HOSTILE.model_dump(), "noise": HOSTILE.noise * 2})
+        return SyntheticCorpusReader(PROCESS, noisier)
+
+    return Harness(SyntheticCorpusReader(PROCESS, HOSTILE), change_the_specification)
+
+
+ADAPTERS: dict[str, Callable[[Path], Harness]] = {
+    "in_memory": in_memory,
+    "cmapss": cmapss,
+    "synthetic": synthetic,
+}
 
 
 @pytest.fixture(params=list(ADAPTERS.values()), ids=list(ADAPTERS))
@@ -82,8 +111,7 @@ def test_describing_the_same_data_twice_gives_equal_descriptions(harness: Harnes
 def test_changed_values_change_the_checksum_and_nothing_else(harness: Harness) -> None:
     before = harness.reader.describe()
 
-    harness.change_data()
-    after = harness.reader.describe()
+    after = harness.change_data().describe()
 
     assert after.content.checksum != before.content.checksum
     assert after.channel_schema == before.channel_schema
