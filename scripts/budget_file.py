@@ -1,7 +1,8 @@
-"""The budget file, read once, and the encoder shape each of its compute tiers describes.
+"""The budget file, read once, and what a report needs to build a model at one of its compute tiers.
 
 Numbers live in ``corpus_budget.toml``; a report script that needs one asks here, so the file is
-parsed in one place and a tier becomes an architecture in one place.
+parsed in one place, a tier becomes an architecture in one place, and every script that builds a
+tier-shaped encoder builds it over the same vocabulary.
 """
 
 import tomllib
@@ -31,4 +32,13 @@ def architecture_of(tier: dict[str, Any]) -> EncoderArchitecture:
         layers=tier["layers"],
         feedforward_width=tier["feedforward_width"],
         time_frequencies=tier["time_frequencies"],
+    )
+
+
+def vocabulary_size() -> int:
+    """Channels of every measured corpus together: the table one backbone over the mix carries."""
+    return sum(
+        int(corpus["measured"]["channels"])
+        for corpus in budget()["corpora"].values()
+        if "measured" in corpus
     )

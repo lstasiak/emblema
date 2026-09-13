@@ -31,7 +31,7 @@ import onnxruntime as ort
 import torch
 
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
-from scripts.budget_file import architecture_of, tier_named
+from scripts.budget_file import architecture_of, tier_named, vocabulary_size
 from tests.ml.onnx_export.exported_encoder import (
     MAX_TOKENS,
     OPSET_VERSION,
@@ -42,7 +42,7 @@ from tests.ml.onnx_export.exported_encoder import (
 )
 from tests.ml.onnx_export.pooled_set_encoder import PooledSetEncoder
 from tests.support.encoders import small_encoder
-from tests.support.token_tensors import VOCABULARY_SIZE, fully_padded, random_batch
+from tests.support.token_tensors import fully_padded, random_batch
 
 REPETITIONS = 30
 WARMUP = 5
@@ -81,9 +81,13 @@ def measure_latency(call: Callable[[], object]) -> float:
 
 
 def tier_encoder(name: str) -> PooledSetEncoder:
-    """The encoder at the shape of compute tier ``name``, pooled, as the export takes it."""
+    """The encoder at the shape of compute tier ``name``, pooled, as the export takes it.
+
+    Over the vocabulary of the measured corpora, not the test one: a table of the wrong height
+    would put a parameter count in this report that no model of that tier has.
+    """
     torch.manual_seed(SEED)
-    encoder = SetEncoder.for_vocabulary(architecture_of(tier_named(name)), VOCABULARY_SIZE)
+    encoder = SetEncoder.for_vocabulary(architecture_of(tier_named(name)), vocabulary_size())
     return PooledSetEncoder(encoder.eval())
 
 
@@ -164,13 +168,6 @@ def report_alternatives(rows: list[str], label: str, model: PooledSetEncoder) ->
         exported = ExportedEncoder.from_model(model)
         export_seconds = time.perf_counter() - started
 
-        try:
-            torch.jit.script(model)
-        except Exception as error:
-            scripting = summarise(error, limit=110)
-        else:
-            scripting = "pass"
-
         # `torch.jit` carries no type information; the call is checked by the comparison below.
         traced = torch.jit.trace(model, sample.args, strict=False)  # type: ignore[no-untyped-call]
         buffer = io.BytesIO()
@@ -185,7 +182,7 @@ def report_alternatives(rows: list[str], label: str, model: PooledSetEncoder) ->
     rows += [
         f"### {label} — {parameters / 1e6:.2f}M parameters",
         "",
-        f"Export took {export_seconds:.1f} s. `torch.jit.script`: {scripting}. "
+        f"Export took {export_seconds:.1f} s. "
         f"`torch.jit.trace` reproduces eager to `{traced_deviation:.1e}`.",
         "",
         "| | ONNX (opset 20) | TorchScript (traced) | eager |",

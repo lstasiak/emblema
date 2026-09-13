@@ -33,7 +33,7 @@ import torch
 
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
-from scripts.budget_file import architecture_of, budget
+from scripts.budget_file import architecture_of, budget, tier_named, vocabulary_size
 from scripts.loader_throughput_report import device_in_use, median_seconds, synchronise
 from scripts.reporting import dated_heading, machine, table
 from tests.support.token_tensors import random_batch
@@ -46,8 +46,9 @@ PUBLISHED_TIER = "M"
 TOKENS_PER_STEP = 8192
 REPEATS = 3
 # Memory of the free GPU the published tier trains on, and what of it the attention buffers may
-# take: the rest is weights, optimiser state, the dense activations and the runtime's own use.
-DEVICE_GIB = 16.0
+# take: the rest is weights, optimiser state, the dense activations and the runtime's own use. A
+# 16 GB T4 reports 15360 MiB to the process, which is what a budget may be spent against.
+DEVICE_GIB = 15.0
 HEADROOM_GIB = 4.0
 # Batch the verdict is stated for, and the bytes of a half-precision value the tier trains in.
 VERDICT_BATCH = 8
@@ -85,21 +86,15 @@ def window_lengths() -> list[WindowLength]:
     return sorted(found, key=lambda length: length.tokens)
 
 
-def vocabulary_size() -> int:
-    """Channels of every measured corpus together: the table one backbone over the mix carries."""
-    return sum(
-        int(corpus["measured"]["channels"])
-        for corpus in budget()["corpora"].values()
-        if "measured" in corpus
-    )
-
-
 def attention_bytes(architecture: EncoderArchitecture, tokens: int, *, bytes_per_value: int) -> int:
     """Bytes one window's attention occupies at the peak of a step when the scores are materialised.
 
-    While the softmax is taken, the scores and the probabilities of every head exist together —
-    two square matrices per head and layer, the probabilities staying on for the backward pass.
-    That is what the plain kernel does and what fused kernels exist to avoid.
+    While the softmax is taken, the scores and the probabilities of every head exist together, and
+    the probabilities stay on for the backward pass. Charging two square matrices to every layer is
+    therefore an upper bound rather than the peak: only the layer inside its softmax holds two at
+    once, the layers behind it hold their probabilities alone. A bound is what a verdict about
+    fitting a device wants, and it is roughly twice what a deep encoder really peaks at. This is
+    what the plain kernel does and what fused kernels exist to avoid.
     """
     matrices = 2 * architecture.heads * architecture.layers
     return matrices * tokens * tokens * bytes_per_value
@@ -119,7 +114,12 @@ def batch_for(tokens: int) -> int:
 
 @dataclass(frozen=True)
 class Step:
-    """One timed training step: seconds and, where the device reports it, bytes held."""
+    """One timed training step: seconds and, where the device reports it, the bytes it held.
+
+    The bytes are the step's own. The weights and the batch are already on the device when the
+    count starts, so what is left grows with the batch and the window — which is what makes a
+    column dividing the figure by the batch mean anything.
+    """
 
     seconds: float
     bytes_held: int | None
@@ -138,19 +138,33 @@ def measure_step(
         model.zero_grad(set_to_none=True)
         synchronise(device)
 
+    held_before = _start_counting(device)
+    seconds = median_seconds(step, REPEATS)
+    return Step(seconds, _bytes_held(device, held_before))
+
+
+def _start_counting(device: str) -> int:
+    """Zero what the device reports about its memory and return where a step is counted from."""
     if device == "cuda":
         torch.cuda.reset_peak_memory_stats()
-    seconds = median_seconds(step, REPEATS)
-    return Step(seconds, _bytes_held(device))
-
-
-def _bytes_held(device: str) -> int | None:
-    # The CPU allocator reports nothing torch can read back; on the accelerators the figure is the
-    # device's own — a peak on CUDA, the allocator's current footprint on MPS, which has no peak.
-    if device == "cuda":
-        return int(torch.cuda.max_memory_allocated())
+        return int(torch.cuda.memory_allocated())
     if device == "mps":
+        # MPS has no peak counter, and its allocator hands nothing back on its own: the driver's
+        # figure only ever grows, so read alone it says what ran before rather than what is running.
+        # Emptying the cache first makes the growth over the steps below the steps' own.
+        torch.mps.empty_cache()
         return int(torch.mps.driver_allocated_memory())
+    return 0
+
+
+def _bytes_held(device: str, before: int) -> int | None:
+    # The CPU allocator reports nothing torch can read back. On CUDA the figure is a true peak; on
+    # MPS it is the high-water mark of an allocator that keeps every block it has taken, which over
+    # a span beginning with an empty cache comes to the same thing.
+    if device == "cuda":
+        return max(0, int(torch.cuda.max_memory_allocated()) - before)
+    if device == "mps":
+        return max(0, int(torch.mps.driver_allocated_memory()) - before)
     return None
 
 
@@ -167,12 +181,7 @@ class Measurements:
 def measure() -> Measurements:
     device = device_in_use()
     lengths = window_lengths()
-    architectures = {
-        name: architecture_of(tier)
-        for tier in budget()["tiers"]
-        for name in TIERS
-        if tier["name"] == name
-    }
+    architectures = {name: architecture_of(tier_named(name)) for name in TIERS}
     steps = {
         (name, length.tokens): measure_step(
             architecture, tokens=length.tokens, batch=batch_for(length.tokens), device=device
@@ -251,7 +260,7 @@ def steps_section(measured: Measurements) -> str:
                 )
             )
     return "### Training step, measured\n\n" + table(
-        ("Tier", "Window", "Tokens", "Batch", "s / window", "Memory / window"), rows
+        ("Tier", "Window", "Tokens", "Batch", "s / window", "Step memory / window"), rows
     )
 
 

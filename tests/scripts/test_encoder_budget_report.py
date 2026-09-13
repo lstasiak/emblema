@@ -10,7 +10,7 @@ import pytest
 pytest.importorskip("torch")
 
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
-from scripts.budget_file import architecture_of, tier_named
+from scripts.budget_file import architecture_of, tier_named, vocabulary_size
 from scripts.encoder_budget_report import (
     DEVICE_GIB,
     GIB,
@@ -22,7 +22,6 @@ from scripts.encoder_budget_report import (
     fits_published_device,
     measure_step,
     render,
-    vocabulary_size,
     window_lengths,
 )
 
