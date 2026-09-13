@@ -49,7 +49,7 @@ class CompositionRoot:
         self,
         settings: Settings,
         *,
-        corpus: str,
+        corpus: str | None = None,
         corpus_root: Path,
         workspace: Path,
         subsets: tuple[str, ...] = (),
@@ -63,12 +63,14 @@ class CompositionRoot:
 
         Args:
             settings: Values read from the environment; only the root and the adapters see them.
-            corpus: Name of the corpus to publish; it decides which adapter reads it.
+            corpus: Name of the corpus to publish; it decides which adapter reads it, and is
+                needed only where ``reader`` is left to the root to choose.
             corpus_root: Directory the raw corpus is read from, where it is read from files.
             workspace: Directory blocks pass through on their way in or out of the store.
             subsets: Subsets of the corpus to read; all of them where empty.
             corpora: Repository of corpora; the configured metadata database unless given.
             reader: Reader of the raw corpus; the adapter of the named corpus unless given.
+                One of the two has to be stated.
             store: Artifact store; the configured S3-compatible bucket unless given. The
                 archive is always the block archive over this store.
             clock: Source of the current instant; the system clock unless given.
@@ -114,16 +116,20 @@ class CompositionRoot:
         )
 
     @staticmethod
-    def _corpus_reader(corpus: str, root: Path, subsets: tuple[str, ...]) -> CorpusReader:
+    def _corpus_reader(corpus: str | None, root: Path, subsets: tuple[str, ...]) -> CorpusReader:
         """Which adapter reads which corpus, and what it takes from the process to do it.
 
-        A corpus read from files takes the directory it was downloaded to; a generated one takes
-        nothing, because its specification is its data.
+        A corpus read from files is handed the directory it was downloaded to; a generated one is
+        handed it too and ignores it, because its specification is its data. The root is passed
+        either way rather than made conditional here: which corpora have files on disk is the
+        adapters' business, and a caller that had to know would be choosing the adapter itself.
 
         Raises:
-            ValueError: If no adapter reads a corpus of that name.
+            ValueError: If no corpus was named, or none of that name has an adapter.
         """
         match corpus:
+            case None:
+                raise ValueError("the process needs a corpus to read or a reader to read it with")
             case "cmapss":
                 return CmapssCorpusReader(root, subsets or SUBSETS)
             case generated if generated in LAYOUTS:

@@ -80,7 +80,6 @@ def process(
     """The publishing process the command line assembles, over a corpus cut to a test's size."""
     return CompositionRoot(
         unreachable_store(),
-        corpus=layout.name,
         corpus_root=workspace / "raw",
         workspace=workspace,
         corpora=corpora,

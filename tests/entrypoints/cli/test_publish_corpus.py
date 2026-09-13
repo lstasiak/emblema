@@ -43,7 +43,6 @@ def process(tmp_path: Path) -> Process:
     store = InMemoryArtifactStore()
     root = CompositionRoot(
         unreachable_store(),
-        corpus="cmapss",
         corpus_root=tmp_path / "raw",
         workspace=tmp_path / "workspace",
         corpora=InMemoryCorpusRepository(),
@@ -129,6 +128,17 @@ def test_a_corpus_no_adapter_reads_is_refused_when_the_process_is_assembled(tmp_
         CompositionRoot(
             unreachable_store(),
             corpus="nothing-of-the-sort",
+            corpus_root=tmp_path / "raw",
+            workspace=tmp_path / "workspace",
+        )
+
+
+def test_a_process_given_neither_a_corpus_nor_a_reader_is_refused(tmp_path: Path) -> None:
+    # Naming a corpus is how the root chooses a reader, so a process that neither names one nor
+    # brings its own has no reader to run on and says so here rather than later.
+    with pytest.raises(ValueError, match="needs a corpus to read"):
+        CompositionRoot(
+            unreachable_store(),
             corpus_root=tmp_path / "raw",
             workspace=tmp_path / "workspace",
         )
