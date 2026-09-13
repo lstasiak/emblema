@@ -3,9 +3,17 @@ from collections import Counter
 import pytest
 
 from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_A, CONTROL_B, CONTROL_PROCESS
+from emblema.catalog.adapters.synthetic.layouts import (
+    CONTROL_A,
+    CONTROL_B,
+    CONTROL_PROCESS,
+    NULL_A,
+)
 from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
-from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import GAIN, SyntheticCorpusReader
+from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import (
+    GAIN,
+    SyntheticCorpusReader,
+)
 from emblema.catalog.domain.channels.channel_schema import Channel
 from emblema.catalog.domain.exceptions import UnknownUnitError
 from emblema.catalog.domain.identifiers import UnitKey
@@ -20,9 +28,9 @@ SMALL = miniature(CONTROL_A)
 # bytes would freeze a different corpus version under the same name, and a change to either has to
 # be a deliberate change here.
 PINNED = {
-    "control-a": "sha256:72e8f4b86906b0270751bf16681eb1698a018ad17a5cf0fa49ed185c15ee926a",
-    "control-b": "sha256:fc1933bd4a4e9bfa4642a04af767a3c0f23848963e7a7c3abd954fc3e0abc8d7",
-    "hostile": "sha256:696cba9b5a7d709cc996e6b533f83145b64dfada7b9d4c2af2a2cbfb3f41aa08",
+    "control-a": "sha256:5abe7209308231c5f53ed7651764510e4e106f0510f336d4a8b009b7f8f1c780",
+    "control-b": "sha256:4073015ee3828a1a10db2340701b21662fe7e15a7181728428b2c3fb2ceb3c3b",
+    "hostile": "sha256:5c39a621d33c284e2a4f5f3745e0f831ff624c8296bf93e63b6d84609d58192f",
 }
 
 
@@ -126,11 +134,50 @@ def test_switching_off_the_coupling_changes_the_values_and_nothing_else() -> Non
     assert [reading[3] for reading in coupled] != [reading[3] for reading in null]
 
 
+def test_a_named_null_corpus_is_its_control_unit_for_unit() -> None:
+    # The pair the control actually uses differs in name as well as in coupling, and the name is
+    # the prefix of every unit key. Nothing may be drawn from that key: a null whose units were
+    # other lengths, sampled at other instants and off by other gains would differ from its twin
+    # in far more than the one dial the comparison rests on.
+    control, null = reader(miniature(CONTROL_A)), reader(miniature(NULL_A))
+
+    for ours, theirs in zip(control.read_units(), null.read_units(), strict=True):
+        assert (ours.extent, ours.static_features) == (theirs.extent, theirs.static_features)
+        here = [(o.channel, o.time) for o in control.read_observations(ours.key)]
+        there = [(o.channel, o.time) for o in null.read_observations(theirs.key)]
+        assert here == there
+
+    assert [reading[1:] for reading in observations(control)] != [
+        reading[1:] for reading in observations(null)
+    ]
+
+
 def test_units_keep_their_extents_when_the_coupling_goes() -> None:
     coupled = [(unit.key, unit.extent) for unit in reader().read_units()]
     null = [(unit.key, unit.extent) for unit in reader(SMALL.with_dials(coupling=0.0)).read_units()]
 
     assert coupled == null
+
+
+@pytest.mark.parametrize("coupling", [1.0, 0.0])
+def test_the_gain_scales_a_unit_whichever_way_the_coupling_is_set(coupling: float) -> None:
+    # Switching the coupling off must not also turn the volume down, or the null corpus would be
+    # the fainter one as well as the unstructured one, and transfer failing on it would have two
+    # explanations. A spread of zero fixes every gain at one, which is the corpus to hold the
+    # gained one against.
+    plain = reader(SMALL.with_dials(coupling=coupling, noise=0.0, gain_spread=0.0))
+    gained = reader(SMALL.with_dials(coupling=coupling, noise=0.0))
+    gains = []
+
+    for unit in gained.read_units():
+        gain = unit.static_features[0].value
+        gains.append(gain)
+        ungained = [o.value for o in plain.read_observations(unit.key)]
+        assert [o.value for o in gained.read_observations(unit.key)] == pytest.approx(
+            [value * gain for value in ungained], abs=1e-5
+        )
+
+    assert any(gain != 1.0 for gain in gains)
 
 
 def test_a_channel_cannot_respond_to_more_factors_than_there_are() -> None:

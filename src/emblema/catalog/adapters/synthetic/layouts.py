@@ -65,9 +65,11 @@ CONTROL_B = SensorLayout(
 )
 
 
-# One dial apart from their coupled twins: the same sensors responding to the same factors at the
-# same instants, losing the same observations and off by the same amounts. What differs is only
-# where the signal comes from, so a difference in what transfer achieves has one explanation.
+# One dial apart from their coupled twins, in the data and not only in the specification: the
+# same sensors responding to the same factors at the same instants, losing the same observations
+# and off by the same amounts, because the reader addresses its draws by a unit's position and
+# never by the name in its key. What differs is only where the signal comes from, so a difference
+# in what transfer achieves has one explanation.
 NULL_A = CONTROL_A.with_dials(name="null-a", coupling=0.0)
 NULL_B = CONTROL_B.with_dials(name="null-b", coupling=0.0)
 

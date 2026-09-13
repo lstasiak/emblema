@@ -1,9 +1,9 @@
 """Show that the positive control has the structure it is supposed to have, before anything uses it.
 
-The control exists to tell a broken pipeline from a disproved thesis: if transfer fails on a
-corpus whose shared structure was put there on purpose, the fault is ours. That argument only
-works if the structure really is there — otherwise a failure indicts the generator instead, and
-nothing is settled. This script is the evidence that it is.
+What the control is for is stated in ``emblema.catalog.adapters.synthetic.layouts``. The argument
+made there only works if the structure really is present, because a failure on a generator that
+never carried any would indict the generator and settle nothing. This script is the evidence that
+it is present.
 
 The measurement is a permutation test. For every channel of every unit it fits the channel's
 values on the latent factors of that unit, and again on the factors of a different unit of the
@@ -125,13 +125,19 @@ def recover(process: LatentFactorProcess, layout: SensorLayout) -> LayoutRecover
     shuffled: list[float] = []
     skipped = 0
     for position, key in enumerate(keys):
-        other = keys[(position + 1) % len(keys)]
+        other = (position + 1) % len(keys)
         for times, values in by_channel(reader, key).values():
             if len(times) < enough:
                 skipped += 1
                 continue
-            own.append(explained(design_on(process, layout, times, key), values))
+            own.append(explained(design_on(process, layout, times, position), values))
             shuffled.append(explained(design_on(process, layout, times, other), values))
+    if not own:
+        # Every channel was too short to fit, so there is no measurement to report; averaging
+        # nothing would hand the verdict a nan and read as a corpus that failed.
+        raise SystemExit(
+            f"no channel of {layout.name} reached {enough} observations; ask for longer units"
+        )
     return LayoutRecovery(
         layout=layout.name,
         coupling=layout.coupling,
@@ -144,9 +150,9 @@ def recover(process: LatentFactorProcess, layout: SensorLayout) -> LayoutRecover
 
 
 def design_on(
-    process: LatentFactorProcess, layout: SensorLayout, times: NDArray[np.float64], unit: str
+    process: LatentFactorProcess, layout: SensorLayout, times: NDArray[np.float64], unit: int
 ) -> NDArray[np.float64]:
-    """The factors of ``unit`` at ``times``, with a column of ones for the offset."""
+    """The factors of the unit at ``unit``, at ``times``, with a column of ones for the offset."""
     factors = process.values_at(times, trajectory_seed=layout.trajectory_seed, unit=unit)
     return np.column_stack([factors, np.ones(len(times))])
 
@@ -173,7 +179,7 @@ def draw(process: LatentFactorProcess, layout: SensorLayout, directory: Path) ->
     unit = next(reader.read_units())
     channels = by_channel(reader, unit.key.value)
     dense = np.linspace(unit.extent.start, unit.extent.end, 600)
-    factors = process.values_at(dense, trajectory_seed=layout.trajectory_seed, unit=unit.key.value)
+    factors = process.values_at(dense, trajectory_seed=layout.trajectory_seed, unit=0)
 
     figure, (above, below) = plt.subplots(2, 1, figsize=(11, 6), sharex=True)
     for number in range(process.factors):
@@ -200,13 +206,14 @@ def measure(arguments: argparse.Namespace) -> Report:
     # A report reads a sample of the corpus, not all of it; a unit is the same unit either way,
     # because a corpus is generated per key rather than in a run.
     chosen = [LAYOUTS[name].with_dials(units=arguments.units) for name in arguments.layout]
+    drawn = (
+        [draw(CONTROL_PROCESS, layout, directory) for layout in chosen] if arguments.figures else []
+    )
     return Report(
         process=CONTROL_PROCESS,
         units=arguments.units,
         recoveries=[recover(CONTROL_PROCESS, layout) for layout in chosen],
-        figures=[draw(CONTROL_PROCESS, layout, directory) for layout in chosen]
-        if arguments.figures
-        else [],
+        figures=drawn,
     )
 
 

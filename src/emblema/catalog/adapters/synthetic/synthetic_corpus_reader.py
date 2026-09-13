@@ -38,8 +38,11 @@ class SyntheticCorpusReader:
     travels the same road as real data — registered, frozen, tokenised, archived and trained on —
     so a failure anywhere along it is a failure the control catches.
 
-    Nothing is stored. A unit is generated when it is asked for, from a seed addressed by its key,
-    so the corpus exists on any machine that has the specification and needs no download. The
+    Nothing is stored. A unit is generated when it is asked for, from a seed addressed by its
+    position in the layout, so the corpus exists on any machine that has the specification and
+    needs no download. Addressed by position and not by key, because the key carries the layout's
+    name: two layouts that differ only in a dial would otherwise differ in every draw as well,
+    and the null pair of the control would stop being the matched twin it is meant to be. The
     randomness is reproducible exactly; the arithmetic on top of it is reproducible as far as the
     array library's transcendental functions are, which is what ``PRECISION`` is about and what
     the checksum a version is frozen over ultimately rests on.
@@ -74,7 +77,12 @@ class SyntheticCorpusReader:
         self._private = process.with_dials(factors=layout.channels, seed=layout.seed)
 
     def describe(self) -> CorpusDescription:
-        """Generate the whole corpus, checksum it and count it, keeping none of it."""
+        """Generate the whole corpus, checksum it and count it, keeping none of it.
+
+        The blocks are counted as they stream into the checksum, so the corpus is never held
+        whole. The count is read afterwards because a checksum cannot be finished before every
+        block has passed through it, which is what leaves the count finished too.
+        """
         counts: list[int] = []
 
         def blocks() -> Iterator[bytes]:
@@ -112,13 +120,12 @@ class SyntheticCorpusReader:
 
     def _readings_of(self, index: int) -> list[tuple[float, int, float]]:
         """One unit's observations as ``(time, channel, value)``, ordered by both in turn."""
-        key = self._key(index)
-        length, gain = self._length(key), self._gain(key)
+        length, gain = self._length(index), self._gain(index)
         readings: list[tuple[float, int, float]] = []
         for channel in range(self._layout.channels):
-            steps = self._steps(key, channel, length)
+            steps = self._steps(index, channel, length)
             times = steps.astype(np.float64) * self._layout.time_step
-            values = self._values(key, channel, times, gain)
+            values = self._values(index, channel, times, gain)
             readings.extend(
                 (time, channel, value)
                 for time, value in zip(times.tolist(), values.tolist(), strict=True)
@@ -127,29 +134,33 @@ class SyntheticCorpusReader:
         return readings
 
     def _values(
-        self, key: str, channel: int, times: NDArray[np.float64], gain: float
+        self, index: int, channel: int, times: NDArray[np.float64], gain: float
     ) -> NDArray[np.float64]:
         """What one channel reports at ``times``: shared signal, private signal and noise.
 
         The two signals are mixed by the root of the coupling so that their variances add to one
-        whatever it is set to. The gain scales the shared part alone, which is what makes the
-        static feature carrying it worth reading.
+        whatever it is set to, and the unit's gain scales what they add up to rather than the
+        shared part alone. Scaling one part would have left a null corpus quieter than its
+        coupled twin by the spread of the gain, and a null that is also the fainter corpus cannot
+        settle whether transfer failed for want of structure or for want of signal. The noise is
+        added after the gain, as measurement noise is.
         """
         layout = self._layout
         shared = (
-            self._process.values_at(times, trajectory_seed=layout.trajectory_seed, unit=key)
+            self._process.values_at(times, trajectory_seed=layout.trajectory_seed, unit=index)
             @ self._projection[channel]
         )
-        private = self._private.values_at(times, trajectory_seed=layout.seed, unit=key)[:, channel]
-        noise = Draws(layout.seed, "noise", key, channel).normal(len(times))
+        private = self._private.values_at(times, trajectory_seed=layout.seed, unit=index)[
+            :, channel
+        ]
+        noise = Draws(layout.seed, "noise", index, channel).normal(len(times))
         values = (
-            gain * np.sqrt(layout.coupling) * shared
-            + np.sqrt(1.0 - layout.coupling) * private
+            gain * (np.sqrt(layout.coupling) * shared + np.sqrt(1.0 - layout.coupling) * private)
             + layout.noise * noise
         )
         return np.round(values, PRECISION)
 
-    def _steps(self, key: str, channel: int, length: int) -> NDArray[np.int64]:
+    def _steps(self, index: int, channel: int, length: int) -> NDArray[np.int64]:
         """The grid steps one channel reports on, inside ``[0, length)`` and strictly increasing.
 
         A synchronous layout draws its steps once per unit, so every channel reports together; an
@@ -157,7 +168,7 @@ class SyntheticCorpusReader:
         either way, so even a synchronous layout has gaps a window has to survive.
         """
         layout = self._layout
-        drawn = Draws(layout.seed, "steps", key, "all" if layout.synchronous else channel)
+        drawn = Draws(layout.seed, "steps", index, "all" if layout.synchronous else channel)
         if layout.cadence == 1:
             steps = np.arange(length)
         else:
@@ -167,27 +178,26 @@ class SyntheticCorpusReader:
             gaps = 1 + np.floor(-(layout.cadence - 1) * np.log(1.0 - drawn.uniform(length)))
             walked = np.cumsum(gaps.astype(np.int64)) - gaps[0].astype(np.int64)
             steps = walked[walked < length]
-        kept = Draws(layout.seed, "missing", key, channel).uniform(len(steps)) >= layout.missing
+        kept = Draws(layout.seed, "missing", index, channel).uniform(len(steps)) >= layout.missing
         return steps[kept]
 
-    def _length(self, key: str) -> int:
+    def _length(self, index: int) -> int:
         """Steps this unit spans, drawn evenly between the shortest and the longest."""
         layout = self._layout
         span = layout.longest_unit - layout.shortest_unit + 1
-        fraction = Draws(layout.seed, "length", key).uniform()
+        fraction = Draws(layout.seed, "length", index).uniform()
         return layout.shortest_unit + int(fraction * span)
 
-    def _gain(self, key: str) -> float:
-        """How strongly this unit's sensors follow the shared factors; one on average."""
-        drawn = float(Draws(self._layout.seed, "gain", key).uniform())
+    def _gain(self, index: int) -> float:
+        """How strongly this unit's sensors report, against the layout's nominal one."""
+        drawn = float(Draws(self._layout.seed, "gain", index).uniform())
         return round(1.0 + self._layout.gain_spread * (2.0 * drawn - 1.0), PRECISION)
 
     def _unit(self, index: int) -> CorpusUnit:
-        key = self._key(index)
         return CorpusUnit(
-            key=UnitKey(key),
-            extent=TimeExtent(0.0, self._length(key) * self._layout.time_step),
-            static_features=(StaticFeature(GAIN, self._gain(key)),),
+            key=UnitKey(self._key(index)),
+            extent=TimeExtent(0.0, self._length(index) * self._layout.time_step),
+            static_features=(StaticFeature(GAIN, self._gain(index)),),
         )
 
     def _block_of(self, index: int) -> tuple[bytes, int]:

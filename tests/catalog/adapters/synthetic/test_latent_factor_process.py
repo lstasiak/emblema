@@ -25,29 +25,29 @@ def test_the_structure_is_the_seed_and_nothing_else() -> None:
 
 
 def test_factors_are_scaled_to_unit_variance() -> None:
-    values = PROCESS.values_at(DENSE, trajectory_seed=1, unit="a")
+    values = PROCESS.values_at(DENSE, trajectory_seed=1, unit=0)
 
     assert values.shape == (len(DENSE), PROCESS.factors)
     assert np.allclose(values.std(axis=0), 1.0, atol=0.15)
 
 
 def test_a_unit_sees_the_same_trajectory_every_time_it_is_asked() -> None:
-    first = PROCESS.values_at(DENSE, trajectory_seed=1, unit="a")
-    second = PROCESS.values_at(DENSE, trajectory_seed=1, unit="a")
+    first = PROCESS.values_at(DENSE, trajectory_seed=1, unit=0)
+    second = PROCESS.values_at(DENSE, trajectory_seed=1, unit=0)
 
     assert np.array_equal(first, second)
 
 
 def test_two_units_see_different_trajectories_of_the_same_factors() -> None:
-    first = PROCESS.values_at(DENSE, trajectory_seed=1, unit="a")
-    second = PROCESS.values_at(DENSE, trajectory_seed=1, unit="b")
+    first = PROCESS.values_at(DENSE, trajectory_seed=1, unit=0)
+    second = PROCESS.values_at(DENSE, trajectory_seed=1, unit=1)
 
     assert not np.allclose(first, second)
 
 
 def test_two_trajectory_seeds_part_the_realisations_of_one_unit() -> None:
-    first = PROCESS.values_at(DENSE, trajectory_seed=1, unit="a")
-    second = PROCESS.values_at(DENSE, trajectory_seed=2, unit="a")
+    first = PROCESS.values_at(DENSE, trajectory_seed=1, unit=0)
+    second = PROCESS.values_at(DENSE, trajectory_seed=2, unit=0)
 
     assert not np.allclose(first, second)
 

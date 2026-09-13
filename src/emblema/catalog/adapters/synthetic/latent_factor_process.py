@@ -45,13 +45,15 @@ class LatentFactorProcess(Dials):
         return self
 
     def values_at(
-        self, times: NDArray[np.float64], *, trajectory_seed: int, unit: str
+        self, times: NDArray[np.float64], *, trajectory_seed: int, unit: int
     ) -> NDArray[np.float64]:
         """Every factor at every instant of ``times``, as a ``(len(times), factors)`` array.
 
-        The realisation is addressed by ``trajectory_seed`` and ``unit``: two layouts asking under
-        different seeds see different trajectories of the same factors, and asking twice under the
-        same seed returns the same ones.
+        The realisation is addressed by ``trajectory_seed`` and by the unit's position: two
+        layouts asking under different seeds see different trajectories of the same factors, and
+        asking twice under the same seed returns the same ones. A position rather than a name,
+        so that what a unit is a realisation of does not move when the corpus it belongs to is
+        called something else.
         """
         draws = Draws(trajectory_seed, unit)
         amplitudes = draws.normal(self.factors, self.harmonics)

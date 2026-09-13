@@ -13,10 +13,13 @@ class SensorLayout(Dials):
     of layouts can be stated rather than written.
 
     ``coupling`` is the dial the control turns. At one, a channel follows the shared factors; at
-    zero, it follows factors of its own that no other layout sees. The two are mixed so that the
-    signal keeps its size either way, which is what makes the zero case an honest null: a layout
-    without shared structure is not also a layout with less to see, so transfer failing there
-    cannot be put down to a fainter signal.
+    zero, it follows factors of its own that no other layout sees. Both sets are scaled to unit
+    variance and mixed by the root of the coupling, and the unit's gain multiplies the mixture
+    rather than one side of it, so turning the dial does not also turn the volume down. That is
+    what makes the zero case an honest null: transfer failing there cannot be put down to a
+    fainter signal. What a unit realises over its finite span still follows whichever periods its
+    seeds happened to draw from the band, by a few per cent either way; what the design rules out
+    is a difference in size that tracks the coupling.
 
     Attributes:
         name: Name the corpus generated from this layout is registered under, and the prefix of
@@ -33,8 +36,8 @@ class SensorLayout(Dials):
         shortest_unit: Grid steps the shortest unit spans.
         longest_unit: Grid steps the longest unit spans.
         time_step: Distance between neighbouring grid steps, in the corpus's time unit.
-        gain_spread: How far a unit's gain — the static feature scaling its shared signal — may
-            stray from one.
+        gain_spread: How far a unit's gain — the static feature scaling its signal — may stray
+            from one.
         seed: Seed of everything this layout decides on its own: which factors each channel sees,
             its private factors, when it samples, what it drops and how much it is off by.
         trajectory_seed: Seed of the realisations of the shared factors this layout observes. Two
