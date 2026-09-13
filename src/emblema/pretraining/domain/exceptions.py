@@ -11,3 +11,7 @@ class PretrainingError(Exception):
 
 class InvalidEncoderArchitectureError(PretrainingError, ValueError):
     pass
+
+
+class InvalidMaskingStrategyError(PretrainingError, ValueError):
+    pass
