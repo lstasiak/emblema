@@ -13,6 +13,7 @@ import pytest
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.measurements.static_feature import StaticFeature
 from emblema.catalog.domain.measurements.time_extent import TimeExtent
 from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
 from emblema.catalog.domain.tokenisation.window_reconstruction import WindowReconstruction
@@ -96,7 +97,40 @@ def test_a_window_that_read_back_the_wrong_number_of_rows_stops_the_report() -> 
     inside = [Observation("T2", 1.0, 0.5), Observation("T2", 2.0, 0.5)]
 
     with pytest.raises(SystemExit, match="read back 1 observations where 2"):
-        residual(inside, WindowReconstruction((inside[0],), ()))
+        residual(inside, (), WindowReconstruction((inside[0],), ()))
+
+
+def test_a_window_that_dropped_a_static_feature_stops_the_report() -> None:
+    with pytest.raises(SystemExit, match="read back 0 static features where 1"):
+        residual((), (StaticFeature("age", 61.0),), WindowReconstruction((), ()))
+
+
+def test_a_static_feature_that_came_back_changed_counts_as_a_value_error() -> None:
+    feature = StaticFeature("age", 61.0)
+
+    values, times = residual(
+        (), (feature,), WindowReconstruction((), (StaticFeature("age", 62.0),))
+    )
+
+    assert (values, times) == (1.0, 0.0)
+
+
+def test_an_observation_that_came_back_under_another_channel_stops_the_report() -> None:
+    inside = [Observation("T2", 1.0, 0.5)]
+
+    with pytest.raises(SystemExit, match="observations of other channels: T2, T3"):
+        residual(inside, (), WindowReconstruction((Observation("T3", 1.0, 0.5),), ()))
+
+
+def test_a_static_feature_that_came_back_under_another_channel_stops_the_report() -> None:
+    # Sorting pairs the two sides by channel, so a rename that kept the value would otherwise be
+    # subtracted from itself and reported as a round trip that held.
+    with pytest.raises(SystemExit, match="static features of other channels: age, hours"):
+        residual(
+            (),
+            (StaticFeature("age", 61.0),),
+            WindowReconstruction((), (StaticFeature("hours", 61.0),)),
+        )
 
 
 @pytest.fixture(scope="module")

@@ -22,7 +22,8 @@ import io
 import math
 import platform
 import sys
-from collections.abc import Iterable, Iterator, Sequence
+from collections import Counter
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import version
@@ -42,10 +43,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from emblema.catalog.adapters.readers.cmapss import SUBSETS, CmapssCorpusReader
+from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
+from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
+from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
+from emblema.catalog.domain.measurements.static_feature import StaticFeature
 from emblema.catalog.domain.measurements.time_extent import TimeExtent
 from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
 from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
@@ -68,8 +73,15 @@ TOLERANCE = 1e-6
 
 
 def default_window(corpus: str) -> WindowSpec:
-    windows = budget()["corpora"][corpus]["windows"]
-    spec = next(window for window in windows if window.get("default"))
+    """The window the budget file gives this corpus.
+
+    Only the corpora the pretraining budget is arithmetic about are in that file; a generated one
+    is not, and says so rather than failing on a missing key.
+    """
+    facts = budget()["corpora"].get(corpus)
+    if facts is None:
+        raise SystemExit(f"{corpus} has no window in the budget file; give --length and --stride")
+    spec = next(window for window in facts["windows"] if window.get("default"))
     return WindowSpec(spec["length"], spec["stride"])
 
 
@@ -77,8 +89,20 @@ def cmapss_reader(root: Path, subset: str | None) -> CorpusReader:
     return CmapssCorpusReader(root, (subset,) if subset else SUBSETS)
 
 
+def generated_reader(layout: SensorLayout) -> Callable[[Path, str | None], CorpusReader]:
+    """A reader of a generated corpus, which takes neither a directory nor a subset."""
+
+    def read(root: Path, subset: str | None) -> CorpusReader:
+        return SyntheticCorpusReader(CONTROL_PROCESS, layout)
+
+    return read
+
+
 # One entry per corpus that has an adapter; a new reader is a line here, not a change below.
-READERS = {"cmapss": cmapss_reader}
+READERS: dict[str, Callable[[Path, str | None], CorpusReader]] = {
+    "cmapss": cmapss_reader,
+    **{name: generated_reader(layout) for name, layout in LAYOUTS.items()},
+}
 
 
 def corpus_root(corpus: str, marker: str = "*.txt") -> tuple[Path, str]:
@@ -87,6 +111,13 @@ def corpus_root(corpus: str, marker: str = "*.txt") -> tuple[Path, str]:
     if hits:
         return hits[0].parent, "raw corpus"
     return SAMPLES / corpus, "miniature sample"
+
+
+def corpus_source(corpus: str) -> tuple[Path | None, str]:
+    """Where the corpus is on this machine; a generated one is nowhere and needs no files."""
+    if corpus in LAYOUTS:
+        return None, "generated from its specification"
+    return corpus_root(corpus)
 
 
 # Plain records: nothing here is validated, serialised or read from outside the process, so they
@@ -120,7 +151,7 @@ class WindowCheck:
 class Report:
     corpus: str
     source: str
-    root: Path
+    root: Path | None
     window: WindowSpec
     units: int
     short_units: int
@@ -138,7 +169,8 @@ def fitted_scheme(
     unfitted = TokenisationScheme.for_vocabulary(ChannelVocabulary()).extended_with(
         corpus, reader.describe().channel_schema
     )
-    return SlidingWindowTokeniser().fit(corpus, observations_of(reader, units), (), unfitted)
+    statics = chain.from_iterable(unit.static_features for unit in units)
+    return SlidingWindowTokeniser().fit(corpus, observations_of(reader, units), statics, unfitted)
 
 
 def diagnose_channels(
@@ -148,15 +180,15 @@ def diagnose_channels(
     vocabulary = scheme.vocabulary
     extremes: dict[str, list[float]] = {}
     outlying: dict[str, int] = {}
-    for observation in observations_of(reader, units):
-        normalised = scheme.statistics_of(vocabulary.id_of(corpus, observation.channel)).normalise(
-            observation.value
-        )
-        seen = extremes.setdefault(observation.channel, [normalised, normalised])
+    timed = ((o.channel, o.value) for o in observations_of(reader, units))
+    timeless = ((f.channel, f.value) for unit in units for f in unit.static_features)
+    for channel, value in chain(timed, timeless):
+        normalised = scheme.statistics_of(vocabulary.id_of(corpus, channel)).normalise(value)
+        seen = extremes.setdefault(channel, [normalised, normalised])
         seen[0] = min(seen[0], normalised)
         seen[1] = max(seen[1], normalised)
         if abs(normalised) > OUTLYING:
-            outlying[observation.channel] = outlying.get(observation.channel, 0) + 1
+            outlying[channel] = outlying.get(channel, 0) + 1
     diagnostics = []
     for entry in vocabulary.entries_of(corpus):
         statistics = scheme.statistics_of(entry.channel_id)
@@ -183,18 +215,53 @@ def spread_over(placed: Sequence[PlacedWindow], count: int) -> list[PlacedWindow
     return [placed[round(index * step)] for index in range(count)]
 
 
+def refuse_renamed_channels(
+    expected: Sequence[tuple[str, *tuple[float, ...]]],
+    actual: Sequence[tuple[str, *tuple[float, ...]]],
+    noun: str,
+) -> None:
+    """Stop the report where the round trip gave a value back under another channel's name.
+
+    The two sides below are paired by their place in the sorted order, which only pairs a value
+    with the value it came from while both sides carry the same channels. A channel returned as
+    another one of equal value would otherwise be read as no error at all.
+    """
+    was = Counter(channel for channel, *_ in expected)
+    now = Counter(channel for channel, *_ in actual)
+    if was != now:
+        strayed = sorted((was - now) + (now - was))
+        raise SystemExit(f"the window read back {noun} of other channels: {', '.join(strayed)}")
+
+
 def residual(
-    inside: Sequence[Observation], reconstruction: WindowReconstruction
+    inside: Sequence[Observation],
+    statics: Sequence[StaticFeature],
+    reconstruction: WindowReconstruction,
 ) -> tuple[float, float]:
-    """How far the round trip strayed, in the corpus's own units of value and of time."""
+    """How far the round trip strayed, in the corpus's own units of value and of time.
+
+    The static features of the unit go through the window as tokens of their own and come back
+    with it, so they are held to the same tolerance as the measurements; only they have no time
+    to stray in.
+    """
     expected = sorted((o.channel, o.time, o.value) for o in inside)
     actual = sorted((o.channel, o.time, o.value) for o in reconstruction.observations)
     if len(expected) != len(actual):
         raise SystemExit(
             f"the window read back {len(actual)} observations where {len(expected)} went in"
         )
+    refuse_renamed_channels(expected, actual, "observations")
+    was_static = sorted((f.channel, f.value) for f in statics)
+    now_static = sorted((f.channel, f.value) for f in reconstruction.static_features)
+    if len(was_static) != len(now_static):
+        raise SystemExit(
+            f"the window read back {len(now_static)} static features where {len(was_static)} "
+            f"went in"
+        )
+    refuse_renamed_channels(was_static, now_static, "static features")
     times = [abs(was[1] - now[1]) for was, now in zip(expected, actual, strict=True)]
     values = [abs(was[2] - now[2]) for was, now in zip(expected, actual, strict=True)]
+    values += [abs(was[1] - now[1]) for was, now in zip(was_static, now_static, strict=True)]
     return max(values, default=0.0), max(times, default=0.0)
 
 
@@ -269,8 +336,8 @@ def chosen_unit(units: Sequence[CorpusUnit], key: str | None) -> CorpusUnit:
 
 def measure(arguments: argparse.Namespace) -> Report:
     corpus = arguments.corpus
-    root, source = corpus_root(corpus)
-    reader = READERS[corpus](root, arguments.subset)
+    root, source = corpus_source(corpus)
+    reader = READERS[corpus](root or RAW / corpus, arguments.subset)
     units = list(reader.read_units())
     scheme = fitted_scheme(reader, corpus, units)
     window = chosen_window(arguments, corpus)
@@ -283,7 +350,7 @@ def measure(arguments: argparse.Namespace) -> Report:
     for number, item in enumerate(spread_over(placed, arguments.windows), start=1):
         inside = [o for o in observations if item.extent.contains(o.time)]
         reconstruction = scheme.reconstruct(item.window, item.extent)
-        values, times = residual(inside, reconstruction)
+        values, times = residual(inside, chosen.static_features, reconstruction)
         figure = draw(
             corpus,
             chosen,
@@ -313,12 +380,17 @@ def shown(path: Path) -> str:
         return path.as_posix()
 
 
+def where(root: Path | None) -> str:
+    """The directory a corpus was read from, where there is one."""
+    return "" if root is None else f", `{shown(root)}`"
+
+
 def heading(report: Report) -> str:
     rows = [
         ("Machine", f"{platform.platform()}, {platform.processor() or 'unknown CPU'}"),
         ("Python", platform.python_version()),
         ("matplotlib", version("matplotlib")),
-        ("Corpus", f"{report.corpus} ({report.source}, `{shown(report.root)}`)"),
+        ("Corpus", f"{report.corpus} ({report.source}{where(report.root)})"),
         ("Window", f"length {report.window.length:g}, stride {report.window.stride:g}"),
         ("Units", f"{report.units}, of which {report.short_units} shorter than a window"),
     ]
