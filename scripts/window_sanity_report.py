@@ -29,6 +29,12 @@ from importlib.metadata import version
 from itertools import chain
 from pathlib import Path
 
+# Run from anywhere: the sibling script modules live in this directory's package at the repository
+# root. The imports below follow, which is why this file is exempt from the import-order rule in
+# the lint configuration.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
 import matplotlib
 
 # A report writes files and never opens a window; the backend has to be chosen before pyplot is.
@@ -49,7 +55,6 @@ from emblema.catalog.ports.corpus_reader import CorpusReader
 from scripts.budget_file import budget
 from scripts.reporting import table
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
 RAW = REPO_ROOT / "data" / "raw"
 SAMPLES = REPO_ROOT / "tests" / "data"
 FIGURES = REPO_ROOT / "docs" / "verification" / "figures"
