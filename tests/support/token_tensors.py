@@ -63,7 +63,7 @@ def padded_by(batch: TokenTensors, tokens: int) -> TokenTensors:
 
 
 def scrambled_under_padding(batch: TokenTensors, *, seed: int) -> TokenTensors:
-    """The same batch with other values, channels and times at its padding positions.
+    """The same batch with other values, channels, times and flags at its padding positions.
 
     A padding position carries zeros by convention; a model that is indifferent to padding must
     be indifferent to what the position carries, not merely to zeros.
@@ -75,6 +75,9 @@ def scrambled_under_padding(batch: TokenTensors, *, seed: int) -> TokenTensors:
         features=torch.where(hidden.unsqueeze(-1), other.features, batch.features),
         channel_ids=torch.where(hidden, other.channel_ids, batch.channel_ids),
         timestamps=torch.where(hidden, other.timestamps, batch.timestamps),
+        # A padding position carries the flag too, and `random_batch` leaves it false there, so
+        # the deformation is to raise it rather than to draw it again.
+        timeless=batch.timeless | hidden,
     )
 
 

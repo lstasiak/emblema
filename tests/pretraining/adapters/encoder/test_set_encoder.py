@@ -53,6 +53,10 @@ def test_one_batch_holds_windows_of_different_channel_counts_and_token_counts(
 
     assert states.shape == (2, len(many_channels), SMALL.width)
     assert torch.isfinite(states).all()
+    # Sharing a batch with a longer window must cost the shorter one nothing: the padding that
+    # squares them off is the only difference between the two calls.
+    alone = encoder(*TokenTensors.from_windows([few_channels]).args)
+    torch.testing.assert_close(states[0, : len(few_channels)], alone[0], **TOLERANCE)
 
 
 def test_permuting_the_tokens_permutes_their_states(encoder: SetEncoder) -> None:
