@@ -227,15 +227,17 @@ class SyntheticCorpusReader:
         return f"{self._layout.name}/{index}"
 
     def _locate(self, unit: UnitKey) -> int:
-        name, separator, index = unit.value.partition("/")
-        if (
-            not separator
-            or name != self._layout.name
-            or not (index.isascii() and index.isdigit())
-            or int(index) >= self._layout.units
-        ):
-            raise UnknownUnitError(f"{unit} is not a unit of layout {self._layout.name!r}")
-        return int(index)
+        """The index of the unit ``unit`` names.
+
+        A key is held against the one its own index would have produced, so a reshaped form of a
+        real key — padded with a zero, say — names no unit rather than quietly aliasing onto it.
+        """
+        _, separator, index = unit.value.partition("/")
+        if separator and index.isascii() and index.isdigit():
+            number = int(index)
+            if number < self._layout.units and unit.value == self._key(number):
+                return number
+        raise UnknownUnitError(f"{unit} is not a unit of layout {self._layout.name!r}")
 
     @staticmethod
     def _drawn_projection(

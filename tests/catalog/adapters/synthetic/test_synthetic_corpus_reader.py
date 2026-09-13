@@ -199,6 +199,15 @@ def test_a_unit_that_reports_nothing_is_still_a_unit() -> None:
 def test_a_key_of_another_layout_names_no_unit() -> None:
     corpus = reader()
 
-    for key in ("other/0", str(SMALL.units), f"{SMALL.name}/{SMALL.units}", f"{SMALL.name}/x"):
+    keys = (
+        "other/0",
+        str(SMALL.units),
+        f"{SMALL.name}/{SMALL.units}",
+        f"{SMALL.name}/x",
+        # A real index in a form this layout never writes: it names no unit rather than the one
+        # it would parse to, so two keys cannot stand for one unit.
+        f"{SMALL.name}/00",
+    )
+    for key in keys:
         with pytest.raises(UnknownUnitError, match="is not a unit of layout"):
             corpus.read_observations(UnitKey(key))
