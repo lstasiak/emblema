@@ -40,6 +40,37 @@ def random_batch(batch: int, tokens: int, *, seed: int, padding: int = 0) -> Tok
     )
 
 
+def grid_batch(
+    windows: int, channels: int, steps: int, *, seed: int, timeless: int = 1
+) -> TokenTensors:
+    """Windows of `channels` channels each observed at the same `steps` evenly spaced instants.
+
+    Values are random; the layout is regular so that a test can count what a draw over channels
+    and spans of time should hit. Channels draw identifiers from 1 upwards, the `timeless` static
+    features of each window continue from there and carry time zero.
+    """
+    generator = torch.Generator().manual_seed(seed)
+    tokens = channels * steps + timeless
+    times = torch.linspace(0.0, 1.0, steps)
+    timestamps = torch.cat([torch.zeros(timeless), times.repeat_interleave(channels)])
+    channel_ids = torch.cat(
+        [
+            torch.arange(channels + 1, channels + 1 + timeless),
+            torch.arange(1, channels + 1).repeat(steps),
+        ]
+    )
+    flags = torch.cat(
+        [torch.ones(timeless, dtype=torch.bool), torch.zeros(channels * steps, dtype=torch.bool)]
+    )
+    return TokenTensors(
+        features=torch.randn(windows, tokens, N_FEATURES, generator=generator),
+        channel_ids=channel_ids.expand(windows, tokens).clone(),
+        timestamps=timestamps.expand(windows, tokens).clone(),
+        timeless=flags.expand(windows, tokens).clone(),
+        padding_mask=torch.zeros(windows, tokens, dtype=torch.bool),
+    )
+
+
 def permutation(batch: TokenTensors, *, seed: int) -> Tensor:
     """An order to visit the tokens of `batch` in, the same for every row."""
     return torch.randperm(batch.token_count, generator=torch.Generator().manual_seed(seed))
