@@ -62,7 +62,15 @@
 | src/emblema/entrypoints/cli/publish\_corpus.py                                       |       37 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus\_invocation.py                           |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/services.py                                              |        7 |        0 |        0 |        0 |    100% |           |
-| src/emblema/shared/adapters/arrays/token\_batch.py                                   |       39 |        0 |        4 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/encoder/encoder\_block.py                           |       15 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/encoder/fourier\_time\_encoding.py                  |       15 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/encoder/learned\_channel\_embedding.py              |        8 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/encoder/masked\_mean\_pooling.py                    |        5 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/encoder/self\_attention.py                          |       21 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/encoder/set\_encoder.py                             |       24 |        0 |        2 |        0 |    100% |           |
+| src/emblema/pretraining/domain/encoder\_architecture.py                              |       29 |        0 |        8 |        0 |    100% |           |
+| src/emblema/pretraining/domain/exceptions.py                                         |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/adapters/arrays/token\_batch.py                                   |       38 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/artifact\_store.py                            |       28 |        0 |        6 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/clock.py                                      |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/event\_publisher.py                           |        8 |        0 |        2 |        0 |    100% |           |
@@ -91,16 +99,16 @@
 | src/emblema/shared/kernel/ordering.py                                                |       10 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/kernel/sampling.py                                                |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/kernel/timestamps.py                                              |       11 |        0 |        4 |        0 |    100% |           |
-| src/emblema/shared/kernel/tokens.py                                                  |       46 |        0 |       20 |        0 |    100% |           |
+| src/emblema/shared/kernel/tokens.py                                                  |       47 |        0 |       20 |        0 |    100% |           |
 | src/emblema/shared/ports/artifact\_store.py                                          |       12 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/clock.py                                                    |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/event\_publisher.py                                         |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/event\_subscriber.py                                        |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                                               |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                            |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                            | **2296** |    **2** |  **428** |    **4** | **99%** |           |
+| **TOTAL**                                                                            | **2417** |    **2** |  **438** |    **4** | **99%** |           |
 
-36 empty files skipped.
+39 empty files skipped.
 
 
 ## Setup coverage badge
