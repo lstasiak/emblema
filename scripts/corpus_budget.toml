@@ -29,8 +29,10 @@ gpu_hours_cap = 150              # T4-class; above it the scale knobs are turned
 # features per head and `feedforward_width` is four times the width — the transformer defaults the
 # 12 · d² · L arithmetic assumes. `time_frequencies` must satisfy 2^F ≥ instants per window, so
 # that neighbouring instants get distinct encodings: 7 covers a 50-sample C-MAPSS window, 12 a
-# 48-hour PhysioNet stay at minute resolution; 16 covers every corpus here with margin, at
-# 2 · F · width parameters. Dropout is a run parameter, not a shape, and is not stated here.
+# 48-hour PhysioNet stay at minute resolution, the finest spacing on this list. Past that there is
+# no margin to be had: a frequency whose period is shorter than the data's own spacing turns
+# neighbouring instants into unrelated encodings instead of nearby ones, which is the opposite of
+# what the encoding is for. Dropout is a run parameter, not a shape, and is not stated here.
 [[tiers]]
 name = "S"
 device = "M1 Pro, MPS, fp32"
@@ -39,7 +41,7 @@ width = 192
 heads = 3
 layers = 4
 feedforward_width = 768
-time_frequencies = 16
+time_frequencies = 12
 corpus_fraction = 0.1
 window = "default"
 
@@ -51,7 +53,7 @@ width = 256
 heads = 4
 layers = 6
 feedforward_width = 1024
-time_frequencies = 16
+time_frequencies = 12
 corpus_fraction = 1.0
 window = "default"
 
@@ -63,7 +65,7 @@ width = 256
 heads = 4
 layers = 6
 feedforward_width = 1024
-time_frequencies = 16
+time_frequencies = 12
 corpus_fraction = 1.0
 window = "longest"
 
