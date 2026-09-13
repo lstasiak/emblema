@@ -1,11 +1,11 @@
 import pytest
 
 from emblema.shared.kernel.exceptions import InvalidTokenWindowError
-from emblema.shared.kernel.tokens import PADDING_CHANNEL_ID, Token, TokenWindow
+from emblema.shared.kernel.tokens import N_FEATURES, PADDING_CHANNEL_ID, Token, TokenWindow
 
 np = pytest.importorskip("numpy")
 
-from emblema.shared.adapters.arrays.token_batch import N_FEATURES, TokenBatch  # noqa: E402
+from emblema.shared.adapters.arrays.token_batch import TokenBatch  # noqa: E402
 
 pytestmark = pytest.mark.ml
 

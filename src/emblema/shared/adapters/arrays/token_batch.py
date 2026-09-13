@@ -5,11 +5,7 @@ from typing import Self
 import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
-from emblema.shared.kernel.tokens import PADDING_CHANNEL_ID, Token, TokenWindow
-
-# The continuous features of a token, in the order they occupy the last axis of ``features``:
-# the normalised value and the gap since the previous token of the same channel.
-N_FEATURES = 2
+from emblema.shared.kernel.tokens import N_FEATURES, PADDING_CHANNEL_ID, Token, TokenWindow
 
 
 @dataclass(frozen=True)

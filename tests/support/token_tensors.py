@@ -1,29 +1,22 @@
-"""The input the exported graph is traced and exercised with, and the variations the tests feed it.
+"""Batches invented out of nothing, and the deformations tests apply to them.
 
-A batch is a ``TokenTensors`` — the same value the loader collates windows into. What the exporter
-traces has to be what the encoder is really called with, or the suite proves a claim about a shape
-nothing produces. Only the apparatus lives here: batches invented out of nothing, and the
-deformations the tests apply to them.
+A batch is a ``TokenTensors`` — the same value the loader collates windows into — so what the
+encoder and the exporter are exercised with is what they are really called with. Only apparatus
+lives here: random batches of the right shape and types, and the ways of bending one that the
+invariance tests need.
 """
 
 from collections.abc import Callable
 from dataclasses import fields, replace
-from typing import Any
 
-import numpy as np
 import torch
 from torch import Tensor
 
-from emblema.shared.adapters.arrays.token_batch import N_FEATURES
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
+from emblema.shared.kernel.tokens import N_FEATURES
 
-# Entries in the channel vocabulary the dummy encoder was built with.
-N_CHANNELS = 64
-
-# The graph's inputs, named and ordered as the model is called. Spelled out rather than read off
-# the fields for the reason `TokenTensors.args` is: this is the calling convention, and the export
-# pairs these names with those arguments by position.
-INPUT_NAMES = ("features", "channel_ids", "timestamps", "timeless", "padding_mask")
+# Entries in the channel vocabulary the test encoders are built over.
+VOCABULARY_SIZE = 64
 
 
 def random_batch(batch: int, tokens: int, *, seed: int, padding: int = 0) -> TokenTensors:
@@ -40,21 +33,21 @@ def random_batch(batch: int, tokens: int, *, seed: int, padding: int = 0) -> Tok
         features=torch.randn(batch, tokens, N_FEATURES, generator=generator),
         # Identifier 0 is reserved for padding in the representation, so real tokens draw
         # from 1 upwards.
-        channel_ids=torch.randint(1, N_CHANNELS, (batch, tokens), generator=generator),
+        channel_ids=torch.randint(1, VOCABULARY_SIZE + 1, (batch, tokens), generator=generator),
         timestamps=torch.rand(batch, tokens, generator=generator),
         timeless=timeless,
         padding_mask=padding_mask,
     )
 
 
-def feeds(batch: TokenTensors) -> dict[str, np.ndarray[Any, Any]]:
-    """Named inputs for an ONNX Runtime session."""
-    return {name: getattr(batch, name).numpy() for name in INPUT_NAMES}
+def permutation(batch: TokenTensors, *, seed: int) -> Tensor:
+    """An order to visit the tokens of `batch` in, the same for every row."""
+    return torch.randperm(batch.token_count, generator=torch.Generator().manual_seed(seed))
 
 
 def permuted(batch: TokenTensors, *, seed: int) -> TokenTensors:
     """The same tokens in a different order — a set carries no order."""
-    order = torch.randperm(batch.token_count, generator=torch.Generator().manual_seed(seed))
+    order = permutation(batch, seed=seed)
     return _map(batch, lambda tensor: tensor[:, order])
 
 
@@ -67,6 +60,25 @@ def padded_by(batch: TokenTensors, tokens: int) -> TokenTensors:
     extended = _map(batch, lambda tensor: torch.cat([tensor, filler(tensor)], dim=1))
     marked = batch.padding_mask.new_ones((batch.padding_mask.shape[0], tokens))
     return replace(extended, padding_mask=torch.cat([batch.padding_mask, marked], dim=1))
+
+
+def scrambled_under_padding(batch: TokenTensors, *, seed: int) -> TokenTensors:
+    """The same batch with other values, channels, times and flags at its padding positions.
+
+    A padding position carries zeros by convention; a model that is indifferent to padding must
+    be indifferent to what the position carries, not merely to zeros.
+    """
+    other = random_batch(batch.batch_size, batch.token_count, seed=seed)
+    hidden = batch.padding_mask
+    return replace(
+        batch,
+        features=torch.where(hidden.unsqueeze(-1), other.features, batch.features),
+        channel_ids=torch.where(hidden, other.channel_ids, batch.channel_ids),
+        timestamps=torch.where(hidden, other.timestamps, batch.timestamps),
+        # A padding position carries the flag too, and `random_batch` leaves it false there, so
+        # the deformation is to raise it rather than to draw it again.
+        timeless=batch.timeless | hidden,
+    )
 
 
 def all_timeless(batch: TokenTensors) -> TokenTensors:

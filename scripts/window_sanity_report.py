@@ -22,14 +22,18 @@ import io
 import math
 import platform
 import sys
-import tomllib
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import version
 from itertools import chain
 from pathlib import Path
-from typing import Any
+
+# Run from anywhere: the sibling script modules live in this directory's package at the repository
+# root. The imports below follow, which is why this file is exempt from the import-order rule in
+# the lint configuration.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
 
 import matplotlib
 
@@ -48,10 +52,9 @@ from emblema.catalog.domain.tokenisation.tokenisation_scheme import Tokenisation
 from emblema.catalog.domain.tokenisation.window_reconstruction import WindowReconstruction
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_reader import CorpusReader
+from scripts.budget_file import budget
 from scripts.reporting import table
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-BUDGET = REPO_ROOT / "scripts" / "corpus_budget.toml"
 RAW = REPO_ROOT / "data" / "raw"
 SAMPLES = REPO_ROOT / "tests" / "data"
 FIGURES = REPO_ROOT / "docs" / "verification" / "figures"
@@ -62,11 +65,6 @@ OUTLYING = 8.0
 # What the round trip must hold to. Normalising and putting the value back is exact arithmetic
 # reached by inexact means, so the bound is the resolution of the double, not zero.
 TOLERANCE = 1e-6
-
-
-def budget() -> dict[str, Any]:
-    with BUDGET.open("rb") as handle:
-        return tomllib.load(handle)
 
 
 def default_window(corpus: str) -> WindowSpec:

@@ -1,27 +1,28 @@
-"""Can a set-shaped encoder with one dynamic axis survive the round trip to ONNX Runtime?
+"""Does the encoder, with one dynamic axis, survive the round trip to ONNX Runtime?
 
-Answering this while the architecture is still open is the point: finding it out once the encoder is
-frozen would leave only two options, rewriting the model or abandoning ONNX. From here on the suite
-also guards the answer, until the real export replaces it.
+The question was first answered on a stand-in, while the architecture was still open; the suite
+now exports the encoder itself, so a construct that the exporter cannot trace fails here, on the
+commit that introduces it, rather than when the inference artefact is first built. The exporter
+adapter, when it arrives, inherits these checks as its contract.
 """
 
 import numpy as np
 import pytest
 
-from emblema.shared.adapters.arrays.token_batch import N_FEATURES
-from tests.ml.onnx_export.batches import (
+from emblema.shared.kernel.tokens import N_FEATURES
+from tests.ml.onnx_export.exported_encoder import (
     INPUT_NAMES,
+    MAX_TOKENS,
+    OUTPUT_NAME,
+    ExportedEncoder,
+)
+from tests.support.token_tensors import (
     all_timeless,
     fully_padded,
     padded_by,
     permuted,
     random_batch,
     with_timestamps,
-)
-from tests.ml.onnx_export.exported_encoder import (
-    MAX_TOKENS,
-    OUTPUT_NAME,
-    ExportedEncoder,
 )
 
 pytestmark = [
@@ -31,10 +32,9 @@ pytestmark = [
     pytest.mark.filterwarnings("ignore:# The axis name:UserWarning"),
 ]
 
-# float32 through a different set of kernels. The largest deviation observed across the three
-# attention implementations, every case below and both development machines is 3.6e-06, at the
-# longest window, where the reduction accumulates the most. The tolerance keeps a factor of three
-# over that.
+# float32 through a different set of kernels. The largest deviation observed across every case
+# below and both development machines is 3.6e-06, at the longest window, where the reduction
+# accumulates the most. The tolerance keeps a factor of three over that.
 ATOL = 1e-5
 RTOL = 1e-4
 
@@ -53,7 +53,7 @@ def test_the_graph_takes_the_five_named_tensors(exported: ExportedEncoder) -> No
     assert exported.get_input_shape("features") == ("batch", "n_tokens", N_FEATURES)
     for name in ("channel_ids", "timestamps", "timeless", "padding_mask"):
         assert exported.get_input_shape(name) == ("batch", "n_tokens")
-    assert exported.output_shape == ("batch", exported.model.d_model)
+    assert exported.output_shape == ("batch", exported.model.width)
     assert exported.graph.graph.output[0].name == OUTPUT_NAME
 
 
@@ -113,27 +113,19 @@ def test_a_timeless_token_ignores_its_timestamp(exported: ExportedEncoder) -> No
     )
 
 
-def test_a_window_of_nothing_but_padding_yields_finite_values(
-    exported_with_sdpa: ExportedEncoder,
-) -> None:
-    # Attention over an entirely masked window is a softmax over nothing. The exported graph keeps
-    # the guard that turns it into zeros; the two mask-by-negative-infinity implementations do not,
-    # which is why only this one is held to it.
-    embedding = exported_with_sdpa.run_onnx(fully_padded(random_batch(1, 16, seed=7)))
+def test_a_window_of_nothing_but_padding_yields_finite_values(exported: ExportedEncoder) -> None:
+    # Attention over an entirely masked window is a softmax over nothing. The attention was chosen
+    # for turning it into zeros rather than NaN; the exported graph must keep that guard.
+    embedding = exported.run_onnx(fully_padded(random_batch(1, 16, seed=7)))
 
     assert np.isfinite(embedding).all()
 
 
-def test_more_tokens_than_the_export_declared_still_run(
-    exported_with_sdpa: ExportedEncoder,
-) -> None:
+def test_more_tokens_than_the_export_declared_still_run(exported: ExportedEncoder) -> None:
     # The declared upper bound guides the exporter; the runtime does not enforce it. Rejecting an
     # oversized window is therefore the caller's job, not the graph's.
     batch = random_batch(1, MAX_TOKENS + 8, seed=1)
 
     np.testing.assert_allclose(
-        exported_with_sdpa.run_onnx(batch),
-        exported_with_sdpa.run_eager(batch),
-        rtol=RTOL,
-        atol=ATOL,
+        exported.run_onnx(batch), exported.run_eager(batch), rtol=RTOL, atol=ATOL
     )
