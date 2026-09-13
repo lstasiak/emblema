@@ -12,6 +12,12 @@
 | src/emblema/catalog/adapters/persistence/corpus\_version\_record.py                  |       45 |        0 |        2 |        0 |    100% |           |
 | src/emblema/catalog/adapters/persistence/orm.py                                      |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/cmapss.py                                       |      111 |        0 |       46 |        0 |    100% |           |
+| src/emblema/catalog/adapters/synthetic/dials.py                                      |        6 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/adapters/synthetic/draws.py                                      |       16 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/adapters/synthetic/latent\_factor\_process.py                    |       26 |        0 |        2 |        0 |    100% |           |
+| src/emblema/catalog/adapters/synthetic/layouts.py                                    |        9 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/adapters/synthetic/sensor\_layout.py                             |       29 |        0 |        4 |        0 |    100% |           |
+| src/emblema/catalog/adapters/synthetic/synthetic\_corpus\_reader.py                  |      108 |        0 |       14 |        0 |    100% |           |
 | src/emblema/catalog/adapters/tokenisation/sliding\_window.py                         |      115 |        0 |       32 |        0 |    100% |           |
 | src/emblema/catalog/application/assemblers/corpus\_version\_ref\_assembler.py        |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/application/assemblers/published\_corpus\_manifest\_assembler.py |       28 |        0 |        2 |        0 |    100% |           |
@@ -57,8 +63,8 @@
 | src/emblema/config/database\_settings.py                                             |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/settings.py                                                       |       13 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/adapters.py                                              |        9 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/composition\_root.py                                     |       43 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/known\_corpora.py                                        |       16 |        0 |        0 |        0 |    100% |           |
+| src/emblema/entrypoints/cli/composition\_root.py                                     |       56 |        0 |        6 |        0 |    100% |           |
+| src/emblema/entrypoints/cli/known\_corpora.py                                        |       19 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus.py                                       |       37 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus\_invocation.py                           |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/services.py                                              |        7 |        0 |        0 |        0 |    100% |           |
@@ -106,9 +112,9 @@
 | src/emblema/shared/ports/event\_subscriber.py                                        |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                                               |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                            |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                            | **2417** |    **2** |  **438** |    **4** | **99%** |           |
+| **TOTAL**                                                                            | **2627** |    **2** |  **464** |    **4** | **99%** |           |
 
-39 empty files skipped.
+40 empty files skipped.
 
 
 ## Setup coverage badge
