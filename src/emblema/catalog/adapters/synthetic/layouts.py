@@ -1,14 +1,20 @@
 """The synthetic corpora of the positive control: two coupled layouts and their null pair.
 
-Constants rather than a registry class, for the same reason the subset names of a file-backed
-reader are constants: they are the adapter's own specification, not facts about the data that
-only the process assembling it could know. A control whose dials can be turned from a command
-line is not a control, so the pairs are stated here, named, and changed by editing them.
+The control exists to tell a broken pipeline from a disproved thesis. Transfer failing on a
+corpus whose shared structure was put there on purpose is a fault of ours; transfer failing where
+no structure was put is the pipeline behaving. Everything else about the control — the generator,
+the report that measures it, the pretraining leg that carries it — is in service of the four
+corpora stated below, and this module is where the claim they embody is written down.
 
 ``control-a`` and ``control-b`` watch the same factors through different sensors, at different
 rates and with different losses, and share no trajectory. ``null-a`` and ``null-b`` have the same
 shape and the same signal strength but no shared structure at all; what transfer finds between
 them is what the pipeline invents.
+
+Constants rather than a registry class, for the same reason the subset names of a file-backed
+reader are constants: they are the adapter's own specification, not facts about the data that
+only the process assembling it could know. A control whose dials can be turned from a command
+line is not a control, so the pairs are stated here, named, and changed by editing them.
 """
 
 from collections.abc import Mapping
