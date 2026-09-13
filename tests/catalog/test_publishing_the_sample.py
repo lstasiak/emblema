@@ -23,6 +23,7 @@ from tests.support.settings import unreachable_store
 def published(root: Path, registry: CorpusRepository) -> tuple[CompositionRoot, ArtifactRef]:
     process = CompositionRoot(
         unreachable_store(),
+        corpus=CORPUS,
         corpus_root=SAMPLE,
         workspace=root / "blocks",
         subsets=(SUBSET,),

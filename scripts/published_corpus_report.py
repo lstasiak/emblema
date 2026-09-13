@@ -135,6 +135,7 @@ def publish_once(
     store = LocalDirectoryArtifactStore(workspace / "store")
     process = CompositionRoot(
         unreachable_store(),
+        corpus=command.name,
         corpus_root=root,
         workspace=workspace / "blocks",
         subsets=SUBSETS if subsets is None else tuple(subsets),

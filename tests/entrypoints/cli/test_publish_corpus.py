@@ -13,7 +13,8 @@ from emblema.catalog.adapters.archive.block_corpus_archive import BlockCorpusArc
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
-from emblema.catalog.adapters.readers.cmapss import SUBSETS, CmapssCorpusReader
+from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.entrypoints.cli.composition_root import CompositionRoot
 from emblema.entrypoints.cli.publish_corpus import PublishCorpusCli
@@ -99,13 +100,48 @@ def test_without_overrides_the_process_runs_on_what_the_settings_name(tmp_path: 
     # the wiring a real run gets: the bucket and the database named by the environment, behind a
     # block archive, over the reader of the corpus asked for.
     root = CompositionRoot(
-        unreachable_store(), corpus_root=tmp_path / "raw", workspace=tmp_path / "workspace"
+        unreachable_store(),
+        corpus="cmapss",
+        corpus_root=tmp_path / "raw",
+        workspace=tmp_path / "workspace",
     )
 
     assert isinstance(root.adapters.store, S3ArtifactStore)
     assert isinstance(root.adapters.corpora, SqlAlchemyCorpusRepository)
     assert isinstance(root.adapters.archive, BlockCorpusArchive)
     assert isinstance(root.adapters.reader, CmapssCorpusReader)
+
+
+def test_the_corpus_asked_for_decides_which_adapter_reads_it(tmp_path: Path) -> None:
+    root = CompositionRoot(
+        unreachable_store(),
+        corpus="control-a",
+        corpus_root=tmp_path / "raw",
+        workspace=tmp_path / "workspace",
+    )
+
+    assert isinstance(root.adapters.reader, SyntheticCorpusReader)
+
+
+def test_a_corpus_no_adapter_reads_is_refused_when_the_process_is_assembled(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="no adapter reads"):
+        CompositionRoot(
+            unreachable_store(),
+            corpus="nothing-of-the-sort",
+            corpus_root=tmp_path / "raw",
+            workspace=tmp_path / "workspace",
+        )
+
+
+def test_a_process_given_neither_a_corpus_nor_a_reader_is_refused(tmp_path: Path) -> None:
+    # Naming a corpus is how the root chooses a reader, so a process that neither names one nor
+    # brings its own has no reader to run on and says so here rather than later.
+    with pytest.raises(ValueError, match="needs a corpus to read"):
+        CompositionRoot(
+            unreachable_store(),
+            corpus_root=tmp_path / "raw",
+            workspace=tmp_path / "workspace",
+        )
 
 
 def test_the_command_line_states_the_window_it_was_given() -> None:
@@ -115,7 +151,21 @@ def test_the_command_line_states_the_window_it_was_given() -> None:
     assert invocation.command.seed == 1
     assert invocation.command.vocabulary_from is None
     assert invocation.corpus_root == Path("data/raw/cmapss")
-    assert invocation.subsets == SUBSETS
+    assert invocation.subsets == ()
+
+
+def test_a_corpus_is_looked_for_under_its_own_name_unless_a_root_is_given() -> None:
+    invocation = PublishCorpusCli().parse(
+        ["--corpus", "control-a", "--window", "4", "--stride", "2"]
+    )
+
+    assert invocation.corpus_root == Path("data/raw/control-a")
+
+
+def test_the_subsets_asked_for_are_the_ones_named() -> None:
+    invocation = PublishCorpusCli().parse([*ARGUMENTS, "--subset", "FD002"])
+
+    assert invocation.subsets == ("FD002",)
 
 
 def test_the_command_line_names_the_manifest_whose_vocabulary_to_continue() -> None:

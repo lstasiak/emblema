@@ -62,6 +62,7 @@ def manifest_ref(store: S3ArtifactStore, tmp_path: Path) -> ArtifactRef:
     # The registry stays in memory: this test is about the bucket, the database has its own.
     root = CompositionRoot(
         Settings(),
+        corpus=CORPUS,
         corpus_root=SAMPLE,
         workspace=tmp_path / "publisher",
         subsets=(SUBSET,),
