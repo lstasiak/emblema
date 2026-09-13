@@ -65,18 +65,11 @@ CONTROL_B = SensorLayout(
 )
 
 
-def _uncoupled(layout: SensorLayout, name: str) -> SensorLayout:
-    """The same layout with the shared factors switched off, and nothing else changed.
-
-    One dial apart from its coupled twin: the same sensors responding to the same factors at the
-    same instants, losing the same observations and off by the same amounts. What differs is only
-    where the signal comes from, so a difference in what transfer achieves has one explanation.
-    """
-    return SensorLayout.model_validate({**layout.model_dump(), "name": name, "coupling": 0.0})
-
-
-NULL_A = _uncoupled(CONTROL_A, "null-a")
-NULL_B = _uncoupled(CONTROL_B, "null-b")
+# One dial apart from their coupled twins: the same sensors responding to the same factors at the
+# same instants, losing the same observations and off by the same amounts. What differs is only
+# where the signal comes from, so a difference in what transfer achieves has one explanation.
+NULL_A = CONTROL_A.with_dials(name="null-a", coupling=0.0)
+NULL_B = CONTROL_B.with_dials(name="null-b", coupling=0.0)
 
 LAYOUTS: Mapping[str, SensorLayout] = {
     layout.name: layout for layout in (CONTROL_A, CONTROL_B, NULL_A, NULL_B)

@@ -17,8 +17,8 @@ def test_every_frequency_lies_inside_the_band() -> None:
 
 
 def test_the_structure_is_the_seed_and_nothing_else() -> None:
-    same = PROCESS.model_copy(update={"seed": PROCESS.seed})
-    other = PROCESS.model_copy(update={"seed": PROCESS.seed + 1})
+    same = PROCESS.with_dials(seed=PROCESS.seed)
+    other = PROCESS.with_dials(seed=PROCESS.seed + 1)
 
     assert np.array_equal(same.frequencies(), PROCESS.frequencies())
     assert not np.array_equal(other.frequencies(), PROCESS.frequencies())

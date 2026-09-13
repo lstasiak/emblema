@@ -17,24 +17,32 @@ from emblema.catalog.domain.registry.corpus_content import CorpusContent
 from emblema.catalog.domain.registry.corpus_description import CorpusDescription
 from emblema.shared.kernel.checksums import Checksum
 
-# Decimals a value is emitted with. A corpus is data, and data has a precision: fixing it here is
-# what lets two machines agree on a checksum, because the sine that produced the value need not
-# agree with itself to the last bit across processors and library builds.
+# Decimals a value is emitted with, so that two machines can agree on a checksum: the sine that
+# produced the value need not agree with itself to the last bit across processors and library
+# builds. Rounding narrows that window rather than closing it — numpy promises nothing about its
+# transcendental functions across versions, builds or vector widths — which the pinned checksums
+# in the tests turn into a loud failure. Where it is not loud is the registry: a frozen version
+# whose bytes moved no longer matches the reader that claims to generate it.
 PRECISION = 6
+
+# The channel a unit's gain is reported under, beside the timed sensors. A fact about what this
+# reader writes rather than a dial of the layout, so it is stated here and not there.
+GAIN = "gain"
 
 
 class SyntheticCorpusReader:
     """Generates a corpus from a sensor layout watching latent factors, and reads it back.
 
-    The positive control of the project: a corpus in which shared structure is present by
-    construction, so that a pipeline which cannot find it there is a pipeline at fault rather
-    than a thesis disproved. It is an adapter of the corpus reader port and nothing more special
-    than that, so the control travels the same road as real data — registered, frozen, tokenised,
-    archived and trained on — and a failure anywhere along it is a failure the control catches.
+    The generator behind the positive control, whose purpose ``layouts`` states. An adapter of
+    the corpus reader port and nothing more special than that, which is the point: the control
+    travels the same road as real data — registered, frozen, tokenised, archived and trained on —
+    so a failure anywhere along it is a failure the control catches.
 
     Nothing is stored. A unit is generated when it is asked for, from a seed addressed by its key,
-    so the corpus exists on any machine that has the specification and needs no download; the same
-    specification yields the same bytes, so the version frozen over it keeps its checksum.
+    so the corpus exists on any machine that has the specification and needs no download. The
+    randomness is reproducible exactly; the arithmetic on top of it is reproducible as far as the
+    array library's transcendental functions are, which is what ``PRECISION`` is about and what
+    the checksum a version is frozen over ultimately rests on.
 
     Time runs on a grid of whole steps. Irregularity is which steps a channel reports on, not an
     arbitrary instant, which keeps two channels either sharing an instant exactly or a whole step
@@ -63,7 +71,7 @@ class SyntheticCorpusReader:
         # a channel follows when the coupling is zero, and it is built like the shared factors so
         # that an uncoupled channel differs from a coupled one in where its signal comes from
         # rather than in how it looks.
-        self._private = process.model_copy(update={"factors": layout.channels, "seed": layout.seed})
+        self._private = process.with_dials(factors=layout.channels, seed=layout.seed)
 
     def describe(self) -> CorpusDescription:
         """Generate the whole corpus, checksum it and count it, keeping none of it."""
@@ -179,7 +187,7 @@ class SyntheticCorpusReader:
         return CorpusUnit(
             key=UnitKey(key),
             extent=TimeExtent(0.0, self._length(key) * self._layout.time_step),
-            static_features=(StaticFeature(SensorLayout.GAIN, self._gain(key)),),
+            static_features=(StaticFeature(GAIN, self._gain(key)),),
         )
 
     def _block_of(self, index: int) -> tuple[bytes, int]:
@@ -193,7 +201,7 @@ class SyntheticCorpusReader:
         names = self._layout.channel_names
         lines = [
             f"unit {unit.key} {unit.extent.start:.{PRECISION}f} {unit.extent.end:.{PRECISION}f}",
-            f"static {SensorLayout.GAIN} {unit.static_features[0].value:.{PRECISION}f}",
+            f"static {GAIN} {unit.static_features[0].value:.{PRECISION}f}",
         ]
         lines.extend(
             f"timed {names[channel]} {time:.{PRECISION}f} {value:.{PRECISION}f}"
@@ -203,7 +211,7 @@ class SyntheticCorpusReader:
 
     def _channel_schema(self) -> ChannelSchema:
         timed = (Channel(name) for name in self._layout.channel_names)
-        return ChannelSchema(frozenset((*timed, Channel(SensorLayout.GAIN, timeless=True))))
+        return ChannelSchema(frozenset((*timed, Channel(GAIN, timeless=True))))
 
     def _key(self, index: int) -> str:
         return f"{self._layout.name}/{index}"

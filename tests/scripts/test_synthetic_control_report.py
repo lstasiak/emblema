@@ -27,7 +27,6 @@ from scripts.synthetic_control_report import (
     recover,
     verdict_section,
 )
-from tests.support.synthetic import fewer_units, uncoupled
 
 UNITS = 6
 
@@ -66,7 +65,7 @@ def test_a_channel_that_never_varied_has_nothing_to_explain() -> None:
 def test_a_coupled_corpus_is_explained_by_its_own_factors_and_not_by_another_unit_s(
     layout: SensorLayout,
 ) -> None:
-    measured = recover(CONTROL_PROCESS, fewer_units(layout, units=UNITS), UNITS)
+    measured = recover(CONTROL_PROCESS, layout.with_dials(units=UNITS))
 
     assert measured.excess >= COUPLED_EXCESS
     assert measured.holds
@@ -76,7 +75,7 @@ def test_a_coupled_corpus_is_explained_by_its_own_factors_and_not_by_another_uni
 def test_an_uncoupled_corpus_is_explained_no_better_by_its_own_factors(
     layout: SensorLayout,
 ) -> None:
-    measured = recover(CONTROL_PROCESS, uncoupled(fewer_units(layout, units=UNITS)), UNITS)
+    measured = recover(CONTROL_PROCESS, layout.with_dials(units=UNITS, coupling=0.0))
 
     assert abs(measured.excess) <= NULL_EXCESS
     assert measured.holds
@@ -86,7 +85,7 @@ def test_a_corpus_of_one_unit_has_no_baseline_to_shuffle_against() -> None:
     # The other unit a channel is fitted against would be itself, leaving every corpus with an
     # excess of nothing and the coupled ones reported as broken.
     with pytest.raises(SystemExit, match="needs a second unit"):
-        recover(CONTROL_PROCESS, fewer_units(CONTROL_A, units=1), 1)
+        recover(CONTROL_PROCESS, CONTROL_A.with_dials(units=1))
 
 
 def test_a_coupled_corpus_that_recovers_nothing_does_not_hold() -> None:

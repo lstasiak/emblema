@@ -112,14 +112,14 @@ def explained(design: NDArray[np.float64], values: NDArray[np.float64]) -> float
     return 1.0 - float(np.square(residual).sum()) / spread
 
 
-def recover(process: LatentFactorProcess, layout: SensorLayout, units: int) -> LayoutRecovery:
-    """Fit every channel of every unit on its own factors and on another unit's."""
-    reader = SyntheticCorpusReader(process, cut_to(layout, units))
-    keys = [unit.key.value for unit in reader.read_units()]
-    if len(keys) < 2:
+def recover(process: LatentFactorProcess, layout: SensorLayout) -> LayoutRecovery:
+    """Fit every channel of every unit of ``layout`` on its own factors and on another unit's."""
+    if layout.units < 2:
         # With one unit the shuffled baseline is the fit itself, so every corpus reads as an
         # excess of nothing and a coupled one is condemned by arithmetic rather than measured.
         raise SystemExit("the shuffled baseline needs a second unit; ask for --units 2 or more")
+    reader = SyntheticCorpusReader(process, layout)
+    keys = [unit.key.value for unit in reader.read_units()]
     enough = OBSERVATIONS_PER_PARAMETER * (process.factors + 1)
     own: list[float] = []
     shuffled: list[float] = []
@@ -167,14 +167,9 @@ def by_channel(
     }
 
 
-def cut_to(layout: SensorLayout, units: int) -> SensorLayout:
-    """The layout with fewer units; a report reads a sample of the corpus, not all of it."""
-    return SensorLayout.model_validate({**layout.model_dump(), "units": units})
-
-
-def draw(process: LatentFactorProcess, layout: SensorLayout, units: int, directory: Path) -> Path:
+def draw(process: LatentFactorProcess, layout: SensorLayout, directory: Path) -> Path:
     """The hidden factors of one unit above the channels that watch them, for a person to judge."""
-    reader = SyntheticCorpusReader(process, cut_to(layout, units))
+    reader = SyntheticCorpusReader(process, layout)
     unit = next(reader.read_units())
     channels = by_channel(reader, unit.key.value)
     dense = np.linspace(unit.extent.start, unit.extent.end, 600)
@@ -200,17 +195,18 @@ def draw(process: LatentFactorProcess, layout: SensorLayout, units: int, directo
 
 
 def measure(arguments: argparse.Namespace) -> Report:
+    """Every corpus asked for, cut to the units asked for, measured and optionally drawn."""
     directory = Path(arguments.out)
-    chosen = [LAYOUTS[name] for name in arguments.layout]
+    # A report reads a sample of the corpus, not all of it; a unit is the same unit either way,
+    # because a corpus is generated per key rather than in a run.
+    chosen = [LAYOUTS[name].with_dials(units=arguments.units) for name in arguments.layout]
     return Report(
         process=CONTROL_PROCESS,
         units=arguments.units,
-        recoveries=[recover(CONTROL_PROCESS, layout, arguments.units) for layout in chosen],
-        figures=[
-            draw(CONTROL_PROCESS, layout, arguments.units, directory)
-            for layout in chosen
-            if arguments.figures
-        ],
+        recoveries=[recover(CONTROL_PROCESS, layout) for layout in chosen],
+        figures=[draw(CONTROL_PROCESS, layout, directory) for layout in chosen]
+        if arguments.figures
+        else [],
     )
 
 

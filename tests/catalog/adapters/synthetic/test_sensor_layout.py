@@ -7,7 +7,7 @@ from tests.support.synthetic import HOSTILE
 
 
 def layout(**dials: object) -> SensorLayout:
-    return SensorLayout.model_validate({**HOSTILE.model_dump(), **dials})
+    return HOSTILE.with_dials(**dials)
 
 
 def test_channels_are_named_by_position() -> None:

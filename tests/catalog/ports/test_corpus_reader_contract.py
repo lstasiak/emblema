@@ -22,7 +22,6 @@ import pytest
 
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.domain.exceptions import UnknownUnitError
 from emblema.catalog.domain.identifiers import UnitKey
@@ -85,7 +84,7 @@ def cmapss(tmp_path: Path) -> Harness:
 
 def synthetic(tmp_path: Path) -> Harness:
     def change_the_specification() -> CorpusReader:
-        noisier = SensorLayout.model_validate({**HOSTILE.model_dump(), "noise": HOSTILE.noise * 2})
+        noisier = HOSTILE.with_dials(noise=HOSTILE.noise * 2)
         return SyntheticCorpusReader(PROCESS, noisier)
 
     return Harness(SyntheticCorpusReader(PROCESS, HOSTILE), change_the_specification)

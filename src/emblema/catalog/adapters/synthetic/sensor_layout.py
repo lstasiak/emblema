@@ -1,11 +1,10 @@
-from typing import ClassVar
+from pydantic import Field, model_validator
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-
+from emblema.catalog.adapters.synthetic.dials import Dials
 from emblema.shared.kernel.sampling import SamplingRegime
 
 
-class SensorLayout(BaseModel):
+class SensorLayout(Dials):
     """One instrumented system watching the latent factors: how many sensors, how well, how often.
 
     A layout is a partial, noisy and unevenly sampled view of the factors. Every dial that makes
@@ -19,12 +18,9 @@ class SensorLayout(BaseModel):
     without shared structure is not also a layout with less to see, so transfer failing there
     cannot be put down to a fainter signal.
 
-    A model rather than a dataclass: these are the dials of the control, they constrain each
-    other, and a run's configuration will want to state them.
-
     Attributes:
-        name: Name the corpus generated from this layout is registered under.
-        channels: Sensors the layout carries.
+        name: Name the corpus generated from this layout is registered under, and the prefix of
+            its unit keys.
         factors_per_channel: Factors one sensor responds to; fewer than all makes the view partial.
         coupling: How much of a channel's signal comes from the shared factors rather than from
             factors private to this layout, between zero and one.
@@ -44,10 +40,6 @@ class SensorLayout(BaseModel):
         trajectory_seed: Seed of the realisations of the shared factors this layout observes. Two
             layouts of one control differ here, so they share the structure and no trajectory.
     """
-
-    model_config = ConfigDict(frozen=True)
-
-    GAIN: ClassVar[str] = "gain"
 
     name: str = Field(min_length=1)
     channels: int = Field(ge=1)

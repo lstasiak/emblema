@@ -1,11 +1,12 @@
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from emblema.catalog.adapters.synthetic.dials import Dials
 from emblema.catalog.adapters.synthetic.draws import Draws
 
 
-class LatentFactorProcess(BaseModel):
+class LatentFactorProcess(Dials):
     """The hidden factors a synthetic corpus is a view of: a few signals defined for every instant.
 
     A factor is a sum of harmonics whose frequencies are drawn once, from the seed of the process,
@@ -21,18 +22,12 @@ class LatentFactorProcess(BaseModel):
     so that how strongly a channel follows them is a property of the channel and not of which
     factor it happened to be given.
 
-    A model rather than a dataclass: the fields are the dials of the control, they constrain each
-    other, and a run's configuration will want to state them.
-
     Attributes:
-        factors: Hidden signals driving the corpora built on this process.
         harmonics: Sinusoids each factor is the sum of.
         shortest_period: Period of the fastest harmonic any factor may be given, in time units.
         longest_period: Period of the slowest, in time units.
         seed: Seed the frequencies are drawn with; the identity of the shared structure.
     """
-
-    model_config = ConfigDict(frozen=True)
 
     factors: int = Field(ge=1)
     harmonics: int = Field(ge=1)

@@ -20,7 +20,6 @@ class Draws:
     """
 
     def __init__(self, seed: int, *parts: object) -> None:
-        """Address the draws by ``seed`` and the identity of what they belong to."""
         state = int.from_bytes(seeded_rank(seed, *parts))
         self._generator = np.random.Generator(np.random.Philox(state))
 

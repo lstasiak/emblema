@@ -5,12 +5,12 @@ import pytest
 from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
 from emblema.catalog.adapters.synthetic.layouts import CONTROL_A, CONTROL_B, CONTROL_PROCESS
 from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
-from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
+from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import GAIN, SyntheticCorpusReader
 from emblema.catalog.domain.channels.channel_schema import Channel
 from emblema.catalog.domain.exceptions import UnknownUnitError
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.shared.kernel.sampling import SamplingRegime
-from tests.support.synthetic import HOSTILE, PROCESS, miniature, uncoupled
+from tests.support.synthetic import HOSTILE, PROCESS, miniature
 
 SMALL = miniature(CONTROL_A)
 
@@ -71,7 +71,7 @@ def test_the_corpus_is_the_same_bytes_wherever_it_is_generated(
     ],
 )
 def test_a_turned_dial_gives_another_corpus(dial: str, turned_to: float) -> None:
-    turned = SensorLayout.model_validate({**SMALL.model_dump(), dial: turned_to})
+    turned = SMALL.with_dials(**{dial: turned_to})
 
     assert reader(turned).describe().content.checksum != reader().describe().content.checksum
 
@@ -80,13 +80,13 @@ def test_the_schema_carries_a_timeless_channel_beside_the_sensors() -> None:
     schema = reader().describe().channel_schema
 
     assert len(schema) == SMALL.channels + 1
-    assert Channel(SensorLayout.GAIN, timeless=True) in schema.channels
-    assert all(not channel.timeless for channel in schema if channel.name != SensorLayout.GAIN)
+    assert Channel(GAIN, timeless=True) in schema.channels
+    assert all(not channel.timeless for channel in schema if channel.name != GAIN)
 
 
 def test_the_gain_of_a_unit_is_its_only_static_feature() -> None:
     for unit in reader().read_units():
-        assert [feature.channel for feature in unit.static_features] == [SensorLayout.GAIN]
+        assert [feature.channel for feature in unit.static_features] == [GAIN]
         assert abs(unit.static_features[0].value - 1.0) <= SMALL.gain_spread
 
 
@@ -107,7 +107,7 @@ def test_a_regular_layout_reports_every_channel_on_every_step_it_keeps() -> None
 
 
 def test_an_asynchronous_layout_reports_its_channels_apart() -> None:
-    apart = SensorLayout.model_validate({**SMALL.model_dump(), "cadence": 3, "synchronous": False})
+    apart = SMALL.with_dials(cadence=3, synchronous=False)
     corpus = reader(apart)
     unit = next(corpus.read_units())
 
@@ -120,7 +120,7 @@ def test_an_asynchronous_layout_reports_its_channels_apart() -> None:
 
 
 def test_switching_off_the_coupling_changes_the_values_and_nothing_else() -> None:
-    coupled, null = observations(reader()), observations(reader(uncoupled(SMALL)))
+    coupled, null = observations(reader()), observations(reader(SMALL.with_dials(coupling=0.0)))
 
     assert [reading[:3] for reading in coupled] == [reading[:3] for reading in null]
     assert [reading[3] for reading in coupled] != [reading[3] for reading in null]
@@ -128,15 +128,13 @@ def test_switching_off_the_coupling_changes_the_values_and_nothing_else() -> Non
 
 def test_units_keep_their_extents_when_the_coupling_goes() -> None:
     coupled = [(unit.key, unit.extent) for unit in reader().read_units()]
-    null = [(unit.key, unit.extent) for unit in reader(uncoupled(SMALL)).read_units()]
+    null = [(unit.key, unit.extent) for unit in reader(SMALL.with_dials(coupling=0.0)).read_units()]
 
     assert coupled == null
 
 
 def test_a_channel_cannot_respond_to_more_factors_than_there_are() -> None:
-    greedy = SensorLayout.model_validate(
-        {**SMALL.model_dump(), "factors_per_channel": CONTROL_PROCESS.factors + 1}
-    )
+    greedy = SMALL.with_dials(factors_per_channel=CONTROL_PROCESS.factors + 1)
 
     with pytest.raises(ValueError, match="cannot respond to"):
         reader(greedy)
