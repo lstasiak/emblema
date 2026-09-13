@@ -34,6 +34,7 @@ def process(store: InMemoryArtifactStore, workspace: Path) -> CompositionRoot:
     told = description(b"records", SCHEMA, units=len(UNITS), observations=64)
     return CompositionRoot(
         Settings(),
+        corpus=CORPUS,
         corpus_root=workspace / "raw",
         workspace=workspace,
         reader=InMemoryCorpusReader(told, UNITS),

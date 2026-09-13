@@ -5,6 +5,8 @@ from sqlalchemy import create_engine
 from emblema.catalog.adapters.archive.block_corpus_archive import BlockCorpusArchive
 from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
 from emblema.catalog.adapters.readers.cmapss import SUBSETS, CmapssCorpusReader
+from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
+from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
     CorpusVersionRefAssembler,
@@ -47,9 +49,10 @@ class CompositionRoot:
         self,
         settings: Settings,
         *,
+        corpus: str,
         corpus_root: Path,
         workspace: Path,
-        subsets: tuple[str, ...] = SUBSETS,
+        subsets: tuple[str, ...] = (),
         corpora: CorpusRepository | None = None,
         reader: CorpusReader | None = None,
         store: ArtifactStore | None = None,
@@ -60,11 +63,12 @@ class CompositionRoot:
 
         Args:
             settings: Values read from the environment; only the root and the adapters see them.
-            corpus_root: Directory the raw corpus is read from.
+            corpus: Name of the corpus to publish; it decides which adapter reads it.
+            corpus_root: Directory the raw corpus is read from, where it is read from files.
             workspace: Directory blocks pass through on their way in or out of the store.
-            subsets: Subsets of the corpus to read, where it has any.
+            subsets: Subsets of the corpus to read; all of them where empty.
             corpora: Repository of corpora; the configured metadata database unless given.
-            reader: Reader of the raw corpus; the C-MAPSS reader unless given.
+            reader: Reader of the raw corpus; the adapter of the named corpus unless given.
             store: Artifact store; the configured S3-compatible bucket unless given. The
                 archive is always the block archive over this store.
             clock: Source of the current instant; the system clock unless given.
@@ -73,7 +77,7 @@ class CompositionRoot:
         chosen_store = self._artifact_store(settings) if store is None else store
         self.adapters = Adapters(
             corpora=self._corpus_repository(settings) if corpora is None else corpora,
-            reader=CmapssCorpusReader(corpus_root, subsets) if reader is None else reader,
+            reader=self._corpus_reader(corpus, corpus_root, subsets) if reader is None else reader,
             store=chosen_store,
             archive=BlockCorpusArchive(chosen_store, workspace, PublishedCorpusManifestAssembler()),
             clock=SystemClock() if clock is None else clock,
@@ -108,6 +112,24 @@ class CompositionRoot:
                 adapters.archive,
             ),
         )
+
+    @staticmethod
+    def _corpus_reader(corpus: str, root: Path, subsets: tuple[str, ...]) -> CorpusReader:
+        """Which adapter reads which corpus, and what it takes from the process to do it.
+
+        A corpus read from files takes the directory it was downloaded to; a generated one takes
+        nothing, because its specification is its data.
+
+        Raises:
+            ValueError: If no adapter reads a corpus of that name.
+        """
+        match corpus:
+            case "cmapss":
+                return CmapssCorpusReader(root, subsets or SUBSETS)
+            case generated if generated in LAYOUTS:
+                return SyntheticCorpusReader(CONTROL_PROCESS, LAYOUTS[generated])
+            case _:
+                raise ValueError(f"no adapter reads a corpus named {corpus!r}")
 
     @staticmethod
     def _corpus_repository(settings: Settings) -> CorpusRepository:
