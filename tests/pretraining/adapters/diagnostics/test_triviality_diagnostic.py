@@ -8,6 +8,7 @@ from emblema.pretraining.adapters.diagnostics.triviality_diagnostic import (  # 
     TrivialityDiagnostic,
 )
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks  # noqa: E402
+from emblema.pretraining.domain.assessment.mask_kind_tally import MaskKindTally  # noqa: E402
 from emblema.pretraining.domain.mask_kind import MaskKind  # noqa: E402
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
 from tests.support.token_tensors import grid_batch  # noqa: E402
@@ -25,74 +26,88 @@ def masks_of_every_kind(batch: TokenTensors) -> TokenMasks:
     )
 
 
-def test_an_oracle_beats_every_baseline_and_is_trivial_nowhere() -> None:
-    batch = grid_batch(4, 4, 11, seed=1)
-    masks = masks_of_every_kind(batch)
+def one_group(batch: TokenTensors) -> list[str]:
+    return ["unit"] * batch.batch_size
+
+
+def shifted(
+    batch: TokenTensors,
+    *,
+    model: float,
+    interpolation: float,
+    ridge: float,
+    combined: float,
+) -> dict[str, Tensor]:
     truth = batch.features[..., 0]
-    guess = torch.zeros_like(truth)
-
-    verdicts = TrivialityDiagnostic().observe(batch, masks, truth, guess, guess).verdicts()
-
-    assert {verdict.kind for verdict in verdicts} == set(MaskKind)
-    assert all(verdict.model_error == 0.0 for verdict in verdicts)
-    assert all(verdict.baseline_error > 0.0 for verdict in verdicts)
-    assert not any(verdict.trivial for verdict in verdicts)
-    assert all(verdict.excess > 0.0 for verdict in verdicts)
-
-
-def test_a_model_that_is_its_baseline_is_trivial_everywhere() -> None:
-    batch = grid_batch(4, 4, 11, seed=2)
-    masks = masks_of_every_kind(batch)
-    interpolation = torch.randn_like(batch.features[..., 0])
-    ridge = torch.randn_like(interpolation)
-    model = torch.where(masks.channel, ridge, interpolation)
-
-    verdicts = TrivialityDiagnostic().observe(batch, masks, model, interpolation, ridge).verdicts()
-
-    assert all(verdict.trivial for verdict in verdicts)
-    assert all(verdict.excess == 0.0 for verdict in verdicts)
-
-
-def test_each_kind_is_scored_against_its_own_baseline() -> None:
-    batch = grid_batch(2, 4, 11, seed=3)
-    masks = masks_of_every_kind(batch)
-    truth = batch.features[..., 0]
-    model = truth + 1.0
-    interpolation = truth + 2.0
-    ridge = truth + 3.0
-
-    by_kind = {
-        verdict.kind: verdict
-        for verdict in TrivialityDiagnostic()
-        .observe(batch, masks, model, interpolation, ridge)
-        .verdicts()
+    return {
+        "model": truth + model,
+        "interpolation": truth + interpolation,
+        "ridge": truth + ridge,
+        "combined": truth + combined,
     }
 
-    assert by_kind[MaskKind.CHANNEL].baseline_error == pytest.approx(9.0)
-    assert by_kind[MaskKind.BLOCK].baseline_error == pytest.approx(4.0)
-    assert by_kind[MaskKind.TOKEN].baseline_error == pytest.approx(4.0)
-    assert all(verdict.model_error == pytest.approx(1.0) for verdict in by_kind.values())
-    assert by_kind[MaskKind.CHANNEL].tokens == 2 * 11
-    assert by_kind[MaskKind.BLOCK].tokens == 2 * 3
-    assert by_kind[MaskKind.TOKEN].tokens == 2
+
+def by_kind(tallies: tuple[MaskKindTally, ...]) -> dict[MaskKind, MaskKindTally]:
+    return {tally.kind: tally for tally in tallies if not tally.apart}
 
 
-def test_channels_reported_apart_get_rows_of_their_own() -> None:
-    batch = grid_batch(2, 4, 11, seed=4)
+def test_each_kind_is_tallied_against_its_matched_and_its_linear_baseline() -> None:
+    batch = grid_batch(2, 4, 11, seed=3)
     masks = masks_of_every_kind(batch)
-    truth = batch.features[..., 0]
+    predictions = shifted(batch, model=1.0, interpolation=2.0, ridge=3.0, combined=4.0)
 
-    verdicts = (
-        TrivialityDiagnostic(channels_apart=frozenset({1}))
-        .observe(batch, masks, truth + 1.0, truth, truth)
-        .verdicts()
+    tallies = by_kind(
+        TrivialityDiagnostic().observe(batch, masks, one_group(batch), **predictions).tallies()
     )
 
-    apart = [verdict for verdict in verdicts if verdict.apart]
-    together = [verdict for verdict in verdicts if not verdict.apart]
-    assert [verdict.kind for verdict in apart] == [MaskKind.CHANNEL]
-    assert {verdict.kind for verdict in together} == {MaskKind.BLOCK, MaskKind.TOKEN}
-    assert verdicts.index(apart[0]) > max(verdicts.index(verdict) for verdict in together)
+    channel, block, token = (tallies[kind] for kind in MaskKind)
+    assert (channel.tokens, block.tokens, token.tokens) == (2 * 11, 2 * 3, 2)
+    assert channel.matched == pytest.approx(9.0 * channel.tokens)
+    assert channel.linear == pytest.approx(9.0 * channel.tokens)
+    assert block.matched == pytest.approx(4.0 * block.tokens)
+    assert block.linear == pytest.approx(16.0 * block.tokens)
+    assert token.matched == pytest.approx(4.0 * token.tokens)
+    assert token.linear == pytest.approx(16.0 * token.tokens)
+    assert all(tally.model == pytest.approx(tally.tokens) for tally in tallies.values())
+
+
+def test_the_mean_is_the_error_of_predicting_zero() -> None:
+    batch = grid_batch(3, 4, 11, seed=4)
+    masks = masks_of_every_kind(batch)
+    truth = batch.features[..., 0].to(torch.float64)
+    predictions = shifted(batch, model=0.0, interpolation=0.0, ridge=0.0, combined=0.0)
+
+    tallies = by_kind(
+        TrivialityDiagnostic().observe(batch, masks, one_group(batch), **predictions).tallies()
+    )
+
+    for kind, tally in tallies.items():
+        assert tally.mean == pytest.approx(float(truth[masks.of_kind(kind)].pow(2).sum()))
+        assert tally.model == 0.0
+
+
+def test_windows_are_tallied_per_group_and_groups_add_up_to_the_whole() -> None:
+    batch = grid_batch(4, 4, 11, seed=5)
+    masks = masks_of_every_kind(batch)
+    noise = torch.Generator().manual_seed(7)
+    truth = batch.features[..., 0]
+    predictions = {
+        name: truth + torch.randn(truth.shape, generator=noise)
+        for name in ("model", "interpolation", "ridge", "combined")
+    }
+
+    grouped = TrivialityDiagnostic().observe(batch, masks, ["a", "b", "a", "c"], **predictions)
+    pooled = TrivialityDiagnostic().observe(batch, masks, one_group(batch), **predictions)
+
+    groups = {tally.group for tally in grouped.tallies()}
+    assert groups == {"a", "b", "c"}
+    for kind, whole in by_kind(pooled.tallies()).items():
+        parts = [tally for tally in grouped.tallies() if tally.kind is kind]
+        assert sum(part.tokens for part in parts) == whole.tokens
+        assert sum(part.model for part in parts) == pytest.approx(whole.model)
+        assert sum(part.linear for part in parts) == pytest.approx(whole.linear)
+    token_of_a = next(t for t in grouped.tallies() if t.kind is MaskKind.TOKEN and t.group == "a")
+    assert token_of_a.tokens == 2
 
 
 def test_batches_observed_one_at_a_time_tally_as_one() -> None:
@@ -105,26 +120,97 @@ def test_batches_observed_one_at_a_time_tally_as_one() -> None:
         torch.cat([first.padding_mask, second.padding_mask]),
     )
     noise = torch.Generator().manual_seed(7)
+    truth = whole.features[..., 0]
+    predictions = {
+        name: truth + torch.randn(truth.shape, generator=noise)
+        for name in ("model", "interpolation", "ridge", "combined")
+    }
 
-    def prediction(batch: TokenTensors) -> Tensor:
-        truth = batch.features[..., 0]
-        return truth + torch.randn(truth.shape, generator=noise)
-
-    model, interpolation, ridge = prediction(whole), prediction(whole), prediction(whole)
     at_once = TrivialityDiagnostic().observe(
-        whole, masks_of_every_kind(whole), model, interpolation, ridge
+        whole, masks_of_every_kind(whole), one_group(whole), **predictions
     )
     one_by_one = (
         TrivialityDiagnostic()
-        .observe(first, masks_of_every_kind(first), model[:2], interpolation[:2], ridge[:2])
-        .observe(second, masks_of_every_kind(second), model[2:], interpolation[2:], ridge[2:])
+        .observe(
+            first,
+            masks_of_every_kind(first),
+            one_group(first),
+            **{name: prediction[:2] for name, prediction in predictions.items()},
+        )
+        .observe(
+            second,
+            masks_of_every_kind(second),
+            one_group(second),
+            **{name: prediction[2:] for name, prediction in predictions.items()},
+        )
     )
 
-    for together, apart in zip(at_once.verdicts(), one_by_one.verdicts(), strict=True):
-        assert together.kind is apart.kind
-        assert together.tokens == apart.tokens
-        assert together.model_error == pytest.approx(apart.model_error)
-        assert together.baseline_error == pytest.approx(apart.baseline_error)
+    for together, apart in zip(at_once.tallies(), one_by_one.tallies(), strict=True):
+        assert (together.kind, together.group, together.tokens) == (
+            apart.kind,
+            apart.group,
+            apart.tokens,
+        )
+        assert together.model == pytest.approx(apart.model)
+        assert together.matched == pytest.approx(apart.matched)
+
+
+def test_channels_reported_apart_get_tallies_of_their_own_after_the_rest() -> None:
+    batch = grid_batch(2, 4, 11, seed=4)
+    masks = masks_of_every_kind(batch)
+    predictions = shifted(batch, model=1.0, interpolation=0.0, ridge=0.0, combined=0.0)
+
+    tallies = (
+        TrivialityDiagnostic(channels_apart=frozenset({1}))
+        .observe(batch, masks, one_group(batch), **predictions)
+        .tallies()
+    )
+
+    assert [(tally.kind, tally.apart) for tally in tallies] == [
+        (MaskKind.BLOCK, False),
+        (MaskKind.TOKEN, False),
+        (MaskKind.CHANNEL, True),
+    ]
+
+
+def test_the_noise_floor_is_summed_per_channel_where_the_corpus_states_it() -> None:
+    batch = grid_batch(2, 4, 11, seed=8)
+    masks = masks_of_every_kind(batch)
+    predictions = shifted(batch, model=0.0, interpolation=0.0, ridge=0.0, combined=0.0)
+    # Padding, then channels 1 to 4, then the timeless channel 5 the grid adds.
+    variance = (0.0, 0.1, 0.2, 0.3, 0.4, 0.0)
+
+    stated = by_kind(
+        TrivialityDiagnostic(noise_variance=variance)
+        .observe(batch, masks, one_group(batch), **predictions)
+        .tallies()
+    )
+    unstated = by_kind(
+        TrivialityDiagnostic().observe(batch, masks, one_group(batch), **predictions).tallies()
+    )
+
+    assert stated[MaskKind.CHANNEL].floor == pytest.approx(0.1 * 22)
+    assert stated[MaskKind.BLOCK].floor == pytest.approx(0.2 * 6)
+    assert stated[MaskKind.TOKEN].floor == pytest.approx(0.3 * 2)
+    assert all(tally.floor is None for tally in unstated.values())
+
+
+def test_a_noise_variance_that_does_not_cover_the_batch_is_refused() -> None:
+    batch = grid_batch(1, 4, 11, seed=9)
+    predictions = shifted(batch, model=0.0, interpolation=0.0, ridge=0.0, combined=0.0)
+
+    with pytest.raises(ValueError, match="noise variance covers 3"):
+        TrivialityDiagnostic(noise_variance=(0.0, 0.1, 0.1)).observe(
+            batch, masks_of_every_kind(batch), one_group(batch), **predictions
+        )
+
+
+def test_groups_must_name_every_window() -> None:
+    batch = grid_batch(3, 4, 11, seed=10)
+    predictions = shifted(batch, model=0.0, interpolation=0.0, ridge=0.0, combined=0.0)
+
+    with pytest.raises(ValueError, match="one group per window: 2 for 3"):
+        TrivialityDiagnostic().observe(batch, masks_of_every_kind(batch), ["a", "b"], **predictions)
 
 
 def test_padding_is_not_tallied_whatever_the_masks_say() -> None:
@@ -138,16 +224,6 @@ def test_padding_is_not_tallied_whatever_the_masks_say() -> None:
     )
     everything = torch.ones_like(batch.padding_mask)
     masks = TokenMasks(channel=everything, block=everything, token=everything)
-    truth = batch.features[..., 0]
+    predictions = shifted(batch, model=0.0, interpolation=0.0, ridge=0.0, combined=0.0)
 
-    assert TrivialityDiagnostic().observe(padded, masks, truth, truth, truth).verdicts() == ()
-
-
-def test_a_verdict_over_no_tokens_is_not_pronounced_trivial() -> None:
-    from emblema.pretraining.adapters.diagnostics.mask_kind_verdict import MaskKindVerdict
-
-    empty = MaskKindVerdict(
-        kind=MaskKind.BLOCK, apart=False, tokens=0, model_error=0.0, baseline_error=0.0
-    )
-
-    assert not empty.trivial
+    assert TrivialityDiagnostic().observe(padded, masks, ["unit"], **predictions).tallies() == ()

@@ -5,6 +5,15 @@ from emblema.catalog.adapters.synthetic.layouts import LAYOUTS
 from emblema.catalog.domain.registry.corpus_source import CorpusSource
 from emblema.catalog.domain.registry.licence import Licence
 
+# A corpus generated here carries the repository's own terms and may be redistributed: the control
+# can travel with a published model, which is what lets a reader repeat it.
+GENERATED_SOURCE = CorpusSource("Emblema", "https://github.com/lstasiak/emblema")
+GENERATED_LICENCE = Licence(
+    "Apache-2.0",
+    permits_derivatives=True,
+    url="https://www.apache.org/licenses/LICENSE-2.0",
+)
+
 
 @dataclass(frozen=True)
 class KnownCorpus:
@@ -29,15 +38,6 @@ class KnownCorpora:
 
     @classmethod
     def default(cls) -> Self:
-        # The control corpora are generated here, so they carry the repository's own terms and
-        # may be redistributed: the control can travel with a published model, which is what lets
-        # a reader repeat it.
-        ours = CorpusSource("Emblema", "https://github.com/lstasiak/emblema")
-        apache = Licence(
-            "Apache-2.0",
-            permits_derivatives=True,
-            url="https://www.apache.org/licenses/LICENSE-2.0",
-        )
         return cls(
             # NASA publishes C-MAPSS with no licence text. Whether derivatives may be
             # redistributed is undocumented, and an undocumented permission is recorded as its
@@ -49,7 +49,7 @@ class KnownCorpora:
                 ),
                 Licence("US Government Work", permits_derivatives=False),
             ),
-            *(KnownCorpus(name, ours, apache) for name in LAYOUTS),
+            *(KnownCorpus(name, GENERATED_SOURCE, GENERATED_LICENCE) for name in LAYOUTS),
         )
 
     def names(self) -> tuple[str, ...]:

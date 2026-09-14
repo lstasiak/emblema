@@ -56,3 +56,8 @@ def hiding(
     return TokenMasks(
         channel=whole & ~batch.padding_mask, block=nothing, token=single & ~batch.padding_mask
     )
+
+
+def unmasked(*batches: TokenTensors) -> list[tuple[TokenTensors, TokenMasks]]:
+    """Batches paired with masks that hide nothing, for a fit where every neighbour is visible."""
+    return [(batch, hiding(batch)) for batch in batches]

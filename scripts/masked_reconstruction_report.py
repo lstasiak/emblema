@@ -1,4 +1,4 @@
-"""Train the objective on the positive control for a few epochs and show what it learnt.
+"""Train the objective on the positive control and the spectral probe, and show what it learnt.
 
 The self-supervised objective is judged on three things before any real corpus sees it: that its
 loss falls, that its reconstructions look like the signal, and that what it learnt is not what a
@@ -8,24 +8,43 @@ nothing is at fault. It publishes the corpus through the same use cases the comm
 trains the encoder with the masked-reconstruction objective on the training units, and measures
 on the validation units against the baseline matched to each kind of mask: interpolation within
 the channel for blocks and single tokens, a ridge regression from the other channels for a
-channel hidden whole. A least-squares spectrum of the channels hidden whole says which frequencies
-the model gives back.
+channel hidden whole. The regressions are fitted on training windows under the masks the strategy
+draws, so that they meet their regressors missing as they will be. Beside the matched baselines
+stands the strongest linear one on the same inputs, and a least-squares spectrum of the channels
+hidden whole says which frequencies the model gives back. The control's signal is too slow for a
+window to show more than one of them, so the spectrum is read on ``spectral_probe`` — the dense
+control watching faster factors — which the report trains on too.
 
     uv sync --all-extras
-    uv run scripts/masked_reconstruction_report.py --corpus control-a --corpus control-b
+    uv run scripts/masked_reconstruction_report.py
+    uv run scripts/masked_reconstruction_report.py --corpus control-b --epochs 10
 
 The training loop here is the smallest that answers the question — no checkpoints, no tracker,
-no precision policy; those belong to the run that trains a backbone for real. The output is
-markdown, meant to be pasted under a dated heading in the verification note; the figures are
-written next to it.
+no precision policy; those belong to the run that trains a backbone for real. It warms the
+learning rate up and decays it, because a verdict read off a model still circling its minimum is
+read off whichever point of the circle the last epoch landed on. The output is markdown, meant to
+be pasted under a dated heading in the verification note; the figures are written next to it.
+What the run measured is stored as CSV, one directory per run with a line in an index of every
+run, and ``AssessReconstructionRun`` turns it into the decision printed under the verdict —
+comparing the run with a stored run of the same configuration and half the epochs, which is how it
+tells a model that stopped learning from a schedule that stopped it.
+
+Transitional. The training loop, the CSV store and the code digest here stand in for what T-2.3
+and T-2.4 build — the training runtime, the experiment tracker and the provenance of a run — and
+go when those exist; the diagnostics and the rules they feed already live in the package. What
+the runs showed is recorded in ``docs/verification/masked-reconstruction.md``.
 """
 
 import argparse
+import hashlib
+import io
 import sys
 import time
+import tomllib
 from collections import Counter
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
 
@@ -45,28 +64,49 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
+from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
 from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
+from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.entrypoints.cli.composition_root import CompositionRoot
-from emblema.entrypoints.cli.known_corpora import KnownCorpora
+from emblema.entrypoints.cli.known_corpora import (
+    GENERATED_LICENCE,
+    GENERATED_SOURCE,
+    KnownCorpora,
+    KnownCorpus,
+)
 from emblema.pretraining.adapters.diagnostics.cross_channel_ridge_baseline import (
     CrossChannelRidgeBaseline,
 )
 from emblema.pretraining.adapters.diagnostics.linear_interpolation_baseline import (
     LinearInterpolationBaseline,
 )
-from emblema.pretraining.adapters.diagnostics.mask_kind_verdict import MaskKindVerdict
+from emblema.pretraining.adapters.diagnostics.own_and_cross_channel_ridge_baseline import (
+    OwnAndCrossChannelRidgeBaseline,
+)
 from emblema.pretraining.adapters.diagnostics.spectral_recovery import SpectralRecovery
 from emblema.pretraining.adapters.diagnostics.triviality_diagnostic import TrivialityDiagnostic
+from emblema.pretraining.adapters.diagnostics.unit_bootstrap import UnitBootstrap
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
 from emblema.pretraining.adapters.objective.reconstruction_loss import ReconstructionLoss
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
+from emblema.pretraining.application.use_cases.assess_reconstruction_run import (
+    AssessReconstructionRun,
+)
+from emblema.pretraining.domain.assessment.assessment import Assessment
+from emblema.pretraining.domain.assessment.curve import Curve
+from emblema.pretraining.domain.assessment.kind_summary import BEYOND_LINEAR, MATCHED_BASELINE
+from emblema.pretraining.domain.assessment.mask_kind_tally import MaskKindTally
+from emblema.pretraining.domain.assessment.results import Results
+from emblema.pretraining.domain.assessment.spectrum import Spectrum
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
+from emblema.pretraining.domain.exceptions import InvalidLearningRateScheduleError
+from emblema.pretraining.domain.learning_rate_schedule import LearningRateSchedule
 from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -74,21 +114,77 @@ from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.tokens import TokenWindow
 from scripts.budget_file import architecture_of, tier_named
+from scripts.masked_reconstruction_assessment import (
+    assessment_section,
+    find_shorter,
+    kinds_table,
+    store,
+)
 from scripts.reporting import dated_heading, machine, table
+from scripts.spectral_probe import SPECTRAL_PROBE, SPECTRAL_PROCESS
 from tests.support.settings import unreachable_store
 
 FIGURES = REPO_ROOT / "docs" / "verification" / "figures"
+# What the report trains on when the command line names nothing: both controls, and the probe the
+# spectrum is read on.
+DEFAULT_CORPORA = ("control-a", "control-b", SPECTRAL_PROBE.name)
+RESULTS = REPO_ROOT / "data" / "report" / "results"
 
 # The mixture the plan asks for: blocks and whole channels carry most of the hiding, single tokens
 # are the minority ingredient, and together they take close to half of a window.
 MIXTURE = MaskingStrategy(channel_rate=0.15, block_rate=0.6, block_span=0.5, token_rate=0.1)
 DECODER_LAYERS = 1
-# Cycles per window the spectrum is fitted up to, at most: the fastest harmonic of the control
-# process completes about four cycles in a window of this length. A sparse layout holds fewer
-# tokens per channel than that many coefficients need, so each corpus fits as many as it can.
+# Cycles per window the spectrum is fitted up to, at most. On the control corpora that is more than
+# their signal holds: the fastest harmonic of the control process completes about one cycle in a
+# window of this length, so every frequency above the first holds noise alone, and the verdict and
+# the assessment call the spectrum uninformative there rather than read recovery into it. A sparse
+# layout holds fewer tokens per channel than that many coefficients need, so each corpus fits as
+# many as it can.
 CYCLES_AT_MOST = 6
 WINDOW = WindowSpec(length=32.0, stride=12.0)
 EXAMPLE_WINDOWS = 3
+# One epoch of warmup is a hundred-odd steps on the control corpora — enough for Adam's moment
+# estimates to settle before the peak rate — and a floor of one per cent of the peak is where the
+# steps are too small to move the verdicts.
+WARMUP_EPOCHS = 1
+FINAL_LR_FRACTION = 0.01
+# Where the model trains. Tier S is declared on MPS in the budget file; everything the diagnostics
+# compute stays on the host, because the baselines are numpy and MPS holds no double precision.
+DEVICES = ("cpu", "mps", "cuda")
+# Epochs per tier and corpus when the command line names none, with how they were measured.
+EPOCHS_FILE = Path(__file__).resolve().parent / "masked_reconstruction_epochs.toml"
+
+
+def default_device() -> str:
+    """The accelerator this machine has, the CPU where it has none."""
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def device_available(device: str) -> bool:
+    if device == "mps":
+        return torch.backends.mps.is_available()
+    if device == "cuda":
+        return torch.cuda.is_available()
+    return device == "cpu"
+
+
+def measured_epochs(tier: str, corpus: str, *, path: Path = EPOCHS_FILE) -> int | None:
+    """The epochs measured for ``corpus`` at ``tier``; ``None`` where nothing was measured.
+
+    Raises:
+        ValueError: If the file states something other than a positive whole number of epochs.
+    """
+    with path.open("rb") as handle:
+        epochs = tomllib.load(handle).get(tier, {}).get(corpus)
+    if epochs is not None and (
+        isinstance(epochs, bool) or not isinstance(epochs, int) or epochs < 1
+    ):
+        raise ValueError(
+            f"{path.name}: epochs of {corpus} at tier {tier} must be positive, got {epochs!r}"
+        )
+    return epochs
 
 
 @dataclass(frozen=True)
@@ -102,7 +198,10 @@ class Run:
     epochs: int
     batch_size: int
     learning_rate: float
+    warmup_epochs: int
+    final_lr_fraction: float
     seed: int
+    device: str
 
     @property
     def architecture(self) -> EncoderArchitecture:
@@ -115,14 +214,34 @@ class Run:
             return f"tier {self.tier}"
         return f"tier {self.tier} cut down to {self.shape.width} wide, {self.shape.layers} deep"
 
+    def schedule(self, steps_per_epoch: int) -> LearningRateSchedule:
+        """The learning rate over the run, in optimiser steps."""
+        return LearningRateSchedule(
+            warmup_steps=self.warmup_epochs * steps_per_epoch,
+            total_steps=self.epochs * steps_per_epoch,
+            final_fraction=self.final_lr_fraction,
+        )
+
 
 @dataclass(frozen=True)
 class Published:
-    """The control corpus after the pipeline: its manifest and the windows of each split."""
+    """The control corpus after the pipeline: its manifest and the windows of each split.
+
+    Attributes:
+        manifest: What the pipeline recorded about the corpus.
+        training: Windows of the training units.
+        validation: Windows of the validation units.
+        validation_units: The unit each validation window was cut from, in the order of
+            ``validation``: a verdict's uncertainty is resampled by unit, not by window.
+        noise: Standard deviation of the layout's measurement noise in raw units, where the corpus
+            states one.
+    """
 
     manifest: TokenisationManifest
     training: tuple[TokenWindow, ...]
     validation: tuple[TokenWindow, ...]
+    validation_units: tuple[str, ...]
+    noise: float | None
 
     @property
     def vocabulary_size(self) -> int:
@@ -142,6 +261,24 @@ class Published:
         typical = int(np.median(tokens_per_channel)) if tokens_per_channel else 0
         return max(1, min(CYCLES_AT_MOST, SpectralRecovery.cycles_fitting(typical)))
 
+    def noise_variance(self) -> tuple[float, ...] | None:
+        """Per vocabulary entry, the variance of the measurement noise in normalised units.
+
+        Indexed by channel identifier, padding at zero. What no predictor can go below on a token of
+        that channel. Zero for a channel reported apart, which carries no measurement noise;
+        ``None`` for a corpus that states no noise.
+        """
+        if self.noise is None:
+            return None
+        scheme = self.manifest.scheme
+        apart = self.channels_apart()
+        variance = [0.0] * (self.vocabulary_size + 1)
+        for entry in scheme.vocabulary.entries_of(self.manifest.corpus):
+            statistics = scheme.statistics[entry.channel_id - 1]
+            if entry.channel_id not in apart and statistics is not None:
+                variance[entry.channel_id] = (self.noise / statistics.std) ** 2
+        return tuple(variance)
+
     def channels_apart(self) -> frozenset[int]:
         """Channels the verdict leaves aside: timeless ones and ones that never vary."""
         scheme = self.manifest.scheme
@@ -151,6 +288,9 @@ class Published:
             if entry.timeless or (statistics is not None and statistics.std == 0.0):
                 apart.add(entry.channel_id)
         return frozenset(apart)
+
+    def channel_name(self, channel_id: int) -> str:
+        return self.manifest.scheme.vocabulary.entry(channel_id).channel
 
 
 @dataclass(frozen=True)
@@ -169,13 +309,27 @@ class Trained:
 
 @dataclass(frozen=True)
 class Example:
-    """One channel of one validation window, as the figure draws it."""
+    """One channel of one validation window, as the figure draws it.
+
+    Attributes:
+        window: Position of the window among the validation windows.
+        channel: Name of the channel.
+        times: Instants of the channel's observed tokens.
+        truth: Their values.
+        visible: Which of them the model saw.
+        of_kind: Which of them were hidden by the kind of mask the example shows — a token hidden by
+            another kind is neither visible nor drawn as a prediction here.
+        kind: The kind of mask the example shows.
+        model: The model's prediction at every token.
+        baseline: The matched baseline's.
+    """
 
     window: int
     channel: str
     times: np.ndarray
     truth: np.ndarray
-    hidden: np.ndarray
+    visible: np.ndarray
+    of_kind: np.ndarray
     kind: MaskKind
     model: np.ndarray
     baseline: np.ndarray
@@ -183,30 +337,40 @@ class Example:
 
 @dataclass(frozen=True)
 class Diagnosis:
-    verdicts: tuple[MaskKindVerdict, ...]
     interpolation_loss: float
     ridge_loss: float
     spectrum_of_model: SpectralRecovery
     spectrum_of_ridge: SpectralRecovery
     examples: tuple[Example, ...]
+    tallies: tuple[MaskKindTally, ...]
 
-    @property
-    def negative(self) -> bool:
-        """Whether every kind of mask, channels apart aside, taught more than its baseline knew."""
-        return all(not verdict.trivial for verdict in self.verdicts if not verdict.apart)
+
+def corpora() -> tuple[str, ...]:
+    """Every corpus the report can train on: the control registry's and the spectral probe."""
+    return (*sorted(LAYOUTS), SPECTRAL_PROBE.name)
+
+
+def generated(corpus: str) -> tuple[LatentFactorProcess, SensorLayout, KnownCorpus]:
+    """The process, the layout and the terms a corpus the report trains on is generated from."""
+    if corpus == SPECTRAL_PROBE.name:
+        return (
+            SPECTRAL_PROCESS,
+            SPECTRAL_PROBE,
+            KnownCorpus(corpus, GENERATED_SOURCE, GENERATED_LICENCE),
+        )
+    return CONTROL_PROCESS, LAYOUTS[corpus], KnownCorpora.default().named(corpus)
 
 
 def publish(run: Run, workspace: Path) -> Published:
-    layout = LAYOUTS[run.corpus]
+    process, layout, known = generated(run.corpus)
     if run.units is not None:
         layout = layout.with_dials(units=run.units)
-    known = KnownCorpora.default().named(run.corpus)
     root = CompositionRoot(
         unreachable_store(),
         corpus_root=workspace / "raw",
         workspace=workspace,
         corpora=InMemoryCorpusRepository(),
-        reader=SyntheticCorpusReader(CONTROL_PROCESS, layout),
+        reader=SyntheticCorpusReader(process, layout),
         store=InMemoryArtifactStore(),
     )
     ref = root.services.publish_corpus(
@@ -221,32 +385,75 @@ def publish(run: Run, workspace: Path) -> Published:
     )
     archive = root.adapters.archive
     manifest = archive.read_manifest(ref)
+    validation: list[TokenWindow] = []
+    units: list[str] = []
+    for unit in manifest.archived.units:
+        if unit in manifest.split.validation:
+            windows = archive.read_windows(manifest.archived, {unit})
+            validation += windows
+            units += [unit.value] * len(windows)
     return Published(
         manifest,
         tuple(archive.read_windows(manifest.archived, manifest.split.training)),
-        tuple(archive.read_windows(manifest.archived, manifest.split.validation)),
+        tuple(validation),
+        tuple(units),
+        noise=layout.noise,
     )
 
 
-def validation_batches(published: Published, run: Run) -> Iterator[tuple[TokenTensors, TokenMasks]]:
-    """The validation windows in a fixed order under masks drawn once per batch, every time."""
+def validation_batches(
+    published: Published, run: Run
+) -> Iterator[tuple[TokenTensors, TokenMasks, tuple[str, ...]]]:
+    """The validation windows in a fixed order under masks drawn once per batch, every time.
+
+    Batches and masks stay on the host, where the masks are drawn — so a run on any device is scored
+    under the same masks — and whoever runs the model moves them. Each batch comes with the units
+    its windows were cut from, counted off the windows actually delivered rather than computed from
+    the batch size.
+    """
     loader = WindowLoader(
         published.validation, batch_size=run.batch_size, seed=run.seed, shuffle=False
     )
     masking = TokenMasking(MIXTURE)
+    offset = 0
     for index, batch in enumerate(loader.batches_of(0)):
-        yield batch, masking.draw(batch, torch.Generator().manual_seed(run.seed * 1_000 + index))
+        units = published.validation_units[offset : offset + batch.batch_size]
+        offset += batch.batch_size
+        yield (
+            batch,
+            masking.draw(batch, torch.Generator().manual_seed(run.seed * 1_000 + index)),
+            units,
+        )
+
+
+def masked_training_batches(
+    published: Published, run: Run
+) -> list[tuple[TokenTensors, TokenMasks]]:
+    """The training windows in a fixed order under masks drawn once, to fit the linear baselines.
+
+    Drawn by the strategy the model trains under, from a generator of the run's seed, so that the
+    baselines learn from windows as incomplete as the ones they will be asked about.
+    """
+    loader = WindowLoader(
+        published.training, batch_size=run.batch_size, seed=run.seed, shuffle=False
+    )
+    masking = TokenMasking(MIXTURE)
+    draws = torch.Generator().manual_seed(run.seed)
+    return [(batch, masking.draw(batch, draws)) for batch in loader.batches_of(0)]
 
 
 def train(published: Published, run: Run) -> Trained:
     torch.manual_seed(run.seed)
+    # Built on the host, so that the seed gives the same initial weights whatever the device.
     model = MaskedReconstruction(
         SetEncoder.for_vocabulary(run.architecture, published.vocabulary_size),
         decoder_layers=DECODER_LAYERS,
-    )
+    ).to(run.device)
     loss = ReconstructionLoss()
     optimiser = torch.optim.Adam(model.parameters(), lr=run.learning_rate)
     loader = WindowLoader(published.training, batch_size=run.batch_size, seed=run.seed)
+    schedule = run.schedule(steps_per_epoch=len(loader))
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimiser, schedule.factor)
     masking = TokenMasking(MIXTURE)
     draws = torch.Generator().manual_seed(run.seed)
     epochs = []
@@ -254,12 +461,14 @@ def train(published: Published, run: Run) -> Trained:
         started = time.perf_counter()
         model.train()
         seen = []
-        for batch in loader.batches_of(epoch):
-            masks = masking.draw(batch, draws)
+        for on_host in loader.batches_of(epoch):
+            masks = masking.draw(on_host, draws).to(run.device)
+            batch = on_host.to(run.device)
             optimiser.zero_grad()
             step = loss(model(batch, masks), batch, masks)
             step.backward()
             optimiser.step()
+            scheduler.step()
             seen.append(step.item())
         validation, _ = evaluate(model, published, run)
         epochs.append(Epoch(float(np.mean(seen)), validation, time.perf_counter() - started))
@@ -273,7 +482,8 @@ def evaluate(model: MaskedReconstruction, published: Published, run: Run) -> tup
     loss = ReconstructionLoss()
     total, hidden, observed = 0.0, 0, 0
     with torch.no_grad():
-        for batch, masks in validation_batches(published, run):
+        for on_host, masks_on_host, _ in validation_batches(published, run):
+            batch, masks = on_host.to(run.device), masks_on_host.to(run.device)
             scored = int(masks.hidden.sum())
             total += float(loss(model(batch, masks), batch, masks)) * scored
             hidden += scored
@@ -282,26 +492,36 @@ def evaluate(model: MaskedReconstruction, published: Published, run: Run) -> tup
 
 
 def diagnose(published: Published, trained: Trained, run: Run) -> Diagnosis:
+    fit = masked_training_batches(published, run)
     interpolation = LinearInterpolationBaseline()
-    ridge = CrossChannelRidgeBaseline.fitted(
-        WindowLoader(
-            published.training, batch_size=run.batch_size, seed=run.seed, shuffle=False
-        ).batches_of(0),
-        vocabulary_size=published.vocabulary_size,
+    ridge = CrossChannelRidgeBaseline.fitted(fit, vocabulary_size=published.vocabulary_size)
+    combined = OwnAndCrossChannelRidgeBaseline.fitted(
+        fit, vocabulary_size=published.vocabulary_size
     )
-    triviality = TrivialityDiagnostic(channels_apart=published.channels_apart())
+    apart = published.channels_apart()
+    triviality = TrivialityDiagnostic(
+        channels_apart=apart, noise_variance=published.noise_variance()
+    )
     cycles = published.spectral_cycles()
     spectrum_of_model = SpectralRecovery.up_to(cycles)
     spectrum_of_ridge = SpectralRecovery.up_to(cycles)
     loss = ReconstructionLoss()
-    interpolation_total, ridge_total, hidden = 0.0, 0.0, 0
+    interpolation_total, ridge_total, hidden, windows = 0.0, 0.0, 0, 0
     examples: list[Example] = []
     with torch.no_grad():
-        for batch, masks in validation_batches(published, run):
-            predicted = trained.model(batch, masks)
+        for batch, masks, units in validation_batches(published, run):
+            predicted = trained.model(batch.to(run.device), masks.to(run.device)).cpu()
             interpolated = interpolation.predict(batch, masks)
             regressed = ridge.predict(batch, masks)
-            triviality = triviality.observe(batch, masks, predicted, interpolated, regressed)
+            triviality = triviality.observe(
+                batch,
+                masks,
+                units,
+                model=predicted,
+                interpolation=interpolated,
+                ridge=regressed,
+                combined=combined.predict(batch, masks),
+            )
             spectrum_of_model = spectrum_of_model.observe(batch, masks, predicted)
             spectrum_of_ridge = spectrum_of_ridge.observe(batch, masks, regressed)
             scored = int(masks.hidden.sum())
@@ -310,33 +530,53 @@ def diagnose(published: Published, trained: Trained, run: Run) -> Diagnosis:
             hidden += scored
             if len(examples) < EXAMPLE_WINDOWS * len(MaskKind):
                 examples += pick_examples(
-                    published, batch, masks, predicted, interpolated, regressed, len(examples)
+                    batch,
+                    masks,
+                    predicted,
+                    interpolated,
+                    regressed,
+                    first_window=windows,
+                    channel_name=published.channel_name,
+                    apart=apart,
                 )
+            windows += batch.batch_size
     return Diagnosis(
-        verdicts=triviality.verdicts(),
         interpolation_loss=interpolation_total / max(hidden, 1),
         ridge_loss=ridge_total / max(hidden, 1),
         spectrum_of_model=spectrum_of_model,
         spectrum_of_ridge=spectrum_of_ridge,
         examples=tuple(examples[: EXAMPLE_WINDOWS * len(MaskKind)]),
+        tallies=triviality.tallies(),
     )
 
 
 def pick_examples(
-    published: Published,
     batch: TokenTensors,
     masks: TokenMasks,
     predicted: torch.Tensor,
     interpolated: torch.Tensor,
     regressed: torch.Tensor,
-    offset: int,
+    *,
+    first_window: int,
+    channel_name: Callable[[int], str],
+    apart: frozenset[int],
 ) -> list[Example]:
-    """One channel per kind of mask from the first windows of the batch, for the figure."""
-    vocabulary = published.manifest.scheme.vocabulary
-    apart = published.channels_apart()
+    """One channel per kind of mask from the first windows of the batch, for the figure.
+
+    Args:
+        batch: The windows.
+        masks: What was hidden in them.
+        predicted: The model's prediction.
+        interpolated: The interpolation baseline's.
+        regressed: The cross-channel regression's.
+        first_window: Position of the batch's first window among the validation windows.
+        channel_name: The name of a channel identifier.
+        apart: Channels the verdict leaves aside, which the figure leaves aside too.
+    """
     examples: list[Example] = []
     for row in range(min(batch.batch_size, EXAMPLE_WINDOWS)):
         observed = ~batch.padding_mask[row]
+        visible = observed & ~masks.hidden[row]
         for kind in MaskKind:
             of_kind = masks.of_kind(kind)[row] & observed
             channels = [
@@ -350,17 +590,94 @@ def pick_examples(
             baseline = regressed if kind is MaskKind.CHANNEL else interpolated
             examples.append(
                 Example(
-                    window=offset + row,
-                    channel=vocabulary.entry(channels[0]).channel,
+                    window=first_window + row,
+                    channel=channel_name(channels[0]),
                     times=batch.timestamps[row][tokens].numpy(),
                     truth=batch.features[row, :, 0][tokens].numpy(),
-                    hidden=masks.hidden[row][tokens].numpy(),
+                    visible=visible[tokens].numpy(),
+                    of_kind=of_kind[tokens].numpy(),
                     kind=kind,
                     model=predicted[row][tokens].numpy(),
                     baseline=baseline[row][tokens].numpy(),
                 )
             )
     return examples
+
+
+def code_digest() -> str:
+    """A digest of the repository code this process has loaded: the package, scripts and support.
+
+    Two runs are compared only when their code agrees, uncommitted changes included, so that a
+    shorter run from before a change to a baseline is never taken for a run of this configuration.
+    Read off the modules actually loaded rather than off every file, so that editing a script the
+    run never imports does not set its stored runs apart; by the time a run is stored, everything
+    that computed its numbers has been imported.
+    """
+    roots = [REPO_ROOT / "src", REPO_ROOT / "scripts", REPO_ROOT / "tests"]
+    files = set()
+    for module in list(sys.modules.values()):
+        source = getattr(module, "__file__", None)
+        if source is None:
+            continue
+        path = Path(source).resolve()
+        if path.suffix == ".py" and any(path.is_relative_to(root) for root in roots):
+            files.add(path)
+    digest = hashlib.sha256()
+    for path in sorted(files):
+        digest.update(path.relative_to(REPO_ROOT).as_posix().encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:16]
+
+
+def results_of(run: Run, published: Published, trained: Trained, diagnosis: Diagnosis) -> Results:
+    """What the run measured, in the form the assessment reads and the CSV files store."""
+    architecture = run.architecture
+    settings = {
+        "corpus": run.corpus,
+        "date": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+        "code": code_digest(),
+        "machine": machine(),
+        "python": sys.version.split()[0],
+        "torch": version("torch"),
+        "tier": run.tier,
+        "shape": (
+            f"{architecture.width},{architecture.heads},{architecture.layers},"
+            f"{architecture.feedforward_width}"
+        ),
+        "decoder_layers": str(DECODER_LAYERS),
+        "units": "" if run.units is None else str(run.units),
+        "training_windows": str(len(published.training)),
+        "validation_windows": str(len(published.validation)),
+        "validation_units": str(len(set(published.validation_units))),
+        "window_length": f"{WINDOW.length:g}",
+        "window_stride": f"{WINDOW.stride:g}",
+        "batch_size": str(run.batch_size),
+        "learning_rate": f"{run.learning_rate:g}",
+        "warmup_epochs": str(run.warmup_epochs),
+        "final_lr_fraction": f"{run.final_lr_fraction:g}",
+        "seed": str(run.seed),
+        "device": run.device,
+        "noise": "" if published.noise is None else f"{published.noise:g}",
+    }
+    model, ridge = diagnosis.spectrum_of_model, diagnosis.spectrum_of_ridge
+    return Results(
+        settings=settings,
+        strategy=MIXTURE,
+        realised_ratio=trained.hidden_ratio,
+        curve=Curve(
+            training=tuple(epoch.training_loss for epoch in trained.epochs),
+            validation=tuple(epoch.validation_loss for epoch in trained.epochs),
+            seconds=tuple(epoch.seconds for epoch in trained.epochs),
+        ),
+        tallies=diagnosis.tallies,
+        spectrum=Spectrum(
+            truth=model.truth_energy,
+            model_residual=model.residual_energy,
+            ridge_residual=ridge.residual_energy,
+            fitted=model.fitted,
+            skipped=model.skipped,
+        ),
+    )
 
 
 def heading(run: Run, published: Published, trained: Trained) -> str:
@@ -384,8 +701,9 @@ def heading(run: Run, published: Published, trained: Trained) -> str:
         "of observed tokens"
     )
     training = (
-        f"{run.epochs} epochs, batch {run.batch_size}, Adam at {run.learning_rate:g}, "
-        f"seed {run.seed}, CPU"
+        f"{run.epochs} epochs, batch {run.batch_size}, Adam at a peak of {run.learning_rate:g}, "
+        f"{run.warmup_epochs} epoch(s) of warmup then cosine decay to "
+        f"{run.final_lr_fraction:g} of the peak, seed {run.seed}, {run.device.upper()}"
     )
     rows = [
         ("Machine", machine()),
@@ -418,7 +736,8 @@ def loss_section(trained: Trained, diagnosis: Diagnosis) -> str:
     summary = (
         f"Validation loss went from {first.validation_loss:.4f} to {last.validation_loss:.4f} "
         f"(÷{factor:.1f}); over the same hidden tokens the interpolation baseline scores "
-        f"{diagnosis.interpolation_loss:.4f} and the ridge baseline {diagnosis.ridge_loss:.4f}."
+        f"{diagnosis.interpolation_loss:.4f} and the ridge baseline, fitted under the same "
+        f"masking, {diagnosis.ridge_loss:.4f}."
     )
     return (
         "### Loss\n\n"
@@ -428,37 +747,8 @@ def loss_section(trained: Trained, diagnosis: Diagnosis) -> str:
     )
 
 
-def triviality_section(diagnosis: Diagnosis) -> str:
-    rows = [
-        (
-            verdict.kind.value + (" (apart)" if verdict.apart else ""),
-            "ridge" if verdict.kind is MaskKind.CHANNEL else "interpolation",
-            f"{verdict.tokens:,}",
-            f"{verdict.model_error:.4f}",
-            f"{verdict.baseline_error:.4f}",
-            f"{verdict.excess:+.4f}",
-            "trivial" if verdict.trivial else "learnt",
-        )
-        for verdict in diagnosis.verdicts
-    ]
-    return "### Triviality per kind of mask\n\n" + table(
-        ("Kind", "Baseline", "Tokens", "Model", "Baseline error", "Excess", "Verdict"), rows
-    )
-
-
-# A frequency holding less than this share of the truth's energy is noise, not signal: nothing
-# recovers noise, so a share of it "recovered" says nothing about the model.
-INFORMATIVE_SHARE = 0.01
-
-
-def informative_frequencies(spectrum: SpectralRecovery) -> list[int]:
-    """Cycles per window at which the truth holds a share of its energy worth recovering."""
-    total = sum(spectrum.truth_energy)
-    return [
-        k + 1
-        for k, energy in enumerate(spectrum.truth_energy)
-        if total > 0.0 and energy / total >= INFORMATIVE_SHARE
-    ]
+def triviality_section(assessment: Assessment) -> str:
+    return "### Triviality per kind of mask\n\n" + kinds_table(assessment.summaries)
 
 
 def spectral_section(diagnosis: Diagnosis) -> str:
@@ -487,35 +777,60 @@ def spectral_section(diagnosis: Diagnosis) -> str:
     )
 
 
-def verdict_section(run: Run, trained: Trained, diagnosis: Diagnosis) -> str:
-    first, last = trained.epochs[0], trained.epochs[-1]
+def verdict_section(run: Run, assessment: Assessment) -> str:
+    """What the run shows, in one place and one voice with the assessment beneath it."""
+    results = assessment.results
+    first, last = results.curve.validation[0], results.curve.validation[-1]
     lines = [
-        f"- Loss {'fell' if last.validation_loss < first.validation_loss else 'did not fall'}: "
-        f"{first.validation_loss:.4f} → {last.validation_loss:.4f} on validation."
+        f"- Loss {'fell' if last < first else 'did not fall'}: "
+        f"{first:.4f} → {last:.4f} on validation."
     ]
-    for verdict in diagnosis.verdicts:
-        if verdict.apart:
+    for summary in assessment.summaries:
+        if summary.apart:
             continue
-        outcome = "trivial: nothing its baseline did not know" if verdict.trivial else "learnt"
-        lines.append(
-            f"- `{verdict.kind.value}` masks: model {verdict.model_error:.4f} against baseline "
-            f"{verdict.baseline_error:.4f} — {outcome}."
+        line = (
+            f"- `{summary.kind.value}` masks: model {summary.model_error:.4f} against "
+            f"{MATCHED_BASELINE[summary.kind]} {summary.matched_error:.4f}, excess "
+            f"{summary.matched_excess} — {summary.verdict.value}"
         )
+        if summary.kind in BEYOND_LINEAR:
+            line += (
+                f"; against the linear baseline {summary.linear_error:.4f}, "
+                f"{summary.linear_excess} — {summary.linear_excess.verdict.value}"
+            )
+        lines.append(line + ".")
     lines.append(
         "- Triviality diagnostic "
         + (
-            "**negative**: every kind of mask beats its baseline."
-            if diagnosis.negative
-            else "**positive** for at least one kind: see the table."
+            "**negative**: every kind of mask the strategy draws beats its matched baseline "
+            "beyond the bootstrap's doubt."
+            if assessment.triviality_negative
+            else "**positive** for at least one kind: see the table and the assessment."
         )
     )
-    spectrum = diagnosis.spectrum_of_model
-    informative = informative_frequencies(spectrum)
-    recovered = spectrum.recovered()
-    lost = [k for k in informative if recovered[k - 1] < 0.5]
+    lines.append("- " + spectrum_verdict(results.spectrum))
     lines.append(
-        f"- Spectrum: the truth holds its energy at {', '.join(map(str, informative)) or 'no'} "
-        f"cycle(s) per window of {spectrum.cycles} fitted; the model recovers "
+        f"- Figures: `masked-reconstruction-{run.corpus}-loss.png`, `…-windows.png`, "
+        "`…-diagnostics.png`."
+    )
+    return "### Verdict\n\n" + "\n".join(lines)
+
+
+def spectrum_verdict(spectrum: Spectrum) -> str:
+    if spectrum.fitted == 0:
+        return "Spectrum: no channel hidden whole had tokens enough to fit."
+    informative = spectrum.informative()
+    if len(informative) <= 1:
+        return (
+            f"Spectrum: uninformative on this corpus — the truth holds {spectrum.shares()[0]:.1%} "
+            "of its energy at one cycle per window and noise alone above it, so what the model "
+            "recovers cannot tell structure from smoothness."
+        )
+    recovered = spectrum.recovered(spectrum.model_residual)
+    lost = [k for k in informative if recovered[k - 1] < 0.5]
+    return (
+        f"Spectrum: the truth holds its energy at {', '.join(map(str, informative))} cycle(s) per "
+        f"window of {len(spectrum.truth)} fitted; the model recovers "
         + ", ".join(f"{recovered[k - 1]:.0%} at {k}" for k in informative)
         + (
             f" — it loses the signal at {', '.join(map(str, lost))}."
@@ -523,26 +838,26 @@ def verdict_section(run: Run, trained: Trained, diagnosis: Diagnosis) -> str:
             else "; every frequency the signal has is recovered."
         )
     )
-    lines.append(
-        f"- Figures: `docs/verification/figures/masked-reconstruction-{run.corpus}-loss.png`, "
-        f"`…-windows.png`, `…-diagnostics.png`."
-    )
-    return "### Verdict\n\n" + "\n".join(lines)
 
 
-def render(run: Run, published: Published, trained: Trained, diagnosis: Diagnosis) -> str:
+def render(
+    run: Run, published: Published, trained: Trained, diagnosis: Diagnosis, assessment: Assessment
+) -> str:
     return "\n\n".join(
         [
             heading(run, published, trained),
             loss_section(trained, diagnosis),
-            triviality_section(diagnosis),
+            triviality_section(assessment),
             spectral_section(diagnosis),
-            verdict_section(run, trained, diagnosis),
+            verdict_section(run, assessment),
+            assessment_section(assessment),
         ]
     )
 
 
-def draw_figures(run: Run, trained: Trained, diagnosis: Diagnosis, directory: Path) -> None:
+def draw_figures(
+    run: Run, trained: Trained, diagnosis: Diagnosis, assessment: Assessment, directory: Path
+) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     stem = f"masked-reconstruction-{run.corpus}"
 
@@ -567,44 +882,46 @@ def draw_figures(run: Run, trained: Trained, diagnosis: Diagnosis, directory: Pa
         for axis, example in zip(np.atleast_1d(axes), examples, strict=False):
             axis.plot(example.times, example.truth, color="black", linewidth=1, label="truth")
             axis.scatter(
-                example.times[~example.hidden],
-                example.truth[~example.hidden],
+                example.times[example.visible],
+                example.truth[example.visible],
                 s=12,
                 color="black",
                 label="visible",
             )
-            hidden = example.hidden
             axis.scatter(
-                example.times[hidden],
-                example.model[hidden],
+                example.times[example.of_kind],
+                example.model[example.of_kind],
                 marker="x",
                 color="tab:red",
                 label="model",
             )
             axis.scatter(
-                example.times[hidden],
-                example.baseline[hidden],
+                example.times[example.of_kind],
+                example.baseline[example.of_kind],
                 marker="^",
                 s=14,
                 color="tab:blue",
-                label="baseline",
+                label="matched baseline",
             )
             axis.set_ylabel(
                 f"w{example.window} {example.channel}\n{example.kind.value}", fontsize=8
             )
         np.atleast_1d(axes)[0].legend(fontsize=7, ncol=4, loc="upper right")
         np.atleast_1d(axes)[-1].set_xlabel("position in window")
-        figure.suptitle(f"{run.corpus}: hidden tokens, model against the matched baseline")
+        figure.suptitle(
+            f"{run.corpus}: tokens hidden by each kind of mask, model against the matched baseline"
+        )
         figure.tight_layout()
         figure.savefig(directory / f"{stem}-windows.png", dpi=120)
         plt.close(figure)
 
     figure, (left, right) = plt.subplots(1, 2, figsize=(10, 4))
-    verdicts = [verdict for verdict in diagnosis.verdicts if not verdict.apart]
-    positions = np.arange(len(verdicts))
-    left.bar(positions - 0.2, [v.model_error for v in verdicts], width=0.4, label="model")
-    left.bar(positions + 0.2, [v.baseline_error for v in verdicts], width=0.4, label="baseline")
-    left.set_xticks(positions, [v.kind.value for v in verdicts])
+    judged = [summary for summary in assessment.summaries if not summary.apart]
+    positions = np.arange(len(judged))
+    left.bar(positions - 0.27, [s.model_error for s in judged], width=0.27, label="model")
+    left.bar(positions, [s.matched_error for s in judged], width=0.27, label="matched baseline")
+    left.bar(positions + 0.27, [s.linear_error for s in judged], width=0.27, label="linear")
+    left.set_xticks(positions, [s.kind.value for s in judged])
     left.set_ylabel("mean squared error")
     left.set_title("triviality per kind of mask")
     left.legend()
@@ -643,9 +960,13 @@ def shape_of(spec: str) -> EncoderArchitecture:
     )
 
 
+def shown(path: Path) -> Path:
+    return path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--corpus", action="append", choices=sorted(LAYOUTS))
+    parser.add_argument("--corpus", action="append", choices=corpora())
     parser.add_argument("--tier", default="S", choices=["S", "M"])
     parser.add_argument(
         "--shape",
@@ -655,32 +976,88 @@ def main(argv: Sequence[str] | None = None) -> None:
         "the tier's is too slow for the machine; the time frequencies stay the tier's",
     )
     parser.add_argument("--units", type=int, default=None, help="cut the layout to this many units")
-    parser.add_argument("--epochs", type=int, default=8)
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=None,
+        help="epochs for every corpus named; by default each corpus's measured budget",
+    )
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument("--learning-rate", type=float, default=1e-3, help="the peak rate")
+    parser.add_argument("--warmup-epochs", type=int, default=WARMUP_EPOCHS)
+    parser.add_argument(
+        "--final-lr-fraction",
+        type=float,
+        default=FINAL_LR_FRACTION,
+        help="the rate the decay ends at, as a fraction of the peak; 1 with no warmup is constant",
+    )
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument(
+        "--device",
+        choices=DEVICES,
+        default=default_device(),
+        help="where the model trains; runs on different devices are never compared",
+    )
     parser.add_argument("--workspace", type=Path, default=REPO_ROOT / "data" / "report")
     parser.add_argument("--figures", type=Path, default=FIGURES)
+    parser.add_argument(
+        "--results",
+        type=Path,
+        default=RESULTS,
+        help="directory each run is stored under as CSV, beside an index of every run",
+    )
     arguments = parser.parse_args(argv)
-    torch.set_num_threads(max(torch.get_num_threads(), 1))
-    sections = []
-    for corpus in arguments.corpus or ["control-a", "control-b"]:
+    if not device_available(arguments.device):
+        parser.error(f"device {arguments.device} is not available on this machine")
+    runs = []
+    for corpus in arguments.corpus or DEFAULT_CORPORA:
+        epochs = (
+            arguments.epochs
+            if arguments.epochs is not None
+            else measured_epochs(arguments.tier, corpus)
+        )
+        if epochs is None:
+            parser.error(
+                f"no measured epochs for {corpus} at tier {arguments.tier}: name them with --epochs"
+            )
         run = Run(
             corpus=corpus,
             tier=arguments.tier,
             shape=arguments.shape,
             units=arguments.units,
-            epochs=arguments.epochs,
+            epochs=epochs,
             batch_size=arguments.batch_size,
             learning_rate=arguments.learning_rate,
+            warmup_epochs=arguments.warmup_epochs,
+            final_lr_fraction=arguments.final_lr_fraction,
             seed=arguments.seed,
+            device=arguments.device,
         )
-        published = publish(run, arguments.workspace / corpus)
+        try:
+            # Whether the schedule holds does not depend on how many steps an epoch has.
+            run.schedule(steps_per_epoch=1)
+        except InvalidLearningRateScheduleError as error:
+            parser.error(str(error))
+        runs.append(run)
+    torch.set_num_threads(max(torch.get_num_threads(), 1))
+    assess = AssessReconstructionRun(UnitBootstrap())
+    sections = []
+    for run in runs:
+        published = publish(run, arguments.workspace / run.corpus)
         trained = train(published, run)
         diagnosis = diagnose(published, trained, run)
-        draw_figures(run, trained, diagnosis, arguments.figures)
-        sections.append(render(run, published, trained, diagnosis))
-    sys.stdout.reconfigure(encoding="utf-8", newline="\n")  # type: ignore[union-attr]
+        results = results_of(run, published, trained, diagnosis)
+        assessment = assess(results, find_shorter(results, arguments.results))
+        draw_figures(run, trained, diagnosis, assessment, arguments.figures)
+        stored = store(assessment, arguments.results)
+        sections.append(
+            render(run, published, trained, diagnosis, assessment)
+            + f"\n\nFigures in `{shown(arguments.figures)}`; the run is stored in "
+            f"`{shown(stored)}`."
+        )
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        # The tables use ×, → and —; the note this output is pasted into is UTF-8 and LF-only.
+        sys.stdout.reconfigure(encoding="utf-8", newline="\n")
     print("\n\n".join(sections))
 
 
