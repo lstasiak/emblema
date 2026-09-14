@@ -129,7 +129,7 @@ def publish_once(
     registry: CorpusRepository,
 ) -> Published:
     store = LocalDirectoryArtifactStore(workspace / "store")
-    process = CompositionRoot(
+    process = CompositionRoot.over(
         corpus=command.name,
         corpus_root=root,
         workspace=workspace / "blocks",

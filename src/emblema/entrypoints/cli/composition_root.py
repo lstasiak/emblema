@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Self
 
 from sqlalchemy import create_engine
 
@@ -63,8 +64,8 @@ class CompositionRoot:
 
         Args:
             settings: Values read from the environment; only the root and the adapters see them.
-                Needed only to build the store or the repository, so a process given both reads
-                none.
+                Needed only to build the store or the repository; a process bringing both of its
+                own is assembled by ``over`` instead, which requires them.
             corpus: Name of the corpus to publish; it decides which adapter reads it, and is
                 needed only where ``reader`` is left to the root to choose.
             corpus_root: Directory the raw corpus is read from, where it is read from files.
@@ -96,6 +97,38 @@ class CompositionRoot:
             ids=Uuid4IdGenerator() if ids is None else ids,
         )
         self.services = self._services(self.adapters)
+
+    @classmethod
+    def over(
+        cls,
+        *,
+        corpora: CorpusRepository,
+        store: ArtifactStore,
+        corpus: str | None = None,
+        corpus_root: Path,
+        workspace: Path,
+        subsets: tuple[str, ...] = (),
+        reader: CorpusReader | None = None,
+        clock: Clock | None = None,
+        ids: IdGenerator | None = None,
+    ) -> Self:
+        """The process over a repository and a store of its own, nothing read from the environment.
+
+        Those two are the only adapters the root builds from settings, and here they are required:
+        what the general constructor refuses at runtime when settings are missing, this refuses at
+        the type. The reader is chosen as always, by name or by being given.
+        """
+        return cls(
+            corpus=corpus,
+            corpus_root=corpus_root,
+            workspace=workspace,
+            subsets=subsets,
+            corpora=corpora,
+            reader=reader,
+            store=store,
+            clock=clock,
+            ids=ids,
+        )
 
     @staticmethod
     def _services(adapters: Adapters) -> Services:
