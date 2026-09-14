@@ -21,7 +21,7 @@ and only their storage and printing remain below.
 | `fetch_corpora.py` | T-1.0a | tooling | archive checksums for a note | — |
 | `corpus_facts.py` | T-1.0a | measurement | counts pasted into `corpus_budget.toml` | — |
 | `corpus_budget_report.py`, `corpus_budget.toml` | T-1.0a | measurement | budget tables per tier | — |
-| `budget_file.py` | T-2.1 | shared | reads tier shapes and corpus facts from `corpus_budget.toml` for the other scripts | — |
+| `budget_file.py` | T-2.1 | shared | reads corpus facts from `corpus_budget.toml` for the other scripts | — |
 | `onnx_export_report.py` | T-0.6 | measurement | export size, latency, failing paths | — |
 | `loader_throughput_report.py` | T-1.3 | measurement | batching against a training step | — |
 | `window_sanity_report.py` | T-1.4 | measurement | `figures/cmapss-*.png` | — |
@@ -38,7 +38,5 @@ and only their storage and printing remain below.
 - `scripts` and `tests` import each other. `onnx_export_report.py`, `encoder_budget_report.py`,
   `published_corpus_report.py` and `masked_reconstruction_report.py` import `tests.support`, and
   `tests/ml/test_loader_keeps_up_on_mps.py` imports `scripts`.
-- Tier shapes, which are scale parameters (N-15), are read by `budget_file.py` from a file in this
-  directory rather than from `emblema.config`.
 - Nine scripts put the repository root on `sys.path` before their imports, and each carries a lint
   exemption (E402) for it in `pyproject.toml`.

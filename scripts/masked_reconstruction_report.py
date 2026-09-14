@@ -71,6 +71,7 @@ from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import Synthetic
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
+from emblema.config.compute_tiers import ComputeTiers
 from emblema.entrypoints.cli.composition_root import CompositionRoot
 from emblema.entrypoints.cli.known_corpora import (
     GENERATED_LICENCE,
@@ -91,6 +92,7 @@ from emblema.pretraining.adapters.diagnostics.spectral_recovery import SpectralR
 from emblema.pretraining.adapters.diagnostics.triviality_diagnostic import TrivialityDiagnostic
 from emblema.pretraining.adapters.diagnostics.unit_bootstrap import UnitBootstrap
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
 from emblema.pretraining.adapters.objective.reconstruction_loss import ReconstructionLoss
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
@@ -112,8 +114,8 @@ from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
+from emblema.shared.kernel.compute import ComputeTier
 from emblema.shared.kernel.tokens import TokenWindow
-from scripts.budget_file import architecture_of, tier_named
 from scripts.masked_reconstruction_assessment import (
     assessment_section,
     find_shorter,
@@ -206,7 +208,9 @@ class Run:
     @property
     def architecture(self) -> EncoderArchitecture:
         """The tier's shape, unless the run states a smaller one a slow machine can afford."""
-        return self.shape if self.shape is not None else architecture_of(tier_named(self.tier))
+        if self.shape is not None:
+            return self.shape
+        return architecture_of(ComputeTiers.load().profile(ComputeTier(self.tier)))
 
     @property
     def shape_label(self) -> str:
@@ -956,7 +960,7 @@ def shape_of(spec: str) -> EncoderArchitecture:
         heads=heads,
         layers=layers,
         feedforward_width=feedforward,
-        time_frequencies=architecture_of(tier_named("S")).time_frequencies,
+        time_frequencies=ComputeTiers.load().profile(ComputeTier.S).time_frequencies,
     )
 
 

@@ -30,8 +30,11 @@ import numpy as np
 import onnxruntime as ort
 import torch
 
+from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
-from scripts.budget_file import architecture_of, tier_named, vocabulary_size
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
+from emblema.shared.kernel.compute import ComputeTier
+from scripts.budget_file import vocabulary_size
 from tests.ml.onnx_export.exported_encoder import (
     MAX_TOKENS,
     OPSET_VERSION,
@@ -80,14 +83,15 @@ def measure_latency(call: Callable[[], object]) -> float:
     return (time.perf_counter() - started) / REPETITIONS * 1000
 
 
-def tier_encoder(name: str) -> PooledSetEncoder:
+def tier_encoder(name: ComputeTier) -> PooledSetEncoder:
     """The encoder at the shape of compute tier ``name``, pooled, as the export takes it.
 
     Over the vocabulary of the measured corpora, not the test one: a table of the wrong height
     would put a parameter count in this report that no model of that tier has.
     """
     torch.manual_seed(SEED)
-    encoder = SetEncoder.for_vocabulary(architecture_of(tier_named(name)), vocabulary_size())
+    architecture = architecture_of(ComputeTiers.load().profile(name))
+    encoder = SetEncoder.for_vocabulary(architecture, vocabulary_size())
     return PooledSetEncoder(encoder.eval())
 
 
@@ -210,7 +214,7 @@ def main() -> None:
     report_alternatives(
         rows, "Encoder the test suite exports", PooledSetEncoder(small_encoder(seed=SEED))
     )
-    report_alternatives(rows, "Encoder at compute tier M", tier_encoder("M"))
+    report_alternatives(rows, "Encoder at compute tier M", tier_encoder(ComputeTier.M))
     print("\n".join(rows))
 
 

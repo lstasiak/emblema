@@ -1,9 +1,9 @@
 """Turn the corpus facts and the cost assumptions into the pretraining budget tables.
 
-Every number that drives the budget lives in ``corpus_budget.toml`` next to this script: measured
-corpus facts, window variants, compute tiers, the cost model and the eligibility thresholds. This
-script only does the arithmetic and prints markdown for the verification note, so a later
-measurement corrects the file, not the code.
+Every number that drives the budget lives in a file: measured corpus facts, window variants, the
+cost model and the eligibility thresholds in ``corpus_budget.toml`` next to this script, the
+compute tiers in ``emblema.config``. This script only does the arithmetic and prints markdown for
+the verification note, so a later measurement corrects a file, not the code.
 
     uv run scripts/corpus_budget_report.py
     uv run scripts/corpus_budget_report.py --config path/to/other.toml
@@ -26,12 +26,13 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from emblema.config.compute_tiers import ComputeTierProfile, ComputeTiers, WindowChoice
+
 DEFAULT_CONFIG = Path(__file__).resolve().with_name("corpus_budget.toml")
 
 Answer = Literal["yes", "no", "unclear"]
 Verdict = Literal["pretraining", "ingredient", "downstream-only", "candidate", "rejected"]
 MIXED = frozenset({"pretraining", "ingredient"})
-WindowChoice = Literal["default", "longest"]
 Basis = Literal["measured", "estimate"]
 
 
@@ -74,25 +75,6 @@ class Thresholds(Strict):
     gpu_hours_cap: float = Field(
         gt=0, description="T4-class total above which the scale knobs are turned now, not later"
     )
-
-
-class Tier(Strict):
-    name: str = Field(description="S, M or L")
-    device: str = Field(description="Hardware and precision the tier runs on")
-    tflops: float = Field(gt=0, description="Sustained throughput assumed for the device, TFLOP/s")
-    width: int = Field(gt=0, description="Model width")
-    heads: int = Field(gt=0, description="Attention heads per block")
-    layers: int = Field(gt=0, description="Encoder layers")
-    feedforward_width: int = Field(
-        gt=0, description="Hidden width of the feed-forward network in each block"
-    )
-    time_frequencies: int = Field(gt=0, description="Fourier frequencies of the time encoding")
-    corpus_fraction: float = Field(gt=0, le=1, description="Share of each corpus seen per epoch")
-    window: WindowChoice = Field(description="Window variant of each corpus the tier trains on")
-
-    @property
-    def parameters(self) -> float:
-        return parameter_count(self.width, self.layers)
 
 
 class Window(Strict):
@@ -290,7 +272,7 @@ class Sweep(Strict):
 class Budget(Strict):
     cost_model: CostModel
     thresholds: Thresholds
-    tiers: tuple[Tier, ...] = Field(min_length=1)
+    tiers: tuple[ComputeTierProfile, ...] = Field(min_length=1)
     corpora: dict[str, Corpus]
     backbones: tuple[Backbone, ...]
     campaigns: tuple[Campaign, ...]
@@ -298,9 +280,18 @@ class Budget(Strict):
     sweep: Sweep
 
     @classmethod
-    def load(cls, path: Path) -> Self:
+    def load(cls, path: Path, tiers: ComputeTiers | None = None) -> Self:
+        """The budget in ``path``, priced at ``tiers`` — the configured compute tiers by default.
+
+        Raises:
+            ValueError: If the file states tiers of its own, which would silently be ignored.
+        """
         with path.open("rb") as source:
-            return cls.model_validate(tomllib.load(source))
+            raw = tomllib.load(source)
+        if "tiers" in raw:
+            raise ValueError(f"{path.name} states tiers; they belong to emblema.config")
+        priced = ComputeTiers.load() if tiers is None else tiers
+        return cls.model_validate({**raw, "tiers": priced.tiers})
 
     @model_validator(mode="after")
     def check_references(self) -> Self:
@@ -320,7 +311,7 @@ class Budget(Strict):
             raise ValueError("tier M is the reference for thresholds and campaigns")
         return self
 
-    def tier(self, name: str) -> Tier:
+    def tier(self, name: str) -> ComputeTierProfile:
         return next(tier for tier in self.tiers if tier.name == name)
 
     def eligible(self) -> list[str]:
@@ -333,6 +324,10 @@ class Budget(Strict):
 
 
 # --- arithmetic -------------------------------------------------------------------------------
+
+
+def parameters(tier: ComputeTierProfile) -> float:
+    return parameter_count(tier.width, tier.layers)
 
 
 def parameter_count(width: int, layers: int) -> float:
@@ -391,10 +386,10 @@ def window_stats(key: str, corpus: Corpus, window: Window) -> WindowStats:
     return WindowStats(key, window, count, observed + estimate.timeless_tokens_per_unit, "estimate")
 
 
-def pretraining_hours(key: str, corpus: Corpus, tier: Tier, budget: Budget) -> float:
+def pretraining_hours(key: str, corpus: Corpus, tier: ComputeTierProfile, budget: Budget) -> float:
     stats = window_stats(key, corpus, corpus.pick_window(tier.window))
     flops = flops_per_window(
-        stats.tokens_per_window, tier.parameters, tier.width, tier.layers, budget.cost_model
+        stats.tokens_per_window, parameters(tier), tier.width, tier.layers, budget.cost_model
     )
     windows_seen = stats.count * tier.corpus_fraction * corpus.epochs
     return gpu_hours(windows_seen * flops, tier.tflops)
@@ -408,7 +403,7 @@ def backbone_corpora(backbone: Backbone, budget: Budget) -> list[list[str]]:
     return [keys for _ in range(backbone.count)]
 
 
-def backbone_hours(backbone: Backbone, budget: Budget, tier: Tier) -> float:
+def backbone_hours(backbone: Backbone, budget: Budget, tier: ComputeTierProfile) -> float:
     total = 0.0
     for keys in backbone_corpora(backbone, budget):
         hours = sum(pretraining_hours(key, budget.corpora[key], tier, budget) for key in keys)
@@ -418,13 +413,15 @@ def backbone_hours(backbone: Backbone, budget: Budget, tier: Tier) -> float:
     return total
 
 
-def campaign_run_hours(campaign: Campaign, budget: Budget, model: Tier, tflops: float) -> float:
+def campaign_run_hours(
+    campaign: Campaign, budget: Budget, model: ComputeTierProfile, tflops: float
+) -> float:
     """One fine-tuning run of the ``model`` tier's backbone on a device of ``tflops``."""
     corpus = budget.corpora[campaign.task_corpus]
     stats = window_stats(campaign.task_corpus, corpus, corpus.pick_window("default"))
     windows = stats.count if campaign.budget == "all" else campaign.budget
     flops = flops_per_window(
-        stats.tokens_per_window, model.parameters, model.width, model.layers, budget.cost_model
+        stats.tokens_per_window, parameters(model), model.width, model.layers, budget.cost_model
     )
     return gpu_hours(windows * campaign.epochs * flops, tflops)
 
@@ -489,7 +486,7 @@ def render_assumptions(budget: Budget) -> str:
             tier.device,
             f"{tier.tflops:g}",
             f"{tier.width} × {tier.layers}",
-            si(tier.parameters),
+            si(parameters(tier)),
             f"{tier.corpus_fraction:g}",
             tier.window,
         )
@@ -548,7 +545,7 @@ def render_corpora(budget: Budget) -> str:
             stats = window_stats(key, corpus, window)
             flops = flops_per_window(
                 stats.tokens_per_window,
-                reference.parameters,
+                parameters(reference),
                 reference.width,
                 reference.layers,
                 budget.cost_model,
@@ -586,7 +583,7 @@ def render_corpora(budget: Budget) -> str:
 def render_thresholds(budget: Budget) -> str:
     reference = budget.tier("M")
     limits = budget.thresholds
-    needed = limits.unique_tokens_per_parameter * reference.parameters
+    needed = limits.unique_tokens_per_parameter * parameters(reference)
     rows = []
     for corpus in budget.corpora.values():
         unique = corpus.unique_observations()
@@ -598,7 +595,7 @@ def render_thresholds(budget: Budget) -> str:
                 "yes" if corpus.units >= limits.min_training_units else "**no**",
                 si(unique),
                 "yes" if unique >= needed else "**no**",
-                f"{effective / reference.parameters:.0f}",
+                f"{effective / parameters(reference):.0f}",
                 corpus.verdict,
                 corpus.decision,
             )
@@ -715,7 +712,7 @@ def render_campaigns(budget: Budget) -> str:
     )
     return "\n".join(
         [
-            f"Fine-tuning always uses the tier-{model.name} backbone ({si(model.parameters)} "
+            f"Fine-tuning always uses the tier-{model.name} backbone ({si(parameters(model))} "
             "parameters); the columns differ only by device.",
             "",
             table(header, rows),

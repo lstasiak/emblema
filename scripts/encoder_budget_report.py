@@ -31,16 +31,19 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import torch
 
+from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
-from scripts.budget_file import architecture_of, budget, tier_named, vocabulary_size
+from emblema.shared.kernel.compute import ComputeTier
+from scripts.budget_file import budget, vocabulary_size
 from scripts.loader_throughput_report import device_in_use, median_seconds, synchronise
 from scripts.reporting import dated_heading, machine, table
 from tests.support.token_tensors import random_batch
 
-TIERS = ("S", "M")
+TIERS = (ComputeTier.S, ComputeTier.M)
 # The tier whose results are published, so the one the verdict is about.
-PUBLISHED_TIER = "M"
+PUBLISHED_TIER = ComputeTier.M
 # Tokens a timed step carries in all, whatever the window length: a batch of long windows is small
 # and a batch of short ones large, and the numbers are reported per window either way.
 TOKENS_PER_STEP = 8192
@@ -181,7 +184,8 @@ class Measurements:
 def measure() -> Measurements:
     device = device_in_use()
     lengths = window_lengths()
-    architectures = {name: architecture_of(tier_named(name)) for name in TIERS}
+    tiers = ComputeTiers.load()
+    architectures = {str(name): architecture_of(tiers.profile(name)) for name in TIERS}
     steps = {
         (name, length.tokens): measure_step(
             architecture, tokens=length.tokens, batch=batch_for(length.tokens), device=device

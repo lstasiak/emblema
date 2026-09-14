@@ -25,7 +25,6 @@ from datetime import datetime
 from importlib.metadata import version
 from itertools import chain, count, islice
 from pathlib import Path
-from typing import Any
 
 # Run from anywhere: the sibling script modules live in this directory's package at the repository
 # root. The imports below follow, which is why this file is exempt from the import-order rule in
@@ -40,12 +39,14 @@ from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTo
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
+from emblema.config.compute_tiers import ComputeTierProfile, ComputeTiers
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.shared.adapters.loaders.seeded_shuffle_sampler import SeededShuffleSampler
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.kernel.tokens import Token, TokenWindow
-from scripts.budget_file import architecture_of, budget
+from scripts.budget_file import budget
 from scripts.reporting import table
 
 RAW = REPO_ROOT / "data" / "raw" / "cmapss"
@@ -252,7 +253,7 @@ class Measurements:
     collating: dict[int, float]
     transfer: float
     steps: dict[str, float]
-    tiers: list[dict[str, Any]]
+    tiers: list[ComputeTierProfile]
 
     def feeding(self, workers: int) -> float:
         """Seconds to put one batch in front of the model: collating it and moving it across."""
@@ -262,7 +263,7 @@ class Measurements:
 def measure() -> Measurements:
     device = device_in_use()
     corpus = load_corpus()
-    tiers = [tier for tier in budget()["tiers"] if tier["name"] in ("S", "M")]
+    tiers = [tier for tier in ComputeTiers.load().tiers if tier.name in ("S", "M")]
     return Measurements(
         device=device,
         corpus=corpus,
@@ -272,7 +273,7 @@ def measure() -> Measurements:
         },
         transfer=transfer_seconds(corpus.windows, device=device),
         steps={
-            tier["name"]: step_seconds(
+            tier.name: step_seconds(
                 corpus.windows, architecture=architecture_of(tier), device=device
             )
             for tier in tiers
@@ -340,11 +341,11 @@ def ordering_section() -> str:
 def steps_section(measured: Measurements) -> str:
     rows = [
         (
-            tier["name"],
-            str(tier["width"]),
-            str(tier["layers"]),
-            f"{measured.steps[tier['name']] * 1e3:.0f} ms",
-            f"{BATCH_SIZE / measured.steps[tier['name']]:,.0f}",
+            tier.name,
+            str(tier.width),
+            str(tier.layers),
+            f"{measured.steps[tier.name] * 1e3:.0f} ms",
+            f"{BATCH_SIZE / measured.steps[tier.name]:,.0f}",
         )
         for tier in measured.tiers
     ]

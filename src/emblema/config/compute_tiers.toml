@@ -1,0 +1,50 @@
+# What each compute tier is (§4.6, N-15): the hardware it assumes and the scale an experiment runs at
+# there. An experiment declares its tier; the model shape, the share of each corpus and the window
+# follow from this file, never from code. Read by `emblema.config.compute_tiers.ComputeTiers`.
+#
+# Throughputs are sustained, not peak: T4 in fp16 with fused attention, an M1 Pro through MPS in
+# fp32, an A100 in bf16 at the ratio the paid platform prices it against the T4.
+#
+# Shape fields per tier are conventions and a derivation, not measurements. `heads` gives 64
+# features per head and `feedforward_width` is four times the width — the transformer defaults the
+# 12 · d² · L arithmetic assumes. `time_frequencies` must satisfy 2^F ≥ instants per window, so
+# that neighbouring instants get distinct encodings: 7 covers a 50-sample C-MAPSS window, 12 a
+# 48-hour PhysioNet stay at minute resolution, the finest spacing among the corpora. Past that there
+# is no margin to be had: a frequency whose period is shorter than the data's own spacing turns
+# neighbouring instants into unrelated encodings instead of nearby ones, which is the opposite of
+# what the encoding is for. Dropout is a run parameter, not a shape, and is not stated here.
+[[tiers]]
+name = "S"
+device = "M1 Pro, MPS, fp32"
+tflops = 1.25
+width = 192
+heads = 3
+layers = 4
+feedforward_width = 768
+time_frequencies = 12
+corpus_fraction = 0.1
+window = "default"
+
+[[tiers]]
+name = "M"
+device = "T4, fp16"
+tflops = 10.0
+width = 256
+heads = 4
+layers = 6
+feedforward_width = 1024
+time_frequencies = 12
+corpus_fraction = 1.0
+window = "default"
+
+[[tiers]]
+name = "L"
+device = "A100 40 GB, bf16"
+tflops = 50.0
+width = 256
+heads = 4
+layers = 6
+feedforward_width = 1024
+time_frequencies = 12
+corpus_fraction = 1.0
+window = "longest"
