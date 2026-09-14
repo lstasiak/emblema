@@ -321,6 +321,7 @@ def test_the_whole_road_stores_what_it_measured_per_unit(road: Road) -> None:
     assert measured.epochs == road.run.epochs
     assert measured.strategy == MIXTURE
     assert measured.settings["device"] == "cpu"
+    assert measured.settings["time_frequencies"] == str(TOY.time_frequencies)
     assert measured.settings["validation_units"] == str(len(set(road.published.validation_units)))
     assert {tally.group for tally in measured.tallies} <= set(road.published.validation_units)
     assert all(tally.floor is not None for tally in measured.tallies)

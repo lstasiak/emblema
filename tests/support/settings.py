@@ -1,4 +1,4 @@
-"""Settings for a process assembled in a test or a report: services named, none of them reached."""
+"""Settings for a process assembled in a test: services named, none of them reached."""
 
 from emblema.config.artifact_store_settings import ArtifactStoreSettings
 from emblema.config.database_settings import DatabaseSettings

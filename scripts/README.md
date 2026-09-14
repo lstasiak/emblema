@@ -10,6 +10,11 @@ Everything here is run by hand, outside the package. Each script is one of three
 - **Transitional** scripts stand in for package code that a named later ticket builds, and go with
   that ticket.
 
+A script imports the package and other scripts, never the tests
+(`tests/architecture/test_scripts_import_no_tests.py`). The report of the ONNX export spike
+(T-0.6) runs the suite's own harness, so it lives with that suite in `tests/ml/onnx_export/report.py`
+and goes with it at T-6.2.
+
 Logic that a verdict depends on belongs in `src/emblema`, under the architecture rules, types and
 coverage, not here. That is why the rules of the T-2.2 assessment live in `emblema.pretraining`
 and only their storage and printing remain below.
@@ -22,7 +27,6 @@ and only their storage and printing remain below.
 | `corpus_facts.py` | T-1.0a | measurement | counts pasted into `corpus_budget.toml` | — |
 | `corpus_budget_report.py`, `corpus_budget.toml` | T-1.0a | measurement | budget tables per tier | — |
 | `budget_file.py` | T-2.1 | shared | reads corpus facts from `corpus_budget.toml` for the other scripts | — |
-| `onnx_export_report.py` | T-0.6 | measurement | export size, latency, failing paths | — |
 | `loader_throughput_report.py` | T-1.3 | measurement | batching against a training step | — |
 | `window_sanity_report.py` | T-1.4 | measurement | `figures/cmapss-*.png` | — |
 | `synthetic_control_report.py` | T-1.5a | measurement | `figures/synthetic-control-*.png` | — |
@@ -35,8 +39,5 @@ and only their storage and printing remain below.
 
 - The tickets T-0.6, T-1.0a, T-1.3, T-1.4, T-1.5a, T-1.6 and T-2.1 have no note in
   `docs/verification/` yet. Figures exist for T-1.4 and T-1.5a.
-- `scripts` and `tests` import each other. `onnx_export_report.py`, `encoder_budget_report.py`,
-  `published_corpus_report.py` and `masked_reconstruction_report.py` import `tests.support`, and
-  `tests/ml/test_loader_keeps_up_on_mps.py` imports `scripts`.
-- Nine scripts put the repository root on `sys.path` before their imports, and each carries a lint
+- Eight scripts put the repository root on `sys.path` before their imports, and each carries a lint
   exemption (E402) for it in `pyproject.toml`.

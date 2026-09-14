@@ -24,6 +24,7 @@ from scripts.encoder_budget_report import (
     batch_for,
     fits_published_device,
     measure_step,
+    random_windows,
     render,
     window_lengths,
 )
@@ -91,3 +92,12 @@ def test_the_report_states_a_verdict_per_window_length() -> None:
 
     assert report.count("— fits") + report.count("— DOES NOT FIT") == len(lengths)
     assert "### Verdict" in report
+
+
+def test_the_random_windows_name_only_channels_of_the_vocabulary_and_pad_nothing() -> None:
+    windows = random_windows(3, 50, vocabulary=7, seed=1)
+
+    assert 1 <= int(windows.channel_ids.min()) <= int(windows.channel_ids.max()) <= 7
+    assert not windows.padding_mask.any()
+    assert windows.timeless[:, :2].all()
+    assert not windows.timeless[:, 2:].any()

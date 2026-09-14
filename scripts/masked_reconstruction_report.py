@@ -124,7 +124,6 @@ from scripts.masked_reconstruction_assessment import (
 )
 from scripts.reporting import dated_heading, machine, table
 from scripts.spectral_probe import SPECTRAL_PROBE, SPECTRAL_PROCESS
-from tests.support.settings import unreachable_store
 
 FIGURES = REPO_ROOT / "docs" / "verification" / "figures"
 # What the report trains on when the command line names nothing: both controls, and the probe the
@@ -370,7 +369,6 @@ def publish(run: Run, workspace: Path) -> Published:
     if run.units is not None:
         layout = layout.with_dials(units=run.units)
     root = CompositionRoot(
-        unreachable_store(),
         corpus_root=workspace / "raw",
         workspace=workspace,
         corpora=InMemoryCorpusRepository(),
@@ -609,7 +607,7 @@ def pick_examples(
 
 
 def code_digest() -> str:
-    """A digest of the repository code this process has loaded: the package, scripts and support.
+    """A digest of the repository code this process has loaded: the package and the scripts.
 
     Two runs are compared only when their code agrees, uncommitted changes included, so that a
     shorter run from before a change to a baseline is never taken for a run of this configuration.
@@ -617,7 +615,7 @@ def code_digest() -> str:
     run never imports does not set its stored runs apart; by the time a run is stored, everything
     that computed its numbers has been imported.
     """
-    roots = [REPO_ROOT / "src", REPO_ROOT / "scripts", REPO_ROOT / "tests"]
+    roots = [REPO_ROOT / "src", REPO_ROOT / "scripts"]
     files = set()
     for module in list(sys.modules.values()):
         source = getattr(module, "__file__", None)
@@ -648,6 +646,9 @@ def results_of(run: Run, published: Published, trained: Trained, diagnosis: Diag
             f"{architecture.width},{architecture.heads},{architecture.layers},"
             f"{architecture.feedforward_width}"
         ),
+        # Read from the tier configuration, which the code digest does not cover, so stated here
+        # for two runs of different time encodings never to count as one configuration.
+        "time_frequencies": str(architecture.time_frequencies),
         "decoder_layers": str(DECODER_LAYERS),
         "units": "" if run.units is None else str(run.units),
         "training_windows": str(len(published.training)),

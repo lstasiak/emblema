@@ -44,7 +44,6 @@ from emblema.shared.adapters.windows.window_block_writer import WindowBlockWrite
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
 from scripts.reporting import dated_heading, machine, table
-from tests.support.settings import unreachable_store
 
 BUDGET = REPO_ROOT / "scripts" / "corpus_budget.toml"
 RAW = REPO_ROOT / "data" / "raw"
@@ -134,7 +133,6 @@ def publish_once(
 ) -> Published:
     store = LocalDirectoryArtifactStore(workspace / "store")
     process = CompositionRoot(
-        unreachable_store(),
         corpus=command.name,
         corpus_root=root,
         workspace=workspace / "blocks",
