@@ -1,22 +1,15 @@
-"""Show that the positive control has the structure it is supposed to have, before anything uses it.
+"""Show that the positive control carries the structure it claims, before anything uses it.
 
-What the control is for is stated in ``emblema.catalog.adapters.synthetic.layouts``. The argument
-made there only works if the structure really is present, because a failure on a generator that
-never carried any would indict the generator and settle nothing. This script is the evidence that
-it is present.
-
-The measurement is a permutation test. For every channel of every unit it fits the channel's
-values on the latent factors of that unit, and again on the factors of a different unit of the
-same corpus. The second fit is not zero: all units share the frequencies of the process, so a
-sinusoidal basis explains part of any channel. What only shared structure can produce is the
-excess of the first over the second — a channel following its own unit's factors specifically.
+A permutation test: every channel of every unit is fitted on its own unit's latent factors and on
+another unit's. The second fit is not zero, since all units share the process's frequencies, so the
+evidence of shared structure is the excess of the first over the second. The coupled corpora must
+clear the excess threshold and the null ones must not, and the report says which happened.
 
     uv sync --all-extras
     uv run scripts/synthetic_control_report.py
 
-The output is markdown, meant to be pasted under a dated heading in the verification note; the
-figures are written next to it. The coupled corpora must clear the excess threshold and the null
-corpora must not, and the script says which happened rather than leaving the reader to divide.
+Prints markdown for the verification note and writes the figures beside it. Why the control exists
+is stated in ``emblema.catalog.adapters.synthetic.layouts``.
 """
 
 import argparse

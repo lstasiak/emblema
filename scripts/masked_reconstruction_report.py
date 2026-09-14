@@ -1,38 +1,16 @@
-"""Train the objective on the positive control and the spectral probe, and show what it learnt.
+"""Train the objective on the control corpora and the spectral probe, and assess what it learnt.
 
-The self-supervised objective is judged on three things before any real corpus sees it: that its
-loss falls, that its reconstructions look like the signal, and that what it learnt is not what a
-trivial baseline already knew. This script does all three on the control corpora, which exist
-for exactly this — a corpus whose structure was put there on purpose, so that a model finding
-nothing is at fault. It publishes the corpus through the same use cases the command line runs,
-trains the encoder with the masked-reconstruction objective on the training units, and measures
-on the validation units against the baseline matched to each kind of mask: interpolation within
-the channel for blocks and single tokens, a ridge regression from the other channels for a
-channel hidden whole. The regressions are fitted on training windows under the masks the strategy
-draws, so that they meet their regressors missing as they will be. Beside the matched baselines
-stands the strongest linear one on the same inputs, and a least-squares spectrum of the channels
-hidden whole says which frequencies the model gives back. The control's signal is too slow for a
-window to show more than one of them, so the spectrum is read on ``spectral_probe`` — the dense
-control watching faster factors — which the report trains on too.
+Each corpus is published through the command line's use cases, trained on its training units and
+scored on its validation units against the baselines of each kind of mask and the spectrum of its
+channels hidden whole. Each run is stored as CSV, assessed against its stored run with half the
+epochs, and printed as markdown beside its figures.
 
     uv sync --all-extras
     uv run scripts/masked_reconstruction_report.py
     uv run scripts/masked_reconstruction_report.py --corpus control-b --epochs 10
 
-The training loop here is the smallest that answers the question — no checkpoints, no tracker,
-no precision policy; those belong to the run that trains a backbone for real. It warms the
-learning rate up and decays it, because a verdict read off a model still circling its minimum is
-read off whichever point of the circle the last epoch landed on. The output is markdown, meant to
-be pasted under a dated heading in the verification note; the figures are written next to it.
-What the run measured is stored as CSV, one directory per run with a line in an index of every
-run, and ``AssessReconstructionRun`` turns it into the decision printed under the verdict —
-comparing the run with a stored run of the same configuration and half the epochs, which is how it
-tells a model that stopped learning from a schedule that stopped it.
-
-Transitional. The training loop, the CSV store and the code digest here stand in for what T-2.3
-and T-2.4 build — the training runtime, the experiment tracker and the provenance of a run — and
-go when those exist; the diagnostics and the rules they feed already live in the package. What
-the runs showed is recorded in ``docs/verification/masked-reconstruction.md``.
+Transitional until T-2.3 and T-2.4 (training loop, run store, provenance). What the runs showed is
+in ``docs/verification/masked-reconstruction.md``.
 """
 
 import argparse

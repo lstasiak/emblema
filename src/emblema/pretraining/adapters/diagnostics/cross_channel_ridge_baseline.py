@@ -21,23 +21,15 @@ from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 class CrossChannelRidgeBaseline:
     """What the other channels say about a hidden token: one ridge regression per channel.
 
-    The regressors are the values the other channels show at their instants nearest to the token.
+    The trivial answer for a channel hidden whole, where nothing of the channel is left to
+    interpolate. A token's design row holds each channel's nearest visible value in the window, zero
+    where it shows nothing, then a bias; its own column is zero, so a channel never explains itself.
+    One penalty for every coefficient but the bias: a baseline is not tuned.
 
-    The trivial answer for a channel hidden whole, where there is nothing of the channel itself to
-    interpolate. A model that does no better than this on such tokens has learnt a linear
-    cross-talk between sensors, which any regression would have found. The design row of a token
-    holds one column per entry of the vocabulary — the nearest visible value of that channel in
-    the window, zero where the channel shows nothing — and a bias; the token's own column is zero,
-    so a channel never explains itself. One penalty for every coefficient but the bias: a baseline
-    is not tuned.
-
-    Fitted under the masks the strategy draws, on training windows, so that its regressors go
-    missing as often and as far as they will when it predicts: a regression fitted on windows with
-    nothing hidden learns weights for neighbours that are always there, then meets windows where a
-    whole channel of them is zero and the nearest visible value of another lies half a window away,
-    and is weaker than the trivial answer it stands for. Every observed token is a target, hidden
-    or not — its own column is zeroed either way, and the other channels are masked independently
-    of it — so that what it knows comes from the same data the model trains on.
+    Fitted on training windows under the masks the strategy draws, so its regressors go missing as
+    they will when it predicts; fitted on windows with nothing hidden, it would lean on neighbours
+    that are always there and lose to the answer it stands for. Every observed token is a target,
+    hidden or not.
 
     Attributes:
         coefficients: ``[entries, entries + 1]`` — a row of weights per target channel, the bias

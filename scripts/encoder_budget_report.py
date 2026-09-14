@@ -1,18 +1,14 @@
 """Measure what full self-attention costs at the window lengths the corpora produce, as a note.
 
-The encoder attends every token to every other, so a window's cost grows with the square of its
-token count, and the window length is the knob that bounds it. The tests hold what must be true
-everywhere — permutation, padding, gradients, the parameter count; this script measures what only
-holds on a machine: how long a training step takes per window and how much memory it holds, per
-compute tier and per window length, beside the arithmetic the numbers should agree with. Run it
-once per machine, because that is what the numbers depend on:
+A window's cost grows with the square of its tokens, so the window length bounds it. The tests hold
+what is true everywhere; this measures what holds on one machine: the seconds and memory of a
+training step per window, per compute tier and window length, beside the arithmetic they should
+agree with. The lengths are the default windows of the measured corpora in the budget file.
 
     uv sync --all-extras
     uv run scripts/encoder_budget_report.py
 
-Window lengths come from the budget file — the default window of every corpus that has been
-measured, as its mean tokens per window — so a corpus added there shows up here. The output is
-markdown, meant to be pasted under a dated heading in the verification note.
+Prints markdown for the verification note; run it once per machine.
 """
 
 import io

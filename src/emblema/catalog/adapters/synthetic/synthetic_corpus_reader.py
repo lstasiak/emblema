@@ -33,26 +33,15 @@ GAIN = "gain"
 class SyntheticCorpusReader:
     """Generates a corpus from a sensor layout watching latent factors, and reads it back.
 
-    The generator behind the positive control, whose purpose ``layouts`` states. An adapter of
-    the corpus reader port and nothing more special than that, which is the point: the control
-    travels the same road as real data — registered, frozen, tokenised, archived and trained on —
-    so a failure anywhere along it is a failure the control catches.
+    The generator of the positive control (see ``layouts``), behind the same port as real data, so
+    the control travels the same road: registered, frozen, tokenised, archived and trained on.
+    Nothing is stored. A unit is generated on request from a seed addressed by its position rather
+    than its key, which carries the layout's name, so two layouts differing in one dial share every
+    draw and the null twin stays matched. Draws reproduce exactly; the arithmetic on them as far as
+    ``PRECISION`` states.
 
-    Nothing is stored. A unit is generated when it is asked for, from a seed addressed by its
-    position in the layout, so the corpus exists on any machine that has the specification and
-    needs no download. Addressed by position and not by key, because the key carries the layout's
-    name: two layouts that differ only in a dial would otherwise differ in every draw as well,
-    and the null pair of the control would stop being the matched twin it is meant to be. The
-    randomness is reproducible exactly; the arithmetic on top of it is reproducible as far as the
-    array library's transcendental functions are, which is what ``PRECISION`` is about and what
-    the checksum a version is frozen over ultimately rests on.
-
-    Time runs on a grid of whole steps. Irregularity is which steps a channel reports on, not an
-    arbitrary instant, which keeps two channels either sharing an instant exactly or a whole step
-    apart — far enough for a window to be archived at the precision the block is written in.
-
-    Channels are named by position and the vocabulary keys them by corpus as well, so two layouts
-    of one control share no identifier and a model must learn each from its own data.
+    Time runs on whole steps, so two channels share an instant exactly or lie a step apart. Channels
+    are named by position and keyed by corpus, so two layouts share no identifier.
     """
 
     def __init__(self, process: LatentFactorProcess, layout: SensorLayout) -> None:

@@ -1,23 +1,16 @@
 """Fetch the raw corpora the data spike measures, from their sources of record.
 
-Each archive is downloaded once into ``data/raw/<corpus>/``, hashed with SHA-256 for the
-verification note, checked against the publisher's checksum where one is published (Zenodo gives
-MD5), and unpacked next to it. Whatever an earlier run finished, a later one skips: a downloaded
-file is not fetched again, its checksums are read back from ``.digests.json`` beside it instead of
-hashing gigabytes a second time, and an unpacked archive keeps its marker. Interrupted downloads
-resume where they stopped, which matters for the 11.6 GB of satellite telemetry.
-
-A file that fails its published checksum is set aside as ``*.bad``, never unpacked, and fetched
-again on the next run. An archive that fails for any other reason is reported at the end and does
-not stop the rest of the run.
+Each archive is downloaded once into ``data/raw/<corpus>/``, hashed with SHA-256, checked against
+the publisher's checksum where one exists (MD5 on Zenodo) and unpacked; a rerun skips finished work
+and resumes interrupted downloads. A file failing its checksum is set aside as ``*.bad``, never
+unpacked, and fetched again; any other failure is reported at the end without stopping the run.
 
     uv run scripts/fetch_corpora.py                # every corpus
     uv run scripts/fetch_corpora.py cmapss skab    # a selection
     uv run scripts/fetch_corpora.py --recheck      # hash the files again, trusting nothing
     uv run scripts/fetch_corpora.py --list
 
-Mirrors (Kaggle re-uploads, forks) are deliberately absent: the source of record carries the licence
-and the version. GitHub-hosted corpora are pinned to a commit for the same reason.
+No mirrors: the source of record carries the licence and version; GitHub sources are commit-pinned.
 """
 
 import argparse

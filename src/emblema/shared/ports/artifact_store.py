@@ -24,17 +24,12 @@ class Retention(StrEnum):
 class ArtifactStore(Protocol):
     """Content-addressed store of binary artifacts.
 
-    The store computes the checksum of the content it receives and derives the key from it,
-    so an existing reference can never come to point at different bytes and the same content
-    stored twice yields the same reference. Reading verifies the bytes against the reference's
-    checksum before returning them. There is no way to delete: durable artifacts are the
-    provenance of every published result, and transient ones expire by lifecycle rule.
-
-    Artifacts come in two sizes and the port carries both. Small ones — a manifest, a
-    configuration — pass as bytes. Ones an author would not want twice in memory, such as a
-    tokenised corpus, pass as a file: ``put_file`` and ``get_file`` move them between the store
-    and the local filesystem, never through a buffer the size of the artifact. A file is also
-    what a reader that maps an artifact into memory needs, which no stream can stand in for.
+    The key derives from the checksum of the content received, so a reference can never point at
+    other bytes and the same content stored twice yields one reference; reads verify the bytes
+    against it. Nothing is deleted: durable artifacts are the provenance of published results, and
+    transient ones expire by lifecycle rule. Small artifacts pass as bytes; large ones, such as a
+    tokenised corpus, as files through ``put_file`` and ``get_file``, never through a buffer of
+    their size, which is also what a reader mapping an artifact into memory needs.
     """
 
     def put(self, content: bytes, retention: Retention = Retention.DURABLE) -> ArtifactRef:

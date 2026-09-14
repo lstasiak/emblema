@@ -7,13 +7,11 @@ from emblema.pretraining.domain.exceptions import InvalidMaskingStrategyError
 class MaskingStrategy:
     """How much of a window is hidden from the encoder, and in what shapes.
 
-    Three draws are made independently over every window, and a token is hidden if any of them
-    reaches it. Whole channels, so that a value has to be inferred from other channels — the
-    situation a sensor set the model has never seen puts it in. Blocks of a channel's time, so that
-    a value cannot be read off its neighbours. Single tokens, as the minority ingredient. The rates
-    are the primitives and the overall fraction follows from them, because the rates are what an
-    ablation turns and what a vectorised draw needs; the fraction they add up to is stated by
-    ``expected_ratio`` and measured on data rather than promised.
+    Three independent draws per window, and a token is hidden if any reaches it: whole channels, so
+    a value must be inferred from other channels as with a sensor set never seen; blocks of a
+    channel's time, so it cannot be read off its neighbours; single tokens, as the minority. The
+    rates are the primitives, being what an ablation turns and a vectorised draw needs; the fraction
+    they add up to is ``expected_ratio``, measured on data rather than promised.
 
     Invariants: every rate lies in ``[0, 1]``; ``block_span`` lies in ``(0, 1]``; at least one
     rate is positive, since a strategy that hides nothing trains nothing; and no draw hides

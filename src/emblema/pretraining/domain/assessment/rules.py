@@ -1,16 +1,10 @@
 """The rules a masked-reconstruction run is held to, one function per question.
 
-Each rule asks one question a wrong result would answer differently, and belongs to the area a
-failure would send someone to fix (``Area``). A kind of mask is judged against the baseline the
-plan matches to it and against the strongest linear baseline on the same inputs, which reads the
-channel's own line and the other channels together. Beating each source alone is not beating both
-at once, and a kind whose every gain a linear regression also makes teaches nothing a
-representation is needed for — so both decide. The linear one decides only where the noise floor
-shows room above it: a linear baseline already at the floor means nothing beyond linear is left to
-learn on the corpus, which condemns neither the model nor the strategy, and without a floor the two
-cannot be told apart, so it only informs. The noise floor is what no predictor can go below: the
-measurement noise of a synthetic layout, in normalised units; a corpus that states no noise has
-none, and the rules that need one say so rather than pass.
+Each rule belongs to the area a failure sends someone to fix (``Area``). A kind of mask is judged
+against its matched baseline and against the strongest linear baseline on the same inputs, since
+beating each source alone is not beating both at once. The linear baseline decides only where the
+noise floor — the measurement noise no predictor can go below — leaves room above it: at the floor
+nothing beyond linear is left to learn, and without a stated floor it only informs.
 """
 
 from collections.abc import Sequence

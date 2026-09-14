@@ -13,18 +13,12 @@ from emblema.shared.kernel.tokens import TokenWindow
 class TokenTensors:
     """A batch of windows as the tensors a model is called with, in the order it declares them.
 
-    The arrays of ``TokenBatch`` are the batch; these are the same buffers seen through torch, so
-    building them copies nothing. Training and inference share this step deliberately: an encoder
-    that is fed differently than it was trained is served a distribution it never learned.
-
-    Precision and device are properties of the run, not of the data, so the tensors are built in
-    the codec's floating type and moved by ``to``. Only the floating tensors take a new type there
-    — identifiers stay integral and masks stay boolean whatever precision the run uses.
-
-    The fields are those of ``TokenBatch``, in that order and with that meaning; it describes the
-    layout, and describing it twice would leave two descriptions to keep true. What is fixed here
-    is the type each one reaches the model as: ``features`` and ``timestamps`` floating,
-    ``channel_ids`` int64, ``timeless`` and ``padding_mask`` bool.
+    The buffers of ``TokenBatch`` seen through torch, without a copy, and the one path training and
+    inference share, so a model is never fed differently than it was trained. The fields and their
+    meaning are ``TokenBatch``'s; fixed here is the type each reaches the model as: ``features`` and
+    ``timestamps`` floating, in the codec's type, ``channel_ids`` int64, ``timeless`` and
+    ``padding_mask`` bool. Device and precision belong to the run, and ``to`` retypes only the
+    floating tensors.
     """
 
     features: Tensor

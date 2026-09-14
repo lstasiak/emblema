@@ -28,24 +28,16 @@ KINDS = (MaskKind.BLOCK, MaskKind.TOKEN)
 class OwnAndCrossChannelRidgeBaseline:
     """The strongest linear answer for a token whose channel still shows something in the window.
 
-    The matched baselines each read one source: interpolation reads the token's own channel, the
-    cross-channel regression reads the others. A model that beats both separately may still have
-    learnt nothing a single linear regression reading both at once would not know, so this is that
-    regression: the other channels' nearest visible values, as the cross-channel baseline takes
-    them, and the channel's own line between its visible neighbours, as interpolation draws it,
-    with a bias. It stands beside the matched baselines rather than replacing them — the plan
-    names the matched ones — and says whether the model beats linear algebra on the same inputs.
+    One ridge regression over both sources the matched baselines read apart — the other channels'
+    nearest visible values and the channel's own interpolated line — so that a model beating both
+    separately is shown to beat linear algebra on the same inputs too. It stands beside the matched
+    baselines, which the plan names, rather than replacing them.
 
-    One regression per kind of mask and channel, because how far a hidden token lies from its
-    visible neighbours is what the kind decides and what the weight on interpolation should follow:
-    one token between two neighbours trusts the line, a block half a window long does not. The
-    kind is read off the masks, which are known before the value is, so choosing the regression by
-    it is not choosing by the answer.
-
-    Fitted under drawn masks on training windows, and only on hidden tokens of the kind: a visible
-    token interpolated from the visible tokens of its own channel would be read off itself. A timed
-    token whose channel keeps no visible token, and a timeless token, get zero for the line, as
-    interpolation gives them.
+    One regression per kind of mask and channel: the kind decides how far the visible neighbours
+    lie, and it is read off the masks, known before the value is. Fitted under drawn masks on
+    training windows, on hidden tokens of the kind only, as a visible token would be interpolated
+    from itself. A token with no visible token of its channel, or a timeless one, gets zero for the
+    line.
 
     Attributes:
         coefficients: Per kind of mask, ``[entries, entries + 2]`` — a row of weights per target

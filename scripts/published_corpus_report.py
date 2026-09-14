@@ -1,17 +1,14 @@
 """Publish a corpus the way a run will, and report what the artifact costs and what it holds.
 
-Preprocessing happens once and every later run reads the result, so the questions worth answering
-about it are answered once too: how large the artifact is beside the same windows held as Python
-objects, whether publishing twice into one registry gives one artifact or two, and what reading a
-window back out of a memory map costs against reading one from a list. Run it where the raw corpus
-is:
+Answered once, as preprocessing happens once: the artifact's size beside the same windows as Python
+objects, whether publishing twice into one registry yields one artifact, and what reading a window
+from the memory map costs against a list. The artifacts go to a local directory store: the numbers
+concern the format and the machine, not a network.
 
     uv sync --all-extras
     uv run scripts/published_corpus_report.py --corpus cmapss
 
-The artifacts go to a local directory store rather than the bucket: the numbers here are about the
-format and the machine, not about a network. The output is markdown, meant to be pasted under a
-dated heading in the verification note.
+Run where the raw corpus is; prints markdown for the verification note.
 """
 
 import argparse

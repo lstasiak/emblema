@@ -19,21 +19,16 @@ OBSERVATIONS_PER_COEFFICIENT = 2
 class SpectralRecovery:
     """Which frequencies of a channel hidden whole the model gives back, and which it loses.
 
-    Every channel hidden whole is fitted by least squares on sines and cosines at one to ``cycles``
-    cycles per window, once for the true values and once for the residual of the prediction; the
-    energy of each is summed per frequency over every such channel-window. ``recovered`` is the
-    share of the truth's energy at each frequency the residual no longer holds. A model that
-    recovers the low frequencies and none of the high ones has learnt that channels are smooth,
+    Each channel hidden whole is fitted by least squares on sines and cosines at one to ``cycles``
+    cycles per window, once for the truth and once for the residual of the prediction, and the
+    energy is summed per frequency; ``recovered`` is the share of the truth's energy the residual no
+    longer holds. A model recovering only the low frequencies has learnt that channels are smooth,
     not how they move.
 
-    The basis also carries a constant and a linear trend, which absorb what is slower than one
-    cycle per window and would otherwise leak into every frequency; their energy is not a
-    frequency and is not reported. Whole cycles rather than half-cycles, because a half-wave over
-    the window is close to a constant and the fit would trade one off against the other in
-    thousands. The fit is on the tokens' own instants and assumes no grid, so it serves an irregular
-    layout as it serves a regular one; the price is that the frequencies are not orthogonal under
-    an irregular sampling and their shares are approximate. A channel with too few tokens for the
-    number of coefficients is skipped and counted.
+    A constant and a linear trend absorb what is slower than a cycle and are not reported; cycles
+    are whole, as a half-wave over the window is nearly a constant. The fit uses the tokens' own
+    instants, so it serves irregular layouts too, where the shares are approximate. A channel with
+    fewer tokens than coefficients is skipped and counted.
 
     Attributes:
         cycles: Highest frequency fitted, in cycles per window.

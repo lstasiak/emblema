@@ -9,17 +9,12 @@ from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 class MaskedReconstruction(nn.Module):
     """The self-supervised objective: hide part of a window, encode the rest, predict the hidden.
 
-    A hidden token leaves the encoder's input altogether — it is marked as padding for that call,
-    which for a set encoder is the same as never having been observed — so the encoder never meets
-    a placeholder it will not meet at inference, and its attention pays only for the tokens it can
-    see. The decoder then puts a placeholder at every hidden position, labels each with the channel
-    and time encodings the encoder itself uses, and reads the visible states to predict the value.
-    Sharing those two input modules means a channel hidden whole still teaches its own embedding
-    through the question the decoder asks about it.
-
-    The prediction covers every position; ``ReconstructionLoss`` decides which ones count. The
-    masks come from outside, so a test can hold them fixed and a diagnostic can hand the same masks
-    to a baseline.
+    A hidden token is marked as padding for the encoder's call, which for a set encoder is the same
+    as never observed, so the encoder meets no placeholder it would not meet at inference. The
+    decoder puts a placeholder at every hidden position, labelled with the encoder's own channel and
+    time encodings, so a channel hidden whole still trains its embedding. The prediction covers
+    every position and ``ReconstructionLoss`` decides which count; the masks come from outside, so
+    tests and diagnostics can hold them fixed.
 
     Attributes:
         encoder: The backbone being pretrained; what remains when the objective is done.

@@ -9,18 +9,12 @@ from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 class TokenMasking:
     """Draws the masks a strategy prescribes over a batch, one draw per window and channel.
 
-    A channel-level draw is one uniform number per window and channel, looked up per token
-    through its channel identifier, so a batch of any width and any token count is masked in a
-    handful of tensor operations and a channel is hidden whole or not at all. Blocks are spans of
-    the window's length, not runs of tokens: how many tokens a block swallows follows from how
-    densely the channel is sampled there, which is the fact the model is not allowed to assume.
-
-    Every window keeps at least one visible token. Where the draws would hide them all, the first
-    observed token is uncovered — a rare event under any sensible strategy, and one that would
-    otherwise ask the model to predict a window from nothing.
-
-    The numbers are drawn where the generator lives and moved to the batch afterwards, so the
-    masks a seed yields do not depend on the device the run happens to use.
+    A channel-level draw is one number per window and channel, looked up per token by its
+    identifier, so a channel is hidden whole or not at all in a few tensor operations. Blocks span
+    the window's time, not a count of tokens, as how densely a channel is sampled is what the model
+    may not assume. Every window keeps a visible token: where the draws hide all, the first observed
+    one is uncovered. Numbers are drawn where the generator lives, so a seed gives the same masks on
+    any device.
     """
 
     def __init__(self, strategy: MaskingStrategy) -> None:

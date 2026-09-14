@@ -8,18 +8,12 @@ from emblema.pretraining.domain.exceptions import InvalidLearningRateScheduleErr
 class LearningRateSchedule:
     """How the learning rate moves over a run: a linear warmup, then a cosine decay to a floor.
 
-    Stated as a factor of the peak rate per optimiser step rather than as a rate, so that the peak
-    stays a setting of the optimiser and the shape stays a setting of the run. A rate that never
-    decays leaves the model circling its minimum at the size of its last steps, and a verdict read
-    off such a run is read off whichever point of the circle the last epoch landed on; a rate that
-    starts at its peak lets the first steps of a freshly initialised model undo themselves. The
-    shape here removes both without adding a knob a run could be tuned on: warmup length, total
-    length and the floor the decay ends at.
-
-    The warmup climbs to the peak by the last of its steps, so no step is taken at a rate of zero.
-    The decay starts at the peak on the first step after the warmup and reaches the floor on the
-    last step of the run; steps past the run stay at the floor. Held with its state by whoever
-    trains — the schedule itself is a pure function of the step.
+    A factor of the peak rate per optimiser step, so the peak stays the optimiser's setting and the
+    shape the run's. The decay keeps a verdict from being read off a model still circling its
+    minimum; the warmup keeps a fresh model's first steps from undoing themselves. The warmup
+    reaches the peak on its last step, so no step runs at zero; the decay starts at the peak,
+    reaches the floor on the run's last step, and later steps stay there. A pure function of the
+    step: whoever trains holds the state.
 
     Invariants: at least one step in all; warmup steps are not negative and leave at least one step
     to decay, since a run that only warms up would never use the floor it states; the floor lies in
