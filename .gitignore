@@ -218,9 +218,12 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Project-local working files, not published (docs/ stays local until the project is finished)
-/docs/
+# Project-local working files, not published: the implementation plan stays local until the
+# project is finished. Verification notes and their figures under docs/verification/ are the
+# evidence the code is judged by, and are tracked.
+/docs/specs/
 /CLAUDE.md
+.DS_Store
 .claude/settings.local.json
 
 # import-linter graph cache
