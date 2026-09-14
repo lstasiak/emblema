@@ -16,10 +16,10 @@ from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 class TrivialityDiagnostic:
     """Does each kind of mask teach anything a trivial baseline does not already know?
 
-    For every kind of mask the model's squared error is tallied beside the baseline the plan
-    matches to it — linear interpolation within the channel for a block or a single token, the
-    cross-channel regression for a channel hidden whole — beside the strongest linear baseline on
-    the same inputs, and beside the channel mean. All of them are scored by the objective's own
+    For every kind of mask the model's squared error is tallied beside the baseline matched to it
+    — linear interpolation within the channel for a block or a single token, the cross-channel
+    regression for a channel hidden whole — beside the strongest linear baseline on the same
+    sources, and beside the channel mean. All of them are scored by the objective's own
     squared error over the same hidden tokens, so the comparison is between answers to one
     question. Batches are observed one at a time and the sums added per group of windows the
     caller names; ``tallies`` hands them over. What the sums mean is judged elsewhere, with the

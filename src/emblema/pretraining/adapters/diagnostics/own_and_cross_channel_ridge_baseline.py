@@ -30,8 +30,8 @@ class OwnAndCrossChannelRidgeBaseline:
 
     One ridge regression over both sources the matched baselines read apart — the other channels'
     nearest visible values and the channel's own interpolated line — so that a model beating both
-    separately is shown to beat linear algebra on the same inputs too. It stands beside the matched
-    baselines, which the plan names, rather than replacing them.
+    separately is shown to beat linear algebra on the same sources too. It stands beside the matched
+    baselines, each of which stands for one source alone, rather than replacing them.
 
     One regression per kind of mask and channel: the kind decides how far the visible neighbours
     lie, and it is read off the masks, known before the value is. Fitted under drawn masks on

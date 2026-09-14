@@ -23,8 +23,8 @@ class KindSummary:
         tokens: Hidden tokens the errors are averaged over.
         units: Validation units they come from.
         model_error: Mean squared error of the model.
-        matched_error: Of the baseline the plan matches to the kind.
-        linear_error: Of the strongest linear baseline on the same inputs.
+        matched_error: Of the baseline matched to the kind.
+        linear_error: Of the strongest linear baseline on the same sources.
         mean_error: Of predicting the channel mean.
         noise_floor: Mean noise variance of the targets; ``None`` where the corpus states none.
         matched_excess: Interval of the matched baseline's error minus the model's.

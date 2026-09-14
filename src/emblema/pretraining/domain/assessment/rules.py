@@ -1,7 +1,7 @@
 """The rules a masked-reconstruction run is held to, one function per question.
 
 Each rule belongs to the area a failure sends someone to fix (``Area``). A kind of mask is judged
-against its matched baseline and against the strongest linear baseline on the same inputs, since
+against its matched baseline and against the strongest linear baseline on the same sources, since
 beating each source alone is not beating both at once. The linear baseline decides only where the
 noise floor — the measurement noise no predictor can go below — leaves room above it: at the floor
 nothing beyond linear is left to learn, and without a stated floor it only informs.

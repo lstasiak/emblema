@@ -23,9 +23,9 @@ class MaskKindTally:
         group: The group of windows the sums cover, as the caller named it.
         tokens: Hidden tokens of the kind in the group.
         model: Summed squared error of the model.
-        matched: Of the baseline the plan matches to the kind — interpolation within the channel
+        matched: Of the baseline matched to the kind — interpolation within the channel
             for a block or a single token, the cross-channel regression for a channel hidden whole.
-        linear: Of the strongest linear baseline on the same inputs — the regression on the other
+        linear: Of the strongest linear baseline on the same sources — the regression on the other
             channels and the channel's own line together, or the cross-channel regression alone
             where nothing of the channel is left.
         mean: Of predicting the channel's mean, zero once normalised: the summed squared targets.

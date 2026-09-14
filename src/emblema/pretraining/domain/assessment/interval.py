@@ -8,7 +8,7 @@ CONFIDENCE = 0.95
 class Verdict(Enum):
     """What an interval of the excess says: above zero, holding zero, or below it.
 
-    ``matched`` is the baseline matching the model, in the plan's words — as trivial as ``beaten``.
+    ``matched`` is the baseline matching the model, which is as trivial as ``beaten``.
     """
 
     LEARNT = "learnt"

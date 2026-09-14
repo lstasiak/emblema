@@ -11,9 +11,10 @@ class LearningRateSchedule:
     A factor of the peak rate per optimiser step, so the peak stays the optimiser's setting and the
     shape the run's. The decay keeps a verdict from being read off a model still circling its
     minimum; the warmup keeps a fresh model's first steps from undoing themselves. The warmup
-    reaches the peak on its last step, so no step runs at zero; the decay starts at the peak,
-    reaches the floor on the run's last step, and later steps stay there. A pure function of the
-    step: whoever trains holds the state.
+    reaches the peak on its last step, so no step runs at zero; the decay starts at the peak and
+    reaches the floor on the run's last step, or takes its one step at the peak where the warmup
+    left it only one. Steps past the run stay at the floor. A pure function of the step: whoever
+    trains holds the state.
 
     Invariants: at least one step in all; warmup steps are not negative and leave at least one step
     to decay, since a run that only warms up would never use the floor it states; the floor lies in

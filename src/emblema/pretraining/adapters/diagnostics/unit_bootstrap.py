@@ -16,7 +16,7 @@ class UnitBootstrap:
 
     Both comparisons of a kind are ratios of sums over hidden tokens, and tokens of one unit are
     not independent — windows overlap and a unit is one realisation of the process — so their
-    uncertainty is a bootstrap over validation units, the resampling unit the plan prescribes. The
+    uncertainty is a bootstrap over validation units, the level at which they are independent. The
     masks are drawn once over the validation windows, so an interval holds the variation between
     units under that draw and not the variation between draws. Both intervals of a kind are read
     off the same resamples.
