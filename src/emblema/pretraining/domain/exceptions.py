@@ -19,3 +19,11 @@ class InvalidMaskingStrategyError(PretrainingError, ValueError):
 
 class InvalidLearningRateScheduleError(PretrainingError, ValueError):
     pass
+
+
+class IncompatibleTalliesError(PretrainingError, ValueError):
+    pass
+
+
+class IncomparableRunsError(PretrainingError, ValueError):
+    pass
