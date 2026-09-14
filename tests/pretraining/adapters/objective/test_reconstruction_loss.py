@@ -112,3 +112,17 @@ def test_the_batch_is_the_source_of_the_target() -> None:
 
     assert ReconstructionLoss()(prediction, windows, everything).item() == 0.0
     assert ReconstructionLoss()(prediction, other, everything).item() == pytest.approx(1.0)
+
+
+def test_the_squared_error_is_per_position_against_the_value_and_masks_nothing() -> None:
+    batch = random_batch(2, 5, seed=9, padding=2)
+    target = batch.features[..., 0]
+    prediction = target + torch.arange(10, dtype=target.dtype).reshape(2, 5)
+
+    squared = ReconstructionLoss.squared_error(prediction, batch)
+
+    torch.testing.assert_close(squared, torch.arange(10, dtype=target.dtype).reshape(2, 5).pow(2))
+    everything = torch.ones_like(batch.padding_mask)
+    assert ReconstructionLoss.over(prediction, batch, everything).item() == pytest.approx(
+        float(squared[~batch.padding_mask].mean())
+    )

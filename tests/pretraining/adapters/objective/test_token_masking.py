@@ -197,3 +197,16 @@ def test_the_same_seed_draws_the_same_masks(strategy: MaskingStrategy) -> None:
     assert torch.equal(first.channel, second.channel)
     assert torch.equal(first.block, second.block)
     assert not torch.equal(first.hidden, other.hidden)
+
+
+def test_masks_moved_to_a_device_are_the_same_masks(strategy: MaskingStrategy) -> None:
+    batch = grid_batch(4, CHANNELS, STEPS, seed=11)
+    masks = draw(strategy, batch)
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+
+    moved = masks.to(device)
+    back = moved.to("cpu")
+
+    assert moved.hidden.device.type == device
+    for kind in MaskKind:
+        assert torch.equal(back.of_kind(kind), masks.of_kind(kind))

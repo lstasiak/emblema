@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+from typing import Self
 
+import torch
 from torch import Tensor
 
 from emblema.pretraining.domain.mask_kind import MaskKind
@@ -27,6 +29,14 @@ class TokenMasks:
     channel: Tensor
     block: Tensor
     token: Tensor
+
+    def to(self, device: torch.device | str) -> Self:
+        """The same masks on ``device``, as a batch moved there is read with."""
+        return type(self)(
+            channel=self.channel.to(device),
+            block=self.block.to(device),
+            token=self.token.to(device),
+        )
 
     @property
     def hidden(self) -> Tensor:

@@ -26,6 +26,15 @@ class ReconstructionLoss(nn.Module):
     def over(prediction: Tensor, batch: TokenTensors, positions: Tensor) -> Tensor:
         """The error over ``positions`` that hold an observed token; zero where there is none."""
         scored = positions & ~batch.padding_mask
-        target = batch.features[..., 0].to(prediction.dtype)
-        squared = (prediction - target).pow(2) * scored.to(prediction.dtype)
+        squared = ReconstructionLoss.squared_error(prediction, batch) * scored.to(prediction.dtype)
         return squared.sum() / scored.sum().clamp(min=1)
+
+    @staticmethod
+    def squared_error(prediction: Tensor, batch: TokenTensors) -> Tensor:
+        """Per position, the squared distance of the prediction from the token's target.
+
+        Nothing is masked here, padding included: this is the one place the target is read, for
+        whoever sums the errors over positions of their own choosing.
+        """
+        target = batch.features[..., 0].to(prediction.dtype)
+        return (prediction - target).pow(2)
