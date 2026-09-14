@@ -219,9 +219,11 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Project-local working files, not published: the implementation plan stays local until the
-# project is finished. Verification notes and their figures under docs/verification/ are the
-# evidence the code is judged by, and are tracked.
+# project is finished. Decision records under docs/adr/ and verification notes and their figures
+# under docs/verification/ are the evidence the code is judged by, and are tracked. A note whose
+# run has not happened yet is a task, not evidence, and stays out until it has a result.
 /docs/specs/
+/docs/verification/kaggle-smoke.md
 /CLAUDE.md
 .DS_Store
 .claude/settings.local.json

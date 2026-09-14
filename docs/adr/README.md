@@ -1,0 +1,31 @@
+# Architecture Decision Records
+
+One record per decision that shapes the system. The defence of a decision is a reference
+implementation and a measurement, not a preference: where two options are viable, both live in the
+repository and the record states the threshold at which the choice flips.
+
+Format: context, decision, consequences, alternatives considered. Status is one of
+`proposed`, `accepted`, `superseded by ADR-XXXX`.
+
+| ID | Title | Status |
+|----|-------|--------|
+| [0001](0001-celery-for-background-jobs.md) | Celery for background jobs (arq was the default it replaces) | accepted |
+| [0002](0002-python-version-floor.md) | Python lower bound set by the GPU platform, not the local machine | accepted |
+| [0003](0003-immutable-domain-model.md) | Immutable domain model: aggregates and value objects as frozen dataclasses | accepted |
+| [0004](0004-corpus-aggregate-boundary.md) | `Corpus` is the aggregate root; `CorpusVersion` is an entity inside it | accepted |
+| [0005](0005-context-contracts.md) | Context integration: published contracts, shared vocabulary and in-process events | accepted |
+| [0006](0006-artifact-store.md) | Artifact store: S3 as the protocol, content-addressed keys, Garage locally and Cloudflare R2 remotely | accepted |
+| [0007](0007-onnx-inference-format.md) | ONNX as the inference format: one dynamic token axis, a pinned opset, attention that survives an empty window | accepted |
+| [0008](0008-pretraining-corpora.md) | Pretraining corpora: which enter the mix, which only host a task, and the budget that bounds the model | accepted |
+| [0009](0009-corpus-version-identity.md) | Corpus version identity: the checksum covers the bytes of the file set the reader declares | accepted |
+| [0010](0010-ports-layer.md) | Ports are a layer of the bounded context: Protocols only, between domain and application | accepted |
+| [0011](0011-token-representation.md) | Token representation: a window is a set of channel–time–value tokens, normalised per channel, timed relative to the window, with the gap to the previous token of its channel | accepted |
+| [0012](0012-where-tokenisation-lives.md) | Where tokenisation lives: the window in the shared kernel, the array codec beside it, the tokeniser a port of the Catalog | accepted |
+| [0013](0013-feeding-the-model.md) | Feeding the model: a dataset is a sequence of windows, an epoch's order comes from a digest framed part by part, and the loading layer is shared | accepted |
+| [0014](0014-published-corpus-format.md) | A published corpus is a block of windows beside a manifest, in a format we own | accepted |
+| [0015](0015-composition-root-by-hand.md) | The composition root is written by hand, without a DI container | proposed |
+| [0016](0016-catalog-persistence.md) | The Catalog persists its aggregate as plain tables, migrated by one Alembic tree | accepted |
+| [0017](0017-encoder-architecture.md) | The encoder: full self-attention over a set of tokens, time at fixed frequencies, one learned vector per channel | accepted |
+| [0018](0018-synthetic-positive-control.md) | The positive control is a corpus reader: one latent process, two sensor layouts, disjoint trajectories | accepted |
+| [0019](0019-self-supervised-objective.md) | The self-supervised objective: masked reconstruction with the hidden tokens removed from the encoder, a mixture of channel, block and token masks, and a trivial baseline per kind | accepted |
+| [0020](0020-judging-a-masked-reconstruction-run.md) | Judging a masked-reconstruction run: rules in the domain, an interval per comparison, a noise floor, and a probe for the diagnostic the control cannot answer | accepted |
