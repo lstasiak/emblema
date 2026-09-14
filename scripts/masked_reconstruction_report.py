@@ -9,8 +9,8 @@ epochs, and printed as markdown beside its figures.
     uv run scripts/masked_reconstruction_report.py
     uv run scripts/masked_reconstruction_report.py --corpus control-b --epochs 10
 
-Transitional until T-2.3 and T-2.4 (training loop, run store, provenance). What the runs showed is
-in ``docs/verification/masked-reconstruction.md``.
+Transitional: the training runtime, the run store and a run's provenance replace it. What the
+runs showed is in ``docs/verification/masked-reconstruction.md``.
 """
 
 import argparse
@@ -109,8 +109,8 @@ FIGURES = REPO_ROOT / "docs" / "verification" / "figures"
 DEFAULT_CORPORA = ("control-a", "control-b", SPECTRAL_PROBE.name)
 RESULTS = REPO_ROOT / "data" / "report" / "results"
 
-# The mixture the plan asks for: blocks and whole channels carry most of the hiding, single tokens
-# are the minority ingredient, and together they take close to half of a window.
+# Blocks and whole channels carry most of the hiding, single tokens are the minority ingredient,
+# and together they take close to half of a window.
 MIXTURE = MaskingStrategy(channel_rate=0.15, block_rate=0.6, block_span=0.5, token_rate=0.1)
 DECODER_LAYERS = 1
 # Cycles per window the spectrum is fitted up to, at most. On the control corpora that is more than
@@ -346,7 +346,7 @@ def publish(run: Run, workspace: Path) -> Published:
     process, layout, known = generated(run.corpus)
     if run.units is not None:
         layout = layout.with_dials(units=run.units)
-    root = CompositionRoot(
+    root = CompositionRoot.over(
         corpus_root=workspace / "raw",
         workspace=workspace,
         corpora=InMemoryCorpusRepository(),
@@ -450,9 +450,8 @@ def train(published: Published, run: Run) -> Trained:
             optimiser.step()
             scheduler.step()
             seen.append(step.item())
-        validation, _ = evaluate(model, published, run)
+        validation, ratio = evaluate(model, published, run)
         epochs.append(Epoch(float(np.mean(seen)), validation, time.perf_counter() - started))
-    _, ratio = evaluate(model, published, run)
     return Trained(model.eval(), tuple(epochs), ratio)
 
 
@@ -889,12 +888,21 @@ def draw_figures(
             axis.set_ylabel(
                 f"w{example.window} {example.channel}\n{example.kind.value}", fontsize=8
             )
-        np.atleast_1d(axes)[0].legend(fontsize=7, ncol=4, loc="upper right")
-        np.atleast_1d(axes)[-1].set_xlabel("position in window")
+        drawn = np.atleast_1d(axes)
+        drawn[-1].set_xlabel("position in window")
         figure.suptitle(
             f"{run.corpus}: tokens hidden by each kind of mask, model against the matched baseline"
         )
-        figure.tight_layout()
+        # Below the panels, not over the first one: the legend would sit on the data it explains,
+        # and a title above it would strike through the frame.
+        figure.legend(
+            *drawn[0].get_legend_handles_labels(),
+            fontsize=8,
+            ncol=4,
+            loc="lower center",
+            frameon=False,
+        )
+        figure.tight_layout(rect=(0.0, 0.02, 1.0, 0.99))
         figure.savefig(directory / f"{stem}-windows.png", dpi=120)
         plt.close(figure)
 
@@ -924,7 +932,7 @@ def draw_figures(
     right.set_yscale("log")
     right.set_xlabel("cycles per window")
     right.set_ylabel("energy over channel-windows hidden whole")
-    right.set_title("spectrum of the truth and of what each method leaves")
+    right.set_title("spectrum of the truth and of each residual")
     right.legend()
     figure.tight_layout()
     figure.savefig(directory / f"{stem}-diagnostics.png", dpi=120)
