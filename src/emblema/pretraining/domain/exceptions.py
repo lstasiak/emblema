@@ -15,3 +15,7 @@ class InvalidEncoderArchitectureError(PretrainingError, ValueError):
 
 class InvalidMaskingStrategyError(PretrainingError, ValueError):
     pass
+
+
+class InvalidLearningRateScheduleError(PretrainingError, ValueError):
+    pass
