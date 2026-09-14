@@ -1,8 +1,8 @@
-"""What the ONNX export spike (T-0.6) measures but cannot assert, as a note-ready report.
+"""What the ONNX export spike measures but cannot assert, as a note-ready report.
 
 The suite beside this module asserts the findings; this measures artefact size, latency against the
 alternatives and the behaviour of the export paths that fail, through the same harness. It lives
-with the suite and goes with it when the export adapter replaces the spike (T-6.2). Run it once per
+with the suite and goes with it when the export adapter replaces the spike. Run it once per
 machine architecture, from the repository root:
 
     uv sync --all-extras

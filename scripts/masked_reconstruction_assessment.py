@@ -1,8 +1,8 @@
 """Store what a masked-reconstruction run measured, find the run it is compared with, print it.
 
 The rules that judge a run live in ``emblema.pretraining`` (``AssessReconstructionRun``); this
-module is what surrounds them until the training loop and the experiment tracker exist (T-2.3):
-the tables the report prints and the CSV files each run is stored in, a directory of its own and a
+module is what surrounds them until the training loop and the experiment tracker exist: the
+tables the report prints and the CSV files each run is stored in, a directory of its own and a
 line in an index of every run, so that the next run of a configuration can be compared with it.
 
     uv run scripts/masked_reconstruction_assessment.py data/report/results/control-a-20260913-101500
