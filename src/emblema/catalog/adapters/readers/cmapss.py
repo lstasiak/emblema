@@ -54,27 +54,16 @@ WIDTH = LEADING_COLUMNS + len(SENSORS)
 class CmapssCorpusReader:
     """Reads the training trajectories of NASA's C-MAPSS turbofan degradation data set.
 
-    The data set comes as four subsets (FD001 to FD004) that differ in operating conditions and
-    fault modes. Each ``train_FD00x.txt`` holds one row per engine cycle: unit number, cycle,
-    three operational settings and 21 sensor measurements, separated by spaces. An engine is a
-    unit, a sensor is a channel, and a sensor value in a cycle is an observation; cycles are
-    equally spaced by construction, so the regime is regular. The operational settings are
-    inputs that vary per cycle in FD002 and FD004 and are not channels.
+    Each ``train_FD00x.txt`` holds a row per engine cycle: unit, cycle, three operational settings
+    and 21 sensors. An engine is a unit and a sensor a channel; cycles are evenly spaced, so the
+    regime is regular, and the operational settings are not channels. Only training trajectories are
+    read: the official test engines and their RUL targets are evaluation data outside the Catalog,
+    so a version's checksum also proves that no test engine was pretrained on.
 
-    What this reader registers is the pretraining side of the corpus, the training trajectories
-    only. The official test trajectories and their remaining-useful-life targets are labelled
-    evaluation data and stay outside the Catalog, so a version's checksum is also the proof that
-    no test engine took part in pretraining.
-
-    The checksum covers the bytes of the selected files in subset order, whatever order the
-    subsets were named in, so it is the provenance of exactly what was read and two readers over
-    the same files agree.
-
-    Units are keyed ``<subset>/<engine>`` because engine numbers restart in every subset. The time
-    axis of a unit is its cycle index: an engine of ``L`` cycles spans ``[1, L + 1)``, a cycle
-    occupying the unit interval that starts at its index. The rows of an engine form one
-    contiguous block of its file, which the reader requires, so the observations of one engine are
-    read by scanning its file up to the block and no further.
+    Units are keyed ``<subset>/<engine>``, since engine numbers restart per subset, and an engine of
+    ``L`` cycles spans ``[1, L + 1)``. An engine's rows must form one contiguous block of its file.
+    The checksum covers the selected files' bytes in subset order, whatever order the subsets were
+    named in.
     """
 
     def __init__(self, root: Path, subsets: Iterable[str] = SUBSETS) -> None:

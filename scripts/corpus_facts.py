@@ -1,18 +1,16 @@
 """Count the structural facts of each raw corpus and print them as TOML for the budget file.
 
-Runs where the data is — the development Mac after ``fetch_corpora.py`` — never in CI. For every
-corpus it counts independent units, channels and observed values on the pretraining side, then the
-exact number of windows and tokens for each window variant declared in ``corpus_budget.toml``. The
-output is one ``[corpora.<key>.measured]`` block per corpus, to paste over the previous one.
+Runs where the data is, never in CI. Per corpus it counts units, channels and observed values on the
+pretraining side, and the windows and tokens of each window variant declared in
+``corpus_budget.toml``, as a ``[corpora.<key>.measured]`` block to paste over the previous one.
 
     uv run scripts/corpus_facts.py                            # every corpus with data present
     uv run scripts/corpus_facts.py cmapss physionet2012
     uv run --with "pandas<3" scripts/corpus_facts.py esa_ad   # pickles written by a 2.x pandas
 
-Counting rules: a unit is what a split happens on (an engine, an experiment run, a machine, an ICU
-stay, a mission); the pretraining side is the official training portion; a token is one observed
-value of one channel at one time; a window with nothing observed in it is not a window. Static
-descriptors count once per unit as timeless tokens.
+A unit is what a split happens on (an engine, a run, a machine, an ICU stay, a mission); the
+pretraining side is the official training portion; a token is one observed value; a window with
+nothing observed is not a window; static descriptors count once per unit as timeless tokens.
 """
 
 import argparse

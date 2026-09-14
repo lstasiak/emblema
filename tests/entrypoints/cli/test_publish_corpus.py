@@ -144,6 +144,38 @@ def test_a_process_given_neither_a_corpus_nor_a_reader_is_refused(tmp_path: Path
         )
 
 
+def test_a_process_given_every_adapter_it_would_build_from_settings_reads_none(
+    tmp_path: Path,
+) -> None:
+    store = InMemoryArtifactStore()
+
+    root = CompositionRoot(
+        corpus="control-a",
+        corpus_root=tmp_path / "raw",
+        workspace=tmp_path / "workspace",
+        corpora=InMemoryCorpusRepository(),
+        store=store,
+    )
+
+    assert root.adapters.store is store
+
+
+def test_a_process_left_to_build_an_adapter_without_settings_is_refused(tmp_path: Path) -> None:
+    raw, workspace = tmp_path / "raw", tmp_path / "workspace"
+
+    with pytest.raises(ValueError, match="needs store given"):
+        CompositionRoot(
+            corpus="control-a",
+            corpus_root=raw,
+            workspace=workspace,
+            corpora=InMemoryCorpusRepository(),
+        )
+    with pytest.raises(ValueError, match="needs corpora given"):
+        CompositionRoot(
+            corpus="control-a", corpus_root=raw, workspace=workspace, store=InMemoryArtifactStore()
+        )
+
+
 def test_the_command_line_states_the_window_it_was_given() -> None:
     invocation = PublishCorpusCli().parse(ARGUMENTS)
 

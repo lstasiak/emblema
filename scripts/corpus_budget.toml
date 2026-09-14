@@ -1,5 +1,6 @@
 # Facts and assumptions behind the pretraining budget. Numbers live here, arithmetic lives in
-# corpus_budget_report.py, so a later measurement corrects this file and nothing else.
+# corpus_budget_report.py, so a later measurement corrects this file and nothing else. The compute
+# tiers the budget is priced at are configuration, stated in src/emblema/config/compute_tiers.toml.
 #
 # Per corpus: `estimate` holds literature figures used until `measured` exists; `measured` is the
 # block corpus_facts.py prints from the raw files. Verdicts: `pretraining` enters the pretraining
@@ -21,53 +22,6 @@ min_training_units = 20          # a unit-level split must leave something on ea
 unique_tokens_per_parameter = 20 # Chinchilla's ratio as a reference point; fitted to language models
 effective_repetitions = 4        # repeated data is worth about as much as fresh data up to ~4 epochs
 gpu_hours_cap = 150              # T4-class; above it the scale knobs are turned before any long run
-
-# Throughputs are sustained, not peak: T4 in fp16 with fused attention, an M1 Pro through MPS in
-# fp32, an A100 in bf16 at the ratio the paid platform prices it against the T4.
-#
-# Shape fields per tier are conventions and a derivation, not measurements. `heads` gives 64
-# features per head and `feedforward_width` is four times the width — the transformer defaults the
-# 12 · d² · L arithmetic assumes. `time_frequencies` must satisfy 2^F ≥ instants per window, so
-# that neighbouring instants get distinct encodings: 7 covers a 50-sample C-MAPSS window, 12 a
-# 48-hour PhysioNet stay at minute resolution, the finest spacing on this list. Past that there is
-# no margin to be had: a frequency whose period is shorter than the data's own spacing turns
-# neighbouring instants into unrelated encodings instead of nearby ones, which is the opposite of
-# what the encoding is for. Dropout is a run parameter, not a shape, and is not stated here.
-[[tiers]]
-name = "S"
-device = "M1 Pro, MPS, fp32"
-tflops = 1.25
-width = 192
-heads = 3
-layers = 4
-feedforward_width = 768
-time_frequencies = 12
-corpus_fraction = 0.1
-window = "default"
-
-[[tiers]]
-name = "M"
-device = "T4, fp16"
-tflops = 10.0
-width = 256
-heads = 4
-layers = 6
-feedforward_width = 1024
-time_frequencies = 12
-corpus_fraction = 1.0
-window = "default"
-
-[[tiers]]
-name = "L"
-device = "A100 40 GB, bf16"
-tflops = 50.0
-width = 256
-heads = 4
-layers = 6
-feedforward_width = 1024
-time_frequencies = 12
-corpus_fraction = 1.0
-window = "longest"
 
 # ----------------------------------------------------------------------------------------------
 # Corpora

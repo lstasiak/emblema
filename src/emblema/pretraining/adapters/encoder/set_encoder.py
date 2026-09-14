@@ -12,17 +12,12 @@ from emblema.shared.kernel.tokens import N_FEATURES
 class SetEncoder(nn.Module):
     """Maps a window of tokens to one state per token, indifferent to their order and their count.
 
-    The token count is the only axis that varies — channels enter through their embedding, not
-    through an axis — so permuting the tokens permutes their states, and appending padding leaves
-    the states of the observed tokens unchanged. The output is a state per position, padding
-    positions included: an objective scores the observed ones, ``MaskedMeanPooling`` averages them
-    into one embedding of the window.
-
-    The two input modules are injected, so a variant of either — a learned time encoding, a
-    channel vector derived from a description — replaces the standard one without the rest of the
-    encoder noticing. ``for_vocabulary`` builds the standard pair, which is what the architecture's
-    ``parameter_count`` describes. Dropout is regularisation of a run, not part of the shape, so it
-    is an argument here rather than a field of the architecture.
+    The token count is the only axis that varies, channels entering through their embedding, so
+    permuting the tokens permutes their states and padding leaves the observed states unchanged.
+    Every position gets a state, padding included; an objective scores the observed ones and
+    ``MaskedMeanPooling`` averages them. The time and channel modules are injected, so either can be
+    replaced alone; ``for_vocabulary`` builds the standard pair ``parameter_count`` describes.
+    Dropout is a run's argument, not a shape.
 
     Attributes:
         architecture: The shape this encoder was built to.

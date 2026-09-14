@@ -5,100 +5,23 @@ frozen, tokenised, archived and read back through the block — the same use cas
 real corpus goes through, wired by the process the command line assembles. Their windows then
 meet in one batch and pass through the encoder that will be pretrained on them.
 
-Nothing here is trained: the self-supervised objective belongs to a later ticket, and this test
-exists so that when it arrives, a failure is the objective's rather than the road's. The one
+Nothing here is trained: the self-supervised objective is held to these windows in its own test,
+and this one exists so that a failure there is the objective's rather than the road's. The one
 claim it makes about the model is the one the road depends on — that a batch mixing two layouts
 is a batch the encoder accepts, with no axis for channels to disagree on.
 """
 
-from pathlib import Path
-from typing import NamedTuple
-
 import pytest
 import torch
 
-from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_A, CONTROL_B, CONTROL_PROCESS
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
-from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
-from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
+from emblema.catalog.adapters.synthetic.layouts import CONTROL_A, CONTROL_B
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
-from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
-from emblema.catalog.ports.corpus_archive import CorpusArchive
-from emblema.entrypoints.cli.composition_root import CompositionRoot
-from emblema.entrypoints.cli.known_corpora import KnownCorpora
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
-from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
-from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.kernel.tokens import TokenWindow
+from tests.support.control_corpus import Control
 from tests.support.encoders import SMALL
-from tests.support.settings import unreachable_store
-from tests.support.synthetic import miniature
 
 pytestmark = pytest.mark.ml
-
-# Short enough that a miniature unit yields several windows, with a stride that leaves a tail.
-WINDOW = WindowSpec(length=32.0, stride=12.0)
-
-
-class Control(NamedTuple):
-    """Both control corpora published into one store, under one channel vocabulary."""
-
-    archive: CorpusArchive
-    manifests: tuple[TokenisationManifest, TokenisationManifest]
-
-    def windows_of(self, which: int) -> list[TokenWindow]:
-        manifest = self.manifests[which]
-        return list(self.archive.read_windows(manifest.archived, manifest.split.training))
-
-
-@pytest.fixture(scope="module")
-def control(tmp_path_factory: pytest.TempPathFactory) -> Control:
-    workspace = tmp_path_factory.mktemp("control")
-    store = InMemoryArtifactStore()
-    corpora = InMemoryCorpusRepository()
-    archive: CorpusArchive | None = None
-    refs: list[ArtifactRef] = []
-    for layout in (CONTROL_A, CONTROL_B):
-        root = process(layout, workspace, store, corpora)
-        archive = root.adapters.archive
-        # The second corpus continues the first one's vocabulary: that is what lets one model
-        # hold both, and the only place the two layouts are ever named together.
-        refs.append(root.services.publish_corpus(command(layout, refs[0] if refs else None)))
-    assert archive is not None
-    manifests = tuple(archive.read_manifest(ref) for ref in refs)
-    return Control(archive, (manifests[0], manifests[1]))
-
-
-def process(
-    layout: SensorLayout,
-    workspace: Path,
-    store: InMemoryArtifactStore,
-    corpora: InMemoryCorpusRepository,
-) -> CompositionRoot:
-    """The publishing process the command line assembles, over a corpus cut to a test's size."""
-    return CompositionRoot(
-        unreachable_store(),
-        corpus_root=workspace / "raw",
-        workspace=workspace,
-        corpora=corpora,
-        reader=SyntheticCorpusReader(CONTROL_PROCESS, miniature(layout)),
-        store=store,
-    )
-
-
-def command(layout: SensorLayout, vocabulary_from: ArtifactRef | None) -> PublishCorpusCommand:
-    known = KnownCorpora.default().named(layout.name)
-    return PublishCorpusCommand(
-        name=known.name,
-        source=known.source,
-        licence=known.licence,
-        window=WINDOW,
-        validation_fraction=0.25,
-        seed=1,
-        vocabulary_from=vocabulary_from,
-    )
 
 
 def test_both_layouts_publish_as_corpora_of_their_own_width(control: Control) -> None:
@@ -144,9 +67,8 @@ def identifiers(manifest: TokenisationManifest) -> set[int]:
 def test_the_two_layouts_meet_in_one_batch_the_encoder_accepts(control: Control) -> None:
     windows = control.windows_of(0)[:4] + control.windows_of(1)[:4]
     batch = TokenTensors.from_windows(windows)
-    vocabulary = len(control.manifests[1].scheme.vocabulary)
     torch.manual_seed(1)
-    encoder = SetEncoder.for_vocabulary(SMALL, vocabulary).eval()
+    encoder = SetEncoder.for_vocabulary(SMALL, control.vocabulary_size).eval()
 
     states = encoder(*batch.args)
 
@@ -161,7 +83,7 @@ def test_the_gradient_of_a_mixed_batch_reaches_both_layouts_channel_embeddings(
     windows = control.windows_of(0)[:4] + control.windows_of(1)[:4]
     batch = TokenTensors.from_windows(windows)
     torch.manual_seed(1)
-    encoder = SetEncoder.for_vocabulary(SMALL, len(control.manifests[1].scheme.vocabulary))
+    encoder = SetEncoder.for_vocabulary(SMALL, control.vocabulary_size)
 
     encoder(*batch.args).sum().backward()
 

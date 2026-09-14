@@ -1,10 +1,13 @@
 import tomllib
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
+from emblema.config.compute_tiers import ComputeTiers
+from emblema.shared.kernel.compute import ComputeTier
 from scripts.corpus_budget_report import (
     DEFAULT_CONFIG,
     Backbone,
@@ -195,19 +198,24 @@ def test_a_measured_corpus_measures_exactly_its_declared_variants(measured_names
         )
 
 
+def shipped_budget() -> dict[str, Any]:
+    """The shipped budget file as raw values, priced at the configured tiers as ``load`` does."""
+    with DEFAULT_CONFIG.open("rb") as source:
+        raw = tomllib.load(source)
+    return {**raw, "tiers": ComputeTiers.load().tiers}
+
+
 @pytest.mark.parametrize(
     ("path", "value", "message"),
     [
         (("campaigns", 0, "task_corpus"), "nope", "unknown corpus nope"),
         (("backbones", 0, "corpora"), ["cmapss", "nope"], "unknown corpora"),
-        (("tiers", 1, "name"), "X", "tier M is the reference"),
     ],
 )
 def test_budget_rejects_dangling_references(
     path: tuple[str | int, ...], value: object, message: str
 ):
-    with DEFAULT_CONFIG.open("rb") as source:
-        raw = tomllib.load(source)
+    raw = shipped_budget()
     target: Any = raw
     for step in path[:-1]:
         target = target[step]
@@ -215,6 +223,28 @@ def test_budget_rejects_dangling_references(
 
     with pytest.raises(ValidationError, match=message):
         Budget.model_validate(raw)
+
+
+def test_a_budget_priced_without_the_reference_tier_is_rejected():
+    raw = shipped_budget()
+    raw["tiers"] = tuple(tier for tier in raw["tiers"] if tier.name != ComputeTier.M)
+
+    with pytest.raises(ValidationError, match="tier M is the reference"):
+        Budget.model_validate(raw)
+
+
+def test_a_budget_file_stating_tiers_of_its_own_is_refused(tmp_path: Path):
+    with DEFAULT_CONFIG.open("rb") as source:
+        text = source.read().decode()
+    stating = tmp_path / "budget.toml"
+    stating.write_text(text + '\n[[tiers]]\nname = "S"\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="states tiers"):
+        Budget.load(stating)
+
+
+def test_the_budget_is_priced_at_the_configured_tiers():
+    assert Budget.load(DEFAULT_CONFIG).tiers == ComputeTiers.load().tiers
 
 
 def test_unknown_keys_in_the_configuration_are_rejected():

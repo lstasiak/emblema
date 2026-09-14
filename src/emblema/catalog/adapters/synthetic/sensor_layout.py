@@ -7,19 +7,14 @@ from emblema.shared.kernel.sampling import SamplingRegime
 class SensorLayout(Dials):
     """One instrumented system watching the latent factors: how many sensors, how well, how often.
 
-    A layout is a partial, noisy and unevenly sampled view of the factors. Every dial that makes
-    two layouts different is here — the number of channels, how many factors a channel responds
-    to, how closely it follows them, how often it reports and how much it drops — so that a pair
-    of layouts can be stated rather than written.
+    A partial, noisy and unevenly sampled view of the factors, holding every dial that tells two
+    layouts apart, so that a pair of layouts is stated rather than written.
 
-    ``coupling`` is the dial the control turns. At one, a channel follows the shared factors; at
-    zero, it follows factors of its own that no other layout sees. Both sets are scaled to unit
-    variance and mixed by the root of the coupling, and the unit's gain multiplies the mixture
-    rather than one side of it, so turning the dial does not also turn the volume down. That is
-    what makes the zero case an honest null: transfer failing there cannot be put down to a
-    fainter signal. What a unit realises over its finite span still follows whichever periods its
-    seeds happened to draw from the band, by a few per cent either way; what the design rules out
-    is a difference in size that tracks the coupling.
+    ``coupling`` is the dial the control turns: at one a channel follows the shared factors, at zero
+    factors of its own. Both sets have unit variance and are mixed by the root of the coupling, and
+    the unit's gain scales the mixture, so turning the dial never turns the volume down and the null
+    case cannot fail for a fainter signal. A unit's realised size still varies by a few per cent
+    with the periods its seeds draw, not with the coupling.
 
     Attributes:
         name: Name the corpus generated from this layout is registered under, and the prefix of

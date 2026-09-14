@@ -1,14 +1,14 @@
-"""Reproduce the ONNX export findings on this machine and print them as a note-ready report.
+"""What the ONNX export spike measures but cannot assert, as a note-ready report.
 
-The export suite asserts the findings; this script measures what cannot be an assertion — artefact
-size, latency against the alternatives, and the behaviour of the export paths that fail. Run it once
-per machine architecture, because that is what the numbers depend on:
+The suite beside this module asserts the findings; this measures artefact size, latency against the
+alternatives and the behaviour of the export paths that fail, through the same harness. It lives
+with the suite and goes with it when the export adapter replaces the spike. Run it once per
+machine architecture, from the repository root:
 
     uv sync --all-extras
-    uv run scripts/onnx_export_report.py
+    uv run python -m tests.ml.onnx_export.report
 
-The output is markdown, meant to be pasted under a dated heading in the verification note. It
-exports the encoder itself, through the same harness the test suite uses.
+The output is markdown, meant to be pasted under a dated heading in the verification note.
 """
 
 import contextlib
@@ -19,19 +19,16 @@ import time
 from collections.abc import Callable, Iterator
 from datetime import datetime
 from importlib.metadata import version
-from pathlib import Path
-
-# Run from anywhere: the export harness lives in the test package at the repository root, next to
-# this directory. The imports below follow, which is why this file is exempt from the import-order
-# rule in the lint configuration.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np
 import onnxruntime as ort
 import torch
 
+from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
-from scripts.budget_file import architecture_of, tier_named, vocabulary_size
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
+from emblema.shared.kernel.compute import ComputeTier
+from scripts.budget_file import vocabulary_size
 from tests.ml.onnx_export.exported_encoder import (
     MAX_TOKENS,
     OPSET_VERSION,
@@ -80,14 +77,15 @@ def measure_latency(call: Callable[[], object]) -> float:
     return (time.perf_counter() - started) / REPETITIONS * 1000
 
 
-def tier_encoder(name: str) -> PooledSetEncoder:
+def tier_encoder(name: ComputeTier) -> PooledSetEncoder:
     """The encoder at the shape of compute tier ``name``, pooled, as the export takes it.
 
     Over the vocabulary of the measured corpora, not the test one: a table of the wrong height
     would put a parameter count in this report that no model of that tier has.
     """
     torch.manual_seed(SEED)
-    encoder = SetEncoder.for_vocabulary(architecture_of(tier_named(name)), vocabulary_size())
+    architecture = architecture_of(ComputeTiers.load().profile(name))
+    encoder = SetEncoder.for_vocabulary(architecture, vocabulary_size())
     return PooledSetEncoder(encoder.eval())
 
 
@@ -168,8 +166,7 @@ def report_alternatives(rows: list[str], label: str, model: PooledSetEncoder) ->
         exported = ExportedEncoder.from_model(model)
         export_seconds = time.perf_counter() - started
 
-        # `torch.jit` carries no type information; the call is checked by the comparison below.
-        traced = torch.jit.trace(model, sample.args, strict=False)  # type: ignore[no-untyped-call]
+        traced = torch.jit.trace(model, sample.args, strict=False)
         buffer = io.BytesIO()
         torch.jit.save(traced, buffer)
         with torch.no_grad():
@@ -210,7 +207,7 @@ def main() -> None:
     report_alternatives(
         rows, "Encoder the test suite exports", PooledSetEncoder(small_encoder(seed=SEED))
     )
-    report_alternatives(rows, "Encoder at compute tier M", tier_encoder("M"))
+    report_alternatives(rows, "Encoder at compute tier M", tier_encoder(ComputeTier.M))
     print("\n".join(rows))
 
 

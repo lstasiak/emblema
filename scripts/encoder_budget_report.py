@@ -1,18 +1,14 @@
 """Measure what full self-attention costs at the window lengths the corpora produce, as a note.
 
-The encoder attends every token to every other, so a window's cost grows with the square of its
-token count, and the window length is the knob that bounds it. The tests hold what must be true
-everywhere — permutation, padding, gradients, the parameter count; this script measures what only
-holds on a machine: how long a training step takes per window and how much memory it holds, per
-compute tier and per window length, beside the arithmetic the numbers should agree with. Run it
-once per machine, because that is what the numbers depend on:
+A window's cost grows with the square of its tokens, so the window length bounds it. The tests hold
+what is true everywhere; this measures what holds on one machine: the seconds and memory of a
+training step per window, per compute tier and window length, beside the arithmetic they should
+agree with. The lengths are the default windows of the measured corpora in the budget file.
 
     uv sync --all-extras
     uv run scripts/encoder_budget_report.py
 
-Window lengths come from the budget file — the default window of every corpus that has been
-measured, as its mean tokens per window — so a corpus added there shows up here. The output is
-markdown, meant to be pasted under a dated heading in the verification note.
+Prints markdown for the verification note; run it once per machine.
 """
 
 import io
@@ -23,24 +19,28 @@ from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path
 
-# Run from anywhere: the sibling script modules and the test apparatus live in packages at the
-# repository root, next to this directory. The imports below follow, which is why this file is
-# exempt from the import-order rule in the lint configuration.
+# Run from anywhere: the sibling script modules live in this directory's package at the repository
+# root. The imports below follow, which is why this file is exempt from the import-order rule in
+# the lint configuration.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import torch
 
+from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
-from scripts.budget_file import architecture_of, budget, tier_named, vocabulary_size
+from emblema.shared.adapters.tensors.token_tensors import TokenTensors
+from emblema.shared.kernel.compute import ComputeTier
+from emblema.shared.kernel.tokens import N_FEATURES
+from scripts.budget_file import budget, vocabulary_size
 from scripts.loader_throughput_report import device_in_use, median_seconds, synchronise
 from scripts.reporting import dated_heading, machine, table
-from tests.support.token_tensors import random_batch
 
-TIERS = ("S", "M")
+TIERS = (ComputeTier.S, ComputeTier.M)
 # The tier whose results are published, so the one the verdict is about.
-PUBLISHED_TIER = "M"
+PUBLISHED_TIER = ComputeTier.M
 # Tokens a timed step carries in all, whatever the window length: a batch of long windows is small
 # and a batch of short ones large, and the numbers are reported per window either way.
 TOKENS_PER_STEP = 8192
@@ -125,13 +125,32 @@ class Step:
     bytes_held: int | None
 
 
+def random_windows(batch: int, tokens: int, *, vocabulary: int, seed: int) -> TokenTensors:
+    """``batch`` windows of ``tokens`` random tokens over ``vocabulary`` channels, none padding.
+
+    What a step costs follows from the shapes, not the values; the values are drawn so that no
+    operation meets a constant, and two tokens a window are timeless, as static features enter.
+    """
+    generator = torch.Generator().manual_seed(seed)
+    timeless = torch.zeros(batch, tokens, dtype=torch.bool)
+    timeless[:, :2] = True
+    return TokenTensors(
+        features=torch.randn(batch, tokens, N_FEATURES, generator=generator),
+        channel_ids=torch.randint(1, vocabulary + 1, (batch, tokens), generator=generator),
+        timestamps=torch.rand(batch, tokens, generator=generator),
+        timeless=timeless,
+        padding_mask=torch.zeros(batch, tokens, dtype=torch.bool),
+    )
+
+
 def measure_step(
     architecture: EncoderArchitecture, *, tokens: int, batch: int, device: str
 ) -> Step:
     """Forward and backward over `batch` windows of `tokens` random tokens, on `device`."""
     torch.manual_seed(1)
-    model = SetEncoder.for_vocabulary(architecture, vocabulary_size()).to(device)
-    inputs = random_batch(batch, tokens, seed=tokens).to(device)
+    vocabulary = vocabulary_size()
+    model = SetEncoder.for_vocabulary(architecture, vocabulary).to(device)
+    inputs = random_windows(batch, tokens, vocabulary=vocabulary, seed=tokens).to(device)
 
     def step() -> None:
         model(*inputs.args).pow(2).mean().backward()
@@ -181,7 +200,8 @@ class Measurements:
 def measure() -> Measurements:
     device = device_in_use()
     lengths = window_lengths()
-    architectures = {name: architecture_of(tier_named(name)) for name in TIERS}
+    tiers = ComputeTiers.load()
+    architectures = {str(name): architecture_of(tiers.profile(name)) for name in TIERS}
     steps = {
         (name, length.tokens): measure_step(
             architecture, tokens=length.tokens, batch=batch_for(length.tokens), device=device

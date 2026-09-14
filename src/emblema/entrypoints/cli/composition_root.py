@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Self
 
 from sqlalchemy import create_engine
 
@@ -47,7 +48,7 @@ class CompositionRoot:
 
     def __init__(
         self,
-        settings: Settings,
+        settings: Settings | None = None,
         *,
         corpus: str | None = None,
         corpus_root: Path,
@@ -63,6 +64,8 @@ class CompositionRoot:
 
         Args:
             settings: Values read from the environment; only the root and the adapters see them.
+                Needed only to build the store or the repository; a process bringing both of its
+                own is assembled by ``over`` instead, which requires them.
             corpus: Name of the corpus to publish; it decides which adapter reads it, and is
                 needed only where ``reader`` is left to the root to choose.
             corpus_root: Directory the raw corpus is read from, where it is read from files.
@@ -75,10 +78,18 @@ class CompositionRoot:
                 archive is always the block archive over this store.
             clock: Source of the current instant; the system clock unless given.
             ids: Source of new identifiers; random UUIDs unless given.
+
+        Raises:
+            ValueError: If the store or the repository is left to the root without settings to
+                build it from, or the reader is left to it without a corpus it has an adapter for.
         """
-        chosen_store = self._artifact_store(settings) if store is None else store
+        chosen_store = self._artifact_store(_needed(settings, "store")) if store is None else store
         self.adapters = Adapters(
-            corpora=self._corpus_repository(settings) if corpora is None else corpora,
+            corpora=(
+                self._corpus_repository(_needed(settings, "corpora"))
+                if corpora is None
+                else corpora
+            ),
             reader=self._corpus_reader(corpus, corpus_root, subsets) if reader is None else reader,
             store=chosen_store,
             archive=BlockCorpusArchive(chosen_store, workspace, PublishedCorpusManifestAssembler()),
@@ -86,6 +97,38 @@ class CompositionRoot:
             ids=Uuid4IdGenerator() if ids is None else ids,
         )
         self.services = self._services(self.adapters)
+
+    @classmethod
+    def over(
+        cls,
+        *,
+        corpora: CorpusRepository,
+        store: ArtifactStore,
+        corpus: str | None = None,
+        corpus_root: Path,
+        workspace: Path,
+        subsets: tuple[str, ...] = (),
+        reader: CorpusReader | None = None,
+        clock: Clock | None = None,
+        ids: IdGenerator | None = None,
+    ) -> Self:
+        """The process over a repository and a store of its own, nothing read from the environment.
+
+        Those two are the only adapters the root builds from settings, and here they are required:
+        what the general constructor refuses at runtime when settings are missing, this refuses at
+        the type. The reader is chosen as always, by name or by being given.
+        """
+        return cls(
+            corpus=corpus,
+            corpus_root=corpus_root,
+            workspace=workspace,
+            subsets=subsets,
+            corpora=corpora,
+            reader=reader,
+            store=store,
+            clock=clock,
+            ids=ids,
+        )
 
     @staticmethod
     def _services(adapters: Adapters) -> Services:
@@ -153,3 +196,9 @@ class CompositionRoot:
             bucket=config.bucket,
             key_prefix=config.key_prefix,
         )
+
+
+def _needed(settings: Settings | None, adapter: str) -> Settings:
+    if settings is None:
+        raise ValueError(f"without settings the process needs {adapter} given, not built")
+    return settings

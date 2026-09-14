@@ -10,17 +10,12 @@ class LatentFactorProcess(Dials):
     """The hidden factors a synthetic corpus is a view of: a few signals defined for every instant.
 
     A factor is a sum of harmonics whose frequencies are drawn once, from the seed of the process,
-    and whose amplitudes and phases are drawn per unit. The frequencies are therefore the
-    behaviour the factors share — the structure a model could learn and carry to sensors it has
-    never seen — while the amplitudes and phases are one realisation of it, private to a unit.
-    Two sensor layouts built on the same process share that structure without sharing a single
-    trajectory, which is what the control has to demonstrate and what makes its transfer leg
-    honest rather than a memory test.
-
-    Factors are defined as functions of time rather than over a grid, because the layouts that
-    observe them sample at instants of their own choosing; and they are scaled to unit variance,
-    so that how strongly a channel follows them is a property of the channel and not of which
-    factor it happened to be given.
+    and whose amplitudes and phases are drawn per unit: the frequencies are the structure a model
+    could carry to sensors it has never seen, the amplitudes and phases one unit's realisation of
+    it. Two layouts on one process share the structure and no trajectory, which keeps the transfer
+    leg from being a memory test. Factors are functions of time, as layouts sample at instants of
+    their own, and have unit variance, so how strongly a channel follows one is a property of the
+    channel.
 
     Attributes:
         harmonics: Sinusoids each factor is the sum of.

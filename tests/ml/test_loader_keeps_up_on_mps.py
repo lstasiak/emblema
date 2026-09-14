@@ -12,7 +12,9 @@ the number that script prints cannot drift apart.
 import pytest
 import torch
 
-from scripts.budget_file import architecture_of, tier_named
+from emblema.config.compute_tiers import ComputeTiers
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
+from emblema.shared.kernel.compute import ComputeTier
 from scripts.loader_throughput_report import (
     MARGIN,
     collate_seconds,
@@ -27,7 +29,7 @@ pytestmark = [
     pytest.mark.skipif(not torch.backends.mps.is_available(), reason="needs Apple-silicon MPS"),
 ]
 
-TIER = architecture_of(tier_named("M"))
+TIER = architecture_of(ComputeTiers.load().profile(ComputeTier.M))
 WINDOWS = 64
 
 

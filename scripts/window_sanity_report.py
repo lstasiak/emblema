@@ -1,20 +1,16 @@
 """Draw a raw window beside the reconstruction of its tokens, and say what the corpus looks like.
 
-Every hour of pretraining rests on the claim that a token window still holds the measurements it
-was cut from. This script makes that claim visible before the hours are spent: it reads a corpus
-through its adapter, cuts a few windows, reads them back through the tokenisation scheme and draws
-both curves on one pair of axes, channel by channel. Beside the pictures it prints what no picture
-shows well — the largest residual of the round trip, and per channel the spread the scheme fitted,
-how far the extremes of the corpus lie from it and how many values sit far out.
+Pretraining rests on a token window still holding the measurements it was cut from. The report cuts
+a few windows, reads them back through the tokenisation scheme and draws both curves per channel; it
+prints the largest round-trip residual and, per channel, the fitted spread and how far and how often
+values lie outside it.
 
     uv sync --all-extras
     uv run scripts/window_sanity_report.py --corpus cmapss --subset FD001
 
-The output is markdown, meant to be pasted under a dated heading in the verification note; the
-figures are written next to it. Where the raw corpus is absent the miniature sample in the test
-data is used instead, and the output says which one it was. Statistics are fitted on every unit
-read, because this is a check on the data rather than a training run: no number here belongs in a
-result.
+Prints markdown for the verification note and writes the figures beside it. Without the raw corpus
+it uses the miniature test sample and says so. Statistics are fitted on every unit read: this checks
+the data, and none of its numbers belongs in a result.
 """
 
 import argparse

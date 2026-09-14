@@ -112,13 +112,14 @@ allowed-confusables = ["×"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D"]
 # Developer scripts that import a sibling package: the path is set up before the imports run.
-"scripts/onnx_export_report.py" = ["E402"]
 "scripts/corpus_facts.py" = ["E402"]
 "scripts/loader_throughput_report.py" = ["E402"]
 "scripts/window_sanity_report.py" = ["E402"]
 "scripts/published_corpus_report.py" = ["E402"]
 "scripts/encoder_budget_report.py" = ["E402"]
 "scripts/synthetic_control_report.py" = ["E402"]
+"scripts/masked_reconstruction_report.py" = ["E402"]
+"scripts/masked_reconstruction_assessment.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
