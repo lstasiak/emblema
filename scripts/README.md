@@ -17,7 +17,9 @@ retired with it.
 
 Logic that a verdict depends on belongs in `src/emblema`, under the architecture rules, types and
 coverage, not here. That is why the rules that judge a masked-reconstruction run live in
-`emblema.pretraining` and only their storage and printing remain below.
+`emblema.pretraining`, and why the loop that trains one, the state it can be resumed from and the
+record of what it did followed them there. What remains below is composition — which corpus, which
+experiment — and the shape of a note: its CSV, its tables, its figures.
 
 | Script | Kind | Evidence it produces | Retired by |
 | --- | --- | --- | --- |
@@ -32,10 +34,16 @@ coverage, not here. That is why the rules that judge a masked-reconstruction run
 | `synthetic_control_report.py` | measurement | `figures/synthetic-control-*.png` | — |
 | `published_corpus_report.py` | measurement | artifact size and write cost | — |
 | `encoder_budget_report.py` | measurement | attention cost per window length | — |
-| `masked_reconstruction_report.py`, `masked_reconstruction_assessment.py`, `masked_reconstruction_epochs.toml`, `spectral_probe.py` | transitional | [`masked-reconstruction.md`](../docs/verification/masked-reconstruction.md) and `figures/masked-reconstruction-*.png` | the training runtime and the experiment tracker, which own a run's loop and its provenance |
+| `masked_reconstruction_report.py`, `spectral_probe.py` | measurement | [`masked-reconstruction.md`](../docs/verification/masked-reconstruction.md) | the evaluation harness, once it owns campaigns and the statistics a published result is read from; what would stay is the note's composition |
+| `masked_reconstruction_assessment.py` | transitional | the CSV a run is stored and compared in | the evaluation harness, which persists a campaign rather than a directory of files |
+| `masked_reconstruction_figures.py` | measurement | `figures/masked-reconstruction-*.png` | — |
+| `training_loop_report.py` | measurement | [`training-loop.md`](../docs/verification/training-loop.md) | — |
 | `reporting.py` | shared | the heading and table shape of every report | — |
 
 ## Known debt
 
-- Eight scripts put the repository root on `sys.path` before their imports, and each carries a lint
+- Ten scripts put the repository root on `sys.path` before their imports, and each carries a lint
   exemption (E402) for it in `pyproject.toml`.
+- `masked_reconstruction_report.py` is the largest thing here and does three jobs — publishing a
+  corpus, diagnosing what a run learnt, and rendering a note. Each has tests; none of them is
+  domain logic. It shrinks to composition when the evaluation harness takes the assessment over.
