@@ -214,6 +214,11 @@ class RunFigures:
     examples: tuple[Example, ...]
 
 
+def run_name(corpus: str, started: datetime) -> str:
+    """What a run is called, by the tracker and by the directory it is stored in alike."""
+    return f"{corpus}-{started:%Y%m%d-%H%M%S}"
+
+
 def store(assessment: Assessment, figures: RunFigures, root: Path) -> Path:
     """Write the run under a directory of its own in ``root`` and add it to the index.
 
@@ -228,7 +233,7 @@ def store(assessment: Assessment, figures: RunFigures, root: Path) -> Path:
     index = root / INDEX
     _check_index(index)
     stamp = datetime.strptime(results.settings["date"], "%Y-%m-%d %H:%M:%S")
-    base = f"{results.settings['corpus']}-{stamp:%Y%m%d-%H%M%S}"
+    base = run_name(results.settings["corpus"], stamp)
     root.mkdir(parents=True, exist_ok=True)
     directory = _fresh_directory(root, base)
     _write_measured(results, figures, directory)

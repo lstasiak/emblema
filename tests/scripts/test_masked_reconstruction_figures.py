@@ -14,7 +14,7 @@ from emblema.pretraining.application.use_cases.assess_reconstruction_run import 
     AssessReconstructionRun,
 )
 from scripts.masked_reconstruction_assessment import EXAMPLES, RUN, store
-from scripts.masked_reconstruction_figures import drawn_from, shape_label
+from scripts.masked_reconstruction_figures import drawn_from, figures_of, main, shape_label
 from tests.support.reconstruction_runs import figures, results
 
 assess = AssessReconstructionRun(UnitBootstrap())
@@ -36,6 +36,18 @@ def test_every_figure_the_report_promises_is_drawn_from_the_stored_run(
         "masked-reconstruction-control-a-windows.png",
     ]
     assert all(path.stat().st_size > 0 for path in drawn)
+
+
+def test_a_runs_figures_are_drawn_beside_it_unless_asked_for_elsewhere(
+    stored: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    main([str(stored)])
+    main([str(stored), "--figures", str(tmp_path / "note")])
+    capsys.readouterr()
+
+    assert figures_of(stored) == stored / "figures"
+    assert len(list(figures_of(stored).iterdir())) == 3
+    assert len(list((tmp_path / "note").iterdir())) == 3
 
 
 def test_a_run_that_drew_no_example_still_gets_its_other_figures(

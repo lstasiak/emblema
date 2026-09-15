@@ -7,6 +7,7 @@ road — publish, train, diagnose, assess, store, draw — runs once on a few un
 """
 
 from dataclasses import dataclass, replace
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,10 @@ pytest.importorskip("torch")
 
 import torch
 
+from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.diagnostics.unit_bootstrap import UnitBootstrap
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
+from emblema.pretraining.adapters.in_memory.experiment_tracker import InMemoryExperimentTracker
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
 from emblema.pretraining.application.use_cases.assess_reconstruction_run import (
     AssessReconstructionRun,
@@ -26,6 +30,7 @@ from emblema.pretraining.domain.assessment.results import Results
 from emblema.pretraining.domain.assessment.spectrum import Spectrum
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.mask_kind import MaskKind
+from emblema.shared.kernel.compute import ComputeTier
 from scripts.masked_reconstruction_assessment import (
     INDEX,
     RunFigures,
@@ -52,12 +57,15 @@ from scripts.masked_reconstruction_report import (
     verdict_section,
 )
 from tests.support.experiments import MIXTURE, budget, configuration
+from tests.support.reconstruction_runs import figures as stored_figures
+from tests.support.reconstruction_runs import results as stored_results
 from tests.support.token_tensors import grid_batch
 
 pytestmark = pytest.mark.ml
 
 assess = AssessReconstructionRun(UnitBootstrap())
 
+STARTED = datetime(2026, 9, 15, 23, 4, 11)
 TOY = EncoderArchitecture(width=16, heads=2, layers=1, feedforward_width=32, time_frequencies=12)
 
 
@@ -230,6 +238,36 @@ def test_an_override_that_leaves_nothing_to_decay_is_refused_before_anything_run
     assert not any(tmp_path.iterdir())
 
 
+def test_a_run_of_its_tiers_own_shape_is_named_by_the_tier_alone() -> None:
+    tier_shape = architecture_of(ComputeTiers.load().profile(ComputeTier.S))
+    run = replace(
+        run_named("control-a"),
+        configuration=configuration(tier=ComputeTier.S, architecture=tier_shape),
+    )
+
+    assert run.shape_label == "tier S"
+
+
+def test_a_run_that_changes_its_tiers_shape_says_so() -> None:
+    assert run_named("control-a").shape_label == "tier S with its shape overridden"
+
+
+def test_redrawing_a_stored_run_draws_into_that_run_and_trains_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stored = store(assess(stored_results()), stored_figures(), tmp_path / "results")
+
+    main(["--figures-only", str(stored), "--workspace", str(tmp_path / "workspace")])
+
+    assert sorted(path.name for path in (stored / "figures").iterdir()) == [
+        "masked-reconstruction-control-a-diagnostics.png",
+        "masked-reconstruction-control-a-loss.png",
+        "masked-reconstruction-control-a-windows.png",
+    ]
+    assert str(Path("figures")) in capsys.readouterr().out
+    assert not (tmp_path / "workspace").exists()
+
+
 def test_the_code_digest_is_stable() -> None:
     digest = code_digest()
 
@@ -245,6 +283,7 @@ class Road:
     run: Run
     published: Published
     trained: Trained
+    tracker: InMemoryExperimentTracker
     report: str
     figures: Path
     stored: Path
@@ -255,7 +294,8 @@ def road(tmp_path_factory: pytest.TempPathFactory) -> Road:
     run = run_named("control-a")
     workspace = tmp_path_factory.mktemp("report")
     published = publish(run, workspace / "corpus")
-    trained = train(published, run, workspace / "corpus", None)
+    tracker = InMemoryExperimentTracker()
+    trained = train(published, run, workspace / "corpus", tracker, STARTED)
     found = diagnose(published, trained, run)
     measured = results_of(run, published, trained, found)
     assessment = assess(measured, find_shorter(measured, workspace / "results"))
@@ -267,7 +307,7 @@ def road(tmp_path_factory: pytest.TempPathFactory) -> Road:
     # As the report draws them: from the stored run, never from what is still in memory.
     drawn_from(stored, workspace / "figures")
     report = render(run, published, trained, found, assessment)
-    return Road(run, published, trained, report, workspace / "figures", stored)
+    return Road(run, published, trained, tracker, report, workspace / "figures", stored)
 
 
 def test_the_whole_road_renders_every_section(road: Road) -> None:
@@ -275,6 +315,7 @@ def test_the_whole_road_renders_every_section(road: Road) -> None:
         assert section in road.report
     assert "control-a" in road.report
     assert "cut to 4 units" in road.report
+    assert "| tier S with its shape overridden: 16 wide, 2 heads, 1 blocks," in road.report
     assert "cosine decay to 0.01 of the peak, seed 1, fp32 on CPU" in road.report
 
 
@@ -301,6 +342,18 @@ def test_the_whole_road_stores_what_it_measured_per_unit(road: Road) -> None:
     assert all(tally.model >= (tally.floor or 0.0) for tally in measured.tallies if not tally.apart)
 
 
+def test_the_whole_road_stores_the_run_under_the_name_it_was_tracked_by(road: Road) -> None:
+    """The stored run names the tracked one twice: by name, and by the weights it left behind."""
+    settings = read(road.stored).settings
+    kept = road.tracker.outcome
+
+    assert road.stored.name == road.tracker.run == "control-a-20260915-230411"
+    assert settings["tracked_run"] == road.tracker.run
+    assert settings["date"] == "2026-09-15 23:04:11"
+    assert kept is not None
+    assert settings["backbone_checksum"] == str(kept.backbone.checksum)
+
+
 def test_the_noise_variance_is_the_layouts_noise_in_normalised_units(road: Road) -> None:
     published = road.published
     variance = published.noise_variance()
@@ -321,7 +374,13 @@ def test_the_noise_variance_is_the_layouts_noise_in_normalised_units(road: Road)
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="needs MPS")
 def test_a_run_on_mps_hides_what_a_run_on_the_cpu_hides(tmp_path: Path, road: Road) -> None:
     """Masks are drawn on the host, so the device changes the arithmetic, not what is hidden."""
-    on_mps = train(road.published, replace(road.run, device="mps"), tmp_path, None)
+    on_mps = train(
+        road.published,
+        replace(road.run, device="mps"),
+        tmp_path,
+        InMemoryExperimentTracker(),
+        STARTED,
+    )
 
     assert on_mps.hidden_ratio == road.trained.hidden_ratio
     assert on_mps.epochs[-1].validation_loss == pytest.approx(

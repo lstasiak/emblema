@@ -5,6 +5,7 @@ into figures. A legend that sits on the data or a title that reads badly is then
 another training run.
 
     uv run scripts/masked_reconstruction_figures.py data/report/results/control-a-20260915-101500
+    uv run scripts/masked_reconstruction_figures.py <run> --figures docs/verification/figures
 """
 
 import argparse
@@ -39,7 +40,14 @@ from scripts.masked_reconstruction_assessment import (
     read_figures,
 )
 
-FIGURES = REPO_ROOT / "docs" / "verification" / "figures"
+
+def figures_of(stored: Path) -> Path:
+    """Where the figures of the run stored in ``stored`` are drawn unless asked for elsewhere.
+
+    Beside the numbers they are drawn from: a smoke run then never replaces the figures a note
+    shows, and a figure copied into a note has a run it can be redrawn from.
+    """
+    return stored / "figures"
 
 
 def shape_label(settings: Mapping[str, str]) -> str:
@@ -190,10 +198,15 @@ def drawn_from(stored: Path, destination: Path) -> list[Path]:
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("runs", nargs="+", type=Path, help="directories the report stored runs in")
-    parser.add_argument("--figures", type=Path, default=FIGURES)
+    parser.add_argument(
+        "--figures",
+        type=Path,
+        default=None,
+        help="directory to draw into; each run's own figures directory unless given",
+    )
     arguments = parser.parse_args(argv)
     for stored in arguments.runs:
-        for path in drawn_from(stored, arguments.figures):
+        for path in drawn_from(stored, arguments.figures or figures_of(stored)):
             print(path)
 
 

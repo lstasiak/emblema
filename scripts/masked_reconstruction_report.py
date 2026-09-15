@@ -12,7 +12,9 @@ never from what is still in memory, so a change of style costs a redraw and not 
     uv run scripts/masked_reconstruction_report.py --experiment control-b-s
     uv run scripts/masked_reconstruction_report.py --figures-only data/report/results/<run>
 
-What the runs showed is in ``docs/verification/masked-reconstruction.md``.
+A run's figures are drawn into its own stored directory; the ones a note shows are drawn there on
+purpose, with ``--figures docs/verification/figures``. What the runs showed is in
+``docs/verification/masked-reconstruction.md``.
 """
 
 import argparse
@@ -43,6 +45,7 @@ from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import Synthetic
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
+from emblema.config.compute_tiers import ComputeTiers
 from emblema.entrypoints.cli.composition_root import CompositionRoot
 from emblema.entrypoints.cli.known_corpora import (
     GENERATED_LICENCE,
@@ -62,6 +65,7 @@ from emblema.pretraining.adapters.diagnostics.own_and_cross_channel_ridge_baseli
 from emblema.pretraining.adapters.diagnostics.spectral_recovery import SpectralRecovery
 from emblema.pretraining.adapters.diagnostics.triviality_diagnostic import TrivialityDiagnostic
 from emblema.pretraining.adapters.diagnostics.unit_bootstrap import UnitBootstrap
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
 from emblema.pretraining.adapters.experiments.experiment_file import ExperimentFile
 from emblema.pretraining.adapters.in_memory.experiment_tracker import InMemoryExperimentTracker
 from emblema.pretraining.adapters.mlflow.mlflow_experiment_tracker import MlflowExperimentTracker
@@ -90,10 +94,12 @@ from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.ports.experiment_tracker import ExperimentTracker
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
+from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
 from scripts.masked_reconstruction_assessment import (
     Example,
@@ -101,9 +107,10 @@ from scripts.masked_reconstruction_assessment import (
     assessment_section,
     find_shorter,
     kinds_table,
+    run_name,
     store,
 )
-from scripts.masked_reconstruction_figures import FIGURES, drawn_from
+from scripts.masked_reconstruction_figures import drawn_from, figures_of
 from scripts.reporting import dated_heading, machine, table
 from scripts.spectral_probe import SPECTRAL_PROBE, SPECTRAL_PROCESS
 
@@ -178,8 +185,15 @@ class Run:
 
     @property
     def shape_label(self) -> str:
-        shape = self.configuration.architecture
-        return f"tier {self.configuration.tier}, {shape.width} wide, {shape.layers} deep"
+        """The tier the run declares, and whether its experiment changed the shape that tier states.
+
+        Compared by value rather than by whether the file has a shape section: a section that
+        repeats the tier's own numbers still trains the tier.
+        """
+        tier = self.configuration.tier
+        if self.architecture == architecture_of(ComputeTiers.load().profile(tier)):
+            return f"tier {tier}"
+        return f"tier {tier} with its shape overridden"
 
 
 @dataclass(frozen=True)
@@ -254,11 +268,23 @@ class Published:
 
 @dataclass(frozen=True)
 class Trained:
-    """What a run of the experiment produced: the model it stored, read back, and its epochs."""
+    """What a run of the experiment produced: the model it stored, read back, and its epochs.
+
+    Attributes:
+        model: The model the run stored, read back from the store.
+        epochs: What each epoch measured.
+        hidden_ratio: Share of observed validation tokens the masks hid.
+        name: What the tracker calls the run.
+        started: When the run started, which its name and its stored date are read off.
+        backbone: The weights the run stored; the tracker keeps their checksum as a tag.
+    """
 
     model: MaskedReconstruction
     epochs: tuple[EpochOutcome, ...]
     hidden_ratio: float
+    name: str
+    started: datetime
+    backbone: ArtifactRef
 
 
 @dataclass(frozen=True)
@@ -367,16 +393,23 @@ def masked_training_batches(
     return [(batch, masking.draw(batch, draws)) for batch in loader.batches_of(0)]
 
 
-def train(published: Published, run: Run, workspace: Path, tracking: str | None) -> Trained:
+def train(
+    published: Published,
+    run: Run,
+    workspace: Path,
+    tracker: ExperimentTracker,
+    started: datetime,
+) -> Trained:
     """Train the experiment through the use case, and read back the model it stored.
 
     The run writes its checkpoints and its weights to a store under the workspace, and the model
     the diagnostics score is the one read back from it: what is diagnosed is then what was kept,
-    not an object that happened to survive in memory.
+    not an object that happened to survive in memory. It is tracked under the name its stored
+    directory takes, both read off ``started``, so the two are found from each other.
     """
     store = LocalDirectoryArtifactStore(workspace / "artifacts")
     runtime = TorchTrainingRuntime(store, device=run.device)
-    tracker = InMemoryExperimentTracker() if tracking is None else MlflowExperimentTracker(tracking)
+    name = run_name(run.corpus, started)
     outcome = PretrainBackbone(runtime, tracker)(
         PretrainBackboneCommand(
             configuration=run.configuration,
@@ -387,11 +420,16 @@ def train(published: Published, run: Run, workspace: Path, tracking: str | None)
                 validation=published.validation,
                 vocabulary_size=published.vocabulary_size,
             ),
-            run=f"{run.corpus}-{datetime.now():%Y%m%d-%H%M%S}",
+            run=name,
         )
     )
     return Trained(
-        runtime.restore(outcome.backbone).to(run.device), outcome.epochs, outcome.hidden_ratio
+        model=runtime.restore(outcome.backbone).to(run.device),
+        epochs=outcome.epochs,
+        hidden_ratio=outcome.hidden_ratio,
+        name=name,
+        started=started,
+        backbone=outcome.backbone,
     )
 
 
@@ -540,7 +578,11 @@ def results_of(run: Run, published: Published, trained: Trained, diagnosis: Diag
     settings = {
         "corpus": run.corpus,
         "experiment": configuration.name,
-        "date": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+        "date": f"{trained.started:%Y-%m-%d %H:%M:%S}",
+        # Which tracked run this is, by name and by what it left behind: a tracker's names repeat,
+        # the checksum of a run's weights does not.
+        "tracked_run": trained.name,
+        "backbone_checksum": str(trained.backbone.checksum),
         "code": code_digest(),
         "machine": machine(),
         "python": sys.version.split()[0],
@@ -815,7 +857,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         "given (the local stack serves one at http://127.0.0.1:5000)",
     )
     parser.add_argument("--workspace", type=Path, default=REPO_ROOT / "data" / "report")
-    parser.add_argument("--figures", type=Path, default=FIGURES)
+    parser.add_argument(
+        "--figures",
+        type=Path,
+        default=None,
+        help="directory to draw into; the stored run's own figures directory unless given",
+    )
     parser.add_argument(
         "--results",
         type=Path,
@@ -825,7 +872,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     arguments = parser.parse_args(argv)
     if arguments.figures_only:
         for directory in arguments.figures_only:
-            for path in drawn_from(directory, arguments.figures):
+            for path in drawn_from(directory, arguments.figures or figures_of(directory)):
                 print(shown(path))
         return
     if not device_available(arguments.device):
@@ -854,7 +901,19 @@ def main(argv: Sequence[str] | None = None) -> None:
     sections = []
     for run in runs:
         published = publish(run, arguments.workspace / run.corpus)
-        trained = train(published, run, arguments.workspace / run.corpus, arguments.track)
+        # One tracker per run, because a tracker records exactly one.
+        tracker = (
+            InMemoryExperimentTracker()
+            if arguments.track is None
+            else MlflowExperimentTracker(arguments.track)
+        )
+        trained = train(
+            published,
+            run,
+            arguments.workspace / run.corpus,
+            tracker,
+            datetime.now(),
+        )
         diagnosis = diagnose(published, trained, run)
         results = results_of(run, published, trained, diagnosis)
         assessment = assess(results, find_shorter(results, arguments.results))
@@ -869,10 +928,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
         # Drawn from the files the run just wrote, never from what is still in memory: a figure
         # this report can draw is a figure anyone can redraw from the stored run.
-        drawn_from(stored, arguments.figures)
+        figures = arguments.figures or figures_of(stored)
+        drawn_from(stored, figures)
         sections.append(
             render(run, published, trained, diagnosis, assessment)
-            + f"\n\nFigures in `{shown(arguments.figures)}`; the run is stored in "
+            + f"\n\nFigures in `{shown(figures)}`; the run is stored in "
             f"`{shown(stored)}`."
         )
     if isinstance(sys.stdout, io.TextIOWrapper):
