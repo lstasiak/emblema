@@ -61,5 +61,9 @@ class UnsupportedPrecisionError(PretrainingError):
     """Raised where a device cannot run the precision the experiment declared."""
 
 
+class DivergedRunError(PretrainingError):
+    """Raised where a run's loss or gradients stop being finite, before a step is taken on them."""
+
+
 class InvalidRunSignatureError(PretrainingError, ValueError):
     pass

@@ -41,6 +41,8 @@ class TrainingRuntime(Protocol):
             IncompatibleCheckpointError: If the checkpoint is not one this configuration and
                 corpus produced, or the run it comes from has already finished.
             UnsupportedPrecisionError: If the device cannot compute at the declared precision.
+            DivergedRunError: While the run trains, if a loss or a gradient stops being finite;
+                nothing computed from it is stepped or written.
             ArtifactNotFoundError: If the checkpoint is not in the store.
             ArtifactIntegrityError: If the stored checkpoint does not hash to its checksum.
         """

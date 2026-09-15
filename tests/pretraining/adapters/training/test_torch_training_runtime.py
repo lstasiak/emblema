@@ -5,19 +5,26 @@ trains can be held to — that accumulation is the larger batch, that a resumed 
 resumed, and that the weights it stored are the weights it trained.
 """
 
+import math
+from typing import Any
+
 import pytest
 
-from emblema.pretraining.domain.exceptions import UnsupportedPrecisionError
+from emblema.pretraining.domain.exceptions import DivergedRunError, UnsupportedPrecisionError
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import Token, TokenWindow
+from emblema.shared.ports.artifact_store import Retention
 from tests.support.experiments import budget, checksum_of, configuration, corpus
 
 torch = pytest.importorskip("torch")
 
+from emblema.pretraining.adapters.objective.reconstruction_loss import (  # noqa: E402
+    ReconstructionLoss,
+)
 from emblema.pretraining.adapters.training.torch_training_runtime import (  # noqa: E402
     TorchTrainingRuntime,
 )
@@ -30,6 +37,18 @@ from emblema.pretraining.domain.training.run_signature import RunSignature  # no
 pytestmark = pytest.mark.ml
 
 CORPUS = corpus(training=8, validation=4)
+
+
+class RecordingStore(InMemoryArtifactStore):
+    """A store that remembers each thing it was asked to keep."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.kept: list[Retention] = []
+
+    def put(self, content: bytes, retention: Retention = Retention.DURABLE) -> ArtifactRef:
+        self.kept.append(retention)
+        return super().put(content, retention)
 
 
 def weights_of(store: InMemoryArtifactStore, ref: ArtifactRef | None):
@@ -157,3 +176,47 @@ def test_an_epoch_whose_masks_hid_nothing_leaves_the_weights_finite() -> None:
     assert all(
         torch.isfinite(value).all() for value in weights_of(store, outcomes[-1].backbone).values()
     )
+
+
+def test_a_loss_that_is_not_finite_stops_the_run_before_anything_is_stepped_or_kept(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    summed = ReconstructionLoss.summed
+
+    def not_finite(*arguments: Any) -> Any:
+        error, scored = summed(*arguments)
+        return error * math.nan, scored
+
+    monkeypatch.setattr(ReconstructionLoss, "summed", staticmethod(not_finite))
+    store = RecordingStore()
+
+    with pytest.raises(DivergedRunError, match="the loss of batch 0 in epoch 0 is nan"):
+        list(
+            TorchTrainingRuntime(store, device="cpu").train(
+                configuration(checkpoint=CheckpointPolicy(every_steps=1)), CORPUS
+            )
+        )
+    assert store.kept == []
+
+
+def test_gradients_that_are_not_finite_stop_the_run_before_their_step_is_taken(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The loss stays finite and only the gradient overflows, as half precision without a scaler."""
+    summed = ReconstructionLoss.summed
+
+    def overflowing(*arguments: Any) -> Any:
+        error, scored = summed(*arguments)
+        error.register_hook(lambda gradient: gradient * math.inf)
+        return error, scored
+
+    monkeypatch.setattr(ReconstructionLoss, "summed", staticmethod(overflowing))
+    store = RecordingStore()
+
+    with pytest.raises(DivergedRunError, match="a gradient is not finite at step 1 of epoch 0"):
+        list(
+            TorchTrainingRuntime(store, device="cpu").train(
+                configuration(checkpoint=CheckpointPolicy(every_steps=1)), CORPUS
+            )
+        )
+    assert store.kept == []

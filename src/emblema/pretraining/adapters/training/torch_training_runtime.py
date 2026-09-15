@@ -1,3 +1,4 @@
+import math
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ from emblema.pretraining.adapters.training.devices import available_device
 from emblema.pretraining.adapters.training.torch_precision import TorchPrecision
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
 from emblema.pretraining.adapters.training.training_checkpoint import TrainingCheckpoint
-from emblema.pretraining.domain.exceptions import IncompatibleCheckpointError
+from emblema.pretraining.domain.exceptions import DivergedRunError, IncompatibleCheckpointError
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.run_position import RunPosition
@@ -95,6 +96,7 @@ class TorchTrainingRuntime:
             IncompatibleCheckpointError: If the checkpoint belongs to another run, or to one that
                 has finished.
             UnsupportedPrecisionError: If this device cannot train at the declared precision.
+            DivergedRunError: While the run trains, if a loss or a gradient stops being finite.
         """
         return self._epochs(self._assemble(configuration, corpus, resume_from))
 
@@ -236,17 +238,28 @@ class TorchTrainingRuntime:
                 error, scored = ReconstructionLoss.summed(
                     session.model(batch, drawn), batch, drawn.hidden
                 )
+            summed = float(error.detach())
+            if not math.isfinite(summed):
+                raise DivergedRunError(
+                    f"the loss of batch {index} in epoch {session.position.epoch} is {summed}, "
+                    f"after {session.position.steps} steps"
+                )
             # Accumulated micro-batches make one gradient, and the error is summed rather than
             # averaged per batch so that each hidden token weighs the same whichever batch it
             # landed in. The sum is divided out of the gradients once, below, before the step.
             session.scaler.scale(error).backward()
             hidden = int(scored)
             group_tokens += hidden
-            epoch_error += float(error.detach())
+            epoch_error += summed
             epoch_tokens += hidden
             stepped = budget.takes_a_step_at(index, batches)
             if stepped:
                 self._average_gradients(session, group_tokens)
+                # A gradient scaler skips a step whose gradients overflowed, which is what it is
+                # for; without one, such a step would write non-finite weights into the model and
+                # into the next checkpoint, so it is refused here instead.
+                if not session.precision.scales_gradients:
+                    self._refuse_non_finite_gradients(session)
                 session.scaler.step(session.optimiser)
                 session.scaler.update()
                 session.optimiser.zero_grad(set_to_none=True)
@@ -266,6 +279,15 @@ class TorchTrainingRuntime:
             for parameter in session.model.parameters():
                 if parameter.grad is not None:
                     parameter.grad /= tokens
+
+    @staticmethod
+    def _refuse_non_finite_gradients(session: _Session) -> None:
+        gradients = [p.grad for p in session.model.parameters() if p.grad is not None]
+        if gradients and not bool(torch.stack([g.isfinite().all() for g in gradients]).all()):
+            raise DivergedRunError(
+                f"a gradient is not finite at step {session.position.steps + 1} of epoch "
+                f"{session.position.epoch}, at {session.configuration.precision}"
+            )
 
     def _validate(self, session: _Session) -> tuple[float, float]:
         """The loss on the validation windows and the share of their observed tokens it scored.
