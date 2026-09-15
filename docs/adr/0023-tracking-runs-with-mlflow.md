@@ -42,7 +42,10 @@ trains logs runs, and the API and the inference worker have no use for its stack
 **The CSV store stays where it is.** It holds what the assessment reads and what the figures are
 drawn from — per-unit tallies, the spectrum, the drawn windows — which is the report's shape and
 not a tracker's. The two are separate on purpose: the tracker follows a run, the store holds a
-result.
+result. They are joined by what the stored run says about itself: the name it was tracked under,
+read off the same moment as its directory's, and the checksum of its weights, which the tracker
+keeps as a tag — a tracker's names can repeat, while two runs that share a checksum left the same
+weights.
 
 ## Consequences
 

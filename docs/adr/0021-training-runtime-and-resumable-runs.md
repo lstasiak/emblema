@@ -70,6 +70,11 @@ host — and raises where a pair is impossible. Gradient scaling follows the sam
 answer to half precision's underflow, so a run that cannot scale says so by not scaling rather
 than by pretending to. A run never reports a precision it did not use.
 
+**A run that stops being finite stops.** The loss of each micro-batch is read before its backward
+pass, and the gradients before each step wherever no scaler stands between them and the optimiser;
+either one not finite raises `DivergedRunError`, so non-finite weights reach neither a step nor a
+checkpoint. Under a gradient scaler an overflowing step is the scaler's to skip, and is left to it.
+
 **The optimiser is Adam at the configured rate and nothing implicit.** Weight decay is stated as
 zero rather than inherited from a default, because a regularisation this project never chose
 should not be one a reader has to look up; the day it varies it becomes a field of the experiment,
@@ -95,7 +100,15 @@ applies within a batch, broken across them.
   At the rate a scaler settles to, that is a handful of steps in a run.
 - The summed accumulation makes the loss magnitude that reaches `backward` proportional to the
   tokens a batch hid. Under CUDA half precision the scaler absorbs it by construction; on MPS,
-  where no scaler exists, a large batch in half precision is the case to watch.
+  where no scaler exists, a large batch in half precision is the case to watch. Such a batch now
+  stops the run instead of writing non-finite weights, and on MPS autocast computes the squared
+  error in single precision, so the sum itself is not where it would overflow.
+- On MPS a run does not repeat itself bit for bit, resumed or not, so the resume is verified there
+  against the spread between repeats of the uninterrupted run: a test holds it to a tolerance set
+  between that spread and how far a broken resume lands, and two runs ending in one reference is
+  something only the host shows (`docs/verification/training-loop.md`).
+- A resumed run reports the epoch it re-entered with a training loss over the batches after the
+  checkpoint only, so its tracked curve differs from the uninterrupted run's at that one point.
 
 ## Alternatives considered
 
