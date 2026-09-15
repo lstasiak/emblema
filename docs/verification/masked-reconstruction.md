@@ -38,17 +38,29 @@ Method, on any machine with the repository:
 ```sh
 uv sync --all-extras
 uv run pytest tests/pretraining tests/ml/test_objective_overfits_one_batch.py tests/scripts/test_masked_reconstruction_report.py
-uv run scripts/masked_reconstruction_report.py                       # tier S, every corpus
-uv run scripts/masked_reconstruction_report.py --shape 64,2,2,256 --epochs 12 --learning-rate 3e-3   # what a CPU affords
+uv run scripts/masked_reconstruction_report.py                                  # every experiment in experiments/
+uv run scripts/masked_reconstruction_report.py --experiment control-a-s --track http://127.0.0.1:5000   # one, logged to the local stack
+uv run scripts/masked_reconstruction_report.py --figures-only data/report/results/<run>              # redraw a stored run
+uv run scripts/masked_reconstruction_report.py --figures-only data/report/results/<run> --figures docs/verification/figures   # into a note
 ```
 
 Nothing is downloaded: the corpora are generated and published through the same use cases the
-command line runs. The training loop is the report's own — plain Adam, no checkpoints, no tracker
-— and is superseded by the training runtime, not extended.
+command line runs. A run is the experiment file it names (ADR-0022), trained by the training
+runtime through the pretraining use case (ADR-0021); a machine that cannot afford the tier's encoder
+writes a smaller shape into a file of its own rather than onto the command line. The legs below
+predate both: they ran the report's own loop — plain Adam, no checkpoints, no tracker — configured
+by flags that no longer exist, and each records the shape, rate and epochs it ran with.
+
+A run draws its figures into its own stored directory, so a smoke run (`--units`, a short
+`--epochs`) leaves the figures of a note alone, and a figure reaches the note by the last command,
+from a run that can draw it again. The repository keeps one set of figures — the newest run's, the
+leg of 2026-09-16 — rather than a set per leg; the earlier legs' numbers stay, and their runs were
+stored before the store kept what a figure is drawn from, so those drawings are gone.
 
 The runs below are in the order they happened. The first leg is a small encoder on a CPU and the
-answers it gave; the second is the published tier on Apple silicon, after the corrections the
-first leg called for. What changed between them, and what did not, is the point of keeping both.
+answers it gave; the second is the published tier on Apple silicon, after the corrections the first
+leg called for; the third repeats the second after the report handed its training to the training
+runtime. What changed between them, and what did not, is the point of keeping all three.
 
 ## 2026-09-13 — Windows AMD64, CPU, cut-down encoder — control-a
 
@@ -223,6 +235,10 @@ compared with a shorter run of the same code, as the convergence rule requires. 
 not repeat bit for bit on MPS (see [Repeatability](#repeatability-on-mps)): every repeat so far gave
 the same verdicts, with final losses up to 9% apart.
 
+The figures of this leg are not in the repository. It keeps one set — the newest run's, in the leg
+of 2026-09-16 below, which repeats this one on the same experiments and the same seed — rather than
+a set per leg that says the same thing.
+
 ### Configuration
 
 Common to every run: windows of 32 steps with a stride of 12; a quarter of the units held out for
@@ -250,10 +266,6 @@ A channel "apart" is timeless or constant: it is tallied in a row of its own and
 Losses are mean squared errors on hidden tokens in normalised units. The baselines are scored over
 the same hidden tokens as the model. The validation loss ends within 0.1% of its best epoch on all
 three corpora, and at 0.97–1.08× the training loss.
-
-![control-a loss](figures/masked-reconstruction-control-a-loss.png)
-![control-b loss](figures/masked-reconstruction-control-b-loss.png)
-![spectral-probe loss](figures/masked-reconstruction-spectral-probe-loss.png)
 
 ### Triviality per kind of mask
 
@@ -299,9 +311,6 @@ The assessment accepts all three runs. Two warnings stand:
   calls convergence, although no verdict changed.
 - **The spectrum is uninformative on the controls.** See below.
 
-![control-a diagnostics](figures/masked-reconstruction-control-a-diagnostics.png)
-![control-b diagnostics](figures/masked-reconstruction-control-b-diagnostics.png)
-
 ### Spectral recovery of channels hidden whole
 
 On the controls the truth holds 99.4% (control-a) and 100% (control-b) of its energy at one cycle
@@ -321,13 +330,11 @@ question:
 Fitted over 901 channel-windows, 1 too short to fit. The model recovers at least 91% of the energy
 at every frequency that carries signal, so it does not recover only the low frequencies.
 
-![spectral-probe diagnostics](figures/masked-reconstruction-spectral-probe-diagnostics.png)
-
 ### Reconstructions
 
 One channel per kind of mask from the first validation windows: truth as a line, visible tokens as
 dots, the model's predictions (red crosses) and the matched baseline's (blue triangles) on the
-tokens that kind hid.
+tokens that kind hid. What was seen in them, drawing by drawing:
 
 - **spectral-probe.** Inside hidden blocks the model follows the oscillation through several cycles
   where interpolation draws a straight line (`w2 s04`, `w32 s01`). On channels hidden whole it keeps
@@ -343,10 +350,6 @@ tokens that kind hid.
   with control-b's highest channel error (0.2435, 40× the floor).
 
 The reconstructions are sensible, not exact.
-
-![control-a windows](figures/masked-reconstruction-control-a-windows.png)
-![control-b windows](figures/masked-reconstruction-control-b-windows.png)
-![spectral-probe windows](figures/masked-reconstruction-spectral-probe-windows.png)
 
 ### Training budget
 
@@ -411,3 +414,101 @@ learnt. The cause of the spread has not been isolated.
   that count.
 - The training loop is the report's minimal one: no checkpoints, no experiment tracker and no
   precision policy. The training runtime replaces it.
+
+## 2026-09-16 — macOS arm64, MPS, tier S, trained by the training runtime
+
+The report no longer trains: it assembles the pretraining use case, the training runtime trains
+behind its port, and the diagnostics score the model read back out of the store (ADR-0021). This
+leg asks what that change did to the verdicts, on the same experiments, the same seed and the same
+machine as the leg above. It also leaves runs whose figures can be drawn again from what they
+stored.
+
+### Provenance
+
+| | |
+| --- | --- |
+| Machine | macOS-26.6.2-arm64-arm-64bit-Mach-O, Apple silicon, MPS |
+| Python, torch | 3.14.7, 2.14.0 |
+| Code | the training-loop branch, working tree; the report's source digest `86cc49bc532ca3ef` |
+| Commands | `… --experiment control-a-s --experiment spectral-probe-s --epochs 12 --track http://127.0.0.1:5000`, then `… --experiment control-b-s --epochs 10 --track …`, then `uv run scripts/masked_reconstruction_report.py --track …` |
+| Stored runs | `data/report/results/{control-a-20260916-004026, control-b-20260916-004850, spectral-probe-20260916-005106}`, each compared with its half-budget run (`control-a-20260916-003223`, `control-b-20260916-003919`, `spectral-probe-20260916-003712`) |
+| Tracked runs | the same six, in MLflow, each under the name of its directory; the stored run holds that name and the checksum of the weights the tracker tagged |
+| Figures | `figures/`, redrawn from the three stored runs; the note keeps this one set |
+
+### Loss
+
+| Corpus | Validation loss, epoch 1 → last | Last, 2026-09-14 | Interpolation | Ridge | Hidden share |
+| --- | --- | --- | --- | --- | --- |
+| control-a | 0.3949 → 0.0140 (÷28.2) | 0.0139 | 0.4712 | 0.1693 | 46.0% |
+| control-b | 0.6912 → 0.1485 (÷4.7) | 0.1314 | 0.7342 | 0.4893 | 45.8% |
+| spectral-probe | 1.0199 → 0.0409 (÷25.0) | 0.0409 | 1.2289 | 0.4701 | 45.7% |
+
+Every first epoch, every baseline and every hidden share repeat the leg above to the digit; the
+baselines are computed on the host and do not depend on the loop. control-b ends 13% above its run
+of two days ago, which is wider than the 9% this machine had shown between repeats until now and
+is the only corpus that moved; its verdicts do not.
+
+![control-a loss](figures/masked-reconstruction-control-a-loss.png)
+![control-b loss](figures/masked-reconstruction-control-b-loss.png)
+![spectral-probe loss](figures/masked-reconstruction-spectral-probe-loss.png)
+
+### Triviality per kind of mask
+
+| Corpus | Kind | Tokens / units | Model | Matched baseline | Excess [95%] | Beyond linear [95%] |
+| --- | --- | --- | --- | --- | --- | --- |
+| control-a | channel | 56,902 / 40 | 0.0213 | ridge 0.1656 | [+0.1244, +0.1656] learnt | — |
+| control-a | block | 97,141 / 40 | 0.0081 | interpolation 0.2467 | [+0.1982, +0.2793] learnt | [+0.0781, +0.1046] learnt |
+| control-a | token | 23,145 / 40 | 0.0060 | interpolation 0.0135 | [+0.0044, +0.0113] learnt | [+0.0041, +0.0103] learnt |
+| control-b | channel | 9,572 / 30 | 0.2934 | ridge 0.4774 | [+0.1525, +0.2179] learnt | — |
+| control-b | block | 16,022 / 30 | 0.0668 | interpolation 0.6957 | [+0.5391, +0.7221] learnt | [+0.1760, +0.2289] learnt |
+| control-b | token | 3,882 / 30 | 0.0565 | interpolation 0.1137 | [+0.0458, +0.0686] learnt | [+0.0362, +0.0485] learnt |
+| spectral-probe | channel | 28,286 / 20 | 0.0561 | ridge 0.3964 | [+0.2906, +0.3907] learnt | — |
+| spectral-probe | block | 49,884 / 20 | 0.0352 | interpolation 1.6275 | [+1.3606, +1.8388] learnt | [+0.4099, +0.5800] learnt |
+| spectral-probe | token | 11,768 / 20 | 0.0206 | interpolation 0.1191 | [+0.0755, +0.1225] learnt | [+0.0542, +0.0848] learnt |
+
+**All nine kinds are `learnt` again, and the assessment accepts all three runs.** On control-a and
+the spectral probe the model's errors repeat the leg above to four decimals (0.0209 against 0.0213
+for channels, 0.0081 and 0.0060 unchanged, and every spectral-probe error unchanged), and the
+intervals with them. control-b's channel masks are the one place the change shows: 0.2934 against
+0.2435, an interval of [+0.1525, +0.2179] against [+0.2000, +0.2710]. That is the same corpus whose
+final loss moved, and the verdict does not depend on it.
+
+![control-a diagnostics](figures/masked-reconstruction-control-a-diagnostics.png)
+![control-b diagnostics](figures/masked-reconstruction-control-b-diagnostics.png)
+
+### Spectral recovery of channels hidden whole
+
+The spectral probe gives back exactly what it gave two days ago: 96%, 92%, 91%, 96%, 94% and 78% of
+the truth's energy at one to six cycles per window, against the ridge's 73% to 49%, over 901
+channel-windows with 1 too short to fit. On the controls the spectrum stays uninformative, 99.4%
+and 100% of the energy sitting at one cycle per window.
+
+![spectral-probe diagnostics](figures/masked-reconstruction-spectral-probe-diagnostics.png)
+
+### Warnings that stand
+
+- **Convergence is still not shown.** Doubling the budget from half lowered the final validation
+  loss by 27.8% (control-a), 20.6% (control-b) and 43.0% (spectral probe), against the 5% the rule
+  calls convergence; no verdict changed at either budget.
+- **The spectrum is uninformative on the controls**, as before.
+
+### Reconstructions
+
+The drawn windows say what they said above: inside hidden blocks the model follows the truth and
+leaves the step-to-step wiggles out, on a channel hidden whole (`w1 s02` of control-a) it keeps the
+shape and overshoots in the second half while the ridge stays flat, and single tokens between dense
+neighbours sit on the line both methods draw.
+
+![control-a windows](figures/masked-reconstruction-control-a-windows.png)
+![control-b windows](figures/masked-reconstruction-control-b-windows.png)
+![spectral-probe windows](figures/masked-reconstruction-spectral-probe-windows.png)
+
+### What this leg says
+
+- **Training through the runtime changed no verdict**, and on two corpora of three it changed no
+  number that matters beyond the fourth decimal.
+- **A run is now findable from both ends**: the stored run names the tracked one and the checksum
+  of its weights, which the tracker holds as a tag, and both take the name of the directory.
+- **These figures can be drawn again** from the stored runs, which the drawings of the legs above
+  could not be; that is why the note shows this leg's.
+- The training took 23 minutes for six runs on this machine, 19–23 s an epoch of control-a.
