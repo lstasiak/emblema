@@ -1,6 +1,6 @@
 # Repository Coverage
 
-
+[Full report](https://htmlpreview.github.io/?https://github.com/lstasiak/emblema/blob/python-coverage-comment-action-data/htmlcov/index.html)
 
 | Name                                                                                      |    Stmts |     Miss |   Branch |   BrPart |   Cover |   Missing |
 |------------------------------------------------------------------------------------------ | -------: | -------: | -------: | -------: | ------: | --------: |
@@ -85,12 +85,24 @@
 | src/emblema/pretraining/adapters/encoder/self\_attention.py                               |       21 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/set\_encoder.py                                  |       24 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/tier\_architecture.py                            |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/experiments/experiment\_file.py                          |       42 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/in\_memory/experiment\_tracker.py                        |       27 |        0 |        6 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/in\_memory/training\_runtime.py                          |       54 |        0 |       12 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/mlflow/mlflow\_experiment\_tracker.py                    |       37 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/masked\_reconstruction.py                      |       15 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/reconstruction\_decoder.py                     |       20 |        0 |        4 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/objective/reconstruction\_loss.py                        |       15 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/objective/reconstruction\_loss.py                        |       19 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/token\_masking.py                              |       35 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/token\_masks.py                                |       18 |        0 |        4 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/training/device\_generator.py                            |       18 |        6 |       10 |        3 |     54% |20, 22, 29-32 |
+| src/emblema/pretraining/adapters/training/devices.py                                      |        5 |        0 |        2 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/training/exceptions.py                                   |        5 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/training/torch\_precision.py                             |       26 |        0 |        4 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/training/torch\_training\_runtime.py                     |      152 |        0 |       32 |        2 |     99% |261-\>263, 280-\>279 |
+| src/emblema/pretraining/adapters/training/trained\_model.py                               |       33 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/training/training\_checkpoint.py                         |       36 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/application/use\_cases/assess\_reconstruction\_run.py             |       11 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/application/use\_cases/pretrain\_backbone.py                      |       28 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/domain/assessment/assessment.py                                   |       31 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/domain/assessment/check.py                                        |       42 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/assessment/curve.py                                        |        3 |        0 |        0 |        0 |    100% |           |
@@ -103,11 +115,22 @@
 | src/emblema/pretraining/domain/assessment/spectrum.py                                     |       12 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/assessment/summarised\_run.py                              |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/encoder\_architecture.py                                   |       29 |        0 |        8 |        0 |    100% |           |
-| src/emblema/pretraining/domain/exceptions.py                                              |       12 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/domain/exceptions.py                                              |       29 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/learning\_rate\_schedule.py                                |       21 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/domain/mask\_kind.py                                              |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/masking\_strategy.py                                       |       18 |        0 |       10 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/checkpoint\_policy.py                             |       11 |        0 |        4 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/epoch\_outcome.py                                 |       16 |        0 |        8 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/experiment\_configuration.py                      |       22 |        0 |        6 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/precision.py                                      |        5 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/run\_position.py                                  |       16 |        0 |        4 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/run\_signature.py                                 |       18 |        0 |        2 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/training\_budget.py                               |       32 |        2 |       16 |        2 |     92% |    91, 93 |
+| src/emblema/pretraining/domain/training/training\_corpus.py                               |       15 |        0 |        8 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/training\_outcome.py                              |       20 |        0 |        8 |        0 |    100% |           |
+| src/emblema/pretraining/ports/experiment\_tracker.py                                      |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/ports/mask\_kind\_summariser.py                                   |        6 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/ports/training\_runtime.py                                        |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/arrays/token\_batch.py                                        |       38 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/artifact\_store.py                                 |       28 |        0 |        6 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/clock.py                                           |        6 |        0 |        0 |        0 |    100% |           |
@@ -144,9 +167,9 @@
 | src/emblema/shared/ports/event\_subscriber.py                                             |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                                                    |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **3501** |    **2** |  **626** |    **5** | **99%** |           |
+| **TOTAL**                                                                                 | **4156** |   **10** |  **770** |   **12** | **99%** |           |
 
-46 empty files skipped.
+51 empty files skipped.
 
 
 ## Setup coverage badge
@@ -155,11 +178,22 @@ Below are examples of the badges you can use in your main branch `README` file.
 
 ### Direct image
 
-[![Coverage badge](https://github.com/lstasiak/emblema/raw/python-coverage-comment-action-data/badge.svg)](https://github.com/lstasiak/emblema/tree/python-coverage-comment-action-data)
+[![Coverage badge](https://raw.githubusercontent.com/lstasiak/emblema/python-coverage-comment-action-data/badge.svg)](https://htmlpreview.github.io/?https://github.com/lstasiak/emblema/blob/python-coverage-comment-action-data/htmlcov/index.html)
 
 This is the one to use if your repository is private or if you don't want to customize anything.
 
+### [Shields.io](https://shields.io) Json Endpoint
 
+[![Coverage badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/lstasiak/emblema/python-coverage-comment-action-data/endpoint.json)](https://htmlpreview.github.io/?https://github.com/lstasiak/emblema/blob/python-coverage-comment-action-data/htmlcov/index.html)
+
+Using this one will allow you to [customize](https://shields.io/endpoint) the look of your badge.
+It won't work with private repositories. It won't be refreshed more than once per five minutes.
+
+### [Shields.io](https://shields.io) Dynamic Badge
+
+[![Coverage badge](https://img.shields.io/badge/dynamic/json?color=brightgreen&label=coverage&query=%24.message&url=https%3A%2F%2Fraw.githubusercontent.com%2Flstasiak%2Femblema%2Fpython-coverage-comment-action-data%2Fendpoint.json)](https://htmlpreview.github.io/?https://github.com/lstasiak/emblema/blob/python-coverage-comment-action-data/htmlcov/index.html)
+
+This one will always be the same color. It won't work for private repos. I'm not even sure why we included it.
 
 ## What is that?
 
