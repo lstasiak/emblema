@@ -350,8 +350,9 @@ The reconstructions are sensible, not exact.
 
 ### Training budget
 
-The default epochs in `scripts/masked_reconstruction_epochs.toml` are measured for what the report
-decides. For each corpus, the entry E is the fewest epochs for which runs of E/2, E and 2E give
+The default epochs were measured for what the report decides. They lived in
+`scripts/masked_reconstruction_epochs.toml` when this was written and are now in the experiment
+that states them, `experiments/<name>.toml`, beside everything else a run of it does (ADR-0022). For each corpus, the entry E is the fewest epochs for which runs of E/2, E and 2E give
 every kind of mask the same verdict against both baselines. The budget was measured before
 `e66f6ff`, with the report's source digests `e859c97fb13c8352` (controls) and `7d26d7c38c24c6b7`
 (spectral probe):

@@ -1,9 +1,13 @@
 """Store what a masked-reconstruction run measured, find the run it is compared with, print it.
 
-The rules that judge a run live in ``emblema.pretraining`` (``AssessReconstructionRun``); this
-module is what surrounds them until the training loop and the experiment tracker exist: the
-tables the report prints and the CSV files each run is stored in, a directory of its own and a
-line in an index of every run, so that the next run of a configuration can be compared with it.
+The rules that judge a run live in ``emblema.pretraining`` (``AssessReconstructionRun``); this is
+what surrounds them: the tables the report prints and the CSV files each run is stored in, a
+directory of its own and a line in an index of every run, so that the next run of a configuration
+can be compared with it and its figures can be drawn again without training anything.
+
+The experiment tracker follows a run while it runs; this holds the result once there is one. The
+two are separate on purpose, and what belongs here is the shape of the report: per-unit tallies,
+the spectrum, and the windows the figures draw.
 
     uv run scripts/masked_reconstruction_assessment.py data/report/results/control-a-20260913-101500
 """
@@ -13,8 +17,12 @@ import csv
 import io
 import sys
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from datetime import datetime
+from itertools import groupby
 from pathlib import Path
+
+import numpy as np
 
 # Run from anywhere: the sibling script modules live in this directory's package at the repository
 # root. The imports below follow, which is why this file is exempt from the import-order rule in
@@ -114,6 +122,7 @@ RUN = "run.csv"
 EPOCHS = "epochs.csv"
 TALLIES = "tallies.csv"
 SPECTRUM = "spectrum.csv"
+EXAMPLES = "examples.csv"
 KINDS = "mask_kinds.csv"
 CHECKS = "checks.csv"
 INDEX = "runs.csv"
@@ -141,9 +150,71 @@ INDEX_FIELDS = (
 )
 # How many runs of one corpus a single second may hold before storing gives up on a name.
 SAME_SECOND = 100
+# Losses of the baselines over every hidden validation token, which the loss figure draws as lines.
+# Written beside the settings and kept out of them: they are what the run measured, and two runs
+# of one configuration must not count as two configurations because their baselines differed.
+BASELINE_FIELDS = ("interpolation_loss", "ridge_loss")
+# One row per drawn token, grouped by the example it belongs to, in the order they were drawn.
+EXAMPLE_FIELDS = (
+    "window",
+    "channel",
+    "kind",
+    "time",
+    "truth",
+    "visible",
+    "of_kind",
+    "model",
+    "baseline",
+)
 
 
-def store(assessment: Assessment, root: Path) -> Path:
+@dataclass(frozen=True)
+class Example:
+    """One channel of one validation window, as the figure draws it.
+
+    Attributes:
+        window: Position of the window among the validation windows.
+        channel: Name of the channel.
+        times: Instants of the channel's observed tokens.
+        truth: Their values.
+        visible: Which of them the model saw.
+        of_kind: Which of them were hidden by the kind of mask the example shows — a token hidden
+            by another kind is neither visible nor drawn as a prediction here.
+        kind: The kind of mask the example shows.
+        model: The model's prediction at every token.
+        baseline: The matched baseline's.
+    """
+
+    window: int
+    channel: str
+    times: np.ndarray
+    truth: np.ndarray
+    visible: np.ndarray
+    of_kind: np.ndarray
+    kind: MaskKind
+    model: np.ndarray
+    baseline: np.ndarray
+
+
+@dataclass(frozen=True)
+class RunFigures:
+    """What the figures need beyond what the assessment reads, stored with the run.
+
+    Drawing is separated from measuring by storing this: a figure whose legend sits on the data is
+    redrawn from the files a run left behind, and nothing is trained twice for a change of style.
+
+    Attributes:
+        interpolation_loss: Error of the linear baseline over every hidden validation token.
+        ridge_loss: Error of the cross-channel ridge over the same tokens.
+        examples: The windows the report draws, token by token.
+    """
+
+    interpolation_loss: float
+    ridge_loss: float
+    examples: tuple[Example, ...]
+
+
+def store(assessment: Assessment, figures: RunFigures, root: Path) -> Path:
     """Write the run under a directory of its own in ``root`` and add it to the index.
 
     The directory is named after the corpus and the date of the run and created afresh: a second
@@ -160,7 +231,7 @@ def store(assessment: Assessment, root: Path) -> Path:
     base = f"{results.settings['corpus']}-{stamp:%Y%m%d-%H%M%S}"
     root.mkdir(parents=True, exist_ok=True)
     directory = _fresh_directory(root, base)
-    _write_measured(results, directory)
+    _write_measured(results, figures, directory)
     _write_derived(assessment, directory)
     _append_to_index(assessment, directory.name, index)
     return directory
@@ -174,7 +245,13 @@ def read(directory: Path) -> Results:
     run = {row["key"]: row["value"] for row in _read_rows(directory / RUN)}
     epochs = _read_rows(directory / EPOCHS)
     spectrum = _read_rows(directory / SPECTRUM)
-    reserved = {*STRATEGY_FIELDS, "realised_ratio", "spectrum_fitted", "spectrum_skipped"}
+    reserved = {
+        *STRATEGY_FIELDS,
+        *BASELINE_FIELDS,
+        "realised_ratio",
+        "spectrum_fitted",
+        "spectrum_skipped",
+    }
     return Results(
         settings={key: value for key, value in run.items() if key not in reserved},
         strategy=MaskingStrategy(
@@ -248,10 +325,12 @@ def _fresh_directory(root: Path, base: str) -> Path:
     raise FileExistsError(f"every name for {base} in {root} is taken")
 
 
-def _write_measured(results: Results, directory: Path) -> None:
+def _write_measured(results: Results, figures: RunFigures, directory: Path) -> None:
     strategy = results.strategy
     run = {
         **results.settings,
+        "interpolation_loss": _number(figures.interpolation_loss),
+        "ridge_loss": _number(figures.ridge_loss),
         "channel_rate": _number(strategy.channel_rate),
         "block_rate": _number(strategy.block_rate),
         "block_span": _number(strategy.block_span),
@@ -311,6 +390,77 @@ def _write_measured(results: Results, directory: Path) -> None:
             )
         ),
     )
+    _write_rows(
+        directory / EXAMPLES,
+        EXAMPLE_FIELDS,
+        (
+            (
+                str(example.window),
+                example.channel,
+                example.kind.value,
+                _number(time),
+                _number(truth),
+                str(bool(visible)).lower(),
+                str(bool(of_kind)).lower(),
+                _number(model),
+                _number(baseline),
+            )
+            for example in figures.examples
+            for time, truth, visible, of_kind, model, baseline in zip(
+                example.times,
+                example.truth,
+                example.visible,
+                example.of_kind,
+                example.model,
+                example.baseline,
+                strict=True,
+            )
+        ),
+    )
+
+
+def read_figures(directory: Path) -> RunFigures:
+    """What a stored run's figures are drawn from, without training anything again.
+
+    Raises:
+        KeyError: If the stored run is missing a column a figure reads.
+        ValueError: If a stored number is not one.
+    """
+    run = {row["key"]: row["value"] for row in _read_rows(directory / RUN)}
+    rows = _read_rows(directory / EXAMPLES)
+    examples = []
+    for (window, channel, kind), tokens in groupby(rows, key=_example_key):
+        drawn = list(tokens)
+        examples.append(
+            Example(
+                window=int(window),
+                channel=channel,
+                kind=MaskKind(kind),
+                times=_column(drawn, "time"),
+                truth=_column(drawn, "truth"),
+                visible=_flags(drawn, "visible"),
+                of_kind=_flags(drawn, "of_kind"),
+                model=_column(drawn, "model"),
+                baseline=_column(drawn, "baseline"),
+            )
+        )
+    return RunFigures(
+        interpolation_loss=float(run["interpolation_loss"]),
+        ridge_loss=float(run["ridge_loss"]),
+        examples=tuple(examples),
+    )
+
+
+def _example_key(row: dict[str, str]) -> tuple[str, str, str]:
+    return (row["window"], row["channel"], row["kind"])
+
+
+def _column(rows: Sequence[dict[str, str]], field: str) -> np.ndarray:
+    return np.array([float(row[field]) for row in rows])
+
+
+def _flags(rows: Sequence[dict[str, str]], field: str) -> np.ndarray:
+    return np.array([row[field] == "true" for row in rows])
 
 
 def _write_derived(assessment: Assessment, directory: Path) -> None:

@@ -20,31 +20,28 @@ from emblema.pretraining.adapters.diagnostics.spectral_recovery import SpectralR
 from emblema.pretraining.domain.assessment.spectrum import Spectrum
 from scripts.masked_reconstruction_report import (
     CYCLES_AT_MOST,
-    DEFAULT_CORPORA,
     WINDOW,
     Run,
     corpora,
+    experiments,
     generated,
     publish,
     validation_batches,
 )
 from scripts.spectral_probe import SPECTRAL_PROBE, SPECTRAL_PROCESS
+from tests.support.experiments import budget, configuration
 
 pytestmark = pytest.mark.ml
 
 
 def run_on(corpus: str) -> Run:
     return Run(
+        configuration=configuration(
+            name=f"{corpus}-test",
+            budget=budget(epochs=2, batch_size=32, warmup_epochs=1, final_lr_fraction=0.01),
+        ),
         corpus=corpus,
-        tier="S",
-        shape=None,
         units=16,
-        epochs=2,
-        batch_size=32,
-        learning_rate=1e-3,
-        warmup_epochs=1,
-        final_lr_fraction=0.01,
-        seed=1,
         device="cpu",
     )
 
@@ -79,7 +76,7 @@ def test_the_probe_stays_out_of_the_controls_registry_but_the_report_trains_on_i
     assert SPECTRAL_PROBE.name not in KnownCorpora.default().names()
     assert SPECTRAL_PROBE.name in corpora()
     assert set(LAYOUTS) <= set(corpora())
-    assert SPECTRAL_PROBE.name in DEFAULT_CORPORA
+    assert SPECTRAL_PROBE.name in {file.corpus for file in experiments().values()}
 
 
 def test_the_report_generates_the_probe_from_its_own_process_under_the_generated_terms() -> None:
