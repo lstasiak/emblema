@@ -39,6 +39,10 @@ ml = [
     "onnxscript>=0.7",
 ]
 
+# Tracking is its own extra: only a process that trains logs runs, and MLflow's client pulls in
+# a stack the API and the inference worker have no use for.
+tracking = ["mlflow-skinny>=3.1"]
+
 [project.urls]
 Repository = "https://github.com/lstasiak/emblema"
 
@@ -120,6 +124,8 @@ allowed-confusables = ["×"]
 "scripts/synthetic_control_report.py" = ["E402"]
 "scripts/masked_reconstruction_report.py" = ["E402"]
 "scripts/masked_reconstruction_assessment.py" = ["E402"]
+"scripts/masked_reconstruction_figures.py" = ["E402"]
+"scripts/training_loop_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

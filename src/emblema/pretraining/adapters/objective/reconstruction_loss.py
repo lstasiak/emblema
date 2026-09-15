@@ -25,9 +25,21 @@ class ReconstructionLoss(nn.Module):
     @staticmethod
     def over(prediction: Tensor, batch: TokenTensors, positions: Tensor) -> Tensor:
         """The error over ``positions`` that hold an observed token; zero where there is none."""
+        total, scored = ReconstructionLoss.summed(prediction, batch, positions)
+        return total / scored.clamp(min=1)
+
+    @staticmethod
+    def summed(prediction: Tensor, batch: TokenTensors, positions: Tensor) -> tuple[Tensor, Tensor]:
+        """The error over those positions before it is divided, and how many were scored.
+
+        What one batch contributes to a larger batch's mean. Whoever sums several batches into one
+        gradient adds these and divides once, and then a batch that hid three tokens weighs a
+        hundredth of one that hid three hundred — the rule this class applies within a batch,
+        applied across them.
+        """
         scored = positions & ~batch.padding_mask
         squared = ReconstructionLoss.squared_error(prediction, batch) * scored.to(prediction.dtype)
-        return squared.sum() / scored.sum().clamp(min=1)
+        return squared.sum(), scored.sum()
 
     @staticmethod
     def squared_error(prediction: Tensor, batch: TokenTensors) -> Tensor:

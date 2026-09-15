@@ -6,9 +6,9 @@ from emblema.pretraining.domain.assessment.mask_kind_tally import MaskKindTally
 from emblema.pretraining.domain.assessment.spectrum import Spectrum
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 
-# Settings that describe when a run happened rather than what it was; two runs differing only in
-# these are runs of one configuration.
-CIRCUMSTANTIAL = frozenset({"date"})
+# Settings that name a run — when it happened, what its tracker calls it, which weights it left —
+# rather than say what it was; two runs differing only in these are runs of one configuration.
+CIRCUMSTANTIAL = frozenset({"date", "tracked_run", "backbone_checksum"})
 
 
 @dataclass(frozen=True)

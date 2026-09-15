@@ -6,8 +6,8 @@ verdict is exercised on numbers that should earn it and on numbers that should n
 road — publish, train, diagnose, assess, store, draw — runs once on a few units with a toy encoder.
 """
 
-import copy
 from dataclasses import dataclass, replace
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -16,7 +16,10 @@ pytest.importorskip("torch")
 
 import torch
 
+from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.diagnostics.unit_bootstrap import UnitBootstrap
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
+from emblema.pretraining.adapters.in_memory.experiment_tracker import InMemoryExperimentTracker
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
 from emblema.pretraining.application.use_cases.assess_reconstruction_run import (
     AssessReconstructionRun,
@@ -27,48 +30,55 @@ from emblema.pretraining.domain.assessment.results import Results
 from emblema.pretraining.domain.assessment.spectrum import Spectrum
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.mask_kind import MaskKind
-from scripts.masked_reconstruction_assessment import INDEX, find_shorter, read, store
+from emblema.shared.kernel.compute import ComputeTier
+from scripts.masked_reconstruction_assessment import (
+    INDEX,
+    RunFigures,
+    find_shorter,
+    read,
+    store,
+)
+from scripts.masked_reconstruction_figures import drawn_from
 from scripts.masked_reconstruction_report import (
-    MIXTURE,
     Published,
     Run,
     Trained,
     code_digest,
+    corpora,
     diagnose,
-    draw_figures,
-    evaluate,
+    experiments,
     main,
-    measured_epochs,
     pick_examples,
     publish,
     render,
     results_of,
-    shape_of,
     spectrum_verdict,
     train,
     verdict_section,
 )
+from tests.support.experiments import MIXTURE, budget, configuration
+from tests.support.reconstruction_runs import figures as stored_figures
+from tests.support.reconstruction_runs import results as stored_results
 from tests.support.token_tensors import grid_batch
 
 pytestmark = pytest.mark.ml
 
 assess = AssessReconstructionRun(UnitBootstrap())
 
+STARTED = datetime(2026, 9, 15, 23, 4, 11)
 TOY = EncoderArchitecture(width=16, heads=2, layers=1, feedforward_width=32, time_frequencies=12)
 
 
 def run_named(corpus: str, *, epochs: int = 2) -> Run:
+    """A run of the report at a size a test can afford, on an encoder it can afford."""
     return Run(
+        configuration=configuration(
+            name=f"{corpus}-test",
+            architecture=TOY,
+            budget=budget(epochs=epochs, batch_size=16, warmup_epochs=1, final_lr_fraction=0.01),
+        ),
         corpus=corpus,
-        tier="S",
-        shape=TOY,
         units=4,
-        epochs=epochs,
-        batch_size=16,
-        learning_rate=1e-3,
-        warmup_epochs=1,
-        final_lr_fraction=0.01,
-        seed=1,
         device="cpu",
     )
 
@@ -104,28 +114,6 @@ def every_kind_learnt() -> list[list[MaskKindTally]]:
         tallies(MaskKind.BLOCK, model=0.1, matched=0.2),
         tallies(MaskKind.TOKEN, model=0.01, matched=0.02),
     ]
-
-
-def test_the_shape_flag_keeps_the_tiers_time_frequencies() -> None:
-    shape = shape_of("64,2,2,256")
-
-    assert (shape.width, shape.heads, shape.layers, shape.feedforward_width) == (64, 2, 2, 256)
-    assert shape.time_frequencies == 12
-
-
-def test_a_run_without_a_shape_builds_the_tier() -> None:
-    run = replace(run_named("control-a"), shape=None)
-
-    assert run.architecture.width == 192
-    assert run.shape_label == "tier S"
-    assert run_named("control-a").shape_label == "tier S cut down to 16 wide, 1 deep"
-
-
-def test_the_schedule_counts_its_warmup_and_its_length_in_optimiser_steps() -> None:
-    schedule = run_named("control-a", epochs=5).schedule(steps_per_epoch=10)
-
-    assert (schedule.warmup_steps, schedule.total_steps) == (10, 50)
-    assert schedule.final_fraction == 0.01
 
 
 def test_the_verdict_says_when_the_loss_did_not_fall() -> None:
@@ -205,30 +193,16 @@ def test_an_example_draws_only_the_tokens_its_kind_hid() -> None:
     assert {example.window for example in examples} == {7}
 
 
-def test_measured_epochs_are_read_per_tier_and_corpus(tmp_path: Path) -> None:
-    epochs = tmp_path / "epochs.toml"
-    epochs.write_text("[S]\ncontrol-a = 24\n\n[M]\n", encoding="utf-8")
+def test_every_experiment_the_report_offers_names_a_corpus_it_can_generate() -> None:
+    stated = experiments()
 
-    assert measured_epochs("S", "control-a", path=epochs) == 24
-    assert measured_epochs("S", "control-b", path=epochs) is None
-    assert measured_epochs("M", "control-a", path=epochs) is None
-    assert measured_epochs("L", "control-a", path=epochs) is None
+    assert set(stated) >= {"control-a-s", "control-b-s", "spectral-probe-s"}
+    assert all(file.corpus in corpora() for file in stated.values())
 
 
-@pytest.mark.parametrize("stated", ["0", "-3", '"24"', "true", "2.5"])
-def test_measured_epochs_that_are_not_a_positive_whole_number_are_refused(
-    tmp_path: Path, stated: str
-) -> None:
-    epochs = tmp_path / "epochs.toml"
-    epochs.write_text(f"[S]\ncontrol-a = {stated}\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="must be positive"):
-        measured_epochs("S", "control-a", path=epochs)
-
-
-def test_a_corpus_without_measured_epochs_is_refused_before_anything_runs(tmp_path: Path) -> None:
+def test_an_experiment_nobody_stated_is_refused_before_anything_runs(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
-        main(["--corpus", "null-a", "--workspace", str(tmp_path)])
+        main(["--experiment", "no-such-experiment", "--workspace", str(tmp_path)])
     assert not any(tmp_path.iterdir())
 
 
@@ -240,8 +214,8 @@ def test_a_device_the_machine_lacks_is_refused_before_anything_runs(
     with pytest.raises(SystemExit):
         main(
             [
-                "--corpus",
-                "control-a",
+                "--experiment",
+                "control-a-s",
                 "--epochs",
                 "2",
                 "--device",
@@ -254,13 +228,44 @@ def test_a_device_the_machine_lacks_is_refused_before_anything_runs(
     assert not any(tmp_path.iterdir())
 
 
-def test_a_schedule_that_leaves_nothing_to_decay_is_refused_before_anything_runs(
+def test_an_override_that_leaves_nothing_to_decay_is_refused_before_anything_runs(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # Every experiment warms up for an epoch, so a run cut to one has none left to decay over.
     with pytest.raises(SystemExit):
-        main(["--corpus", "control-a", "--epochs", "1", "--workspace", str(tmp_path)])
-    assert "warmup_steps" in capsys.readouterr().err
+        main(["--experiment", "control-a-s", "--epochs", "1", "--workspace", str(tmp_path)])
+    assert "warmup_epochs" in capsys.readouterr().err
     assert not any(tmp_path.iterdir())
+
+
+def test_a_run_of_its_tiers_own_shape_is_named_by_the_tier_alone() -> None:
+    tier_shape = architecture_of(ComputeTiers.load().profile(ComputeTier.S))
+    run = replace(
+        run_named("control-a"),
+        configuration=configuration(tier=ComputeTier.S, architecture=tier_shape),
+    )
+
+    assert run.shape_label == "tier S"
+
+
+def test_a_run_that_changes_its_tiers_shape_says_so() -> None:
+    assert run_named("control-a").shape_label == "tier S with its shape overridden"
+
+
+def test_redrawing_a_stored_run_draws_into_that_run_and_trains_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stored = store(assess(stored_results()), stored_figures(), tmp_path / "results")
+
+    main(["--figures-only", str(stored), "--workspace", str(tmp_path / "workspace")])
+
+    assert sorted(path.name for path in (stored / "figures").iterdir()) == [
+        "masked-reconstruction-control-a-diagnostics.png",
+        "masked-reconstruction-control-a-loss.png",
+        "masked-reconstruction-control-a-windows.png",
+    ]
+    assert str(Path("figures")) in capsys.readouterr().out
+    assert not (tmp_path / "workspace").exists()
 
 
 def test_the_code_digest_is_stable() -> None:
@@ -278,6 +283,7 @@ class Road:
     run: Run
     published: Published
     trained: Trained
+    tracker: InMemoryExperimentTracker
     report: str
     figures: Path
     stored: Path
@@ -288,14 +294,20 @@ def road(tmp_path_factory: pytest.TempPathFactory) -> Road:
     run = run_named("control-a")
     workspace = tmp_path_factory.mktemp("report")
     published = publish(run, workspace / "corpus")
-    trained = train(published, run)
+    tracker = InMemoryExperimentTracker()
+    trained = train(published, run, workspace / "corpus", tracker, STARTED)
     found = diagnose(published, trained, run)
     measured = results_of(run, published, trained, found)
     assessment = assess(measured, find_shorter(measured, workspace / "results"))
-    draw_figures(run, trained, found, assessment, workspace / "figures")
-    stored = store(assessment, workspace / "results")
+    stored = store(
+        assessment,
+        RunFigures(found.interpolation_loss, found.ridge_loss, found.examples),
+        workspace / "results",
+    )
+    # As the report draws them: from the stored run, never from what is still in memory.
+    drawn_from(stored, workspace / "figures")
     report = render(run, published, trained, found, assessment)
-    return Road(run, published, trained, report, workspace / "figures", stored)
+    return Road(run, published, trained, tracker, report, workspace / "figures", stored)
 
 
 def test_the_whole_road_renders_every_section(road: Road) -> None:
@@ -303,7 +315,8 @@ def test_the_whole_road_renders_every_section(road: Road) -> None:
         assert section in road.report
     assert "control-a" in road.report
     assert "cut to 4 units" in road.report
-    assert "1 epoch(s) of warmup then cosine decay to 0.01 of the peak, seed 1, CPU" in road.report
+    assert "| tier S with its shape overridden: 16 wide, 2 heads, 1 blocks," in road.report
+    assert "cosine decay to 0.01 of the peak, seed 1, fp32 on CPU" in road.report
 
 
 def test_the_whole_road_draws_three_figures(road: Road) -> None:
@@ -329,6 +342,18 @@ def test_the_whole_road_stores_what_it_measured_per_unit(road: Road) -> None:
     assert all(tally.model >= (tally.floor or 0.0) for tally in measured.tallies if not tally.apart)
 
 
+def test_the_whole_road_stores_the_run_under_the_name_it_was_tracked_by(road: Road) -> None:
+    """The stored run names the tracked one twice: by name, and by the weights it left behind."""
+    settings = read(road.stored).settings
+    kept = road.tracker.outcome
+
+    assert road.stored.name == road.tracker.run == "control-a-20260915-230411"
+    assert settings["tracked_run"] == road.tracker.run
+    assert settings["date"] == "2026-09-15 23:04:11"
+    assert kept is not None
+    assert settings["backbone_checksum"] == str(kept.backbone.checksum)
+
+
 def test_the_noise_variance_is_the_layouts_noise_in_normalised_units(road: Road) -> None:
     published = road.published
     variance = published.noise_variance()
@@ -347,14 +372,20 @@ def test_the_noise_variance_is_the_layouts_noise_in_normalised_units(road: Road)
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="needs MPS")
-def test_a_model_on_mps_is_scored_under_the_same_masks_as_on_the_cpu(road: Road) -> None:
-    on_mps = copy.deepcopy(road.trained.model).to("mps")
+def test_a_run_on_mps_hides_what_a_run_on_the_cpu_hides(tmp_path: Path, road: Road) -> None:
+    """Masks are drawn on the host, so the device changes the arithmetic, not what is hidden."""
+    on_mps = train(
+        road.published,
+        replace(road.run, device="mps"),
+        tmp_path,
+        InMemoryExperimentTracker(),
+        STARTED,
+    )
 
-    cpu_loss, cpu_ratio = evaluate(road.trained.model, road.published, road.run)
-    mps_loss, mps_ratio = evaluate(on_mps, road.published, replace(road.run, device="mps"))
-
-    assert mps_ratio == cpu_ratio
-    assert mps_loss == pytest.approx(cpu_loss, rel=1e-4)
+    assert on_mps.hidden_ratio == road.trained.hidden_ratio
+    assert on_mps.epochs[-1].validation_loss == pytest.approx(
+        road.trained.epochs[-1].validation_loss, rel=1e-3
+    )
 
 
 def test_the_sparse_layout_fits_fewer_cycles_than_the_dense_one(tmp_path: Path) -> None:

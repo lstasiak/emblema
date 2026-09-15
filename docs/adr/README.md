@@ -29,3 +29,6 @@ Format: context, decision, consequences, alternatives considered. Status is one 
 | [0018](0018-synthetic-positive-control.md) | The positive control is a corpus reader: one latent process, two sensor layouts, disjoint trajectories | accepted |
 | [0019](0019-self-supervised-objective.md) | The self-supervised objective: masked reconstruction with the hidden tokens removed from the encoder, a mixture of channel, block and token masks, and a trivial baseline per kind | accepted |
 | [0020](0020-judging-a-masked-reconstruction-run.md) | Judging a masked-reconstruction run: rules in the domain, an interval per comparison, a noise floor, and a probe for the diagnostic the control cannot answer | accepted |
+| [0021](0021-training-runtime-and-resumable-runs.md) | The training loop is an adapter behind a port that reports epochs, and a run is resumable mid-epoch | accepted |
+| [0022](0022-experiment-configuration-as-a-file.md) | An experiment is a file: every parameter of scale written down, the shape from its tier | accepted |
+| [0023](0023-tracking-runs-with-mlflow.md) | Runs are tracked through a port with an MLflow adapter, logged epoch by epoch while they run | accepted |

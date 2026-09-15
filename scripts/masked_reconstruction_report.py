@@ -1,27 +1,29 @@
 """Train the objective on the control corpora and the spectral probe, and assess what it learnt.
 
-Each corpus is published through the command line's use cases, trained on its training units and
-scored on its validation units against the baselines of each kind of mask and the spectrum of its
-channels hidden whole. Each run is stored as CSV, assessed against its stored run with half the
-epochs, and printed as markdown beside its figures.
+Each experiment in ``experiments/`` names a corpus and everything a run of it does. The corpus is
+published through the command line's use cases, trained by the training runtime on its training
+units and scored on its validation units against the baselines of each kind of mask and the
+spectrum of its channels hidden whole. Each run is stored as CSV, assessed against its stored run
+with half the epochs, printed as markdown, and its figures are drawn from the files it stored —
+never from what is still in memory, so a change of style costs a redraw and not a run.
 
     uv sync --all-extras
     uv run scripts/masked_reconstruction_report.py
-    uv run scripts/masked_reconstruction_report.py --corpus control-b --epochs 10
+    uv run scripts/masked_reconstruction_report.py --experiment control-b-s
+    uv run scripts/masked_reconstruction_report.py --figures-only data/report/results/<run>
 
-Transitional: the training runtime, the run store and a run's provenance replace it. What the
-runs showed is in ``docs/verification/masked-reconstruction.md``.
+A run's figures are drawn into its own stored directory; the ones a note shows are drawn there on
+purpose, with ``--figures docs/verification/figures``. What the runs showed is in
+``docs/verification/masked-reconstruction.md``.
 """
 
 import argparse
 import hashlib
 import io
 import sys
-import time
-import tomllib
 from collections import Counter
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -34,12 +36,6 @@ import torch
 # the lint configuration.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-
-import matplotlib
-
-# A report writes files and never opens a window; the backend has to be chosen before pyplot is.
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
@@ -69,14 +65,22 @@ from emblema.pretraining.adapters.diagnostics.own_and_cross_channel_ridge_baseli
 from emblema.pretraining.adapters.diagnostics.spectral_recovery import SpectralRecovery
 from emblema.pretraining.adapters.diagnostics.triviality_diagnostic import TrivialityDiagnostic
 from emblema.pretraining.adapters.diagnostics.unit_bootstrap import UnitBootstrap
-from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
+from emblema.pretraining.adapters.experiments.experiment_file import ExperimentFile
+from emblema.pretraining.adapters.in_memory.experiment_tracker import InMemoryExperimentTracker
+from emblema.pretraining.adapters.mlflow.mlflow_experiment_tracker import MlflowExperimentTracker
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
 from emblema.pretraining.adapters.objective.reconstruction_loss import ReconstructionLoss
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
+from emblema.pretraining.adapters.training.devices import available_device
+from emblema.pretraining.adapters.training.torch_training_runtime import TorchTrainingRuntime
 from emblema.pretraining.application.use_cases.assess_reconstruction_run import (
     AssessReconstructionRun,
+)
+from emblema.pretraining.application.use_cases.pretrain_backbone import (
+    PretrainBackbone,
+    PretrainBackboneCommand,
 )
 from emblema.pretraining.domain.assessment.assessment import Assessment
 from emblema.pretraining.domain.assessment.curve import Curve
@@ -85,34 +89,36 @@ from emblema.pretraining.domain.assessment.mask_kind_tally import MaskKindTally
 from emblema.pretraining.domain.assessment.results import Results
 from emblema.pretraining.domain.assessment.spectrum import Spectrum
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
-from emblema.pretraining.domain.exceptions import InvalidLearningRateScheduleError
-from emblema.pretraining.domain.learning_rate_schedule import LearningRateSchedule
+from emblema.pretraining.domain.exceptions import InvalidTrainingBudgetError
 from emblema.pretraining.domain.mask_kind import MaskKind
-from emblema.pretraining.domain.masking_strategy import MaskingStrategy
+from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
+from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
+from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.ports.experiment_tracker import ExperimentTracker
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
+from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
-from emblema.shared.kernel.compute import ComputeTier
+from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
 from scripts.masked_reconstruction_assessment import (
+    Example,
+    RunFigures,
     assessment_section,
     find_shorter,
     kinds_table,
+    run_name,
     store,
 )
+from scripts.masked_reconstruction_figures import drawn_from, figures_of
 from scripts.reporting import dated_heading, machine, table
 from scripts.spectral_probe import SPECTRAL_PROBE, SPECTRAL_PROCESS
 
-FIGURES = REPO_ROOT / "docs" / "verification" / "figures"
-# What the report trains on when the command line names nothing: both controls, and the probe the
-# spectrum is read on.
-DEFAULT_CORPORA = ("control-a", "control-b", SPECTRAL_PROBE.name)
+# Where the experiments are written down: one file per experiment, and a run is reproduced by
+# naming one.
+EXPERIMENTS = REPO_ROOT / "experiments"
 RESULTS = REPO_ROOT / "data" / "report" / "results"
 
-# Blocks and whole channels carry most of the hiding, single tokens are the minority ingredient,
-# and together they take close to half of a window.
-MIXTURE = MaskingStrategy(channel_rate=0.15, block_rate=0.6, block_span=0.5, token_rate=0.1)
-DECODER_LAYERS = 1
 # Cycles per window the spectrum is fitted up to, at most. On the control corpora that is more than
 # their signal holds: the fastest harmonic of the control process completes about one cycle in a
 # window of this length, so every frequency above the first holds noise alone, and the verdict and
@@ -122,23 +128,9 @@ DECODER_LAYERS = 1
 CYCLES_AT_MOST = 6
 WINDOW = WindowSpec(length=32.0, stride=12.0)
 EXAMPLE_WINDOWS = 3
-# One epoch of warmup is a hundred-odd steps on the control corpora — enough for Adam's moment
-# estimates to settle before the peak rate — and a floor of one per cent of the peak is where the
-# steps are too small to move the verdicts.
-WARMUP_EPOCHS = 1
-FINAL_LR_FRACTION = 0.01
-# Where the model trains. Tier S is declared on MPS in the budget file; everything the diagnostics
-# compute stays on the host, because the baselines are numpy and MPS holds no double precision.
+# Where the model trains. Everything the diagnostics compute stays on the host, because the
+# baselines are numpy and MPS holds no double precision.
 DEVICES = ("cpu", "mps", "cuda")
-# Epochs per tier and corpus when the command line names none, with how they were measured.
-EPOCHS_FILE = Path(__file__).resolve().parent / "masked_reconstruction_epochs.toml"
-
-
-def default_device() -> str:
-    """The accelerator this machine has, the CPU where it has none."""
-    if torch.backends.mps.is_available():
-        return "mps"
-    return "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def device_available(device: str) -> bool:
@@ -149,59 +141,59 @@ def device_available(device: str) -> bool:
     return device == "cpu"
 
 
-def measured_epochs(tier: str, corpus: str, *, path: Path = EPOCHS_FILE) -> int | None:
-    """The epochs measured for ``corpus`` at ``tier``; ``None`` where nothing was measured.
-
-    Raises:
-        ValueError: If the file states something other than a positive whole number of epochs.
-    """
-    with path.open("rb") as handle:
-        epochs = tomllib.load(handle).get(tier, {}).get(corpus)
-    if epochs is not None and (
-        isinstance(epochs, bool) or not isinstance(epochs, int) or epochs < 1
-    ):
-        raise ValueError(
-            f"{path.name}: epochs of {corpus} at tier {tier} must be positive, got {epochs!r}"
-        )
-    return epochs
+def experiments(directory: Path = EXPERIMENTS) -> dict[str, ExperimentFile]:
+    """Every experiment stated in ``directory`` whose corpus this report can generate."""
+    stated = (ExperimentFile.load(path) for path in sorted(directory.glob("*.toml")))
+    return {file.name: file for file in stated if file.corpus in corpora()}
 
 
 @dataclass(frozen=True)
 class Run:
-    """Everything that decides what the training does, stated once and printed with the result."""
+    """One run of the report: the experiment it follows and where it is run.
 
+    The experiment says what is done and is reproduced by running the same file; what is left here
+    is what belongs to the machine and to this report — the device, and a corpus cut short for a
+    smoke run.
+
+    Attributes:
+        configuration: What the experiment states.
+        corpus: The corpus the experiment reads, which this report generates.
+        units: Units the layout is cut to, where a run is meant to be quick.
+        device: Where the arithmetic happens.
+    """
+
+    configuration: ExperimentConfiguration
     corpus: str
-    tier: str
-    shape: EncoderArchitecture | None
     units: int | None
-    epochs: int
-    batch_size: int
-    learning_rate: float
-    warmup_epochs: int
-    final_lr_fraction: float
-    seed: int
     device: str
 
     @property
+    def epochs(self) -> int:
+        return self.configuration.budget.epochs
+
+    @property
+    def seed(self) -> int:
+        return self.configuration.budget.seed
+
+    @property
+    def batch_size(self) -> int:
+        return self.configuration.budget.batch_size
+
+    @property
     def architecture(self) -> EncoderArchitecture:
-        """The tier's shape, unless the run states a smaller one a slow machine can afford."""
-        if self.shape is not None:
-            return self.shape
-        return architecture_of(ComputeTiers.load().profile(ComputeTier(self.tier)))
+        return self.configuration.architecture
 
     @property
     def shape_label(self) -> str:
-        if self.shape is None:
-            return f"tier {self.tier}"
-        return f"tier {self.tier} cut down to {self.shape.width} wide, {self.shape.layers} deep"
+        """The tier the run declares, and whether its experiment changed the shape that tier states.
 
-    def schedule(self, steps_per_epoch: int) -> LearningRateSchedule:
-        """The learning rate over the run, in optimiser steps."""
-        return LearningRateSchedule(
-            warmup_steps=self.warmup_epochs * steps_per_epoch,
-            total_steps=self.epochs * steps_per_epoch,
-            final_fraction=self.final_lr_fraction,
-        )
+        Compared by value rather than by whether the file has a shape section: a section that
+        repeats the tier's own numbers still trains the tier.
+        """
+        tier = self.configuration.tier
+        if self.architecture == architecture_of(ComputeTiers.load().profile(tier)):
+            return f"tier {tier}"
+        return f"tier {tier} with its shape overridden"
 
 
 @dataclass(frozen=True)
@@ -275,45 +267,24 @@ class Published:
 
 
 @dataclass(frozen=True)
-class Epoch:
-    training_loss: float
-    validation_loss: float
-    seconds: float
-
-
-@dataclass(frozen=True)
 class Trained:
-    model: MaskedReconstruction
-    epochs: tuple[Epoch, ...]
-    hidden_ratio: float
-
-
-@dataclass(frozen=True)
-class Example:
-    """One channel of one validation window, as the figure draws it.
+    """What a run of the experiment produced: the model it stored, read back, and its epochs.
 
     Attributes:
-        window: Position of the window among the validation windows.
-        channel: Name of the channel.
-        times: Instants of the channel's observed tokens.
-        truth: Their values.
-        visible: Which of them the model saw.
-        of_kind: Which of them were hidden by the kind of mask the example shows — a token hidden by
-            another kind is neither visible nor drawn as a prediction here.
-        kind: The kind of mask the example shows.
-        model: The model's prediction at every token.
-        baseline: The matched baseline's.
+        model: The model the run stored, read back from the store.
+        epochs: What each epoch measured.
+        hidden_ratio: Share of observed validation tokens the masks hid.
+        name: What the tracker calls the run.
+        started: When the run started, which its name and its stored date are read off.
+        backbone: The weights the run stored; the tracker keeps their checksum as a tag.
     """
 
-    window: int
-    channel: str
-    times: np.ndarray
-    truth: np.ndarray
-    visible: np.ndarray
-    of_kind: np.ndarray
-    kind: MaskKind
-    model: np.ndarray
-    baseline: np.ndarray
+    model: MaskedReconstruction
+    epochs: tuple[EpochOutcome, ...]
+    hidden_ratio: float
+    name: str
+    started: datetime
+    backbone: ArtifactRef
 
 
 @dataclass(frozen=True)
@@ -394,7 +365,7 @@ def validation_batches(
     loader = WindowLoader(
         published.validation, batch_size=run.batch_size, seed=run.seed, shuffle=False
     )
-    masking = TokenMasking(MIXTURE)
+    masking = TokenMasking(run.configuration.masking)
     offset = 0
     for index, batch in enumerate(loader.batches_of(0)):
         units = published.validation_units[offset : offset + batch.batch_size]
@@ -417,57 +388,49 @@ def masked_training_batches(
     loader = WindowLoader(
         published.training, batch_size=run.batch_size, seed=run.seed, shuffle=False
     )
-    masking = TokenMasking(MIXTURE)
+    masking = TokenMasking(run.configuration.masking)
     draws = torch.Generator().manual_seed(run.seed)
     return [(batch, masking.draw(batch, draws)) for batch in loader.batches_of(0)]
 
 
-def train(published: Published, run: Run) -> Trained:
-    torch.manual_seed(run.seed)
-    # Built on the host, so that the seed gives the same initial weights whatever the device.
-    model = MaskedReconstruction(
-        SetEncoder.for_vocabulary(run.architecture, published.vocabulary_size),
-        decoder_layers=DECODER_LAYERS,
-    ).to(run.device)
-    loss = ReconstructionLoss()
-    optimiser = torch.optim.Adam(model.parameters(), lr=run.learning_rate)
-    loader = WindowLoader(published.training, batch_size=run.batch_size, seed=run.seed)
-    schedule = run.schedule(steps_per_epoch=len(loader))
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimiser, schedule.factor)
-    masking = TokenMasking(MIXTURE)
-    draws = torch.Generator().manual_seed(run.seed)
-    epochs = []
-    for epoch in range(run.epochs):
-        started = time.perf_counter()
-        model.train()
-        seen = []
-        for on_host in loader.batches_of(epoch):
-            masks = masking.draw(on_host, draws).to(run.device)
-            batch = on_host.to(run.device)
-            optimiser.zero_grad()
-            step = loss(model(batch, masks), batch, masks)
-            step.backward()
-            optimiser.step()
-            scheduler.step()
-            seen.append(step.item())
-        validation, ratio = evaluate(model, published, run)
-        epochs.append(Epoch(float(np.mean(seen)), validation, time.perf_counter() - started))
-    return Trained(model.eval(), tuple(epochs), ratio)
+def train(
+    published: Published,
+    run: Run,
+    workspace: Path,
+    tracker: ExperimentTracker,
+    started: datetime,
+) -> Trained:
+    """Train the experiment through the use case, and read back the model it stored.
 
-
-def evaluate(model: MaskedReconstruction, published: Published, run: Run) -> tuple[float, float]:
-    """The validation loss under the fixed masks, and the share of observed tokens they hide."""
-    model.eval()
-    loss = ReconstructionLoss()
-    total, hidden, observed = 0.0, 0, 0
-    with torch.no_grad():
-        for on_host, masks_on_host, _ in validation_batches(published, run):
-            batch, masks = on_host.to(run.device), masks_on_host.to(run.device)
-            scored = int(masks.hidden.sum())
-            total += float(loss(model(batch, masks), batch, masks)) * scored
-            hidden += scored
-            observed += int((~batch.padding_mask).sum())
-    return total / max(hidden, 1), hidden / max(observed, 1)
+    The run writes its checkpoints and its weights to a store under the workspace, and the model
+    the diagnostics score is the one read back from it: what is diagnosed is then what was kept,
+    not an object that happened to survive in memory. It is tracked under the name its stored
+    directory takes, both read off ``started``, so the two are found from each other.
+    """
+    store = LocalDirectoryArtifactStore(workspace / "artifacts")
+    runtime = TorchTrainingRuntime(store, device=run.device)
+    name = run_name(run.corpus, started)
+    outcome = PretrainBackbone(runtime, tracker)(
+        PretrainBackboneCommand(
+            configuration=run.configuration,
+            corpus=TrainingCorpus(
+                name=run.corpus,
+                checksum=published.manifest.archived.block.checksum,
+                training=published.training,
+                validation=published.validation,
+                vocabulary_size=published.vocabulary_size,
+            ),
+            run=name,
+        )
+    )
+    return Trained(
+        model=runtime.restore(outcome.backbone).to(run.device),
+        epochs=outcome.epochs,
+        hidden_ratio=outcome.hidden_ratio,
+        name=name,
+        started=started,
+        backbone=outcome.backbone,
+    )
 
 
 def diagnose(published: Published, trained: Trained, run: Run) -> Diagnosis:
@@ -610,41 +573,50 @@ def code_digest() -> str:
 
 def results_of(run: Run, published: Published, trained: Trained, diagnosis: Diagnosis) -> Results:
     """What the run measured, in the form the assessment reads and the CSV files store."""
-    architecture = run.architecture
+    configuration = run.configuration
+    architecture = configuration.architecture
     settings = {
         "corpus": run.corpus,
-        "date": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+        "experiment": configuration.name,
+        "date": f"{trained.started:%Y-%m-%d %H:%M:%S}",
+        # Which tracked run this is, by name and by what it left behind: a tracker's names repeat,
+        # the checksum of a run's weights does not.
+        "tracked_run": trained.name,
+        "backbone_checksum": str(trained.backbone.checksum),
         "code": code_digest(),
         "machine": machine(),
         "python": sys.version.split()[0],
         "torch": version("torch"),
-        "tier": run.tier,
+        "tier": str(configuration.tier),
         "shape": (
             f"{architecture.width},{architecture.heads},{architecture.layers},"
             f"{architecture.feedforward_width}"
         ),
-        # Read from the tier configuration, which the code digest does not cover, so stated here
-        # for two runs of different time encodings never to count as one configuration.
+        # Read from the experiment, which the code digest does not cover, so stated here for two
+        # runs of different time encodings never to count as one configuration.
         "time_frequencies": str(architecture.time_frequencies),
-        "decoder_layers": str(DECODER_LAYERS),
+        "decoder_layers": str(configuration.decoder_layers),
+        "dropout": f"{configuration.dropout:g}",
+        "precision": str(configuration.precision),
         "units": "" if run.units is None else str(run.units),
         "training_windows": str(len(published.training)),
         "validation_windows": str(len(published.validation)),
         "validation_units": str(len(set(published.validation_units))),
         "window_length": f"{WINDOW.length:g}",
         "window_stride": f"{WINDOW.stride:g}",
-        "batch_size": str(run.batch_size),
-        "learning_rate": f"{run.learning_rate:g}",
-        "warmup_epochs": str(run.warmup_epochs),
-        "final_lr_fraction": f"{run.final_lr_fraction:g}",
-        "seed": str(run.seed),
+        "batch_size": str(configuration.budget.batch_size),
+        "accumulation_steps": str(configuration.budget.accumulation_steps),
+        "learning_rate": f"{configuration.budget.learning_rate:g}",
+        "warmup_epochs": str(configuration.budget.warmup_epochs),
+        "final_lr_fraction": f"{configuration.budget.final_lr_fraction:g}",
+        "seed": str(configuration.budget.seed),
         "device": run.device,
         "noise": "" if published.noise is None else f"{published.noise:g}",
     }
     model, ridge = diagnosis.spectrum_of_model, diagnosis.spectrum_of_ridge
     return Results(
         settings=settings,
-        strategy=MIXTURE,
+        strategy=configuration.masking,
         realised_ratio=trained.hidden_ratio,
         curve=Curve(
             training=tuple(epoch.training_loss for epoch in trained.epochs),
@@ -663,7 +635,9 @@ def results_of(run: Run, published: Published, trained: Trained, diagnosis: Diag
 
 
 def heading(run: Run, published: Published, trained: Trained) -> str:
-    architecture = run.architecture
+    configuration = run.configuration
+    architecture = configuration.architecture
+    budget = configuration.budget
     corpus = (
         f"{run.corpus}, {len(published.training)} training and {len(published.validation)} "
         f"validation windows of {WINDOW.length:g} steps, stride {WINDOW.stride:g}"
@@ -674,23 +648,28 @@ def heading(run: Run, published: Published, trained: Trained) -> str:
         f"{run.shape_label}: {architecture.width} wide, {architecture.heads} heads, "
         f"{architecture.layers} blocks, "
         f"{architecture.parameter_count(published.vocabulary_size):,} parameters; "
-        f"decoder of {DECODER_LAYERS} block"
+        f"decoder of {configuration.decoder_layers} block(s)"
     )
+    strategy = configuration.masking
     masking = (
-        f"channel {MIXTURE.channel_rate:g}, block {MIXTURE.block_rate:g} over "
-        f"{MIXTURE.block_span:g} of the window, token {MIXTURE.token_rate:g}; "
-        f"expected {MIXTURE.expected_ratio:.1%}, realised {trained.hidden_ratio:.1%} "
+        f"channel {strategy.channel_rate:g}, block {strategy.block_rate:g} over "
+        f"{strategy.block_span:g} of the window, token {strategy.token_rate:g}; "
+        f"expected {strategy.expected_ratio:.1%}, realised {trained.hidden_ratio:.1%} "
         "of observed tokens"
     )
     training = (
-        f"{run.epochs} epochs, batch {run.batch_size}, Adam at a peak of {run.learning_rate:g}, "
-        f"{run.warmup_epochs} epoch(s) of warmup then cosine decay to "
-        f"{run.final_lr_fraction:g} of the peak, seed {run.seed}, {run.device.upper()}"
+        f"{budget.epochs} epochs, batch {budget.batch_size}"
+        + (f" × {budget.accumulation_steps} accumulated" if budget.accumulation_steps > 1 else "")
+        + f", Adam at a peak of {budget.learning_rate:g}, "
+        f"{budget.warmup_epochs} epoch(s) of warmup then cosine decay to "
+        f"{budget.final_lr_fraction:g} of the peak, seed {budget.seed}, "
+        f"{configuration.precision} on {run.device.upper()}"
     )
     rows = [
         ("Machine", machine()),
         ("Python", sys.version.split()[0]),
         ("torch", version("torch")),
+        ("Experiment", f"`experiments/{configuration.name}.toml`"),
         ("Corpus", corpus),
         (
             "Vocabulary",
@@ -837,160 +816,53 @@ def render(
     )
 
 
-def draw_figures(
-    run: Run, trained: Trained, diagnosis: Diagnosis, assessment: Assessment, directory: Path
-) -> None:
-    directory.mkdir(parents=True, exist_ok=True)
-    stem = f"masked-reconstruction-{run.corpus}"
-
-    epochs = np.arange(1, len(trained.epochs) + 1)
-    figure, axis = plt.subplots(figsize=(6, 4))
-    axis.plot(epochs, [e.training_loss for e in trained.epochs], marker="o", label="training")
-    axis.plot(epochs, [e.validation_loss for e in trained.epochs], marker="s", label="validation")
-    axis.axhline(diagnosis.interpolation_loss, linestyle="--", color="grey", label="interpolation")
-    axis.axhline(diagnosis.ridge_loss, linestyle=":", color="grey", label="ridge")
-    axis.set_yscale("log")
-    axis.set_xlabel("epoch")
-    axis.set_ylabel("mean squared error on hidden tokens")
-    axis.set_title(f"{run.corpus}: masked reconstruction, {run.shape_label}")
-    axis.legend()
-    figure.tight_layout()
-    figure.savefig(directory / f"{stem}-loss.png", dpi=120)
-    plt.close(figure)
-
-    examples = diagnosis.examples
-    if examples:
-        figure, axes = plt.subplots(len(examples), 1, figsize=(8, 2.2 * len(examples)), sharex=True)
-        for axis, example in zip(np.atleast_1d(axes), examples, strict=False):
-            axis.plot(example.times, example.truth, color="black", linewidth=1, label="truth")
-            axis.scatter(
-                example.times[example.visible],
-                example.truth[example.visible],
-                s=12,
-                color="black",
-                label="visible",
-            )
-            axis.scatter(
-                example.times[example.of_kind],
-                example.model[example.of_kind],
-                marker="x",
-                color="tab:red",
-                label="model",
-            )
-            axis.scatter(
-                example.times[example.of_kind],
-                example.baseline[example.of_kind],
-                marker="^",
-                s=14,
-                color="tab:blue",
-                label="matched baseline",
-            )
-            axis.set_ylabel(
-                f"w{example.window} {example.channel}\n{example.kind.value}", fontsize=8
-            )
-        drawn = np.atleast_1d(axes)
-        drawn[-1].set_xlabel("position in window")
-        figure.suptitle(
-            f"{run.corpus}: tokens hidden by each kind of mask, model against the matched baseline"
-        )
-        # Below the panels, not over the first one: the legend would sit on the data it explains,
-        # and a title above it would strike through the frame.
-        figure.legend(
-            *drawn[0].get_legend_handles_labels(),
-            fontsize=8,
-            ncol=4,
-            loc="lower center",
-            frameon=False,
-        )
-        figure.tight_layout(rect=(0.0, 0.02, 1.0, 0.99))
-        figure.savefig(directory / f"{stem}-windows.png", dpi=120)
-        plt.close(figure)
-
-    figure, (left, right) = plt.subplots(1, 2, figsize=(10, 4))
-    judged = [summary for summary in assessment.summaries if not summary.apart]
-    positions = np.arange(len(judged))
-    left.bar(positions - 0.27, [s.model_error for s in judged], width=0.27, label="model")
-    left.bar(positions, [s.matched_error for s in judged], width=0.27, label="matched baseline")
-    left.bar(positions + 0.27, [s.linear_error for s in judged], width=0.27, label="linear")
-    left.set_xticks(positions, [s.kind.value for s in judged])
-    left.set_ylabel("mean squared error")
-    left.set_title("triviality per kind of mask")
-    left.legend()
-    spectrum = diagnosis.spectrum_of_model
-    frequencies = np.arange(1, spectrum.cycles + 1)
-    right.plot(frequencies, spectrum.truth_energy, marker="o", color="black", label="truth")
-    right.plot(
-        frequencies, spectrum.residual_energy, marker="x", color="tab:red", label="model residual"
-    )
-    right.plot(
-        frequencies,
-        diagnosis.spectrum_of_ridge.residual_energy,
-        marker="^",
-        color="tab:blue",
-        label="ridge residual",
-    )
-    right.set_yscale("log")
-    right.set_xlabel("cycles per window")
-    right.set_ylabel("energy over channel-windows hidden whole")
-    right.set_title("spectrum of the truth and of each residual")
-    right.legend()
-    figure.tight_layout()
-    figure.savefig(directory / f"{stem}-diagnostics.png", dpi=120)
-    plt.close(figure)
-
-
-def shape_of(spec: str) -> EncoderArchitecture:
-    """``WIDTH,HEADS,LAYERS,FEEDFORWARD`` as an architecture, with the tier's time frequencies."""
-    width, heads, layers, feedforward = (int(part) for part in spec.split(","))
-    return EncoderArchitecture(
-        width=width,
-        heads=heads,
-        layers=layers,
-        feedforward_width=feedforward,
-        time_frequencies=ComputeTiers.load().profile(ComputeTier.S).time_frequencies,
-    )
-
-
 def shown(path: Path) -> Path:
     return path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--corpus", action="append", choices=corpora())
-    parser.add_argument("--tier", default="S", choices=["S", "M"])
+    stated = experiments()
     parser.add_argument(
-        "--shape",
-        type=shape_of,
-        default=None,
-        help="WIDTH,HEADS,LAYERS,FEEDFORWARD to build a smaller encoder than the tier's, where "
-        "the tier's is too slow for the machine; the time frequencies stay the tier's",
+        "--experiment",
+        action="append",
+        choices=sorted(stated),
+        help="experiment to run; every one this report can generate a corpus for unless given",
+    )
+    parser.add_argument(
+        "--figures-only",
+        type=Path,
+        action="append",
+        metavar="RUN",
+        help="draw the figures of a stored run and train nothing; repeatable",
     )
     parser.add_argument("--units", type=int, default=None, help="cut the layout to this many units")
     parser.add_argument(
         "--epochs",
         type=int,
         default=None,
-        help="epochs for every corpus named; by default each corpus's measured budget",
+        help="override the epochs every experiment states; recorded with the run",
     )
-    parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--learning-rate", type=float, default=1e-3, help="the peak rate")
-    parser.add_argument("--warmup-epochs", type=int, default=WARMUP_EPOCHS)
-    parser.add_argument(
-        "--final-lr-fraction",
-        type=float,
-        default=FINAL_LR_FRACTION,
-        help="the rate the decay ends at, as a fraction of the peak; 1 with no warmup is constant",
-    )
-    parser.add_argument("--seed", type=int, default=1)
     parser.add_argument(
         "--device",
         choices=DEVICES,
-        default=default_device(),
+        default=available_device(),
         help="where the model trains; runs on different devices are never compared",
     )
+    parser.add_argument(
+        "--track",
+        default=None,
+        metavar="URI",
+        help="MLflow tracking server or database to record the runs in; kept in memory unless "
+        "given (the local stack serves one at http://127.0.0.1:5000)",
+    )
     parser.add_argument("--workspace", type=Path, default=REPO_ROOT / "data" / "report")
-    parser.add_argument("--figures", type=Path, default=FIGURES)
+    parser.add_argument(
+        "--figures",
+        type=Path,
+        default=None,
+        help="directory to draw into; the stored run's own figures directory unless given",
+    )
     parser.add_argument(
         "--results",
         type=Path,
@@ -998,52 +870,69 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="directory each run is stored under as CSV, beside an index of every run",
     )
     arguments = parser.parse_args(argv)
+    if arguments.figures_only:
+        for directory in arguments.figures_only:
+            for path in drawn_from(directory, arguments.figures or figures_of(directory)):
+                print(shown(path))
+        return
     if not device_available(arguments.device):
         parser.error(f"device {arguments.device} is not available on this machine")
     runs = []
-    for corpus in arguments.corpus or DEFAULT_CORPORA:
-        epochs = (
-            arguments.epochs
-            if arguments.epochs is not None
-            else measured_epochs(arguments.tier, corpus)
-        )
-        if epochs is None:
-            parser.error(
-                f"no measured epochs for {corpus} at tier {arguments.tier}: name them with --epochs"
+    for name in arguments.experiment or sorted(stated):
+        file = stated[name]
+        configuration = file.configuration()
+        if arguments.epochs is not None:
+            try:
+                configuration = replace(
+                    configuration, budget=replace(configuration.budget, epochs=arguments.epochs)
+                )
+            except InvalidTrainingBudgetError as error:
+                parser.error(f"{name}: {error}")
+        runs.append(
+            Run(
+                configuration=configuration,
+                corpus=file.corpus,
+                units=arguments.units,
+                device=arguments.device,
             )
-        run = Run(
-            corpus=corpus,
-            tier=arguments.tier,
-            shape=arguments.shape,
-            units=arguments.units,
-            epochs=epochs,
-            batch_size=arguments.batch_size,
-            learning_rate=arguments.learning_rate,
-            warmup_epochs=arguments.warmup_epochs,
-            final_lr_fraction=arguments.final_lr_fraction,
-            seed=arguments.seed,
-            device=arguments.device,
         )
-        try:
-            # Whether the schedule holds does not depend on how many steps an epoch has.
-            run.schedule(steps_per_epoch=1)
-        except InvalidLearningRateScheduleError as error:
-            parser.error(str(error))
-        runs.append(run)
     torch.set_num_threads(max(torch.get_num_threads(), 1))
     assess = AssessReconstructionRun(UnitBootstrap())
     sections = []
     for run in runs:
         published = publish(run, arguments.workspace / run.corpus)
-        trained = train(published, run)
+        # One tracker per run, because a tracker records exactly one.
+        tracker = (
+            InMemoryExperimentTracker()
+            if arguments.track is None
+            else MlflowExperimentTracker(arguments.track)
+        )
+        trained = train(
+            published,
+            run,
+            arguments.workspace / run.corpus,
+            tracker,
+            datetime.now(),
+        )
         diagnosis = diagnose(published, trained, run)
         results = results_of(run, published, trained, diagnosis)
         assessment = assess(results, find_shorter(results, arguments.results))
-        draw_figures(run, trained, diagnosis, assessment, arguments.figures)
-        stored = store(assessment, arguments.results)
+        stored = store(
+            assessment,
+            RunFigures(
+                interpolation_loss=diagnosis.interpolation_loss,
+                ridge_loss=diagnosis.ridge_loss,
+                examples=diagnosis.examples,
+            ),
+            arguments.results,
+        )
+        # Drawn from the files the run just wrote, never from what is still in memory: a figure
+        # this report can draw is a figure anyone can redraw from the stored run.
+        figures = arguments.figures or figures_of(stored)
+        drawn_from(stored, figures)
         sections.append(
             render(run, published, trained, diagnosis, assessment)
-            + f"\n\nFigures in `{shown(arguments.figures)}`; the run is stored in "
+            + f"\n\nFigures in `{shown(figures)}`; the run is stored in "
             f"`{shown(stored)}`."
         )
     if isinstance(sys.stdout, io.TextIOWrapper):

@@ -126,3 +126,39 @@ def test_the_squared_error_is_per_position_against_the_value_and_masks_nothing()
     assert ReconstructionLoss.over(prediction, batch, everything).item() == pytest.approx(
         float(squared[~batch.padding_mask].mean())
     )
+
+
+def test_the_summed_error_is_the_mean_before_it_is_divided() -> None:
+    batch = random_batch(3, 12, seed=5, padding=2)
+    prediction = torch.randn(3, 12)
+    hidden = torch.rand(3, 12) < 0.6
+
+    total, scored = ReconstructionLoss.summed(prediction, batch, hidden)
+
+    assert total / scored == ReconstructionLoss.over(prediction, batch, hidden)
+
+
+def test_a_batch_summed_in_parts_is_the_batch_summed_whole() -> None:
+    """What lets a gradient be accumulated: the parts add up to the whole, tokens and all."""
+    batch = random_batch(4, 12, seed=6, padding=3)
+    prediction = torch.randn(4, 12)
+    hidden = torch.rand(4, 12) < 0.6
+    whole = ReconstructionLoss.summed(prediction, batch, hidden)
+
+    parts = [
+        ReconstructionLoss.summed(prediction[rows], _rows(batch, rows), hidden[rows])
+        for rows in (slice(0, 2), slice(2, 4))
+    ]
+
+    assert sum(total for total, _ in parts) == pytest.approx(whole[0].item())
+    assert sum(int(scored) for _, scored in parts) == int(whole[1])
+
+
+def _rows(batch: TokenTensors, rows: slice) -> TokenTensors:
+    return TokenTensors(
+        features=batch.features[rows],
+        channel_ids=batch.channel_ids[rows],
+        timestamps=batch.timestamps[rows],
+        timeless=batch.timeless[rows],
+        padding_mask=batch.padding_mask[rows],
+    )

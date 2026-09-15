@@ -13,6 +13,7 @@ from emblema.pretraining.domain.assessment.results import Results
 from emblema.pretraining.domain.assessment.spectrum import Spectrum
 from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
+from scripts.masked_reconstruction_assessment import Example, RunFigures
 
 FLOOR = 0.01
 UNITS = 20
@@ -115,3 +116,26 @@ def half_of(run: Results) -> Results:
     half = epochs_of(run, run.epochs // 2)
     ending = (*half.curve.validation[:-1], run.curve.validation[-1])
     return replace(half, curve=replace(half.curve, validation=ending))
+
+
+def figures(*, kinds: tuple[MaskKind, ...] = (MaskKind.BLOCK, MaskKind.TOKEN)) -> RunFigures:
+    """What a run's figures are drawn from: the baseline levels and one example per kind."""
+    times = np.linspace(0.0, 1.0, 5)
+    return RunFigures(
+        interpolation_loss=0.3,
+        ridge_loss=0.25,
+        examples=tuple(
+            Example(
+                window=index,
+                channel=f"s{index + 1}",
+                times=times,
+                truth=np.sin(times * np.pi),
+                visible=np.array([True, True, False, True, True]),
+                of_kind=np.array([False, False, True, False, False]),
+                kind=kind,
+                model=np.full(5, 0.5),
+                baseline=np.full(5, 0.4),
+            )
+            for index, kind in enumerate(kinds)
+        ),
+    )

@@ -205,6 +205,9 @@ def lint_imports(package_root: Path | None = None) -> subprocess.CompletedProces
     # The report is wrapped to the console width, 80 columns when captured; a wide console keeps
     # "<name> BROKEN" on one line whatever the length of a contract name.
     env["COLUMNS"] = "200"
+    # A shell that forces colour (FORCE_COLOR) would wrap "BROKEN" in escape codes the assertions
+    # never match; the report is read as text, so it is asked for as text.
+    env["NO_COLOR"] = "1"
     if package_root is not None:
         env["PYTHONPATH"] = str(package_root)
     return subprocess.run(

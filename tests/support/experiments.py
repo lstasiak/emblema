@@ -1,0 +1,119 @@
+"""Experiments and corpora small enough to run inside a test.
+
+The overrides are typed ``Any`` because each names a field of the value object it builds and
+carries that field's type; the value object refuses anything else on the way in.
+
+The configuration here is the shape of a real one — every field stated, nothing defaulted away —
+at a size where a whole run is a fraction of a second. The windows are invented rather than
+published: what is being exercised is the loop around them, and a test that needs windows a
+corpus really produced asks ``tests.support.control_corpus`` instead.
+"""
+
+import random
+from collections.abc import Sequence
+from dataclasses import replace
+from typing import Any
+
+from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
+from emblema.pretraining.domain.masking_strategy import MaskingStrategy
+from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
+from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
+from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.training_budget import TrainingBudget
+from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.compute import ComputeTier
+from emblema.shared.kernel.tokens import Token, TokenWindow
+
+TINY = EncoderArchitecture(width=16, heads=2, layers=1, feedforward_width=32, time_frequencies=4)
+MIXTURE = MaskingStrategy(channel_rate=0.15, block_rate=0.6, block_span=0.5, token_rate=0.1)
+CHANNELS = 3
+
+
+def configuration(**overrides: Any) -> ExperimentConfiguration:
+    """A whole experiment at a test's scale; anything named is replaced."""
+    stated = ExperimentConfiguration(
+        name="test-experiment",
+        tier=ComputeTier.S,
+        architecture=TINY,
+        dropout=0.0,
+        decoder_layers=1,
+        masking=MIXTURE,
+        budget=budget(),
+        precision=Precision.FP32,
+        checkpoint=CheckpointPolicy(every_steps=2),
+    )
+    return replace(stated, **overrides)
+
+
+def budget(**overrides: Any) -> TrainingBudget:
+    stated = TrainingBudget(
+        epochs=2,
+        batch_size=2,
+        accumulation_steps=1,
+        learning_rate=1e-3,
+        warmup_epochs=0,
+        final_lr_fraction=0.5,
+        seed=1,
+    )
+    return replace(stated, **overrides)
+
+
+def corpus(
+    *, training: int = 8, validation: int = 4, name: str = "invented", seed: int = 1
+) -> TrainingCorpus:
+    """A corpus of invented windows, each of three channels observed at four instants.
+
+    The checksum stands for the artifact real windows are read out of: here it digests the windows
+    themselves, so two corpora that hold different data are told apart as they would be in a run.
+    """
+    training_windows = windows(training, seed=seed)
+    validation_windows = windows(validation, seed=seed + 1)
+    return TrainingCorpus(
+        name=name,
+        checksum=checksum_of(training_windows + validation_windows),
+        training=training_windows,
+        validation=validation_windows,
+        vocabulary_size=CHANNELS,
+    )
+
+
+def checksum_of(read: Sequence[TokenWindow]) -> Checksum:
+    """A digest of what the windows hold, as the block a run reads them from would be digested."""
+    return Checksum.of_bytes(repr([window.values for window in read]).encode())
+
+
+def windows(count: int, *, seed: int, steps: int = 4) -> list[TokenWindow]:
+    """``count`` windows of the same channels at the same instants, with drawn values."""
+    draws = random.Random(seed)
+    times = [step / (steps - 1) for step in range(steps)]
+    return [
+        TokenWindow.of(
+            Token(
+                channel_id=channel,
+                value=draws.gauss(0.0, 1.0),
+                time=time,
+                gap=time if index == 0 else times[index] - times[index - 1],
+            )
+            for channel in range(1, CHANNELS + 1)
+            for index, time in enumerate(times)
+        )
+        for _ in range(count)
+    ]
+
+
+WEIGHTS = ArtifactRef("durable/weights", Checksum.of_bytes(b"weights"))
+
+
+def epoch_outcome(number: int, **overrides: Any) -> EpochOutcome:
+    """What an epoch of a run that went well reports; anything named is replaced."""
+    stated: dict[str, Any] = {
+        "epoch": number,
+        "training_loss": 1.0 / (number + 1),
+        "validation_loss": 1.2 / (number + 1),
+        "hidden_ratio": 0.46,
+        "seconds": 0.25,
+    }
+    return EpochOutcome(**(stated | overrides))
