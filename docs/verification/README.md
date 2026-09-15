@@ -18,6 +18,7 @@ result is reproducible and its age is visible.
 | [synthetic-control.md](synthetic-control.md) | the generated control pair shares structure and the null pair does not, by a margin fixed before the measurement; checksums agree on arm64 and x86 |
 | [encoder.md](encoder.md) | what full self-attention costs at the default window of every measured corpus: exact parameters per tier, attention buffers per window, a training step per window |
 | [masked-reconstruction.md](masked-reconstruction.md) | the objective trained on the positive control: the loss falls, the reconstructions follow the signal, and each kind of mask is measured against its trivial baseline with an interval; which frequencies a hidden channel gets back |
+| [training-loop.md](training-loop.md) | a run interrupted inside an epoch and resumed from its checkpoint ends in the weights the uninterrupted run ended in; what a checkpoint costs and which precisions a machine runs |
 
 Add one file per verification, named `<topic>.md`. Never overwrite a previous run: append a new
 dated section, so that the note reads as the history of the measurement and not only its latest
