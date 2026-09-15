@@ -132,6 +132,10 @@ one is losing the session the checkpoint was for.
 - Half precision on MPS is measured on a real batch and the loss magnitude under summed
   accumulation turns out to overflow: the fallback is to divide each micro-batch by the group's
   size, at the cost of the weighting this record argues for.
+- An experiment has to vary what is trained rather than how much of it: another objective, an
+  encoder with a learnt time encoding, an optimiser other than Adam. The runtime builds one model
+  and one optimiser today, which is what a project with one objective should build; the seam is a
+  builder passed to its constructor, and the first ablation that needs it is where it goes in.
 - A scheduler arrives whose state is not a function of the step — a plateau schedule reading the
   validation loss, say. The rate is restored here by rebuilding the schedule at the step the run
   reached, which is exact for a schedule that is a pure function of it (measured: the rebuilt
