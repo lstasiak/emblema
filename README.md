@@ -15,6 +15,14 @@
 
 Emblema is a research platform for label-efficient representation learning on heterogeneous sensor streams. A single permutation-invariant, variable-channel transformer encoder is pretrained without labels on measurement corpora that differ in channel count and sampling regime, then transferred to new, small labelled tasks. The platform measures, with confidence intervals and strong classical baselines, whether and when that pretraining actually pays off, and serves the winning candidate through an API.
 
+## Methodology
+
+The criteria that decide whether pretraining paid off — which comparison is primary, how large a
+difference has to be, what is reported when the answer is partial or negative — are registered in
+[docs/preregistration.md](docs/preregistration.md) before the runs they judge. Decisions about the
+system are recorded in [docs/adr](docs/adr); measurements that cannot run in CI are dated notes in
+[docs/verification](docs/verification).
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/). One command builds the environment, a second runs the tests:
