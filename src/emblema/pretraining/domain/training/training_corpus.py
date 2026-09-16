@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from emblema.pretraining.domain.exceptions import InvalidTrainingCorpusError
+from emblema.pretraining.domain.training.training_corpus_shape import TrainingCorpusShape
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.tokens import TokenWindow
 
@@ -15,10 +15,11 @@ class TrainingCorpus:
     the channel table is built for, and it belongs to the corpus the windows were published with,
     not to the model.
 
-    Invariants: the name is non-empty and carries no surrounding whitespace; both sides hold at
-    least one window; the vocabulary holds at least one channel. That every token's channel is
-    within the vocabulary is not checked: the scan would cost the pass it protects, and a window
-    that says otherwise is refused by the model's channel table on the first batch.
+    Invariants: those of its shape — the name is non-empty and carries no surrounding whitespace,
+    both sides hold at least one window, the vocabulary holds at least one channel. That every
+    token's channel is within the vocabulary is not checked: the scan would cost the pass it
+    protects, and a window that says otherwise is refused by the model's channel table on the
+    first batch.
 
     Attributes:
         name: The corpus the windows were published from.
@@ -38,14 +39,21 @@ class TrainingCorpus:
     vocabulary_size: int
 
     def __post_init__(self) -> None:
-        if not self.name or self.name != self.name.strip():
-            raise InvalidTrainingCorpusError(
-                "name must be non-empty without surrounding whitespace"
-            )
-        for label, windows in (("training", self.training), ("validation", self.validation)):
-            if not windows:
-                raise InvalidTrainingCorpusError(f"the {label} side must hold a window")
-        if self.vocabulary_size < 1:
-            raise InvalidTrainingCorpusError(
-                f"vocabulary_size must be positive, got {self.vocabulary_size}"
-            )
+        # Building the shape runs the invariants: a corpus whose shape is not a shape is no corpus.
+        _ = self.shape
+
+    @property
+    def shape(self) -> TrainingCorpusShape:
+        """The corpus without its windows: what a run's signature is computed from.
+
+        Raises:
+            InvalidTrainingCorpusError: If the name is blank, a side is empty or the vocabulary
+                holds no channel.
+        """
+        return TrainingCorpusShape(
+            name=self.name,
+            checksum=self.checksum,
+            training_windows=len(self.training),
+            validation_windows=len(self.validation),
+            vocabulary_size=self.vocabulary_size,
+        )
