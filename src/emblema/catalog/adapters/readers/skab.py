@@ -41,9 +41,8 @@ TIME_COLUMN = "datetime"
 # of Evaluation, so a version's checksum covers them while its channels do not.
 LABEL_COLUMNS = ("anomaly", "changepoint")
 HEADER = (TIME_COLUMN, *(sensor.name for sensor in SENSORS))
-# One row a second is the testbed's cadence, so the last row occupies the second it starts in and
-# the extent ends there. It is a nominal cadence and nothing else rests on it: rows are placed by
-# their own timestamps, and the recorded gaps run to several minutes.
+# The last row occupies the second it starts in, so an extent ends one cadence past it. This is
+# the only thing the cadence is used for.
 SAMPLE_PERIOD = 1.0
 
 

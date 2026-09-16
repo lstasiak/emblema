@@ -28,8 +28,7 @@ METRICS = tuple(Channel(f"metric_{column:02d}") for column in range(1, WIDTH + 1
 
 SEPARATOR = ","
 PREFIX = "machine"
-# The publishers report a one-minute resolution and the files carry no timestamps, so a row is a
-# minute and a row index is the time. It is a nominal cadence: nothing here derives a step from it.
+# The resolution the publishers report. It is nominal: nothing here derives a step from it.
 SAMPLE_PERIOD = 1.0
 
 
