@@ -171,5 +171,28 @@ comparable with each other.
 
 ## Amendments
 
-None. An amendment is appended here as a dated section, stating what changed, why, and what had
-already been measured when it changed.
+An amendment is appended here as a dated section, stating what changed, why, and what had already
+been measured when it changed.
+
+### 2026-09-16 — the held-out engines are the ones the backbone never saw
+
+**Changed.** The validation side is no longer 20 engines drawn by the task. It is the 18 FD001
+engines the published corpus already holds out, and the tuning side is the remaining 82.
+
+**Why.** The corpus is published with a split over units, and the statistics that normalise every
+token are fitted on its training side only. A task that drew its own validation engines would draw
+most of them from that training side — engines whose unlabelled windows the backbone was pretrained
+on and whose values contributed to the normalisation. The comparison would then be transductive,
+and the first question a reader asks would be about the design rather than the result. Inheriting
+the corpus's own held-out units costs two engines and removes both objections.
+
+**Consequences.** The paired interval is now over 18 units, so its half-width is about 0.50 standard
+deviations rather than 0.47; under the Holm correction over the secondary family it is
+correspondingly wider. The tuning side holds 2,651 windows and the validation side 535, so the
+largest budget, *all*, is 2,651 rather than 2,766 and the ceiling still carries a quarter of the
+tuning windows. The endpoint, the thresholds and the floor are unchanged. The
+split is recorded when the task is created and never recomputed, so a later publication of the
+corpus under another seed cannot move it.
+
+**Measured when this changed.** Nothing. No model has been fine-tuned on this task and no comparison
+has been run; the unit counts come from replaying the published split over the raw unit keys.
