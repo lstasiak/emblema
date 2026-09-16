@@ -15,7 +15,7 @@ pytest.importorskip("torch")
 import torch
 
 from emblema.catalog.adapters.synthetic.layouts import CONTROL_A, CONTROL_PROCESS, LAYOUTS
-from emblema.entrypoints.cli.known_corpora import KnownCorpora
+from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
 from emblema.pretraining.adapters.diagnostics.spectral_recovery import SpectralRecovery
 from emblema.pretraining.domain.assessment.spectrum import Spectrum
 from scripts.masked_reconstruction_report import (

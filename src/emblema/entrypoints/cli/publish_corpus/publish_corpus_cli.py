@@ -5,9 +5,9 @@ from pathlib import Path
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.composition_root import CompositionRoot
-from emblema.entrypoints.cli.known_corpora import KnownCorpora
-from emblema.entrypoints.cli.publish_corpus_invocation import PublishCorpusInvocation
+from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
+from emblema.entrypoints.cli.publish_corpus.publish_corpus_invocation import PublishCorpusInvocation
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 
@@ -99,7 +99,3 @@ class PublishCorpusCli:
             return None
         key, checksum = pair
         return ArtifactRef(key, Checksum.parse(checksum))
-
-
-if __name__ == "__main__":
-    PublishCorpusCli().run()

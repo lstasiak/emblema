@@ -12,7 +12,7 @@ from pathlib import Path
 
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
-from emblema.entrypoints.cli.known_corpora import KnownCorpora
+from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
 from scripts.raw_corpora import raw_root as downloaded_root
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

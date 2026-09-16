@@ -33,8 +33,8 @@ from emblema.catalog.domain.tokenisation.tokenisation_manifest import Tokenisati
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
 from emblema.catalog.ports.corpus_repository import CorpusRepository
-from emblema.entrypoints.cli.composition_root import CompositionRoot
-from emblema.entrypoints.cli.known_corpora import KnownCorpora
+from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
 from emblema.shared.adapters.windows.window_block_writer import WindowBlockWriter
 from emblema.shared.kernel.artifacts import ArtifactRef

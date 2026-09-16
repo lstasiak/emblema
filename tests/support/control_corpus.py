@@ -17,8 +17,8 @@ from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCo
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
-from emblema.entrypoints.cli.composition_root import CompositionRoot
-from emblema.entrypoints.cli.known_corpora import KnownCorpora
+from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow

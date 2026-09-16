@@ -46,8 +46,8 @@ from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCo
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.config.compute_tiers import ComputeTiers
-from emblema.entrypoints.cli.composition_root import CompositionRoot
-from emblema.entrypoints.cli.known_corpora import (
+from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus.known_corpora import (
     GENERATED_LICENCE,
     GENERATED_SOURCE,
     KnownCorpora,

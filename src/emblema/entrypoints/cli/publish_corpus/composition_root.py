@@ -1,8 +1,6 @@
 from pathlib import Path
 from typing import Self
 
-from sqlalchemy import create_engine
-
 from emblema.catalog.adapters.archive.block_corpus_archive import BlockCorpusArchive
 from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
 from emblema.catalog.adapters.readers.cmapss import SUBSETS as CMAPSS_SUBSETS
@@ -27,11 +25,11 @@ from emblema.catalog.application.use_cases.tokenise_corpus_version import Tokeni
 from emblema.catalog.ports.corpus_reader import CorpusReader
 from emblema.catalog.ports.corpus_repository import CorpusRepository
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.adapters import Adapters
-from emblema.entrypoints.cli.services import Services
+from emblema.entrypoints.cli.configured import configured_engine, configured_store, settings_for
+from emblema.entrypoints.cli.publish_corpus.adapters import Adapters
+from emblema.entrypoints.cli.publish_corpus.services import Services
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
-from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.adapters.system.clock import SystemClock
 from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator
 from emblema.shared.ports.artifact_store import ArtifactStore
@@ -88,10 +86,10 @@ class CompositionRoot:
             ValueError: If the store or the repository is left to the root without settings to
                 build it from, or the reader is left to it without a corpus it has an adapter for.
         """
-        chosen_store = self._artifact_store(_needed(settings, "store")) if store is None else store
+        chosen_store = configured_store(settings_for(settings, "store")) if store is None else store
         self.adapters = Adapters(
             corpora=(
-                self._corpus_repository(_needed(settings, "corpora"))
+                self._corpus_repository(settings_for(settings, "corpora"))
                 if corpora is None
                 else corpora
             ),
@@ -191,23 +189,4 @@ class CompositionRoot:
 
     @staticmethod
     def _corpus_repository(settings: Settings) -> CorpusRepository:
-        # The engine opens no connection until the first query: assembling costs no network.
-        return SqlAlchemyCorpusRepository(create_engine(settings.database.sqlalchemy_url()))
-
-    @staticmethod
-    def _artifact_store(settings: Settings) -> ArtifactStore:
-        config = settings.artifact_store
-        return S3ArtifactStore.connect(
-            endpoint_url=config.endpoint_url,
-            region=config.region,
-            access_key=config.access_key.get_secret_value() if config.access_key else None,
-            secret_key=config.secret_key.get_secret_value() if config.secret_key else None,
-            bucket=config.bucket,
-            key_prefix=config.key_prefix,
-        )
-
-
-def _needed(settings: Settings | None, adapter: str) -> Settings:
-    if settings is None:
-        raise ValueError(f"without settings the process needs {adapter} given, not built")
-    return settings
+        return SqlAlchemyCorpusRepository(configured_engine(settings))
