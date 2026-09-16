@@ -11,7 +11,10 @@
 | src/emblema/catalog/adapters/persistence/corpus\_repository.py                            |       33 |        1 |        4 |        1 |     95% |        46 |
 | src/emblema/catalog/adapters/persistence/corpus\_version\_record.py                       |       45 |        0 |        2 |        0 |    100% |           |
 | src/emblema/catalog/adapters/persistence/orm.py                                           |        4 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/adapters/readers/cmapss.py                                            |      111 |        0 |       46 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/cmapss.py                                            |      107 |        0 |       42 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/skab.py                                              |      122 |        0 |       44 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/smd.py                                               |       90 |        0 |       30 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/subsets.py                                           |        9 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/adapters/synthetic/dials.py                                           |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/adapters/synthetic/draws.py                                           |       16 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/adapters/synthetic/latent\_factor\_process.py                         |       26 |        0 |        2 |        0 |    100% |           |
@@ -64,7 +67,7 @@
 | src/emblema/config/database\_settings.py                                                  |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/settings.py                                                            |       13 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/adapters.py                                                   |        9 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/composition\_root.py                                          |       64 |        0 |        8 |        0 |    100% |           |
+| src/emblema/entrypoints/cli/composition\_root.py                                          |       73 |        0 |       12 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/known\_corpora.py                                             |       19 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus.py                                            |       37 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus\_invocation.py                                |        5 |        0 |        0 |        0 |    100% |           |
@@ -167,7 +170,7 @@
 | src/emblema/shared/ports/event\_subscriber.py                                             |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                                                    |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **4156** |   **10** |  **770** |   **12** | **99%** |           |
+| **TOTAL**                                                                                 | **4382** |   **10** |  **848** |   **12** | **99%** |           |
 
 51 empty files skipped.
 
