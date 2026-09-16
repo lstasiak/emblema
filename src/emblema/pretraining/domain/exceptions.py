@@ -67,3 +67,43 @@ class DivergedRunError(PretrainingError):
 
 class InvalidRunSignatureError(PretrainingError, ValueError):
     pass
+
+
+class InvalidPretrainingInputError(PretrainingError, ValueError):
+    pass
+
+
+class InvalidBackboneError(PretrainingError, ValueError):
+    pass
+
+
+class BackboneNotFoundError(PretrainingError):
+    pass
+
+
+class BackboneAlreadyDeliveredError(PretrainingError):
+    """Raised where weights are delivered to a backbone that already has its artifact."""
+
+
+class InvalidPretrainingOrderError(PretrainingError, ValueError):
+    pass
+
+
+class InvalidPretrainingResultError(PretrainingError, ValueError):
+    pass
+
+
+class PretrainingOrderRejectedError(PretrainingError):
+    """Raised where an order cannot be placed or fulfilled: the corpus is not the one it names."""
+
+
+class PretrainingResultRejectedError(PretrainingError):
+    """Raised where a delivered result is not the run that was ordered, naming what differs."""
+
+
+class UnreadablePublishedCorpusError(PretrainingError):
+    """Raised where a published manifest or its block is not one this context can read."""
+
+
+class UnreadableHandoffDocumentError(PretrainingError):
+    """Raised where stored bytes are not an order or a result this context can read."""
