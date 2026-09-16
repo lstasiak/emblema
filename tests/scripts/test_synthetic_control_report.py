@@ -31,17 +31,17 @@ from scripts.synthetic_control_report import (
 UNITS = 6
 
 
-def recovery(**fields: object) -> LayoutRecovery:
-    defaults = {
-        "layout": "control-a",
-        "coupling": 1.0,
-        "fits": 8,
-        "skipped": 0,
-        "own": 0.9,
-        "shuffled": 0.2,
-        "weakest_own": 0.8,
-    }
-    return LayoutRecovery(**{**defaults, **fields})  # type: ignore[arg-type]
+def recovery(*, coupling: float = 1.0, own: float = 0.9, shuffled: float = 0.2) -> LayoutRecovery:
+    """A recovery that came out as designed unless a test says otherwise about its verdict."""
+    return LayoutRecovery(
+        layout="control-a",
+        coupling=coupling,
+        fits=8,
+        skipped=0,
+        own=own,
+        shuffled=shuffled,
+        weakest_own=0.8,
+    )
 
 
 def test_a_design_that_says_everything_explains_everything() -> None:
