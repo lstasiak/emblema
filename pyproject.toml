@@ -275,6 +275,17 @@ forbidden_modules = ["emblema.catalog.contracts"]
 ignore_imports = ["emblema.catalog.domain.** -> emblema.catalog.contracts.identifiers"]
 
 [[tool.importlinter.contracts]]
+id = "evaluation-domain-shares-only-identity-with-contracts"
+name = "Evaluation's domain and ports import nothing from their own published contracts except identifiers"
+type = "forbidden"
+source_modules = ["emblema.evaluation.domain", "emblema.evaluation.ports"]
+forbidden_modules = ["emblema.evaluation.contracts"]
+ignore_imports = [
+    "emblema.evaluation.domain.** -> emblema.evaluation.contracts.identifiers",
+    "emblema.evaluation.ports.** -> emblema.evaluation.contracts.identifiers",
+]
+
+[[tool.importlinter.contracts]]
 id = "shared-imports-no-context"
 name = "Shared code knows no bounded context"
 type = "forbidden"
