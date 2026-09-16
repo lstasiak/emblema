@@ -6,7 +6,7 @@ pretraining side, and the windows and tokens of each window variant declared in
 
     uv run scripts/corpus_facts.py                            # every corpus with data present
     uv run scripts/corpus_facts.py cmapss physionet2012
-    uv run --with "pandas<3" scripts/corpus_facts.py esa_ad   # pickles written by a 2.x pandas
+    uv run scripts/corpus_facts.py esa_ad          # needs the corpora extra for the pickles
 
 A unit is what a split happens on (an engine, a run, a machine, an ICU stay, a mission); the
 pretraining side is the official training portion; a token is one observed value; a window with
@@ -335,8 +335,8 @@ def channel_seconds(path: Path) -> NDArray[np.int64]:
     A channel is a pandas DataFrame pickled inside a zip; the times are its index, or its first
     column where the pickle did not keep one.
     """
-    # Imported here: pandas is not a project dependency, it is supplied ad hoc for this corpus.
-    import pandas as pd  # ty: ignore[unresolved-import]
+    # Imported here: the extra that provides pandas is needed for this corpus alone.
+    import pandas as pd
 
     frame = pd.read_pickle(path)
     index = frame.index if isinstance(frame.index, pd.DatetimeIndex) else frame.iloc[:, 0]

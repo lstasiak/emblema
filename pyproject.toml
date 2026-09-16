@@ -43,6 +43,10 @@ ml = [
 # a stack the API and the inference worker have no use for.
 tracking = ["mlflow-skinny>=3.1"]
 
+# Reading the raw corpora whose publisher ships pandas pickles (the satellite telemetry). Its own
+# extra: only the process that publishes a corpus reads raw files, and a run or a server never does.
+corpora = ["pandas>=2.2"]
+
 [project.urls]
 Repository = "https://github.com/lstasiak/emblema"
 
@@ -157,8 +161,7 @@ disallow_any_generics = false
 warn_return_any = false
 
 [[tool.mypy.overrides]]
-# Third-party packages that ship no type information, or are not installed in the project
-# (pandas is pulled in ad hoc by one data script).
+# Third-party packages that ship no type information of their own.
 module = ["onnxruntime", "onnxruntime.*", "pandas", "pandas.*"]
 ignore_missing_imports = true
 
@@ -234,7 +237,7 @@ source_modules = [
     "emblema.*.domain", "emblema.*.ports", "emblema.*.application", "emblema.*.contracts",
 ]
 forbidden_modules = [
-    "torch", "numpy", "onnx", "onnxruntime", "onnxscript",
+    "torch", "numpy", "pandas", "onnx", "onnxruntime", "onnxscript",
     "sqlalchemy", "alembic",
     "fastapi", "starlette", "pydantic", "pydantic_settings",
     "celery", "redis", "mlflow", "boto3", "botocore",

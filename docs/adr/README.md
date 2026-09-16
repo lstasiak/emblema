@@ -33,3 +33,4 @@ Format: context, decision, consequences, alternatives considered. Status is one 
 | [0022](0022-experiment-configuration-as-a-file.md) | An experiment is a file: every parameter of scale written down, the shape from its tier | accepted |
 | [0023](0023-tracking-runs-with-mlflow.md) | Runs are tracked through a port with an MLflow adapter, logged epoch by epoch while they run | accepted |
 | [0024](0024-handing-a-run-to-another-machine.md) | A run is ordered here, made anywhere, and accepted back against the order: the backbone registry, the handoff exchange and the replaying runtime | accepted |
+| [0025](0025-reading-the-satellite-telemetry.md) | Reading the satellite telemetry: the mission is the unit of independence, the calendar month the unit of splitting; the subsampling is constants, channels are named by mission, pandas is an extra | accepted |

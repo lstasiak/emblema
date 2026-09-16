@@ -6,7 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from emblema.catalog.adapters.readers.skab import SENSORS, SUBSETS, SkabCorpusReader
+from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.domain.channels.channel_schema import Channel
 from emblema.catalog.domain.exceptions import (
     CorpusDataNotFoundError,
@@ -19,6 +19,9 @@ from emblema.catalog.domain.measurements.time_extent import TimeExtent
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.sampling import SamplingRegime
 from tests.support.corpora import BUDGET, raw_root, sample
+
+SENSORS = SkabCorpusReader.SENSORS
+SUBSETS = SkabCorpusReader.SUBSETS
 
 SAMPLE = sample("skab")
 SAMPLE_SUBSETS = ("anomaly-free", "other", "valve1")

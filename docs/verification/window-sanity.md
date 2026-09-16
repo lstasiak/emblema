@@ -304,9 +304,98 @@ Figures: `figures/smd-machine-2-6-w1.png`, `-w2.png`, `-w3.png`. Several metrics
 inside the window drawn, most of them at zero, which is the machine being idle in that respect
 rather than a channel that never varies; `metric_08` is the only one of the latter kind.
 
+## 2026-09-16 — macOS arm64 (M1 Pro), the satellite telemetry
+
+The ESA Anomaly Dataset, read through the subsampling the corpus decision fixed: the benchmark's
+lightweight channels, the first half of each mission by time, one observation per channel per
+thirty-second bin with its native instant. Two things are new here and nothing behind the reader
+changed for either: the channels arrive as pickled data frames rather than text, and a unit is a
+calendar month of a mission rather than a machine or an engine, because two missions with channels
+of their own cannot be split on (ADR-0025). The window is the one the budget prices, one hour.
+
+```sh
+uv sync --all-extras                               # the corpora extra brings pandas
+uv run scripts/fetch_corpora.py esa_ad             # 11.6 GB
+uv run scripts/window_sanity_report.py --corpus esa_ad
+```
+
+|  |  |
+| --- | --- |
+| Machine | macOS-26.6.2-arm64-arm-64bit-Mach-O, Apple M1 Pro |
+| Python | 3.14.7 |
+| matplotlib | 3.11.2 |
+| pandas | 3.0.5 |
+
+| Corpus | Window | Units | Unit drawn | Observations per window | Largest value error | Largest time error |
+| --- | --- | --- | --- | --- | --- | --- |
+| esa_ad | length 1 h, stride 1 h | 105 (84 months of Mission1, 21 of Mission2) | ESA-Mission1/2000-03 | 720 each | 0.00e+00 | 0.00e+00 |
+
+The round trip is exact to the bit on this corpus: the values are single-precision in the source
+and come back as the same doubles, and an instant placed in hours since the mission's start comes
+back as the same hour. Every reconstruction marker sits on the raw curve in all six channels of the
+three figures, at each channel's own scale — read and confirmed on 2026-09-16.
+
+### The satellite: synchronous channels, wide tails, and a corpus read from pickles
+
+The six lightweight channels of Mission1 share their instants — the publisher samples the subsystem
+as one — so every hour of the month drawn holds exactly 720 observations, 120 per channel at the
+thirty-second cadence the binning leaves. Mission2's eleven channels run at eighteen seconds and
+the binning halves them; its months hold 1,838,869 values per channel against Mission1's
+7,350,161.
+
+Every channel but one holds values beyond eight fitted deviations, and the tails are wider than
+anything the machine corpora showed: Mission1's channels sit within a hundredth of their mean for
+years and drop to −89 deviations, Mission2's `channel_20` spans −194 to +73. These are the
+excursions the benchmark labels as anomalies and rare events, over a baseline whose spread is tiny
+— the spread is the right one for the baseline, and a normalised value far outside it is the
+telemetry saying something happened. Four of Mission2's channels (`channel_25` to `channel_28`)
+live at 10⁻¹¹: the scale fitted per channel is what makes them the same kind of token as a
+channel at 0.8. No channel is constant.
+
+Reading the corpus is cheap next to tokenising it: describing both missions — hashing a gigabyte of
+archives and unpickling every channel — takes 5.7 s, and streaming the 64.3 million observations
+38 s. The reader keeps the mission it last read, so that a month is served from memory; without
+that each of the 105 months would unpickle its mission again.
+
+| Channel | Values | Mean | Spread | Lowest, deviations | Highest, deviations | Beyond 8 deviations |
+| --- | --- | --- | --- | --- | --- | --- |
+| ESA-Mission1/channel_41 | 7,350,161 | 0.8116 | 0.00913 | -88.89 | 18.68 | 20,032 |
+| ESA-Mission1/channel_42 | 7,350,161 | 0.7852 | 0.01043 | -75.25 | 17.35 | 19,001 |
+| ESA-Mission1/channel_43 | 7,350,161 | 0.7725 | 0.01579 | -48.91 | 11.29 | 14,338 |
+| ESA-Mission1/channel_44 | 7,350,161 | 0.7969 | 0.02375 | -33.56 | 7.52 | 5,649 |
+| ESA-Mission1/channel_45 | 7,350,161 | 0.8138 | 0.009948 | -81.80 | 18.72 | 19,995 |
+| ESA-Mission1/channel_46 | 7,350,161 | 0.769 | 0.01073 | -71.66 | 17.75 | 19,156 |
+| ESA-Mission2/channel_18 | 1,838,869 | 0.4576 | 0.02969 | -15.41 | 18.23 | 6,411 |
+| ESA-Mission2/channel_19 | 1,838,869 | 0.456 | 0.002313 | -48.08 | 58.29 | 1,117 |
+| ESA-Mission2/channel_20 | 1,838,869 | 0.4561 | 0.0009217 | -193.71 | 73.19 | 3,290 |
+| ESA-Mission2/channel_21 | 1,838,869 | 0.1762 | 0.02121 | -8.31 | 9.05 | 2,655 |
+| ESA-Mission2/channel_22 | 1,838,869 | 0.8564 | 0.02166 | -8.88 | 6.46 | 504 |
+| ESA-Mission2/channel_23 | 1,838,869 | 0.8754 | 0.02886 | -8.14 | 4.32 | 87 |
+| ESA-Mission2/channel_24 | 1,838,869 | 0.1552 | 0.02833 | -4.96 | 6.88 | 0 |
+| ESA-Mission2/channel_25 | 1,838,869 | 5.551e-11 | 1.932e-12 | -8.56 | 5.04 | 2 |
+| ESA-Mission2/channel_26 | 1,838,869 | 2.008e-11 | 8.06e-13 | -10.96 | 23.44 | 18 |
+| ESA-Mission2/channel_27 | 1,838,869 | 9.247e-12 | 3.164e-12 | -2.92 | 9.39 | 2 |
+| ESA-Mission2/channel_28 | 1,838,869 | 5.976e-11 | 1.168e-12 | -17.81 | 11.45 | 18 |
+
+Figures: `figures/esa_ad-ESA-Mission1-2000-03-w1.png`, `-w2.png`, `-w3.png`.
+
+### The same road, end to end
+
+The corpus was then published through the command line unchanged, against the local stack, in one
+run of 189 s including both reads of the data and the upload:
+
+```sh
+uv run python -m emblema.entrypoints.cli.publish_corpus --corpus esa_ad --window 1 --stride 1
+```
+
+105 units, 76,682 windows, 64,323,742 tokens in a block of 1,095,655,006 bytes; 84 months fit the
+scheme and 21 validate it, months of both missions on each side. The budget file priced the same
+window at 76,685 windows and 64,326,491 tokens from bin-start instants laid over each mission as one
+series; the reader lays hours inside months, so the fraction of an hour at the start of a mission
+and at its cut is the 2,749 tokens between the two counts.
+
 ### What this note still owes
 
-Two corpora of the mixture have no reader yet and therefore no section here: the satellite
-telemetry, whose channels are pickled data frames and whose subsampling has to be settled where the
-data is, and the clinical stream, which is the one irregular corpus with static descriptors on real
-patients. Both add a dated section as they arrive.
+One corpus of the mixture has no reader yet and therefore no section here: the clinical stream,
+which is the one irregular corpus with static descriptors on real patients. It adds a dated section
+as it arrives.

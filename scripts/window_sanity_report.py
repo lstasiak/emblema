@@ -38,11 +38,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from emblema.catalog.adapters.readers.cmapss import SUBSETS as CMAPSS_SUBSETS
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
-from emblema.catalog.adapters.readers.skab import SUBSETS as SKAB_SUBSETS
+from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
-from emblema.catalog.adapters.readers.smd import SUBSETS as SMD_SUBSETS
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
 from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
@@ -88,15 +86,19 @@ def default_window(corpus: str) -> WindowSpec:
 
 
 def cmapss_reader(root: Path, subset: str | None) -> CorpusReader:
-    return CmapssCorpusReader(root, (subset,) if subset else CMAPSS_SUBSETS)
+    return CmapssCorpusReader(root, (subset,) if subset else CmapssCorpusReader.SUBSETS)
 
 
 def skab_reader(root: Path, subset: str | None) -> CorpusReader:
-    return SkabCorpusReader(root, (subset,) if subset else SKAB_SUBSETS)
+    return SkabCorpusReader(root, (subset,) if subset else SkabCorpusReader.SUBSETS)
 
 
 def smd_reader(root: Path, subset: str | None) -> CorpusReader:
-    return SmdCorpusReader(root, (subset,) if subset else SMD_SUBSETS)
+    return SmdCorpusReader(root, (subset,) if subset else SmdCorpusReader.SUBSETS)
+
+
+def esa_ad_reader(root: Path, subset: str | None) -> CorpusReader:
+    return EsaAdCorpusReader(root, (subset,) if subset else EsaAdCorpusReader.SUBSETS)
 
 
 def generated_reader(layout: SensorLayout) -> Callable[[Path, str | None], CorpusReader]:
@@ -113,6 +115,7 @@ READERS: dict[str, Callable[[Path, str | None], CorpusReader]] = {
     "cmapss": cmapss_reader,
     "skab": skab_reader,
     "smd": smd_reader,
+    "esa_ad": esa_ad_reader,
     **{name: generated_reader(layout) for name, layout in LAYOUTS.items()},
 }
 
@@ -488,7 +491,7 @@ def main() -> None:
     parser.add_argument(
         "--subset",
         help="one part of the corpus, where it has any: a C-MAPSS subset, a SKAB folder, "
-        "an SMD machine group",
+        "an SMD machine group, an ESA mission",
     )
     parser.add_argument("--unit", help="unit to draw; the longest one by default")
     parser.add_argument("--windows", type=int, default=3, help="windows to draw, spread along it")

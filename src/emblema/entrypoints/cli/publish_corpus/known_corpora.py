@@ -70,6 +70,20 @@ class KnownCorpora:
                 ),
                 Licence("No licence stated", permits_derivatives=False),
             ),
+            # The Zenodo record states CC BY 3.0 IGO for the data itself, so a derivative may
+            # be redistributed with attribution.
+            KnownCorpus(
+                "esa_ad",
+                CorpusSource(
+                    "European Space Agency (De Canio, Kotowski, Haskamp)",
+                    "https://zenodo.org/records/15237121",
+                ),
+                Licence(
+                    "CC-BY-3.0-IGO",
+                    permits_derivatives=True,
+                    url="https://creativecommons.org/licenses/by/3.0/igo/",
+                ),
+            ),
             *(KnownCorpus(name, GENERATED_SOURCE, GENERATED_LICENCE) for name in LAYOUTS),
         )
 

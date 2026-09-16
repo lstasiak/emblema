@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from emblema.catalog.adapters.readers.cmapss import SENSORS, CmapssCorpusReader
+from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.domain.measurements.observation import Observation
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
@@ -108,7 +108,7 @@ def test_the_full_corpus_lays_out_the_windows_measured_by_the_data_spike() -> No
 
     # Every cycle of a regular corpus carries all its sensors, so tokens follow from windows.
     assert count == measured["count"]
-    assert count * window.length * len(SENSORS) == measured["tokens"]
+    assert count * window.length * len(CmapssCorpusReader.SENSORS) == measured["tokens"]
 
 
 @NO_RAW_DATA
@@ -123,7 +123,10 @@ def test_a_real_subset_tokenises_to_the_windows_its_engines_hold() -> None:
     windows, tokens = tokenise_corpus(root, ("FD001",), window)
     elapsed = time.perf_counter() - started
 
-    assert (windows, tokens) == (expected, expected * window.length * len(SENSORS))
+    assert (windows, tokens) == (
+        expected,
+        expected * window.length * len(CmapssCorpusReader.SENSORS),
+    )
     # Tokenising reads the corpus twice, to fit and to cut, so reading it is the floor and the
     # ratio is what the streaming design promises. An absolute number of seconds would only say
     # which machine ran the test; it was 5.5 times reading when this was written.
