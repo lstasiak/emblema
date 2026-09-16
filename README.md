@@ -11,10 +11,12 @@
 | src/emblema/catalog/adapters/persistence/corpus\_repository.py                            |       33 |        1 |        4 |        1 |     95% |        46 |
 | src/emblema/catalog/adapters/persistence/corpus\_version\_record.py                       |       45 |        0 |        2 |        0 |    100% |           |
 | src/emblema/catalog/adapters/persistence/orm.py                                           |        5 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/adapters/readers/cmapss.py                                            |      107 |        0 |       42 |        0 |    100% |           |
-| src/emblema/catalog/adapters/readers/skab.py                                              |      122 |        0 |       44 |        0 |    100% |           |
-| src/emblema/catalog/adapters/readers/smd.py                                               |       90 |        0 |       30 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/cmapss.py                                            |       98 |        0 |       34 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/esa\_ad.py                                           |      169 |        0 |       44 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/skab.py                                              |      116 |        0 |       38 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/smd.py                                               |       76 |        0 |       24 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/subsets.py                                           |        9 |        0 |        4 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/text.py                                              |       21 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/adapters/synthetic/dials.py                                           |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/adapters/synthetic/draws.py                                           |       16 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/adapters/synthetic/latent\_factor\_process.py                         |       26 |        0 |        2 |        0 |    100% |           |
@@ -74,7 +76,7 @@
 | src/emblema/entrypoints/cli/pretrain/services.py                                          |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/pretrain/source\_revision.py                                  |       59 |        0 |       14 |        1 |     99% |   88-\>92 |
 | src/emblema/entrypoints/cli/publish\_corpus/adapters.py                                   |        9 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/publish\_corpus/composition\_root.py                          |       64 |        0 |       10 |        0 |    100% |           |
+| src/emblema/entrypoints/cli/publish\_corpus/composition\_root.py                          |       64 |        0 |       12 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/known\_corpora.py                             |       19 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_cli.py                       |       37 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_invocation.py                |        5 |        0 |        0 |        0 |    100% |           |
@@ -204,7 +206,7 @@
 | src/emblema/shared/ports/event\_subscriber.py                                             |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                                                    |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **5290** |   **10** |  **960** |   **13** | **99%** |           |
+| **TOTAL**                                                                                 | **5451** |   **10** |  **994** |   **13** | **99%** |           |
 
 60 empty files skipped.
 
