@@ -46,7 +46,7 @@ The artifact store speaks S3 to Garage locally and to a Cloudflare R2 bucket tha
 
 ### Data
 
-The raw corpora come from their sources of record into `data/raw/` (not tracked) and are priced before any tokeniser exists: units, windows and tokens are counted from the files, and the GPU-hour budget per compute tier is derived from `scripts/corpus_budget.toml` and the tier profiles in `src/emblema/config/compute_tiers.toml`.
+The raw corpora come from their sources of record into `data/raw/` (not tracked) and are priced before any tokeniser exists: units, windows and tokens are counted from the files, and the GPU-hour budget per compute tier is derived from `scripts/corpus_budget.toml` and the tier profiles in `src/emblema/config/compute_tiers.toml`. The satellite telemetry ships as pandas pickles, so reading it needs the `corpora` extra, which `--all-extras` installs.
 
 ```sh
 uv run scripts/fetch_corpora.py            # about 12 GB; a re-run skips what is already there
