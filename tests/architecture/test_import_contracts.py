@@ -177,6 +177,16 @@ VIOLATIONS = [
         evidence="emblema.catalog.ports.leak -> emblema.catalog.contracts.corpus_version_ref",
     ),
     Violation(
+        contract_id="evaluation-domain-shares-only-identity-with-contracts",
+        modules={"evaluation/domain/leak.py": "import emblema.evaluation.contracts.events\n"},
+        evidence="emblema.evaluation.domain.leak -> emblema.evaluation.contracts.events",
+    ),
+    Violation(
+        contract_id="evaluation-domain-shares-only-identity-with-contracts",
+        modules={"evaluation/ports/leak.py": "import emblema.evaluation.contracts.events\n"},
+        evidence="emblema.evaluation.ports.leak -> emblema.evaluation.contracts.events",
+    ),
+    Violation(
         contract_id="shared-imports-no-context",
         modules={"shared/kernel/leak.py": "import emblema.catalog\n"},
         evidence="emblema.shared.kernel.leak -> emblema.catalog",
