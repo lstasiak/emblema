@@ -49,6 +49,27 @@ class KnownCorpora:
                 ),
                 Licence("US Government Work", permits_derivatives=False),
             ),
+            # The benchmark repository is GPL-3.0 and the data files sit inside it, so a
+            # derivative may be redistributed under the same copyleft terms.
+            KnownCorpus(
+                "skab",
+                CorpusSource("Skoltech (Katser and Kozitsin)", "https://github.com/waico/SKAB"),
+                Licence(
+                    "GPL-3.0",
+                    permits_derivatives=True,
+                    url="https://www.gnu.org/licenses/gpl-3.0.html",
+                ),
+            ),
+            # The repository is MIT-licensed, but the metrics inside it were collected from a
+            # company that stated no terms of its own; an undocumented permission is recorded as
+            # its absence.
+            KnownCorpus(
+                "smd",
+                CorpusSource(
+                    "NetManAIOps (Su et al.)", "https://github.com/NetManAIOps/OmniAnomaly"
+                ),
+                Licence("No licence stated", permits_derivatives=False),
+            ),
             *(KnownCorpus(name, GENERATED_SOURCE, GENERATED_LICENCE) for name in LAYOUTS),
         )
 
