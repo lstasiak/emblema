@@ -80,3 +80,17 @@ harness, the next process to be assembled.
   something other than a handful of lines.
 - A process needs dependencies scoped per request or per task and doing it by hand starts to mean
   bookkeeping the code does not make obvious.
+
+## 2026-09-16 — the second process
+
+The pretraining command line (ADR-0024) is the second process assembled by hand, in
+`entrypoints/cli/pretrain/composition_root.py` beside the publishing one, which moved to
+`entrypoints/cli/publish_corpus/`. What the two repeated before the repetition was removed: the
+S3 store connected from the settings and the engine created from them — fourteen lines — and the
+guard that refuses to build either without settings. Those became three functions in
+`entrypoints/cli/configured.py`, which both roots call. Nothing else is shared: the publishing root
+chooses a corpus reader and a block archive, the pretraining root chooses a runtime by whether it
+accepts a result and a tracker by whether it has a tracking URI, and neither has a use for the
+other's adapters. Both roots still build everything once and exit; no scope per request has been
+needed. The status stays `proposed`: the third process, the evaluation worker, is the one with
+per-task lifetimes, and the decision is taken there.
