@@ -190,3 +190,123 @@ Figures: `figures/control-a-control-a-121-w1.png`, `-w2.png`,
 What this adds to the mixture corpora is nothing: the real readers still owe this note a section
 each. What it removes is the doubt about the timeless leg, which had no coverage on data at all.
 
+## 2026-09-16 — Windows AMD64, SKAB and SMD
+
+The first two downloaded corpora after C-MAPSS, and the two that bracket it on channel count: 8
+against 21 against 38. Nothing behind the readers changed to accommodate either, which is the
+claim this section exists to support — the same tokenisation scheme, the same window arithmetic
+and the same archive, driven from the same command line.
+
+```sh
+uv run scripts/fetch_corpora.py skab smd
+uv run scripts/window_sanity_report.py --corpus skab
+uv run scripts/window_sanity_report.py --corpus smd
+```
+
+|  |  |
+| --- | --- |
+| Machine | Windows-11-10.0.26200-SP0, Intel64 Family 6 Model 140 Stepping 1, GenuineIntel |
+| Python | 3.14.5 |
+| matplotlib | 3.11.2 |
+
+| Corpus | Window | Units | Unit drawn | Observations per window | Largest value error | Largest time error |
+| --- | --- | --- | --- | --- | --- | --- |
+| skab | length 100 s, stride 10 s | 35 | anomaly-free/anomaly-free | 752, 752, 768 | 1.42e-14 | 7.11e-15 |
+| smd | length 100 min, stride 20 min | 28 | machine-2-6 | 3,800 each | 1.11e-16 | 7.11e-15 |
+
+Both round trips sit eight orders of magnitude inside the 1e-06 the tests hold to, and every
+reconstruction marker sits on the raw curve in all six figures, at each channel's own scale — read
+and confirmed on 2026-09-16.
+
+### SKAB: a nominal cadence is not a fixed one
+
+The testbed writes one row a second, and the files do not keep to it. The unit drawn holds 9,405
+rows across an extent of 9,961 seconds. Over the corpus 44,222 gaps are of one second, 2,479 of
+two, and 70 longer ones run from three seconds to 247. The reader therefore places each
+observation by the seconds elapsed since its experiment's first row rather than by its row index;
+a reader that had counted rows would have put every observation after the first gap in the wrong
+second, and the figures would still have looked right, because the reconstruction would have
+agreed with the mistake. The three windows drawn hold
+752, 752 and 768 observations for a nominal 800, which is that loss made visible.
+
+| Channel | Values | Mean | Spread | Lowest, deviations | Highest, deviations | Beyond 8 deviations |
+| --- | --- | --- | --- | --- | --- | --- |
+| Accelerometer1RMS | 46,806 | 0.1293 | 0.1267 | -0.90 | 4.68 | 0 |
+| Accelerometer2RMS | 46,806 | 0.1628 | 0.1447 | -1.02 | 4.41 | 0 |
+| Current | 46,806 | 1.653 | 0.7924 | -1.90 | 2.10 | 0 |
+| Pressure | 46,806 | 0.07935 | 0.2597 | -5.15 | 6.22 | 0 |
+| Temperature | 46,806 | 79.34 | 9.393 | -1.52 | 1.67 | 0 |
+| Thermocouple | 46,806 | 26.54 | 2.576 | -1.75 | 2.67 | 0 |
+| Voltage | 46,806 | 229.6 | 10.95 | -2.63 | 2.35 | 0 |
+| Volume Flow RateRMS | 46,806 | 75.53 | 45.46 | -1.65 | 1.28 | 0 |
+
+No channel is constant and none holds a value beyond eight fitted deviations. Pressure is the
+widest-tailed of the eight and takes exactly ten distinct values in the whole corpus, spaced
+0.327927 bar apart: that is the resolution of the gauge, not anything about the loop.
+
+Figures: `figures/skab-anomaly-free-anomaly-free-w1.png`, `-w2.png`, `-w3.png`.
+
+### SMD: the first constant channel met on real data
+
+`metric_08` holds the same value in all 708,405 minutes of the corpus. A channel with no spread
+has no scale to normalise by, and the scheme falls back to a scale of one rather than dividing by
+zero; until now that fallback had only property tests behind it, and this run is the first time a
+real corpus has exercised it end to end. The round trip holds on that channel like any other.
+
+Seventeen of the 38 metrics hold values beyond eight fitted deviations, up to 735 on `metric_27`.
+That is not a fault in the reading: these are bounded rates that sit at or near zero for most of a
+week and spike, so a spread fitted over the whole corpus is small and any spike is far outside it.
+It is worth knowing before a normalised value is taken at face value, and it is an argument for
+fitting statistics per corpus rather than across the mixture.
+
+| Channel | Values | Mean | Spread | Lowest, deviations | Highest, deviations | Beyond 8 deviations |
+| --- | --- | --- | --- | --- | --- | --- |
+| metric_01 | 708,405 | 0.1356 | 0.1377 | -0.98 | 6.28 | 0 |
+| metric_02 | 708,405 | 0.07032 | 0.1108 | -0.63 | 8.39 | 20 |
+| metric_03 | 708,405 | 0.08122 | 0.1285 | -0.63 | 7.15 | 0 |
+| metric_04 | 708,405 | 0.09548 | 0.1575 | -0.61 | 5.74 | 0 |
+| metric_05 | 708,405 | 0.2638 | 0.4158 | -0.63 | 1.77 | 0 |
+| metric_06 | 708,405 | 0.7226 | 0.2949 | -2.45 | 0.94 | 0 |
+| metric_07 | 708,405 | 0.3942 | 0.3234 | -1.22 | 1.87 | 0 |
+| metric_08 | 708,405 | 0 | 0 (never varied) | 0.00 | 0.00 | 0 |
+| metric_09 | 708,405 | 0.02001 | 0.05146 | -0.39 | 19.05 | 2,186 |
+| metric_10 | 708,405 | 0.001013 | 0.011 | -0.09 | 90.85 | 1,196 |
+| metric_11 | 708,405 | 0.05069 | 0.08676 | -0.58 | 10.94 | 809 |
+| metric_12 | 708,405 | 0.0608 | 0.07861 | -0.77 | 11.95 | 518 |
+| metric_13 | 708,405 | 0.0173 | 0.04214 | -0.41 | 23.32 | 1,000 |
+| metric_14 | 708,405 | 0.07983 | 0.1051 | -0.76 | 8.76 | 25 |
+| metric_15 | 708,405 | 0.05488 | 0.07756 | -0.71 | 12.19 | 199 |
+| metric_16 | 708,405 | 0.06195 | 0.08415 | -0.74 | 11.15 | 186 |
+| metric_17 | 708,405 | 2.495e-05 | 0.003756 | -0.01 | 266.21 | 56 |
+| metric_18 | 708,405 | 7.869e-05 | 0.004943 | -0.02 | 202.29 | 266 |
+| metric_19 | 708,405 | 0.1656 | 0.1825 | -0.91 | 4.57 | 0 |
+| metric_20 | 708,405 | 0.159 | 0.1749 | -0.91 | 4.81 | 0 |
+| metric_21 | 708,405 | 0.1807 | 0.1842 | -0.98 | 4.45 | 0 |
+| metric_22 | 708,405 | 0.1854 | 0.1857 | -1.00 | 4.39 | 0 |
+| metric_23 | 708,405 | 0.2152 | 0.2747 | -0.78 | 2.86 | 0 |
+| metric_24 | 708,405 | 0.3317 | 0.3113 | -1.07 | 2.15 | 0 |
+| metric_25 | 708,405 | 0.1209 | 0.1514 | -0.80 | 5.81 | 0 |
+| metric_26 | 708,405 | 0.3393 | 0.3203 | -1.06 | 2.06 | 0 |
+| metric_27 | 708,405 | 2.47e-06 | 0.001361 | -0.00 | 734.67 | 3 |
+| metric_28 | 708,405 | 0.1822 | 0.1818 | -1.00 | 4.50 | 0 |
+| metric_29 | 708,405 | 1.58e-05 | 0.003382 | -0.00 | 295.67 | 25 |
+| metric_30 | 708,405 | 0.1004 | 0.1392 | -0.72 | 6.46 | 0 |
+| metric_31 | 708,405 | 0.1917 | 0.1869 | -1.03 | 4.32 | 0 |
+| metric_32 | 708,405 | 0.1053 | 0.1488 | -0.71 | 6.01 | 0 |
+| metric_33 | 708,405 | 0.03576 | 0.08363 | -0.43 | 11.53 | 158 |
+| metric_34 | 708,405 | 0.05773 | 0.1075 | -0.54 | 8.77 | 11 |
+| metric_35 | 708,405 | 0.2149 | 0.2045 | -1.05 | 3.84 | 0 |
+| metric_36 | 708,405 | 0.2107 | 0.2068 | -1.02 | 3.82 | 0 |
+| metric_37 | 708,405 | 0.01667 | 0.07108 | -0.23 | 12.27 | 775 |
+| metric_38 | 708,405 | 0.009591 | 0.05937 | -0.16 | 14.80 | 3,182 |
+
+Figures: `figures/smd-machine-2-6-w1.png`, `-w2.png`, `-w3.png`. Several metrics are flat
+inside the window drawn, most of them at zero, which is the machine being idle in that respect
+rather than a channel that never varies; `metric_08` is the only one of the latter kind.
+
+### What this note still owes
+
+Two corpora of the mixture have no reader yet and therefore no section here: the satellite
+telemetry, whose channels are pickled data frames and whose subsampling has to be settled where the
+data is, and the clinical stream, which is the one irregular corpus with static descriptors on real
+patients. Both add a dated section as they arrive.

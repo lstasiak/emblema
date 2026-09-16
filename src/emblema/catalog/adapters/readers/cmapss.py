@@ -2,6 +2,7 @@ import math
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
+from emblema.catalog.adapters.readers.subsets import chosen_subsets
 from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.exceptions import (
     CorpusDataNotFoundError,
@@ -77,13 +78,8 @@ class CmapssCorpusReader:
         Raises:
             ValueError: If no subset is named or a name is not one of the four.
         """
-        chosen = set(subsets)
-        unknown = sorted(chosen - set(SUBSETS))
-        if unknown:
-            raise ValueError(f"unknown C-MAPSS subsets {unknown}; expected some of {SUBSETS}")
-        if not chosen:
-            raise ValueError("at least one C-MAPSS subset is needed")
-        self._files = {name: root / f"train_{name}.txt" for name in SUBSETS if name in chosen}
+        chosen = chosen_subsets(subsets, SUBSETS, "C-MAPSS subset")
+        self._files = {name: root / f"train_{name}.txt" for name in chosen}
 
     def describe(self) -> CorpusDescription:
         """Validate the selected files and describe them.

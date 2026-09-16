@@ -29,8 +29,9 @@ experiment — and the shape of a note: its CSV, its tables, its figures.
 | `corpus_facts.py` | measurement | counts pasted into `corpus_budget.toml` | — |
 | `corpus_budget_report.py`, `corpus_budget.toml` | measurement | budget tables per tier | — |
 | `budget_file.py` | shared | reads corpus facts from `corpus_budget.toml` for the other scripts | — |
+| `raw_corpora.py` | shared | finds a downloaded corpus's root under `data/raw/` for the reports that read one | — |
 | `loader_throughput_report.py` | measurement | batching against a training step | — |
-| `window_sanity_report.py` | measurement | `figures/cmapss-*.png` | — |
+| `window_sanity_report.py` | measurement | `figures/<corpus>-*.png` | — |
 | `synthetic_control_report.py` | measurement | `figures/synthetic-control-*.png` | — |
 | `published_corpus_report.py` | measurement | artifact size and write cost | — |
 | `encoder_budget_report.py` | measurement | attention cost per window length | — |

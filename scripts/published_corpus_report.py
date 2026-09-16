@@ -28,7 +28,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
-from emblema.catalog.adapters.readers.cmapss import SUBSETS
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
@@ -40,6 +39,7 @@ from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifa
 from emblema.shared.adapters.windows.window_block_writer import WindowBlockWriter
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
+from scripts.raw_corpora import raw_root
 from scripts.reporting import dated_heading, machine, table
 
 BUDGET = REPO_ROOT / "scripts" / "corpus_budget.toml"
@@ -115,10 +115,10 @@ def measured_counts(corpus: str) -> dict[str, int] | None:
 
 
 def corpus_root(corpus: str) -> Path:
-    hits = sorted((RAW / corpus).rglob("*.txt")) if (RAW / corpus).is_dir() else []
-    if not hits:
+    root = raw_root(corpus)
+    if root is None:
         raise SystemExit(f"no raw {corpus} under {RAW / corpus}; this report needs the real corpus")
-    return hits[0].parent
+    return root
 
 
 def publish_once(
@@ -133,7 +133,7 @@ def publish_once(
         corpus=command.name,
         corpus_root=root,
         workspace=workspace / "blocks",
-        subsets=SUBSETS if subsets is None else tuple(subsets),
+        subsets=tuple(subsets or ()),
         corpora=registry,
         store=store,
     )

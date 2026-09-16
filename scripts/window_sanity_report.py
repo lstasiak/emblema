@@ -38,7 +38,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from emblema.catalog.adapters.readers.cmapss import SUBSETS, CmapssCorpusReader
+from emblema.catalog.adapters.readers.cmapss import SUBSETS as CMAPSS_SUBSETS
+from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.readers.skab import SUBSETS as SKAB_SUBSETS
+from emblema.catalog.adapters.readers.skab import SkabCorpusReader
+from emblema.catalog.adapters.readers.smd import SUBSETS as SMD_SUBSETS
+from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
 from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
@@ -54,6 +59,7 @@ from emblema.catalog.domain.tokenisation.window_reconstruction import WindowReco
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_reader import CorpusReader
 from scripts.budget_file import budget
+from scripts.raw_corpora import raw_root
 from scripts.reporting import table
 
 RAW = REPO_ROOT / "data" / "raw"
@@ -82,7 +88,15 @@ def default_window(corpus: str) -> WindowSpec:
 
 
 def cmapss_reader(root: Path, subset: str | None) -> CorpusReader:
-    return CmapssCorpusReader(root, (subset,) if subset else SUBSETS)
+    return CmapssCorpusReader(root, (subset,) if subset else CMAPSS_SUBSETS)
+
+
+def skab_reader(root: Path, subset: str | None) -> CorpusReader:
+    return SkabCorpusReader(root, (subset,) if subset else SKAB_SUBSETS)
+
+
+def smd_reader(root: Path, subset: str | None) -> CorpusReader:
+    return SmdCorpusReader(root, (subset,) if subset else SMD_SUBSETS)
 
 
 def generated_reader(layout: SensorLayout) -> Callable[[Path, str | None], CorpusReader]:
@@ -97,15 +111,17 @@ def generated_reader(layout: SensorLayout) -> Callable[[Path, str | None], Corpu
 # One entry per corpus that has an adapter; a new reader is a line here, not a change below.
 READERS: dict[str, Callable[[Path, str | None], CorpusReader]] = {
     "cmapss": cmapss_reader,
+    "skab": skab_reader,
+    "smd": smd_reader,
     **{name: generated_reader(layout) for name, layout in LAYOUTS.items()},
 }
 
 
-def corpus_root(corpus: str, marker: str = "*.txt") -> tuple[Path, str]:
+def corpus_root(corpus: str) -> tuple[Path, str]:
     """Where the corpus is on this machine, and whether that is the real thing or the sample."""
-    hits = sorted((RAW / corpus).rglob(marker)) if (RAW / corpus).is_dir() else []
-    if hits:
-        return hits[0].parent, "raw corpus"
+    root = raw_root(corpus)
+    if root is not None:
+        return root, "raw corpus"
     return SAMPLES / corpus, "miniature sample"
 
 
@@ -469,7 +485,11 @@ def verdict_section(report: Report) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--corpus", default="cmapss", choices=sorted(READERS))
-    parser.add_argument("--subset", help="subset of the corpus, where it has any (FD001 to FD004)")
+    parser.add_argument(
+        "--subset",
+        help="one part of the corpus, where it has any: a C-MAPSS subset, a SKAB folder, "
+        "an SMD machine group",
+    )
     parser.add_argument("--unit", help="unit to draw; the longest one by default")
     parser.add_argument("--windows", type=int, default=3, help="windows to draw, spread along it")
     parser.add_argument("--length", type=float, help="window length; the corpus default if unset")
