@@ -1,2 +1,7 @@
 * text=auto eol=lf
 *.sh text eol=lf
+
+# Corpus samples are copied byte for byte from their publishers and checksummed by the readers
+# that read them, so their line endings are part of the data rather than a local convention.
+tests/data/** -text
+tests/data/**/README.md text eol=lf
