@@ -81,6 +81,32 @@
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_cli.py                       |       37 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_invocation.py                |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/services.py                                   |        7 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/blocks/block\_corpus\_windows.py                          |       51 |        0 |        4 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/in\_memory/corpus\_windows.py                             |       28 |        0 |        8 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/in\_memory/downstream\_task\_repository.py                |       13 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/in\_memory/unit\_lifetimes.py                             |       11 |        0 |        2 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/readers/cmapss\_unit\_lifetimes.py                        |       44 |        0 |       16 |        0 |    100% |           |
+| src/emblema/evaluation/application/use\_cases/define\_downstream\_task.py                 |       28 |        0 |        2 |        0 |    100% |           |
+| src/emblema/evaluation/application/use\_cases/draw\_label\_budget.py                      |       21 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/application/use\_cases/open\_test\_split.py                        |       23 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/contracts/events.py                                                |        5 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/contracts/identifiers.py                                           |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/exceptions.py                                               |       14 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/identifiers.py                                              |        9 |        0 |        2 |        0 |    100% |           |
+| src/emblema/evaluation/domain/labels/label\_budget.py                                     |       20 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/domain/labels/label\_sample.py                                     |       32 |        0 |       10 |        1 |     98% |   75-\>74 |
+| src/emblema/evaluation/domain/labels/labelled\_window.py                                  |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/labels/remaining\_life\_scheme.py                           |       13 |        0 |        4 |        0 |    100% |           |
+| src/emblema/evaluation/domain/labels/target\_bins.py                                      |       21 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/domain/labels/task\_window.py                                      |       11 |        0 |        4 |        0 |    100% |           |
+| src/emblema/evaluation/domain/task/corpus\_sides.py                                       |       13 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/domain/task/downstream\_task.py                                    |       22 |        0 |        2 |        0 |    100% |           |
+| src/emblema/evaluation/domain/task/frozen\_test\_split.py                                 |       10 |        0 |        4 |        0 |    100% |           |
+| src/emblema/evaluation/domain/task/run\_purpose.py                                        |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/task/task\_split.py                                         |       15 |        0 |        8 |        0 |    100% |           |
+| src/emblema/evaluation/ports/corpus\_windows.py                                           |        9 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/ports/downstream\_task\_repository.py                              |        6 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/ports/unit\_lifetimes.py                                           |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/blocks/block\_training\_corpus\_reader.py                |       44 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/diagnostics/channel\_series.py                           |       24 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/diagnostics/cross\_channel\_ridge\_baseline.py           |       47 |        0 |       10 |        0 |    100% |           |
@@ -206,9 +232,9 @@
 | src/emblema/shared/ports/event\_subscriber.py                                             |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                                                    |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **5451** |   **10** |  **994** |   **13** | **99%** |           |
+| **TOTAL**                                                                                 | **5887** |   **10** | **1078** |   **14** | **99%** |           |
 
-60 empty files skipped.
+71 empty files skipped.
 
 
 ## Setup coverage badge
