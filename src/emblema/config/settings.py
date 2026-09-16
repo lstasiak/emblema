@@ -36,4 +36,23 @@ class Settings(BaseSettings):
         ),
     )
     artifact_store: ArtifactStoreSettings
-    database: DatabaseSettings
+    database: DatabaseSettings | None = Field(
+        default=None,
+        description=(
+            "The metadata database the process keeps its registries in. A process that only "
+            "trains — a notebook fulfilling an order — has none to reach and leaves it unset."
+        ),
+    )
+
+    def require_database(self) -> DatabaseSettings:
+        """The database settings of a process that cannot run without a registry.
+
+        Raises:
+            ValueError: If none are configured; the process fails as it is assembled rather
+                than reaching for a database nobody named.
+        """
+        if self.database is None:
+            raise ValueError(
+                "the process needs the metadata database and EMBLEMA_DATABASE__* is not set"
+            )
+        return self.database

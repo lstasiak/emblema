@@ -5,14 +5,15 @@ from sqlalchemy import create_engine
 
 from emblema.catalog.adapters.persistence.corpus_record import CorpusRecord
 from emblema.config.settings import Settings
+from emblema.pretraining.adapters.persistence.backbone_record import BackboneRecord
 
 # Every context's tables, so that a comparison covers the whole database.
-target_metadata = [CorpusRecord.metadata]
+target_metadata = [CorpusRecord.metadata, BackboneRecord.metadata]
 
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=Settings().database.sqlalchemy_url(),
+        url=Settings().require_database().sqlalchemy_url(),
         target_metadata=target_metadata,
         literal_binds=True,
         include_schemas=True,
@@ -23,7 +24,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    engine = create_engine(Settings().database.sqlalchemy_url())
+    engine = create_engine(Settings().require_database().sqlalchemy_url())
     with engine.connect() as connection:
         context.configure(
             connection=connection, target_metadata=target_metadata, include_schemas=True
