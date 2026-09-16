@@ -5,6 +5,10 @@ weights on the last epoch and nowhere else; a checkpoint whenever the policy ask
 picked up from a checkpoint that carries on where it stopped; and a refusal for a checkpoint that
 belongs to another run or to one that is over. What a run learns is not a contract — only the
 runtime that trains has that, and its own tests measure it.
+
+The handoff runtime replays a run made elsewhere, so it is driven through a simulated platform:
+the in-memory runtime trains on the far side of an exchange and the handoff runtime reports what
+came back, which holds the replay to everything the other two are held to.
 """
 
 from collections.abc import Callable, Iterator
@@ -23,6 +27,7 @@ from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactSto
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore, Retention
 from tests.support.experiments import budget, configuration, corpus
+from tests.support.platform import SimulatedPlatform
 
 torch = pytest.importorskip("torch")
 
@@ -40,6 +45,7 @@ BATCHES_PER_EPOCH = 4
 ADAPTERS: dict[str, Callable[[ArtifactStore], TrainingRuntime]] = {
     "in-memory": InMemoryTrainingRuntime,
     "torch": lambda store: TorchTrainingRuntime(store, device="cpu"),
+    "handoff": SimulatedPlatform,
 }
 
 
