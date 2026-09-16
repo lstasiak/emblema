@@ -53,3 +53,33 @@ uv run scripts/fetch_corpora.py            # about 12 GB; a re-run skips what is
 uv run scripts/corpus_facts.py             # counts, printed as TOML to paste into the budget file
 uv run scripts/corpus_budget_report.py     # the budget tables
 ```
+
+A corpus is published once, as a block of token windows beside a manifest in the artifact store;
+the manifest's reference is what a training run is pointed at:
+
+```sh
+uv run python -m emblema.entrypoints.cli.publish_corpus --corpus cmapss --window 50 --stride 5
+```
+
+### Pretraining
+
+A run is made in three steps that may happen on two machines. The first registers the backbone
+and places an order in the artifact store; the second fulfils the order wherever there is a GPU,
+here or in a notebook that installed the package at the commit the order names; the third takes
+the result back, holds it to the order, records the run in MLflow and registers the weights.
+
+```sh
+uv run python -m emblema.entrypoints.cli.pretrain order \
+    --experiment experiments/control-a-s.toml --corpus <manifest key> <manifest checksum> --run first
+uv run python -m emblema.entrypoints.cli.pretrain run --order <order key> <order checksum>
+uv run python -m emblema.entrypoints.cli.pretrain accept \
+    --result <result key> <result checksum> --track http://127.0.0.1:5000
+```
+
+Every parameter of a run lives in its experiment file under `experiments/`; the shape of the model
+comes from the compute tier the file declares. The commit the order and the result carry is read
+from the installed package or the working tree: an order is placed only from a committed tree
+unless `--commit` states the revision, a run on other code than ordered stops before it trains,
+and a result made with other code, over other data or under another configuration is refused.
+Accepting records the replayed run against the MLflow server `--track` names, so the flag is
+required there.
