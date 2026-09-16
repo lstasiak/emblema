@@ -9,19 +9,22 @@ assuming the first one still speaks for the corpus.
 
 The data each adapter is given is what its format allows rather than what its corpus happens to
 contain: blank lines the released files do not have, line endings of the other kind, a unit of a
-single row, a unit that reports nothing and a channel that stays silent in the generated one.
+single row, a unit that reports nothing, a channel that stays silent in the generated one, and in
+the pickled one a channel without rows, a month without telemetry and instants at another
+resolution.
 """
 
 import math
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import pytest
 
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
@@ -125,6 +128,51 @@ def smd(tmp_path: Path) -> Harness:
     return Harness(SmdCorpusReader(root, subsets=subsets), change_one_value)
 
 
+def esa_ad(tmp_path: Path) -> Harness:
+    pd = pytest.importorskip("pandas")
+    root = tmp_path / "esa_ad"
+    shutil.copytree(sample("esa_ad"), root)
+    subsets = ("ESA-Mission1", "ESA-Mission2")
+
+    # pandas ships no type information, so a frame is whatever it hands back.
+    def rewrite(mission: str, number: int, edit: Callable[[Any], Any]) -> None:
+        path = root / mission / "channels" / f"channel_{number}.zip"
+        edit(pd.read_pickle(path)).to_pickle(
+            path, compression={"method": "zip", "archive_name": f"channel_{number}"}
+        )
+
+    # What the format allows and the sample holds none of: a channel without a row, a channel whose
+    # rows all fall in the test half, a second row in a bin already occupied, instants kept at
+    # second rather than nanosecond resolution, and a month in which nothing reached the ground.
+    rewrite("ESA-Mission1", 42, lambda frame: frame.iloc[:0])
+    rewrite("ESA-Mission1", 43, lambda frame: frame.iloc[-30:])
+    rewrite(
+        "ESA-Mission1", 44, lambda frame: pd.concat([frame, frame.shift(freq="3ms")]).sort_index()
+    )
+    rewrite("ESA-Mission2", 18, lambda frame: frame.set_axis(frame.index.as_unit("s")))
+    rewrite(
+        "ESA-Mission2",
+        19,
+        lambda frame: frame[(frame.index < "2000-05-01") | (frame.index >= "2000-06-01")],
+    )
+    for number in range(20, 29):
+        rewrite(
+            "ESA-Mission2",
+            number,
+            lambda frame: frame[(frame.index < "2000-05-01") | (frame.index >= "2000-06-01")],
+        )
+
+    def change_one_value() -> CorpusReader:
+        def nudge(frame: Any) -> Any:
+            frame.iloc[0, 0] += 1
+            return frame
+
+        rewrite("ESA-Mission1", 41, nudge)
+        return EsaAdCorpusReader(root, subsets=subsets)
+
+    return Harness(EsaAdCorpusReader(root, subsets=subsets), change_one_value)
+
+
 def synthetic(tmp_path: Path) -> Harness:
     def change_the_specification() -> CorpusReader:
         noisier = HOSTILE.with_dials(noise=HOSTILE.noise * 2)
@@ -138,6 +186,7 @@ ADAPTERS: dict[str, Callable[[Path], Harness]] = {
     "cmapss": cmapss,
     "skab": skab,
     "smd": smd,
+    "esa_ad": esa_ad,
     "synthetic": synthetic,
 }
 
