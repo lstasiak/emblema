@@ -6,7 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from emblema.catalog.adapters.readers.smd import METRICS, SUBSETS, WIDTH, SmdCorpusReader
+from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.domain.channels.channel_schema import Channel
 from emblema.catalog.domain.exceptions import (
     CorpusDataNotFoundError,
@@ -19,6 +19,10 @@ from emblema.catalog.domain.measurements.time_extent import TimeExtent
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.sampling import SamplingRegime
 from tests.support.corpora import BUDGET, raw_root, sample
+
+METRICS = SmdCorpusReader.METRICS
+SUBSETS = SmdCorpusReader.SUBSETS
+WIDTH = len(METRICS)
 
 SAMPLE = sample("smd")
 SAMPLE_SUBSETS = ("1", "2")

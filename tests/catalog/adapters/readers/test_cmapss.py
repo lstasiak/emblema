@@ -6,7 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from emblema.catalog.adapters.readers.cmapss import SENSORS, SUBSETS, CmapssCorpusReader
+from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.domain.channels.channel_schema import Channel
 from emblema.catalog.domain.exceptions import (
     CorpusDataNotFoundError,
@@ -19,6 +19,9 @@ from emblema.catalog.domain.measurements.time_extent import TimeExtent
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.sampling import SamplingRegime
 from tests.support.corpora import BUDGET, SAMPLE, raw_root
+
+SENSORS = CmapssCorpusReader.SENSORS
+SUBSETS = CmapssCorpusReader.SUBSETS
 
 SAMPLE_BYTES = (SAMPLE / "train_FD001.txt").read_bytes()
 SAMPLE_ENGINES = 2

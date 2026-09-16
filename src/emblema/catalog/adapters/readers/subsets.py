@@ -1,27 +1,20 @@
 """Choosing which parts of a corpus a reader covers, shared by the adapters that read files.
 
 Every downloaded corpus arrives split into parts its publisher named — C-MAPSS subsets, SKAB
-folders, SMD machine groups — and a reader is bound to a selection of them. What a part is called
-differs; that a selection must be non-empty, drawn from the parts the corpus has, and ordered the
-way a checksum covers them does not.
+folders, SMD machine groups, ESA missions — and a reader is bound to a selection of them. What a
+part is called differs; that a selection must be non-empty, drawn from the parts the corpus has,
+and ordered the way a checksum covers them does not.
 """
 
 from collections.abc import Iterable
 
 
 def chosen_subsets(subsets: Iterable[str], known: tuple[str, ...], part: str) -> tuple[str, ...]:
-    """The selected parts in canonical order, whatever order they were named in.
-
-    Args:
-        subsets: Parts the caller asked for.
-        known: Every part the corpus has, in the order its checksum covers them.
-        part: What one part of this corpus is called, singular, for the error messages.
-
-    Returns:
-        The selection, ordered as ``known`` orders it.
+    """The selected parts in the order of ``known``, whatever order they were named in.
 
     Raises:
-        ValueError: If no part is named or a name is not one of ``known``.
+        ValueError: If no part is named or a name is not one of ``known``; ``part`` says what one
+            part of this corpus is called.
     """
     chosen = set(subsets)
     unknown = sorted(chosen - set(known))
