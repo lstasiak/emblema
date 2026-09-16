@@ -19,7 +19,7 @@ from emblema.catalog.application.assemblers.published_corpus_manifest_assembler 
     PublishedCorpusManifestAssembler,
 )
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import Retention

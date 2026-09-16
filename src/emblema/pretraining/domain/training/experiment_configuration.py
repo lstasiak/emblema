@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Self
 
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.exceptions import InvalidExperimentConfigurationError
@@ -68,9 +69,11 @@ class ExperimentConfiguration:
         """The configuration flattened to scalars, in a fixed order.
 
         One rendering serves everyone who has to state a run rather than run it: the tracker logs
-        these as the run's parameters, and a checkpoint is refused for a run whose parameters
-        differ. Nested values are prefixed by what they belong to, so two configurations differing
-        anywhere differ in this mapping.
+        these as the run's parameters, a run's signature digests them, and a checkpoint is refused
+        for a run whose parameters differ. Nested values are prefixed by what they belong to, so
+        two configurations differing anywhere differ in this mapping. Rates are rendered as floats
+        whatever they were built as: an integer zero and a float zero are one configuration and
+        must digest to one signature.
         """
         return {
             "name": self.name,
@@ -80,21 +83,26 @@ class ExperimentConfiguration:
             "layers": self.architecture.layers,
             "feedforward_width": self.architecture.feedforward_width,
             "time_frequencies": self.architecture.time_frequencies,
-            "dropout": self.dropout,
+            "dropout": float(self.dropout),
             "decoder_layers": self.decoder_layers,
-            "channel_rate": self.masking.channel_rate,
-            "block_rate": self.masking.block_rate,
-            "block_span": self.masking.block_span,
-            "token_rate": self.masking.token_rate,
-            "expected_hidden_ratio": self.masking.expected_ratio,
+            "channel_rate": float(self.masking.channel_rate),
+            "block_rate": float(self.masking.block_rate),
+            "block_span": float(self.masking.block_span),
+            "token_rate": float(self.masking.token_rate),
+            "expected_hidden_ratio": float(self.masking.expected_ratio),
             "epochs": self.budget.epochs,
             "batch_size": self.budget.batch_size,
             "accumulation_steps": self.budget.accumulation_steps,
             "effective_batch_size": self.budget.effective_batch_size,
-            "learning_rate": self.budget.learning_rate,
+            "learning_rate": float(self.budget.learning_rate),
             "warmup_epochs": self.budget.warmup_epochs,
-            "final_lr_fraction": self.budget.final_lr_fraction,
+            "final_lr_fraction": float(self.budget.final_lr_fraction),
             "seed": self.budget.seed,
             "precision": str(self.precision),
             "checkpoint_every_steps": self.checkpoint.every_steps,
         }
+
+    def differences_from(self, other: Self) -> tuple[str, ...]:
+        """Names of the parameters on which this configuration differs from ``other``."""
+        stated, expected = self.parameters(), other.parameters()
+        return tuple(key for key in expected if stated[key] != expected[key])

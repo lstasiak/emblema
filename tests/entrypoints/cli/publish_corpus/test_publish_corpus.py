@@ -16,8 +16,8 @@ from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCor
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
-from emblema.entrypoints.cli.composition_root import CompositionRoot
-from emblema.entrypoints.cli.publish_corpus import PublishCorpusCli
+from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus.publish_corpus_cli import PublishCorpusCli
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef

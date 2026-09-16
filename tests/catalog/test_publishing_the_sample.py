@@ -12,7 +12,7 @@ from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTo
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.ports.corpus_repository import CorpusRepository
-from emblema.entrypoints.cli.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow

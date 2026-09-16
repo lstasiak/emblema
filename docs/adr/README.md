@@ -32,3 +32,4 @@ Format: context, decision, consequences, alternatives considered. Status is one 
 | [0021](0021-training-runtime-and-resumable-runs.md) | The training loop is an adapter behind a port that reports epochs, and a run is resumable mid-epoch | accepted |
 | [0022](0022-experiment-configuration-as-a-file.md) | An experiment is a file: every parameter of scale written down, the shape from its tier | accepted |
 | [0023](0023-tracking-runs-with-mlflow.md) | Runs are tracked through a port with an MLflow adapter, logged epoch by epoch while they run | accepted |
+| [0024](0024-handing-a-run-to-another-machine.md) | A run is ordered here, made anywhere, and accepted back against the order: the backbone registry, the handoff exchange and the replaying runtime | accepted |

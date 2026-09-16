@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
-from emblema.entrypoints.cli.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
 from tests.support.corpora import SAMPLE_WINDOW, publish_command, sample
 from tests.support.settings import unreachable_store

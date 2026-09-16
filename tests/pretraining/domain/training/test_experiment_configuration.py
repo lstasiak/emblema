@@ -22,6 +22,28 @@ def test_two_configurations_differing_anywhere_differ_in_their_parameters() -> N
     assert configuration(dropout=0.1).parameters() != stated
 
 
+def test_rates_are_rendered_as_floats_however_they_were_built() -> None:
+    # An integer zero and a float zero are one configuration, and everything that renders the
+    # parameters — the tracker, the signature — must see one value.
+    stated = configuration(dropout=0.0, budget=budget(learning_rate=1e-3))
+    as_integers = configuration(dropout=0, budget=budget(learning_rate=1e-3))
+
+    assert stated == as_integers
+    assert stated.parameters() == as_integers.parameters()
+    assert isinstance(as_integers.parameters()["dropout"], float)
+
+
+def test_the_parameters_on_which_two_configurations_differ_are_named() -> None:
+    stated = configuration()
+
+    assert stated.differences_from(stated) == ()
+    assert stated.differences_from(configuration(budget=budget(seed=2))) == ("seed",)
+    assert stated.differences_from(configuration(dropout=0.1, decoder_layers=2)) == (
+        "dropout",
+        "decoder_layers",
+    )
+
+
 def test_the_expected_share_hidden_is_reported_beside_the_rates() -> None:
     parameters = configuration().parameters()
 

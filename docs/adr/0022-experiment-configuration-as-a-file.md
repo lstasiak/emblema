@@ -84,3 +84,11 @@ per experiment is what makes that citation a path.
 - A run's corpus has to be pinned as tightly as its configuration: the file names a corpus, while
   the published artifact it should name is a reference and a checksum. That belongs to the ticket
   where Pretraining reads a published corpus.
+
+## 2026-09-16 — the corpus is pinned by the order, not by the file
+
+The threshold above was met by the order a run is placed as (ADR-0024): the file keeps naming the
+corpus, the order carries the manifest's reference and checksum and the signature of the run over
+the windows actually read, and the registry keeps both beside the backbone. The file says what to
+do; the order says on what. A `[corpus]` table in the file was weighed and not adopted, for the
+reasons ADR-0024 gives.

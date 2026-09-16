@@ -177,6 +177,8 @@ markers = [
 [tool.coverage.run]
 source = ["emblema"]
 branch = true
+# A package's ``__main__`` only hands the process to its command line, and runs nowhere under test.
+omit = ["*/__main__.py"]
 # Paths stored relative to the repository root, so the data file is readable outside the job.
 relative_files = true
 

@@ -116,3 +116,13 @@ process is the place that knows it is republishing.
   ADR-0005, and the first table in the tree not owned by a context's aggregate.
 - The API needs queries the repository does not have, such as listing or paging. Those are read
   models over the same tables, not methods on the repository.
+
+## 2026-09-16 — the second context with tables
+
+Pretraining persists its backbone (ADR-0024) in the same shape: record classes over a declarative
+base for the `pretraining` schema, one more migration in the tree, the configuration as JSONB with
+the columns that are queried beside it. The two contexts share one engine from the settings and
+still write one aggregate per transaction, so no unit of work spans a use case yet. SQLModel and
+`MappedAsDataclass` were weighed again and not adopted — the reasoning is in ADR-0024 — and the
+one thing the two persistence models repeated, the naming convention, moved to
+`shared/adapters/persistence/naming.py`.

@@ -11,7 +11,7 @@ from sqlalchemy import Engine
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from tests.catalog.domain.support import SCHEMA, description, measured_units
 from tests.support.corpora import CORPUS, publish_command
