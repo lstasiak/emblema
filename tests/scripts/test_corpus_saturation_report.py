@@ -45,7 +45,14 @@ from scripts.corpus_saturation_report import (
     train,
     write_settings,
 )
-from tests.support.experiments import budget, configuration, corpus, epoch_outcome, share
+from tests.support.experiments import (
+    WEIGHTS,
+    budget,
+    configuration,
+    corpus,
+    epoch_outcome,
+    share,
+)
 from tests.support.handoff import MANIFEST, outcome
 from tests.support.handoff import pretraining_input as described
 from tests.support.published import EMPTY_UNIT, TRAINING_UNITS, publish
@@ -191,6 +198,7 @@ def test_each_epoch_is_written_as_it_is_measured_and_the_outcome_when_the_run_en
     assert stored is not None
     assert [row.checkpoint for row in stored.epochs] == [MANIFEST, None]
     assert stored.last_checkpoint == MANIFEST
+    assert stored.backbone == WEIGHTS
 
 
 def test_the_epoch_a_resumed_run_re_enters_is_passed_on_but_not_written_twice(

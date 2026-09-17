@@ -268,14 +268,19 @@ class StoredRun:
         settings: What the run was, key by key.
         epochs: What each epoch measured, in order.
         checkpoints: Every checkpoint the run wrote, in order, as the store logged them.
-        finished: Whether the run reported its outcome.
+        backbone: The weights the run kept, once it reported its outcome; ``None`` before.
     """
 
     directory: Path
     settings: Mapping[str, str]
     epochs: tuple[EpochRow, ...]
     checkpoints: tuple[ArtifactRef, ...]
-    finished: bool
+    backbone: ArtifactRef | None
+
+    @property
+    def finished(self) -> bool:
+        """Whether the run reported its outcome."""
+        return self.backbone is not None
 
     @property
     def experiment(self) -> str:
@@ -395,7 +400,7 @@ def read_run(directory: Path) -> StoredRun | None:
         settings,
         read_epochs(directory),
         read_checkpoints(directory),
-        (directory / OUTCOME).is_file(),
+        read_outcome(directory),
     )
 
 
@@ -418,6 +423,15 @@ def read_epochs(directory: Path) -> tuple[EpochRow, ...]:
         )
         for row in _rows(path)
     )
+
+
+def read_outcome(directory: Path) -> ArtifactRef | None:
+    """The weights the run's outcome names, or ``None`` where the run has not ended."""
+    path = directory / OUTCOME
+    if not path.is_file():
+        return None
+    stated = {row["key"]: row["value"] for row in _rows(path)}
+    return ArtifactRef(stated["backbone_key"], Checksum.parse(stated["backbone_checksum"]))
 
 
 def read_checkpoints(directory: Path) -> tuple[ArtifactRef, ...]:
