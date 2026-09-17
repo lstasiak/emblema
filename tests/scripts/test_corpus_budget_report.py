@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from emblema.config.compute_tiers import ComputeTiers
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
 from emblema.shared.kernel.compute import ComputeTier
 from scripts.corpus_budget_report import (
     DEFAULT_CONFIG,
@@ -24,7 +25,7 @@ from scripts.corpus_budget_report import (
     campaign_run_hours,
     flops_per_window,
     gpu_hours,
-    parameter_count,
+    parameters,
     pretraining_hours,
     render,
     window_stats,
@@ -66,8 +67,24 @@ def corpus(**overrides: object) -> Corpus:
     return Corpus.model_validate(fields)
 
 
-def test_parameter_count_reproduces_the_reference_shape():
-    assert parameter_count(256, 6) == pytest.approx(4.72e6, rel=0.01)
+def test_parameters_are_counted_exactly_over_the_mixtures_vocabulary():
+    # The reference shape over the 121 channels of the measured corpora: the number the encoder's
+    # own tests hold a built model to, not the 4.72M the coarse 12 · d² · L gives.
+    budget = Budget.load(DEFAULT_CONFIG)
+
+    assert budget.vocabulary_size() == 121
+    assert parameters(budget.tier("M"), budget) == 4_777_472
+
+
+def test_the_sweep_prices_whole_shapes_and_the_reference_tier_is_one_of_them():
+    budget = Budget.load(DEFAULT_CONFIG)
+    reference = budget.tier("M")
+
+    priced = [shape.priced_as(reference) for shape in budget.sweep.shapes]
+
+    assert any(shape.architecture() == architecture_of(reference) for shape in budget.sweep.shapes)
+    assert all(shape.device == reference.device for shape in priced)
+    assert "| 256 × 6 | 4 × 1024 | 4.78M |" in render(budget)
 
 
 @pytest.mark.parametrize(("length", "expected"), [(49, 0), (50, 1), (54, 1), (55, 2), (226, 36)])

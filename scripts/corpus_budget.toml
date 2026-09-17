@@ -534,5 +534,47 @@ name = "ablations, channel dropout, distillation"
 gpu_hours = 30
 basis = "allowance of 20–40 h, midpoint; priced when the runs are designed"
 
-[sweep]
-shapes = [[192, 4], [256, 6], [320, 8], [384, 10], [512, 8]]
+# Whole shapes, so their parameters are counted exactly over the mixture's vocabulary rather
+# than estimated as 12 · d² · L: heads give 64 features each and the feed-forward width is four
+# times the width, as the tiers assume; twelve time frequencies throughout.
+[[sweep.shapes]]
+width = 192
+heads = 3
+layers = 4
+feedforward_width = 768
+time_frequencies = 12
+
+[[sweep.shapes]]
+width = 256
+heads = 4
+layers = 6
+feedforward_width = 1024
+time_frequencies = 12
+
+[[sweep.shapes]]
+width = 256
+heads = 4
+layers = 7
+feedforward_width = 1024
+time_frequencies = 12
+
+[[sweep.shapes]]
+width = 320
+heads = 5
+layers = 8
+feedforward_width = 1280
+time_frequencies = 12
+
+[[sweep.shapes]]
+width = 384
+heads = 6
+layers = 10
+feedforward_width = 1536
+time_frequencies = 12
+
+[[sweep.shapes]]
+width = 512
+heads = 8
+layers = 8
+feedforward_width = 2048
+time_frequencies = 12

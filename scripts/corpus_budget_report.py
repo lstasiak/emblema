@@ -27,6 +27,8 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from emblema.config.compute_tiers import ComputeTierProfile, ComputeTiers, WindowChoice
+from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
+from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 
 DEFAULT_CONFIG = Path(__file__).resolve().with_name("corpus_budget.toml")
 
@@ -265,8 +267,31 @@ class FixedCost(Strict):
     basis: str
 
 
+class Shape(Strict):
+    """One encoder shape of the sweep, whole: its parameters are counted exactly, not estimated."""
+
+    width: int = Field(gt=0)
+    heads: int = Field(gt=0)
+    layers: int = Field(gt=0)
+    feedforward_width: int = Field(gt=0)
+    time_frequencies: int = Field(gt=0)
+
+    def architecture(self) -> EncoderArchitecture:
+        return EncoderArchitecture(
+            width=self.width,
+            heads=self.heads,
+            layers=self.layers,
+            feedforward_width=self.feedforward_width,
+            time_frequencies=self.time_frequencies,
+        )
+
+    def priced_as(self, tier: ComputeTierProfile) -> ComputeTierProfile:
+        """The tier with this shape in place of its own, so the cost model prices it."""
+        return tier.model_copy(update=self.model_dump())
+
+
 class Sweep(Strict):
-    shapes: tuple[tuple[int, int], ...] = Field(description="(width, layers) pairs to price")
+    shapes: tuple[Shape, ...] = Field(min_length=1, description="Encoder shapes to price")
 
 
 class Budget(Strict):
@@ -322,17 +347,26 @@ class Budget(Strict):
         """Corpora with enough independent units to carry a backbone of their own."""
         return [key for key, corpus in self.corpora.items() if corpus.verdict == "pretraining"]
 
+    def vocabulary_size(self) -> int:
+        """Channels of every measured corpus together: the table one backbone over the mix carries.
+
+        The channel table is the one part of the encoder whose size the corpora decide, so the
+        parameter count of a shape is a count over this vocabulary. Corpora only estimated are
+        left out: the mix is priced on what was counted.
+        """
+        return sum(corpus.measured.channels for corpus in self.corpora.values() if corpus.measured)
+
 
 # --- arithmetic -------------------------------------------------------------------------------
 
 
-def parameters(tier: ComputeTierProfile) -> float:
-    return parameter_count(tier.width, tier.layers)
+def parameters(tier: ComputeTierProfile, budget: "Budget") -> float:
+    """Parameters of the tier's encoder over the mixture's vocabulary, counted exactly.
 
-
-def parameter_count(width: int, layers: int) -> float:
-    """Dense parameters of a transformer encoder: 4·d² attention + 8·d² MLP per layer."""
-    return 12.0 * width**2 * layers
+    The same count the encoder's own tests hold a built model to, so the budget and the note
+    that measures the encoder quote one number for one shape.
+    """
+    return float(architecture_of(tier).parameter_count(budget.vocabulary_size()))
 
 
 def windows_in_series(length: float, window: Window) -> int:
@@ -389,7 +423,11 @@ def window_stats(key: str, corpus: Corpus, window: Window) -> WindowStats:
 def pretraining_hours(key: str, corpus: Corpus, tier: ComputeTierProfile, budget: Budget) -> float:
     stats = window_stats(key, corpus, corpus.pick_window(tier.window))
     flops = flops_per_window(
-        stats.tokens_per_window, parameters(tier), tier.width, tier.layers, budget.cost_model
+        stats.tokens_per_window,
+        parameters(tier, budget),
+        tier.width,
+        tier.layers,
+        budget.cost_model,
     )
     windows_seen = stats.count * tier.corpus_fraction * corpus.epochs
     return gpu_hours(windows_seen * flops, tier.tflops)
@@ -421,7 +459,11 @@ def campaign_run_hours(
     stats = window_stats(campaign.task_corpus, corpus, corpus.pick_window("default"))
     windows = stats.count if campaign.budget == "all" else campaign.budget
     flops = flops_per_window(
-        stats.tokens_per_window, parameters(model), model.width, model.layers, budget.cost_model
+        stats.tokens_per_window,
+        parameters(model, budget),
+        model.width,
+        model.layers,
+        budget.cost_model,
     )
     return gpu_hours(windows * campaign.epochs * flops, tflops)
 
@@ -486,7 +528,7 @@ def render_assumptions(budget: Budget) -> str:
             tier.device,
             f"{tier.tflops:g}",
             f"{tier.width} × {tier.layers}",
-            si(parameters(tier)),
+            si(parameters(tier, budget)),
             f"{tier.corpus_fraction:g}",
             tier.window,
         )
@@ -495,8 +537,9 @@ def render_assumptions(budget: Budget) -> str:
     return "\n".join(
         [
             f"FLOPs per window = {cost.flops_per_parameter_token:g} · P · n + "
-            f"{cost.attention_flops_coefficient:g} · n² · d · L; P = 12 · d² · L. "
-            f"Every GPU-hour below is ±{cost.estimate_error_factor:g}×.",
+            f"{cost.attention_flops_coefficient:g} · n² · d · L; P is the encoder's exact "
+            f"parameter count over the mixture's vocabulary of {budget.vocabulary_size()} "
+            f"channels. Every GPU-hour below is ±{cost.estimate_error_factor:g}×.",
             "",
             table(("Tier", "Device", "TFLOP/s", "d × L", "P", "Corpus fraction", "Window"), rows),
         ]
@@ -545,7 +588,7 @@ def render_corpora(budget: Budget) -> str:
             stats = window_stats(key, corpus, window)
             flops = flops_per_window(
                 stats.tokens_per_window,
-                parameters(reference),
+                parameters(reference, budget),
                 reference.width,
                 reference.layers,
                 budget.cost_model,
@@ -583,7 +626,7 @@ def render_corpora(budget: Budget) -> str:
 def render_thresholds(budget: Budget) -> str:
     reference = budget.tier("M")
     limits = budget.thresholds
-    needed = limits.unique_tokens_per_parameter * parameters(reference)
+    needed = limits.unique_tokens_per_parameter * parameters(reference, budget)
     rows = []
     for corpus in budget.corpora.values():
         unique = corpus.unique_observations()
@@ -595,7 +638,7 @@ def render_thresholds(budget: Budget) -> str:
                 "yes" if corpus.units >= limits.min_training_units else "**no**",
                 si(unique),
                 "yes" if unique >= needed else "**no**",
-                f"{effective / parameters(reference):.0f}",
+                f"{effective / parameters(reference, budget):.0f}",
                 corpus.verdict,
                 corpus.decision,
             )
@@ -712,7 +755,8 @@ def render_campaigns(budget: Budget) -> str:
     )
     return "\n".join(
         [
-            f"Fine-tuning always uses the tier-{model.name} backbone ({si(parameters(model))} "
+            f"Fine-tuning always uses the tier-{model.name} backbone "
+            f"({si(parameters(model, budget))} "
             "parameters); the columns differ only by device.",
             "",
             table(header, rows),
@@ -766,21 +810,22 @@ def render_sweep(budget: Budget) -> str:
     processed = mixed_tokens_per_epoch(budget)
     seen = mixed_tokens_seen(budget)
     rows = []
-    for width, layers in budget.sweep.shapes:
-        parameters = parameter_count(width, layers)
-        shape = reference.model_copy(update={"width": width, "layers": layers})
+    for shape in budget.sweep.shapes:
+        priced = shape.priced_as(reference)
+        count = parameters(priced, budget)
         mixed = sum(
-            pretraining_hours(key, budget.corpora[key], shape, budget) for key in budget.eligible()
+            pretraining_hours(key, budget.corpora[key], priced, budget) for key in budget.eligible()
         )
         rows.append(
             (
-                f"{width} × {layers}",
-                si(parameters),
-                f"{unique / parameters:.0f}",
-                "yes" if unique >= limits.unique_tokens_per_parameter * parameters else "**no**",
-                f"{effective / parameters:.0f}",
-                "yes" if effective >= limits.unique_tokens_per_parameter * parameters else "**no**",
-                f"{seen / parameters:.0f}",
+                f"{shape.width} × {shape.layers}",
+                f"{shape.heads} × {shape.feedforward_width}",
+                si(count),
+                f"{unique / count:.0f}",
+                "yes" if unique >= limits.unique_tokens_per_parameter * count else "**no**",
+                f"{effective / count:.0f}",
+                "yes" if effective >= limits.unique_tokens_per_parameter * count else "**no**",
+                f"{seen / count:.0f}",
                 hours(mixed),
             )
         )
@@ -794,6 +839,7 @@ def render_sweep(budget: Budget) -> str:
             table(
                 (
                     "d × L",
+                    "Heads × FFN",
                     "P",
                     "Unique per P",
                     f"≥ {limits.unique_tokens_per_parameter:g}",
