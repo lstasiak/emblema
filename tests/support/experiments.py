@@ -18,6 +18,7 @@ from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
+from emblema.pretraining.domain.training.corpus_validation import CorpusValidation
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
@@ -117,12 +118,18 @@ WEIGHTS = ArtifactRef("durable/weights", Checksum.of_bytes(b"weights"))
 
 
 def epoch_outcome(number: int, **overrides: Any) -> EpochOutcome:
-    """What an epoch of a run that went well reports; anything named is replaced."""
+    """What an epoch of a run over one corpus reports; anything named is replaced."""
     stated: dict[str, Any] = {
         "epoch": number,
         "training_loss": 1.0 / (number + 1),
-        "validation_loss": 1.2 / (number + 1),
+        "validation": (validated(loss=1.2 / (number + 1)),),
         "hidden_ratio": 0.46,
         "seconds": 0.25,
     }
     return EpochOutcome(**(stated | overrides))
+
+
+def validated(**overrides: Any) -> CorpusValidation:
+    """What one corpus of the held-out side cost an epoch; anything named is replaced."""
+    stated = CorpusValidation(corpus="invented", tokens=40, loss=1.2, trivial=1.0)
+    return replace(stated, **overrides)

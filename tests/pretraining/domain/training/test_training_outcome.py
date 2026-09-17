@@ -4,7 +4,7 @@ from emblema.pretraining.domain.exceptions import InvalidTrainingOutcomeError
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
-from tests.support.experiments import WEIGHTS
+from tests.support.experiments import WEIGHTS, validated
 from tests.support.experiments import epoch_outcome as epoch
 
 OTHER = ArtifactRef("durable/other", Checksum.of_bytes(b"other"))
@@ -50,7 +50,7 @@ def test_a_run_that_trained_nothing_is_refused() -> None:
     [
         ("epoch", -1),
         ("training_loss", -0.1),
-        ("validation_loss", float("nan")),
+        ("validation", ()),
         ("seconds", -1.0),
         ("hidden_ratio", 0.0),
         ("hidden_ratio", 1.5),
@@ -59,3 +59,37 @@ def test_a_run_that_trained_nothing_is_refused() -> None:
 def test_an_epoch_that_measured_something_impossible_is_refused(field: str, value: float) -> None:
     with pytest.raises(InvalidTrainingOutcomeError):
         epoch(0, **{field: value})
+
+
+def test_an_epoch_reports_every_corpus_of_its_held_out_side_once() -> None:
+    both = epoch(0, validation=(validated(corpus="a"), validated(corpus="b", loss=0.4)))
+
+    assert [scored.corpus for scored in both.validation] == ["a", "b"]
+    with pytest.raises(InvalidTrainingOutcomeError, match="validated twice"):
+        epoch(0, validation=(validated(corpus="a"), validated(corpus="a", loss=0.4)))
+
+
+def test_the_loss_over_the_whole_side_weighs_a_corpus_by_the_tokens_it_gave() -> None:
+    mixed = epoch(
+        0,
+        validation=(
+            validated(corpus="small", tokens=10, loss=1.0),
+            validated(corpus="large", tokens=90, loss=2.0),
+        ),
+    )
+
+    assert mixed.validation_loss == pytest.approx((10 * 1.0 + 90 * 2.0) / 100)
+
+
+def test_what_a_stopping_rule_reads_is_the_mean_over_corpora_and_not_over_tokens() -> None:
+    """A corpus decides neither by the size of its values nor by the count of its windows."""
+    mixed = epoch(
+        0,
+        validation=(
+            validated(corpus="small", tokens=10, loss=1.0, trivial=1.0),
+            validated(corpus="large", tokens=90, loss=2.0, trivial=8.0),
+        ),
+    )
+
+    assert mixed.relative_validation == pytest.approx((1.0 + 0.25) / 2)
+    assert mixed.validation_loss > 1.0

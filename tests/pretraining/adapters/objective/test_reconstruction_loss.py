@@ -207,11 +207,16 @@ def test_the_bounded_reading_stops_one_token_from_deciding_the_gradient() -> Non
 
 
 def test_the_trivial_predictor_is_read_under_the_same_reading_as_the_model() -> None:
-    batch = random_batch(2, 5, seed=13)
+    batch = random_batch(2, 5, seed=13, padding=1)
     target = batch.features[..., 0]
+    hidden = torch.ones_like(batch.padding_mask)
 
     for scorer, reading in ((SCORER, SQUARED), (ReconstructionLoss(BOUNDED), BOUNDED)):
-        mean = scorer.of_mean_predictor(batch)
+        nothing_learnt, scored = scorer.summed_over_mean(batch, hidden)
 
-        torch.testing.assert_close(mean, scorer.of_tokens(torch.zeros_like(target), batch))
-        assert float(mean[0, 0]) == pytest.approx(reading.of_error(float(target[0, 0])))
+        # The rule the model is scored by, applied to the predictor that knows nothing: padding
+        # is not a token, and the reading is the run's.
+        observed = target[~batch.padding_mask]
+        assert int(scored) == int(observed.numel())
+        expected = sum(reading.of_error(float(value)) for value in observed)
+        assert float(nothing_learnt) == pytest.approx(expected, rel=1e-6)

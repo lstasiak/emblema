@@ -65,10 +65,11 @@ class ReconstructionLoss(nn.Module):
             prediction, target, reduction="none", delta=self.loss.huber_delta
         )
 
-    def of_mean_predictor(self, batch: TokenTensors) -> Tensor:
-        """Per position, what the reading makes of predicting the channel mean.
+    def summed_over_mean(self, batch: TokenTensors, positions: Tensor) -> tuple[Tensor, Tensor]:
+        """What predicting the channel mean costs over those positions, and how many were scored.
 
-        The trivial predictor is zero in normalised units, and a loss is read against it under
-        the same reading — a bounded loss against a variance would compare two different things.
+        The trivial predictor is zero in normalised units, and what a run learnt is read against
+        it under the run's own reading: a bounded loss against a variance would be two different
+        things divided by each other.
         """
-        return self.of_tokens(torch.zeros_like(batch.features[..., 0]), batch)
+        return self.summed(torch.zeros_like(batch.features[..., 0]), batch, positions)

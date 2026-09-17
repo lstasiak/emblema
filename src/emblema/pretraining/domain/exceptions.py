@@ -57,6 +57,10 @@ class IncomparableFloorError(PretrainingError, ValueError):
     pass
 
 
+class InvalidCorpusValidationError(PretrainingError, ValueError):
+    pass
+
+
 class InvalidSaturationCurveError(PretrainingError, ValueError):
     pass
 

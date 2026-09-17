@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from math import ceil
 
 from emblema.pretraining.domain.exceptions import IncompatibleCheckpointError
+from emblema.pretraining.domain.training.corpus_validation import CorpusValidation
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.run_position import RunPosition
@@ -62,12 +63,20 @@ class InMemoryTrainingRuntime:
                     checkpoint = self._write(signature, position, Retention.TRANSIENT)
             final = position.epoch + 1 == budget.epochs
             # A loss that falls with the epoch and nothing more: the numbers are a shape, not a
-            # measurement, and calling them one anywhere would be a lie.
+            # measurement, and calling them one anywhere would be a lie. The trivial predictor is
+            # given a loss of one for the same reason, so that the relative loss is the shape too.
             falling = 1.0 / (position.epoch + 1)
             yield EpochOutcome(
                 epoch=position.epoch,
                 training_loss=falling,
-                validation_loss=falling,
+                validation=(
+                    CorpusValidation(
+                        corpus=corpus.name,
+                        tokens=len(corpus.validation),
+                        loss=falling,
+                        trivial=1.0,
+                    ),
+                ),
                 hidden_ratio=configuration.masking.expected_ratio,
                 seconds=0.0,
                 checkpoint=checkpoint,

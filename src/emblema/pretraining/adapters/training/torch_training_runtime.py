@@ -15,6 +15,7 @@ from emblema.pretraining.adapters.training.torch_precision import TorchPrecision
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
 from emblema.pretraining.adapters.training.training_checkpoint import TrainingCheckpoint
 from emblema.pretraining.domain.exceptions import DivergedRunError, IncompatibleCheckpointError
+from emblema.pretraining.domain.training.corpus_validation import CorpusValidation
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.run_position import RunPosition
@@ -213,7 +214,7 @@ class TorchTrainingRuntime:
             yield EpochOutcome(
                 epoch=epoch,
                 training_loss=training,
-                validation_loss=validation,
+                validation=(validation,),
                 hidden_ratio=hidden_ratio,
                 seconds=time.perf_counter() - started,
                 checkpoint=checkpoint,
@@ -292,14 +293,17 @@ class TorchTrainingRuntime:
                 f"{session.position.epoch}, at {session.configuration.precision}"
             )
 
-    def _validate(self, session: _Session) -> tuple[float, float]:
-        """The loss on the validation windows and the share of their observed tokens it scored.
+    def _validate(self, session: _Session) -> tuple[CorpusValidation, float]:
+        """What the held-out side cost this epoch, and the share of its observed tokens it scored.
 
         The masks are drawn per batch from a generator the seed fixes, so every epoch is scored
-        under the same hidden tokens: what moves between epochs is the model.
+        under the same hidden tokens: what moves between epochs is the model. The channel-mean
+        predictor is scored over the same tokens in the same pass, so that what a corpus is worth
+        against nothing learnt is measured rather than looked up. A run reads one corpus today
+        and reports one entry; a run over a mixture reports one each.
         """
         session.model.eval()
-        total, hidden_tokens, observed = 0.0, 0, 0
+        total, trivial, hidden_tokens, observed = 0.0, 0.0, 0, 0
         with torch.no_grad():
             for index, on_host in enumerate(session.validation.batches_of(0)):
                 draws = torch.Generator().manual_seed(
@@ -307,13 +311,24 @@ class TorchTrainingRuntime:
                 )
                 masks = session.masking.draw(on_host, draws)
                 batch, drawn = on_host.to(self._device), masks.to(self._device)
-                scored = int(drawn.hidden.sum())
                 with session.precision.autocast():
                     predicted = session.model(batch, drawn)
-                total += float(session.loss(predicted, batch, drawn)) * scored
+                error, counted = session.loss.summed(predicted, batch, drawn.hidden)
+                nothing_learnt, _ = session.loss.summed_over_mean(batch, drawn.hidden)
+                scored = int(counted)
+                total += float(error)
+                trivial += float(nothing_learnt)
                 hidden_tokens += scored
                 observed += int((~batch.padding_mask).sum())
-        return total / max(hidden_tokens, 1), hidden_tokens / max(observed, 1)
+        return (
+            CorpusValidation(
+                corpus=session.corpus.name,
+                tokens=hidden_tokens,
+                loss=total / max(hidden_tokens, 1),
+                trivial=trivial / max(hidden_tokens, 1),
+            ),
+            hidden_tokens / max(observed, 1),
+        )
 
     def _write_checkpoint(self, session: _Session) -> ArtifactRef:
         """The whole state of the run, kept only as long as a dropped session might want it."""

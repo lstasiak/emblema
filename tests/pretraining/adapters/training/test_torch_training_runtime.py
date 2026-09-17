@@ -241,3 +241,20 @@ def test_a_run_is_scored_by_the_reading_its_experiment_states() -> None:
     # hold misses past the knee, so it counts strictly less.
     assert under_bound[-1].validation_loss < under_square[-1].validation_loss
     assert RunSignature.of(bounded, CORPUS) != RunSignature.of(squared, CORPUS)
+
+
+def test_an_epoch_reports_the_corpus_it_validated_against_nothing_learnt() -> None:
+    outcomes = list(
+        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(
+            configuration(budget=budget(epochs=1)), CORPUS
+        )
+    )
+
+    scored = outcomes[-1].validation
+    assert [entry.corpus for entry in scored] == [CORPUS.name]
+    assert scored[0].loss == outcomes[-1].validation_loss
+    # The trivial predictor is the channel mean, measured over the same hidden tokens: on windows
+    # of drawn standard normals it errs about one, and an untrained model does no better.
+    assert scored[0].trivial == pytest.approx(1.0, abs=0.6)
+    assert scored[0].relative == pytest.approx(scored[0].loss / scored[0].trivial)
+    assert 0 < scored[0].tokens <= sum(len(window.values) for window in CORPUS.validation)
