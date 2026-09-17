@@ -5,6 +5,7 @@ from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.shared.kernel.compute import ComputeTier
@@ -44,6 +45,10 @@ class ExperimentConfigurationDocument:
                 "block_span": masking.block_span,
                 "token_rate": masking.token_rate,
             },
+            "objective": {
+                "kind": str(configuration.loss.kind),
+                "huber_delta": configuration.loss.huber_delta,
+            },
             "budget": {
                 "epochs": budget.epochs,
                 "batch_size": budget.batch_size,
@@ -70,6 +75,7 @@ class ExperimentConfigurationDocument:
             fields.fields("masking"),
             fields.fields("budget"),
         )
+        objective = fields.fields("objective")
         return ExperimentConfiguration(
             name=fields.text("name"),
             tier=ComputeTier(fields.text("tier")),
@@ -88,6 +94,10 @@ class ExperimentConfigurationDocument:
                 block_rate=masking.number("block_rate"),
                 block_span=masking.number("block_span"),
                 token_rate=masking.number("token_rate"),
+            ),
+            loss=ObjectiveLoss(
+                kind=LossKind(objective.text("kind")),
+                huber_delta=objective.number("huber_delta"),
             ),
             budget=TrainingBudget(
                 epochs=budget.integer("epochs"),

@@ -8,8 +8,10 @@ from emblema.pretraining.adapters.encoder.tier_architecture import architecture_
 from emblema.pretraining.adapters.experiments.experiment_file import ExperimentFile
 from emblema.pretraining.domain.exceptions import (
     InvalidMaskingStrategyError,
+    InvalidObjectiveLossError,
     InvalidTrainingBudgetError,
 )
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.shared.kernel.compute import ComputeTier
 
@@ -130,3 +132,25 @@ def test_every_experiment_in_the_repository_states_a_configuration(path: Path) -
     stated = ExperimentFile.load(path).configuration()
 
     assert stated.name == path.stem
+
+
+def test_a_file_that_states_no_objective_is_scored_by_the_square(tmp_path: Path) -> None:
+    stated = ExperimentFile.load(written(STATED, tmp_path)).configuration()
+
+    assert stated.loss == ObjectiveLoss(kind=LossKind.MSE)
+
+
+def test_a_file_states_the_reading_its_hidden_tokens_are_scored_by(tmp_path: Path) -> None:
+    text = STATED + '\n[objective]\nkind = "huber"\nhuber_delta = 1.5\n'
+
+    loss = ExperimentFile.load(written(text, tmp_path)).configuration().loss
+
+    assert loss == ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.5)
+    assert loss.is_bounded
+
+
+def test_a_knee_the_stated_reading_does_not_read_is_refused(tmp_path: Path) -> None:
+    text = STATED + "\n[objective]\nhuber_delta = 1.0\n"
+
+    with pytest.raises(InvalidObjectiveLossError, match="no knee"):
+        ExperimentFile.load(written(text, tmp_path)).configuration()

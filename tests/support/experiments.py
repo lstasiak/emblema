@@ -20,6 +20,7 @@ from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPoli
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
@@ -43,6 +44,7 @@ def configuration(**overrides: Any) -> ExperimentConfiguration:
         dropout=0.0,
         decoder_layers=1,
         masking=MIXTURE,
+        loss=ObjectiveLoss(kind=LossKind.MSE),
         budget=budget(),
         precision=Precision.FP32,
         checkpoint=CheckpointPolicy(every_steps=2),
