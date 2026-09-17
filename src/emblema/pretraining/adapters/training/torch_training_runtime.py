@@ -38,6 +38,7 @@ class _Session:
     signature: RunSignature
     precision: TorchPrecision
     model: MaskedReconstruction
+    loss: ReconstructionLoss
     optimiser: torch.optim.Optimizer
     scheduler: torch.optim.lr_scheduler.LRScheduler
     scaler: torch.amp.GradScaler
@@ -130,6 +131,7 @@ class TorchTrainingRuntime:
             decoder_layers=configuration.decoder_layers,
             dropout=configuration.dropout,
         ).to(self._device)
+        loss = ReconstructionLoss(configuration.loss)
         training = WindowLoader(
             corpus.training,
             batch_size=budget.batch_size,
@@ -148,6 +150,7 @@ class TorchTrainingRuntime:
             signature=signature,
             precision=precision,
             model=model,
+            loss=loss,
             optimiser=optimiser,
             scheduler=torch.optim.lr_scheduler.LambdaLR(
                 optimiser, configuration.schedule(len(training)).factor
@@ -235,7 +238,7 @@ class TorchTrainingRuntime:
             masks = session.masking.draw(on_host, session.draws)
             batch, drawn = on_host.to(self._device), masks.to(self._device)
             with session.precision.autocast():
-                error, scored = ReconstructionLoss.summed(
+                error, scored = session.loss.summed(
                     session.model(batch, drawn), batch, drawn.hidden
                 )
             summed = float(error.detach())
@@ -295,7 +298,6 @@ class TorchTrainingRuntime:
         The masks are drawn per batch from a generator the seed fixes, so every epoch is scored
         under the same hidden tokens: what moves between epochs is the model.
         """
-        loss = ReconstructionLoss()
         session.model.eval()
         total, hidden_tokens, observed = 0.0, 0, 0
         with torch.no_grad():
@@ -308,7 +310,7 @@ class TorchTrainingRuntime:
                 scored = int(drawn.hidden.sum())
                 with session.precision.autocast():
                     predicted = session.model(batch, drawn)
-                total += float(loss(predicted, batch, drawn)) * scored
+                total += float(session.loss(predicted, batch, drawn)) * scored
                 hidden_tokens += scored
                 observed += int((~batch.padding_mask).sum())
         return total / max(hidden_tokens, 1), hidden_tokens / max(observed, 1)

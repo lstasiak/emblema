@@ -12,6 +12,7 @@ import pytest
 
 from emblema.pretraining.domain.exceptions import DivergedRunError, UnsupportedPrecisionError
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -187,7 +188,7 @@ def test_a_loss_that_is_not_finite_stops_the_run_before_anything_is_stepped_or_k
         error, scored = summed(*arguments)
         return error * math.nan, scored
 
-    monkeypatch.setattr(ReconstructionLoss, "summed", staticmethod(not_finite))
+    monkeypatch.setattr(ReconstructionLoss, "summed", not_finite)
     store = RecordingStore()
 
     with pytest.raises(DivergedRunError, match="the loss of batch 0 in epoch 0 is nan"):
@@ -210,7 +211,7 @@ def test_gradients_that_are_not_finite_stop_the_run_before_their_step_is_taken(
         error.register_hook(lambda gradient: gradient * math.inf)
         return error, scored
 
-    monkeypatch.setattr(ReconstructionLoss, "summed", staticmethod(overflowing))
+    monkeypatch.setattr(ReconstructionLoss, "summed", overflowing)
     store = RecordingStore()
 
     with pytest.raises(DivergedRunError, match="a gradient is not finite at step 1 of epoch 0"):
@@ -220,3 +221,23 @@ def test_gradients_that_are_not_finite_stop_the_run_before_their_step_is_taken(
             )
         )
     assert store.kept == []
+
+
+def test_a_run_is_scored_by_the_reading_its_experiment_states() -> None:
+    """The same weights under two readings are two runs: the losses differ and so do the seeds."""
+    bounded = configuration(
+        budget=budget(epochs=1), loss=ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.0)
+    )
+    squared = configuration(budget=budget(epochs=1))
+
+    under_bound = list(
+        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(bounded, CORPUS)
+    )
+    under_square = list(
+        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(squared, CORPUS)
+    )
+
+    # The bounded reading never counts a miss for more than the square does, and these windows
+    # hold misses past the knee, so it counts strictly less.
+    assert under_bound[-1].validation_loss < under_square[-1].validation_loss
+    assert RunSignature.of(bounded, CORPUS) != RunSignature.of(squared, CORPUS)

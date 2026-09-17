@@ -450,12 +450,12 @@ def diagnose(published: Published, trained: Trained, run: Run) -> Diagnosis:
     )
     apart = published.channels_apart()
     triviality = TrivialityDiagnostic(
-        channels_apart=apart, noise_variance=published.noise_variance()
+        run.configuration.loss, channels_apart=apart, noise_variance=published.noise_variance()
     )
     cycles = published.spectral_cycles()
     spectrum_of_model = SpectralRecovery.up_to(cycles)
     spectrum_of_ridge = SpectralRecovery.up_to(cycles)
-    loss = ReconstructionLoss()
+    loss = ReconstructionLoss(run.configuration.loss)
     interpolation_total, ridge_total, hidden, windows = 0.0, 0.0, 0, 0
     examples: list[Example] = []
     with torch.no_grad():

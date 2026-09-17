@@ -9,11 +9,29 @@ from emblema.pretraining.adapters.diagnostics.triviality_diagnostic import (  # 
 )
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks  # noqa: E402
 from emblema.pretraining.domain.assessment.mask_kind_tally import MaskKindTally  # noqa: E402
+from emblema.pretraining.domain.exceptions import IncomparableFloorError  # noqa: E402
 from emblema.pretraining.domain.mask_kind import MaskKind  # noqa: E402
+from emblema.pretraining.domain.training.objective_loss import (  # noqa: E402
+    LossKind,
+    ObjectiveLoss,
+)
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
 from tests.support.token_tensors import grid_batch  # noqa: E402
 
 pytestmark = pytest.mark.ml
+
+SQUARED = ObjectiveLoss(kind=LossKind.MSE)
+
+
+def diagnostic(
+    *,
+    channels_apart: frozenset[int] = frozenset(),
+    noise_variance: tuple[float, ...] | None = None,
+) -> TrivialityDiagnostic:
+    """The diagnostic under the squared reading, which is what the control runs under."""
+    return TrivialityDiagnostic(
+        SQUARED, channels_apart=channels_apart, noise_variance=noise_variance
+    )
 
 
 def masks_of_every_kind(batch: TokenTensors) -> TokenMasks:
@@ -56,9 +74,7 @@ def test_each_kind_is_tallied_against_its_matched_and_its_linear_baseline() -> N
     masks = masks_of_every_kind(batch)
     predictions = shifted(batch, model=1.0, interpolation=2.0, ridge=3.0, combined=4.0)
 
-    tallies = by_kind(
-        TrivialityDiagnostic().observe(batch, masks, one_group(batch), **predictions).tallies()
-    )
+    tallies = by_kind(diagnostic().observe(batch, masks, one_group(batch), **predictions).tallies())
 
     channel, block, token = (tallies[kind] for kind in MaskKind)
     assert (channel.tokens, block.tokens, token.tokens) == (2 * 11, 2 * 3, 2)
@@ -77,9 +93,7 @@ def test_the_mean_is_the_error_of_predicting_zero() -> None:
     truth = batch.features[..., 0].to(torch.float64)
     predictions = shifted(batch, model=0.0, interpolation=0.0, ridge=0.0, combined=0.0)
 
-    tallies = by_kind(
-        TrivialityDiagnostic().observe(batch, masks, one_group(batch), **predictions).tallies()
-    )
+    tallies = by_kind(diagnostic().observe(batch, masks, one_group(batch), **predictions).tallies())
 
     for kind, tally in tallies.items():
         assert tally.mean == pytest.approx(float(truth[masks.of_kind(kind)].pow(2).sum()))
@@ -96,8 +110,8 @@ def test_windows_are_tallied_per_group_and_groups_add_up_to_the_whole() -> None:
         for name in ("model", "interpolation", "ridge", "combined")
     }
 
-    grouped = TrivialityDiagnostic().observe(batch, masks, ["a", "b", "a", "c"], **predictions)
-    pooled = TrivialityDiagnostic().observe(batch, masks, one_group(batch), **predictions)
+    grouped = diagnostic().observe(batch, masks, ["a", "b", "a", "c"], **predictions)
+    pooled = diagnostic().observe(batch, masks, one_group(batch), **predictions)
 
     groups = {tally.group for tally in grouped.tallies()}
     assert groups == {"a", "b", "c"}
@@ -126,11 +140,11 @@ def test_batches_observed_one_at_a_time_tally_as_one() -> None:
         for name in ("model", "interpolation", "ridge", "combined")
     }
 
-    at_once = TrivialityDiagnostic().observe(
+    at_once = diagnostic().observe(
         whole, masks_of_every_kind(whole), one_group(whole), **predictions
     )
     one_by_one = (
-        TrivialityDiagnostic()
+        diagnostic()
         .observe(
             first,
             masks_of_every_kind(first),
@@ -161,7 +175,7 @@ def test_channels_reported_apart_get_tallies_of_their_own_after_the_rest() -> No
     predictions = shifted(batch, model=1.0, interpolation=0.0, ridge=0.0, combined=0.0)
 
     tallies = (
-        TrivialityDiagnostic(channels_apart=frozenset({1}))
+        diagnostic(channels_apart=frozenset({1}))
         .observe(batch, masks, one_group(batch), **predictions)
         .tallies()
     )
@@ -181,12 +195,12 @@ def test_the_noise_floor_is_summed_per_channel_where_the_corpus_states_it() -> N
     variance = (0.0, 0.1, 0.2, 0.3, 0.4, 0.0)
 
     stated = by_kind(
-        TrivialityDiagnostic(noise_variance=variance)
+        diagnostic(noise_variance=variance)
         .observe(batch, masks, one_group(batch), **predictions)
         .tallies()
     )
     unstated = by_kind(
-        TrivialityDiagnostic().observe(batch, masks, one_group(batch), **predictions).tallies()
+        diagnostic().observe(batch, masks, one_group(batch), **predictions).tallies()
     )
 
     assert stated[MaskKind.CHANNEL].floor == pytest.approx(0.1 * 22)
@@ -200,7 +214,7 @@ def test_a_noise_variance_that_does_not_cover_the_batch_is_refused() -> None:
     predictions = shifted(batch, model=0.0, interpolation=0.0, ridge=0.0, combined=0.0)
 
     with pytest.raises(ValueError, match="noise variance covers 3"):
-        TrivialityDiagnostic(noise_variance=(0.0, 0.1, 0.1)).observe(
+        diagnostic(noise_variance=(0.0, 0.1, 0.1)).observe(
             batch, masks_of_every_kind(batch), one_group(batch), **predictions
         )
 
@@ -210,7 +224,7 @@ def test_groups_must_name_every_window() -> None:
     predictions = shifted(batch, model=0.0, interpolation=0.0, ridge=0.0, combined=0.0)
 
     with pytest.raises(ValueError, match="one group per window: 2 for 3"):
-        TrivialityDiagnostic().observe(batch, masks_of_every_kind(batch), ["a", "b"], **predictions)
+        diagnostic().observe(batch, masks_of_every_kind(batch), ["a", "b"], **predictions)
 
 
 def test_padding_is_not_tallied_whatever_the_masks_say() -> None:
@@ -226,4 +240,13 @@ def test_padding_is_not_tallied_whatever_the_masks_say() -> None:
     masks = TokenMasks(channel=everything, block=everything, token=everything)
     predictions = shifted(batch, model=0.0, interpolation=0.0, ridge=0.0, combined=0.0)
 
-    assert TrivialityDiagnostic().observe(padded, masks, ["unit"], **predictions).tallies() == ()
+    assert diagnostic().observe(padded, masks, ["unit"], **predictions).tallies() == ()
+
+
+def test_a_noise_floor_is_refused_under_a_reading_no_variance_compares_with() -> None:
+    bounded = ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.0)
+
+    with pytest.raises(IncomparableFloorError, match="variance"):
+        TrivialityDiagnostic(bounded, noise_variance=(0.0, 0.1, 0.1))
+    # Without a floor to compare, the bounded reading tallies like any other.
+    assert TrivialityDiagnostic(bounded).loss.is_bounded

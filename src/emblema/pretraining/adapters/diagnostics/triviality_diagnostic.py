@@ -8,7 +8,9 @@ from torch import Tensor
 from emblema.pretraining.adapters.objective.reconstruction_loss import ReconstructionLoss
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
 from emblema.pretraining.domain.assessment.mask_kind_tally import MaskKindTally
+from emblema.pretraining.domain.exceptions import IncomparableFloorError
 from emblema.pretraining.domain.mask_kind import MaskKind
+from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
 
@@ -16,16 +18,20 @@ from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 class TrivialityDiagnostic:
     """Does each kind of mask teach anything a trivial baseline does not already know?
 
-    For every kind of mask the model's squared error is tallied beside the baseline matched to it
-    — linear interpolation within the channel for a block or a single token, the cross-channel
+    For every kind of mask the model's error is tallied beside the baseline matched to it —
+    linear interpolation within the channel for a block or a single token, the cross-channel
     regression for a channel hidden whole — beside the strongest linear baseline on the same
-    sources, and beside the channel mean. All of them are scored by the objective's own
-    squared error over the same hidden tokens, so the comparison is between answers to one
-    question. Batches are observed one at a time and the sums added per group of windows the
-    caller names; ``tallies`` hands them over. What the sums mean is judged elsewhere, with the
-    uncertainty only groups can give.
+    sources, and beside the channel mean. All of them are scored by the run's own reading of the
+    loss over the same hidden tokens, so the comparison is between answers to one question, which
+    is why the reading is given rather than assumed. Batches are observed one at a time and the
+    sums added per group of windows the caller names; ``tallies`` hands them over. What the sums
+    mean is judged elsewhere, with the uncertainty only groups can give.
+
+    Invariants: a noise floor is stated only under the squared reading, being a variance, which
+    no bounded loss compares with.
 
     Attributes:
+        loss: What the run counts a miss as; every predictor here is read by it.
         channels_apart: Channel identifiers whose tokens are tallied in rows of their own —
             constant channels, whose value every method recovers, and timeless ones, which no
             interpolation reaches.
@@ -35,9 +41,17 @@ class TrivialityDiagnostic:
         sums: Running tallies per kind, side of ``channels_apart`` and group.
     """
 
+    loss: ObjectiveLoss
     channels_apart: frozenset[int] = frozenset()
     noise_variance: tuple[float, ...] | None = None
     sums: Mapping[tuple[MaskKind, bool, str], MaskKindTally] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.noise_variance is not None and self.loss.is_bounded:
+            raise IncomparableFloorError(
+                f"a noise floor is a variance and compares with a squared error alone, not with "
+                f"{self.loss.kind}"
+            )
 
     def observe(
         self,
@@ -74,8 +88,9 @@ class TrivialityDiagnostic:
             ids, torch.tensor(sorted(self.channels_apart), dtype=torch.int64, device=ids.device)
         )
         floor = self._floor_of(ids)
+        scorer = ReconstructionLoss(self.loss)
         errors = {
-            name: ReconstructionLoss.squared_error(prediction.to(torch.float64), batch)
+            name: scorer.of_tokens(prediction.to(torch.float64), batch)
             for name, prediction in (
                 ("model", model),
                 ("interpolation", interpolation),

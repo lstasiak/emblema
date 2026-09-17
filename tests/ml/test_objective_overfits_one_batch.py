@@ -21,6 +21,7 @@ from emblema.pretraining.adapters.objective.reconstruction_loss import Reconstru
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from tests.support.control_corpus import Control
 from tests.support.encoders import SMALL
@@ -39,7 +40,7 @@ def test_one_batch_of_control_windows_is_driven_to_nearly_zero_loss(control: Con
     model = MaskedReconstruction(
         SetEncoder.for_vocabulary(SMALL, control.vocabulary_size), decoder_layers=1
     )
-    loss = ReconstructionLoss()
+    loss = ReconstructionLoss(ObjectiveLoss(kind=LossKind.MSE))
     optimiser = torch.optim.Adam(model.parameters(), lr=1e-2)
 
     losses = []
