@@ -19,7 +19,11 @@ from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCo
 from emblema.catalog.domain.exceptions import InvalidUnitSplitError
 from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
-from emblema.entrypoints.cli.publish_corpus.publish_corpus_cli import PublishCorpusCli
+from emblema.entrypoints.cli.publish_corpus.publish_corpus_cli import (
+    SEED,
+    VALIDATION_FRACTION,
+    PublishCorpusCli,
+)
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -232,3 +236,16 @@ def test_a_subset_asked_for_is_the_only_one_read() -> None:
     invocation = PublishCorpusCli().parse([*ARGUMENTS, "--subset", "FD001"])
 
     assert invocation.subsets == ("FD001",)
+
+
+def test_naming_the_units_and_drawing_them_at_once_is_refused() -> None:
+    """A fraction or a seed beside named units draws nothing, so it is a contradiction."""
+    for contradiction in (["--seed", "7"], ["--validation-fraction", "0.3"]):
+        with pytest.raises(SystemExit):
+            PublishCorpusCli().parse([*ARGUMENTS, "--hold-out", "FD001_unit_1", *contradiction])
+
+
+def test_a_command_line_that_says_nothing_of_the_split_draws_the_usual_share() -> None:
+    assert PublishCorpusCli().parse(ARGUMENTS).command.split == SeededSplit(
+        VALIDATION_FRACTION, SEED
+    )
