@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import Engine
 
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
+from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.config.settings import Settings
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
@@ -45,7 +46,7 @@ def test_a_corpus_published_by_one_process_is_the_corpus_the_next_one_publishes(
     database: Engine, tmp_path: Path
 ) -> None:
     store = InMemoryArtifactStore()
-    command = publish_command(window=WindowSpec(4.0, 2.0), validation_fraction=0.25)
+    command = publish_command(window=WindowSpec(4.0, 2.0), split=SeededSplit(0.25, 1))
 
     first = process(store, tmp_path / "first").services.publish_corpus(command)
     second = process(store, tmp_path / "second").services.publish_corpus(command)

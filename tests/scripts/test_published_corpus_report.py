@@ -12,6 +12,7 @@ from typing import NamedTuple
 import pytest
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
+from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from scripts.published_corpus_report import (
     Published,
@@ -35,7 +36,7 @@ class Run(NamedTuple):
 
 
 def publish_into(registry: InMemoryCorpusRepository, workspace: Path) -> Published:
-    command = publish_command(window=SAMPLE_WINDOW, validation_fraction=0.5)
+    command = publish_command(window=SAMPLE_WINDOW, split=SeededSplit(0.5, 1))
     return publish_once(SAMPLE, workspace, (SUBSET,), command, registry)
 
 

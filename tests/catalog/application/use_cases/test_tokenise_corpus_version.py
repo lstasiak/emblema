@@ -23,6 +23,11 @@ from emblema.catalog.domain.exceptions import (
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
 from emblema.catalog.domain.registry.corpus import Corpus
+from emblema.catalog.domain.tokenisation.split_policy import (
+    NamedSplit,
+    SeededSplit,
+    SplitPolicy,
+)
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -83,6 +88,7 @@ class Fixture:
         self,
         fraction: float = 0.25,
         seed: int = 1,
+        split: SplitPolicy | None = None,
         vocabulary: ChannelVocabulary | None = None,
     ) -> ArtifactRef:
         return self.tokenise(
@@ -90,8 +96,7 @@ class Fixture:
                 corpus_id=corpus_id(),
                 version_id=version_id(),
                 window=WINDOW,
-                validation_fraction=fraction,
-                seed=seed,
+                split=split if split is not None else SeededSplit(fraction, seed),
                 vocabulary=ChannelVocabulary() if vocabulary is None else vocabulary,
             )
         )
@@ -218,3 +223,18 @@ def test_a_vocabulary_declaring_a_channel_of_this_corpus_differently_is_refused(
 
     with pytest.raises(ChannelRedeclaredError):
         fixture.run(vocabulary=redeclared)
+
+
+def test_a_publication_that_names_its_held_out_units_records_them_and_no_seed(
+    wired: Callable[..., Fixture],
+) -> None:
+    """A corpus whose units differ in kind is split by naming, and the names are what it kept."""
+    fixture = wired(registered(UNITS))
+    named = UNITS[0][0].key
+
+    manifest = fixture.archive.read_manifest(fixture.run(split=NamedSplit.of((named,))))
+
+    assert manifest.split.validation == frozenset({named})
+    assert len(manifest.split.training) == len(UNITS) - 1
+    # Nothing was drawn, so the publication records the names it was given and no seed.
+    assert manifest.split_seed is None

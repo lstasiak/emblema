@@ -11,6 +11,7 @@ their own here; every other corpus is reached through ``sample`` and ``raw_root`
 from pathlib import Path
 
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
+from emblema.catalog.domain.tokenisation.split_policy import SeededSplit, SplitPolicy
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
 from scripts.raw_corpora import raw_root as downloaded_root
@@ -42,11 +43,15 @@ def raw_root(corpus: str = CORPUS) -> Path | None:
     return downloaded_root(corpus)
 
 
+# Half the units held out by the test seed: what a corpus whose units differ only in the draw asks
+# for, and what every publication in these tests asked for before a split could be named.
+DRAWN = SeededSplit(0.5, 1)
+
+
 def publish_command(
     *,
     window: WindowSpec = SAMPLE_WINDOW,
-    validation_fraction: float = 0.5,
-    seed: int = 1,
+    split: SplitPolicy = DRAWN,
     corpus: str = CORPUS,
 ) -> PublishCorpusCommand:
     """The command a run issues: the corpus's own facts, plus how this test wants it cut."""
@@ -56,6 +61,5 @@ def publish_command(
         source=known.source,
         licence=known.licence,
         window=window,
-        validation_fraction=validation_fraction,
-        seed=seed,
+        split=split,
     )

@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -125,4 +126,21 @@ def test_a_checksum_of_an_unknown_algorithm_is_refused() -> None:
     document["corpus_checksum"]["algorithm"] = "md5"
 
     with pytest.raises(MalformedManifestError, match="well formed"):
+        JSON.decode(encoded(document))
+
+
+def test_a_manifest_whose_units_were_named_records_no_seed() -> None:
+    named = replace(MANIFEST, split_seed=None)
+
+    document = json.loads(JSON.encode(named))
+
+    assert document["split"]["seed"] is None
+    assert JSON.decode(JSON.encode(named)) == named
+
+
+def test_a_seed_that_is_neither_a_whole_number_nor_absent_is_refused() -> None:
+    document = document_of()
+    document["split"]["seed"] = "seven"
+
+    with pytest.raises(MalformedManifestError, match="integer or null"):
         JSON.decode(encoded(document))

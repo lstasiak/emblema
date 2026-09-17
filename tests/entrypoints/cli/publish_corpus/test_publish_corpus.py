@@ -16,6 +16,8 @@ from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCor
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
+from emblema.catalog.domain.exceptions import InvalidUnitSplitError
+from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.entrypoints.cli.publish_corpus.publish_corpus_cli import PublishCorpusCli
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -93,6 +95,23 @@ def test_what_the_command_line_says_is_what_the_corpus_was_cut_with(process: Pro
     assert (manifest.window.length, manifest.window.stride) == (2.0, 2.0)
     assert manifest.split_seed == 7
     assert len(manifest.split.validation) == 1
+
+
+def test_the_command_line_holds_out_the_units_it_names(process: Process) -> None:
+    """Naming the units is how a corpus whose units differ in kind states its held-out side."""
+    units = process.root.adapters.reader.read_units()
+    named = next(iter(units)).key
+
+    ref = process.root.services.publish_corpus(command("--hold-out", named.value))
+
+    manifest = process.root.adapters.archive.read_manifest(ref)
+    assert manifest.split.validation == frozenset({named})
+    assert manifest.split_seed is None
+
+
+def test_a_unit_the_corpus_does_not_hold_stops_the_publication(process: Process) -> None:
+    with pytest.raises(InvalidUnitSplitError, match="does not hold"):
+        process.root.services.publish_corpus(command("--hold-out", "no-such-unit"))
 
 
 def test_without_overrides_the_process_runs_on_what_the_settings_name(tmp_path: Path) -> None:
@@ -180,7 +199,7 @@ def test_the_command_line_states_the_window_it_was_given() -> None:
     invocation = PublishCorpusCli().parse(ARGUMENTS)
 
     assert (invocation.command.window.length, invocation.command.window.stride) == (4.0, 2.0)
-    assert invocation.command.seed == 1
+    assert invocation.command.split == SeededSplit(0.2, 1)
     assert invocation.command.vocabulary_from is None
     assert invocation.corpus_root == Path("data/raw/cmapss")
     assert invocation.subsets == ()
