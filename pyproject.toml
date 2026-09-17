@@ -130,6 +130,8 @@ allowed-confusables = ["×"]
 "scripts/masked_reconstruction_assessment.py" = ["E402"]
 "scripts/masked_reconstruction_figures.py" = ["E402"]
 "scripts/training_loop_report.py" = ["E402"]
+"scripts/corpus_saturation_report.py" = ["E402"]
+"scripts/corpus_saturation_figures.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
