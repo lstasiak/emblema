@@ -1,0 +1,39 @@
+# What half precision costs on the published tier's accelerator: the small-shape C-MAPSS run in
+# single precision, to be read beside the same run in half.
+#
+# Half precision on CUDA scales its gradients and skips every step whose gradients overflow, a
+# path no other machine of the project takes; single precision has no such path. The two files
+# differ in the precision alone, so whatever separates their curves is that path. The same budget
+# over the same corpus was also measured in single precision on the development machine
+# (docs/verification/corpus-saturation.md), which gives this run a curve to be held against too.
+name = "backbone-cmapss-m-small-fp32"
+tier = "M"
+corpus = "cmapss"
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[shape]
+width = 192
+heads = 3
+layers = 4
+feedforward_width = 768
+time_frequencies = 12
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[budget]
+epochs = 4
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 500
