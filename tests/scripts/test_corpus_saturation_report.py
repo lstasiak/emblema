@@ -23,6 +23,7 @@ from emblema.pretraining.adapters.in_memory.training_runtime import InMemoryTrai
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.pretraining.ports.training_runtime import TrainingRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -41,8 +42,10 @@ from scripts.corpus_saturation_report import (
     read_epochs,
     read_run,
     render,
+    settings_of,
     stored_runs,
     train,
+    trivial_loss,
     write_settings,
 )
 from tests.support.experiments import (
@@ -62,7 +65,9 @@ pytestmark = pytest.mark.ml
 DEVICE, REVISION = "cpu", "0123456789abcdef0123456789abcdef01234567"
 
 
-def experiment(**budget_overrides: object) -> ExperimentFile:
+def experiment(
+    objective: dict[str, object] | None = None, **budget_overrides: object
+) -> ExperimentFile:
     """An experiment of the measurement over the test corpus, at a budget a test affords."""
     stated: dict[str, object] = {
         "epochs": 4,
@@ -88,6 +93,7 @@ def experiment(**budget_overrides: object) -> ExperimentFile:
                 "block_span": 0.5,
                 "token_rate": 0.1,
             },
+            "objective": objective or {},
             "budget": stated | budget_overrides,
             "checkpoint": {"every_steps": 2},
         }
@@ -487,3 +493,33 @@ def test_every_experiment_of_the_measurement_in_the_repository_states_the_whole_
     assert stated, "the repository states at least one saturation experiment"
     assert all(file.corpus_fraction == 1.0 for file in stated.values())
     assert all(name.startswith("saturation-") for name in stated)
+
+
+def test_the_trivial_predictor_is_read_under_the_run_s_own_reading() -> None:
+    """A bounded loss over a mean square would be two things divided, and the verdict reads one."""
+    windows = corpus(training=4).training
+    values = [value for window in windows for value in window.values]
+
+    squared = trivial_loss(windows, ObjectiveLoss(kind=LossKind.MSE))
+    bounded = trivial_loss(windows, ObjectiveLoss(kind=LossKind.HUBER, huber_delta=0.5))
+
+    assert squared == pytest.approx(sum(value * value for value in values) / len(values))
+    knee = ObjectiveLoss(kind=LossKind.HUBER, huber_delta=0.5)
+    assert bounded == pytest.approx(sum(knee.of_error(value) for value in values) / len(values))
+    assert bounded < squared
+
+
+def test_a_run_records_the_reference_its_own_reading_gives(tmp_path: Path) -> None:
+    reader, manifest = published_reader(tmp_path)
+    bounded = experiment({"kind": "huber", "huber_delta": 0.5})
+
+    drawn = plan(bounded, manifest, reader, fractions=(1.0,))[0]
+    settings = settings_of(drawn, device=DEVICE, revision=REVISION)
+
+    reading = drawn.configuration.loss
+    assert reading == ObjectiveLoss(kind=LossKind.HUBER, huber_delta=0.5)
+    for side, windows in (
+        ("training_reference", drawn.windows.training),
+        ("validation_reference", drawn.windows.validation),
+    ):
+        assert float(settings[side]) == trivial_loss(windows, reading)

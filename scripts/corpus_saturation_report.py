@@ -32,6 +32,7 @@ from math import ceil
 from pathlib import Path
 
 import numpy as np
+from numpy.typing import NDArray
 
 # Run from anywhere: the sibling script modules live in this directory's package at the repository
 # root. The imports below follow, which is why this file is exempt from the import-order rule in
@@ -63,6 +64,7 @@ from emblema.pretraining.domain.saturation.saturation_point import SaturationPoi
 from emblema.pretraining.domain.saturation.saturation_verdict import judge
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
@@ -109,18 +111,36 @@ def experiments(directory: Path = EXPERIMENTS) -> dict[str, ExperimentFile]:
     return {file.name: file for file in stated}
 
 
-def trivial_loss(windows: Sequence[TokenWindow]) -> float:
-    """The error of predicting every token's channel mean, which in normalised units is zero.
+def trivial_loss(windows: Sequence[TokenWindow], loss: ObjectiveLoss) -> float:
+    """The cost of predicting every token's channel mean, which in normalised units is zero.
 
-    What a run's loss is read against: the mean square of the values over every token of the
-    side, timeless ones included, as the masks hide any of them.
+    What a run's loss is read against, under the run's own reading of it: a loss that bounds
+    what one excursion costs, divided by a mean square, would be two different things over each
+    other, and the verdict reads that ratio against one. Over every token of the side, timeless
+    ones included, as the masks hide any of them.
     """
-    squares, count = 0.0, 0
+    total, count = 0.0, 0
     for window in windows:
         values = np.asarray(window.values, dtype=np.float64)
-        squares += float(np.dot(values, values))
+        total += _summed(values, loss)
         count += values.size
-    return squares / count if count else 0.0
+    return total / count if count else 0.0
+
+
+def _summed(values: NDArray[np.float64], loss: ObjectiveLoss) -> float:
+    """The reading over an array of errors, in one pass rather than one call per token.
+
+    The same arithmetic as ``ObjectiveLoss.of_error``, which is the definition a test holds this
+    to: a corpus of sixty million tokens is weighed before a run starts, and a Python call per
+    token would be minutes of it.
+    """
+    if loss.kind is LossKind.MSE:
+        return float(np.sum(np.square(values)))
+    delta = loss.huber_delta
+    magnitude = np.abs(values)
+    within = 0.5 * np.square(values)
+    beyond = delta * (magnitude - 0.5 * delta)
+    return float(np.sum(np.where(magnitude <= delta, within, beyond)))
 
 
 def batches_of(corpus: TrainingCorpus, budget: TrainingBudget) -> int:
@@ -367,8 +387,8 @@ def settings_of(
         "training_windows": str(len(run.windows.training)),
         "validation_windows": str(len(run.windows.validation)),
         "validation_stride": str(validation_stride),
-        "training_reference": repr(trivial_loss(run.windows.training)),
-        "validation_reference": repr(trivial_loss(run.windows.validation)),
+        "training_reference": repr(trivial_loss(run.windows.training, configuration.loss)),
+        "validation_reference": repr(trivial_loss(run.windows.validation, configuration.loss)),
         "vocabulary_size": str(run.windows.vocabulary_size),
         "block_checksum": str(run.windows.checksum),
         "steps_per_epoch": str(budget.steps_per_epoch(run.batches)),
