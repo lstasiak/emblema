@@ -17,8 +17,10 @@ class PretrainingResultJson:
     """A result as JSON, the form the machine that trained stores it in for this one to read."""
 
     FORMAT: Final = "emblema.pretraining-result"
-    # Bumped when the meaning of a field changes; a new field is one an older reader ignores.
-    VERSION: Final = 1
+    # Bumped when a document of the version before can no longer be read here: a field changed
+    # its meaning or a required one was added. A field an older reader ignores costs no bump.
+    # Version 2: the configuration states the share of the corpus a run reads.
+    VERSION: Final = 2
 
     def __init__(self) -> None:
         self._configurations = ExperimentConfigurationDocument()

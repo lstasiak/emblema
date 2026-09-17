@@ -9,6 +9,9 @@ corpus = "spectral-probe"
 precision = "fp32"
 dropout = 0.0
 decoder_layers = 1
+# The whole layout, not the tenth the tier states: the tier's share is sized for the real
+# corpora, and the generated ones are already small.
+corpus_fraction = 1.0
 
 # Blocks and whole channels carry most of the hiding, single tokens are the minority ingredient,
 # and together they take close to half of a window.

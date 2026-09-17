@@ -38,6 +38,7 @@ def test_the_document_is_plain_json_with_the_shape_stated_outright() -> None:
         ({"tier": "XL"}, "XL"),
         ({"precision": "fp8"}, "fp8"),
         ({"dropout": 1.5}, "dropout"),
+        ({"corpus_fraction": 0}, "fraction"),
         ({"budget": {}}, "epochs"),
         ({"architecture": None}, "architecture"),
     ],

@@ -9,9 +9,11 @@ from emblema.pretraining.domain.training.training_corpus_shape import TrainingCo
 from emblema.shared.kernel.checksums import Checksum
 from tests.support.experiments import budget, configuration, corpus
 
-# The first backbone registered against the remote bucket: the control experiment at tier S over
-# the control corpus as it was published (window 32, stride 12, a quarter held out). Its
-# signature is in the registry and in the result document, so the digest must not move.
+# The control experiment at tier S over the control corpus as it was published (window 32,
+# stride 12, a quarter held out), as the registry and the result documents sign it. The digest
+# moves only when the configuration gains a parameter or renders one anew, and then on purpose:
+# the first backbone registered against the remote bucket signed as 21c07d44…, before the share
+# of the corpus became a parameter every run states and the warmup a fraction of an epoch.
 CONTROL_A = TrainingCorpusShape(
     name="control-a",
     checksum=Checksum.parse(
@@ -21,7 +23,7 @@ CONTROL_A = TrainingCorpusShape(
     validation_windows=1534,
     vocabulary_size=9,
 )
-CONTROL_A_S_SIGNATURE = "21c07d44e1c35c5cce640083b1b95e7e157dbd96ce4113e7e6eb2062fb602c67"
+CONTROL_A_S_SIGNATURE = "051fcf7020aa7af565f65337282633cc93b5c7f23efc0d1df689644e964cb2bf"
 
 
 def test_the_same_run_signs_the_same_and_another_configuration_does_not() -> None:

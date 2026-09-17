@@ -75,7 +75,7 @@ class _Budget(_Section):
     batch_size: int
     accumulation_steps: int
     learning_rate: float
-    warmup_epochs: int
+    warmup_epochs: float
     final_lr_fraction: float
     seed: int
 
@@ -101,16 +101,18 @@ class _Checkpoint(_Section):
 class ExperimentFile(_Section):
     """An experiment as it is written down: every parameter of scale, in one file, under a tier.
 
-    The file is the source of a run. The shape comes from the tier unless the file says otherwise,
-    and everything else is stated outright, so that reproducing a run means running the same file
-    rather than remembering which flags were passed. What the values are allowed to be is the
-    domain's business: this reads the file, refuses keys nobody reads, and lets the value objects
-    say what is out of range.
+    The file is the source of a run. The shape and the share of the corpus come from the tier
+    unless the file says otherwise, and everything else is stated outright, so that reproducing a
+    run means running the same file rather than remembering which flags were passed. What the
+    values are allowed to be is the domain's business: this reads the file, refuses keys nobody
+    reads, and lets the value objects say what is out of range.
 
     Attributes:
         name: What the experiment is called; runs of it are grouped under this name.
         tier: Hardware class the run declares, and the shape it takes unless overridden.
         corpus: The published corpus the run reads.
+        corpus_fraction: Share of that corpus's training units the run reads; the tier's unless
+            stated.
         precision: What the forward and backward pass are computed at.
         dropout: Dropout of the encoder and the decoder.
         decoder_layers: Blocks of the decoder thrown away when the run ends.
@@ -123,6 +125,7 @@ class ExperimentFile(_Section):
     name: str
     tier: ComputeTier
     corpus: str
+    corpus_fraction: float | None = None
     precision: Precision
     dropout: float
     decoder_layers: int
@@ -148,6 +151,7 @@ class ExperimentFile(_Section):
 
         Raises:
             InvalidExperimentConfigurationError: If what the file states is not a configuration.
+            InvalidCorpusShareError: If the share of the corpus is not one a run could read.
             InvalidEncoderArchitectureError: If the shape it states is not an architecture.
             InvalidMaskingStrategyError: If the strategy hides everything or nothing.
             InvalidTrainingBudgetError: If the budget is not one a run could follow.
@@ -158,6 +162,9 @@ class ExperimentFile(_Section):
         return ExperimentConfiguration(
             name=self.name,
             tier=self.tier,
+            corpus_fraction=(
+                profile.corpus_fraction if self.corpus_fraction is None else self.corpus_fraction
+            ),
             architecture=architecture if self.shape is None else self.shape.over(architecture),
             dropout=self.dropout,
             decoder_layers=self.decoder_layers,
