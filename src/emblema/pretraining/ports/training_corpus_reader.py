@@ -1,6 +1,7 @@
 from typing import Protocol
 
 from emblema.pretraining.domain.backbone.pretraining_input import PretrainingInput
+from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.shared.kernel.artifacts import ArtifactRef
 
@@ -24,8 +25,11 @@ class TrainingCorpusReader(Protocol):
         """
         ...
 
-    def read(self, manifest: ArtifactRef) -> TrainingCorpus:
+    def read(self, manifest: ArtifactRef, share: CorpusShare) -> TrainingCorpus:
         """The windows the manifest describes, training and validation sides apart.
+
+        The training side holds the windows of the units the share picks among the manifest's
+        training units; the validation side is whole whatever the share.
 
         Raises:
             UnreadablePublishedCorpusError: If the manifest or its block is not one this reads.

@@ -1,8 +1,8 @@
 """A corpus published the way the Catalog publishes one, cut to a test's size, in any store.
 
-Three windows in a block beside a manifest that names them: two units with windows, one without,
-one held out. What a reader of the published corpus must give back is stated beside it, so a
-contract holds every adapter to the same corpus.
+Four windows in a block beside a manifest that names them: two training units with windows, a
+training unit without, one held out. What a reader of the published corpus must give back is
+stated beside it, so a contract holds every adapter to the same corpus.
 """
 
 from pathlib import Path
@@ -26,7 +26,7 @@ from tests.shared.adapters.windows.support import stored_at
 CORPUS = "test-corpus"
 VERSION = CorpusVersionId(UUID(int=7))
 SOURCE_CHECKSUM = Checksum.of_bytes(b"the source data of the version")
-TRAINING_UNIT, VALIDATION_UNIT, EMPTY_UNIT = "u1", "u2", "u3"
+TRAINING_UNIT, VALIDATION_UNIT, EMPTY_UNIT, OTHER_TRAINING_UNIT = "u1", "u2", "u3", "u4"
 CHANNELS = (
     PublishedChannel(
         channel_id=1,
@@ -64,6 +64,15 @@ HELD_OUT = TokenWindow.of(
         Token(channel_id=2, value=2 / 3, time=2 / 3, gap=2 / 3),
     )
 )
+# The other training unit's one window, so that a share of the training units is a share.
+OTHER = TokenWindow.of(
+    (
+        Token(channel_id=2, value=-1.0, time=0.0, gap=0.0),
+        Token(channel_id=2, value=1.0, time=0.5, gap=0.5),
+    )
+)
+# The unit each training window was cut from, in the order the block holds them.
+TRAINING_UNITS = (TRAINING_UNIT, TRAINING_UNIT, OTHER_TRAINING_UNIT)
 
 
 class PublishedCorpus(NamedTuple):
@@ -82,6 +91,7 @@ def publish(store: ArtifactStore, workspace: Path) -> PublishedCorpus:
         writer.add(FIRST, unit=0, start=0.0, end=10.0)
         writer.add(SECOND, unit=0, start=5.0, end=15.0)
         writer.add(HELD_OUT, unit=1, start=0.0, end=10.0)
+        writer.add(OTHER, unit=2, start=0.0, end=10.0)
     block = store.put_file(path)
     manifest = store.put(PublishedCorpusManifestJson().encode(manifest_of(block)))
     described = PretrainingInput(
@@ -95,7 +105,7 @@ def publish(store: ArtifactStore, workspace: Path) -> PublishedCorpus:
     corpus = TrainingCorpus(
         name=CORPUS,
         checksum=block.checksum,
-        training=[stored_at(FIRST), stored_at(SECOND)],
+        training=[stored_at(FIRST), stored_at(SECOND), stored_at(OTHER)],
         validation=[stored_at(HELD_OUT)],
         vocabulary_size=len(CHANNELS),
     )
@@ -111,12 +121,12 @@ def manifest_of(block: ArtifactRef, **overrides: Any) -> PublishedCorpusManifest
         "window_length": 10.0,
         "window_stride": 5.0,
         "channels": CHANNELS,
-        "units": (TRAINING_UNIT, VALIDATION_UNIT),
+        "units": (TRAINING_UNIT, VALIDATION_UNIT, OTHER_TRAINING_UNIT),
         "empty_units": (EMPTY_UNIT,),
-        "training_units": (TRAINING_UNIT, EMPTY_UNIT),
+        "training_units": (TRAINING_UNIT, EMPTY_UNIT, OTHER_TRAINING_UNIT),
         "validation_units": (VALIDATION_UNIT,),
         "split_seed": 1,
-        "window_count": 3,
-        "token_count": 7,
+        "window_count": 4,
+        "token_count": 9,
     }
     return PublishedCorpusManifest(**(stated | overrides))
