@@ -45,6 +45,14 @@ class InvalidTrainingCorpusError(PretrainingError, ValueError):
     pass
 
 
+class InvalidCorpusShareError(PretrainingError, ValueError):
+    pass
+
+
+class InvalidSaturationCurveError(PretrainingError, ValueError):
+    pass
+
+
 class InvalidRunPositionError(PretrainingError, ValueError):
     pass
 
