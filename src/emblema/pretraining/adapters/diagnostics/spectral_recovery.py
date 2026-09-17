@@ -69,7 +69,9 @@ class SpectralRecovery:
         """The tallies with every channel hidden whole in ``batch`` fitted in."""
         arrays = WindowArrays.of(batch)
         whole = masks.channel.cpu().numpy() & arrays.observed & ~batch.timeless.cpu().numpy()
-        predicted = prediction.detach().to("cpu", torch.float64).numpy()
+        # Moved, then widened, as ``TokenTensors.to`` does it: a device with no double precision
+        # cannot convert to it, and asking for both in one call gives back zeros.
+        predicted = prediction.detach().to("cpu").to(torch.float64).numpy()
         truth = np.array(self.truth_energy)
         residual = np.array(self.residual_energy)
         fitted, skipped = self.fitted, self.skipped

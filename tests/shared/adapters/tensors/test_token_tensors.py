@@ -62,6 +62,19 @@ def test_moving_keeps_the_values_the_batch_held() -> None:
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="needs Apple-silicon MPS")
+def test_widening_on_the_way_off_the_accelerator_keeps_the_values() -> None:
+    # A device that has no double precision cannot convert to it, and asking it to move and widen
+    # in one call returns zeros rather than refusing (torch 2.14 on MPS).
+    tensors = TokenTensors.from_windows([SHORT, LONG])
+
+    widened = tensors.to("mps").to("cpu", torch.float64)
+
+    assert widened.features.dtype == torch.float64
+    assert torch.equal(widened.features, tensors.features.to(torch.float64))
+    assert torch.equal(widened.timestamps, tensors.timestamps.to(torch.float64))
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="needs Apple-silicon MPS")
 def test_every_tensor_reaches_the_accelerator_the_run_uses() -> None:
     # Moving to an accelerator is the case `.to("cpu")` cannot fail on: a field left behind would
     # only surface as a device mismatch inside the model.

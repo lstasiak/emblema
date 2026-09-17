@@ -76,12 +76,20 @@ class TokenTensors:
     def to(
         self, device: torch.device | str | None = None, dtype: torch.dtype | None = None
     ) -> Self:
-        """The same batch on ``device``, its floating tensors in ``dtype``."""
+        """The same batch on ``device``, its floating tensors in ``dtype``.
+
+        The move and the change of type are two steps, in that order. Asking an accelerator for
+        both at once can give back a tensor that is not the one it holds: on MPS, widening to
+        double precision on the way to the host returns zeros with no error, because the device
+        has no double precision to convert in (torch 2.14). Widening on the host is exact from
+        any device, and costs one pass over a batch.
+        """
 
         def moved(tensor: Tensor) -> Tensor:
-            if dtype is not None and tensor.is_floating_point():
-                return tensor.to(device=device, dtype=dtype)
-            return tensor.to(device=device)
+            on_device = tensor.to(device=device)
+            if dtype is not None and on_device.is_floating_point():
+                return on_device.to(dtype=dtype)
+            return on_device
 
         return replace(
             self, **{field.name: moved(getattr(self, field.name)) for field in fields(self)}
