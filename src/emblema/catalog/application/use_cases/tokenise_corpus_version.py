@@ -10,6 +10,7 @@ from emblema.catalog.domain.identifiers import CorpusId, UnitKey
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
 from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
+from emblema.catalog.domain.tokenisation.split_policy import SplitPolicy
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.tokenisation.unit_split import UnitSplit
@@ -29,8 +30,8 @@ class TokeniseCorpusVersionCommand:
         corpus_id: Corpus the version belongs to.
         version_id: Version to tokenise; must be frozen.
         window: How windows are laid over each unit's time axis.
-        validation_fraction: Share of units held out from fitting the scheme.
-        seed: Seed the split is drawn with; recorded, so the same split can be drawn again.
+        split: How the units held out from fitting the scheme are chosen; recorded with the
+            publication, so the same split can be made again.
         vocabulary: Channels already registered, whose identifiers this corpus's channels are
             appended after. Corpora tokenised under one growing vocabulary can be trained on
             together, because no two of their channels share an identifier; a fresh vocabulary
@@ -40,8 +41,7 @@ class TokeniseCorpusVersionCommand:
     corpus_id: CorpusId
     version_id: CorpusVersionId
     window: WindowSpec
-    validation_fraction: float
-    seed: int
+    split: SplitPolicy
     vocabulary: ChannelVocabulary = field(default_factory=ChannelVocabulary)
 
 
@@ -89,9 +89,7 @@ class TokeniseCorpusVersion:
                 f"but the reader sees {description.content.checksum}"
             )
         units = list(self._reader.read_units())
-        split = UnitSplit.by_seed(
-            (unit.key for unit in units), command.validation_fraction, command.seed
-        )
+        split = command.split.applied_to([unit.key for unit in units])
         scheme = self._fitted(corpus.name, units, split, version.channel_schema, command.vocabulary)
         archived = self._archive.write_windows(
             self._placed(corpus.name, units, scheme, command.window)
@@ -105,7 +103,7 @@ class TokeniseCorpusVersion:
             window=command.window,
             scheme=scheme,
             split=split,
-            split_seed=command.seed,
+            split_seed=command.split.recorded_seed,
             empty_units=tuple(unit.key for unit in units if unit.key not in indexed),
         )
         return self._archive.write_manifest(manifest)

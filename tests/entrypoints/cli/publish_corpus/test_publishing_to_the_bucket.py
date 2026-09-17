@@ -101,7 +101,9 @@ def test_a_training_run_gets_batches_without_opening_a_source_file(
     manifest = elsewhere.read_manifest(manifest_ref)
 
     windows = elsewhere.read_windows(manifest.archived, manifest.split.training)
-    loader = WindowLoader(windows, batch_size=BATCH_SIZE, seed=manifest.split_seed)
+    # The order windows arrive in is a run's business, not the publication's: the split's seed
+    # is recorded for the split, and a named split records none at all.
+    loader = WindowLoader(windows, batch_size=BATCH_SIZE, seed=1)
     batch = next(iter(loader.batches_of(0)))
 
     assert WindowDataset(windows)

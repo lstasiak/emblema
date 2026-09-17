@@ -14,6 +14,7 @@ from emblema.catalog.adapters.synthetic.layouts import CONTROL_A, CONTROL_B, CON
 from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
+from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
@@ -86,7 +87,6 @@ def command(layout: SensorLayout, vocabulary_from: ArtifactRef | None) -> Publis
         source=known.source,
         licence=known.licence,
         window=WINDOW,
-        validation_fraction=0.25,
-        seed=1,
+        split=SeededSplit(0.25, 1),
         vocabulary_from=vocabulary_from,
     )

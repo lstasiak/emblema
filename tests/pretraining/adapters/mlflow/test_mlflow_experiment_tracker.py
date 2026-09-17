@@ -43,6 +43,17 @@ def test_a_finished_run_holds_its_parameters_its_curve_and_what_it_produced(
         (0, epochs[0].validation_loss),
         (1, epochs[1].validation_loss),
     ]
+    # A corpus of the run gets a curve of its own, so that a mixture is read corpus by corpus.
+    per_corpus = client.get_metric_history(run.info.run_id, "validation_loss_invented")
+    assert [(point.step, point.value) for point in per_corpus] == [
+        (0, epochs[0].validation[0].loss),
+        (1, epochs[1].validation[0].loss),
+    ]
+    relative = client.get_metric_history(run.info.run_id, "relative_validation_invented")
+    assert [point.value for point in relative] == [
+        epochs[0].validation[0].relative,
+        epochs[1].validation[0].relative,
+    ]
 
 
 def test_the_checkpoint_a_dropped_session_would_resume_from_is_the_latest_one(

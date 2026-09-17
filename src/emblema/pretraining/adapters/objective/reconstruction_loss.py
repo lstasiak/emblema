@@ -1,11 +1,14 @@
+import torch
 from torch import Tensor, nn
+from torch.nn import functional
 
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
 
 class ReconstructionLoss(nn.Module):
-    """Mean squared error over the hidden tokens that were observed, and over nothing else.
+    """The error over the hidden tokens that were observed, and over nothing else.
 
     A position that is padding is not a token and a token that was never hidden was given to the
     model, so scoring either would lower the loss without the model having predicted anything —
@@ -14,23 +17,31 @@ class ReconstructionLoss(nn.Module):
     the scored tokens of the whole batch, so a window that hid three tokens does not weigh as much
     as one that hid three hundred.
 
-    The target is the normalised value of the token. The same scorer serves a trivial baseline, so
-    that a model and the baseline it is measured against are measured the same way; ``over``
-    takes the positions to score, for a diagnostic that scores one kind of mask at a time.
+    What a miss is worth is the run's to state, not this class's: a squared error, or a bounded
+    one that stops a single excursion from deciding the gradient. The reading is therefore given
+    and never defaulted, and ``ObjectiveLoss.of_error`` is the definition these tensors are held
+    to. The target is the normalised value of the token. The same scorer serves a trivial
+    baseline, so that a model and the baseline it is measured against are measured the same way;
+    ``over`` takes the positions to score, for a diagnostic that scores one kind of mask at a time.
     """
+
+    def __init__(self, loss: ObjectiveLoss) -> None:
+        """Score the hidden tokens by ``loss``."""
+        super().__init__()
+        self.loss = loss
 
     def forward(self, prediction: Tensor, batch: TokenTensors, masks: TokenMasks) -> Tensor:
         return self.over(prediction, batch, masks.hidden)
 
-    @staticmethod
-    def over(prediction: Tensor, batch: TokenTensors, positions: Tensor) -> Tensor:
-        """The error over ``positions`` that hold an observed token; zero where there is none."""
-        total, scored = ReconstructionLoss.summed(prediction, batch, positions)
+    def over(self, prediction: Tensor, batch: TokenTensors, positions: Tensor) -> Tensor:
+        """The loss over ``positions`` that hold an observed token; zero where there is none."""
+        total, scored = self.summed(prediction, batch, positions)
         return total / scored.clamp(min=1)
 
-    @staticmethod
-    def summed(prediction: Tensor, batch: TokenTensors, positions: Tensor) -> tuple[Tensor, Tensor]:
-        """The error over those positions before it is divided, and how many were scored.
+    def summed(
+        self, prediction: Tensor, batch: TokenTensors, positions: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        """The loss over those positions before it is divided, and how many were scored.
 
         What one batch contributes to a larger batch's mean. Whoever sums several batches into one
         gradient adds these and divides once, and then a batch that hid three tokens weighs a
@@ -38,15 +49,27 @@ class ReconstructionLoss(nn.Module):
         applied across them.
         """
         scored = positions & ~batch.padding_mask
-        squared = ReconstructionLoss.squared_error(prediction, batch) * scored.to(prediction.dtype)
-        return squared.sum(), scored.sum()
+        losses = self.of_tokens(prediction, batch) * scored.to(prediction.dtype)
+        return losses.sum(), scored.sum()
 
-    @staticmethod
-    def squared_error(prediction: Tensor, batch: TokenTensors) -> Tensor:
-        """Per position, the squared distance of the prediction from the token's target.
+    def of_tokens(self, prediction: Tensor, batch: TokenTensors) -> Tensor:
+        """Per position, what the run's reading makes of the distance from the token's target.
 
         Nothing is masked here, padding included: this is the one place the target is read, for
-        whoever sums the errors over positions of their own choosing.
+        whoever sums the losses over positions of their own choosing.
         """
         target = batch.features[..., 0].to(prediction.dtype)
-        return (prediction - target).pow(2)
+        if self.loss.kind is LossKind.MSE:
+            return functional.mse_loss(prediction, target, reduction="none")
+        return functional.huber_loss(
+            prediction, target, reduction="none", delta=self.loss.huber_delta
+        )
+
+    def summed_over_mean(self, batch: TokenTensors, positions: Tensor) -> tuple[Tensor, Tensor]:
+        """What predicting the channel mean costs over those positions, and how many were scored.
+
+        The trivial predictor is zero in normalised units, and what a run learnt is read against
+        it under the run's own reading: a bounded loss against a variance would be two different
+        things divided by each other.
+        """
+        return self.summed(torch.zeros_like(batch.features[..., 0]), batch, positions)

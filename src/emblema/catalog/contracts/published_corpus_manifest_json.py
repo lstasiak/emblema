@@ -89,7 +89,7 @@ class PublishedCorpusManifestJson:
             empty_units=fields.texts("empty_units"),
             training_units=split.texts("training"),
             validation_units=split.texts("validation"),
-            split_seed=split.integer("seed"),
+            split_seed=split.optional_integer("seed"),
             window_count=fields.integer("window_count"),
             token_count=fields.integer("token_count"),
         )
@@ -143,6 +143,14 @@ class _Fields:
         value = self._required(key)
         if not isinstance(value, str):
             raise MalformedManifestError(f"field {key!r} must be text, got {value!r}")
+        return value
+
+    def optional_integer(self, key: str) -> int | None:
+        value = self._document.get(key)
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise MalformedManifestError(f"field {key!r} must be an integer or null, got {value!r}")
         return value
 
     def optional_text(self, key: str) -> str | None:

@@ -17,6 +17,7 @@ from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.identifiers import CorpusId
 from emblema.catalog.domain.registry.corpus_source import CorpusSource
 from emblema.catalog.domain.registry.licence import Licence
+from emblema.catalog.domain.tokenisation.split_policy import SplitPolicy
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
 from emblema.catalog.ports.corpus_reader import CorpusReader
@@ -33,8 +34,7 @@ class PublishCorpusCommand:
         source: Where the data comes from; recorded when the corpus is first registered.
         licence: Terms the data was obtained under; recorded when a version is first frozen.
         window: How windows are laid over each unit's time axis.
-        validation_fraction: Share of units held out from fitting the scheme.
-        seed: Seed the split is drawn with.
+        split: How the units held out from fitting the scheme are chosen.
         vocabulary_from: Manifest of a corpus published earlier whose vocabulary this one
             continues, so that the two can be trained on together; ``None`` starts a vocabulary.
     """
@@ -43,8 +43,7 @@ class PublishCorpusCommand:
     source: CorpusSource
     licence: Licence
     window: WindowSpec
-    validation_fraction: float
-    seed: int
+    split: SplitPolicy
     vocabulary_from: ArtifactRef | None = None
 
 
@@ -94,8 +93,7 @@ class PublishCorpus:
                 corpus_id=corpus_id,
                 version_id=version_id,
                 window=command.window,
-                validation_fraction=command.validation_fraction,
-                seed=command.seed,
+                split=command.split,
                 vocabulary=vocabulary,
             )
         )

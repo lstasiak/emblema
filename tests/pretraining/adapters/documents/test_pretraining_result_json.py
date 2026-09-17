@@ -5,7 +5,7 @@ import pytest
 from emblema.pretraining.adapters.documents.pretraining_result_json import PretrainingResultJson
 from emblema.pretraining.domain.exceptions import UnreadableHandoffDocumentError
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
-from tests.support.experiments import WEIGHTS, epoch_outcome
+from tests.support.experiments import WEIGHTS, epoch_outcome, validated
 from tests.support.handoff import CHECKPOINT, result
 
 CODEC = PretrainingResultJson()
@@ -60,3 +60,22 @@ def test_a_result_with_a_field_missing_names_it() -> None:
 
     with pytest.raises(UnreadableHandoffDocumentError, match="vocabulary_size"):
         CODEC.decode(json.dumps(document).encode())
+
+
+def test_every_corpus_an_epoch_validated_travels_in_the_result() -> None:
+    mixed = epoch_outcome(
+        0,
+        backbone=WEIGHTS,
+        validation=(
+            validated(corpus="cmapss", tokens=10, loss=0.5, trivial=1.0),
+            validated(corpus="esa_ad", tokens=90, loss=6.0, trivial=5.0),
+        ),
+    )
+    stated = result(outcome=TrainingOutcome(backbone=WEIGHTS, epochs=(mixed,)))
+
+    read = CODEC.decode(CODEC.encode(stated))
+
+    scored = read.outcome.epochs[0].validation
+    assert [(entry.corpus, entry.tokens) for entry in scored] == [("cmapss", 10), ("esa_ad", 90)]
+    assert read.outcome.epochs[0].validation_loss == mixed.validation_loss
+    assert read.outcome.epochs[0].relative_validation == mixed.relative_validation

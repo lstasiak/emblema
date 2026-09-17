@@ -3,6 +3,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
+from emblema.catalog.domain.identifiers import UnitKey
+from emblema.catalog.domain.tokenisation.split_policy import NamedSplit, SeededSplit, SplitPolicy
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.config.settings import Settings
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
@@ -14,6 +16,10 @@ from emblema.shared.kernel.checksums import Checksum
 # Where a downloaded corpus is unpacked, one directory per corpus. Stated as a default rather
 # than demanded on every run: a corpus that is generated has nothing to unpack.
 RAW = Path("data") / "raw"
+# What a publication holds out where the command line says nothing: a fifth of the units, drawn
+# by the seed every publication of this project has used.
+VALIDATION_FRACTION = 0.2
+SEED = 1
 
 
 class PublishCorpusCli:
@@ -34,7 +40,15 @@ class PublishCorpusCli:
         self._known = KnownCorpora.default() if known is None else known
 
     def parse(self, argv: Sequence[str] | None = None) -> PublishCorpusInvocation:
-        arguments = self._parser().parse_args(argv)
+        parser = self._parser()
+        arguments = parser.parse_args(argv)
+        if arguments.hold_out and (
+            arguments.validation_fraction is not None or arguments.seed is not None
+        ):
+            parser.error(
+                "--hold-out names the units to hold out, so there is nothing for "
+                "--validation-fraction or --seed to draw"
+            )
         known = self._known.named(arguments.corpus)
         return PublishCorpusInvocation(
             command=PublishCorpusCommand(
@@ -42,13 +56,24 @@ class PublishCorpusCli:
                 source=known.source,
                 licence=known.licence,
                 window=WindowSpec(arguments.window, arguments.stride),
-                validation_fraction=arguments.validation_fraction,
-                seed=arguments.seed,
+                split=self._split(arguments),
                 vocabulary_from=self._vocabulary_from(arguments.vocabulary_from),
             ),
             corpus_root=arguments.root or RAW / known.name,
             workspace=arguments.workspace,
             subsets=tuple(arguments.subset or ()),
+        )
+
+    @staticmethod
+    def _split(arguments: argparse.Namespace) -> SplitPolicy:
+        """What the command line asked for: units named, or a share drawn by the seed."""
+        if arguments.hold_out:
+            return NamedSplit.of(UnitKey(key) for key in arguments.hold_out)
+        return SeededSplit(
+            VALIDATION_FRACTION
+            if arguments.validation_fraction is None
+            else arguments.validation_fraction,
+            SEED if arguments.seed is None else arguments.seed,
         )
 
     def run(self, argv: Sequence[str] | None = None) -> None:  # pragma: no cover - environment
@@ -77,8 +102,28 @@ class PublishCorpusCli:
         )
         parser.add_argument("--window", type=float, required=True, help="window length, in time")
         parser.add_argument("--stride", type=float, required=True, help="stride between windows")
-        parser.add_argument("--validation-fraction", type=float, default=0.2)
-        parser.add_argument("--seed", type=int, default=1)
+        # These default to nothing rather than to their values, so that a fraction or a seed
+        # given beside named units is a contradiction the command line can refuse rather than
+        # quietly drop.
+        parser.add_argument(
+            "--validation-fraction",
+            type=float,
+            default=None,
+            help=f"share of units held out from fitting; {VALIDATION_FRACTION} unless given",
+        )
+        parser.add_argument(
+            "--seed",
+            type=int,
+            default=None,
+            help=f"seed the split is drawn with; {SEED} unless given",
+        )
+        parser.add_argument(
+            "--hold-out",
+            nargs="+",
+            metavar="UNIT",
+            help="units to hold out by name, for a corpus whose units differ in kind; refused "
+            "together with --validation-fraction or --seed, which then draw nothing",
+        )
         parser.add_argument(
             "--vocabulary-from",
             nargs=2,

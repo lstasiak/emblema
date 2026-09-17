@@ -47,16 +47,26 @@ class MlflowExperimentTracker:
     def log_epoch(self, outcome: EpochOutcome) -> None:
         run_id = self._recording()
         stamp = int(time.time() * 1000)
+        # A corpus of the mixture gets metrics of its own beside the run's: a single validation
+        # curve over several corpora is the curve of whichever holds the largest values.
+        per_corpus = [
+            (f"validation_loss_{scored.corpus}", scored.loss) for scored in outcome.validation
+        ] + [
+            (f"relative_validation_{scored.corpus}", scored.relative)
+            for scored in outcome.validation
+        ]
         self._client.log_batch(
             run_id,
             metrics=[
                 Metric(key, value, stamp, outcome.epoch)
-                for key, value in (
+                for key, value in [
                     ("training_loss", outcome.training_loss),
                     ("validation_loss", outcome.validation_loss),
+                    ("relative_validation", outcome.relative_validation),
                     ("hidden_ratio", outcome.hidden_ratio),
                     ("seconds", outcome.seconds),
-                )
+                    *per_corpus,
+                ]
             ],
         )
         # The latest checkpoint is a tag rather than a parameter: it is what a dropped session is

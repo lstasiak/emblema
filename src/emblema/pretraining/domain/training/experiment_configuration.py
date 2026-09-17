@@ -7,6 +7,7 @@ from emblema.pretraining.domain.learning_rate_schedule import LearningRateSchedu
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
+from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.shared.kernel.compute import ComputeTier
@@ -36,6 +37,9 @@ class ExperimentConfiguration:
         dropout: Dropout of the encoder and the decoder; a run parameter, not part of the shape.
         decoder_layers: Blocks of the decoder that is thrown away when the run ends.
         masking: What the objective hides, and in what shapes.
+        loss: What the objective counts a miss as. A parameter of the method like the shape: a
+            loss that bounds what one excursion costs is a different run over the same data, and
+            two readings give losses that do not compare.
         budget: How long the run trains and in how large a step.
         precision: What the forward and backward pass are computed at.
         checkpoint: How often resumable state is written.
@@ -48,6 +52,7 @@ class ExperimentConfiguration:
     dropout: float
     decoder_layers: int
     masking: MaskingStrategy
+    loss: ObjectiveLoss
     budget: TrainingBudget
     precision: Precision
     checkpoint: CheckpointPolicy
@@ -107,6 +112,8 @@ class ExperimentConfiguration:
             "block_span": float(self.masking.block_span),
             "token_rate": float(self.masking.token_rate),
             "expected_hidden_ratio": float(self.masking.expected_ratio),
+            "loss": str(self.loss.kind),
+            "huber_delta": float(self.loss.huber_delta),
             "epochs": self.budget.epochs,
             "batch_size": self.budget.batch_size,
             "accumulation_steps": self.budget.accumulation_steps,

@@ -29,6 +29,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
+from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
@@ -300,8 +301,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         source=known.source,
         licence=known.licence,
         window=window,
-        validation_fraction=arguments.validation_fraction,
-        seed=arguments.seed,
+        split=SeededSplit(arguments.validation_fraction, arguments.seed),
     )
     # One registry for both publications, in memory: the report is about the format and the
     # machine, so it stands in for the database the process would otherwise register into.

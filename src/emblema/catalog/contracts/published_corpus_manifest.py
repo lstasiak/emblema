@@ -33,7 +33,7 @@ class PublishedCorpusManifest:
         empty_units: Units of the corpus that yielded no window; absent from the block.
         training_units: Units whose data fitted the statistics, sorted.
         validation_units: Units held out from fitting, sorted.
-        split_seed: Seed the split was drawn with.
+        split_seed: Seed the split was drawn with; ``None`` where its units were named.
         window_count: How many windows the block holds.
         token_count: How many tokens the block holds in all.
     """
@@ -49,7 +49,7 @@ class PublishedCorpusManifest:
     empty_units: tuple[str, ...]
     training_units: tuple[str, ...]
     validation_units: tuple[str, ...]
-    split_seed: int
+    split_seed: int | None
     window_count: int
     token_count: int
 

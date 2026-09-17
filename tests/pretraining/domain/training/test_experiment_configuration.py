@@ -5,8 +5,11 @@ from emblema.pretraining.domain.exceptions import (
     InvalidExperimentConfigurationError,
 )
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from tests.support.experiments import budget, configuration
+
+BOUNDED = ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.0)
 
 
 def test_the_configuration_flattens_to_scalars_a_tracker_can_log() -> None:
@@ -25,6 +28,7 @@ def test_two_configurations_differing_anywhere_differ_in_their_parameters() -> N
     assert configuration(budget=budget(seed=2)).parameters() != stated
     assert configuration(dropout=0.1).parameters() != stated
     assert configuration(corpus_fraction=0.5).parameters() != stated
+    assert configuration(loss=BOUNDED).parameters() != stated
 
 
 def test_rates_are_rendered_as_floats_however_they_were_built() -> None:
@@ -48,6 +52,14 @@ def test_the_parameters_on_which_two_configurations_differ_are_named() -> None:
         "dropout",
         "decoder_layers",
     )
+
+
+def test_the_reading_the_hidden_tokens_are_scored_by_is_reported_with_its_knee() -> None:
+    squared = configuration().parameters()
+    bounded = configuration(loss=BOUNDED).parameters()
+
+    assert (squared["loss"], squared["huber_delta"]) == ("mse", 0.0)
+    assert (bounded["loss"], bounded["huber_delta"]) == ("huber", 1.0)
 
 
 def test_the_expected_share_hidden_is_reported_beside_the_rates() -> None:

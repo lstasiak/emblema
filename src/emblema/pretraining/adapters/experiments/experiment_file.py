@@ -17,6 +17,7 @@ from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.shared.kernel.compute import ComputeTier
@@ -70,6 +71,16 @@ class _Masking(_Section):
         )
 
 
+class _Objective(_Section):
+    """What the objective counts a miss as; a file that says nothing is scored by the square."""
+
+    kind: LossKind = LossKind.MSE
+    huber_delta: float = 0.0
+
+    def loss(self) -> ObjectiveLoss:
+        return ObjectiveLoss(kind=self.kind, huber_delta=self.huber_delta)
+
+
 class _Budget(_Section):
     epochs: int
     batch_size: int
@@ -118,6 +129,8 @@ class ExperimentFile(_Section):
         decoder_layers: Blocks of the decoder thrown away when the run ends.
         shape: What the run overrides of the tier's shape, where it does.
         masking: What the objective hides.
+        objective: What it counts a miss as; the squared error unless the file says otherwise,
+            which is what every run before the reading existed was scored by.
         budget: How long the run trains and in how large a step.
         checkpoint: How often resumable state is written.
     """
@@ -131,6 +144,7 @@ class ExperimentFile(_Section):
     decoder_layers: int
     shape: _Shape | None = None
     masking: _Masking
+    objective: _Objective = _Objective()
     budget: _Budget
     checkpoint: _Checkpoint
 
@@ -154,6 +168,7 @@ class ExperimentFile(_Section):
             InvalidCorpusShareError: If the share of the corpus is not one a run could read.
             InvalidEncoderArchitectureError: If the shape it states is not an architecture.
             InvalidMaskingStrategyError: If the strategy hides everything or nothing.
+            InvalidObjectiveLossError: If the reading states a knee it does not read, or none.
             InvalidTrainingBudgetError: If the budget is not one a run could follow.
             InvalidCheckpointPolicyError: If the interval is not positive.
         """
@@ -169,6 +184,7 @@ class ExperimentFile(_Section):
             dropout=self.dropout,
             decoder_layers=self.decoder_layers,
             masking=self.masking.strategy(),
+            loss=self.objective.loss(),
             budget=self.budget.budget(),
             precision=self.precision,
             checkpoint=self.checkpoint.policy(),

@@ -22,7 +22,8 @@ class PretrainingOrderJson:
     # Bumped when a document of the version before can no longer be read here: a field changed
     # its meaning or a required one was added. A field an older reader ignores costs no bump.
     # Version 2: the configuration states the share of the corpus a run reads.
-    VERSION: Final = 2
+    # Version 3: it states the reading its hidden tokens are scored by.
+    VERSION: Final = 3
 
     def __init__(self) -> None:
         self._configurations = ExperimentConfigurationDocument()

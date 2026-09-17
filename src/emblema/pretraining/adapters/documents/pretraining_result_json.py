@@ -8,6 +8,7 @@ from emblema.pretraining.adapters.documents.fields import Document, Fields
 from emblema.pretraining.domain.exceptions import UnreadableHandoffDocumentError
 from emblema.pretraining.domain.handoff.pretraining_result import PretrainingResult
 from emblema.pretraining.domain.identifiers import BackboneId
+from emblema.pretraining.domain.training.corpus_validation import CorpusValidation
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.training_corpus_shape import TrainingCorpusShape
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
@@ -20,7 +21,9 @@ class PretrainingResultJson:
     # Bumped when a document of the version before can no longer be read here: a field changed
     # its meaning or a required one was added. A field an older reader ignores costs no bump.
     # Version 2: the configuration states the share of the corpus a run reads.
-    VERSION: Final = 2
+    # Version 3: it states the reading its hidden tokens are scored by.
+    # Version 4: an epoch reports the held-out side corpus by corpus.
+    VERSION: Final = 4
 
     def __init__(self) -> None:
         self._configurations = ExperimentConfigurationDocument()
@@ -96,7 +99,15 @@ class PretrainingResultJson:
         return {
             "epoch": epoch.epoch,
             "training_loss": epoch.training_loss,
-            "validation_loss": epoch.validation_loss,
+            "validation": [
+                {
+                    "corpus": scored.corpus,
+                    "tokens": scored.tokens,
+                    "loss": scored.loss,
+                    "trivial": scored.trivial,
+                }
+                for scored in epoch.validation
+            ],
             "hidden_ratio": epoch.hidden_ratio,
             "seconds": epoch.seconds,
             "checkpoint": Fields.of_optional_ref(epoch.checkpoint),
@@ -108,7 +119,15 @@ class PretrainingResultJson:
         return EpochOutcome(
             epoch=fields.integer("epoch"),
             training_loss=fields.number("training_loss"),
-            validation_loss=fields.number("validation_loss"),
+            validation=tuple(
+                CorpusValidation(
+                    corpus=scored.text("corpus"),
+                    tokens=scored.integer("tokens"),
+                    loss=scored.number("loss"),
+                    trivial=scored.number("trivial"),
+                )
+                for scored in fields.each("validation")
+            ),
             hidden_ratio=fields.number("hidden_ratio"),
             seconds=fields.number("seconds"),
             checkpoint=fields.optional_ref("checkpoint"),

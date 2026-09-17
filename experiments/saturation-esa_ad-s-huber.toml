@@ -1,0 +1,41 @@
+# How the ESA Anomaly Dataset saturates once one excursion cannot decide the gradient: the small
+# tier's file over this corpus, unchanged but for the reading of the loss and the version it reads.
+#
+# The squared error over this corpus spends half its gradient on three tokens in a thousand, and
+# the months that hold them enter only at the whole share, so the curve of the first leg moved
+# with the excursions rather than with the data. The knee is one standard deviation of the
+# channel: within it the loss is the squared error the trivial baselines estimate, and past it a
+# token pulls no harder however far the value lies.
+#
+# The corpus this reads is the version whose held-out months were named rather than drawn, so
+# that neither side holds every month the loss is decided by. The budget is the first leg's, to
+# the step, so the two curves are comparable in everything but the reading.
+name = "saturation-esa_ad-s-huber"
+tier = "S"
+corpus = "esa_ad"
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+corpus_fraction = 1.0
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 2
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 500

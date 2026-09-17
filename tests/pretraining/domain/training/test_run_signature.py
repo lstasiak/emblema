@@ -23,7 +23,7 @@ CONTROL_A = TrainingCorpusShape(
     validation_windows=1534,
     vocabulary_size=9,
 )
-CONTROL_A_S_SIGNATURE = "051fcf7020aa7af565f65337282633cc93b5c7f23efc0d1df689644e964cb2bf"
+CONTROL_A_S_SIGNATURE = "96fa0aca4d082a6e15f5fc48eee6997410bfd795e9ef0fccc5b4b735c31fb4c9"
 
 
 def test_the_same_run_signs_the_same_and_another_configuration_does_not() -> None:

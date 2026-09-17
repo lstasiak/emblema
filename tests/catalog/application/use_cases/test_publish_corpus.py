@@ -24,6 +24,7 @@ from emblema.catalog.domain.channels.channel_schema import ChannelSchema
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
 from emblema.catalog.domain.registry.corpus import Corpus
+from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
@@ -96,8 +97,7 @@ def command(
         source=SOURCE,
         licence=LICENCE,
         window=WINDOW,
-        validation_fraction=0.25,
-        seed=1,
+        split=SeededSplit(0.25, 1),
         vocabulary_from=vocabulary_from,
     )
 

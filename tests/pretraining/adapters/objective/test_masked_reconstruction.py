@@ -15,11 +15,17 @@ from emblema.pretraining.adapters.objective.reconstruction_loss import (  # noqa
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking  # noqa: E402
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks  # noqa: E402
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy  # noqa: E402
+from emblema.pretraining.domain.training.objective_loss import (  # noqa: E402
+    LossKind,
+    ObjectiveLoss,
+)
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
 from tests.support.encoders import SMALL  # noqa: E402
 from tests.support.token_tensors import VOCABULARY_SIZE, random_batch  # noqa: E402
 
 pytestmark = pytest.mark.ml
+
+SCORER = ReconstructionLoss(ObjectiveLoss(kind=LossKind.MSE))
 
 # The encoder reduces attention in an order the visible set decides, so two runs over the same
 # visible tokens agree to a reduction's precision rather than bit for bit.
@@ -88,7 +94,7 @@ def test_every_parameter_of_encoder_and_decoder_receives_a_gradient(
     batch = random_batch(4, 40, seed=6, padding=3)
     masks = masks_over(batch, strategy)
 
-    ReconstructionLoss()(model(batch, masks), batch, masks).backward()
+    SCORER(model(batch, masks), batch, masks).backward()
 
     for name, parameter in model.named_parameters():
         assert parameter.grad is not None, name
@@ -101,7 +107,7 @@ def test_the_padding_row_of_the_channel_table_receives_none(strategy: MaskingStr
     batch = random_batch(2, 24, seed=7, padding=4)
     masks = masks_over(batch, strategy)
 
-    ReconstructionLoss()(model(batch, masks), batch, masks).backward()
+    SCORER(model(batch, masks), batch, masks).backward()
 
     table = model.encoder.get_parameter("channel_embedding.table.weight").grad
     assert table is not None

@@ -22,7 +22,7 @@ def test_the_document_names_its_format_and_what_a_reader_of_it_needs() -> None:
     document = json.loads(CODEC.encode(order()))
 
     assert document["format"] == "emblema.pretraining-order"
-    assert document["version"] == 2
+    assert document["version"] == 3
     assert set(document) >= {
         "backbone",
         "configuration",

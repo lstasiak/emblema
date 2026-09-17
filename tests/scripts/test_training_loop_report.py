@@ -26,7 +26,7 @@ from scripts.training_loop_report import (
     report,
     shared_artifacts,
 )
-from tests.support.experiments import epoch_outcome
+from tests.support.experiments import epoch_outcome, validated
 
 pytestmark = pytest.mark.ml
 
@@ -72,7 +72,7 @@ def test_the_training_loss_of_a_re_entered_epoch_is_never_compared() -> None:
 
 def test_every_epochs_validation_loss_and_the_last_training_loss_are_compared() -> None:
     left = measured(UNINTERRUPTED)
-    moved_validation = measured(RESUMED, validation_loss=0.9)
+    moved_validation = measured(RESUMED, validation=(validated(loss=0.9),))
     last = left.epochs[-1]
     moved_training = replace(
         left, epochs=(*left.epochs[:-1], replace(last, training_loss=last.training_loss + 0.25))
