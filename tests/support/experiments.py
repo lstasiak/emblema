@@ -17,6 +17,7 @@ from typing import Any
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.precision import Precision
@@ -37,6 +38,7 @@ def configuration(**overrides: Any) -> ExperimentConfiguration:
     stated = ExperimentConfiguration(
         name="test-experiment",
         tier=ComputeTier.S,
+        corpus_fraction=1.0,
         architecture=TINY,
         dropout=0.0,
         decoder_layers=1,
@@ -46,6 +48,11 @@ def configuration(**overrides: Any) -> ExperimentConfiguration:
         checkpoint=CheckpointPolicy(every_steps=2),
     )
     return replace(stated, **overrides)
+
+
+def share(fraction: float = 1.0, seed: int = 1) -> CorpusShare:
+    """The share a run reads; the whole corpus, ranked by the test seed, unless said otherwise."""
+    return CorpusShare(fraction=fraction, seed=seed)
 
 
 def budget(**overrides: Any) -> TrainingBudget:

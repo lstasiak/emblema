@@ -28,7 +28,11 @@ class ComputeTierProfile(BaseModel):
         gt=0, description="Hidden width of the feed-forward network in each block"
     )
     time_frequencies: int = Field(gt=0, description="Fourier frequencies of the time encoding")
-    corpus_fraction: float = Field(gt=0, le=1, description="Share of each corpus seen per epoch")
+    corpus_fraction: float = Field(
+        gt=0,
+        le=1,
+        description="Share of each corpus's training units a run reads unless its experiment says",
+    )
     window: WindowChoice = Field(description="Window variant of each corpus the tier trains on")
 
 

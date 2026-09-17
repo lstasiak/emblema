@@ -28,6 +28,7 @@ class ExperimentConfigurationDocument:
         return {
             "name": configuration.name,
             "tier": str(configuration.tier),
+            "corpus_fraction": configuration.corpus_fraction,
             "architecture": {
                 "width": architecture.width,
                 "heads": architecture.heads,
@@ -72,6 +73,7 @@ class ExperimentConfigurationDocument:
         return ExperimentConfiguration(
             name=fields.text("name"),
             tier=ComputeTier(fields.text("tier")),
+            corpus_fraction=fields.number("corpus_fraction"),
             architecture=EncoderArchitecture(
                 width=architecture.integer("width"),
                 heads=architecture.integer("heads"),
@@ -92,7 +94,7 @@ class ExperimentConfigurationDocument:
                 batch_size=budget.integer("batch_size"),
                 accumulation_steps=budget.integer("accumulation_steps"),
                 learning_rate=budget.number("learning_rate"),
-                warmup_epochs=budget.integer("warmup_epochs"),
+                warmup_epochs=budget.number("warmup_epochs"),
                 final_lr_fraction=budget.number("final_lr_fraction"),
                 seed=budget.integer("seed"),
             ),

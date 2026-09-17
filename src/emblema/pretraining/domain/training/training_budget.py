@@ -14,16 +14,17 @@ class TrainingBudget:
     than a property of the model. Epochs, not steps, are the unit here, because the corpus decides
     how many batches an epoch holds and the same budget has to describe a run over a tenth of it.
 
-    Invariants: every count is positive; the peak rate is positive and finite; the warmup leaves
-    at least one epoch to decay over, since a run that only warms up never reaches the floor it
-    states; the floor lies in ``[0, 1]``.
+    Invariants: every count is positive; the peak rate is positive and finite; the warmup is not
+    negative and leaves something to decay over, since a run that only warms up never reaches the
+    floor it states; the floor lies in ``[0, 1]``.
 
     Attributes:
         epochs: Passes over the training windows.
         batch_size: Windows per micro-batch, which is what a device has to hold.
         accumulation_steps: Micro-batches summed into one optimiser step.
         learning_rate: Peak rate, which the schedule scales.
-        warmup_epochs: Epochs the rate climbs to the peak over.
+        warmup_epochs: Epochs the rate climbs to the peak over; a fraction of one where a short
+            run warms up over part of its first epoch.
         final_lr_fraction: Fraction of the peak the decay ends at.
         seed: Seed of everything the run draws: weights, order of windows, masks.
     """
@@ -32,7 +33,7 @@ class TrainingBudget:
     batch_size: int
     accumulation_steps: int
     learning_rate: float
-    warmup_epochs: int
+    warmup_epochs: float
     final_lr_fraction: float
     seed: int
 
@@ -48,7 +49,7 @@ class TrainingBudget:
             raise InvalidTrainingBudgetError(
                 f"learning_rate must be positive and finite, got {self.learning_rate}"
             )
-        if not 0 <= self.warmup_epochs < self.epochs:
+        if not isfinite(self.warmup_epochs) or not 0 <= self.warmup_epochs < self.epochs:
             raise InvalidTrainingBudgetError(
                 f"warmup_epochs must lie in [0, epochs) so that an epoch is left to decay over, "
                 f"got {self.warmup_epochs} of {self.epochs}"
@@ -101,7 +102,7 @@ class TrainingBudget:
         """
         steps = self.steps_per_epoch(batches)
         return LearningRateSchedule(
-            warmup_steps=self.warmup_epochs * steps,
+            warmup_steps=round(self.warmup_epochs * steps),
             total_steps=self.epochs * steps,
             final_fraction=self.final_lr_fraction,
         )

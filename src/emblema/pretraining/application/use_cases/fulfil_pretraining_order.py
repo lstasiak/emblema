@@ -54,7 +54,7 @@ class FulfilPretrainingOrder:
         """
         order = self._exchange.read_order(command.order)
         order.require_commit(command.git_commit)
-        corpus = self._reader.read(order.manifest)
+        corpus = self._reader.read(order.manifest, order.configuration.corpus_share)
         order.require_read(corpus)
         outcome = self._pretrain(
             PretrainBackboneCommand(

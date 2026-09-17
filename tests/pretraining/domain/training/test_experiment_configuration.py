@@ -1,6 +1,10 @@
 import pytest
 
-from emblema.pretraining.domain.exceptions import InvalidExperimentConfigurationError
+from emblema.pretraining.domain.exceptions import (
+    InvalidCorpusShareError,
+    InvalidExperimentConfigurationError,
+)
+from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.precision import Precision
 from tests.support.experiments import budget, configuration
 
@@ -20,6 +24,7 @@ def test_two_configurations_differing_anywhere_differ_in_their_parameters() -> N
     assert configuration(precision=Precision.BF16).parameters() != stated
     assert configuration(budget=budget(seed=2)).parameters() != stated
     assert configuration(dropout=0.1).parameters() != stated
+    assert configuration(corpus_fraction=0.5).parameters() != stated
 
 
 def test_rates_are_rendered_as_floats_however_they_were_built() -> None:
@@ -31,6 +36,7 @@ def test_rates_are_rendered_as_floats_however_they_were_built() -> None:
     assert stated == as_integers
     assert stated.parameters() == as_integers.parameters()
     assert isinstance(as_integers.parameters()["dropout"], float)
+    assert isinstance(as_integers.parameters()["warmup_epochs"], float)
 
 
 def test_the_parameters_on_which_two_configurations_differ_are_named() -> None:
@@ -65,3 +71,16 @@ def test_a_configuration_no_run_could_follow_is_refused(field: str, value: objec
 def test_a_decoder_of_no_layers_is_refused() -> None:
     with pytest.raises(InvalidExperimentConfigurationError, match="decoder_layers"):
         configuration(decoder_layers=0)
+
+
+def test_the_share_of_the_corpus_is_the_fraction_ranked_by_the_run_s_seed() -> None:
+    stated = configuration(corpus_fraction=0.25, budget=budget(seed=5))
+
+    assert stated.corpus_share == CorpusShare(fraction=0.25, seed=5)
+    assert stated.parameters()["corpus_fraction"] == 0.25
+
+
+@pytest.mark.parametrize("fraction", [0.0, -0.5, 1.5, float("nan")])
+def test_a_share_no_run_could_read_is_refused(fraction: float) -> None:
+    with pytest.raises(InvalidCorpusShareError):
+        configuration(corpus_fraction=fraction)

@@ -1,0 +1,38 @@
+# How the SKAB saturates: the same budget of optimiser steps over a growing share of its
+# training units, at the tier a laptop runs. This file states the budget for the whole corpus;
+# the report derives, for each share, the epochs that spend the same steps over it.
+#
+# The epochs are the fewest an evening on this machine affords for four shares of the corpus,
+# not a budget the loss has converged at: the curve compares shares at one budget, and says so.
+name = "saturation-skab-s"
+tier = "S"
+corpus = "skab"
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+# The whole corpus is this file's share; the report replaces it with each share it measures.
+corpus_fraction = 1.0
+
+# The mixture the control was learnt under: blocks and whole channels carry most of the hiding,
+# single tokens are the minority ingredient, and together they take close to half of a window.
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# A quarter of the first epoch of warmup, so that a share read in part — trained for many short
+# epochs — warms up over the same share of its steps; a floor of one per cent of the peak.
+[budget]
+epochs = 4
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+# A few minutes apart on this machine: a dropped session loses minutes, and the store holds a few
+# dozen states of a run at most.
+[checkpoint]
+every_steps = 500

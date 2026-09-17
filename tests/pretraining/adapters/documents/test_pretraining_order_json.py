@@ -22,7 +22,7 @@ def test_the_document_names_its_format_and_what_a_reader_of_it_needs() -> None:
     document = json.loads(CODEC.encode(order()))
 
     assert document["format"] == "emblema.pretraining-order"
-    assert document["version"] == 1
+    assert document["version"] == 2
     assert set(document) >= {
         "backbone",
         "configuration",
@@ -39,7 +39,7 @@ def test_the_document_names_its_format_and_what_a_reader_of_it_needs() -> None:
         (b"\xff", "not JSON"),
         (b"[]", "not an object"),
         (b'{"format": "emblema.pretraining-result", "version": 1}', "not an order"),
-        (b'{"format": "emblema.pretraining-order", "version": 2}', "version 2"),
+        (b'{"format": "emblema.pretraining-order", "version": 1}', "version 1"),
     ],
 )
 def test_bytes_that_are_not_an_order_are_refused(content: bytes, message: str) -> None:

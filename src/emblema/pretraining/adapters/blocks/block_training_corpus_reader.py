@@ -5,6 +5,7 @@ from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusM
 from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
 from emblema.pretraining.domain.backbone.pretraining_input import PretrainingInput
 from emblema.pretraining.domain.exceptions import UnreadablePublishedCorpusError
+from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.shared.adapters.storage.files import chunks_of
 from emblema.shared.adapters.windows.exceptions import MalformedBlockError
@@ -42,7 +43,7 @@ class BlockTrainingCorpusReader:
             vocabulary_size=len(published.channels),
         )
 
-    def read(self, manifest: ArtifactRef) -> TrainingCorpus:
+    def read(self, manifest: ArtifactRef, share: CorpusShare) -> TrainingCorpus:
         published = self._manifest(manifest)
         try:
             block = WindowBlock(self._fetched(published.block))
@@ -54,7 +55,9 @@ class BlockTrainingCorpusReader:
         return TrainingCorpus(
             name=published.corpus,
             checksum=published.block.checksum,
-            training=block.of_units(self._positions(positions, published.training_units)),
+            training=block.of_units(
+                self._positions(positions, share.select(published.training_units))
+            ),
             validation=block.of_units(self._positions(positions, published.validation_units)),
             vocabulary_size=len(published.channels),
         )

@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from emblema.pretraining.domain.exceptions import PretrainingOrderRejectedError
@@ -31,6 +33,17 @@ def test_the_order_signs_the_corpus_as_it_was_read_not_as_it_was_described() -> 
     signature = machines.backbones.get(placed.backbone).signature
     assert signature == RunSignature.of(CONFIGURATION, corpus(training=6))
     assert signature != RunSignature.of(CONFIGURATION, CORPUS)
+
+
+def test_the_order_reads_the_share_of_the_corpus_the_configuration_states() -> None:
+    machines = InMemoryHandoff()
+    half = replace(CONFIGURATION, corpus_fraction=0.5)
+
+    placed = machines.order()(order_command(configuration=half))
+
+    read = machines.reader.read(MANIFEST, half.corpus_share)
+    assert len(read.training) == len(CORPUS.training) // 2
+    assert machines.backbones.get(placed.backbone).signature == RunSignature.of(half, read)
 
 
 def test_a_manifest_of_another_corpus_than_the_experiment_names_is_refused() -> None:

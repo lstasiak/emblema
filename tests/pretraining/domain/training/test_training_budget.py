@@ -22,6 +22,15 @@ def test_the_schedule_counts_warmup_and_total_in_optimiser_steps() -> None:
     assert (schedule.warmup_steps, schedule.total_steps) == (10, 50)
 
 
+def test_a_warmup_of_part_of_an_epoch_rounds_to_whole_steps() -> None:
+    # A run of two epochs warming up over a quarter of one: the same share of the steps as a run
+    # of twenty warming up over two and a half, which is what makes budgets of equal steps
+    # comparable across corpora read in part.
+    schedule = budget(epochs=2, warmup_epochs=0.25).schedule(10)
+
+    assert (schedule.warmup_steps, schedule.total_steps) == (2, 20)
+
+
 def test_a_budget_without_batches_in_an_epoch_is_refused() -> None:
     with pytest.raises(InvalidTrainingBudgetError, match="must hold a batch"):
         budget().schedule(0)
@@ -36,6 +45,7 @@ def test_a_budget_without_batches_in_an_epoch_is_refused() -> None:
         ("learning_rate", 0.0),
         ("learning_rate", float("inf")),
         ("warmup_epochs", -1),
+        ("warmup_epochs", float("nan")),
         ("final_lr_fraction", 1.5),
     ],
 )

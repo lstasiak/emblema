@@ -343,9 +343,17 @@ def publish(run: Run, workspace: Path) -> Published:
             windows = archive.read_windows(manifest.archived, {unit})
             validation += windows
             units += [unit.value] * len(windows)
+    # The share the experiment states, over the training units alone: the run is scored on the
+    # whole validation side whatever it trained on.
+    chosen = set(
+        run.configuration.corpus_share.select(
+            tuple(sorted(unit.value for unit in manifest.split.training))
+        )
+    )
+    training = {unit for unit in manifest.split.training if unit.value in chosen}
     return Published(
         manifest,
-        tuple(archive.read_windows(manifest.archived, manifest.split.training)),
+        tuple(archive.read_windows(manifest.archived, training)),
         tuple(validation),
         tuple(units),
         noise=layout.noise,
@@ -588,6 +596,7 @@ def results_of(run: Run, published: Published, trained: Trained, diagnosis: Diag
         "python": sys.version.split()[0],
         "torch": version("torch"),
         "tier": str(configuration.tier),
+        "corpus_fraction": f"{configuration.corpus_fraction:g}",
         "shape": (
             f"{architecture.width},{architecture.heads},{architecture.layers},"
             f"{architecture.feedforward_width}"
@@ -644,6 +653,8 @@ def heading(run: Run, published: Published, trained: Trained) -> str:
     )
     if run.units:
         corpus += f", cut to {run.units} units"
+    if not run.configuration.corpus_share.is_whole:
+        corpus += f", {run.configuration.corpus_fraction:g} of the training units"
     encoder = (
         f"{run.shape_label}: {architecture.width} wide, {architecture.heads} heads, "
         f"{architecture.layers} blocks, "

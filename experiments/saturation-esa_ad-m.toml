@@ -1,0 +1,38 @@
+# The size axis of the saturation measurement on the ESA Anomaly Dataset: the reference shape of the
+# published tier, run on a laptop under the small tier's budget of steps, so that the curve of the
+# small model has a larger one to be read against at the largest shares. The tier declares the
+# machine class; the shape is the published tier's, stated field by field.
+name = "saturation-esa_ad-m"
+tier = "S"
+corpus = "esa_ad"
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+corpus_fraction = 1.0
+
+[shape]
+width = 256
+heads = 4
+layers = 6
+feedforward_width = 1024
+time_frequencies = 12
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# The same steps as the small tier's file over this corpus, in smaller micro-batches accumulated
+# to the same effective batch: the reference shape holds twice the attention buffers.
+[budget]
+epochs = 2
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 500

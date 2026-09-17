@@ -67,7 +67,7 @@ class AcceptPretrainingResult:
         backbone = self._backbones.get(result.backbone)
         backbone.require_open()
         result.require_delivery_for(backbone)
-        corpus = self._reader.read(backbone.input.manifest)
+        corpus = self._reader.read(backbone.input.manifest, backbone.configuration.corpus_share)
         outcome = self._pretrain(
             PretrainBackboneCommand(
                 configuration=backbone.configuration,

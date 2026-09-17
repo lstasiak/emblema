@@ -39,6 +39,8 @@ experiment — and the shape of a note: its CSV, its tables, its figures.
 | `masked_reconstruction_assessment.py` | transitional | the CSV a run is stored and compared in | the evaluation harness, which persists a campaign rather than a directory of files |
 | `masked_reconstruction_figures.py` | measurement | `figures/masked-reconstruction-*.png` | — |
 | `training_loop_report.py` | measurement | [`training-loop.md`](../docs/verification/training-loop.md) | — |
+| `corpus_saturation_report.py` | measurement | [`corpus-saturation.md`](../docs/verification/corpus-saturation.md): one budget of steps over a growing share of a corpus, stored run by run and resumable | the evaluation harness, once a campaign of runs is something it persists |
+| `corpus_saturation_figures.py` | measurement | `figures/corpus-saturation-*.png` | — |
 | `reporting.py` | shared | the heading and table shape of every report | — |
 
 ## Known debt

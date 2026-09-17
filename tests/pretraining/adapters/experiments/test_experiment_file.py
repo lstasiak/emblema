@@ -75,6 +75,23 @@ def test_the_shape_comes_from_the_tier_unless_the_file_says_otherwise(tmp_path: 
     assert cut.architecture.feedforward_width == from_tier.architecture.feedforward_width
 
 
+def test_the_share_of_the_corpus_comes_from_the_tier_unless_the_file_says_otherwise(
+    tmp_path: Path,
+) -> None:
+    tiers = ComputeTiers.load()
+
+    from_tier = ExperimentFile.load(written(STATED, tmp_path)).configuration(tiers)
+    stated = ExperimentFile.load(
+        written(
+            STATED.replace("decoder_layers = 2\n", "decoder_layers = 2\ncorpus_fraction = 0.5\n"),
+            tmp_path,
+        )
+    ).configuration(tiers)
+
+    assert from_tier.corpus_fraction == tiers.profile(ComputeTier.S).corpus_fraction
+    assert stated.corpus_fraction == 0.5
+
+
 def test_a_key_nobody_reads_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match="learning_rate_decay"):
         ExperimentFile.load(written(STATED + "\nlearning_rate_decay = 0.5\n", tmp_path))

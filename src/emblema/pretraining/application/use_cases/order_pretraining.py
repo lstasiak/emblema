@@ -83,7 +83,7 @@ class OrderPretraining:
                 f"the experiment names corpus {command.corpus!r}, "
                 f"the manifest publishes {described.corpus!r}"
             )
-        corpus = self._reader.read(command.manifest)
+        corpus = self._reader.read(command.manifest, command.configuration.corpus_share)
         backbone = Backbone(
             id=self._ids.generate(BackboneId),
             configuration=command.configuration,

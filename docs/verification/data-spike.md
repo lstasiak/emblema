@@ -263,3 +263,56 @@ Mixed corpus (every eligible corpus, default windows): 96.7M unique observed val
 | 320 × 8 | 9.83M | 10 | **no** | 39 | yes | 509 | 18.7 h |
 | 384 × 10 | 17.7M | 5 | **no** | 22 | yes | 283 | 30.6 h |
 | 512 × 8 | 25.2M | 4 | **no** | 15 | **no** | 199 | 37.9 h |
+
+## 2026-09-16 — parameter counts made exact (macOS arm64, M1)
+
+The budget priced every shape as `12 · d² · L`, the dense layers alone, while the encoder note
+counted the reference shape exactly at 4.78M over the mixture's vocabulary — two numbers for one
+shape in two notes. The sweep now states whole shapes (heads, feed-forward width and time
+frequencies beside width and depth) and every parameter count in the report is the encoder's own,
+over the 121 channels of the measured corpora. Nothing was re-measured: the corpus facts are those
+of 2026-09-11, and only the tables that carry a parameter count are reprinted below. The
+GPU-hours move by about one per cent, the verdicts do not; the reference shape clears the strict
+threshold at 20 values per parameter as before, now on the exact count (96.7M against 95.5M
+needed), and a seventh block — the smallest step past 5M parameters — would not.
+
+Command: `uv run scripts/corpus_budget_report.py`.
+
+### Assumptions
+
+FLOPs per window = 6 · P · n + 12 · n² · d · L; P is the encoder's exact parameter count over the mixture's vocabulary of 121 channels. Every GPU-hour below is ±3×.
+
+| Tier | Device | TFLOP/s | d × L | P | Corpus fraction | Window |
+|---|---|---|---|---|---|---|
+| S | M1 Pro, MPS, fp32 | 1.25 | 192 × 4 | 1.81M | 0.1 | default |
+| M | T4, fp16 | 10 | 256 × 6 | 4.78M | 1 | default |
+| L | A100 40 GB, bf16 | 50 | 256 × 6 | 4.78M | 1 | longest |
+
+### Totals
+
+Cap: 150 h of T4, fp16 for the whole project.
+
+| Tier | Pretraining | Campaigns | Fixed | Total | Band ±3× |
+|---|---|---|---|---|---|
+| S | 16.9 h | 177.1 h | 240.0 h | **434.1 h** | 144.7 h to 1302.2 h |
+| M | 46.6 h | 22.1 h | 30.0 h | **98.8 h** | 32.9 h to 296.3 h |
+| L | 15.2 h | 4.4 h | 6.0 h | **25.6 h** | 8.5 h to 76.8 h |
+
+Fixed allowances (T4-class):
+
+| Item | GPU-h | Basis |
+|---|---|---|
+| ablations, channel dropout, distillation | 30.0 h | allowance of 20–40 h, midpoint; priced when the runs are designed |
+
+### Parameter budget
+
+Mixed corpus (every eligible corpus, default windows): 96.7M unique observed values; 387M effective with up to 4 repetitions credited; 230M tokens processed per epoch and 5.01G over the configured epochs (compute, not information).
+
+| d × L | Heads × FFN | P | Unique per P | ≥ 20 | Effective per P | ≥ 20 | Seen per P | Mixed pretraining on T4, fp16 |
+|---|---|---|---|---|---|---|---|---|
+| 192 × 4 | 3 × 768 | 1.81M | 53 | yes | 214 | yes | 2769 | 4.7 h |
+| 256 × 6 | 4 × 1024 | 4.78M | 20 | yes | 81 | yes | 1048 | 10.3 h |
+| 256 × 7 | 4 × 1024 | 5.57M | 17 | **no** | 69 | yes | 900 | 12.0 h |
+| 320 × 8 | 5 × 1280 | 9.91M | 10 | **no** | 39 | yes | 505 | 18.8 h |
+| 384 × 10 | 6 × 1536 | 17.8M | 5 | **no** | 22 | yes | 281 | 30.7 h |
+| 512 × 8 | 8 × 2048 | 25.3M | 4 | **no** | 15 | **no** | 198 | 38.0 h |

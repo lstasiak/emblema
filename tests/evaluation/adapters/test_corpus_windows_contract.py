@@ -1,9 +1,9 @@
 """One corpus, two adapters, one set of answers.
 
-The corpus is the published one every reader contract uses: two units with windows, one that
-yielded none and is still named, and a unit held out by the corpus. What a task asks of it — how
-the corpus divides its units, and where the windows of the ones it covers sit — has to come back
-the same whether the windows are in a block or in a list.
+The corpus is the published one every reader contract uses: three units with windows, one of them
+held out by the corpus, and a training unit that yielded none and is still named. What a task asks
+of it — how the corpus divides its units, and where the windows of the ones it covers sit — has to
+come back the same whether the windows are in a block or in a list.
 """
 
 from pathlib import Path
@@ -23,21 +23,26 @@ from emblema.shared.kernel.checksums import Checksum
 from tests.support.published import (
     CORPUS,
     EMPTY_UNIT,
+    OTHER_TRAINING_UNIT,
     TRAINING_UNIT,
     VALIDATION_UNIT,
     publish,
 )
 
-TRAINING, VALIDATION, EMPTY = (
+TRAINING, VALIDATION, EMPTY, OTHER = (
     UnitKey(TRAINING_UNIT),
     UnitKey(VALIDATION_UNIT),
     UnitKey(EMPTY_UNIT),
+    UnitKey(OTHER_TRAINING_UNIT),
 )
 SIDES = CorpusSides(
-    corpus=CORPUS, training=frozenset({TRAINING, EMPTY}), validation=frozenset({VALIDATION})
+    corpus=CORPUS,
+    training=frozenset({TRAINING, EMPTY, OTHER}),
+    validation=frozenset({VALIDATION}),
 )
-# The block holds the two windows of the training unit first, then the one of the held-out unit.
-ENDS = {TRAINING: [10.0, 15.0], VALIDATION: [10.0]}
+# The block holds the two windows of the training unit first, then the one of the held-out unit,
+# then the one of the other training unit.
+ENDS = {TRAINING: [10.0, 15.0], VALIDATION: [10.0], OTHER: [10.0]}
 
 
 class Corpus(NamedTuple):

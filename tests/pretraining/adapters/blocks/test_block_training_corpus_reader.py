@@ -16,7 +16,17 @@ from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactSto
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import Retention
 from emblema.shared.ports.exceptions import ArtifactNotFoundError
-from tests.support.published import EMPTY_UNIT, TRAINING_UNIT, VALIDATION_UNIT, manifest_of, publish
+from tests.support.experiments import share
+from tests.support.published import (
+    EMPTY_UNIT,
+    OTHER_TRAINING_UNIT,
+    TRAINING_UNIT,
+    VALIDATION_UNIT,
+    manifest_of,
+    publish,
+)
+
+WHOLE = share()
 
 
 class RefusingStore(InMemoryArtifactStore):
@@ -32,11 +42,11 @@ def test_the_block_is_fetched_once_and_kept_under_its_digest(tmp_path: Path) -> 
     workspace = tmp_path / "reader"
     reader = BlockTrainingCorpusReader(store, workspace)
 
-    first = reader.read(published.manifest)
+    first = reader.read(published.manifest, WHOLE)
     cached = workspace / published.block.checksum.digest
     assert cached.is_file(), "the block is kept where the Catalog's archive would keep it"
 
-    again = BlockTrainingCorpusReader(_refusing(store), workspace).read(published.manifest)
+    again = BlockTrainingCorpusReader(_refusing(store), workspace).read(published.manifest, WHOLE)
     assert list(again.training) == list(first.training)
 
 
@@ -50,7 +60,7 @@ def test_a_block_left_in_the_workspace_by_the_publisher_is_read_without_the_stor
     published = publish(store, workspace / "scratch")
     store.get_file(published.block, workspace / published.block.checksum.digest)
 
-    read = BlockTrainingCorpusReader(_refusing(store), workspace).read(published.manifest)
+    read = BlockTrainingCorpusReader(_refusing(store), workspace).read(published.manifest, WHOLE)
 
     assert read.shape == published.corpus.shape
 
@@ -64,11 +74,11 @@ def test_a_block_in_the_workspace_that_does_not_hash_to_its_name_is_fetched_agai
     published = publish(store, tmp_path / "publisher")
     workspace = tmp_path / "reader"
     reader = BlockTrainingCorpusReader(store, workspace)
-    expected = list(reader.read(published.manifest).training)
+    expected = list(reader.read(published.manifest, WHOLE).training)
     cached = workspace / published.block.checksum.digest
     cached.write_bytes(cached.read_bytes()[:-1] + b"\x00")
 
-    read = reader.read(published.manifest)
+    read = reader.read(published.manifest, WHOLE)
 
     assert list(read.training) == expected
     assert published.block.checksum.matches(cached.read_bytes())
@@ -93,7 +103,7 @@ def test_bytes_that_are_not_a_manifest_are_refused(tmp_path: Path) -> None:
     with pytest.raises(UnreadablePublishedCorpusError, match="not a published manifest"):
         reader.describe(ref)
     with pytest.raises(UnreadablePublishedCorpusError, match="not a published manifest"):
-        reader.read(ref)
+        reader.read(ref, WHOLE)
 
 
 def test_a_manifest_whose_block_is_not_a_block_is_refused(tmp_path: Path) -> None:
@@ -102,7 +112,7 @@ def test_a_manifest_whose_block_is_not_a_block_is_refused(tmp_path: Path) -> Non
     manifest = store.put(PublishedCorpusManifestJson().encode(manifest_of(block)))
 
     with pytest.raises(UnreadablePublishedCorpusError, match="not one this reads"):
-        BlockTrainingCorpusReader(store, tmp_path).read(manifest)
+        BlockTrainingCorpusReader(store, tmp_path).read(manifest, WHOLE)
 
 
 def test_a_manifest_whose_block_is_missing_is_reported(tmp_path: Path) -> None:
@@ -112,7 +122,7 @@ def test_a_manifest_whose_block_is_missing_is_reported(tmp_path: Path) -> None:
     manifest = elsewhere.put(store.get(published.manifest))
 
     with pytest.raises(ArtifactNotFoundError):
-        BlockTrainingCorpusReader(elsewhere, tmp_path / "reader").read(manifest)
+        BlockTrainingCorpusReader(elsewhere, tmp_path / "reader").read(manifest, WHOLE)
 
 
 def test_a_split_that_leaves_a_side_without_windows_is_refused(tmp_path: Path) -> None:
@@ -121,13 +131,13 @@ def test_a_split_that_leaves_a_side_without_windows_is_refused(tmp_path: Path) -
     # Every unit with windows on the training side: the corpus would score on nothing.
     lopsided = manifest_of(
         published.block,
-        training_units=(TRAINING_UNIT, VALIDATION_UNIT),
+        training_units=(TRAINING_UNIT, VALIDATION_UNIT, OTHER_TRAINING_UNIT),
         validation_units=(EMPTY_UNIT,),
     )
     manifest = store.put(PublishedCorpusManifestJson().encode(lopsided))
 
     with pytest.raises(InvalidTrainingCorpusError, match="validation side"):
-        BlockTrainingCorpusReader(store, tmp_path / "reader").read(manifest)
+        BlockTrainingCorpusReader(store, tmp_path / "reader").read(manifest, WHOLE)
 
 
 def _refusing(store: InMemoryArtifactStore) -> RefusingStore:
