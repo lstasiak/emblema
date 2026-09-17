@@ -72,12 +72,13 @@ holding the excursions lie on both sides.** The Catalog's split accepts an expli
 held-out units beside the seeded fraction it draws today; the manifest already lists the
 validation units, and a version split by list records no split seed. The list for the satellite
 corpus is derived by a rule from the block's own values, as the diagnostic weighs them: the months
-are ranked by the mean square of their tokens under the current normalisation; the months past the
-excursion line — a mean square above the corpus's, which today names fifteen of the hundred and
-five, four of them past ten — alternate between the sides in rank order, the heaviest on the
-training side; and the remaining months are drawn by the seed so that the held-out side keeps the
-stated fraction of the corpus. The rule, the list it produced and the version it produced are
-recorded with the publication, before any run over the new version. It is a new version of the
+are ranked by the mean square of their tokens under the current normalisation; the months past one
+— the unit the training side is normalised to, which today names fifteen of the hundred and five,
+four of them past ten — alternate between the sides in rank order, the heaviest on the training
+side, so that a model still meets the kind of behaviour it will be asked about; and the remaining
+months are drawn by the seed so that the held-out side keeps the stated fraction of the corpus.
+The rule, the list it produced and the version it produced are recorded with the publication,
+before any run over the new version. It is a new version of the
 corpus, with a new manifest; runs over the old version stay comparable with each other and with
 nothing else.
 
