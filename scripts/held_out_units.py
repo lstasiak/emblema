@@ -19,6 +19,7 @@ weigh its units differently.
 
 import argparse
 import sys
+import textwrap
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -143,8 +144,21 @@ def render(units: Sequence[WeighedUnit], chosen: Sequence[str], *, line: float) 
             "What each side then holds, weighed under the published version's own statistics:",
             summary,
             f"Held out ({len(chosen)} of {len(units)}):",
-            " ".join(chosen),
+            # Wrapped and fenced: this goes into a note, whose lines a reader has to see the end
+            # of, and comes back out of one as the command line takes it.
+            "\n".join(["```", *_wrapped(chosen), "```"]),
         ]
+    )
+
+
+def _wrapped(chosen: Sequence[str], width: int = 92) -> list[str]:
+    """The units over as few lines as fit, never breaking one.
+
+    A key split across lines is a key nobody can paste back into the command line, and these keys
+    hold the hyphens a wrapper would otherwise break on.
+    """
+    return textwrap.wrap(
+        " ".join(chosen), width=width, break_on_hyphens=False, break_long_words=False
     )
 
 
