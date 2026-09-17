@@ -49,6 +49,14 @@ class InvalidCorpusShareError(PretrainingError, ValueError):
     pass
 
 
+class InvalidObjectiveLossError(PretrainingError, ValueError):
+    pass
+
+
+class IncomparableFloorError(PretrainingError, ValueError):
+    pass
+
+
 class InvalidSaturationCurveError(PretrainingError, ValueError):
     pass
 
