@@ -254,3 +254,63 @@ evening on the laptop's MPS at the small tier.
   Detection Evaluation. Harvard Dataverse, doi:10.7910/DVN/6C3JR1.
 - Hoffmann, J. et al. (2022). Training Compute-Optimal Large Language Models. arXiv:2203.15556.
 - Muennighoff, N. et al. (2023). Scaling Data-Constrained Language Models. arXiv:2305.16264.
+
+## 2026-09-17 — corrected by the saturation measurement
+
+The measurement the status line waited for is in `docs/verification/corpus-saturation.md`
+(ADR-0027 for how it is made and judged): the small tier's shape — 192 wide, 4 blocks, 1.8M
+parameters — over a tenth, a quarter, half and all of each corpus's training units at one budget
+of steps, seed 1, on the development machine.
+
+| Corpus | Verdict | What the curve showed |
+|---|---|---|
+| C-MAPSS | saturated | half a per cent of the channel variance on both sides from a quarter of the engines; every share reaches that floor within about 1,500 steps |
+| SMD | overfitting by the rules, data-limited in every other respect | each doubling of the units lowers the held-out loss by 16–18 % with no flattening; the gap between the sides shrinks from 7× to 2.4× as units come; every run is best after one to three epochs |
+| SKAB | data-limited | a tenth learns nothing, a quarter and a half tie, the whole reaches a quarter of the variance; 3,896 windows, one seed |
+| ESA-AD | not learnt | no share does better than the channel mean on the held-out months (1.00 at best, 1.29 at the whole) while every share learns its training months |
+
+What it corrects, and what it confirms:
+
+- **The parameter budget stands at the reference shape, and the sweep past it is closed for
+  now.** The small shape already overfits every classical corpus on its own within one or two
+  passes at an evening's steps, and C-MAPSS is learnt from a quarter of it: growth beyond 1.8M
+  parameters is earned by the mix alone, and growth beyond 4.78M by nothing measured. The
+  reference shape (256 wide, 6 blocks) remains the shape of the published tier for the mixed
+  backbone, on the value criterion as before; the seventh block and the 320-wide shape are not
+  measured and not adopted. The single-corpus backbones of the programme are to be trained at the
+  small shape rather than the reference, provisionally: a 4.78M model over 3–27M values would
+  overfit more than the 1.8M did. The second leg of the measurement — the reference shape over
+  the half and the whole of SMD and ESA-AD at the same steps — settles whether the reference
+  shape does better than the small one on the largest single corpus at all. The tier table
+  records this beside the shape.
+- **Mission3 is not added.** The value criterion is met without it, and the satellite corpus's
+  difficulty is not its volume: its held-out months were not learnt at any share, and more months
+  would not change that reading.
+- **Corpora are mixed from the first full run, as decided above**, with two corrections to how
+  the mix is weighed. C-MAPSS is learnt from a quarter of its units at this objective, so its
+  weight in the mix is that of data already learnt and passes over it are compute, not
+  information — the fifty epochs the budget prices for it are an upper bound the floor is reached
+  long before. The satellite corpus's held-out months must be scored apart from the mix's
+  validation loss, or they decide it (the channel mean errs 4.9 there against about 1 on the
+  classical corpora), and the loss they are scored by is to be reconsidered — a validation split
+  that spreads the excursions over both sides, or a loss that bounds what one costs — before the
+  corpus's share of the mix is judged. The block's own values say why: three tokens in a thousand
+  hold 91 % of the held-out side's squared magnitude and one month 88 %, and on the training side
+  one token in a thousand holds 45 %, so the objective's gradient over this corpus is half from
+  excursions no month repeats.
+- **The regime is corrected along with the size.** At this budget and learning rate the small
+  model is best after one to three epochs of each classical corpus, so the first mixed run needs
+  validation-based stopping with validation reported per corpus, and dropout — zero in the
+  measurement — as a stated parameter of the run.
+
+Later the same day, the second leg ran over the satellite corpus alone (the SMD half was
+stopped before its first epoch): the reference shape lowered the held-out loss against the small
+shape at both shares — 1.00 against 1.07 at the half, 1.12 against 1.29 at the whole — and was
+still read as not learnt at the last epoch, the same excursion month deciding it. The size axis on
+the largest single corpus is unmeasured; the provisional decision above stands.
+
+Revisit when the second leg shows the reference shape no better than the small one over the
+whole of SMD at equal steps — the published tier's shape then earns nothing on a single corpus and
+only the mixed run's own curve can earn it — or when the mixed run's curve is still falling at the
+whole mix, which reopens the sweep with the seventh block on the value criterion with repetition
+credited.

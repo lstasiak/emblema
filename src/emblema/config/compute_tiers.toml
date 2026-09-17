@@ -1,6 +1,7 @@
 # What each compute tier is: the hardware it assumes and the scale an experiment runs at
-# there. An experiment declares its tier; the model shape, the share of each corpus and the window
-# follow from this file, never from code. Read by `emblema.config.compute_tiers.ComputeTiers`.
+# there. An experiment declares its tier; the model shape, the share of each corpus's training
+# units a run reads and the window follow from this file unless the experiment states its own,
+# never from code. Read by `emblema.config.compute_tiers.ComputeTiers`.
 #
 # Throughputs are sustained, not peak: T4 in fp16 with fused attention, an M1 Pro through MPS in
 # fp32, an A100 in bf16 at the ratio the paid platform prices it against the T4.
@@ -25,6 +26,9 @@ time_frequencies = 12
 corpus_fraction = 0.1
 window = "default"
 
+# Held by the corpus-saturation measurement of 2026-09-17: the small shape already overfits each
+# classical corpus on its own at an evening's steps, so this shape is earned by the mix and a
+# larger one by nothing measured yet (ADR-0008, dated section).
 [[tiers]]
 name = "M"
 device = "T4, fp16"
