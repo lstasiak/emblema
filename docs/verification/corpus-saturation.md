@@ -292,3 +292,256 @@ that a larger model reproduces the training months' excursions a little better o
 side, and no more: it does not change the reading, which belongs to the loss and the split. What
 the reference shape earns on the largest single corpus is not measured here, and the decision on
 the shape of single-corpus backbones in ADR-0008 stays provisional.
+
+## 2026-09-17 — the satellite backbones scored apart from the excursions (macOS arm64, M1 Pro, MPS, fp32)
+
+The first leg read the satellite corpus as not learnt and said the reading belonged to the loss
+and the split, not to the model: a few tokens in a thousand held nine tenths of the held-out
+loss. What the model did on the other tokens was invisible in that number. This section scores
+the six stored satellite backbones — the small shape over four shares, the reference shape over
+two — on the validation windows their runs scored, under the masks their runs drew, and reads the
+loss four ways: over every hidden token, which must reproduce the runs' own validation losses;
+over the hidden tokens within ten standard deviations of their channel; as a Huber loss with the
+knee at one deviation; and with the target clipped at ten. It also regenerates, from the block's
+values and no model, the concentration figures the first leg quoted from a one-off script.
+
+Method, on the machine that holds the stored runs and the published block:
+
+```sh
+uv run pytest tests/scripts/test_excursion_report.py tests/scripts/test_excursion_figures.py
+uv run scripts/excursion_report.py --corpus esa_ad <manifest key> <checksum> \
+    --experiment saturation-esa_ad-s --experiment saturation-esa_ad-m --device mps
+uv run scripts/excursion_report.py --report-only
+uv run scripts/excursion_figures.py data/report/saturation/excursions --figures docs/verification/figures
+```
+
+The report weighs every window of both sides of the block, then scores each finished run's
+backbone in the run's own micro-batches, in block order, on every fourth validation window as the
+run did, with the masks of each batch drawn from the generator the training runtime seeds for that
+batch. Everything is written as CSV under `data/report/saturation/excursions/` — a row per window
+and side, a row per backbone, window and reading, a row per bin of target magnitude — and the
+tables and figures are made from those files.
+
+|  |  |
+| --- | --- |
+| Machine | macOS-26.6.2-arm64-arm-64bit-Mach-O, arm |
+| Python | 3.14.7 |
+| torch | 2.14.0 |
+| Device | mps |
+| Revision | ffa1245dcb8eae3d077575a79e968ff413ac5d5f-dirty |
+| Corpus | esa_ad |
+| Block | sha256:20cb7969c6902c1a5305d37a912ea9b325b040757ae22c631e9a4df5905698af |
+| Excursion | a token past 10 standard deviations of its channel |
+| Huber δ | 1 |
+| Rule | every backbone is scored on the validation windows its run scored, under the masks its run drew; the trivial predictor is scored on the same tokens |
+
+The scripts were on the branch and uncommitted when the measurement ran, which the revision
+records as dirty; the code is the branch's, reviewed and committed after it.
+
+### What it cost
+
+Three minutes: 20 s to weigh the 76,682 windows of the block, 21 s per backbone of the small
+shape and 37–39 s per backbone of the reference shape, on 3,846 validation windows each.
+
+### Where the squared magnitude of each side lies
+
+| Side | Windows | Tokens | Mean square | Tokens past 10 SD | Their share of the squares | Unit holding most | Heaviest 1% of windows | Mean square within |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| training | 61,299 | 52,395,556 | 1.000 | 69,169 (0.13%) | 44.5% | `ESA-Mission1/2002-05` (14.5%) | 55.9% | 0.555 |
+| validation | 15,383 | 11,928,186 | 4.858 | 36,620 (0.31%) | 90.8% | `ESA-Mission1/2000-04` (88.1%) | 91.8% | 0.448 |
+
+From the block's values alone, over every token of every window of the side: the mean square is
+the channel-mean predictor's error there, and a squared error over the side is decided by whatever
+holds the squares. These are the first leg's figures, regenerated: one held-out month holds 88 %
+of the side's squared magnitude, three tokens in a thousand hold 91 %, one window in a hundred
+92 %, and the tokens within the threshold have a mean square of 0.45 on the held-out side against
+0.56 on the training side. On the training side, 0.13 % of the tokens hold 45 %.
+
+### saturation-esa_ad-s
+
+| Share | Hidden tokens | Hidden ratio | Validation loss, the run's | Validation loss, here | Relative, every token | Relative, within 10 SD | Relative, Huber δ=1 | Relative, clipped at 10 SD |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 10% | 1,379,092 | 0.4624 | 5.0541 | 5.0541 | 0.959 | 0.395 | 0.539 | 0.632 |
+| 25% | 1,379,092 | 0.4624 | 5.1210 | 5.1210 | 0.971 | 0.443 | 0.522 | 1.225 |
+| 50% | 1,379,092 | 0.4624 | 5.2678 | 5.2678 | 0.999 | 0.636 | 0.558 | 1.547 |
+| 100% | 1,379,092 | 0.4624 | 6.3533 | 6.3533 | 1.205 | 0.938 | 0.548 | 1.330 |
+
+Relative losses are the model's over the channel-mean predictor's on the same hidden tokens, so
+one is nothing learnt. Every token reproduces the run's own validation loss; within the threshold
+leaves the excursions out; Huber and clipped score every token under a loss that bounds what one
+excursion costs. The channel mean errs 5.27 on the hidden tokens against 4.91 on every token of
+the side, so the relative numbers over every token sit some 7 % under the first leg's, which
+divided by the side's mean square; the shares order the same way.
+
+#### saturation-esa_ad-s, by held-out unit
+
+| Unit | Hidden tokens | Mean square | Share of the side's squares | 10% | 25% | 50% | 100% |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `ESA-Mission1/2000-04` | 60,502 | 107.837 | 89.7% | 1.01 / 0.74 | 1.06 / 1.73 | 1.09 / 3.17 | 1.30 / 4.59 |
+| `ESA-Mission1/2000-03` | 60,119 | 3.499 | 2.9% | 0.89 / 0.47 | 0.09 / 0.33 | 0.08 / 0.37 | 0.13 / 0.59 |
+| `ESA-Mission2/2000-06` | 108,321 | 0.835 | 1.2% | 0.74 / 0.72 | 0.34 / 0.28 | 0.30 / 0.23 | 0.39 / 0.33 |
+| `ESA-Mission2/2001-07` | 115,359 | 0.630 | 1.0% | 0.70 / 0.69 | 0.65 / 0.63 | 0.54 / 0.52 | 0.56 / 0.55 |
+| `ESA-Mission1/2006-01` | 62,135 | 0.396 | 0.3% | 0.15 / 0.15 | 0.21 / 0.21 | 0.33 / 0.33 | 0.46 / 0.46 |
+| `ESA-Mission1/2002-08` | 62,754 | 0.390 | 0.3% | 0.13 / 0.13 | 0.15 / 0.15 | 0.20 / 0.20 | 0.43 / 0.43 |
+| `ESA-Mission1/2000-02` | 58,436 | 0.416 | 0.3% | 0.47 / 0.47 | 0.37 / 0.37 | 0.41 / 0.41 | 0.46 / 0.46 |
+| `ESA-Mission1/2004-07` | 62,010 | 0.391 | 0.3% | 0.13 / 0.13 | 0.16 / 0.16 | 0.21 / 0.21 | 0.46 / 0.46 |
+| `ESA-Mission1/2004-05` | 62,127 | 0.388 | 0.3% | 0.13 / 0.13 | 0.16 / 0.16 | 0.21 / 0.21 | 0.45 / 0.45 |
+| `ESA-Mission1/2000-07` | 61,252 | 0.392 | 0.3% | 0.29 / 0.29 | 0.18 / 0.18 | 0.23 / 0.23 | 0.40 / 0.40 |
+| `ESA-Mission1/2006-11` | 58,768 | 0.404 | 0.3% | 0.15 / 0.15 | 0.21 / 0.21 | 0.33 / 0.33 | 0.45 / 0.45 |
+| `ESA-Mission1/2001-12` | 62,876 | 0.374 | 0.3% | 0.14 / 0.14 | 0.16 / 0.16 | 0.21 / 0.21 | 0.44 / 0.44 |
+| `ESA-Mission1/2006-06` | 60,255 | 0.388 | 0.3% | 0.15 / 0.15 | 0.21 / 0.21 | 0.33 / 0.33 | 0.47 / 0.47 |
+| `ESA-Mission1/2002-06` | 59,844 | 0.368 | 0.3% | 0.15 / 0.15 | 0.17 / 0.17 | 0.23 / 0.23 | 0.46 / 0.46 |
+| `ESA-Mission1/2003-01` | 60,253 | 0.362 | 0.3% | 0.14 / 0.14 | 0.16 / 0.16 | 0.21 / 0.21 | 0.42 / 0.42 |
+| `ESA-Mission1/2003-11` | 60,559 | 0.349 | 0.3% | 0.16 / 0.16 | 0.19 / 0.19 | 0.25 / 0.25 | 0.45 / 0.45 |
+| `ESA-Mission1/2004-01` | 60,796 | 0.341 | 0.3% | 0.15 / 0.15 | 0.17 / 0.17 | 0.23 / 0.23 | 0.45 / 0.45 |
+| `ESA-Mission1/2000-11` | 59,741 | 0.327 | 0.3% | 0.30 / 0.30 | 0.20 / 0.20 | 0.27 / 0.27 | 0.39 / 0.39 |
+| `ESA-Mission1/2000-06` | 58,353 | 0.323 | 0.3% | 0.31 / 0.31 | 0.21 / 0.21 | 0.27 / 0.27 | 0.40 / 0.40 |
+| `ESA-Mission1/2004-10` | 62,810 | 0.292 | 0.3% | 0.19 / 0.19 | 0.21 / 0.21 | 0.27 / 0.27 | 0.51 / 0.51 |
+| `ESA-Mission1/2003-12` | 61,822 | 0.213 | 0.2% | 0.26 / 0.26 | 0.29 / 0.29 | 0.35 / 0.35 | 0.56 / 0.56 |
+
+Units in order of the squares their hidden tokens hold; each share's cell is the relative loss
+over every hidden token / over those within 10 SD.
+
+#### saturation-esa_ad-s, by window
+
+| Share | Median | p90 | p99 | Worst | Heaviest 1% | Median within 10 SD | p90 | p99 | Worst | Heaviest 1% |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 10% | 0.19 | 0.51 | 1.2 | 5.4 | 97.5% | 0.19 | 0.51 | 1.2 | 5.4 | 31.4% |
+| 25% | 0.19 | 0.40 | 1.1 | 2.9 | 98.0% | 0.19 | 0.40 | 1.2 | 4.0 | 51.6% |
+| 50% | 0.24 | 0.44 | 1.0 | 2.0 | 97.9% | 0.24 | 0.44 | 1.1 | 5.9 | 61.9% |
+| 100% | 0.41 | 0.64 | 1.1 | 1.8 | 97.3% | 0.41 | 0.64 | 1.1 | 8.1 | 60.6% |
+
+The relative loss of single windows, and the share of the model's summed loss the heaviest 1% of
+windows hold; over every hidden token, then within the threshold.
+
+### saturation-esa_ad-m
+
+| Share | Hidden tokens | Hidden ratio | Validation loss, the run's | Validation loss, here | Relative, every token | Relative, within 10 SD | Relative, Huber δ=1 | Relative, clipped at 10 SD |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 50% | 1,389,673 | 0.4660 | 4.9164 | 4.9164 | 0.976 | 0.447 | 0.588 | 1.503 |
+| 100% | 1,389,673 | 0.4660 | 5.4981 | 5.4981 | 1.092 | 0.847 | 0.632 | 0.992 |
+
+The reference shape's runs took micro-batches of sixteen, so their batches and their masks differ
+from the small shape's; the hidden tokens differ by ten thousand and the ratio by four thousandths.
+
+#### saturation-esa_ad-m, by held-out unit
+
+| Unit | Hidden tokens | Mean square | Share of the side's squares | 50% | 100% |
+| --- | --- | --- | --- | --- | --- |
+| `ESA-Mission1/2000-04` | 61,944 | 100.794 | 89.2% | 1.06 / 1.31 | 1.17 / 3.77 |
+| `ESA-Mission1/2000-03` | 57,456 | 3.759 | 3.1% | 0.08 / 0.41 | 0.13 / 0.56 |
+| `ESA-Mission2/2000-06` | 112,911 | 0.836 | 1.3% | 0.35 / 0.30 | 0.40 / 0.36 |
+| `ESA-Mission2/2001-07` | 113,527 | 0.609 | 1.0% | 0.67 / 0.66 | 0.46 / 0.44 |
+| `ESA-Mission1/2000-07` | 62,641 | 0.400 | 0.4% | 0.26 / 0.26 | 0.49 / 0.49 |
+| `ESA-Mission1/2006-01` | 63,363 | 0.395 | 0.4% | 0.37 / 0.37 | 0.62 / 0.62 |
+| `ESA-Mission1/2006-11` | 61,466 | 0.403 | 0.4% | 0.39 / 0.39 | 0.60 / 0.60 |
+| `ESA-Mission1/2000-02` | 58,927 | 0.417 | 0.4% | 0.44 / 0.44 | 0.60 / 0.60 |
+| `ESA-Mission1/2004-05` | 63,363 | 0.383 | 0.3% | 0.24 / 0.24 | 0.56 / 0.56 |
+| `ESA-Mission1/2002-08` | 61,407 | 0.391 | 0.3% | 0.24 / 0.24 | 0.57 / 0.57 |
+| `ESA-Mission1/2004-07` | 60,831 | 0.393 | 0.3% | 0.25 / 0.25 | 0.57 / 0.57 |
+| `ESA-Mission1/2006-06` | 61,043 | 0.391 | 0.3% | 0.37 / 0.37 | 0.59 / 0.59 |
+| `ESA-Mission1/2001-12` | 62,530 | 0.374 | 0.3% | 0.25 / 0.25 | 0.57 / 0.57 |
+| `ESA-Mission1/2002-06` | 61,567 | 0.373 | 0.3% | 0.28 / 0.28 | 0.63 / 0.63 |
+| `ESA-Mission1/2003-01` | 59,889 | 0.364 | 0.3% | 0.25 / 0.25 | 0.56 / 0.56 |
+| `ESA-Mission1/2003-11` | 59,931 | 0.356 | 0.3% | 0.26 / 0.26 | 0.55 / 0.55 |
+| `ESA-Mission1/2004-01` | 62,242 | 0.339 | 0.3% | 0.26 / 0.26 | 0.57 / 0.57 |
+| `ESA-Mission1/2000-11` | 59,645 | 0.330 | 0.3% | 0.32 / 0.32 | 0.49 / 0.49 |
+| `ESA-Mission1/2000-06` | 60,138 | 0.318 | 0.3% | 0.31 / 0.31 | 0.49 / 0.49 |
+| `ESA-Mission1/2004-10` | 62,657 | 0.288 | 0.3% | 0.29 / 0.29 | 0.58 / 0.58 |
+| `ESA-Mission1/2003-12` | 62,195 | 0.213 | 0.2% | 0.40 / 0.40 | 0.66 / 0.66 |
+
+#### saturation-esa_ad-m, by window
+
+| Share | Median | p90 | p99 | Worst | Heaviest 1% | Median within 10 SD | p90 | p99 | Worst | Heaviest 1% |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 50% | 0.28 | 0.50 | 1.1 | 2.8 | 97.3% | 0.28 | 0.50 | 1.2 | 3.1 | 36.0% |
+| 100% | 0.51 | 0.80 | 1.2 | 1.9 | 96.2% | 0.52 | 0.80 | 1.2 | 6.1 | 46.1% |
+
+![The same backbones under four readings of the loss](figures/excursion-relative-loss.png)
+
+![Relative loss on each held-out unit, against the squares the unit holds](figures/excursion-by-unit.png)
+
+![Error by magnitude of the hidden target, and where the loss comes from](figures/excursion-by-magnitude.png)
+
+### Reading
+
+**The scoring is the runs' own.** All six backbones reproduce their run's last validation loss to
+four decimals and its hidden ratio to four, so what follows is read on the tokens the runs were
+judged on, under the masks they were judged under.
+
+**The ordinary behaviour of the corpus was learnt, at every share and both shapes.** Over the
+twenty held-out months other than `2000-04`, the small shape's error is 0.23–0.51 of the channel
+mean's over every hidden token (0.27–0.45 within the threshold) and the reference shape's
+0.28–0.41; over the whole side within the threshold, 0.40–0.94 and 0.45–0.85; the median
+window sits at 0.19–0.51 of the mean's error. The first leg's *not learnt* was the loss's and the
+split's reading, as it said: the model is not the problem.
+
+**But the loss on the ordinary tokens rises with the share, from a quarter of the corpus on.**
+From the quarter share up, every ordinary month of Mission1 is worse at each larger share — 0.15
+to 0.37 of the mean's error at a quarter, 0.20 to 0.41 at a half, 0.39 to 0.56 at the whole — and
+the twenty ordinary months together go from 0.23 at a quarter to 0.36 at the whole. The two
+months of Mission2 and the second-heaviest month, `2000-03`, are not monotone; the tenth share,
+whose model had seen six thousand windows, is above the quarter's on several months. The bins
+say why. The whole-corpus model reproduces excursions of
+10–20 deviations seven times better than the mean does (a mean square of 40.6 against 283 over
+3,240 tokens) and pays for it where the tokens are: in the 0–1 bin, nine tenths of the hidden
+tokens, its error is 0.135 against the tenth-share model's 0.092, and in the 5–10 bin it errs
+509 against 82, predicting an excursion where a moderate value is. Under a squared error the
+training gradient of this corpus is 45 % from 0.13 % of its tokens, and the shares are where
+those tokens come in. Because the shares are nested, it can be said which share brings them: the
+mean square of the training side itself climbs 0.44, 0.48, 0.70, 1.00 over the four shares, and
+the four heaviest training months — mean squares of 3.9 to 14.2 — all enter at the whole corpus
+and at no smaller share. That is where the ordinary-token loss jumps: 0.23 at a quarter and 0.25
+at a half, neither holding those months, then 0.36 at the whole. Four points of one seed are a
+correspondence and not a proof, but the direction is the objective's: at equal steps more data is
+more of the budget spent on excursions no held-out month repeats. The same backbones read under
+the Huber loss sit flat across the shares, 0.52–0.56 at the small shape: what moves between
+shares under the squared error is the excursions' doing. The satellite curve
+of the first leg therefore reads the objective, not the data, and a saturation curve of this
+corpus is a run under a loss that bounds what one excursion costs, not a re-reading of these.
+
+**The excursion month is not learnable from the other side under this split, its ordinary tokens
+included.** Of `2000-04`'s 60,502 hidden tokens, 57,144 lie within the threshold, where the
+channel mean errs 1.29. On those tokens the small shape's error is 0.74 of the mean's at a tenth,
+1.73 at a quarter, 3.17 at a half and 4.59 at the whole, and the reference shape's 1.31 and 3.77:
+worse at each larger share, and past the trivial predictor from a quarter of the corpus on. The
+model reads the excursions in the visible context of a window and predicts excursions for the
+hidden ordinary tokens beside them, which is what a model trained on months that never look like
+the first weeks of a mission would do. That is where the held-out loss within the threshold comes
+from: at the whole share the month holds 4.2 % of the hidden tokens scored there and 58 % of the
+model's loss over them, and 28 % of the heaviest 1 % of windows are its against its 4.7 % of the
+windows. A held-out side that puts every window of that kind on one side cannot be learnt from
+the other whatever the loss.
+
+**Clipping the target is not a reading of a model trained without it.** The clipped reading sits
+at 0.63–1.55 because these backbones predict past the clip where the target is held at it; what a
+model trained under a clipped target would do is a run, not a reading, and the Huber reading is
+the one that says something about these.
+
+### Limitations
+
+- The backbones were trained under a squared error and are read here under a Huber loss and a
+  clipped target: the readings say what those losses would score, not what a model trained under
+  them would learn. The satellite curve under the bounded loss is a run of the saturation report,
+  which the second leg's cost prices at about six hours on this machine.
+- One threshold, ten deviations — the first leg's own line. The bins above show the ordering of
+  the shares from the 0–1 bin up, so the reading does not hang on where the line is drawn.
+- One seed, the same masks for every share of a shape, every fourth validation window: the
+  first leg's limitations, inherited.
+- A copy from the accelerator that widens to double precision in the same call returns wrong
+  values with no error — zeros, for the tensors measured here (torch 2.14 on MPS, while this was
+  written: `tensor.to("cpu", torch.float64)` of an MPS tensor; moving first and widening on the
+  host is exact, and a cast to half precision on the way is exact). The report reads its targets
+  and masks off the host batch and moves the prediction before it is widened, and a test scores
+  one backbone on both devices and holds them to a tolerance
+  (`tests/scripts/test_excursion_report.py`). No recorded number was affected: the
+  masked-reconstruction report moves its predictions to the host before anything reads them. The
+  package now moves before it widens wherever it did both at once, held by a test of its own.
+
+### What it decided
+
+Recorded in ADR-0028: the objective's loss becomes a parameter of the experiment, with the Huber
+loss for the mixed run; a run over several corpora reports its validation loss per corpus, each
+against its own trivial predictor; and the satellite corpus is republished with held-out months
+chosen so that the months holding the excursions lie on both sides. The satellite curve is to be
+run again under the bounded loss before the corpus's share of the mix is judged.
