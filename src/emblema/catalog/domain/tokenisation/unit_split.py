@@ -60,3 +60,27 @@ class UnitSplit:
             )
         ordered = sorted(units, key=lambda key: (seeded_rank(seed, key), str(key)))
         return cls(training=frozenset(ordered[held_out:]), validation=frozenset(ordered[:held_out]))
+
+    @classmethod
+    def of_held_out(cls, keys: Iterable[UnitKey], held_out: Iterable[UnitKey]) -> Self:
+        """The split that holds out exactly the units named, and keeps the rest.
+
+        What a seeded draw cannot do: put particular units on the held-out side. A corpus whose
+        units differ in kind rather than only in draw — months of a mission in which the
+        instrument was still settling, say — is split by naming them, and the names travel with
+        the publication instead of a seed nobody could invert.
+
+        Raises:
+            InvalidUnitSplitError: If a key repeats on either side, a unit named is not a unit of
+                the corpus, or a side is left empty.
+        """
+        units = list(keys)
+        if len(set(units)) != len(units):
+            raise InvalidUnitSplitError("unit keys must be unique")
+        wanted = list(held_out)
+        if len(set(wanted)) != len(wanted):
+            raise InvalidUnitSplitError("held-out keys must be unique")
+        unknown = sorted(str(key) for key in set(wanted) - set(units))
+        if unknown:
+            raise InvalidUnitSplitError(f"units held out that the corpus does not hold: {unknown}")
+        return cls(training=frozenset(set(units) - set(wanted)), validation=frozenset(wanted))

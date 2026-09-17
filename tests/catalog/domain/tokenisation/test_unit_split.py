@@ -84,3 +84,29 @@ def test_both_sides_hold_a_unit() -> None:
 def test_the_sides_share_no_unit() -> None:
     with pytest.raises(InvalidUnitSplitError, match="both sides"):
         UnitSplit(frozenset(KEYS[:3]), frozenset(KEYS[2:]))
+
+
+def test_a_split_holds_out_exactly_the_units_named() -> None:
+    split = UnitSplit.of_held_out(KEYS, (KEYS[2], KEYS[0]))
+
+    assert split.validation == frozenset({KEYS[0], KEYS[2]})
+    assert split.training == frozenset(KEYS) - split.validation
+
+
+def test_naming_every_unit_or_none_of_them_leaves_a_side_empty() -> None:
+    with pytest.raises(InvalidUnitSplitError, match="at least one unit"):
+        UnitSplit.of_held_out(KEYS, KEYS)
+    with pytest.raises(InvalidUnitSplitError, match="at least one unit"):
+        UnitSplit.of_held_out(KEYS, ())
+
+
+def test_a_unit_the_corpus_does_not_hold_cannot_be_held_out() -> None:
+    with pytest.raises(InvalidUnitSplitError, match="does not hold"):
+        UnitSplit.of_held_out(KEYS, (UnitKey("absent"),))
+
+
+def test_neither_side_of_a_named_split_takes_a_unit_twice() -> None:
+    with pytest.raises(InvalidUnitSplitError, match="held-out keys"):
+        UnitSplit.of_held_out(KEYS, (KEYS[0], KEYS[0]))
+    with pytest.raises(InvalidUnitSplitError, match="unit keys"):
+        UnitSplit.of_held_out((*KEYS, KEYS[0]), (KEYS[1],))
