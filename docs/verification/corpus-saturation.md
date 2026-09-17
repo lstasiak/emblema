@@ -545,3 +545,84 @@ loss for the mixed run; a run over several corpora reports its validation loss p
 against its own trivial predictor; and the satellite corpus is republished with held-out months
 chosen so that the months holding the excursions lie on both sides. The satellite curve is to be
 run again under the bounded loss before the corpus's share of the mix is judged.
+
+## 2026-09-17 — the satellite corpus republished with its held-out months named
+
+What the diagnostic above prescribes, done to the corpus before anything is trained on it. The
+held-out side of the version the two legs read was drawn by a seed, and the draw put every month
+the squared loss is decided by on one side: one of the twenty-one held 88 % of that side's
+squared magnitude, and no model trained on the other months reached it. This version names its
+held-out months instead, by the rule ADR-0028 states, applied to the previous version's own
+values as the excursion report weighed them.
+
+The derivation is code (`scripts/held_out_units.py`) and reads from the weighed block alone, so
+it is repeatable and carries no judgement about which month is which:
+
+```sh
+uv run scripts/held_out_units.py data/report/saturation/excursions
+uv run python -m emblema.entrypoints.cli.publish_corpus --corpus esa_ad --window 1 --stride 1 \
+    --hold-out $(uv run scripts/held_out_units.py data/report/saturation/excursions --plain)
+```
+
+|  |  |
+| --- | --- |
+| Corpus version | `97a498eb-72e5-489f-a858-4f4fedf8c881` |
+| Manifest | `durable/sha256/42855536f8ee815cbc98a7dffe9f9fb0a4b2280d17ea611163ae7ce9e38d6ae4` |
+| Block | `sha256:64dbe6d947d78d18bd7be042eef26e3ec365ed4240ea972fb9be570241285713` |
+| Split seed | none: the months were named, and their names are what the manifest records |
+| Sides | 84 training months, 21 held out, of 105 |
+| Windows, tokens, channels | 76,682 · 64,323,742 · 17 |
+| Line | a mean square above one, the unit the training side of the previous version is normalised to |
+
+Units past 1 mean squares, alternated between the sides, heaviest first:
+
+| Unit | Tokens | Mean square | Side |
+| --- | --- | --- | --- |
+| `ESA-Mission1/2000-04` | 518,394 | 98.425 | training |
+| `ESA-Mission1/2002-05` | 535,680 | 14.163 | held out |
+| `ESA-Mission1/2001-04` | 518,400 | 10.898 | training |
+| `ESA-Mission1/2004-12` | 535,680 | 10.533 | held out |
+| `ESA-Mission1/2005-09` | 493,326 | 3.876 | training |
+| `ESA-Mission1/2000-03` | 510,888 | 3.707 | held out |
+| `ESA-Mission2/2000-04` | 950,400 | 2.778 | training |
+| `ESA-Mission2/2001-06` | 950,400 | 2.706 | held out |
+| `ESA-Mission2/2000-05` | 981,959 | 2.670 | training |
+| `ESA-Mission1/2005-03` | 526,890 | 1.870 | held out |
+| `ESA-Mission1/2005-10` | 527,010 | 1.370 | training |
+| `ESA-Mission2/2000-12` | 982,080 | 1.342 | held out |
+| `ESA-Mission2/2001-01` | 982,080 | 1.293 | training |
+| `ESA-Mission2/2000-07` | 982,080 | 1.075 | held out |
+| `ESA-Mission2/2001-07` | 982,080 | 1.034 | training |
+
+What each side then holds, weighed under the published version's own statistics:
+
+| Side | Units | Tokens | Mean square | Units past 1 |
+| --- | --- | --- | --- | --- |
+| training | 84 | 51,456,100 | 1.672 | 8 |
+| validation | 21 | 12,867,642 | 1.890 | 7 |
+
+Held out (21 of 105):
+
+```
+ESA-Mission1/2000-03 ESA-Mission1/2000-06 ESA-Mission1/2000-07 ESA-Mission1/2000-11
+ESA-Mission1/2001-12 ESA-Mission1/2002-05 ESA-Mission1/2002-08 ESA-Mission1/2003-01
+ESA-Mission1/2003-11 ESA-Mission1/2004-01 ESA-Mission1/2004-05 ESA-Mission1/2004-07
+ESA-Mission1/2004-10 ESA-Mission1/2004-12 ESA-Mission1/2005-03 ESA-Mission1/2006-01
+ESA-Mission1/2006-06 ESA-Mission2/2000-06 ESA-Mission2/2000-07 ESA-Mission2/2000-12
+ESA-Mission2/2001-06
+```
+
+### Reading
+
+The rule moves the months the loss is decided by onto both sides: the heaviest, the first weeks
+of Mission1, now trains, and the second heaviest is held out. Weighed under the previous
+version's statistics, the sides go from a mean square of 1.00 and 4.86 to 1.67 and 1.89, and from
+two and thirteen months past the line to seven and eight. What the new version's own statistics
+make of its months is not this table: they are fitted on the new training side, so a month's
+weight there is a different number, which is why the list is derived once from one version and
+stated to the next rather than recomputed.
+
+Nothing here says the corpus is learnable. It says the held-out side is no longer a side no model
+trained on the other could reach, which is what a curve under a bounded loss needs before it can
+be read at all. That curve is `experiments/saturation-esa_ad-s-huber.toml` over this version, at
+the first leg's budget to the step.
