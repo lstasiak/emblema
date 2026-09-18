@@ -12,6 +12,7 @@ from typing import NamedTuple
 import pytest
 
 from emblema.evaluation.adapters.blocks.block_corpus_windows import BlockCorpusWindows
+from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.in_memory.corpus_windows import InMemoryCorpusWindows
 from emblema.evaluation.domain.exceptions import UnreadableTaskCorpusError
 from emblema.evaluation.domain.identifiers import UnitKey
@@ -59,7 +60,10 @@ def corpus(request: pytest.FixtureRequest, tmp_path: Path) -> Corpus:
         return Corpus(InMemoryCorpusWindows(SIDES, ENDS, manifest), manifest)
     store = InMemoryArtifactStore()
     published = publish(store, tmp_path)
-    return Corpus(BlockCorpusWindows(store, tmp_path / "workspace"), published.manifest)
+    return Corpus(
+        BlockCorpusWindows(PublishedCorpusBlocks(store, tmp_path / "workspace")),
+        published.manifest,
+    )
 
 
 def test_the_corpus_reports_the_sides_it_drew(corpus: Corpus) -> None:

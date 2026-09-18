@@ -111,6 +111,19 @@ class WindowBlock(Sequence[TokenWindow]):
         wanted = np.isin(self._units, np.asarray(sorted(units), dtype=self._units.dtype))
         return _WindowSelection(self, [int(index) for index in np.flatnonzero(wanted)])
 
+    def at(self, positions: Sequence[int]) -> Sequence[TokenWindow]:
+        """The windows at those positions, in the order given, without copying any token.
+
+        A labelled task addresses windows by the position the block holds them at, and a run over
+        it reads exactly those: materialising them as Python objects would cost hundreds of
+        megabytes for a side of a few thousand windows, while a selection pages in only the
+        windows a batch touches.
+
+        Raises:
+            IndexError: If a position is not one of the block's windows.
+        """
+        return _WindowSelection(self, [self._checked(position) for position in positions])
+
     def _span_of(self, index: int) -> tuple[int, int]:
         position = self._checked(index)
         return int(self._token_offsets[position]), int(self._token_offsets[position + 1])

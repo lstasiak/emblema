@@ -135,6 +135,7 @@ allowed-confusables = ["×"]
 "scripts/excursion_report.py" = ["E402"]
 "scripts/excursion_figures.py" = ["E402"]
 "scripts/held_out_units.py" = ["E402"]
+"scripts/transfer_modes_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

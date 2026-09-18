@@ -18,6 +18,7 @@ from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusR
 from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.evaluation.adapters.blocks.block_corpus_windows import BlockCorpusWindows
+from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
@@ -76,7 +77,7 @@ def published(tmp_path_factory: pytest.TempPathFactory) -> Published:
     manifest = publishing.services.publish_corpus(publish_command())
 
     workspace = root / "workspace"
-    corpus = BlockCorpusWindows(store, workspace)
+    corpus = BlockCorpusWindows(PublishedCorpusBlocks(store, workspace))
     tasks = InMemoryDownstreamTaskRepository()
     task = DefineDownstreamTask(tasks, corpus, SequentialIdGenerator())(
         DefineDownstreamTaskCommand(

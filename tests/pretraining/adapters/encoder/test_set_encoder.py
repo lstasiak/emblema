@@ -12,8 +12,8 @@ from emblema.pretraining.adapters.encoder.fourier_time_encoding import (  # noqa
 from emblema.pretraining.adapters.encoder.learned_channel_embedding import (  # noqa: E402
     LearnedChannelEmbedding,
 )
-from emblema.pretraining.adapters.encoder.masked_mean_pooling import MaskedMeanPooling  # noqa: E402
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
+from emblema.shared.adapters.tensors.masked_mean_pooling import MaskedMeanPooling  # noqa: E402
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
 from tests.support.encoders import SMALL  # noqa: E402
 from tests.support.token_tensors import (  # noqa: E402

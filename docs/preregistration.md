@@ -196,3 +196,35 @@ corpus under another seed cannot move it.
 
 **Measured when this changed.** Nothing. No model has been fine-tuned on this task and no comparison
 has been run; the unit counts come from replaying the published split over the raw unit keys.
+
+### 2026-09-18 — the backbone the curve is drawn from, and how a candidate is made
+
+**Changed.** Nothing registered above; this names what was left open. The pretrained arm of every
+comparison starts from one backbone: `backbone-cmapss-m`, registered as
+`de3815c9-6ff4-4fed-9878-df1cbcd204bd` — 256 wide, 4 heads, 6 blocks, 4,751,872 encoder
+parameters over the 21 channels of the turbofan corpus, pretrained in half precision on a T4
+under seed 1 at commit `061fd05`, weights
+`sha256:6830e117d06f9882a240e3e763f792f8d6dca5c9c58efab462130a40c9664930`, over the corpus whose
+manifest is `sha256:a00c3865aba466147cc2fb731cc1903afcb91bdc94c2027379fab5232ca789c1` (window 50,
+stride 5, the split of 2026-09-16). The two smaller backbones of the same corpus stand as a
+reference of precision and are not on the curve.
+
+How a candidate is made is fixed with it. Every method answers through the same linear head over
+the mean of the observed token states; a run trains for a stated number of epochs and is scored
+after the last, never stopped on the validation error; targets are learnt in units of the label
+ceiling. Low-rank updates go beside the attention's projections and the feed-forward network's
+linears of every block, and start at zero. The budget of labels is spread over four strata of the
+target. Two seeds are kept apart: the seed of the draw fixes which labels, the seed of the run
+fixes the head, the fresh weights of the control arm, the updates and the order of windows. The
+five repeats of a cell — the table's "fine-tuning seeds" — are five values of one seed that
+drives both: each repeat draws its own labels and learns from them, so the spread over repeats
+includes which labels a budget happened to hold, and the two methods of a cell are compared under
+the same seed and therefore on the same labels.
+
+**Why.** The choice of backbone is recorded in ADR-0008 and the procedure in ADR-0030; a
+registration that named the methods without naming the weights and the procedure would leave
+both to be chosen once the first errors were visible.
+
+**Measured when this changed.** Nothing on this backbone. The procedure has run on a two-engine
+sample of the corpus under a small untrained encoder, to show that each method trains and
+answers; no number from it is a result.

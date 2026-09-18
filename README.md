@@ -23,6 +23,14 @@ difference has to be, what is reported when the answer is partial or negative �
 system are recorded in [docs/adr](docs/adr); measurements that cannot run in CI are dated notes in
 [docs/verification](docs/verification).
 
+A pretrained backbone meets a task in one of four ways, and the curve compares them at each label
+budget: trained from scratch, frozen under a linear probe, fine-tuned through low-rank updates
+(LoRA), fine-tuned in full. LoRA is not there to save memory or time — on an encoder of five
+million parameters full fine-tuning is cheap — but as an ablation of regularisation: what happens
+when fifty labels may spend fewer degrees of freedom. Every mode answers through the same linear
+head, trains for a fixed number of epochs and is scored on the last, so no validation number
+decides when a run stops ([ADR-0030](docs/adr/0030-transfer-modes.md)).
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/). One command builds the environment, a second runs the tests:
