@@ -1,7 +1,7 @@
 from torch import Tensor, nn
 
-from emblema.pretraining.adapters.encoder.masked_mean_pooling import MaskedMeanPooling
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
+from emblema.shared.adapters.tensors.masked_mean_pooling import MaskedMeanPooling
 
 
 class PooledSetEncoder(nn.Module):

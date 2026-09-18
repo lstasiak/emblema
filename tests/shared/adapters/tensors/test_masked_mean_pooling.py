@@ -2,7 +2,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from emblema.pretraining.adapters.encoder.masked_mean_pooling import MaskedMeanPooling  # noqa: E402
+from emblema.shared.adapters.tensors.masked_mean_pooling import MaskedMeanPooling  # noqa: E402
 
 pytestmark = pytest.mark.ml
 
