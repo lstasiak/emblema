@@ -626,3 +626,123 @@ Nothing here says the corpus is learnable. It says the held-out side is no longe
 trained on the other could reach, which is what a curve under a bounded loss needs before it can
 be read at all. That curve is `experiments/saturation-esa_ad-s-huber.toml` over this version, at
 the first leg's budget to the step.
+
+## 2026-09-18 — the satellite corpus under a bounded loss, over its named split (macOS arm64, M1 Pro, MPS, fp32)
+
+The curve the two sections above prepared for: the small tier's experiment over the satellite
+corpus, changed in nothing but the reading of the loss and the version it reads. The loss is the
+Huber reading with its knee at one standard deviation of the channel (ADR-0028), so a token
+past the knee pulls no harder however far its value lies; the version is the one whose held-out
+months were named rather than drawn (`97a498eb…`, manifest `42855536…`, block `64dbe6d9…`).
+Everything else is the first leg's to the step: 192 wide, 4 blocks, 1.79M parameters over 17
+channels, batch 32, learning rate 1e-3, dropout 0, seed 1, one budget of steps for every share,
+validation on every fourth held-out window — 3,870 of them, the same for every share.
+
+```sh
+caffeinate -is uv run scripts/corpus_saturation_report.py \
+    --corpus esa_ad durable/sha256/42855536f8ee815cbc98a7dffe9f9fb0a4b2280d17ea611163ae7ce9e38d6ae4 \
+        sha256:42855536f8ee815cbc98a7dffe9f9fb0a4b2280d17ea611163ae7ce9e38d6ae4 \
+    --experiment saturation-esa_ad-s-huber --validation-stride 4 --device mps \
+    --track http://127.0.0.1:5000
+uv run scripts/corpus_saturation_report.py --report-only --experiment saturation-esa_ad-s-huber
+uv run scripts/corpus_saturation_figures.py data/report/saturation/runs --figures docs/verification/figures
+```
+
+The runs were made at `a6fc222` (Python 3.14.7, torch 2.14.0), which each run's record names.
+The tables and the figures were rendered afterwards at `061fd05`, from the stored records alone.
+Two keys were added to every stored record on the day the figures were drawn — the reading of
+the loss and its knee, copied from the experiment file each record names — because the record
+had not carried them and two curves of one corpus were sharing a legend entry.
+
+### What it cost
+
+95, 86, 85 and 84 minutes, 5.8 hours in all, 22:58 to 04:48: 1.47, 1.36, 1.33 and 1.32 s per
+optimiser step with the validation passes, against 1.32 s for the same experiment under the
+squared error — the reading costs nothing a step; the tenth share's extra is its nineteen
+validation passes.
+
+### Curve and verdict
+
+#### saturation-esa_ad-s-huber
+
+| Share | Training windows | Epochs | Steps | Last training | Last validation | Relative training | Relative validation | Best validation (epoch) | Gap | Minutes | Finished |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 10% | 6515 | 19 | 3876 | 0.0289 | 0.1735 | 0.147 | 0.555 | 0.554 at 15/19 | 3.78× | 95 min | yes |
+| 25% | 15154 | 8 | 3792 | 0.0347 | 0.1481 | 0.176 | 0.474 | 0.474 at 8/8 | 2.69× | 86 min | yes |
+| 50% | 30627 | 4 | 3832 | 0.0439 | 0.1243 | 0.209 | 0.397 | 0.397 at 4/4 | 1.90× | 85 min | yes |
+| 100% | 61202 | 2 | 3826 | 0.0537 | 0.0846 | 0.232 | 0.270 | 0.270 at 2/2 | 1.17× | 84 min | yes |
+
+Relative losses are against the trivial predictor's on the same side under the same reading —
+the channel mean, whose Huber loss is 0.313 on the validation side and 0.197 to 0.232 on the
+training side of each share; the gap is their ratio. Best validation is the lowest of the run's
+epochs, with the epoch it fell at; the verdict reads the last epoch, where every share has spent
+its budget.
+
+Gains in validation loss share to share: 10%→25% +14.6%, 25%→50% +16.1%, 50%→100% +31.9%.
+
+**data-limited** — the step from 50% to 100% of the training units lowered validation by 31.9%:
+the data, not the model, is the limit at this budget — the corpus suits pretraining and more of
+it would help.
+
+### Reading
+
+**The satellite corpus is learnt, and every doubling of it helps.** Under the squared error over
+the drawn split no share did better than the channel mean on the held-out months (1.03, 1.04,
+1.07 and 1.29 of it); under the bounded reading over the named split the same shape at the same
+steps reaches 0.555, 0.474, 0.397 and 0.270 of it, each share lower than the one before, and the
+gap between the sides closes from 3.8× at a tenth to 1.2× at the whole. The rules of ADR-0027
+read this curve as data-limited without being touched: the verdict the first leg gave was the
+reading's and the split's, as the diagnostic of the third section said, not the data's.
+
+**The whole share is still falling when its budget ends.** Its two epochs went 0.345 then 0.270
+of the channel mean on the held-out side, a fifth lower in one pass, and the half share's four
+went 0.468, 0.421, 0.406, 0.397. Unlike the classical corpora under the squared error, where
+validation was best after one to three epochs and rose after, no share here has begun to overfit
+by the end of its budget except the tenth, whose best epoch is its fifteenth of nineteen and
+lower than its last by a thousandth. The budget was set to an evening, and on this corpus under
+this reading an evening is short of convergence; the curve compares shares at one budget and says
+nothing about where the whole share would settle.
+
+**The bounded reading agrees with the diagnostic on what the squared-error backbones knew.** The
+third section scored the backbones trained under the squared error by the Huber reading and found
+them flat at 0.52 to 0.56 of the channel mean, whatever the share: trained under the squared
+error, the model spent its gradient on the excursions and learnt the ordinary behaviour to the
+same degree from a tenth as from the whole. Trained under the bounded reading, the tenth share
+lands at 0.555 — where those backbones were — and the larger shares go on down, which is the
+gradient the reading gives back to the values the months repeat.
+
+**The sides are now within a factor of the same predictor.** The channel mean's Huber loss is
+0.313 on the held-out months and 0.197 to 0.232 on the training months of each share, a ratio of
+1.35 to 1.6; under the squared error over the drawn split the ratio was 4.9. A held-out side the
+trivial predictor finds a little harder than the training side is what a split over months of one
+telemetry should look like.
+
+### Limitations
+
+- One seed, one shape, one knee. The knee was fixed at one standard deviation before the run
+  (ADR-0028) and is not tuned here; another knee would move every number and possibly the
+  verdict, and is a parameter of the experiment file, not of this note.
+- Relative losses under the two readings are not comparable to each other. 0.270 of the channel
+  mean's Huber loss is not 0.270 of its squared error, and the curves of this section are read
+  against the squared-error curves only in their shape and their verdict.
+- The held-out side is scored on every fourth window, as in the first leg. A whole-side score of
+  the same runs would differ in the third figure, not in the reading.
+- The named split was derived from the previous version's statistics and stated to this one, so
+  which months the loss is decided by was chosen from the drawn version's excursions; a split
+  derived from this version's own statistics would name the same months by a different weight
+  (previous section).
+- The stored records were completed after the fact with the reading of the loss they were made
+  under; the values were copied from the experiment files the records name, and every earlier run
+  reads as the squared error, which every earlier run was.
+
+### What it decided
+
+- The satellite corpus enters the mixed run as data that is still learning at the whole of
+  itself, not as data to be capped; its weight in the mix is a decision of the mixed run's own
+  record, made on this curve rather than on the first leg's.
+- The bounded reading is the objective the mixed run is scored and trained by, and the named
+  split is the version of the corpus it reads (ADR-0028, which this section is the measurement
+  behind).
+- The rules of ADR-0027 stand unchanged: the fourth verdict added after the first leg was needed
+  once, for a side no model could reach, and this curve earns one of the three original verdicts
+  under the same thresholds.
