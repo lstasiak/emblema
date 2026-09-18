@@ -78,6 +78,10 @@ class MlflowExperimentTracker:
         run_id = self._recording()
         self._client.set_tag(run_id, "backbone", outcome.backbone.key)
         self._client.set_tag(run_id, "backbone_checksum", str(outcome.backbone.checksum))
+        # Which point of the curve the backbone is: a run that kept weights it inherited from
+        # before its checkpoint has no such point, and says nothing.
+        if outcome.best_epoch is not None:
+            self._client.set_tag(run_id, "best_epoch", str(outcome.best_epoch))
         self._client.set_terminated(run_id, RunStatus.to_string(RunStatus.FINISHED))
         self._ended = True
 

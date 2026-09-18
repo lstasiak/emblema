@@ -19,7 +19,7 @@ def test_a_finished_run_holds_its_parameters_its_curve_and_what_it_produced(
     stated = configuration(name="finished-run")
     epochs = (
         epoch_outcome(0, checkpoint=WEIGHTS),
-        epoch_outcome(1, backbone=WEIGHTS),
+        epoch_outcome(1, weights=WEIGHTS, backbone=WEIGHTS),
     )
     tracker = MlflowExperimentTracker(uri)
 
@@ -37,6 +37,7 @@ def test_a_finished_run_holds_its_parameters_its_curve_and_what_it_produced(
     assert run.data.tags["corpus"] == "control-a"
     assert run.data.tags["tier"] == "S"
     assert run.data.tags["backbone"] == WEIGHTS.key
+    assert run.data.tags["best_epoch"] == "1"
     assert run.info.status == "FINISHED"
     curve = client.get_metric_history(run.info.run_id, "validation_loss")
     assert [(point.step, point.value) for point in curve] == [
