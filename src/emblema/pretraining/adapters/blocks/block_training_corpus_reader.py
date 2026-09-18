@@ -7,11 +7,9 @@ from emblema.pretraining.domain.backbone.pretraining_input import PretrainingInp
 from emblema.pretraining.domain.exceptions import UnreadablePublishedCorpusError
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
-from emblema.shared.adapters.storage.files import chunks_of
+from emblema.shared.adapters.windows.block_workspace import BlockWorkspace
 from emblema.shared.adapters.windows.exceptions import MalformedBlockError
-from emblema.shared.adapters.windows.window_block import WindowBlock
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.ports.artifact_store import ArtifactStore
 
 
@@ -21,15 +19,12 @@ class BlockTrainingCorpusReader:
     The manifest is decoded by the Catalog's published codec and the block by the shared one, so
     nothing of the Catalog's interior is touched. The block is fetched to the workspace and mapped
     from there, under its digest — the layout the Catalog's archive keeps its own blocks in — so a
-    machine that published a corpus reads it back without fetching it again, and any machine
-    fetches it once. A block found in the workspace is hashed before it is mapped: the workspace
-    is shared with another process and outlives every one of them, and a run over bytes nobody
-    verified would sign as a run over the corpus.
+    machine that published a corpus reads it back without fetching it again.
     """
 
     def __init__(self, store: ArtifactStore, workspace: Path) -> None:
         self._store = store
-        self._workspace = workspace
+        self._blocks = BlockWorkspace(store, workspace)
         self._json = PublishedCorpusManifestJson()
 
     def describe(self, manifest: ArtifactRef) -> PretrainingInput:
@@ -46,7 +41,7 @@ class BlockTrainingCorpusReader:
     def read(self, manifest: ArtifactRef, share: CorpusShare) -> TrainingCorpus:
         published = self._manifest(manifest)
         try:
-            block = WindowBlock(self._fetched(published.block))
+            block = self._blocks.open(published.block)
         except MalformedBlockError as error:
             raise UnreadablePublishedCorpusError(
                 f"block {published.block.key!r} is not one this reads: {error}"
@@ -86,13 +81,3 @@ class BlockTrainingCorpusReader:
             raise UnreadablePublishedCorpusError(
                 f"artifact {ref.key!r} is not a published manifest: {error}"
             ) from error
-
-    def _fetched(self, block: ArtifactRef) -> Path:
-        path = self._workspace / block.checksum.digest
-        if path.is_file() and Checksum.of_chunks(chunks_of(path), block.checksum.algorithm) == (
-            block.checksum
-        ):
-            return path
-        self._workspace.mkdir(parents=True, exist_ok=True)
-        self._store.get_file(block, path)
-        return path

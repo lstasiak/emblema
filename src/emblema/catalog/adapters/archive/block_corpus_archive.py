@@ -16,8 +16,8 @@ from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.tokenisation.archived_corpus import ArchivedCorpus
 from emblema.catalog.domain.tokenisation.placed_window import PlacedWindow
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
+from emblema.shared.adapters.windows.block_workspace import BlockWorkspace
 from emblema.shared.adapters.windows.exceptions import MalformedBlockError, UnstorableWindowError
-from emblema.shared.adapters.windows.window_block import WindowBlock
 from emblema.shared.adapters.windows.window_block_writer import WindowBlockWriter
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
@@ -38,6 +38,7 @@ class BlockCorpusArchive:
     ) -> None:
         self._store = store
         self._workspace = workspace
+        self._blocks = BlockWorkspace(store, workspace)
         self._manifests = manifests
         self._json = PublishedCorpusManifestJson()
 
@@ -67,7 +68,7 @@ class BlockCorpusArchive:
         self, archived: ArchivedCorpus, units: Collection[UnitKey]
     ) -> Sequence[TokenWindow]:
         try:
-            block = WindowBlock(self._fetched(archived.block))
+            block = self._blocks.open(archived.block)
         except MalformedBlockError as error:
             raise UnreadableCorpusBlockError(
                 f"block {archived.block.key!r} is not one this archive reads: {error}"
@@ -103,16 +104,7 @@ class BlockCorpusArchive:
                 token_count += len(placed.window)
         return tuple(units), window_count, token_count
 
-    def _fetched(self, block: ArtifactRef) -> Path:
-        path = self._cached(block)
-        if not path.is_file():
-            self._store.get_file(block, path)
-        return path
-
     def _keep(self, path: Path, block: ArtifactRef) -> None:
-        cached = self._cached(block)
+        cached = self._workspace / block.checksum.digest
         if not cached.exists():
             os.replace(path, cached)
-
-    def _cached(self, block: ArtifactRef) -> Path:
-        return self._workspace / block.checksum.digest
