@@ -314,3 +314,36 @@ whole of SMD at equal steps — the published tier's shape then earns nothing on
 only the mixed run's own curve can earn it — or when the mixed run's curve is still falling at the
 whole mix, which reopens the sweep with the seventh block on the value criterion with repetition
 credited.
+
+## 2026-09-18 — the shape of every backbone of the programme is the reference shape
+
+Two measurements since the section above change one provisional decision in it and confirm
+another.
+
+**The satellite corpus is learnt** once the loss is bounded and the held-out months are named
+(ADR-0028; `docs/verification/corpus-saturation.md`, section of 2026-09-18): data-limited at
+every share, 0.270 of the channel mean's loss at the whole, still falling when the budget ends.
+Its verdict as an ingredient stands, and its share of the mix is to be weighed as data that is
+still learning, in the record of the mixed run.
+
+**The single-corpus backbones are trained at the reference shape, not the small one.** The
+provisional decision of 2026-09-17 held them at 192 wide and 4 blocks on two grounds, and the
+first run on the platform (`docs/verification/manual-handoff.md`, section of 2026-09-18)
+removes both. The cost ground is gone: on the platform's accelerator in half precision the
+reference shape spends 0.31 s a step over C-MAPSS against 0.18 s for the small one, and a whole
+single-corpus run is minutes either way. The overfitting ground does not reach the corpus the
+first curve is drawn on: C-MAPSS is learnt to the objective's floor by both shapes with the sides
+a per cent apart, and the reference shape ends 11 % lower on the held-out side at equal steps
+(0.00469 against 0.00524). Where a corpus does overfit at an evening's steps — SMD, SKAB — the
+remedy the saturation measurement named is stopping on validation, which is a rule of the run,
+not a smaller model. What the small shape would have cost is a confound: a transfer matrix that
+compares a mixed backbone at one shape with single-corpus backbones at another reads capacity
+into every cell. Every backbone the programme compares is therefore the reference shape, and the
+first comparative run on the remaining-useful-life task reads the C-MAPSS backbone
+`backbone-cmapss-m` (256 wide, 6 blocks, half precision, seed 1), registered on 2026-09-18. The
+small shape remains the laptop tier's, for smoke runs, measurements and fine-tuning at small
+label budgets.
+
+The second leg of the size axis on SMD is no longer needed for this decision and is not planned.
+The revisit condition above narrows to the mixed run's own curve: if it is still falling at the
+whole mix, the sweep past the reference shape reopens.
