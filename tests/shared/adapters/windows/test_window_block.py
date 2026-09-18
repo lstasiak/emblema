@@ -121,6 +121,24 @@ def test_windows_can_be_selected_by_the_unit_they_came_from(tmp_path: Path) -> N
     assert list(block.of_units(set())) == []
 
 
+def test_windows_can_be_selected_by_position_in_the_order_asked(tmp_path: Path) -> None:
+    block = block_of(tmp_path / "corpus.block", PLACED)
+
+    selected = block.at([2, 0, 0])
+
+    assert len(selected) == 3
+    assert list(selected) == [TIMED, TIMED, TIMED]
+    assert list(block.at([1])[:1]) == [WITH_STATIC]
+    assert list(block.at([])) == []
+
+
+def test_a_position_past_the_last_window_is_refused_when_selected(tmp_path: Path) -> None:
+    block = block_of(tmp_path / "corpus.block", PLACED)
+
+    with pytest.raises(IndexError):
+        block.at([0, 3])
+
+
 def test_reading_past_the_last_window_fails(tmp_path: Path) -> None:
     block = block_of(tmp_path / "corpus.block", PLACED)
 
