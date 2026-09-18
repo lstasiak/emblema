@@ -518,6 +518,7 @@ def test_a_run_records_the_reference_its_own_reading_gives(tmp_path: Path) -> No
 
     reading = drawn.configuration.loss
     assert reading == ObjectiveLoss(kind=LossKind.HUBER, huber_delta=0.5)
+    assert (settings["loss"], settings["huber_delta"]) == ("huber", "0.5")
     for side, windows in (
         ("training_reference", drawn.windows.training),
         ("validation_reference", drawn.windows.validation),

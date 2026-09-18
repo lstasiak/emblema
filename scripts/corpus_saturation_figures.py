@@ -38,13 +38,20 @@ PANELS_PER_ROW = 3
 
 
 def label_of(run: StoredRun) -> str:
-    """How an experiment is named in a legend: its corpus, its tier and any shape it overrode."""
+    """How an experiment is named in a legend.
+
+    Its corpus, its tier, any shape it overrode and any reading of the loss other than the
+    square: two curves of one corpus that differ only in what a miss costs must not share a
+    label. A run stored before the reading was recorded was scored by the square.
+    """
     tier = ComputeTiers.load().profile(ComputeTier(run.settings["tier"]))
     width, _, layers, _ = run.settings["shape"].split(",")
-    shape = f"tier {run.settings['tier']}"
+    label = f"{run.settings['corpus']}, tier {run.settings['tier']}"
     if (int(width), int(layers)) != (tier.width, tier.layers):
-        shape += f", {width} wide, {layers} deep"
-    return f"{run.settings['corpus']}, {shape}"
+        label += f", {width} wide, {layers} deep"
+    if run.settings.get("loss", "mse") != "mse":
+        label += f", {run.settings['loss']}, knee {run.settings['huber_delta']}"
+    return label
 
 
 def by_experiment(runs: Sequence[StoredRun]) -> list[tuple[str, list[StoredRun]]]:

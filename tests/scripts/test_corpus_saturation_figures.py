@@ -10,7 +10,7 @@ from emblema.pretraining.adapters.in_memory.experiment_tracker import InMemoryEx
 from emblema.pretraining.adapters.in_memory.training_runtime import InMemoryTrainingRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from scripts.corpus_saturation_figures import draw, label_of, main
-from scripts.corpus_saturation_report import leg, plan, stored_runs
+from scripts.corpus_saturation_report import StoredRun, leg, plan, stored_runs
 from tests.scripts.test_corpus_saturation_report import (
     DEVICE,
     REVISION,
@@ -65,6 +65,37 @@ def test_an_experiment_is_labelled_by_its_corpus_and_the_shape_it_ran(results: P
     run = stored_runs(results)[0]
 
     assert label_of(run) == "test-corpus, tier S"
+
+
+def test_a_run_under_a_bounded_loss_is_labelled_by_its_reading(tmp_path: Path) -> None:
+    reader, manifest = published_reader(tmp_path)
+    bounded = plan(
+        experiment({"kind": "huber", "huber_delta": 0.5}), manifest, reader, fractions=(1.0,)
+    )
+    leg(
+        bounded,
+        tmp_path / "runs",
+        InMemoryTrainingRuntime,
+        InMemoryArtifactStore(),
+        InMemoryExperimentTracker,
+        device=DEVICE,
+        revision=REVISION,
+    )
+
+    assert label_of(stored_runs(tmp_path / "runs")[0]) == "test-corpus, tier S, huber, knee 0.5"
+
+
+def test_a_run_stored_before_the_reading_was_recorded_reads_as_the_square(results: Path) -> None:
+    run = stored_runs(results)[0]
+    older = StoredRun(
+        directory=run.directory,
+        settings={k: v for k, v in run.settings.items() if k not in ("loss", "huber_delta")},
+        epochs=run.epochs,
+        checkpoints=run.checkpoints,
+        backbone=run.backbone,
+    )
+
+    assert label_of(older) == "test-corpus, tier S"
 
 
 def test_nothing_finished_is_refused_with_a_sentence(tmp_path: Path) -> None:
