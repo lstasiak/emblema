@@ -170,7 +170,7 @@ def test_both_sets_are_read_by_default(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("subsets", [(), ("set-c",), ("set-a", "Set-B")])
 def test_rejects_unknown_or_no_sets(subsets: tuple[str, ...]) -> None:
-    with pytest.raises(ValueError, match="set"):
+    with pytest.raises(ValueError, match="PhysioNet set"):
         Physionet2012CorpusReader(SAMPLE, subsets=subsets)
 
 
@@ -224,9 +224,12 @@ def test_the_protocols_last_stamp_lies_inside_the_stay(tmp_path: Path) -> None:
         (stay("00:00,RecordID,1"), "a second RecordID"),
         (stay("03:00,Age,54"), "away from admission"),
         (stay("00:00,Age,55"), "given twice"),
+        (stay("00:00,Age,54", descriptors=("00:00,Age,-1",)), "given twice"),
         (stay(descriptors=("00:00,ICUType,5",)), "no ward has the code 5"),
         (stay("00:10,Pulse,80"), "unknown parameter"),
         (stay("0010,HR,80"), "not an HH:MM stamp"),
+        # A superscript two is a digit to ``str.isdigit`` and not a number to ``int``.
+        (stay("0²:00,HR,80"), "not an HH:MM stamp"),
         (stay("00:60,HR,80"), "not an HH:MM stamp"),
         (stay("48:01,HR,80"), "past the 48-hour protocol"),
         (stay("00:10,HR,80", "00:05,HR,81"), "goes back in time"),
@@ -245,9 +248,11 @@ def test_the_protocols_last_stamp_lies_inside_the_stay(tmp_path: Path) -> None:
         "second-record-id",
         "descriptor-off-admission",
         "descriptor-twice",
+        "descriptor-twice-after-an-unrecorded-one",
         "unknown-ward",
         "unknown-parameter",
         "stamp-without-colon",
+        "stamp-outside-ascii",
         "minute-sixty",
         "past-the-protocol",
         "back-in-time",
@@ -304,28 +309,30 @@ def test_reading_a_stay_from_a_missing_set_is_missing_data(tmp_path: Path) -> No
 # Stays of set A whose weight at admission is recorded. The data spike counted the admission
 # weight as a descriptor and left it out; the reader reads it as the first weight of the series.
 ADMISSION_WEIGHTS = 3674
-STAYS_WITHOUT_A_MEASUREMENT = 3
+# Set B, counted here on 2026-09-19 because the spike counted only its stays. It is the side the
+# publication holds out, so nothing else would read it until the corpus is published.
+SET_B_STAYS = 4000
+SET_B_OBSERVATIONS = 1742188
 
 
 @pytest.mark.skipif(
     raw_root("physionet2012") is None,
     reason="the raw PhysioNet files are not on this machine (fetch_corpora.py physionet2012)",
 )
-def test_full_corpus_agrees_with_the_facts_measured_by_the_data_spike() -> None:
+def test_both_published_sets_agree_with_the_counts_measured_on_them() -> None:
     root = raw_root("physionet2012")
     assert root is not None
     with BUDGET.open("rb") as handle:
         measured = tomllib.load(handle)["corpora"]["physionet2012"]["measured"]
-    reader = Physionet2012CorpusReader(root, subsets=("set-a",))
 
-    description = reader.describe()
+    # Describing a set parses every file the way reading it does, so this is also where a stay of
+    # either set that the reader would refuse would surface.
+    set_a = Physionet2012CorpusReader(root, subsets=("set-a",)).describe()
+    set_b = Physionet2012CorpusReader(root, subsets=("set-b",)).describe()
 
-    assert description.content.unit_count == measured["units"]
+    assert set_a.content.unit_count == measured["units"]
     assert len(SERIES) == measured["channels"]
-    assert description.content.observation_count == measured["observations"] + ADMISSION_WEIGHTS
-    empty = [
-        unit.key
-        for unit in reader.read_units()
-        if not any(True for _ in reader.read_observations(unit.key))
-    ]
-    assert len(empty) == STAYS_WITHOUT_A_MEASUREMENT
+    assert set_a.content.observation_count == measured["observations"] + ADMISSION_WEIGHTS
+    assert set_b.content.unit_count == SET_B_STAYS
+    assert set_b.content.observation_count == SET_B_OBSERVATIONS
+    assert set_b.channel_schema == set_a.channel_schema

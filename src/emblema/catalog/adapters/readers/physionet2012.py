@@ -126,7 +126,7 @@ class Physionet2012CorpusReader:
 
     def __init__(self, root: Path, subsets: Iterable[str] = SUBSETS) -> None:
         self._root = root
-        self._subsets = chosen_subsets(subsets, self.SUBSETS, "set")
+        self._subsets = chosen_subsets(subsets, self.SUBSETS, "PhysioNet set")
 
     def describe(self) -> CorpusDescription:
         counts: list[int] = []
@@ -194,6 +194,9 @@ class Physionet2012CorpusReader:
         """
         name = f"{path.parent.name}/{path.name}"
         record: str | None = None
+        # Which descriptors the file carried, not which became features: one recorded as -1 is no
+        # feature, and a file that then gave it a value would repeat it unnoticed.
+        given: set[str] = set()
         features: dict[str, StaticFeature] = {}
         observations: list[Observation] = []
         last = 0.0
@@ -212,10 +215,11 @@ class Physionet2012CorpusReader:
                         )
                     record = value
                     continue
-                if parameter in features:
+                if parameter in given:
                     raise MalformedCorpusDataError(
                         f"{name}, line {number}: descriptor {parameter} given twice"
                     )
+                given.add(parameter)
                 feature = cls._feature_of(name, number, parameter, value)
                 if feature is not None:
                     features[parameter] = feature
@@ -291,8 +295,14 @@ class Physionet2012CorpusReader:
                 minute past 59, or lies past the protocol's 48 hours.
         """
         hours, colon, minutes = stamp.partition(":")
+        # A digit ``int`` refuses is still a digit to ``isdigit`` — a superscript two, a numeral of
+        # another script — so the stamp has to be ASCII before it is read as two numbers.
         if not (
-            colon and hours.isdigit() and minutes.isdigit() and int(minutes) < _MINUTES_PER_HOUR
+            colon
+            and stamp.isascii()
+            and hours.isdigit()
+            and minutes.isdigit()
+            and int(minutes) < _MINUTES_PER_HOUR
         ):
             raise MalformedCorpusDataError(
                 f"{name}, line {number}: {stamp!r} is not an HH:MM stamp"
