@@ -157,7 +157,7 @@
 | src/emblema/pretraining/adapters/mlflow/mlflow\_experiment\_tracker.py                    |       40 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/masked\_reconstruction.py                      |       15 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/reconstruction\_decoder.py                     |       20 |        0 |        4 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/objective/reconstruction\_loss.py                        |       26 |        0 |        2 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/objective/reconstruction\_loss.py                        |       30 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/token\_masking.py                              |       35 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/token\_masks.py                                |       18 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/persistence/backbone\_record.py                          |       53 |        0 |        2 |        0 |    100% |           |
@@ -261,7 +261,7 @@
 | src/emblema/shared/ports/event\_subscriber.py                                             |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                                                    |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **6776** |   **12** | **1288** |   **16** | **99%** |           |
+| **TOTAL**                                                                                 | **6780** |   **12** | **1288** |   **16** | **99%** |           |
 
 74 empty files skipped.
 
