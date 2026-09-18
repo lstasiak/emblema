@@ -126,3 +126,21 @@ still write one aggregate per transaction, so no unit of work spans a use case y
 `MappedAsDataclass` were weighed again and not adopted — the reasoning is in ADR-0024 — and the
 one thing the two persistence models repeated, the naming convention, moved to
 `shared/adapters/persistence/naming.py`.
+
+## 2026-09-18 — the integration tests own their database
+
+The test support migrated and emptied the configured database, which is also the development
+registry: a run of the integration tests between an order placed here and its result accepted
+back from the platform truncated `pretraining.backbone` and left the result with no backbone to
+deliver to, and it emptied the Catalog the same way. The tests now write to a database of their
+own, named after the configured one with `_test` appended. `tests/support/database.py` puts that
+name into the process's environment before anything builds `Settings()`, so Alembic's environment
+and the composition roots under test reach it without a change to the application; it creates the
+database through a service connection to the server's own when it is missing, since the local
+stack's initialisation scripts run on an empty volume only; and the truncation refuses any
+database whose name does not carry the suffix, with a test of the refusal that reaches no server.
+CI is unchanged: the role compose creates owns the server, and the tests create their database
+under it. A second `postgres` service for the tests, testcontainers and a transaction rolled back
+around each test were considered and not adopted: the first costs a container and a port for the
+same isolation, the second was rejected with the local stack, and the third does not hold for
+tests that assemble a process with its own engine and commit through it.
