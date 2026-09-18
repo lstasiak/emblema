@@ -11,6 +11,7 @@ from emblema.pretraining.domain.identifiers import BackboneId
 from emblema.pretraining.domain.training.corpus_validation import CorpusValidation
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.training_corpus_shape import TrainingCorpusShape
+from emblema.pretraining.domain.training.training_mixture_shape import TrainingMixtureShape
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
 
 
@@ -23,26 +24,21 @@ class PretrainingResultJson:
     # Version 2: the configuration states the share of the corpus a run reads.
     # Version 3: it states the reading its hidden tokens are scored by.
     # Version 4: an epoch reports the held-out side corpus by corpus.
-    VERSION: Final = 4
+    # Version 5: the result states the shape of every corpus read, in order, and an epoch names
+    # the weights it kept.
+    VERSION: Final = 5
 
     def __init__(self) -> None:
         self._configurations = ExperimentConfigurationDocument()
 
     def encode(self, result: PretrainingResult) -> bytes:
-        corpus = result.corpus
         document = {
             "format": self.FORMAT,
             "version": self.VERSION,
             "order": Fields.of_ref(result.order),
             "backbone": str(result.backbone),
             "configuration": self._configurations.encode(result.configuration),
-            "corpus": {
-                "name": corpus.name,
-                "checksum": Fields.of_checksum(corpus.checksum),
-                "training_windows": corpus.training_windows,
-                "validation_windows": corpus.validation_windows,
-                "vocabulary_size": corpus.vocabulary_size,
-            },
+            "mixture": [self._corpus_document(corpus) for corpus in result.mixture.corpora],
             "git_commit": result.git_commit,
             "resumed_from": Fields.of_optional_ref(result.resumed_from),
             "outcome": {
@@ -72,17 +68,13 @@ class PretrainingResultJson:
             )
         fields = Fields(document)
         try:
-            corpus, outcome = fields.fields("corpus"), fields.fields("outcome")
+            outcome = fields.fields("outcome")
             return PretrainingResult(
                 order=fields.ref("order"),
                 backbone=BackboneId.parse(fields.text("backbone")),
                 configuration=self._configurations.decode(fields.mapping("configuration")),
-                corpus=TrainingCorpusShape(
-                    name=corpus.text("name"),
-                    checksum=corpus.checksum("checksum"),
-                    training_windows=corpus.integer("training_windows"),
-                    validation_windows=corpus.integer("validation_windows"),
-                    vocabulary_size=corpus.integer("vocabulary_size"),
+                mixture=TrainingMixtureShape(
+                    corpora=tuple(self._corpus(corpus) for corpus in fields.each("mixture"))
                 ),
                 git_commit=fields.text("git_commit"),
                 resumed_from=fields.optional_ref("resumed_from"),
@@ -93,6 +85,26 @@ class PretrainingResultJson:
             )
         except ValueError as error:
             raise UnreadableHandoffDocumentError(f"result is not well formed: {error}") from error
+
+    @staticmethod
+    def _corpus_document(corpus: TrainingCorpusShape) -> Document:
+        return {
+            "name": corpus.name,
+            "checksum": Fields.of_checksum(corpus.checksum),
+            "training_windows": corpus.training_windows,
+            "validation_windows": corpus.validation_windows,
+            "vocabulary_size": corpus.vocabulary_size,
+        }
+
+    @staticmethod
+    def _corpus(fields: Fields) -> TrainingCorpusShape:
+        return TrainingCorpusShape(
+            name=fields.text("name"),
+            checksum=fields.checksum("checksum"),
+            training_windows=fields.integer("training_windows"),
+            validation_windows=fields.integer("validation_windows"),
+            vocabulary_size=fields.integer("vocabulary_size"),
+        )
 
     @staticmethod
     def _epoch_document(epoch: EpochOutcome) -> Document:
@@ -111,6 +123,7 @@ class PretrainingResultJson:
             "hidden_ratio": epoch.hidden_ratio,
             "seconds": epoch.seconds,
             "checkpoint": Fields.of_optional_ref(epoch.checkpoint),
+            "weights": Fields.of_optional_ref(epoch.weights),
             "backbone": Fields.of_optional_ref(epoch.backbone),
         }
 
@@ -131,5 +144,6 @@ class PretrainingResultJson:
             hidden_ratio=fields.number("hidden_ratio"),
             seconds=fields.number("seconds"),
             checkpoint=fields.optional_ref("checkpoint"),
+            weights=fields.optional_ref("weights"),
             backbone=fields.optional_ref("backbone"),
         )

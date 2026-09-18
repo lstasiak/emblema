@@ -46,6 +46,7 @@ from emblema.pretraining.domain.training.experiment_configuration import Experim
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from scripts.masked_reconstruction_report import (
@@ -56,6 +57,7 @@ from scripts.masked_reconstruction_report import (
     publish,
 )
 from scripts.reporting import dated_heading, machine, table
+from scripts.vocabulary import channel_names
 
 # Small enough to run in a minute on any machine and large enough that an epoch holds several
 # optimiser steps, which is what a mid-epoch interruption needs.
@@ -100,19 +102,21 @@ class CheckpointCost:
     read_seconds: float
 
 
-def corpus_of(run: Run, workspace: Path) -> TrainingCorpus:
+def corpus_of(run: Run, workspace: Path) -> TrainingMixture:
     published = publish(run, workspace)
-    return TrainingCorpus(
-        name=run.corpus,
-        checksum=published.manifest.archived.block.checksum,
-        training=published.training,
-        validation=published.validation,
-        vocabulary_size=published.vocabulary_size,
+    return TrainingMixture.of(
+        TrainingCorpus(
+            name=run.corpus,
+            checksum=published.manifest.archived.block.checksum,
+            training=published.training,
+            validation=published.validation,
+            channels=channel_names(published.manifest.scheme.vocabulary),
+        )
     )
 
 
 def uninterrupted(
-    configuration: ExperimentConfiguration, corpus: TrainingCorpus, device: str
+    configuration: ExperimentConfiguration, corpus: TrainingMixture, device: str
 ) -> Measured:
     store = InMemoryArtifactStore()
     started = time.perf_counter()
@@ -123,7 +127,7 @@ def uninterrupted(
 
 
 def interrupted_and_resumed(
-    configuration: ExperimentConfiguration, corpus: TrainingCorpus, device: str
+    configuration: ExperimentConfiguration, corpus: TrainingMixture, device: str
 ) -> tuple[Measured, CheckpointCost]:
     """Stop after the second epoch, pick the run up from its last checkpoint inside that epoch.
 
@@ -314,7 +318,8 @@ def report(argv: Sequence[str] | None = None) -> str:
         budget=replace(file.configuration().budget, epochs=arguments.epochs),
         checkpoint=CheckpointPolicy(every_steps=arguments.every),
     )
-    run = Run(configuration=configuration, corpus=file.corpus, units=arguments.units, device=device)
+    (corpus_name,) = file.corpora
+    run = Run(configuration=configuration, corpus=corpus_name, units=arguments.units, device=device)
     corpus = corpus_of(run, arguments.workspace / run.corpus)
 
     runs: list[Measured] = []
@@ -372,7 +377,8 @@ def report(argv: Sequence[str] | None = None) -> str:
             (
                 "Corpus",
                 f"{run.corpus} cut to {arguments.units} units: "
-                f"{len(corpus.training)} training and {len(corpus.validation)} validation windows",
+                f"{len(corpus.corpora[0].training)} training and "
+                f"{len(corpus.corpora[0].validation)} validation windows",
             ),
             (
                 "Run",

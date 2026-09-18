@@ -6,6 +6,7 @@ from emblema.pretraining.application.use_cases.pretrain_backbone import (
 )
 from emblema.pretraining.domain.exceptions import PretrainingResultRejectedError
 from emblema.pretraining.domain.identifiers import BackboneId
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.ports.backbone_repository import BackboneRepository
 from emblema.pretraining.ports.handoff_exchange import HandoffExchange
 from emblema.pretraining.ports.training_corpus_reader import TrainingCorpusReader
@@ -67,11 +68,16 @@ class AcceptPretrainingResult:
         backbone = self._backbones.get(result.backbone)
         backbone.require_open()
         result.require_delivery_for(backbone)
-        corpus = self._reader.read(backbone.input.manifest, backbone.configuration.corpus_share)
+        mixture = TrainingMixture(
+            corpora=tuple(
+                self._reader.read(read.manifest, backbone.configuration.corpus_share)
+                for read in backbone.inputs
+            )
+        )
         outcome = self._pretrain(
             PretrainBackboneCommand(
                 configuration=backbone.configuration,
-                corpus=corpus,
+                mixture=mixture,
                 run=backbone.run,
                 resume_from=result.resumed_from,
             )

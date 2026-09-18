@@ -13,11 +13,13 @@ from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
 
 
 class PretrainingInputRecord(Base):
-    """Row of ``pretraining.pretraining_input``: the published corpus a backbone was trained on.
+    """Row of ``pretraining.pretraining_input``: one published corpus a backbone was trained on.
 
     The corpus version is a reference into another context's schema, so it is a plain column
     with its checksum beside it rather than a foreign key: what Pretraining knows of the Catalog
-    is what the published manifest said, and that is what the row keeps.
+    is what the published manifest said, and that is what the row keeps. A backbone over several
+    corpora has one row per corpus, keyed by its position in the order they were read, because
+    the order is the order their vocabulary was chained and a row cannot say that on its own.
     """
 
     __tablename__ = "pretraining_input"
@@ -25,6 +27,7 @@ class PretrainingInputRecord(Base):
     backbone_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("pretraining.backbone.id", ondelete="CASCADE"), primary_key=True
     )
+    position: Mapped[int] = mapped_column(Integer, primary_key=True)
     corpus: Mapped[str] = mapped_column(Text)
     corpus_version: Mapped[UUID] = mapped_column(Uuid)
     corpus_checksum_algorithm: Mapped[str] = mapped_column(Text)
@@ -37,9 +40,10 @@ class PretrainingInputRecord(Base):
     vocabulary_size: Mapped[int] = mapped_column(Integer)
 
     @classmethod
-    def from_input(cls, backbone_id: BackboneId, read: PretrainingInput) -> Self:
+    def from_input(cls, backbone_id: BackboneId, position: int, read: PretrainingInput) -> Self:
         return cls(
             backbone_id=backbone_id.value,
+            position=position,
             corpus=read.corpus,
             corpus_version=read.corpus_version.value,
             corpus_checksum_algorithm=str(read.corpus_checksum.algorithm),

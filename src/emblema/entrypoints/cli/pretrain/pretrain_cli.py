@@ -1,4 +1,5 @@
 import argparse
+import logging
 import sys
 from collections.abc import Sequence
 from contextlib import redirect_stdout
@@ -37,6 +38,8 @@ class PretrainCli:
             --experiment experiments/control-a-s.toml --corpus <manifest key> <checksum>
             --run first
 
+    with ``--corpus`` once per corpus the experiment names, in the order it names them.
+
     which prints the backbone's identifier and the order's reference. On whichever machine
     trains — this one, or a notebook that installed the package at the commit the order names::
 
@@ -53,7 +56,10 @@ class PretrainCli:
     revision where it cannot be read, or where the tree is not what the run is made of.
 
     Standard output is the references a person copies into the next invocation, and nothing
-    else: whatever a library prints while a use case runs goes to standard error.
+    else: whatever a library prints while a use case runs goes to standard error, and so does
+    the run's log — the epoch's progress every so many steps, each checkpoint written and each
+    epoch's losses — which on a platform that keeps the log of a dropped session is where the
+    checkpoint to pick it up from is read.
     """
 
     def __init__(self, revision: SourceRevision | None = None) -> None:
@@ -67,13 +73,20 @@ class PretrainCli:
             device=getattr(arguments, "device", None),
             tracking_uri=getattr(arguments, "track", None),
             num_workers=getattr(arguments, "num_workers", 0),
+            progress_every=getattr(arguments, "progress_every", 0),
         )
 
     def run(self, argv: Sequence[str] | None = None) -> None:  # pragma: no cover - environment
         invocation = self.parse(argv)
         command = invocation.command
+        settings = Settings()
+        logging.basicConfig(
+            stream=sys.stderr,
+            level=settings.log_level,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        )
         root = CompositionRoot(
-            Settings(),
+            settings,
             workspace=invocation.workspace,
             device=invocation.device,
             tracking_uri=invocation.tracking_uri,
@@ -81,6 +94,7 @@ class PretrainCli:
                 command.result if isinstance(command, AcceptPretrainingResultCommand) else None
             ),
             num_workers=invocation.num_workers,
+            progress_every=invocation.progress_every,
         )
         with redirect_stdout(sys.stderr):
             printed = self.execute(command, root.services)
@@ -110,10 +124,18 @@ class PretrainCli:
         match arguments.what:
             case "order":
                 experiment = ExperimentFile.load(arguments.experiment)
+                if len(arguments.corpus) != len(experiment.corpora):
+                    raise SystemExit(
+                        f"{experiment.name} names {len(experiment.corpora)} corpora "
+                        f"({', '.join(experiment.corpora)}); give --corpus once per corpus, "
+                        f"in that order, not {len(arguments.corpus)} times"
+                    )
                 return OrderPretrainingCommand(
                     configuration=experiment.configuration(),
-                    corpus=experiment.corpus,
-                    manifest=self._ref(arguments.corpus),
+                    corpora=tuple(
+                        (name, self._ref(pair))
+                        for name, pair in zip(experiment.corpora, arguments.corpus, strict=True)
+                    ),
                     run=arguments.run,
                     git_commit=self._commit(arguments.commit, committed=True),
                 )
@@ -144,8 +166,16 @@ class PretrainCli:
 
         order = what.add_parser(ORDER, help="register a backbone and place the order for it")
         order.add_argument("--experiment", type=Path, required=True, help="experiment file")
-        self._reference(
-            order, "--corpus", "manifest of the published corpus to train on", required=True
+        order.add_argument(
+            "--corpus",
+            nargs=2,
+            metavar=("KEY", "CHECKSUM"),
+            action="append",
+            required=True,
+            help=(
+                "manifest of a published corpus to train on; once per corpus the experiment "
+                "names, in its order"
+            ),
         )
         order.add_argument("--run", required=True, help="name of the run within the experiment")
         self._common(order, commit=True)
@@ -155,6 +185,13 @@ class PretrainCli:
         run.add_argument("--device", help="where to train; the machine's accelerator by default")
         self._reference(run, "--resume-from", "checkpoint of an interrupted run of this order")
         run.add_argument("--num-workers", type=int, default=0, help="batch collating processes")
+        run.add_argument(
+            "--progress-every",
+            type=int,
+            default=100,
+            metavar="STEPS",
+            help="log the epoch's progress every this many optimiser steps; 0 logs none",
+        )
         run.add_argument(
             "--track", help="MLflow tracking URI; the run is kept in memory unless given"
         )

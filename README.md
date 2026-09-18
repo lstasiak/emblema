@@ -85,8 +85,13 @@ uv run python -m emblema.entrypoints.cli.pretrain accept \
 ```
 
 Every parameter of a run lives in its experiment file under `experiments/`; the shape of the model
-and the share of the corpus's training units a run reads come from the compute tier the file
-declares unless the file states its own. The commit the order and the result carry is read
+and the share of each corpus's training units a run reads come from the compute tier the file
+declares unless the file states its own. A file names the corpora a run reads in the order
+their vocabulary was chained through the publications, and the order takes one `--corpus` per
+name in that order. A run over several corpora batches and steps each corpus on its own and
+scores each held-out side apart; every run keeps the epoch whose mean relative validation over
+its corpora is lowest, which for a run over one corpus is its lowest validation loss. The
+commit the order and the result carry is read
 from the installed package or the working tree: an order is placed only from a committed tree
 unless `--commit` states the revision, a run on other code than ordered stops before it trains,
 and a result made with other code, over other data or under another configuration is refused.

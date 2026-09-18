@@ -25,7 +25,7 @@ CONFIGURATIONS = ExperimentConfigurationDocument()
 
 
 class BackboneRecord(Base):
-    """Row of ``pretraining.backbone`` with its input: the persistence model of the aggregate.
+    """Row of ``pretraining.backbone`` with its inputs: the persistence model of the aggregate.
 
     The configuration is JSONB, a document whose shape changes more often than it is queried;
     the seed, the parameter count and the commit are columns beside it because they are asked
@@ -67,8 +67,10 @@ class BackboneRecord(Base):
     artifact_digest: Mapped[str | None] = mapped_column(Text)
     ordered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    input: Mapped[PretrainingInputRecord] = relationship(
-        cascade="all, delete-orphan", lazy="selectin"
+    inputs: Mapped[list[PretrainingInputRecord]] = relationship(
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by=PretrainingInputRecord.position,
     )
 
     @classmethod
@@ -93,14 +95,17 @@ class BackboneRecord(Base):
             artifact_digest=None if artifact is None else artifact.checksum.digest,
             ordered_at=backbone.ordered_at.value,
             delivered_at=None if backbone.delivered_at is None else backbone.delivered_at.value,
-            input=PretrainingInputRecord.from_input(backbone.id, backbone.input),
+            inputs=[
+                PretrainingInputRecord.from_input(backbone.id, position, read)
+                for position, read in enumerate(backbone.inputs)
+            ],
         )
 
     def to_backbone(self) -> Backbone:
         return Backbone(
             id=BackboneId(self.id),
             configuration=CONFIGURATIONS.decode(self.configuration),
-            input=self.input.to_input(),
+            inputs=tuple(read.to_input() for read in self.inputs),
             run=self.run,
             git_commit=self.git_commit,
             signature=RunSignature(self.signature),

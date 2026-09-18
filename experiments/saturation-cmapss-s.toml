@@ -6,7 +6,7 @@
 # not a budget the loss has converged at: the curve compares shares at one budget, and says so.
 name = "saturation-cmapss-s"
 tier = "S"
-corpus = "cmapss"
+corpora = ["cmapss"]
 precision = "fp32"
 dropout = 0.0
 decoder_layers = 1

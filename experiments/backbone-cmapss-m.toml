@@ -9,7 +9,7 @@
 # shape's beside it: the two files differ in the shape alone.
 name = "backbone-cmapss-m"
 tier = "M"
-corpus = "cmapss"
+corpora = ["cmapss"]
 precision = "fp16"
 dropout = 0.0
 decoder_layers = 1

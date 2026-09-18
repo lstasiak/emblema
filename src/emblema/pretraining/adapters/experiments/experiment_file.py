@@ -9,7 +9,7 @@ import tomllib
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
@@ -121,8 +121,9 @@ class ExperimentFile(_Section):
     Attributes:
         name: What the experiment is called; runs of it are grouped under this name.
         tier: Hardware class the run declares, and the shape it takes unless overridden.
-        corpus: The published corpus the run reads.
-        corpus_fraction: Share of that corpus's training units the run reads; the tier's unless
+        corpora: The published corpora the run reads, in the order their vocabulary was chained;
+            one for a run over one corpus.
+        corpus_fraction: Share of each corpus's training units the run reads; the tier's unless
             stated.
         precision: What the forward and backward pass are computed at.
         dropout: Dropout of the encoder and the decoder.
@@ -137,7 +138,7 @@ class ExperimentFile(_Section):
 
     name: str
     tier: ComputeTier
-    corpus: str
+    corpora: tuple[str, ...] = Field(min_length=1)
     corpus_fraction: float | None = None
     precision: Precision
     dropout: float

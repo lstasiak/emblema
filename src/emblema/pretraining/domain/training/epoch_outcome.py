@@ -10,11 +10,13 @@ from emblema.shared.kernel.artifacts import ArtifactRef
 class EpochOutcome:
     """What one epoch measured and what it left in the artifact store.
 
-    Two references rather than one, because the two artifacts are kept for different reasons and
+    Three references rather than one, because the artifacts are kept for different reasons and
     for different lengths of time: a checkpoint carries the whole state of the run and exists so
-    that a dropped session can be picked up, while the backbone carries the weights alone and is
-    what the run was for. The backbone appears on the last epoch of a run and nowhere else, which
-    is what lets a caller consuming the epochs one by one know when it has them all.
+    that a dropped session can be picked up; the weights of an epoch are written when it is the
+    best the run has seen by its validation, so that the epoch worth keeping is kept whatever
+    comes after it; and the backbone is the weights the run ends with — the best epoch's — which
+    appears on the last epoch of a run and nowhere else, which is what lets a caller consuming
+    the epochs one by one know when it has them all.
 
     Invariants: the epoch is not negative; the training loss is finite and not negative; the
     time taken is not negative; the share hidden lies in ``(0, 1]``, since an epoch that hid
@@ -32,7 +34,10 @@ class EpochOutcome:
         seconds: Wall-clock time the epoch took, training and scoring together.
         checkpoint: The last resumable state written during the epoch; ``None`` where the policy
             asked for none.
-        backbone: The weights kept, on the run's final epoch only.
+        weights: The weights as this epoch left them, written because the epoch is the best the
+            run has seen; ``None`` for an epoch that did not improve on an earlier one.
+        backbone: The weights the run kept, on its final epoch only: those of the epoch whose
+            validation was lowest, which may be an earlier one or one a resumed run inherited.
     """
 
     epoch: int
@@ -41,6 +46,7 @@ class EpochOutcome:
     hidden_ratio: float
     seconds: float
     checkpoint: ArtifactRef | None = None
+    weights: ArtifactRef | None = None
     backbone: ArtifactRef | None = None
 
     def __post_init__(self) -> None:

@@ -12,7 +12,7 @@
 # the step, so the two curves are comparable in everything but the reading.
 name = "saturation-esa_ad-s-huber"
 tier = "S"
-corpus = "esa_ad"
+corpora = ["esa_ad"]
 precision = "fp32"
 dropout = 0.0
 decoder_layers = 1

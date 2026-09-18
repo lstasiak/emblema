@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from emblema.pretraining.domain.exceptions import InvalidTrainingOutcomeError
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
-from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
 from emblema.pretraining.ports.experiment_tracker import ExperimentTracker
 from emblema.pretraining.ports.training_runtime import TrainingRuntime
@@ -15,15 +15,16 @@ class PretrainBackboneCommand:
 
     Attributes:
         configuration: The experiment, which fixes everything the run does.
-        corpus: The windows to train on and the windows to score on.
+        mixture: The corpora to train on and to score on; a run over one corpus is a
+            mixture of one.
         run: What this run is called within the experiment; two runs of one configuration differ
             only here, so the name comes from whoever started them rather than from a clock the
             use case reaches for.
-        resume_from: Checkpoint of an interrupted run of the same configuration and corpus.
+        resume_from: Checkpoint of an interrupted run of the same configuration and corpora.
     """
 
     configuration: ExperimentConfiguration
-    corpus: TrainingCorpus
+    mixture: TrainingMixture
     run: str
     resume_from: ArtifactRef | None = None
 
@@ -53,8 +54,8 @@ class PretrainBackbone:
         # The run is asked for before it is recorded: a runtime refuses a precision it cannot
         # honour or a checkpoint from elsewhere when it is asked, and a run that never started is
         # not a run the tracker should be holding open.
-        running = self._runtime.train(command.configuration, command.corpus, command.resume_from)
-        self._tracker.begin(command.configuration, corpus=command.corpus.name, run=command.run)
+        running = self._runtime.train(command.configuration, command.mixture, command.resume_from)
+        self._tracker.begin(command.configuration, corpus=command.mixture.name, run=command.run)
         epochs = []
         for epoch in running:
             self._tracker.log_epoch(epoch)

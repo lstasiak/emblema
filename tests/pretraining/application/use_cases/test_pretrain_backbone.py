@@ -16,13 +16,14 @@ from emblema.pretraining.domain.exceptions import (
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
-from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
-from tests.support.experiments import WEIGHTS, budget, configuration, corpus
+from tests.support.experiments import WEIGHTS, budget, configuration, corpus, mixture
 from tests.support.experiments import epoch_outcome as epoch
 
 CORPUS = corpus(training=8, validation=4)
+MIXTURE = mixture(CORPUS)
 
 
 def command(**overrides: Any) -> PretrainBackboneCommand:
@@ -30,7 +31,7 @@ def command(**overrides: Any) -> PretrainBackboneCommand:
         "configuration": configuration(
             budget=budget(epochs=2, batch_size=2), checkpoint=CheckpointPolicy(every_steps=3)
         ),
-        "corpus": CORPUS,
+        "mixture": MIXTURE,
         "run": "first",
     }
     return PretrainBackboneCommand(**(stated | overrides))
@@ -46,7 +47,7 @@ class SilentRuntime:
     def train(
         self,
         configuration: ExperimentConfiguration,
-        corpus: TrainingCorpus,
+        mixture: TrainingMixture,
         resume_from: ArtifactRef | None = None,
     ) -> Iterator[EpochOutcome]:
         self.resumed_from = resume_from
@@ -93,7 +94,7 @@ def test_an_epoch_is_recorded_before_the_next_one_is_asked_for() -> None:
     seen: list[int] = []
 
     class Watching(SilentRuntime):
-        def train(self, configuration, corpus, resume_from=None):
+        def train(self, configuration, mixture, resume_from=None):
             for reported in self._epochs:
                 seen.append(len(tracker.epochs))
                 yield reported
@@ -122,7 +123,7 @@ def test_an_interrupted_run_is_left_without_an_ending() -> None:
     tracker = InMemoryExperimentTracker()
 
     class Dying(SilentRuntime):
-        def train(self, configuration, corpus, resume_from=None):
+        def train(self, configuration, mixture, resume_from=None):
             yield epoch(0)
             raise RuntimeError("the session dropped")
 
@@ -137,7 +138,7 @@ def test_a_run_the_runtime_refuses_is_never_begun() -> None:
     """A tracker holding a run that never started would read as an interrupted one."""
 
     class Refusing(SilentRuntime):
-        def train(self, configuration, corpus, resume_from=None):
+        def train(self, configuration, mixture, resume_from=None):
             raise UnsupportedPrecisionError("cpu cannot train at fp16")
 
     tracker = InMemoryExperimentTracker()

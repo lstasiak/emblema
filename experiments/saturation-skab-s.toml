@@ -6,7 +6,7 @@
 # not a budget the loss has converged at: the curve compares shares at one budget, and says so.
 name = "saturation-skab-s"
 tier = "S"
-corpus = "skab"
+corpora = ["skab"]
 precision = "fp32"
 dropout = 0.0
 decoder_layers = 1

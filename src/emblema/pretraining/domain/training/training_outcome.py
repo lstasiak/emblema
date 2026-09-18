@@ -17,7 +17,7 @@ class TrainingOutcome:
     the last epoch and by no other, and it is the run's.
 
     Attributes:
-        backbone: The weights kept when the objective was thrown away.
+        backbone: The weights kept when the objective was thrown away: the best epoch's.
         epochs: What each epoch of this run measured, in order.
     """
 
@@ -39,6 +39,16 @@ class TrainingOutcome:
             raise InvalidTrainingOutcomeError(
                 "the run's backbone and its last epoch's must be the same artifact"
             )
+
+    @property
+    def best_epoch(self) -> int | None:
+        """The epoch of this run whose weights the run kept; ``None`` where it kept inherited ones.
+
+        A run picked up from a checkpoint may end with weights an epoch before the checkpoint
+        wrote, which no epoch of this run reports.
+        """
+        kept = [epoch.epoch for epoch in self.epochs if epoch.weights == self.backbone]
+        return kept[-1] if kept else None
 
     @property
     def hidden_ratio(self) -> float:

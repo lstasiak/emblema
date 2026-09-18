@@ -1,4 +1,5 @@
 from dataclasses import dataclass, replace
+from itertools import pairwise
 from typing import Self
 
 from emblema.pretraining.domain.backbone.pretraining_input import PretrainingInput
@@ -15,7 +16,7 @@ from emblema.shared.kernel.timestamps import UtcDateTime
 
 @dataclass(frozen=True, kw_only=True)
 class Backbone:
-    """An encoder pretrained under one configuration over a published corpus, and its weights.
+    """An encoder pretrained under one configuration over published corpora, and its weights.
 
     Ordered before it is trained and ready once its weights are registered, because the run that
     produces them may happen on a machine this system only hands work to: the order is what that
@@ -23,18 +24,20 @@ class Backbone:
     backbone with its artifact, and a backbone that is ready never changes; another run is another
     backbone.
 
-    Invariants: the run name and the commit are non-empty without surrounding whitespace; the
-    result, the artifact and the time of delivery come together or not at all; a delivery is
-    never earlier than the order.
+    Invariants: the run name and the commit are non-empty without surrounding whitespace; at
+    least one corpus was read, none twice, and their vocabularies do not shrink along the order,
+    since each continues the one before; the result, the artifact and the time of delivery come
+    together or not at all; a delivery is never earlier than the order.
 
     Attributes:
         id: Identity of the backbone.
         configuration: The experiment it was trained under.
-        input: The published corpus it was trained on.
+        inputs: The published corpora it was trained on, in the order their vocabulary was
+            chained; a backbone over one corpus has one.
         run: Name of the run within the experiment; with the experiment's name, what the backbone
             is called.
         git_commit: Revision of the code the run was ordered at, and made with.
-        signature: What the run is: the configuration over the corpus as it was read at ordering.
+        signature: What the run is: the configuration over the corpora as read at ordering.
         ordered_at: When the run was ordered.
         result: The result the weights were delivered with, which names the order it fulfilled,
             the checkpoint the run was picked up from and every epoch; ``None`` while the order
@@ -45,7 +48,7 @@ class Backbone:
 
     id: BackboneId
     configuration: ExperimentConfiguration
-    input: PretrainingInput
+    inputs: tuple[PretrainingInput, ...]
     run: str
     git_commit: str
     signature: RunSignature
@@ -60,6 +63,16 @@ class Backbone:
                 raise InvalidBackboneError(
                     f"{label} must be non-empty without surrounding whitespace"
                 )
+        if not self.inputs:
+            raise InvalidBackboneError("a backbone is trained on at least one corpus")
+        names = [read.corpus for read in self.inputs]
+        if len(set(names)) != len(names):
+            raise InvalidBackboneError(f"a corpus is read twice: {names}")
+        sizes = [read.vocabulary_size for read in self.inputs]
+        if any(later < earlier for earlier, later in pairwise(sizes)):
+            raise InvalidBackboneError(
+                f"the vocabularies of the corpora do not shrink along the order, got {sizes}"
+            )
         delivery = (self.result is None, self.artifact is None, self.delivered_at is None)
         if any(delivery) and not all(delivery):
             raise InvalidBackboneError(
@@ -82,9 +95,14 @@ class Backbone:
         return self.configuration.budget.seed
 
     @property
+    def vocabulary_size(self) -> int:
+        """Channels of the vocabulary the run trained under: the last corpus's."""
+        return self.inputs[-1].vocabulary_size
+
+    @property
     def parameter_count(self) -> int:
-        """Parameters of the encoder over the vocabulary of the corpus it read."""
-        return self.configuration.architecture.parameter_count(self.input.vocabulary_size)
+        """Parameters of the encoder over the vocabulary the run trained under."""
+        return self.configuration.architecture.parameter_count(self.vocabulary_size)
 
     def require_open(self) -> None:
         """Refuse a backbone that already holds its weights.

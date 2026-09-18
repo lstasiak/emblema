@@ -24,7 +24,7 @@ def test_an_ordered_backbone_is_named_signed_and_not_ready() -> None:
     assert ordered.name == "test-experiment/first"
     assert not ordered.is_ready
     assert ordered.seed == 1
-    assert ordered.parameter_count == TINY.parameter_count(ordered.input.vocabulary_size)
+    assert ordered.parameter_count == TINY.parameter_count(ordered.vocabulary_size)
 
 
 def test_delivering_the_weights_makes_a_new_ready_backbone_and_leaves_the_order() -> None:
@@ -88,7 +88,37 @@ def test_a_blank_or_padded_name_is_refused(field: str, value: str) -> None:
 
 
 def test_the_parameter_count_follows_the_vocabulary_the_corpus_was_published_under() -> None:
-    wider = backbone(input=pretraining_input(vocabulary_size=30))
+    wider = backbone(inputs=(pretraining_input(vocabulary_size=30),))
 
     assert wider.parameter_count == TINY.parameter_count(30)
     assert wider.parameter_count > backbone().parameter_count
+
+
+def test_a_backbone_over_several_corpora_trains_under_the_last_one_s_vocabulary() -> None:
+    mixed = backbone(
+        inputs=(
+            pretraining_input(),
+            pretraining_input(corpus="second", vocabulary_size=5),
+            pretraining_input(corpus="third", vocabulary_size=9),
+        )
+    )
+
+    assert mixed.vocabulary_size == 9
+    assert mixed.parameter_count == TINY.parameter_count(9)
+
+
+def test_a_backbone_over_no_corpus_is_refused() -> None:
+    with pytest.raises(InvalidBackboneError, match="at least one corpus"):
+        backbone(inputs=())
+
+
+def test_a_corpus_read_twice_is_refused() -> None:
+    with pytest.raises(InvalidBackboneError, match="read twice"):
+        backbone(inputs=(pretraining_input(), pretraining_input(vocabulary_size=5)))
+
+
+def test_vocabularies_that_shrink_along_the_corpora_are_refused() -> None:
+    with pytest.raises(InvalidBackboneError, match="do not shrink"):
+        backbone(
+            inputs=(pretraining_input(), pretraining_input(corpus="second", vocabulary_size=2))
+        )

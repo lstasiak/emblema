@@ -25,6 +25,7 @@ from emblema.pretraining.domain.training.objective_loss import LossKind, Objecti
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.compute import ComputeTier
@@ -33,6 +34,7 @@ from emblema.shared.kernel.tokens import Token, TokenWindow
 TINY = EncoderArchitecture(width=16, heads=2, layers=1, feedforward_width=32, time_frequencies=4)
 MIXTURE = MaskingStrategy(channel_rate=0.15, block_rate=0.6, block_span=0.5, token_rate=0.1)
 CHANNELS = 3
+CHANNEL_NAMES = ("invented/a", "invented/b", "invented/c")
 
 
 def configuration(**overrides: Any) -> ExperimentConfiguration:
@@ -72,7 +74,12 @@ def budget(**overrides: Any) -> TrainingBudget:
 
 
 def corpus(
-    *, training: int = 8, validation: int = 4, name: str = "invented", seed: int = 1
+    *,
+    training: int = 8,
+    validation: int = 4,
+    name: str = "invented",
+    seed: int = 1,
+    channels: tuple[str, ...] = CHANNEL_NAMES,
 ) -> TrainingCorpus:
     """A corpus of invented windows, each of three channels observed at four instants.
 
@@ -86,7 +93,29 @@ def corpus(
         checksum=checksum_of(training_windows + validation_windows),
         training=training_windows,
         validation=validation_windows,
-        vocabulary_size=CHANNELS,
+        channels=channels,
+    )
+
+
+def mixture(*corpora: TrainingCorpus) -> TrainingMixture:
+    """The mixture of these corpora; the test corpus alone unless others are given."""
+    return TrainingMixture.of(*(corpora or (corpus(),)))
+
+
+def continued(
+    *, name: str, seed: int, training: int = 8, validation: int = 4, channels: int = 2
+) -> TrainingCorpus:
+    """A corpus published after the test corpus, continuing its vocabulary by that many channels.
+
+    Its windows still carry the first three channels, so what the mixture checks — the chain of
+    names — is exercised without windows of a wider vocabulary being invented.
+    """
+    return corpus(
+        training=training,
+        validation=validation,
+        name=name,
+        seed=seed,
+        channels=CHANNEL_NAMES + tuple(f"{name}/{index}" for index in range(channels)),
     )
 
 

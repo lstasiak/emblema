@@ -6,8 +6,9 @@ from emblema.pretraining.adapters.experiments.experiment_file import ExperimentF
 from emblema.pretraining.domain.exceptions import InvalidRunSignatureError
 from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.pretraining.domain.training.training_corpus_shape import TrainingCorpusShape
+from emblema.pretraining.domain.training.training_mixture_shape import TrainingMixtureShape
 from emblema.shared.kernel.checksums import Checksum
-from tests.support.experiments import budget, configuration, corpus
+from tests.support.experiments import budget, configuration, continued, corpus, mixture
 
 # The control experiment at tier S over the control corpus as it was published (window 32,
 # stride 12, a quarter held out), as the registry and the result documents sign it. The digest
@@ -27,7 +28,7 @@ CONTROL_A_S_SIGNATURE = "96fa0aca4d082a6e15f5fc48eee6997410bfd795e9ef0fccc5b4b73
 
 
 def test_the_same_run_signs_the_same_and_another_configuration_does_not() -> None:
-    stated, windows = configuration(), corpus()
+    stated, windows = configuration(), mixture()
 
     assert RunSignature.of(stated, windows) == RunSignature.of(stated, windows)
     assert RunSignature.of(configuration(budget=budget(seed=2)), windows) != RunSignature.of(
@@ -38,8 +39,12 @@ def test_the_same_run_signs_the_same_and_another_configuration_does_not() -> Non
 def test_the_same_configuration_over_another_corpus_is_another_run() -> None:
     stated = configuration()
 
-    assert RunSignature.of(stated, corpus(name="other")) != RunSignature.of(stated, corpus())
-    assert RunSignature.of(stated, corpus(training=6)) != RunSignature.of(stated, corpus())
+    assert RunSignature.of(stated, mixture(corpus(name="other"))) != RunSignature.of(
+        stated, mixture()
+    )
+    assert RunSignature.of(stated, mixture(corpus(training=6))) != RunSignature.of(
+        stated, mixture()
+    )
 
 
 def test_two_corpora_of_one_shape_holding_other_data_are_other_runs() -> None:
@@ -49,11 +54,11 @@ def test_two_corpora_of_one_shape_holding_other_data_are_other_runs() -> None:
 
     assert (other.name, len(other.training)) == (read.name, len(read.training))
     assert other.checksum != read.checksum
-    assert RunSignature.of(stated, other) != RunSignature.of(stated, read)
+    assert RunSignature.of(stated, mixture(other)) != RunSignature.of(stated, mixture(read))
 
 
 def test_a_configuration_built_from_integers_signs_as_the_same_run() -> None:
-    windows = corpus()
+    windows = mixture()
 
     assert RunSignature.of(configuration(dropout=0), windows) == RunSignature.of(
         configuration(dropout=0.0), windows
@@ -63,7 +68,25 @@ def test_a_configuration_built_from_integers_signs_as_the_same_run() -> None:
 def test_the_signature_of_a_registered_run_is_the_digest_the_registry_holds() -> None:
     stated = ExperimentFile.load(Path("experiments/control-a-s.toml")).configuration()
 
-    assert RunSignature.of_shape(stated, CONTROL_A).digest == CONTROL_A_S_SIGNATURE
+    assert (
+        RunSignature.of_shape(stated, TrainingMixtureShape(corpora=(CONTROL_A,))).digest
+        == CONTROL_A_S_SIGNATURE
+    )
+
+
+def test_a_mixture_signs_by_every_corpus_in_order() -> None:
+    stated = configuration()
+    first, second = corpus(), continued(name="second", seed=2)
+
+    assert RunSignature.of(stated, mixture(first, second)) != RunSignature.of(
+        stated, mixture(first)
+    )
+    assert RunSignature.of(stated, mixture(first, second)) == RunSignature.of(
+        stated, mixture(first, second)
+    )
+    assert RunSignature.of(stated, mixture(first, second)) != RunSignature.of(
+        stated, mixture(first, continued(name="second", seed=3))
+    )
 
 
 def test_a_signature_without_a_digest_is_refused() -> None:

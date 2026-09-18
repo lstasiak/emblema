@@ -1,0 +1,45 @@
+# The mixed backbone at the published tier: the tier's own shape over the whole of four corpora,
+# read in the order their vocabulary was chained, on the accelerator and at the precision the
+# tier names (ADR-0029).
+#
+# Every optimiser step is taken over micro-batches of one corpus and the steps are interleaved,
+# so a corpus weighs its share of the steps: about 43 % the satellite corpus, 41 % SMD,
+# 14 % C-MAPSS and 3 % SKAB at the windows published for this run. The loss is bounded at one standard deviation
+# because the satellite corpus is learnt under that reading and not under the square
+# (ADR-0028); the classical corpora lie within a deviation on most tokens, where the two readings
+# agree. Dropout stays at zero, as in the single-corpus backbones this one is compared against.
+name = "backbone-mixed-m"
+tier = "M"
+corpora = ["cmapss", "skab", "smd", "esa_ad"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+# Eight passes over every window of every corpus, priced at about six hours on the platform's
+# accelerator with the estimate's factor of three either way; the epoch kept is the one whose
+# mean relative validation over the corpora is lowest, so the budget bounds the cost and not the
+# result. The longest window of the mix, 1,900 tokens of SMD, sets the micro-batch: sixteen
+# windows, two of them accumulated into the step of thirty-two the single-corpus backbones took.
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+# About twenty minutes and sixty megabytes apart on the platform: a session that drops loses at
+# most that, and the transient prefix holds a few dozen states over the run rather than hundreds.
+[checkpoint]
+every_steps = 2000

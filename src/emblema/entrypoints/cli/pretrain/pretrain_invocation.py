@@ -25,6 +25,8 @@ class PretrainInvocation:
         tracking_uri: MLflow server or database file the run is recorded against; in memory
             unless given.
         num_workers: Processes collating batches for a run fulfilled here.
+        progress_every: Optimiser steps between two progress lines of a run fulfilled here; zero
+            for none.
     """
 
     command: PretrainCommand
@@ -32,3 +34,4 @@ class PretrainInvocation:
     device: str | None = None
     tracking_uri: str | None = None
     num_workers: int = 0
+    progress_every: int = 0

@@ -5,8 +5,8 @@ from emblema.pretraining.domain.exceptions import (
     PretrainingOrderRejectedError,
 )
 from emblema.pretraining.domain.handoff.pretraining_order import PretrainingOrder
-from tests.support.experiments import corpus
-from tests.support.handoff import COMMIT, CORPUS, OTHER_COMMIT, backbone, order
+from tests.support.experiments import corpus, mixture
+from tests.support.handoff import COMMIT, MIXTURE, OTHER_COMMIT, backbone, order
 
 
 def test_the_order_of_a_backbone_is_its_run_as_registered() -> None:
@@ -17,7 +17,7 @@ def test_the_order_of_a_backbone_is_its_run_as_registered() -> None:
     assert placed == order(
         backbone=ordered.id,
         configuration=ordered.configuration,
-        manifest=ordered.input.manifest,
+        manifests=(ordered.inputs[0].manifest,),
         run=ordered.run,
         git_commit=ordered.git_commit,
         signature=ordered.signature,
@@ -27,9 +27,9 @@ def test_the_order_of_a_backbone_is_its_run_as_registered() -> None:
 def test_the_corpus_ordered_passes_and_another_one_stops_the_run() -> None:
     placed = order()
 
-    placed.require_read(CORPUS)
-    with pytest.raises(PretrainingOrderRejectedError, match="signs run"):
-        placed.require_read(corpus(training=6))
+    placed.require_read(MIXTURE)
+    with pytest.raises(PretrainingOrderRejectedError, match="sign run"):
+        placed.require_read(mixture(corpus(training=6)))
 
 
 def test_the_code_ordered_passes_and_other_code_stops_the_run() -> None:
@@ -47,3 +47,10 @@ def test_the_code_ordered_passes_and_other_code_stops_the_run() -> None:
 def test_a_blank_name_is_refused(field: str) -> None:
     with pytest.raises(InvalidPretrainingOrderError, match=field):
         order(**{field: " "})
+
+
+def test_an_order_names_at_least_one_manifest_and_none_twice() -> None:
+    with pytest.raises(InvalidPretrainingOrderError, match="at least one manifest"):
+        order(manifests=())
+    with pytest.raises(InvalidPretrainingOrderError, match="no manifest twice"):
+        order(manifests=(order().manifests[0], order().manifests[0]))

@@ -67,6 +67,7 @@ from emblema.pretraining.domain.training.experiment_configuration import Experim
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
 from emblema.pretraining.ports.experiment_tracker import ExperimentTracker
 from emblema.pretraining.ports.training_corpus_reader import TrainingCorpusReader
@@ -106,9 +107,19 @@ EPOCH_FIELDS = (
 
 
 def experiments(directory: Path = EXPERIMENTS) -> dict[str, ExperimentFile]:
-    """Every experiment of this measurement stated in ``directory``, by name."""
+    """Every experiment of this measurement stated in ``directory``, by name.
+
+    The measurement is of one corpus at a time, so a file that names several is not one of its
+    experiments, whatever its name says.
+    """
     stated = (ExperimentFile.load(path) for path in sorted(directory.glob(f"{PREFIX}*.toml")))
-    return {file.name: file for file in stated}
+    return {file.name: file for file in stated if len(file.corpora) == 1}
+
+
+def corpus_of(file: ExperimentFile) -> str:
+    """The one corpus an experiment of this measurement reads."""
+    (corpus,) = file.corpora
+    return corpus
 
 
 def trivial_loss(windows: Sequence[TokenWindow], loss: ObjectiveLoss) -> float:
@@ -248,7 +259,7 @@ def plan(
         batches = batches_of(corpus, base.budget)
         if equal_steps:
             shared = replace(shared, budget=equal_step_budget(base.budget, base_batches, batches))
-        runs.append(PlannedRun(file.name, file.corpus, shared, corpus, batches))
+        runs.append(PlannedRun(file.name, corpus_of(file), shared, corpus, batches))
     return runs
 
 
@@ -600,7 +611,7 @@ def train(
     resume = None if stored is None else stored.last_checkpoint
     command = PretrainBackboneCommand(
         configuration=planned.configuration,
-        corpus=planned.windows,
+        mixture=TrainingMixture.of(planned.windows),
         run=planned.name,
         resume_from=resume,
     )
@@ -866,11 +877,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         return
     manifests = manifests_of(arguments.corpus)
     names = arguments.experiment or [
-        name for name, file in stated.items() if file.corpus in manifests
+        name for name, file in stated.items() if corpus_of(file) in manifests
     ]
     for name in names:
-        if stated[name].corpus not in manifests:
-            parser.error(f"{name} reads corpus {stated[name].corpus!r}, which no --corpus names")
+        if corpus_of(stated[name]) not in manifests:
+            parser.error(
+                f"{name} reads corpus {corpus_of(stated[name])!r}, which no --corpus names"
+            )
     if not names:
         parser.error("nothing to run: no experiment reads a corpus given with --corpus")
     if not device_available(arguments.device):
@@ -896,7 +909,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         file = stated[name]
         planned += plan(
             file,
-            manifests[file.corpus],
+            manifests[corpus_of(file)],
             reader,
             sorted(arguments.fractions),
             arguments.epochs,

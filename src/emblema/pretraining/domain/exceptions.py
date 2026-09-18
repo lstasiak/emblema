@@ -45,6 +45,10 @@ class InvalidTrainingCorpusError(PretrainingError, ValueError):
     pass
 
 
+class InvalidTrainingMixtureError(PretrainingError, ValueError):
+    pass
+
+
 class InvalidCorpusShareError(PretrainingError, ValueError):
     pass
 

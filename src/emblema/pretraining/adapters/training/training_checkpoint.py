@@ -9,6 +9,8 @@ from emblema.pretraining.adapters.training.exceptions import UNREADABLE_BYTES
 from emblema.pretraining.domain.exceptions import IncompatibleCheckpointError
 from emblema.pretraining.domain.training.run_position import RunPosition
 from emblema.pretraining.domain.training.run_signature import RunSignature
+from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,10 @@ class TrainingCheckpoint:
         seeds: State of the host's global generator, which initialisation draws from.
         device_seeds: State of the accelerator's own generator, which dropout draws from where
             the run is not on the host; ``None`` on the host.
+        best_relative: The lowest mean relative validation an epoch of the run has reached, so
+            that a resumed run keeps its best epoch rather than the best since it resumed;
+            ``None`` before any epoch was scored.
+        best_weights: The weights of that epoch, as written; ``None`` with ``best_relative``.
     """
 
     signature: RunSignature
@@ -45,6 +51,8 @@ class TrainingCheckpoint:
     masks: Tensor
     seeds: Tensor
     device_seeds: Tensor | None = None
+    best_relative: float | None = None
+    best_weights: ArtifactRef | None = None
 
     def to_bytes(self) -> bytes:
         """The checkpoint as the bytes the artifact store keeps, every tensor on the CPU."""
@@ -61,6 +69,12 @@ class TrainingCheckpoint:
                 "masks": _on_cpu(self.masks),
                 "seeds": _on_cpu(self.seeds),
                 "device_seeds": _on_cpu(self.device_seeds),
+                "best_relative": self.best_relative,
+                "best_weights": (
+                    None
+                    if self.best_weights is None
+                    else [self.best_weights.key, str(self.best_weights.checksum)]
+                ),
             },
             buffer,
         )
@@ -92,6 +106,14 @@ class TrainingCheckpoint:
                 masks=stored["masks"],
                 seeds=stored["seeds"],
                 device_seeds=stored["device_seeds"],
+                best_relative=stored["best_relative"],
+                best_weights=(
+                    None
+                    if stored["best_weights"] is None
+                    else ArtifactRef(
+                        stored["best_weights"][0], Checksum.parse(stored["best_weights"][1])
+                    )
+                ),
             )
         except UNREADABLE_BYTES as error:
             raise IncompatibleCheckpointError(f"not a checkpoint this can read: {error}") from error

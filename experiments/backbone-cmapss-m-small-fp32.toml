@@ -8,7 +8,7 @@
 # (docs/verification/corpus-saturation.md), which gives this run a curve to be held against too.
 name = "backbone-cmapss-m-small-fp32"
 tier = "M"
-corpus = "cmapss"
+corpora = ["cmapss"]
 precision = "fp32"
 dropout = 0.0
 decoder_layers = 1

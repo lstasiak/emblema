@@ -62,6 +62,7 @@ class CompositionRoot:
         tracking_uri: str | None = None,
         result: ArtifactRef | None = None,
         num_workers: int = 0,
+        progress_every: int = 0,
         store: ArtifactStore | None = None,
         backbones: BackboneRepository | None = None,
         reader: TrainingCorpusReader | None = None,
@@ -83,6 +84,8 @@ class CompositionRoot:
             result: The result this process accepts, if it accepts one: the runtime then replays
                 it rather than training.
             num_workers: Processes collating batches for a run fulfilled here.
+            progress_every: Optimiser steps between two progress lines of a run fulfilled here;
+                zero for none.
             store: Artifact store; the configured S3-compatible bucket unless given.
             backbones: Registry of backbones; the configured metadata database unless given, and
                 none where the settings name no database.
@@ -111,7 +114,9 @@ class CompositionRoot:
             reader=BlockTrainingCorpusReader(chosen_store, workspace) if reader is None else reader,
             exchange=chosen_exchange,
             runtime=(
-                self._runtime(chosen_store, chosen_exchange, device, result, num_workers)
+                self._runtime(
+                    chosen_store, chosen_exchange, device, result, num_workers, progress_every
+                )
                 if runtime is None
                 else runtime
             ),
@@ -132,6 +137,7 @@ class CompositionRoot:
         tracking_uri: str | None = None,
         result: ArtifactRef | None = None,
         num_workers: int = 0,
+        progress_every: int = 0,
         reader: TrainingCorpusReader | None = None,
         exchange: HandoffExchange | None = None,
         runtime: TrainingRuntime | None = None,
@@ -151,6 +157,7 @@ class CompositionRoot:
             tracking_uri=tracking_uri,
             result=result,
             num_workers=num_workers,
+            progress_every=progress_every,
             store=store,
             backbones=backbones,
             reader=reader,
@@ -174,10 +181,13 @@ class CompositionRoot:
         device: str | None,
         result: ArtifactRef | None,
         num_workers: int,
+        progress_every: int,
     ) -> TrainingRuntime:
         if result is not None:
             return HandoffTrainingRuntime(exchange, store, result)
-        return TorchTrainingRuntime(store, device=device, num_workers=num_workers)
+        return TorchTrainingRuntime(
+            store, device=device, num_workers=num_workers, progress_every=progress_every
+        )
 
     @staticmethod
     def _tracker(tracking_uri: str | None) -> ExperimentTracker:
