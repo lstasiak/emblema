@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
-from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.ports.corpus_windows import CorpusWindows
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
 from emblema.evaluation.ports.unit_lifetimes import UnitLifetimes
@@ -54,12 +53,5 @@ class DrawLabelBudget:
         """
         task = self._tasks.get(command.task)
         windows = self._corpus.windows_of(task.manifest, task.tuning_units)
-        failed_at = self._lifetimes.failure_times(task.tuning_units)
-        pool = [
-            LabelledWindow(
-                window=window,
-                target=task.labels.target(failed_at=failed_at[window.unit], ends_at=window.ends_at),
-            )
-            for window in windows
-        ]
+        pool = task.labelled(windows, self._lifetimes.failure_times(task.tuning_units))
         return LabelSample.drawn(task.task_id, pool, command.budget, task.strata, command.seed)
