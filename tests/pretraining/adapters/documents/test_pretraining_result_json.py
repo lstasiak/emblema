@@ -5,8 +5,8 @@ import pytest
 from emblema.pretraining.adapters.documents.pretraining_result_json import PretrainingResultJson
 from emblema.pretraining.domain.exceptions import UnreadableHandoffDocumentError
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
-from tests.support.experiments import WEIGHTS, epoch_outcome, validated
-from tests.support.handoff import CHECKPOINT, result
+from tests.support.experiments import WEIGHTS, continued, epoch_outcome, mixture, validated
+from tests.support.handoff import CHECKPOINT, CORPUS, result
 
 CODEC = PretrainingResultJson()
 
@@ -56,10 +56,31 @@ def test_a_result_whose_outcome_breaks_the_domain_rules_is_refused() -> None:
 
 def test_a_result_with_a_field_missing_names_it() -> None:
     document = json.loads(CODEC.encode(result()))
-    del document["corpus"]["vocabulary_size"]
+    del document["mixture"][0]["vocabulary_size"]
 
     with pytest.raises(UnreadableHandoffDocumentError, match="vocabulary_size"):
         CODEC.decode(json.dumps(document).encode())
+
+
+def test_the_weights_an_epoch_kept_travel_in_the_result() -> None:
+    kept = TrainingOutcome(
+        backbone=WEIGHTS,
+        epochs=(epoch_outcome(0, weights=WEIGHTS), epoch_outcome(1, backbone=WEIGHTS)),
+    )
+
+    read = CODEC.decode(CODEC.encode(result(outcome=kept)))
+
+    assert read.outcome.best_epoch == 0
+    assert [epoch.weights for epoch in read.outcome.epochs] == [WEIGHTS, None]
+
+
+def test_every_corpus_of_the_mixture_travels_in_the_result() -> None:
+    mixed = result(mixture=mixture(CORPUS, continued(name="second", seed=2)).shape)
+
+    read = CODEC.decode(CODEC.encode(mixed))
+
+    assert [corpus.name for corpus in read.mixture.corpora] == ["invented", "second"]
+    assert read == mixed
 
 
 def test_every_corpus_an_epoch_validated_travels_in_the_result() -> None:

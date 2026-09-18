@@ -23,7 +23,8 @@ class PretrainingOrderJson:
     # its meaning or a required one was added. A field an older reader ignores costs no bump.
     # Version 2: the configuration states the share of the corpus a run reads.
     # Version 3: it states the reading its hidden tokens are scored by.
-    VERSION: Final = 3
+    # Version 4: the order names the manifests of every corpus the run reads, in order.
+    VERSION: Final = 4
 
     def __init__(self) -> None:
         self._configurations = ExperimentConfigurationDocument()
@@ -34,7 +35,7 @@ class PretrainingOrderJson:
             "version": self.VERSION,
             "backbone": str(order.backbone),
             "configuration": self._configurations.encode(order.configuration),
-            "manifest": Fields.of_ref(order.manifest),
+            "manifests": [Fields.of_ref(manifest) for manifest in order.manifests],
             "run": order.run,
             "git_commit": order.git_commit,
             "signature": order.signature.digest,
@@ -64,7 +65,7 @@ class PretrainingOrderJson:
             return PretrainingOrder(
                 backbone=BackboneId.parse(fields.text("backbone")),
                 configuration=self._configurations.decode(fields.mapping("configuration")),
-                manifest=fields.ref("manifest"),
+                manifests=tuple(fields.refs("manifests")),
                 run=fields.text("run"),
                 git_commit=fields.text("git_commit"),
                 signature=RunSignature(fields.text("signature")),

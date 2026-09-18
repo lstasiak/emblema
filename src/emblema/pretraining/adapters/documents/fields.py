@@ -70,6 +70,9 @@ class Fields:
     def optional_ref(self, key: str) -> ArtifactRef | None:
         return None if self._document.get(key) is None else self.ref(key)
 
+    def refs(self, key: str) -> list[ArtifactRef]:
+        return [ArtifactRef(item.text("key"), item.checksum("checksum")) for item in self.each(key)]
+
     @staticmethod
     def of_checksum(checksum: Checksum) -> Document:
         return {"algorithm": str(checksum.algorithm), "digest": checksum.digest}

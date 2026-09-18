@@ -22,11 +22,11 @@ def test_the_document_names_its_format_and_what_a_reader_of_it_needs() -> None:
     document = json.loads(CODEC.encode(order()))
 
     assert document["format"] == "emblema.pretraining-order"
-    assert document["version"] == 3
+    assert document["version"] == 4
     assert set(document) >= {
         "backbone",
         "configuration",
-        "manifest",
+        "manifests",
         "run",
         "git_commit",
         "signature",
@@ -53,7 +53,8 @@ def test_bytes_that_are_not_an_order_are_refused(content: bytes, message: str) -
         ("backbone", "not-a-uuid", "UUID"),
         ("run", "", "run"),
         ("signature", "", "digest"),
-        ("manifest", {"key": "x"}, "checksum"),
+        ("manifests", [{"key": "x"}], "checksum"),
+        ("manifests", [], "at least one manifest"),
     ],
 )
 def test_an_order_that_breaks_its_own_rules_is_refused(
