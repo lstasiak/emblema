@@ -57,6 +57,10 @@ refused as in the SKAB reader; the released files never do.
   Describing it, which parses every file for the checksum and the counts, takes 10 s on the
   development machine; the sanity pass, which reads every stay again to fit the scheme, 58 s
   (`docs/verification/window-sanity.md`, 2026-09-18).
+- The extra minute of the extent is what lets the last stamp be read, not what puts it in a
+  window: a whole-stay window covers `[0, 48)`, so the rows stamped `48:00` — 455 in set A, 473 in
+  set B — are read, counted and checksummed but fall inside no window. Every corpus leaves such a
+  tail; here it is one minute wide.
 - Five channels never vary in the fitted data: the four ward tokens and `MechVent`, which the
   challenge records only while ventilation is on. Their statistics fall back to a scale of one and
   their normalised value is zero; what they carry is the channel identity, which is what a presence
