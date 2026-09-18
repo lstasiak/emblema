@@ -122,8 +122,11 @@ order names the manifests, and the verification note signs each corpus's window 
 numbers. SMD enters at 50 / 10 minutes, the window the saturation curve was measured at and the
 cheaper of the two published, as the first dial of scale ADR-0008 named.
 
-**The run says where it can be picked up from.** The training runtime logs, through the standard
-library's logging, one line for every checkpoint it writes — the reference, the step and the
+**The run says where it stands and where it can be picked up from.** The training runtime logs,
+through the standard library's logging, a line every so many optimiser steps — the step of the
+epoch, the loss since the last line, the seconds a step and the time left in the epoch and in
+the run at this session's pace, an interval the command line sets — one line for every
+checkpoint it writes — the reference, the step and the
 seconds since the session began, which a resumed run counts afresh — and one line at the end of
 every epoch with the loss of each corpus. The command line sends the log to standard error. The platform keeps the log of a
 session that ended on its limit, so the reference a dropped run is resumed from is read off the

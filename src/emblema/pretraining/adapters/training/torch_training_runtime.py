@@ -3,6 +3,7 @@ import math
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
+from typing import Self
 
 import torch
 
@@ -70,6 +71,42 @@ class _Session:
     best: _Best | None = None
 
 
+@dataclass
+class _Progress:
+    """What the log of an epoch's progress counts: the steps this session took and what they cost.
+
+    The pace is this session's, from the moment the epoch began here, so a run picked up in the
+    middle of an epoch reports the pace it has kept since, not one it inherited.
+    """
+
+    started: float
+    first_step: int
+    steps_in_epoch: int
+    steps_in_run: int
+    stepped: int = 0
+    reported: int = 0
+    error: float = 0.0
+    tokens: int = 0
+
+    @classmethod
+    def at(cls, session: _Session, batches: int) -> Self:
+        budget = session.configuration.budget
+        steps_in_epoch = budget.steps_per_epoch(batches)
+        return cls(
+            started=time.perf_counter(),
+            first_step=session.position.epoch * steps_in_epoch,
+            steps_in_epoch=steps_in_epoch,
+            steps_in_run=budget.epochs * steps_in_epoch,
+        )
+
+
+def _duration(seconds: float) -> str:
+    """Seconds as a person reads them off a log: whole minutes under an hour, hours above."""
+    if seconds < 3600:
+        return f"{max(seconds, 0.0) / 60:.0f} min"
+    return f"{seconds / 3600:.1f} h"
+
+
 class TorchTrainingRuntime:
     """Trains the objective in this process, on whatever device the machine has.
 
@@ -91,7 +128,12 @@ class TorchTrainingRuntime:
     """
 
     def __init__(
-        self, store: ArtifactStore, *, device: str | None = None, num_workers: int = 0
+        self,
+        store: ArtifactStore,
+        *,
+        device: str | None = None,
+        num_workers: int = 0,
+        progress_every: int = 0,
     ) -> None:
         """Train against ``store``, which keeps the checkpoints and the model.
 
@@ -100,11 +142,20 @@ class TorchTrainingRuntime:
             device: Where the arithmetic happens; the machine's accelerator unless given.
             num_workers: Processes collating batches, for each corpus of the mixture; zero
                 collates in this one.
+            progress_every: Optimiser steps between two lines of the log that say where the
+                epoch stands, what the loss has been since the last and how long is left; zero
+                says nothing between checkpoints and epochs.
+
+        Raises:
+            ValueError: If the progress interval is negative.
         """
+        if progress_every < 0:
+            raise ValueError(f"progress_every must not be negative, got {progress_every}")
         self._store = store
         self._device = available_device() if device is None else device
         self._generator = DeviceGenerator(self._device)
         self._num_workers = num_workers
+        self._progress_every = progress_every
 
     @property
     def device(self) -> str:
@@ -302,6 +353,7 @@ class TorchTrainingRuntime:
         checkpoint: ArtifactRef | None = None
         session.model.train()
         epoch_error, epoch_tokens, group_tokens = 0.0, 0, 0
+        progress = _Progress.at(session, batches)
         for index, on_host in enumerate(session.training.batches_of(session.position.epoch)):
             if index < skip:
                 continue
@@ -317,6 +369,7 @@ class TorchTrainingRuntime:
                     f"the loss of batch {index} in epoch {session.position.epoch} is {summed}, "
                     f"after {session.position.steps} steps"
                 )
+            progress.error += summed
             # Accumulated micro-batches make one gradient, and the error is summed rather than
             # averaged per batch so that each hidden token weighs the same whichever batch it
             # landed in. The sum is divided out of the gradients once, below, before the step.
@@ -325,6 +378,7 @@ class TorchTrainingRuntime:
             group_tokens += hidden
             epoch_error += summed
             epoch_tokens += hidden
+            progress.tokens += hidden
             stepped = budget.takes_a_step_at(index, batches)
             if stepped:
                 self._average_gradients(session, group_tokens)
@@ -339,6 +393,10 @@ class TorchTrainingRuntime:
                 session.scheduler.step()
                 group_tokens = 0
             session.position = session.position.after_batch(stepped=stepped)
+            if stepped:
+                progress.stepped += 1
+                if self._progress_every and progress.stepped % self._progress_every == 0:
+                    self._say_progress(session, progress)
             if (
                 stepped
                 and index + 1 < batches
@@ -346,6 +404,27 @@ class TorchTrainingRuntime:
             ):
                 checkpoint = self._write_checkpoint(session)
         return epoch_error / max(epoch_tokens, 1), checkpoint
+
+    @staticmethod
+    def _say_progress(session: _Session, progress: _Progress) -> None:
+        """Where the epoch stands, at the pace this session has kept since the epoch began."""
+        budget = session.configuration.budget
+        taken = session.position.steps - progress.first_step
+        a_step = (time.perf_counter() - progress.started) / max(progress.stepped, 1)
+        logger.info(
+            "epoch %d of %d, step %d of %d: loss %.5f over the last %d steps, %.2f s a step, "
+            "about %s left in the epoch and %s of training in the run",
+            session.position.epoch + 1,
+            budget.epochs,
+            taken,
+            progress.steps_in_epoch,
+            progress.error / max(progress.tokens, 1),
+            progress.stepped - progress.reported,
+            a_step,
+            _duration((progress.steps_in_epoch - taken) * a_step),
+            _duration((progress.steps_in_run - session.position.steps) * a_step),
+        )
+        progress.error, progress.tokens, progress.reported = 0.0, 0, progress.stepped
 
     @staticmethod
     def _average_gradients(session: _Session, tokens: int) -> None:

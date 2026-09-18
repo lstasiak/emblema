@@ -57,8 +57,9 @@ class PretrainCli:
 
     Standard output is the references a person copies into the next invocation, and nothing
     else: whatever a library prints while a use case runs goes to standard error, and so does
-    the run's log — each checkpoint written and each epoch's losses — which on a platform that
-    keeps the log of a dropped session is where the checkpoint to pick it up from is read.
+    the run's log — the epoch's progress every so many steps, each checkpoint written and each
+    epoch's losses — which on a platform that keeps the log of a dropped session is where the
+    checkpoint to pick it up from is read.
     """
 
     def __init__(self, revision: SourceRevision | None = None) -> None:
@@ -72,6 +73,7 @@ class PretrainCli:
             device=getattr(arguments, "device", None),
             tracking_uri=getattr(arguments, "track", None),
             num_workers=getattr(arguments, "num_workers", 0),
+            progress_every=getattr(arguments, "progress_every", 0),
         )
 
     def run(self, argv: Sequence[str] | None = None) -> None:  # pragma: no cover - environment
@@ -92,6 +94,7 @@ class PretrainCli:
                 command.result if isinstance(command, AcceptPretrainingResultCommand) else None
             ),
             num_workers=invocation.num_workers,
+            progress_every=invocation.progress_every,
         )
         with redirect_stdout(sys.stderr):
             printed = self.execute(command, root.services)
@@ -182,6 +185,13 @@ class PretrainCli:
         run.add_argument("--device", help="where to train; the machine's accelerator by default")
         self._reference(run, "--resume-from", "checkpoint of an interrupted run of this order")
         run.add_argument("--num-workers", type=int, default=0, help="batch collating processes")
+        run.add_argument(
+            "--progress-every",
+            type=int,
+            default=100,
+            metavar="STEPS",
+            help="log the epoch's progress every this many optimiser steps; 0 logs none",
+        )
         run.add_argument(
             "--track", help="MLflow tracking URI; the run is kept in memory unless given"
         )

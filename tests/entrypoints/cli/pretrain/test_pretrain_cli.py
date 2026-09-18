@@ -129,6 +129,8 @@ def test_a_run_fulfils_the_order_named_where_it_is_told_to_and_may_be_picked_up(
         "sqlite:///runs.db",
         "--num-workers",
         "2",
+        "--progress-every",
+        "50",
         "--workspace",
         "elsewhere",
     )
@@ -138,6 +140,7 @@ def test_a_run_fulfils_the_order_named_where_it_is_told_to_and_may_be_picked_up(
     assert (command.order, command.git_commit, command.resume_from) == (ORDER_REF, COMMIT, RESULT)
     assert (invocation.device, invocation.tracking_uri) == ("cpu", "sqlite:///runs.db")
     assert (invocation.num_workers, invocation.workspace) == (2, Path("elsewhere"))
+    assert invocation.progress_every == 50
 
 
 def test_accepting_names_the_result_and_where_to_record_it() -> None:

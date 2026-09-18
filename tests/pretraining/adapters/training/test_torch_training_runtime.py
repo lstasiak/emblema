@@ -344,3 +344,32 @@ def test_the_run_says_where_it_can_be_picked_up_from(caplog: pytest.LogCaptureFi
         message.startswith("epoch 1 of 1 done") and "invented validation" in message
         for message in said
     )
+
+
+def test_the_run_says_how_far_the_epoch_has_come_every_so_many_steps(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stated = configuration(budget=budget(epochs=2, batch_size=2, accumulation_steps=2))
+    runtime = TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu", progress_every=1)
+
+    with caplog.at_level("INFO", logger="emblema.pretraining"):
+        list(runtime.train(stated, MIXTURE))
+
+    progress = [
+        record.getMessage() for record in caplog.records if ", step " in record.getMessage()
+    ]
+    assert [message[: message.index(":")] for message in progress] == [
+        "epoch 1 of 2, step 1 of 2",
+        "epoch 1 of 2, step 2 of 2",
+        "epoch 2 of 2, step 1 of 2",
+        "epoch 2 of 2, step 2 of 2",
+    ]
+    assert all(
+        "over the last 1 steps" in message and "left in the epoch" in message
+        for message in progress
+    )
+
+
+def test_a_negative_progress_interval_is_refused() -> None:
+    with pytest.raises(ValueError, match="progress_every"):
+        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu", progress_every=-1)
