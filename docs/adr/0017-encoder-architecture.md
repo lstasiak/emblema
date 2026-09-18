@@ -236,3 +236,17 @@ the pooling, stands where the inference adapter will.
 - Shukla, S. N. and Marlin, B. M. (2021). Multi-Time Attention Networks for Irregularly Sampled
   Time Series. ICLR.
 - Horn, M. et al. (2020). Set Functions for Time Series. ICML.
+
+## 2026-09-18 — the first consumer decided: a factory the process wires
+
+Evaluation fine-tunes the encoder from this date, and the mechanism is the first of the three
+listed under *Revisit when*: the consumer's torch adapter takes a structural `BackboneFactory` —
+`pretrained(weights)`, `fresh()`, `width`, modules typed as `nn.Module` over the five tensors of a
+batch — and the process implements it beside its composition roots (`RestoredBackbones`), reading
+the model Pretraining stored. The encoder stays in `pretraining/adapters/encoder/`. The wiring
+argument and the threshold at which the choice flips are in ADR-0030.
+
+One module named in this record moved: `MaskedMeanPooling` is now
+`shared/adapters/tensors/masked_mean_pooling.py`. It carries no language of this context and
+three things pool the same states the same way — the export, a task's head, an inference graph —
+so it is shared the way the loading layer is (ADR-0013). Nothing else about the encoder changed.
