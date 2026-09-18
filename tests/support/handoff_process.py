@@ -71,8 +71,7 @@ class InMemoryHandoff:
 def order_command(**overrides: Any) -> OrderPretrainingCommand:
     stated: dict[str, Any] = {
         "configuration": CONFIGURATION,
-        "corpus": CORPUS.name,
-        "manifest": MANIFEST,
+        "corpora": ((CORPUS.name, MANIFEST),),
         "run": "first",
         "git_commit": COMMIT,
     }

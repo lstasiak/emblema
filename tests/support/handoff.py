@@ -21,11 +21,12 @@ from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.timestamps import UtcDateTime
-from tests.support.experiments import WEIGHTS, configuration, corpus, epoch_outcome
+from tests.support.experiments import WEIGHTS, configuration, corpus, epoch_outcome, mixture
 
 CORPUS = corpus()
+MIXTURE = mixture(CORPUS)
 CONFIGURATION = configuration()
-SIGNATURE = RunSignature.of(CONFIGURATION, CORPUS)
+SIGNATURE = RunSignature.of(CONFIGURATION, MIXTURE)
 MANIFEST = ArtifactRef("durable/manifest", Checksum.of_bytes(b"manifest"))
 ORDER_REF = ArtifactRef("durable/order", Checksum.of_bytes(b"order"))
 CHECKPOINT = ArtifactRef("transient/checkpoint", Checksum.of_bytes(b"checkpoint"))
@@ -57,7 +58,7 @@ def backbone(**overrides: Any) -> Backbone:
     stated: dict[str, Any] = {
         "id": backbone_id(),
         "configuration": CONFIGURATION,
-        "input": pretraining_input(),
+        "inputs": (pretraining_input(),),
         "run": "first",
         "git_commit": COMMIT,
         "signature": SIGNATURE,
@@ -70,7 +71,7 @@ def order(**overrides: Any) -> PretrainingOrder:
     stated: dict[str, Any] = {
         "backbone": backbone_id(),
         "configuration": CONFIGURATION,
-        "manifest": MANIFEST,
+        "manifests": (MANIFEST,),
         "run": "first",
         "git_commit": COMMIT,
         "signature": SIGNATURE,
@@ -96,7 +97,7 @@ def result(**overrides: Any) -> PretrainingResult:
         "order": ORDER_REF,
         "backbone": backbone_id(),
         "configuration": CONFIGURATION,
-        "corpus": CORPUS.shape,
+        "mixture": MIXTURE.shape,
         "git_commit": COMMIT,
         "resumed_from": None,
         "outcome": outcome(),

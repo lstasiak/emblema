@@ -52,7 +52,7 @@ def test_an_unknown_backbone_is_reported(backbones: BackboneRepository) -> None:
 def test_an_ordered_backbone_reads_back_whole(backbones: BackboneRepository) -> None:
     ordered = backbone(
         configuration=configuration(name="stored", budget=budget(seed=3, epochs=4)),
-        input=pretraining_input(vocabulary_size=17),
+        inputs=(pretraining_input(vocabulary_size=17),),
         run="second",
     )
 
@@ -84,3 +84,24 @@ def test_backbones_are_kept_apart_by_identity(backbones: BackboneRepository) -> 
 
     assert backbones.get(first.id).run == "first"
     assert backbones.get(second.id).run == "second"
+
+
+def test_a_backbone_over_several_corpora_reads_back_with_them_in_order(
+    backbones: BackboneRepository,
+) -> None:
+    mixed = backbone(
+        inputs=(
+            pretraining_input(),
+            pretraining_input(corpus="second", vocabulary_size=5),
+            pretraining_input(corpus="third", vocabulary_size=9),
+        )
+    )
+
+    backbones.save(mixed)
+
+    assert backbones.get(mixed.id) == mixed
+    assert [read.corpus for read in backbones.get(mixed.id).inputs] == [
+        "invented",
+        "second",
+        "third",
+    ]

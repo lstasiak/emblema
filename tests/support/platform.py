@@ -13,7 +13,7 @@ from emblema.pretraining.adapters.in_memory.training_runtime import InMemoryTrai
 from emblema.pretraining.domain.handoff.pretraining_result import PretrainingResult
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
-from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore
@@ -30,11 +30,11 @@ class SimulatedPlatform:
     def train(
         self,
         configuration: ExperimentConfiguration,
-        corpus: TrainingCorpus,
+        mixture: TrainingMixture,
         resume_from: ArtifactRef | None = None,
     ) -> Iterator[EpochOutcome]:
         epochs = list(
-            InMemoryTrainingRuntime(self._store).train(configuration, corpus, resume_from)
+            InMemoryTrainingRuntime(self._store).train(configuration, mixture, resume_from)
         )
         kept = epochs[-1].backbone
         assert kept is not None, "the in-memory runtime keeps the weights on the last epoch"
@@ -43,11 +43,11 @@ class SimulatedPlatform:
                 order=ORDER_REF,
                 backbone=backbone_id(),
                 configuration=configuration,
-                corpus=corpus.shape,
+                mixture=mixture.shape,
                 git_commit=COMMIT,
                 resumed_from=resume_from,
                 outcome=TrainingOutcome(backbone=kept, epochs=tuple(epochs)),
             )
         )
         replay = HandoffTrainingRuntime(self.exchange, self._store, reported)
-        yield from replay.train(configuration, corpus, resume_from)
+        yield from replay.train(configuration, mixture, resume_from)

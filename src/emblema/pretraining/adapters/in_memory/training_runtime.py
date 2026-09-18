@@ -8,7 +8,7 @@ from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.run_position import RunPosition
 from emblema.pretraining.domain.training.run_signature import RunSignature
-from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore, Retention
 
@@ -16,11 +16,13 @@ from emblema.shared.ports.artifact_store import ArtifactStore, Retention
 class InMemoryTrainingRuntime:
     """A run without the arithmetic: the shape of a training run and none of the learning.
 
-    It counts the epochs and the steps the configuration asks for, writes a checkpoint whenever
-    the policy says one is due and the model when the last epoch ends, and reports a loss that
-    falls because a curve that falls is what callers of the port are written against. Whoever
-    wants a model that learnt something asks the runtime that trains; whoever wants to know that
-    a caller logs every epoch, resumes where it stopped and keeps the last artifact does not need
+    It counts the epochs and the steps the configuration asks for over every corpus of the
+    mixture, writes a checkpoint whenever the policy says one is due, writes the weights of every
+    epoch because a loss that falls makes every epoch the best so far, and reports the last
+    epoch's as the backbone, which under a falling loss is the best epoch's. The loss falls
+    because a curve that falls is what callers of the port are written against. Whoever wants a
+    model that learnt something asks the runtime that trains; whoever wants to know that a caller
+    logs every epoch, resumes where it stopped and keeps the epoch the run kept does not need
     one, and does not need torch either.
     """
 
@@ -30,22 +32,25 @@ class InMemoryTrainingRuntime:
     def train(
         self,
         configuration: ExperimentConfiguration,
-        corpus: TrainingCorpus,
+        mixture: TrainingMixture,
         resume_from: ArtifactRef | None = None,
     ) -> Iterator[EpochOutcome]:
-        signature = RunSignature.of(configuration, corpus)
-        batches = ceil(len(corpus.training) / configuration.budget.batch_size)
+        signature = RunSignature.of(configuration, mixture)
+        batches = sum(
+            ceil(len(corpus.training) / configuration.budget.batch_size)
+            for corpus in mixture.corpora
+        )
         position = (
             RunPosition.start()
             if resume_from is None
             else self._resumed(resume_from, signature, configuration, batches)
         )
-        return self._epochs(configuration, corpus, signature, position, batches)
+        return self._epochs(configuration, mixture, signature, position, batches)
 
     def _epochs(
         self,
         configuration: ExperimentConfiguration,
-        corpus: TrainingCorpus,
+        mixture: TrainingMixture,
         signature: RunSignature,
         position: RunPosition,
         batches: int,
@@ -66,21 +71,24 @@ class InMemoryTrainingRuntime:
             # measurement, and calling them one anywhere would be a lie. The trivial predictor is
             # given a loss of one for the same reason, so that the relative loss is the shape too.
             falling = 1.0 / (position.epoch + 1)
+            weights = self._model(signature, mixture, position.epoch)
             yield EpochOutcome(
                 epoch=position.epoch,
                 training_loss=falling,
-                validation=(
+                validation=tuple(
                     CorpusValidation(
                         corpus=corpus.name,
                         tokens=len(corpus.validation),
                         loss=falling,
                         trivial=1.0,
-                    ),
+                    )
+                    for corpus in mixture.corpora
                 ),
                 hidden_ratio=configuration.masking.expected_ratio,
                 seconds=0.0,
                 checkpoint=checkpoint,
-                backbone=self._model(signature, corpus) if final else None,
+                weights=weights,
+                backbone=weights if final else None,
             )
             position = position.next_epoch()
 
@@ -126,6 +134,6 @@ class InMemoryTrainingRuntime:
         }
         return self._store.put(json.dumps(state, sort_keys=True).encode(), retention)
 
-    def _model(self, signature: RunSignature, corpus: TrainingCorpus) -> ArtifactRef:
-        stated = {"signature": signature.digest, "corpus": corpus.name}
+    def _model(self, signature: RunSignature, mixture: TrainingMixture, epoch: int) -> ArtifactRef:
+        stated = {"signature": signature.digest, "corpora": mixture.name, "epoch": epoch}
         return self._store.put(json.dumps(stated, sort_keys=True).encode(), Retention.DURABLE)

@@ -5,6 +5,7 @@ from emblema.pretraining.application.use_cases.pretrain_backbone import (
     PretrainBackboneCommand,
 )
 from emblema.pretraining.domain.handoff.pretraining_result import PretrainingResult
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.ports.handoff_exchange import HandoffExchange
 from emblema.pretraining.ports.training_corpus_reader import TrainingCorpusReader
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -30,8 +31,8 @@ class FulfilPretrainingOrder:
     """Runs an order on this machine and reports the result back through the exchange.
 
     What the machine that trains does, whichever machine it is: read the order, stop if the code
-    running here is not the code ordered, read the corpus the order names and stop if it is not
-    the corpus ordered, train through the same use case a run of any kind goes through, and
+    running here is not the code ordered, read the corpora the order names and stop if they are
+    not the data ordered, train through the same use case a run of any kind goes through, and
     report what came out with the facts the acceptance will check. Both stops come before the
     run, because a result the acceptance would refuse is a session of an accelerator wasted.
     """
@@ -48,18 +49,24 @@ class FulfilPretrainingOrder:
 
         Raises:
             PretrainingOrderRejectedError: If this machine runs other code than the order names,
-                or the corpus read is not the one the order signed.
+                or the corpora read are not the data the order signed.
+            InvalidTrainingMixtureError: If the corpora read are not a chain of one vocabulary.
             UnreadableHandoffDocumentError: If what the reference names is not an order.
-            UnreadablePublishedCorpusError: If the manifest or its block cannot be read.
+            UnreadablePublishedCorpusError: If a manifest or its block cannot be read.
         """
         order = self._exchange.read_order(command.order)
         order.require_commit(command.git_commit)
-        corpus = self._reader.read(order.manifest, order.configuration.corpus_share)
-        order.require_read(corpus)
+        mixture = TrainingMixture(
+            corpora=tuple(
+                self._reader.read(manifest, order.configuration.corpus_share)
+                for manifest in order.manifests
+            )
+        )
+        order.require_read(mixture)
         outcome = self._pretrain(
             PretrainBackboneCommand(
                 configuration=order.configuration,
-                corpus=corpus,
+                mixture=mixture,
                 run=order.run,
                 resume_from=command.resume_from,
             )
@@ -69,7 +76,7 @@ class FulfilPretrainingOrder:
                 order=command.order,
                 backbone=order.backbone,
                 configuration=order.configuration,
-                corpus=corpus.shape,
+                mixture=mixture.shape,
                 git_commit=command.git_commit,
                 resumed_from=command.resume_from,
                 outcome=outcome,

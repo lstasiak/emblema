@@ -17,6 +17,21 @@ def test_a_run_reports_the_epochs_it_ran_and_the_weights_of_its_last() -> None:
     assert outcome.hidden_ratio == 0.46
 
 
+def test_the_best_epoch_is_the_one_whose_weights_the_run_kept() -> None:
+    kept = TrainingOutcome(
+        backbone=WEIGHTS,
+        epochs=(epoch(0, weights=OTHER), epoch(1, weights=WEIGHTS), epoch(2, backbone=WEIGHTS)),
+    )
+
+    assert kept.best_epoch == 1
+
+
+def test_a_run_that_kept_inherited_weights_names_no_epoch_of_its_own() -> None:
+    inherited = TrainingOutcome(backbone=WEIGHTS, epochs=(epoch(3), epoch(4, backbone=WEIGHTS)))
+
+    assert inherited.best_epoch is None
+
+
 def test_a_resumed_run_need_not_begin_at_the_first_epoch() -> None:
     outcome = TrainingOutcome(backbone=WEIGHTS, epochs=(epoch(3), epoch(4, backbone=WEIGHTS)))
 

@@ -9,7 +9,7 @@ from emblema.pretraining.domain.exceptions import (
 from emblema.pretraining.domain.identifiers import BackboneId
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.run_signature import RunSignature
-from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.kernel.artifacts import ArtifactRef
 
 
@@ -17,25 +17,27 @@ from emblema.shared.kernel.artifacts import ArtifactRef
 class PretrainingOrder:
     """What a machine outside this system is asked to run, complete enough to run and to prove.
 
-    Everything the run needs — the configuration and the manifest of the corpus — and everything
-    the result is held to: which backbone it is for, the revision the code is to be at, and the
-    signature the machine must find when it reads the corpus, so that one running other code or
-    reading the wrong data stops before it trains rather than after.
+    Everything the run needs — the configuration and the manifests of the corpora, in the order
+    they are read — and everything the result is held to: which backbone it is for, the revision
+    the code is to be at, and the signature the machine must find when it reads the corpora, so
+    that one running other code or reading the wrong data stops before it trains rather than
+    after.
 
-    Invariants: the run name and the commit are non-empty without surrounding whitespace.
+    Invariants: the run name and the commit are non-empty without surrounding whitespace; at
+    least one manifest is named, none twice.
 
     Attributes:
         backbone: The backbone the run is for.
         configuration: The experiment to run.
-        manifest: The published corpus to read.
+        manifests: The published corpora to read, in the order their vocabulary was chained.
         run: Name of the run within the experiment.
         git_commit: Revision of the code the run is to be made with.
-        signature: What the run is: the configuration over the corpus as read when ordered.
+        signature: What the run is: the configuration over the corpora as read when ordered.
     """
 
     backbone: BackboneId
     configuration: ExperimentConfiguration
-    manifest: ArtifactRef
+    manifests: tuple[ArtifactRef, ...]
     run: str
     git_commit: str
     signature: RunSignature
@@ -46,6 +48,10 @@ class PretrainingOrder:
                 raise InvalidPretrainingOrderError(
                     f"{label} must be non-empty without surrounding whitespace"
                 )
+        if not self.manifests:
+            raise InvalidPretrainingOrderError("an order names at least one manifest")
+        if len(set(self.manifests)) != len(self.manifests):
+            raise InvalidPretrainingOrderError("an order names no manifest twice")
 
     @classmethod
     def of(cls, backbone: Backbone) -> Self:
@@ -53,23 +59,23 @@ class PretrainingOrder:
         return cls(
             backbone=backbone.id,
             configuration=backbone.configuration,
-            manifest=backbone.input.manifest,
+            manifests=tuple(read.manifest for read in backbone.inputs),
             run=backbone.run,
             git_commit=backbone.git_commit,
             signature=backbone.signature,
         )
 
-    def require_read(self, corpus: TrainingCorpus) -> None:
-        """Stop a run over a corpus other than the one ordered, before it trains.
+    def require_read(self, mixture: TrainingMixture) -> None:
+        """Stop a run over data other than the data ordered, before it trains.
 
         Raises:
-            PretrainingOrderRejectedError: If the configuration over ``corpus`` is not the run
+            PretrainingOrderRejectedError: If the configuration over ``mixture`` is not the run
                 the order signed.
         """
-        found = RunSignature.of(self.configuration, corpus)
+        found = RunSignature.of(self.configuration, mixture)
         if found != self.signature:
             raise PretrainingOrderRejectedError(
-                f"the corpus read signs run {found}, the order is for run {self.signature}"
+                f"the corpora read sign run {found}, the order is for run {self.signature}"
             )
 
     def require_commit(self, git_commit: str) -> None:

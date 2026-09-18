@@ -7,11 +7,12 @@ from emblema.pretraining.domain.exceptions import (
     PretrainingResultRejectedError,
 )
 from emblema.pretraining.domain.training.run_signature import RunSignature
-from tests.support.experiments import budget, configuration, corpus
+from tests.support.experiments import budget, configuration, continued, corpus, mixture
 from tests.support.handoff import (
     CHECKPOINT,
     CONFIGURATION,
     CORPUS,
+    MIXTURE,
     OTHER_COMMIT,
     backbone,
     backbone_id,
@@ -20,28 +21,28 @@ from tests.support.handoff import (
 
 
 def test_the_signature_is_computed_from_what_the_result_states() -> None:
-    assert result().signature == RunSignature.of(CONFIGURATION, CORPUS)
-    assert result(corpus=corpus(seed=7).shape).signature != result().signature
+    assert result().signature == RunSignature.of(CONFIGURATION, MIXTURE)
+    assert result(mixture=mixture(corpus(seed=7)).shape).signature != result().signature
 
 
 def test_the_run_ordered_is_accepted_as_a_run_of_it() -> None:
-    result().require_run_of(CONFIGURATION, CORPUS.shape, None)
-    result(resumed_from=CHECKPOINT).require_run_of(CONFIGURATION, CORPUS.shape, CHECKPOINT)
+    result().require_run_of(CONFIGURATION, MIXTURE.shape, None)
+    result(resumed_from=CHECKPOINT).require_run_of(CONFIGURATION, MIXTURE.shape, CHECKPOINT)
 
 
 def test_a_result_of_another_configuration_is_refused_naming_the_parameter() -> None:
     delivered = result(configuration=configuration(budget=budget(seed=2)))
 
     with pytest.raises(PretrainingResultRejectedError, match=r"seed=2 for 1"):
-        delivered.require_run_of(CONFIGURATION, CORPUS.shape, None)
+        delivered.require_run_of(CONFIGURATION, MIXTURE.shape, None)
 
 
 def test_a_result_over_other_data_is_refused_naming_the_checksums() -> None:
     other = corpus(seed=7)
-    delivered = result(corpus=other.shape)
+    delivered = result(mixture=mixture(other).shape)
 
     with pytest.raises(PretrainingResultRejectedError) as refused:
-        delivered.require_run_of(CONFIGURATION, CORPUS.shape, None)
+        delivered.require_run_of(CONFIGURATION, MIXTURE.shape, None)
 
     assert str(other.checksum) in str(refused.value)
     assert str(CORPUS.checksum) in str(refused.value)
@@ -49,9 +50,9 @@ def test_a_result_over_other_data_is_refused_naming_the_checksums() -> None:
 
 def test_a_result_picked_up_from_another_checkpoint_is_refused() -> None:
     with pytest.raises(PretrainingResultRejectedError, match="picked up from the start"):
-        result().require_run_of(CONFIGURATION, CORPUS.shape, CHECKPOINT)
+        result().require_run_of(CONFIGURATION, MIXTURE.shape, CHECKPOINT)
     with pytest.raises(PretrainingResultRejectedError, match=CHECKPOINT.key):
-        result(resumed_from=CHECKPOINT).require_run_of(CONFIGURATION, CORPUS.shape, None)
+        result(resumed_from=CHECKPOINT).require_run_of(CONFIGURATION, MIXTURE.shape, None)
 
 
 def test_the_delivery_a_backbone_waits_for_is_accepted() -> None:
@@ -77,7 +78,7 @@ def test_a_delivery_of_another_configuration_is_refused_naming_the_parameter() -
 
 def test_a_delivery_over_other_data_is_refused_naming_the_checksums() -> None:
     other = corpus(seed=7)
-    delivered = result(corpus=other.shape)
+    delivered = result(mixture=mixture(other).shape)
 
     with pytest.raises(PretrainingResultRejectedError, match="ordered on") as refused:
         delivered.require_delivery_for(backbone())
@@ -89,10 +90,31 @@ def test_a_delivery_over_other_data_is_refused_naming_the_checksums() -> None:
 def test_a_delivery_of_the_same_data_read_as_other_windows_is_refused_by_signature() -> None:
     # The same block and vocabulary, split into other counts: nothing but the signature, which
     # the registry keeps and the windows are not needed for, can tell the two runs apart.
-    delivered = result(corpus=replace(CORPUS.shape, training_windows=6))
+    delivered = result(
+        mixture=replace(MIXTURE.shape, corpora=(replace(CORPUS.shape, training_windows=6),))
+    )
 
     with pytest.raises(PretrainingResultRejectedError, match=r"signs run.*6 training"):
         delivered.require_delivery_for(backbone())
+
+
+def test_a_delivery_over_fewer_corpora_than_ordered_is_refused_naming_them() -> None:
+    second = continued(name="second", seed=2)
+    ordered = backbone(
+        inputs=(
+            backbone().inputs[0],
+            replace(
+                backbone().inputs[0],
+                corpus="second",
+                block_checksum=second.checksum,
+                vocabulary_size=second.vocabulary_size,
+            ),
+        ),
+        signature=RunSignature.of(CONFIGURATION, mixture(CORPUS, second)),
+    )
+
+    with pytest.raises(PretrainingResultRejectedError, match=r"ordered on .*'second'"):
+        result().require_delivery_for(ordered)
 
 
 def test_a_blank_commit_is_refused() -> None:

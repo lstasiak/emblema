@@ -21,12 +21,12 @@ from emblema.pretraining.domain.exceptions import IncompatibleCheckpointError
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
-from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.ports.training_runtime import TrainingRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore, Retention
-from tests.support.experiments import budget, configuration, corpus
+from tests.support.experiments import budget, configuration, continued, corpus, mixture
 from tests.support.platform import SimulatedPlatform
 
 torch = pytest.importorskip("torch")
@@ -40,6 +40,7 @@ pytestmark = pytest.mark.ml
 # Eight training windows in batches of two: four micro-batches an epoch, so a checkpoint every
 # third step falls inside an epoch and one every fourth falls on its last step.
 CORPUS = corpus(training=8, validation=4)
+MIXTURE = mixture(CORPUS)
 BATCHES_PER_EPOCH = 4
 
 ADAPTERS: dict[str, Callable[[ArtifactStore], TrainingRuntime]] = {
@@ -99,9 +100,9 @@ def run(
     runtime: TrainingRuntime,
     configured: ExperimentConfiguration,
     resume_from: ArtifactRef | None = None,
-    corpus_read: TrainingCorpus = CORPUS,
+    read: TrainingMixture = MIXTURE,
 ) -> list[EpochOutcome]:
-    return list(runtime.train(configured, corpus_read, resume_from))
+    return list(runtime.train(configured, read, resume_from))
 
 
 def test_a_run_reports_one_outcome_per_epoch_in_order(
@@ -120,6 +121,31 @@ def test_the_weights_are_reported_on_the_last_epoch_and_nowhere_else(
     assert outcomes[0].backbone is None
     assert outcomes[-1].backbone is not None
     assert store.exists(outcomes[-1].backbone)
+
+
+def test_the_backbone_is_the_weights_of_the_epoch_the_run_kept(
+    build: Callable[[ArtifactStore], TrainingRuntime], store: InMemoryArtifactStore
+) -> None:
+    outcomes = run(build(store), stated())
+
+    kept = [outcome.weights for outcome in outcomes if outcome.weights is not None]
+    assert kept, "an epoch that is the best so far leaves its weights"
+    assert outcomes[-1].backbone in kept
+    assert all(store.exists(weights) for weights in kept)
+
+
+def test_a_run_over_several_corpora_scores_each_of_them_every_epoch(
+    build: Callable[[ArtifactStore], TrainingRuntime], store: InMemoryArtifactStore
+) -> None:
+    mixed = mixture(CORPUS, continued(name="second", seed=2, training=4, validation=2))
+
+    outcomes = run(build(store), stated(), read=mixed)
+
+    assert [outcome.epoch for outcome in outcomes] == [0, 1]
+    assert all(
+        [scored.corpus for scored in outcome.validation] == ["invented", "second"]
+        for outcome in outcomes
+    )
 
 
 def test_a_checkpoint_is_written_when_the_policy_asks_and_is_readable(
@@ -179,7 +205,12 @@ def test_a_checkpoint_of_the_same_run_over_another_corpus_is_refused(
     interrupted = run(build(store), configured)
 
     with pytest.raises(IncompatibleCheckpointError):
-        run(build(store), configured, interrupted[0].checkpoint, corpus(training=8, name="other"))
+        run(
+            build(store),
+            configured,
+            interrupted[0].checkpoint,
+            mixture(corpus(training=8, name="other")),
+        )
 
 
 def test_a_run_that_has_finished_cannot_be_picked_up(
@@ -197,7 +228,7 @@ def test_nothing_is_written_until_the_first_outcome_is_asked_for(
 ) -> None:
     counting = CountingStore()
 
-    epochs: Iterator[EpochOutcome] = build(counting).train(stated(), CORPUS)
+    epochs: Iterator[EpochOutcome] = build(counting).train(stated(), MIXTURE)
 
     assert counting.writes == 0
     next(epochs)

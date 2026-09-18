@@ -9,6 +9,7 @@ from emblema.pretraining.domain.identifiers import BackboneId
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.pretraining.domain.training.training_corpus_shape import TrainingCorpusShape
+from emblema.pretraining.domain.training.training_mixture_shape import TrainingMixtureShape
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
 from emblema.shared.kernel.artifacts import ArtifactRef
 
@@ -17,7 +18,7 @@ from emblema.shared.kernel.artifacts import ArtifactRef
 class PretrainingResult:
     """What a machine outside this system reports back: the order it took and what the run made.
 
-    It states what the run actually did — the configuration it trained under, the shape of the
+    It states what the run actually did — the configuration it trained under, the shape of each
     corpus it read, the revision of the code, the checkpoint it was picked up from — rather than
     claiming it did what was ordered, so that acceptance compares facts with the order and says
     which of them differs. A result that differs in the configuration and one that differs in
@@ -29,7 +30,7 @@ class PretrainingResult:
         order: The order fulfilled.
         backbone: The backbone the order was for.
         configuration: The experiment the run trained under.
-        corpus: The corpus the run read, as its shape.
+        mixture: The corpora the run read, as their shapes, in the order read.
         git_commit: Revision of the code the run was made with.
         resumed_from: Checkpoint the run was picked up from; ``None`` for a run from the start.
         outcome: What the run produced.
@@ -38,7 +39,7 @@ class PretrainingResult:
     order: ArtifactRef
     backbone: BackboneId
     configuration: ExperimentConfiguration
-    corpus: TrainingCorpusShape
+    mixture: TrainingMixtureShape
     git_commit: str
     resumed_from: ArtifactRef | None
     outcome: TrainingOutcome
@@ -52,30 +53,25 @@ class PretrainingResult:
     @property
     def signature(self) -> RunSignature:
         """What the run was, computed from what the result states rather than copied."""
-        return RunSignature.of_shape(self.configuration, self.corpus)
+        return RunSignature.of_shape(self.configuration, self.mixture)
 
     def require_run_of(
         self,
         configuration: ExperimentConfiguration,
-        corpus: TrainingCorpusShape,
+        mixture: TrainingMixtureShape,
         resume_from: ArtifactRef | None,
     ) -> None:
-        """Refuse the result unless it is the run of ``configuration`` over ``corpus``.
+        """Refuse the result unless it is the run of ``configuration`` over ``mixture``.
 
         Raises:
             PretrainingResultRejectedError: Naming what differs — the configuration, the data or
                 the checkpoint the run was picked up from.
         """
         self._require_configuration(configuration)
-        if self.corpus != corpus:
+        if self.mixture != mixture:
             raise PretrainingResultRejectedError(
-                f"the result read corpus {self.corpus.name!r} with checksum "
-                f"{self.corpus.checksum}, {self.corpus.training_windows} training and "
-                f"{self.corpus.validation_windows} validation windows over "
-                f"{self.corpus.vocabulary_size} channels; the data ordered is "
-                f"{corpus.name!r} with checksum {corpus.checksum}, {corpus.training_windows} "
-                f"training and {corpus.validation_windows} validation windows over "
-                f"{corpus.vocabulary_size} channels"
+                f"the result read {self._describe(self.mixture)}; the data ordered is "
+                f"{self._describe(mixture)}"
             )
         if self.resumed_from != resume_from:
             raise PretrainingResultRejectedError(
@@ -88,7 +84,7 @@ class PretrainingResult:
 
         What differs is named in the order it is fixed in: the backbone, the code, the
         configuration by parameter, the data by checksum, and last the signature, which by then
-        can differ only in how many windows each side of the corpus held when it was read.
+        can differ only in how many windows each side of a corpus held when it was read.
 
         Raises:
             PretrainingResultRejectedError: If the result is for another backbone, was made with
@@ -105,25 +101,31 @@ class PretrainingResult:
                 f"the backbone was ordered at {backbone.git_commit}"
             )
         self._require_configuration(backbone.configuration)
-        ordered = backbone.input
-        if (self.corpus.name, self.corpus.checksum, self.corpus.vocabulary_size) != (
-            ordered.corpus,
-            ordered.block_checksum,
-            ordered.vocabulary_size,
-        ):
+        trained_on = [
+            (corpus.name, corpus.checksum, corpus.vocabulary_size)
+            for corpus in self.mixture.corpora
+        ]
+        ordered = [
+            (given.corpus, given.block_checksum, given.vocabulary_size) for given in backbone.inputs
+        ]
+        if trained_on != ordered:
             raise PretrainingResultRejectedError(
-                f"the result read corpus {self.corpus.name!r} with checksum "
-                f"{self.corpus.checksum} over {self.corpus.vocabulary_size} channels; the "
-                f"backbone was ordered on {ordered.corpus!r} with checksum "
-                f"{ordered.block_checksum} over {ordered.vocabulary_size} channels"
+                f"the result read {self._describe(self.mixture)}; the backbone was ordered on "
+                + ", ".join(
+                    f"{name!r} with checksum {checksum} over {size} channels"
+                    for name, checksum, size in ordered
+                )
             )
         if self.signature != backbone.signature:
             raise PretrainingResultRejectedError(
                 f"the result signs run {self.signature}, the backbone was ordered as run "
                 f"{backbone.signature}: the same configuration and data, read as "
-                f"{self.corpus.training_windows} training and "
-                f"{self.corpus.validation_windows} validation windows where the order was "
-                f"signed over other counts"
+                + ", ".join(
+                    f"{corpus.training_windows} training and {corpus.validation_windows} "
+                    f"validation windows of {corpus.name!r}"
+                    for corpus in self.mixture.corpora
+                )
+                + " where the order was signed over other counts"
             )
 
     def _require_configuration(self, expected: ExperimentConfiguration) -> None:
@@ -137,6 +139,18 @@ class PretrainingResult:
         raise PretrainingResultRejectedError(
             f"the result trained under configuration {self.configuration.name!r} "
             f"with parameters that differ from the ones ordered: {differing}"
+        )
+
+    @classmethod
+    def _describe(cls, mixture: TrainingMixtureShape) -> str:
+        return ", ".join(cls._describe_corpus(corpus) for corpus in mixture.corpora)
+
+    @staticmethod
+    def _describe_corpus(corpus: TrainingCorpusShape) -> str:
+        return (
+            f"corpus {corpus.name!r} with checksum {corpus.checksum}, "
+            f"{corpus.training_windows} training and {corpus.validation_windows} validation "
+            f"windows over {corpus.vocabulary_size} channels"
         )
 
     @staticmethod

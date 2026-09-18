@@ -3,7 +3,7 @@ from collections.abc import Iterator
 from emblema.pretraining.domain.exceptions import PretrainingResultRejectedError
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
-from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.ports.handoff_exchange import HandoffExchange
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore
@@ -34,7 +34,7 @@ class HandoffTrainingRuntime:
     def train(
         self,
         configuration: ExperimentConfiguration,
-        corpus: TrainingCorpus,
+        mixture: TrainingMixture,
         resume_from: ArtifactRef | None = None,
     ) -> Iterator[EpochOutcome]:
         """The epochs the other machine reported, once the result is held to this run.
@@ -46,7 +46,7 @@ class HandoffTrainingRuntime:
             ArtifactNotFoundError: If the result is not in the store.
         """
         result = self._exchange.read_result(self._result)
-        result.require_run_of(configuration, corpus.shape, resume_from)
+        result.require_run_of(configuration, mixture.shape, resume_from)
         if not self._store.exists(result.outcome.backbone):
             raise PretrainingResultRejectedError(
                 f"the result names weights under {result.outcome.backbone.key!r} "

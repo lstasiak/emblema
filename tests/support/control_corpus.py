@@ -20,6 +20,9 @@ from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_archive import CorpusArchive
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
+from emblema.pretraining.adapters.blocks.block_training_corpus_reader import (
+    BlockTrainingCorpusReader,
+)
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
@@ -44,6 +47,14 @@ class Control(NamedTuple):
     def vocabulary_size(self) -> int:
         """Entries of the vocabulary the second corpus continued from the first."""
         return len(self.manifests[1].scheme.vocabulary)
+
+    @property
+    def channels(self) -> tuple[str, ...]:
+        """The names of that vocabulary's channels, in identifier order."""
+        return tuple(
+            BlockTrainingCorpusReader.channel_name(entry.corpus, entry.channel)
+            for entry in self.manifests[1].scheme.vocabulary.entries
+        )
 
 
 def publish_control(workspace: Path) -> Control:

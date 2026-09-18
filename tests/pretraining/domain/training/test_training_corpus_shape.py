@@ -5,7 +5,8 @@ import pytest
 from emblema.pretraining.domain.exceptions import InvalidTrainingCorpusError
 from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.pretraining.domain.training.training_corpus_shape import TrainingCorpusShape
-from tests.support.experiments import configuration, corpus
+from emblema.pretraining.domain.training.training_mixture_shape import TrainingMixtureShape
+from tests.support.experiments import configuration, corpus, mixture
 
 READ = corpus(training=8, validation=4)
 
@@ -23,7 +24,9 @@ def test_the_shape_of_a_corpus_is_its_counts_beside_its_identity() -> None:
 def test_a_run_signs_the_same_from_the_corpus_and_from_its_shape() -> None:
     stated = configuration()
 
-    assert RunSignature.of_shape(stated, READ.shape) == RunSignature.of(stated, READ)
+    assert RunSignature.of_shape(
+        stated, TrainingMixtureShape(corpora=(READ.shape,))
+    ) == RunSignature.of(stated, mixture(READ))
 
 
 @pytest.mark.parametrize(

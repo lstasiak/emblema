@@ -14,6 +14,9 @@ from emblema.catalog.contracts.published_channel import PublishedChannel
 from emblema.catalog.contracts.published_channel_statistics import PublishedChannelStatistics
 from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
+from emblema.pretraining.adapters.blocks.block_training_corpus_reader import (
+    BlockTrainingCorpusReader,
+)
 from emblema.pretraining.domain.backbone.pretraining_input import PretrainingInput
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.shared.adapters.windows.window_block_writer import WindowBlockWriter
@@ -107,7 +110,10 @@ def publish(store: ArtifactStore, workspace: Path) -> PublishedCorpus:
         checksum=block.checksum,
         training=[stored_at(FIRST), stored_at(SECOND), stored_at(OTHER)],
         validation=[stored_at(HELD_OUT)],
-        vocabulary_size=len(CHANNELS),
+        channels=tuple(
+            BlockTrainingCorpusReader.channel_name(channel.corpus, channel.channel)
+            for channel in CHANNELS
+        ),
     )
     return PublishedCorpus(manifest, block, described, corpus)
 
