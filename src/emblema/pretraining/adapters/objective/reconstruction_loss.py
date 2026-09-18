@@ -49,16 +49,22 @@ class ReconstructionLoss(nn.Module):
         applied across them.
         """
         scored = positions & ~batch.padding_mask
-        losses = self.of_tokens(prediction, batch) * scored.to(prediction.dtype)
+        losses = self.of_tokens(prediction, batch) * scored.to(losses_dtype(prediction))
         return losses.sum(), scored.sum()
 
     def of_tokens(self, prediction: Tensor, batch: TokenTensors) -> Tensor:
         """Per position, what the run's reading makes of the distance from the token's target.
 
         Nothing is masked here, padding included: this is the one place the target is read, for
-        whoever sums the losses over positions of their own choosing.
+        whoever sums the losses over positions of their own choosing. Read in single precision
+        at least, whatever the prediction came in: a half-precision sum over one batch of a
+        corpus with excursions of hundreds of deviations passes 65,504 and comes back infinite,
+        and a target cast to half loses the excursion's value before it is scored. A prediction
+        read in double keeps its double.
         """
-        target = batch.features[..., 0].to(prediction.dtype)
+        dtype = losses_dtype(prediction)
+        prediction = prediction.to(dtype)
+        target = batch.features[..., 0].to(dtype)
         if self.loss.kind is LossKind.MSE:
             return functional.mse_loss(prediction, target, reduction="none")
         return functional.huber_loss(
@@ -73,3 +79,8 @@ class ReconstructionLoss(nn.Module):
         things divided by each other.
         """
         return self.summed(torch.zeros_like(batch.features[..., 0]), batch, positions)
+
+
+def losses_dtype(prediction: Tensor) -> torch.dtype:
+    """The precision the losses are read in: the prediction's, widened to single at least."""
+    return torch.promote_types(prediction.dtype, torch.float32)
