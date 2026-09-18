@@ -19,6 +19,7 @@ from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCo
 from emblema.catalog.domain.exceptions import InvalidUnitSplitError
 from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
+from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
 from emblema.entrypoints.cli.publish_corpus.publish_corpus_cli import (
     SEED,
     VALIDATION_FRACTION,
@@ -144,6 +145,24 @@ def test_the_corpus_asked_for_decides_which_adapter_reads_it(tmp_path: Path) -> 
     )
 
     assert isinstance(root.adapters.reader, SyntheticCorpusReader)
+
+
+@pytest.mark.parametrize("corpus", KnownCorpora.default().names())
+def test_every_corpus_the_command_line_offers_has_an_adapter_that_reads_it(
+    tmp_path: Path, corpus: str
+) -> None:
+    # The names the parser accepts and the names the root has a reader for are two lists kept by
+    # hand. A corpus on the first and missing from the second is refused only once a run has been
+    # started, with the raw data already fetched and named on the command line.
+    root = CompositionRoot.over(
+        corpora=InMemoryCorpusRepository(),
+        store=InMemoryArtifactStore(),
+        corpus=corpus,
+        corpus_root=tmp_path / "raw",
+        workspace=tmp_path / "workspace",
+    )
+
+    assert type(root.adapters.reader).__module__.startswith("emblema.catalog.adapters")
 
 
 def test_a_corpus_no_adapter_reads_is_refused_when_the_process_is_assembled(tmp_path: Path) -> None:
