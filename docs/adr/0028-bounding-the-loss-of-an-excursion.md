@@ -1,6 +1,6 @@
 # ADR-0028: Bounding what one excursion costs — the objective's loss is a parameter of the experiment, a mixed run reports validation per corpus, and the satellite corpus is split so that its excursions lie on both sides
 
-- Status: proposed
+- Status: accepted (2026-09-18, on the measurement in the dated section below)
 - Date: 2026-09-17
 
 ## Context
@@ -152,6 +152,23 @@ on tokens no held-out month repeats, and a reading does not change what the grad
   squared error then stops being the default for anything.
 - A corpus arrives whose excursions are its signal rather than its anomalies: the bound is then
   per corpus in the mix, not per run.
+
+## 2026-09-18 — measured
+
+The curve the first revisit condition waited for is drawn (`docs/verification/corpus-saturation.md`,
+section of 2026-09-18): the small shape over the satellite corpus, at the first leg's budget to
+the step, under the Huber loss with its knee at one standard deviation, over the version whose
+held-out months were named. It reads **data-limited**: 0.555, 0.474, 0.397 and 0.270 of the
+channel mean's loss on the held-out months at a tenth, a quarter, half and the whole of the
+training months, each share lower than the one before, the gap between the sides closing from
+3.8× to 1.2×, and the whole share still falling when its two epochs end. The same shape at the
+same steps under the squared error over the drawn split read *not learnt* at every share.
+
+What it settles: the satellite corpus's difficulty was its loss and its split, not its data, and
+the corpus enters the mixed run as an ingredient that is still learning at the whole of itself.
+The record's three decisions stand as made; the first revisit condition is spent. What it does
+not settle: the knee is one value, measured once, and its weight in the mix is the mixed run's
+own decision. The status moves to accepted on this measurement.
 
 ## Sources
 

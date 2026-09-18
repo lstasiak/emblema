@@ -115,12 +115,107 @@ the file, to be measured when the leg is repeated.
   is a corpus. On the machine that published the corpus that is a map of a file already there; on
   another machine it is one download.
 
+### 2026-09-18 — Kaggle, Tesla T4, CUDA 12.8, fp32 and fp16, against Cloudflare R2
+
+The first runs on the platform the handoff was designed for: three orders placed here from a
+committed tree, fulfilled in one Kaggle notebook that installed the package at that commit, and
+accepted back into the local registry. The corpus is C-MAPSS as published to the bucket
+(`published-corpus.md`; manifest `durable/sha256/a00c3865…`, block `bbee7fcd…`, 454 MB, 21 channels, 20,237
+training and 5,158 validation windows of 1,050 tokens); the experiments are the three files of
+`experiments/backbone-cmapss-m*.toml`, which differ in the shape and the precision alone and spend
+the budget the saturation measurement spent over this corpus, 2,532 steps of batch 32.
+
+|  |  |
+| --- | --- |
+| Platform | Kaggle notebook, accelerator "GPU T4 x2", one device used; Python 3.12; torch 2.10.0+cu128 as preinstalled, CUDA 12.8, `Tesla T4`, capability (7, 5); numpy 2.5.3, boto3 1.43.36, mlflow-skinny 3.16.1, pydantic 2.12.3 after `pip install "emblema[ml,tracking] @ git+https://github.com/lstasiak/emblema@061fd05…"` |
+| This machine | macOS 26.6.2, Apple M1 Pro; Python 3.14.7; torch 2.14.0 — orders and acceptances only |
+| Code | `061fd0543bfdab7049ace288701d7b100e91b0ee`, read by the notebook from the installed package's `direct_url.json` and by this machine from the tree; every order and every result carries it |
+| Bucket | the remote bucket, six `EMBLEMA_ARTIFACT_STORE__*` variables from the notebook's secrets |
+
+Before any order, the notebook confirmed what the wheels note had only read off a repository:
+the platform's Python is 3.12, the package installs from a commit without a token, the commit is
+read back from the installation, the platform's own CUDA torch satisfies `torch>=2.9` and is
+kept, and the manifest and the block are readable from the notebook with the bucket's
+credentials. pip reported version conflicts against packages preinstalled on the platform
+(`numba`, `ydata-profiling`, `google-colab`, `moviepy`) over the numpy it raised to 2.5.3; none
+of them is on this package's path.
+
+| Experiment | Shape | Precision | Backbone | Result | Weights | Steps | Wall clock |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-cmapss-m-small-fp32` | 192×4, 1,789,440 | fp32 | `b6b04ba2-…` | `durable/sha256/88ba80d1…` | `durable/sha256/8c79085b…` | 2,532 | 22 min 59 s |
+| `backbone-cmapss-m-small` | 192×4, 1,789,440 | fp16 | `5da9b8ce-…` | `durable/sha256/6b80fa2e…` | `durable/sha256/3d208e70…` | 2,532 | not recorded; 7 min 26 s of epochs |
+| `backbone-cmapss-m` | 256×6, 4,751,872 | fp16 | `de3815c9-…` | `durable/sha256/dd966da6…` | `durable/sha256/6830e117…` | 2,532 | 13 min 12 s |
+
+The parameter counts are the encoder's, as the registry records them; each run's objective adds
+one decoder block. Each run wrote five checkpoints to the bucket's transient prefix, one every
+500 steps, and the notebook printed nothing between fetching the block and printing the result's
+reference — a run in this process has no log, and its progress is read off the platform's GPU
+gauge, which stood at 90–100 % throughout: the accelerator, not the loader in the main process,
+is what a step waits for.
+
+Loss per hidden token at the end of each epoch, validation over the whole held-out side (2,511,314
+hidden tokens, the same for every run; the channel mean scores 1.0208 there):
+
+| Epoch | fp32 192×4, training / validation | fp16 192×4, training / validation | fp16 256×6, training / validation | Seconds, fp32 / fp16 small / fp16 256×6 |
+| --- | --- | --- | --- | --- |
+| 1 | 0.3314 / 0.01237 | 0.3436 / 0.01199 | 0.3520 / 0.01100 | 329 / 104 / 193 |
+| 2 | 0.00777 / 0.00630 | 0.00779 / 0.00636 | 0.00732 / 0.00617 | 336 / 110 / 190 |
+| 3 | 0.00572 / 0.00528 | 0.00590 / 0.00551 | 0.00558 / 0.00507 | 338 / 112 / 190 |
+| 4 | 0.00491 / 0.00498 | 0.00515 / 0.00524 | 0.00475 / 0.00469 | 343 / 120 / 202 |
+
+Per optimiser step, validation passes and checkpoint uploads included: 0.53 s in fp32 and 0.18 s
+in fp16 at the small shape, 0.31 s in fp16 at the reference shape. The saturation measurement's
+run of the same experiment on this machine (MPS, fp32, validation on every fourth window) ended
+at 0.0049 training and 0.0047 validation.
+
+What the registry holds afterwards: three rows in `pretraining.backbone` in state `ready`, tier
+`M`, seed 1, commit `061fd05…`, each with its signature, its artifact key and its input row
+naming the corpus version `e143f4b4-…`, the manifest and the block; the acceptances replayed the
+epochs into the local MLflow server under the three experiment names, run `kaggle-t4` each.
+
+#### What the numbers say
+
+- **The path works end to end on the platform it was made for**, from a committed tree: the
+  notebook read the order and the corpus from the bucket, trained, uploaded its checkpoints and
+  its weights, reported, and the registry accepted each result against the order it had placed.
+  The one `-dirty` run of the first leg is superseded.
+- **The CUDA path reproduces the development machine's curve.** In fp32 the training loss of the
+  last epoch agrees with the MPS run to three significant figures (0.00491 against 0.0049); the
+  validation figure differs by the windows it is scored on, all of them here against a quarter
+  there.
+- **Half precision costs 5 % of the loss at this budget and buys a threefold speed-up.** The
+  small shape ends at 0.00524 in fp16 against 0.00498 in fp32 on the same windows, and at
+  0.00515 against 0.00491 in training. Two things separate the runs: what fp16 does to the
+  arithmetic, and the steps the gradient scaler skipped. The loss is summed over a batch's hidden
+  tokens rather than averaged, so the scaler's starting scale of 65,536 overflows fp16 by
+  construction; emulated on the host before the run (CPU autocast to float16, the loop's own
+  order of operations), the first steps were skipped with the scale halving each time, and a
+  backward pass fitted at a scale of 2⁴ and overflowed at 2⁶ for either shape on a batch of 8 —
+  so on a batch of 32 the scaler skipped a dozen or so of the 2,532 steps, all within the
+  warm-up, and settled near 2³. The platform confirmed the mechanism without counting it: torch
+  warned, once, that the scheduler had stepped before the optimiser, which is what a skipped
+  step looks like from the scheduler's side. Which of the two accounts for the 5 % is
+  not separated here; a second run of either configuration would put a device's own scatter
+  beside it.
+- **The reference shape lowers the loss at equal steps, a little.** 0.00469 against 0.00524
+  under the same precision, 11 % lower on the held-out side, for 1.7× the time per step; the
+  saturation measurement's reading that C-MAPSS is learnt to the objective's floor by the small
+  shape stands, with the floor a little lower for the larger one.
+- **The platform's cost per step is what prices the mixed run.** At the reference shape, in half
+  precision, a step over 32 windows of 1,050 tokens costs 0.31 s on a T4 with everything
+  included; the mixed run's windows are longer and its attention is quadratic in them, so this
+  number is the floor of that estimate, not the estimate.
+
 ### Open
 
 - The checkpoint reference a dropped session should be resumed from is known to MLflow when the
-  run is tracked and to nobody when it is not: the notebook has to print it. Which of the two
-  remedies ADR-0024 names is taken is decided with the first run on a platform.
-- Every run of this note was made on a dirty tree and cannot be reproduced from a commit alone;
-  the commit the note names is the base. An order is now refused from such a tree, so the leg is
-  to be repeated from the commit that carries these changes, which will also remeasure `read`
-  and fill the result columns the registry gained since.
+  run is tracked and to nobody when it is not: the notebook has to print it. The three platform
+  runs were short enough not to need it, and the result document carries the last checkpoint of
+  each epoch once the run has ended; a run of hours on the platform still needs one of the two
+  remedies ADR-0024 names, decided before the mixed run.
+- Resuming from a remote checkpoint has been tested through the port and on this machine's
+  accelerator, not yet on the platform: the platform runs of 2026-09-18 left five checkpoints
+  each in the bucket, and a second run of one of their orders from one of them is the test that
+  remains, read against the scatter of two uninterrupted runs of the same order.
+- The cost of `read` on a machine that fetches the block from the bucket was not measured on the
+  platform: the run's wall clock includes it and the run itself does not time it.

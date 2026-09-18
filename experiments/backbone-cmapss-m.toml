@@ -1,0 +1,44 @@
+# The C-MAPSS backbone at the published tier: the tier's own shape over the whole corpus, on the
+# accelerator and at the precision the tier names.
+#
+# The budget is the one the saturation measurement spent over the whole of this corpus, to the
+# step (docs/verification/corpus-saturation.md). That measurement was made at the small shape:
+# there every share of the corpus reached the objective's floor within these steps and the last
+# epoch was the best one. Whether the larger shape wants a stopping rule over the same steps is
+# what this run's own curve shows. Equal steps are also what lets it be read against the small
+# shape's beside it: the two files differ in the shape alone.
+name = "backbone-cmapss-m"
+tier = "M"
+corpus = "cmapss"
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+# The mixture the saturation curve of this corpus was measured under: blocks and whole channels
+# carry most of the hiding, single tokens are the minority ingredient, and together they take
+# close to half of a window.
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# A quarter of the first epoch of warmup and a floor of one per cent of the peak, as measured.
+# The whole batch goes through in one micro-batch. A step at this shape took about 0.3 GiB a window
+# of this corpus in single precision on the development machine (docs/verification/encoder.md),
+# so thirty-two windows stay under ten of the accelerator's fifteen before half precision takes
+# anything off; the accelerator itself has not been measured, and a run that does not fit is
+# restated as two micro-batches of sixteen, which is the same batch to the optimiser.
+[budget]
+epochs = 4
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+# Five states over the run. A session on a free accelerator can drop at any step, the store is a
+# bucket on another network, and a state of this shape is about sixty megabytes.
+[checkpoint]
+every_steps = 500

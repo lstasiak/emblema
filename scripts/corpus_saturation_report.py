@@ -383,6 +383,8 @@ def settings_of(
         "final_lr_fraction": f"{budget.final_lr_fraction:g}",
         "seed": str(budget.seed),
         "precision": str(configuration.precision),
+        "loss": str(configuration.loss.kind),
+        "huber_delta": f"{configuration.loss.huber_delta:g}",
         "checkpoint_every_steps": str(configuration.checkpoint.every_steps),
         "training_windows": str(len(run.windows.training)),
         "validation_windows": str(len(run.windows.validation)),

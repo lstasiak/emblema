@@ -36,3 +36,14 @@ Constraints observed:
 
 Result: **floor `>=3.12` holds** for both platforms. Both remain to be confirmed from inside a live
 notebook.
+
+## 2026-09-18 — Kaggle confirmed from inside a live notebook
+
+| Platform | Python | torch preinstalled | Package install | Source |
+|----------|--------|--------------------|-----------------|--------|
+| Kaggle notebooks, "GPU T4 x2" | 3.12 | 2.10.0+cu128, CUDA 12.8, kept by pip | `pip install "emblema[ml,tracking] @ git+https://github.com/lstasiak/emblema@061fd05…"` builds the wheel with `uv_build` and installs it; the commit is read back from `direct_url.json` | the notebook's own `python --version` and `torch.__version__`, 2026-09-18; the runs are in `manual-handoff.md` |
+
+Result: **floor `>=3.12` holds on Kaggle in practice**, and the platform's CUDA build of torch
+satisfies `torch>=2.9` without being replaced. pip raised numpy from the platform's version to
+2.5.3 and reported conflicts against preinstalled packages this package does not use. Colab
+remains to be confirmed from inside a live notebook.
