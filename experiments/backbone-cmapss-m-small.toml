@@ -7,7 +7,7 @@
 # file of the tier's own shape, to the step, so the pair differs in the shape alone.
 name = "backbone-cmapss-m-small"
 tier = "M"
-corpus = "cmapss"
+corpora = ["cmapss"]
 precision = "fp16"
 dropout = 0.0
 decoder_layers = 1

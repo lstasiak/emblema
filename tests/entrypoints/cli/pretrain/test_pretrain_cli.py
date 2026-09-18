@@ -26,6 +26,8 @@ from tests.support.handoff import COMMIT, MANIFEST, ORDER_REF
 from tests.support.handoff_process import InMemoryHandoff, order_command
 
 EXPERIMENT = Path("experiments/control-a-s.toml")
+MIXED_EXPERIMENT = Path("experiments/backbone-mixed-m.toml")
+MIXED = ("cmapss", "skab", "smd", "esa_ad")
 RESULT = ArtifactRef("durable/result", Checksum.of_bytes(b"result"))
 TRACKING = "http://127.0.0.1:5000"
 
@@ -64,10 +66,31 @@ def test_an_order_is_the_experiment_file_over_the_manifest_at_the_revision_read(
     command = invocation.command
     assert isinstance(command, OrderPretrainingCommand)
     assert command.configuration == ExperimentFile.load(EXPERIMENT).configuration()
-    assert command.corpus == "control-a"
-    assert (command.manifest, command.run, command.git_commit) == (MANIFEST, "r1", COMMIT)
+    assert command.corpora == (("control-a", MANIFEST),)
+    assert (command.run, command.git_commit) == ("r1", COMMIT)
     assert invocation.workspace == Path("data/artifacts")
     assert (invocation.device, invocation.tracking_uri) == (None, None)
+
+
+def test_an_order_pairs_the_corpora_the_experiment_names_with_the_manifests_in_order() -> None:
+    manifests = [ArtifactRef(f"durable/{name}", Checksum.of_bytes(name.encode())) for name in MIXED]
+    invocation = parse(
+        "order",
+        "--experiment",
+        str(MIXED_EXPERIMENT),
+        *(argument for ref in manifests for argument in ("--corpus", *reference(ref))),
+        "--run",
+        "r1",
+    )
+
+    command = invocation.command
+    assert isinstance(command, OrderPretrainingCommand)
+    assert command.corpora == tuple(zip(MIXED, manifests, strict=True))
+
+
+def test_an_order_with_other_than_one_manifest_per_corpus_is_refused() -> None:
+    with pytest.raises(SystemExit, match=r"names 1 corpora \(control-a\); give --corpus once"):
+        parse(*order_arguments("--corpus", *reference(ORDER_REF), "--run", "r1"))
 
 
 def test_a_revision_stated_on_the_command_line_wins_over_the_one_read() -> None:

@@ -4,7 +4,7 @@
 # machine class; the shape is the published tier's, stated field by field.
 name = "saturation-esa_ad-m"
 tier = "S"
-corpus = "esa_ad"
+corpora = ["esa_ad"]
 precision = "fp32"
 dropout = 0.0
 decoder_layers = 1
