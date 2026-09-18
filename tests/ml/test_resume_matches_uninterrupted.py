@@ -21,6 +21,7 @@ from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPoli
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from tests.support.control_corpus import Control
 from tests.support.encoders import SMALL
@@ -40,14 +41,16 @@ WEIGHT_TOLERANCE_ON_MPS = 1e-3
 
 
 @pytest.fixture(scope="module")
-def corpus(control: Control) -> TrainingCorpus:
+def corpus(control: Control) -> TrainingMixture:
     """Windows the control corpus really produced, cut to what a test can train on."""
-    return TrainingCorpus(
-        name="control-a",
-        checksum=control.manifests[0].archived.block.checksum,
-        training=control.windows_of(0)[:8],
-        validation=control.windows_of(1)[:4],
-        vocabulary_size=control.vocabulary_size,
+    return TrainingMixture.of(
+        TrainingCorpus(
+            name="control-a",
+            checksum=control.manifests[0].archived.block.checksum,
+            training=control.windows_of(0)[:8],
+            validation=control.windows_of(1)[:4],
+            channels=control.channels,
+        )
     )
 
 
@@ -67,7 +70,7 @@ def weights(store: InMemoryArtifactStore, outcome: EpochOutcome) -> dict[str, to
 
 
 def test_a_run_resumed_mid_epoch_ends_exactly_where_the_uninterrupted_one_did(
-    corpus: TrainingCorpus, stated: ExperimentConfiguration
+    corpus: TrainingMixture, stated: ExperimentConfiguration
 ) -> None:
     whole, dropped = InMemoryArtifactStore(), InMemoryArtifactStore()
 
@@ -91,7 +94,7 @@ def test_a_run_resumed_mid_epoch_ends_exactly_where_the_uninterrupted_one_did(
 
 
 def test_the_weights_of_the_two_runs_are_the_same_artifact(
-    corpus: TrainingCorpus, stated: ExperimentConfiguration
+    corpus: TrainingMixture, stated: ExperimentConfiguration
 ) -> None:
     """The store is content-addressed, so equal weights are one reference — the strongest form."""
     whole, dropped = InMemoryArtifactStore(), InMemoryArtifactStore()
@@ -110,7 +113,7 @@ def test_the_weights_of_the_two_runs_are_the_same_artifact(
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="needs MPS")
 def test_a_run_resumed_mid_epoch_on_mps_ends_within_what_a_repeat_of_it_would(
-    corpus: TrainingCorpus, stated: ExperimentConfiguration
+    corpus: TrainingMixture, stated: ExperimentConfiguration
 ) -> None:
     whole, dropped = InMemoryArtifactStore(), InMemoryArtifactStore()
 

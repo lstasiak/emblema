@@ -6,7 +6,7 @@ import pytest
 from emblema.pretraining.domain.exceptions import IncompatibleCheckpointError
 from emblema.pretraining.domain.training.run_position import RunPosition
 from emblema.pretraining.domain.training.run_signature import RunSignature
-from tests.support.experiments import configuration, corpus
+from tests.support.experiments import configuration, mixture
 
 torch = pytest.importorskip("torch")
 
@@ -16,7 +16,7 @@ from emblema.pretraining.adapters.training.training_checkpoint import (  # noqa:
 
 pytestmark = pytest.mark.ml
 
-SIGNATURE = RunSignature.of(configuration(), corpus())
+SIGNATURE = RunSignature.of(configuration(), mixture())
 POSITION = RunPosition(epoch=2, batches=7, steps=23)
 
 
@@ -62,7 +62,7 @@ def test_an_accelerator_without_a_generator_of_its_own_stores_none() -> None:
 
 
 def test_a_checkpoint_of_another_run_is_refused() -> None:
-    elsewhere = RunSignature.of(configuration(name="other"), corpus())
+    elsewhere = RunSignature.of(configuration(name="other"), mixture())
 
     with pytest.raises(IncompatibleCheckpointError, match="offered to run"):
         TrainingCheckpoint.read(checkpoint().to_bytes(), signature=elsewhere)

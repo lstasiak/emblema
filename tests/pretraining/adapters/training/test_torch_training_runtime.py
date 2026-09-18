@@ -15,11 +15,20 @@ from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPoli
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import Token, TokenWindow
 from emblema.shared.ports.artifact_store import Retention
-from tests.support.experiments import budget, checksum_of, configuration, corpus
+from tests.support.experiments import (
+    CHANNEL_NAMES,
+    budget,
+    checksum_of,
+    configuration,
+    continued,
+    corpus,
+    mixture,
+)
 
 torch = pytest.importorskip("torch")
 
@@ -38,6 +47,7 @@ from emblema.pretraining.domain.training.run_signature import RunSignature  # no
 pytestmark = pytest.mark.ml
 
 CORPUS = corpus(training=8, validation=4)
+MIXTURE = mixture(CORPUS)
 
 
 class RecordingStore(InMemoryArtifactStore):
@@ -69,8 +79,8 @@ def test_the_same_configuration_twice_trains_the_same_weights() -> None:
     stated = configuration(budget=budget(epochs=1, batch_size=2))
     first, second = InMemoryArtifactStore(), InMemoryArtifactStore()
 
-    one = list(TorchTrainingRuntime(first, device="cpu").train(stated, CORPUS))
-    two = list(TorchTrainingRuntime(second, device="cpu").train(stated, CORPUS))
+    one = list(TorchTrainingRuntime(first, device="cpu").train(stated, MIXTURE))
+    two = list(TorchTrainingRuntime(second, device="cpu").train(stated, MIXTURE))
 
     assert one[-1].training_loss == two[-1].training_loss
     assert one[-1].backbone == two[-1].backbone
@@ -90,9 +100,9 @@ def test_accumulated_micro_batches_make_one_step_between_them() -> None:
     )
     store = InMemoryArtifactStore()
 
-    outcomes = list(TorchTrainingRuntime(store, device="cpu").train(accumulated, CORPUS))
+    outcomes = list(TorchTrainingRuntime(store, device="cpu").train(accumulated, MIXTURE))
 
-    written = checkpoint_at(store, outcomes[-1].checkpoint, RunSignature.of(accumulated, CORPUS))
+    written = checkpoint_at(store, outcomes[-1].checkpoint, RunSignature.of(accumulated, MIXTURE))
     assert (written.position.batches, written.position.steps) == (4, 2)
 
 
@@ -102,12 +112,12 @@ def test_a_resumed_run_ends_where_the_uninterrupted_one_did() -> None:
     )
     whole, halved = InMemoryArtifactStore(), InMemoryArtifactStore()
 
-    uninterrupted = list(TorchTrainingRuntime(whole, device="cpu").train(stated, CORPUS))
-    interrupted = TorchTrainingRuntime(halved, device="cpu").train(stated, CORPUS)
+    uninterrupted = list(TorchTrainingRuntime(whole, device="cpu").train(stated, MIXTURE))
+    interrupted = TorchTrainingRuntime(halved, device="cpu").train(stated, MIXTURE)
     stopped = next(interrupted)
     # The rest of the run is simply never asked for: that is what an interruption is here.
     resumed = list(
-        TorchTrainingRuntime(halved, device="cpu").train(stated, CORPUS, stopped.checkpoint)
+        TorchTrainingRuntime(halved, device="cpu").train(stated, MIXTURE, stopped.checkpoint)
     )
 
     assert resumed[-1].validation_loss == uninterrupted[-1].validation_loss
@@ -123,9 +133,9 @@ def test_a_checkpoint_records_where_the_run_stood() -> None:
     )
     store = InMemoryArtifactStore()
 
-    outcomes = list(TorchTrainingRuntime(store, device="cpu").train(stated, CORPUS))
+    outcomes = list(TorchTrainingRuntime(store, device="cpu").train(stated, MIXTURE))
 
-    written = checkpoint_at(store, outcomes[0].checkpoint, RunSignature.of(stated, CORPUS))
+    written = checkpoint_at(store, outcomes[0].checkpoint, RunSignature.of(stated, MIXTURE))
     assert (written.position.epoch, written.position.batches, written.position.steps) == (0, 3, 3)
 
 
@@ -134,7 +144,7 @@ def test_what_a_run_stored_is_what_it_trained() -> None:
     store = InMemoryArtifactStore()
     runtime = TorchTrainingRuntime(store, device="cpu")
 
-    outcomes = list(runtime.train(stated, CORPUS))
+    outcomes = list(runtime.train(stated, MIXTURE))
 
     kept = outcomes[-1].backbone
     assert kept is not None
@@ -147,7 +157,7 @@ def test_a_precision_this_device_cannot_run_is_refused_before_anything_is_traine
     stated = configuration(precision=Precision.FP16)
 
     with pytest.raises(UnsupportedPrecisionError):
-        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(stated, CORPUS)
+        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(stated, MIXTURE)
 
 
 def test_the_device_is_the_machine_s_unless_the_run_is_told_otherwise() -> None:
@@ -163,13 +173,13 @@ def test_an_epoch_whose_masks_hid_nothing_leaves_the_weights_finite() -> None:
         checksum=checksum_of(single),
         training=single,
         validation=CORPUS.validation,
-        vocabulary_size=3,
+        channels=CHANNEL_NAMES,
     )
     store = InMemoryArtifactStore()
 
     outcomes = list(
         TorchTrainingRuntime(store, device="cpu").train(
-            configuration(budget=budget(epochs=1, batch_size=2)), nothing_to_hide
+            configuration(budget=budget(epochs=1, batch_size=2)), mixture(nothing_to_hide)
         )
     )
 
@@ -194,7 +204,7 @@ def test_a_loss_that_is_not_finite_stops_the_run_before_anything_is_stepped_or_k
     with pytest.raises(DivergedRunError, match="the loss of batch 0 in epoch 0 is nan"):
         list(
             TorchTrainingRuntime(store, device="cpu").train(
-                configuration(checkpoint=CheckpointPolicy(every_steps=1)), CORPUS
+                configuration(checkpoint=CheckpointPolicy(every_steps=1)), MIXTURE
             )
         )
     assert store.kept == []
@@ -217,7 +227,7 @@ def test_gradients_that_are_not_finite_stop_the_run_before_their_step_is_taken(
     with pytest.raises(DivergedRunError, match="a gradient is not finite at step 1 of epoch 0"):
         list(
             TorchTrainingRuntime(store, device="cpu").train(
-                configuration(checkpoint=CheckpointPolicy(every_steps=1)), CORPUS
+                configuration(checkpoint=CheckpointPolicy(every_steps=1)), MIXTURE
             )
         )
     assert store.kept == []
@@ -231,22 +241,22 @@ def test_a_run_is_scored_by_the_reading_its_experiment_states() -> None:
     squared = configuration(budget=budget(epochs=1))
 
     under_bound = list(
-        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(bounded, CORPUS)
+        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(bounded, MIXTURE)
     )
     under_square = list(
-        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(squared, CORPUS)
+        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(squared, MIXTURE)
     )
 
     # The bounded reading never counts a miss for more than the square does, and these windows
     # hold misses past the knee, so it counts strictly less.
     assert under_bound[-1].validation_loss < under_square[-1].validation_loss
-    assert RunSignature.of(bounded, CORPUS) != RunSignature.of(squared, CORPUS)
+    assert RunSignature.of(bounded, MIXTURE) != RunSignature.of(squared, MIXTURE)
 
 
 def test_an_epoch_reports_the_corpus_it_validated_against_nothing_learnt() -> None:
     outcomes = list(
         TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(
-            configuration(budget=budget(epochs=1)), CORPUS
+            configuration(budget=budget(epochs=1)), MIXTURE
         )
     )
 
@@ -258,3 +268,79 @@ def test_an_epoch_reports_the_corpus_it_validated_against_nothing_learnt() -> No
     assert scored[0].trivial == pytest.approx(1.0, abs=0.6)
     assert scored[0].relative == pytest.approx(scored[0].loss / scored[0].trivial)
     assert 0 < scored[0].tokens <= sum(len(window.values) for window in CORPUS.validation)
+
+
+def test_the_backbone_is_the_best_epoch_s_weights_not_the_last_epoch_s() -> None:
+    """A run whose validation rises after its first epoch keeps the first epoch's weights."""
+    overfitting = configuration(budget=budget(epochs=3, batch_size=2, learning_rate=0.5))
+    store = InMemoryArtifactStore()
+
+    outcomes = list(TorchTrainingRuntime(store, device="cpu").train(overfitting, MIXTURE))
+
+    relative = [outcome.relative_validation for outcome in outcomes]
+    best = relative.index(min(relative))
+    assert best < len(outcomes) - 1, "the test needs a run whose last epoch is not its best"
+    kept = outcomes[best].weights
+    assert kept is not None
+    assert outcomes[-1].backbone == kept
+    assert outcomes[-1].weights is None
+    assert all(
+        outcome.weights is None
+        for outcome in outcomes
+        if outcome.relative_validation > min(relative[: outcome.epoch + 1])
+    )
+
+
+def test_a_resumed_run_keeps_the_best_epoch_from_before_the_checkpoint() -> None:
+    overfitting = configuration(
+        budget=budget(epochs=3, batch_size=2, learning_rate=0.5),
+        checkpoint=CheckpointPolicy(every_steps=4),
+    )
+    whole, halved = InMemoryArtifactStore(), InMemoryArtifactStore()
+
+    uninterrupted = list(TorchTrainingRuntime(whole, device="cpu").train(overfitting, MIXTURE))
+    interrupted = TorchTrainingRuntime(halved, device="cpu").train(overfitting, MIXTURE)
+    first = next(interrupted)
+    resumed = list(
+        TorchTrainingRuntime(halved, device="cpu").train(overfitting, MIXTURE, first.checkpoint)
+    )
+
+    relative = [outcome.relative_validation for outcome in uninterrupted]
+    assert relative.index(min(relative)) == 0, "the test needs the best epoch before the checkpoint"
+    assert [outcome.relative_validation for outcome in resumed] == relative[1:]
+    assert resumed[-1].backbone == uninterrupted[-1].backbone == first.weights
+    assert all(outcome.weights is None for outcome in resumed)
+
+
+def test_a_run_over_two_corpora_scores_each_on_its_own() -> None:
+    second = continued(name="second", seed=2, training=4, validation=2)
+    mixed = TrainingMixture.of(CORPUS, second)
+    stated = configuration(budget=budget(epochs=1, batch_size=2))
+
+    outcomes = list(
+        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(stated, mixed)
+    )
+
+    scored = outcomes[-1].validation
+    assert [entry.corpus for entry in scored] == ["invented", "second"]
+    assert 0 < scored[0].tokens <= sum(len(window.values) for window in CORPUS.validation)
+    assert 0 < scored[1].tokens <= sum(len(window.values) for window in second.validation)
+
+
+def test_the_run_says_where_it_can_be_picked_up_from(caplog: pytest.LogCaptureFixture) -> None:
+    stated = configuration(
+        budget=budget(epochs=1, batch_size=2), checkpoint=CheckpointPolicy(every_steps=2)
+    )
+    store = InMemoryArtifactStore()
+
+    with caplog.at_level("INFO", logger="emblema.pretraining"):
+        outcomes = list(TorchTrainingRuntime(store, device="cpu").train(stated, MIXTURE))
+
+    checkpoint = outcomes[-1].checkpoint
+    assert checkpoint is not None
+    said = [record.getMessage() for record in caplog.records]
+    assert any(f"checkpoint {checkpoint.key} {checkpoint.checksum}" in message for message in said)
+    assert any(
+        message.startswith("epoch 1 of 1 done") and "invented validation" in message
+        for message in said
+    )
