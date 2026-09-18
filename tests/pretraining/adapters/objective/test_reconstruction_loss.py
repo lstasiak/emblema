@@ -94,7 +94,7 @@ def test_over_scores_the_positions_it_is_given() -> None:
     assert only_last.item() == pytest.approx(9.0)
 
 
-def test_the_target_is_read_in_the_predictions_precision() -> None:
+def test_a_prediction_read_in_double_is_scored_in_double() -> None:
     batch = random_batch(1, 3, seed=7)
     prediction = batch.features[..., 0].to(torch.float64)
 
@@ -102,6 +102,22 @@ def test_the_target_is_read_in_the_predictions_precision() -> None:
 
     assert loss.dtype == torch.float64
     assert loss.item() == 0.0
+
+
+def test_a_half_precision_prediction_is_scored_in_single_so_a_large_batch_stays_finite() -> None:
+    # A hundred misses of a thousand each: their bounded losses sum past what half precision
+    # holds, which is what a validation batch of a corpus with excursions does.
+    batch = random_batch(1, 100, seed=7)
+    prediction = (batch.features[..., 0] + 1000.0).to(torch.float16)
+    everything = torch.ones(1, 100, dtype=torch.bool)
+
+    total, scored = ReconstructionLoss(BOUNDED).summed(prediction, batch, everything)
+
+    assert total.dtype == torch.float32
+    assert torch.isfinite(total)
+    assert int(scored) == 100
+    expected = ReconstructionLoss(BOUNDED).summed(prediction.to(torch.float32), batch, everything)
+    assert torch.isclose(total, expected[0])
 
 
 def test_the_batch_is_the_source_of_the_target() -> None:
