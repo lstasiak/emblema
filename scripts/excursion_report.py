@@ -73,6 +73,7 @@ from scripts.corpus_saturation_report import (
     BLOCKS,
     WORKSPACE,
     StoredRun,
+    corpus_of,
     experiments,
     stored_runs,
 )
@@ -1076,7 +1077,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         run
         for run in stored_runs(arguments.workspace / "runs")
         if run.experiment in stated
-        and stated[run.experiment].corpus == corpus
+        and corpus_of(stated[run.experiment]) == corpus
         and (not arguments.experiment or run.experiment in arguments.experiment)
     ]
     if not runs:

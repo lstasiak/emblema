@@ -95,6 +95,7 @@ from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.ports.experiment_tracker import ExperimentTracker
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
@@ -114,6 +115,7 @@ from scripts.masked_reconstruction_assessment import (
 from scripts.masked_reconstruction_figures import drawn_from, figures_of
 from scripts.reporting import dated_heading, machine, table
 from scripts.spectral_probe import SPECTRAL_PROBE, SPECTRAL_PROCESS
+from scripts.vocabulary import channel_names
 
 # Where the experiments are written down: one file per experiment, and a run is reproduced by
 # naming one.
@@ -143,9 +145,13 @@ def device_available(device: str) -> bool:
 
 
 def experiments(directory: Path = EXPERIMENTS) -> dict[str, ExperimentFile]:
-    """Every experiment stated in ``directory`` whose corpus this report can generate."""
+    """Every experiment stated in ``directory`` over one corpus this report can generate."""
     stated = (ExperimentFile.load(path) for path in sorted(directory.glob("*.toml")))
-    return {file.name: file for file in stated if file.corpus in corpora()}
+    return {
+        file.name: file
+        for file in stated
+        if len(file.corpora) == 1 and file.corpora[0] in corpora()
+    }
 
 
 @dataclass(frozen=True)
@@ -421,12 +427,14 @@ def train(
     outcome = PretrainBackbone(runtime, tracker)(
         PretrainBackboneCommand(
             configuration=run.configuration,
-            corpus=TrainingCorpus(
-                name=run.corpus,
-                checksum=published.manifest.archived.block.checksum,
-                training=published.training,
-                validation=published.validation,
-                vocabulary_size=published.vocabulary_size,
+            mixture=TrainingMixture.of(
+                TrainingCorpus(
+                    name=run.corpus,
+                    checksum=published.manifest.archived.block.checksum,
+                    training=published.training,
+                    validation=published.validation,
+                    channels=channel_names(published.manifest.scheme.vocabulary),
+                )
             ),
             run=name,
         )
@@ -899,10 +907,11 @@ def main(argv: Sequence[str] | None = None) -> None:
                 )
             except InvalidTrainingBudgetError as error:
                 parser.error(f"{name}: {error}")
+        (corpus_name,) = file.corpora
         runs.append(
             Run(
                 configuration=configuration,
-                corpus=file.corpus,
+                corpus=corpus_name,
                 units=arguments.units,
                 device=arguments.device,
             )

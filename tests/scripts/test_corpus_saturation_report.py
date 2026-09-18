@@ -24,7 +24,7 @@ from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPoli
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
-from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.ports.training_runtime import TrainingRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -82,7 +82,7 @@ def experiment(
         {
             "name": "saturation-test-s",
             "tier": "S",
-            "corpus": "test-corpus",
+            "corpora": ["test-corpus"],
             "corpus_fraction": 1.0,
             "precision": "fp32",
             "dropout": 0.0,
@@ -249,11 +249,11 @@ class _DroppingRuntime:
     def train(
         self,
         configuration: ExperimentConfiguration,
-        corpus: TrainingCorpus,
+        mixture: TrainingMixture,
         resume_from: ArtifactRef | None = None,
     ) -> Iterator[EpochOutcome]:
         self._sessions.resumed_from.append(resume_from)
-        epochs = self._inner.train(configuration, corpus, resume_from)
+        epochs = self._inner.train(configuration, mixture, resume_from)
         return self._dropped(epochs) if len(self._sessions.resumed_from) == 1 else epochs
 
     @staticmethod

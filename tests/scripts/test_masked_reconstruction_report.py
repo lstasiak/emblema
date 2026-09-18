@@ -197,7 +197,8 @@ def test_every_experiment_the_report_offers_names_a_corpus_it_can_generate() -> 
     stated = experiments()
 
     assert set(stated) >= {"control-a-s", "control-b-s", "spectral-probe-s"}
-    assert all(file.corpus in corpora() for file in stated.values())
+    assert "backbone-mixed-m" not in stated
+    assert all(file.corpora[0] in corpora() for file in stated.values())
 
 
 def test_an_experiment_nobody_stated_is_refused_before_anything_runs(tmp_path: Path) -> None:
