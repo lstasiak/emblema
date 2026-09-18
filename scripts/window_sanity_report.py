@@ -40,6 +40,7 @@ import matplotlib.pyplot as plt
 
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
+from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
@@ -101,6 +102,12 @@ def esa_ad_reader(root: Path, subset: str | None) -> CorpusReader:
     return EsaAdCorpusReader(root, (subset,) if subset else EsaAdCorpusReader.SUBSETS)
 
 
+def physionet2012_reader(root: Path, subset: str | None) -> CorpusReader:
+    return Physionet2012CorpusReader(
+        root, (subset,) if subset else Physionet2012CorpusReader.SUBSETS
+    )
+
+
 def generated_reader(layout: SensorLayout) -> Callable[[Path, str | None], CorpusReader]:
     """A reader of a generated corpus, which takes neither a directory nor a subset."""
 
@@ -116,6 +123,7 @@ READERS: dict[str, Callable[[Path, str | None], CorpusReader]] = {
     "skab": skab_reader,
     "smd": smd_reader,
     "esa_ad": esa_ad_reader,
+    "physionet2012": physionet2012_reader,
     **{name: generated_reader(layout) for name, layout in LAYOUTS.items()},
 }
 
