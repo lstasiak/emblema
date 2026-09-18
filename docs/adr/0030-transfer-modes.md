@@ -1,6 +1,6 @@
 # ADR-0030: Transfer modes — four arms of one procedure, low-rank updates as a cap on degrees of freedom, and the encoder reached through a seam the process wires
 
-- Status: accepted
+- Status: accepted (first run on the registered backbone in the dated section below)
 - Date: 2026-09-18
 
 ## Context
@@ -130,6 +130,20 @@ once the block is at hand.
 - No import-linter contract changed. The seam is a protocol in Evaluation's torch adapters, its
   implementation in the entrypoints, and the shared packages gained a module with no context
   language in it.
+
+### 2026-09-18 — the first run on the registered backbone
+
+Measured on the M1 (MPS, fp32; `docs/verification/transfer-modes.md`): 200 labelled windows of
+the turbofan task, one seed, 30 epochs, the report's default learning rate per mode, nothing
+tuned. Validation RMSE over the 18 held-out engines (535 windows): from scratch 44.64, frozen
+probe 38.92, low-rank 24.07, full fine-tuning 22.30; the mean predictor scores 41.11 on the same
+windows. The trainable counts are the ones stated above (257 / 196,865 / 4,752,129). Every mode
+trains and answers, which is what the ticket asked; the two arms that update the pretrained
+encoder are far under the trivial predictor, the probe barely under it, and the control arm
+above it — at this budget and schedule the fresh encoder learnt the mean, and two runs of it
+alone at a tenth of the rate, or at three times the epochs, reach 34.9 (the note). The control
+arm's schedule is therefore fixed on the validation side before the grid and declared as the
+grid's, since the primary endpoint is measured against it.
 
 ## Alternatives considered
 
