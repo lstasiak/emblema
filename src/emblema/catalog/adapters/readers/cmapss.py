@@ -98,7 +98,7 @@ class CmapssCorpusReader:
         for name, path in self._files.items():
             engines = self._cycles_per_engine(path.name, self._bytes_of(path))
             for engine, cycles in engines.items():
-                yield CorpusUnit(UnitKey(f"{name}/{engine}"), TimeExtent(1.0, cycles + 1.0))
+                yield CorpusUnit(UnitKey.within(name, str(engine)), TimeExtent(1.0, cycles + 1.0))
 
     def read_observations(self, unit: UnitKey) -> Iterator[Observation]:
         """One engine's sensor values, cycle by cycle.

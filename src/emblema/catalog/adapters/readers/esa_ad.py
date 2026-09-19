@@ -277,7 +277,7 @@ class _Mission:
         months = np.arange(first, beyond)
         edges = np.arange(first, beyond + np.timedelta64(1, "M")).astype("datetime64[ns]")
         return tuple(
-            _Segment(UnitKey(f"{name}/{month}"), max(int(lower), start), min(int(upper), end))
+            _Segment(UnitKey.within(name, str(month)), max(int(lower), start), min(int(upper), end))
             for month, lower, upper in zip(
                 months, edges[:-1].astype(np.int64), edges[1:].astype(np.int64), strict=True
             )

@@ -168,7 +168,7 @@ class Physionet2012CorpusReader:
             yield from files
 
     def _key_of(self, path: Path) -> UnitKey:
-        return UnitKey(f"{path.parent.name}/{path.stem}")
+        return UnitKey.within(path.parent.name, path.stem)
 
     def _locate(self, unit: UnitKey) -> Path:
         subset, separator, record = unit.value.partition("/")
