@@ -37,9 +37,11 @@ class SmdCorpusReader:
     minute was pretrained on.
 
     The reader is bound to a selection of the three machine groups, each a set of servers of one
-    kind and a corpus in its own right. Units are keyed by file name, which already names the
-    group. The checksum covers the selected groups' files in group order and, within a group, in
-    file-name order, whatever order the groups were named in.
+    kind and a corpus in its own right. A machine is keyed within its group, as every corpus that
+    arrives in parts keys its units, so that a publication can hold a whole group out; the file
+    name repeats the group, and the key says it where the other corpora say it. The checksum
+    covers the selected groups' files in group order and, within a group, in file-name order,
+    whatever order the groups were named in.
     """
 
     SUBSETS: ClassVar[tuple[str, ...]] = ("1", "2", "3")
@@ -76,9 +78,11 @@ class SmdCorpusReader:
         )
 
     def read_units(self) -> Iterator[CorpusUnit]:
-        for path in self._paths():
+        for group, path in self._grouped_paths():
             rows = self._rows_in(path.name, path.read_bytes())
-            yield CorpusUnit(UnitKey(path.stem), TimeExtent(0.0, rows * _SAMPLE_PERIOD))
+            yield CorpusUnit(
+                UnitKey.within(group, path.stem), TimeExtent(0.0, rows * _SAMPLE_PERIOD)
+            )
 
     def read_observations(self, unit: UnitKey) -> Iterator[Observation]:
         path = self._locate(unit)
@@ -86,13 +90,19 @@ class SmdCorpusReader:
 
     def _paths(self) -> Iterator[Path]:
         """The selected files in canonical order: groups as declared, files by name within one."""
+        for _, path in self._grouped_paths():
+            yield path
+
+    def _grouped_paths(self) -> Iterator[tuple[str, Path]]:
+        """The same files, each beside the group it was read from, which its key states."""
         if not self._root.is_dir():
             raise CorpusDataNotFoundError(f"{self._root} is missing")
         found = False
         for group in self._subsets:
             files = sorted(self._root.glob(f"{_PREFIX}-{group}-*.txt"), key=lambda path: path.name)
             found = found or bool(files)
-            yield from files
+            for path in files:
+                yield group, path
         if not found:
             raise CorpusDataNotFoundError(
                 f"{self._root} holds no machine of the groups {self._subsets}"
@@ -101,14 +111,22 @@ class SmdCorpusReader:
     def _locate(self, unit: UnitKey) -> Path:
         if not self._root.is_dir():
             raise CorpusDataNotFoundError(f"{self._root} is missing")
-        parts = unit.value.split("-")
-        if len(parts) != 3 or parts[0] != _PREFIX or parts[1] not in self._subsets:
+        group, machine = unit.part, unit.name
+        parts = machine.split("-")
+        if (
+            group is None
+            or group not in self._subsets
+            or len(parts) != 3
+            or parts[0] != _PREFIX
+            # The file name names the group too, and a key whose two disagree names no machine.
+            or parts[1] != group
+        ):
             raise UnknownUnitError(f"{unit} is not a machine of a selected group")
-        path = self._root / f"{unit.value}.txt"
+        path = self._root / f"{machine}.txt"
         # A key naming anything but a file of the directory names no machine, however the file
         # system would resolve it.
         if path.parent != self._root or not path.is_file():
-            raise UnknownUnitError(f"{self._root} has no machine {unit}")
+            raise UnknownUnitError(f"{self._root} has no machine {machine}")
         return path
 
     @classmethod

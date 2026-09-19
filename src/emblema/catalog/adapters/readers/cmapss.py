@@ -98,7 +98,7 @@ class CmapssCorpusReader:
         for name, path in self._files.items():
             engines = self._cycles_per_engine(path.name, self._bytes_of(path))
             for engine, cycles in engines.items():
-                yield CorpusUnit(UnitKey(f"{name}/{engine}"), TimeExtent(1.0, cycles + 1.0))
+                yield CorpusUnit(UnitKey.within(name, str(engine)), TimeExtent(1.0, cycles + 1.0))
 
     def read_observations(self, unit: UnitKey) -> Iterator[Observation]:
         """One engine's sensor values, cycle by cycle.
@@ -135,8 +135,8 @@ class CmapssCorpusReader:
             raise UnknownUnitError(f"{path.name} has no engine {engine}")
 
     def _locate(self, unit: UnitKey) -> tuple[str, int]:
-        name, separator, engine = unit.value.partition("/")
-        if not separator or name not in self._files or not (engine.isascii() and engine.isdigit()):
+        name, engine = unit.part, unit.name
+        if name is None or name not in self._files or not (engine.isascii() and engine.isdigit()):
             raise UnknownUnitError(f"{unit} is not an engine of a selected subset")
         return name, int(engine)
 

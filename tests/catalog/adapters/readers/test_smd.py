@@ -196,12 +196,14 @@ def test_counts_and_extents_follow_the_rows_written(
     assert [unit.extent for unit in reader.read_units()] == [TimeExtent(0.0, float(minutes))]
 
 
-def test_machines_are_units_keyed_by_file_spanning_their_minutes(reader: SmdCorpusReader) -> None:
+def test_machines_are_units_keyed_within_their_group_spanning_their_minutes(
+    reader: SmdCorpusReader,
+) -> None:
     units = list(reader.read_units())
 
     assert [(str(unit.key), unit.extent) for unit in units] == [
-        ("machine-1-1", TimeExtent(0.0, 60.0)),
-        ("machine-2-1", TimeExtent(0.0, 60.0)),
+        ("1/machine-1-1", TimeExtent(0.0, 60.0)),
+        ("2/machine-2-1", TimeExtent(0.0, 60.0)),
     ]
     assert all(unit.static_features == () for unit in units)
 
@@ -209,7 +211,7 @@ def test_machines_are_units_keyed_by_file_spanning_their_minutes(reader: SmdCorp
 def test_observations_of_a_machine_are_its_metric_values_minute_by_minute(
     reader: SmdCorpusReader,
 ) -> None:
-    observations = list(reader.read_observations(UnitKey("machine-1-1")))
+    observations = list(reader.read_observations(UnitKey("1/machine-1-1")))
 
     assert len(observations) == SAMPLE_ROWS * WIDTH
     assert observations[:3] == [
@@ -221,7 +223,19 @@ def test_observations_of_a_machine_are_its_metric_values_minute_by_minute(
 
 
 @pytest.mark.parametrize(
-    "key", ["machine-3-1", "machine-1-99", "1-1", "machine-1", "machine-1-1-1", "Machine-1-1"]
+    "key",
+    [
+        "3/machine-3-1",
+        "1/machine-1-99",
+        "1/1-1",
+        "1/machine-1",
+        "1/machine-1-1-1",
+        "1/Machine-1-1",
+        # The group of the key and the group the file name states must be the same one.
+        "2/machine-1-1",
+        # Keys of the shape the reader used before a machine was keyed within its group.
+        "machine-1-1",
+    ],
 )
 def test_a_key_that_could_name_no_machine_is_unknown_before_the_stream(
     reader: SmdCorpusReader, key: str
@@ -232,7 +246,7 @@ def test_a_key_that_could_name_no_machine_is_unknown_before_the_stream(
 
 def test_reading_a_machine_from_a_missing_directory_is_missing_data(tmp_path: Path) -> None:
     with pytest.raises(CorpusDataNotFoundError, match="missing"):
-        SmdCorpusReader(tmp_path / "absent").read_observations(UnitKey("machine-1-1"))
+        SmdCorpusReader(tmp_path / "absent").read_observations(UnitKey("1/machine-1-1"))
 
 
 @pytest.mark.skipif(

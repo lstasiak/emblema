@@ -336,3 +336,32 @@ def test_both_published_sets_agree_with_the_counts_measured_on_them() -> None:
     assert set_b.content.unit_count == SET_B_STAYS
     assert set_b.content.observation_count == SET_B_OBSERVATIONS
     assert set_b.channel_schema == set_a.channel_schema
+
+
+def channels_measured(reader: Physionet2012CorpusReader) -> set[str]:
+    """Every channel some stay of the reader's sets carries, as a descriptor or a measurement."""
+    measured: set[str] = set()
+    for unit in reader.read_units():
+        measured.update(feature.channel for feature in unit.static_features)
+        measured.update(observation.channel for observation in reader.read_observations(unit.key))
+    return measured
+
+
+@pytest.mark.skipif(
+    raw_root("physionet2012") is None,
+    reason="the raw PhysioNet files are not on this machine (fetch_corpora.py physionet2012)",
+)
+def test_every_channel_is_measured_on_both_published_sets() -> None:
+    """What holding out set B whole rests on: the statistics are fitted on set A alone, so a
+    channel measured only in set B would leave its tokens nothing to be normalised by. Reads
+    both sets in full, which takes tens of seconds where the raw files are.
+    """
+    root = raw_root("physionet2012")
+    assert root is not None
+
+    measured = {
+        name: channels_measured(Physionet2012CorpusReader(root, subsets=(name,)))
+        for name in SUBSETS
+    }
+
+    assert measured["set-a"] == measured["set-b"] == set(Physionet2012CorpusReader.SCHEMA.names)

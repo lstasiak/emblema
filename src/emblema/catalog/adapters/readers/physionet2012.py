@@ -168,20 +168,20 @@ class Physionet2012CorpusReader:
             yield from files
 
     def _key_of(self, path: Path) -> UnitKey:
-        return UnitKey(f"{path.parent.name}/{path.stem}")
+        return UnitKey.within(path.parent.name, path.stem)
 
     def _locate(self, unit: UnitKey) -> Path:
-        subset, separator, record = unit.value.partition("/")
-        if not separator or subset not in self._subsets:
+        subset = unit.part
+        if subset is None or subset not in self._subsets:
             raise UnknownUnitError(f"{unit} is not a stay of a selected set")
         folder = self._root / subset
         if not folder.is_dir():
             raise CorpusDataNotFoundError(f"{folder} is missing")
-        path = folder / f"{record}.txt"
+        path = folder / f"{unit.name}.txt"
         # A key naming anything but a file of the set — a nested path, a step upwards — names no
         # stay, however the file system would resolve it.
         if path.parent != folder or not path.is_file():
-            raise UnknownUnitError(f"{folder} has no stay {record}")
+            raise UnknownUnitError(f"{folder} has no stay {unit.name}")
         return path
 
     @classmethod

@@ -15,7 +15,9 @@ class PublishedCorpusManifest:
     A tokenised corpus travels as two artifacts, the block of windows and this manifest. The
     manifest pins the data by version and checksum, names the block, carries the vocabulary the
     tokens are indexed by and lists the units in the order the block indexes them, with the side
-    of the split each is on. Nothing of the Catalog's interior is here; unit keys are text.
+    of the split each is on. Nothing of the Catalog's interior is here; unit keys are text, and
+    the one thing a consumer may assume of their shape is that a corpus which arrives in parts
+    keys a unit as ``<part>/<name>``.
 
     Invariants: channels carry identifiers ``1..n`` in order; units are unique and none is also
     said to be empty; the sides of the split are sorted, disjoint and together name exactly the
@@ -33,7 +35,8 @@ class PublishedCorpusManifest:
         empty_units: Units of the corpus that yielded no window; absent from the block.
         training_units: Units whose data fitted the statistics, sorted.
         validation_units: Units held out from fitting, sorted.
-        split_seed: Seed the split was drawn with; ``None`` where its units were named.
+        split_seed: Seed the split was drawn with; ``None`` where its units were named or a part
+            of the corpus held out.
         window_count: How many windows the block holds.
         token_count: How many tokens the block holds in all.
     """

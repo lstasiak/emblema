@@ -2,11 +2,15 @@ from collections import Counter
 
 import pytest
 
+pytest.importorskip("torch")
+
+import torch
+
 from emblema.shared.adapters.loaders.interleaved_loader import InterleavedLoader
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from tests.support.experiments import windows
 
-torch = pytest.importorskip("torch")
+pytestmark = pytest.mark.ml
 
 
 def loader(count: int, *, seed: int = 1, batch_size: int = 2) -> WindowLoader:
