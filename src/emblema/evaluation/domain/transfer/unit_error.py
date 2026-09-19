@@ -53,6 +53,18 @@ class UnitError:
             count += 1
         return cls(unit=unit, squared_error=total, windows=count)
 
+    @classmethod
+    def per_unit(cls, predictions: Iterable[WindowPrediction]) -> tuple[Self, ...]:
+        """The error of every unit among ``predictions``, in unit order.
+
+        The order is the units' own and not the predictions', so two candidates scored on the
+        same units pair by position whatever order each answered in.
+        """
+        grouped: dict[UnitKey, list[WindowPrediction]] = {}
+        for prediction in predictions:
+            grouped.setdefault(prediction.window.unit, []).append(prediction)
+        return tuple(cls.of(unit, grouped[unit]) for unit in sorted(grouped, key=str))
+
     @property
     def rmse(self) -> float:
         return sqrt(self.squared_error / self.windows)

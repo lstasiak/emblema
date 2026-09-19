@@ -26,6 +26,8 @@ def outcome(
         task=TASK,
         budget=LabelBudget.of(2),
         sample_seed=3,
+        labelled_windows=2,
+        labelled_units=2,
         trainable_parameters=257,
         training_losses=(0.5, 0.25),
         predictions=predictions,
@@ -66,6 +68,19 @@ def test_the_training_losses_are_one_per_planned_epoch() -> None:
 def test_a_training_loss_that_is_not_a_finite_non_negative_number_is_refused(loss: float) -> None:
     with pytest.raises(InvalidAdaptationOutcomeError, match="training loss"):
         outcome(training_losses=(0.5, loss))
+
+
+@pytest.mark.parametrize("units", [0, 3])
+def test_the_labels_come_from_at_least_one_unit_and_no_more_units_than_windows(units: int) -> None:
+    with pytest.raises(InvalidAdaptationOutcomeError, match="no more units than windows"):
+        outcome(labelled_units=units)
+
+
+def test_a_counted_budget_must_resolve_to_as_many_windows() -> None:
+    with pytest.raises(InvalidAdaptationOutcomeError, match="budget of 2 windows resolved to 3"):
+        outcome(labelled_windows=3, labelled_units=2)
+
+    assert outcome(budget=LabelBudget.everything(), labelled_windows=3).labelled_windows == 3
 
 
 def test_a_run_that_trained_nothing_is_refused() -> None:

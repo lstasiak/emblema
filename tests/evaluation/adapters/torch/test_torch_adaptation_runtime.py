@@ -180,3 +180,32 @@ def test_the_pretrained_encoder_the_tests_stand_on_is_the_same_every_time() -> N
 
     assert PRETRAINED_SEED == 1
     assert all(torch.equal(first[name], again[name]) for name in first)
+
+
+def test_the_rate_follows_the_schedule_on_every_step_the_probe_included(
+    published: Published, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The optimiser's rate is the schedule's factor of the peak, stepped once per batch."""
+    seen: list[float] = []
+    original = torch.optim.lr_scheduler.LambdaLR
+
+    class Recording(original):  # type: ignore[misc, valid-type]
+        def step(self, epoch: int | None = None) -> None:
+            seen.append(self.optimizer.param_groups[0]["lr"])
+            super().step(epoch)
+
+    monkeypatch.setattr(torch.optim.lr_scheduler, "LambdaLR", Recording)
+    schedule = adaptation_schedule(
+        epochs=3, batch_size=2, learning_rate=1e-2, warmup_fraction=0.4, final_lr_fraction=0.1
+    )
+    stated = plan(TransferMode.FROZEN_PROBE, schedule=schedule)
+
+    adapt(published, stated)
+
+    # The scheduler steps once as it is built, to set the first rate; every record after that is
+    # the rate the optimiser had just stepped under.
+    shape = schedule.learning_rate_schedule(len(SAMPLE.windows))
+    stepped_under = seen[1:]
+    assert len(stepped_under) == shape.total_steps == 6
+    assert stepped_under == pytest.approx([1e-2 * shape.factor(step) for step in range(6)])
+    assert stepped_under[0] < stepped_under[1] == 1e-2 > stepped_under[-1]

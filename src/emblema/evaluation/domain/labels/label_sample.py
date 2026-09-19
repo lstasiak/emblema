@@ -79,6 +79,11 @@ class LabelSample:
             depth += 1
         return cls(task=task, windows=cls._ordered(pool, taken), budget=budget, seed=seed)
 
+    @property
+    def unit_count(self) -> int:
+        """How many units the windows came from — fewer than the windows, which overlap."""
+        return len({labelled.window.unit for labelled in self.windows})
+
     @staticmethod
     def _ordered(
         pool: Sequence[LabelledWindow], taken: Iterable[int]

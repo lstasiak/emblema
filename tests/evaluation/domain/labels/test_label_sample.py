@@ -93,3 +93,11 @@ def test_the_sample_carries_what_drew_it() -> None:
     assert sample.task == TASK
     assert sample.seed == 3
     assert sample.budget == LabelBudget.of(6)
+
+
+def test_the_sample_counts_the_units_its_windows_came_from() -> None:
+    # Twelve windows over four engines: the whole pool reaches every engine, a budget of six
+    # drawn across the strata happens to reach three of them under this seed, one window one.
+    assert LabelSample.drawn(TASK, pool(), LabelBudget.everything(), BINS, seed=3).unit_count == 4
+    assert LabelSample.drawn(TASK, pool(), LabelBudget.of(6), BINS, seed=3).unit_count == 3
+    assert LabelSample.drawn(TASK, pool(), LabelBudget.of(1), BINS, seed=3).unit_count == 1
