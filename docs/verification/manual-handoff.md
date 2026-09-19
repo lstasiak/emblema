@@ -262,17 +262,37 @@ Every number is validation, not test. What the run says:
   counts them. A handful of steps out of 35,944, and the same on the fp16 C-MAPSS runs.
 - **The log is what the dropped-session remedy came to** (ADR-0029): a progress line every 100
   steps with the pace and the time left, a line per checkpoint with its reference, a line per
-  epoch with every corpus's loss. This run fitted one session, so resuming on the platform is
-  still the test that remains.
+  epoch with every corpus's loss. This run fitted one session, so the resume was tested on its
+  own, below.
+- **Resumed on the platform from a checkpoint inside an epoch.** A second session ran the same
+  order from the checkpoint written at step 26,000, inside the sixth epoch (`transient/sha256/d67c6cde…`,
+  the last checkpoint that epoch wrote), and finished the sixth, seventh and eighth epochs in
+  618 + 2,018 + 2,022 s; result `durable/sha256/15baac32…`, which names the checkpoint it
+  resumed from and signs the same run. Read against the uninterrupted run, relative validation
+  per corpus:
+
+  | epoch | cmapss | skab | smd | esa_ad | mean relative | uninterrupted mean |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | 6 | 0.008 | 0.264 | 0.379 | 0.290 | 0.2354 | 0.2356 |
+  | 7 | 0.007 | 0.263 | 0.365 | 0.282 | 0.2294 | 0.2295 |
+  | 8 | 0.007 | 0.263 | 0.368 | 0.282 | 0.2299 | 0.2308 |
+
+  The largest difference in any corpus's number is 0.005 (SMD, eighth epoch), the mean agrees to
+  0.001 or better, and the resumed run keeps the same epoch, the seventh, as its backbone — an
+  epoch's worth of the accelerator's own half-precision scatter, of the size the resume test of
+  `training-loop.md` calibrated on this machine's accelerator. The resumed run inherited the best
+  epoch the checkpoint carried (the fifth's 0.2411), improved on it at the sixth and seventh,
+  and reports the sixth epoch's training loss over the batches after the checkpoint alone, as
+  `training-loop.md` says it does. Its result is not accepted: the backbone was delivered by the
+  first run and refuses a second delivery, which is the registry doing its job.
 
 ### Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when
   the run is not tracked.~~ Closed on 2026-09-19: the runtime logs every checkpoint it writes,
   and the platform keeps the log (ADR-0029).
-- Resuming from a remote checkpoint has been tested through the port and on this machine's
-  accelerator, not yet on the platform: the mixed run of 2026-09-19 fitted one session and left
-  seventeen checkpoints in the bucket's transient prefix, and a second run of its order from one
-  of them is the test that remains, read against the scatter of two uninterrupted runs.
+- ~~Resuming from a remote checkpoint has been tested through the port and on this machine's
+  accelerator, not yet on the platform.~~ Closed on 2026-09-19: the mixed run's order was resumed
+  on the platform from a checkpoint inside its sixth epoch (section above).
 - The cost of `read` on a machine that fetches the block from the bucket was not measured on the
   platform: the run's wall clock includes it and the run itself does not time it.
