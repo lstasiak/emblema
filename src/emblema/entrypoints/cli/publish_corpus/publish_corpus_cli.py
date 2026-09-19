@@ -4,7 +4,12 @@ from pathlib import Path
 
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.tokenisation.split_policy import NamedSplit, SeededSplit, SplitPolicy
+from emblema.catalog.domain.tokenisation.split_policy import (
+    NamedSplit,
+    SeededSplit,
+    SplitPolicy,
+    SubsetSplit,
+)
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.config.settings import Settings
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
@@ -42,12 +47,27 @@ class PublishCorpusCli:
     def parse(self, argv: Sequence[str] | None = None) -> PublishCorpusInvocation:
         parser = self._parser()
         arguments = parser.parse_args(argv)
-        if arguments.hold_out and (
+        if arguments.hold_out and arguments.hold_out_subset:
+            parser.error(
+                "--hold-out and --hold-out-subset both say which units are held out; give one"
+            )
+        if (arguments.hold_out or arguments.hold_out_subset) and (
             arguments.validation_fraction is not None or arguments.seed is not None
         ):
             parser.error(
-                "--hold-out names the units to hold out, so there is nothing for "
-                "--validation-fraction or --seed to draw"
+                "--hold-out and --hold-out-subset say which units are held out, so there is "
+                "nothing for --validation-fraction or --seed to draw"
+            )
+        if (
+            arguments.hold_out_subset
+            and arguments.subset
+            and arguments.hold_out_subset not in arguments.subset
+        ):
+            # Refused here rather than where the split is made: the corpus is read first, and a
+            # publication of a large one would fail minutes in on a contradiction stated up front.
+            parser.error(
+                f"--hold-out-subset {arguments.hold_out_subset} holds out a subset this run does "
+                "not read"
             )
         known = self._known.named(arguments.corpus)
         return PublishCorpusInvocation(
@@ -66,9 +86,11 @@ class PublishCorpusCli:
 
     @staticmethod
     def _split(arguments: argparse.Namespace) -> SplitPolicy:
-        """What the command line asked for: units named, or a share drawn by the seed."""
+        """What the command line asked for: units named, a subset held out, or a seeded share."""
         if arguments.hold_out:
             return NamedSplit.of(UnitKey(key) for key in arguments.hold_out)
+        if arguments.hold_out_subset:
+            return SubsetSplit(arguments.hold_out_subset)
         return SeededSplit(
             VALIDATION_FRACTION
             if arguments.validation_fraction is None
@@ -123,6 +145,12 @@ class PublishCorpusCli:
             metavar="UNIT",
             help="units to hold out by name, for a corpus whose units differ in kind; refused "
             "together with --validation-fraction or --seed, which then draw nothing",
+        )
+        parser.add_argument(
+            "--hold-out-subset",
+            metavar="SUBSET",
+            help="subset whose every unit is held out, where the corpus's publisher drew the "
+            "line and its units are too many to name",
         )
         parser.add_argument(
             "--vocabulary-from",

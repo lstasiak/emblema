@@ -17,7 +17,7 @@ from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.exceptions import InvalidUnitSplitError
-from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
+from emblema.catalog.domain.tokenisation.split_policy import SeededSplit, SubsetSplit
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
 from emblema.entrypoints.cli.publish_corpus.publish_corpus_cli import (
@@ -262,6 +262,28 @@ def test_naming_the_units_and_drawing_them_at_once_is_refused() -> None:
     for contradiction in (["--seed", "7"], ["--validation-fraction", "0.3"]):
         with pytest.raises(SystemExit):
             PublishCorpusCli().parse([*ARGUMENTS, "--hold-out", "FD001_unit_1", *contradiction])
+        with pytest.raises(SystemExit):
+            PublishCorpusCli().parse([*ARGUMENTS, "--hold-out-subset", "FD001", *contradiction])
+
+
+def test_the_command_line_holds_out_the_subset_it_was_given() -> None:
+    invocation = PublishCorpusCli().parse([*ARGUMENTS, "--hold-out-subset", "FD002"])
+
+    assert invocation.command.split == SubsetSplit("FD002")
+
+
+def test_naming_the_units_and_holding_out_a_subset_at_once_is_refused() -> None:
+    """Both say which units are held out, and nothing says which of them the run meant."""
+    with pytest.raises(SystemExit):
+        PublishCorpusCli().parse(
+            [*ARGUMENTS, "--hold-out", "FD001/1", "--hold-out-subset", "FD002"]
+        )
+
+
+def test_holding_out_a_subset_the_run_does_not_read_is_refused_before_the_corpus_is() -> None:
+    """A publication of a large corpus reads for minutes; this contradiction is stated up front."""
+    with pytest.raises(SystemExit):
+        PublishCorpusCli().parse([*ARGUMENTS, "--subset", "FD001", "--hold-out-subset", "FD002"])
 
 
 def test_a_command_line_that_says_nothing_of_the_split_draws_the_usual_share() -> None:
