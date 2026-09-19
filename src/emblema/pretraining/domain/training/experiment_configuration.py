@@ -3,7 +3,6 @@ from typing import Self
 
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.exceptions import InvalidExperimentConfigurationError
-from emblema.pretraining.domain.learning_rate_schedule import LearningRateSchedule
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
@@ -11,6 +10,7 @@ from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.shared.kernel.compute import ComputeTier
+from emblema.shared.kernel.learning_rate_schedule import LearningRateSchedule
 
 
 @dataclass(frozen=True, kw_only=True)

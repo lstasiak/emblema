@@ -3,11 +3,8 @@ from itertools import pairwise
 
 import pytest
 
-from emblema.pretraining.domain.exceptions import (
-    InvalidLearningRateScheduleError,
-    PretrainingError,
-)
-from emblema.pretraining.domain.learning_rate_schedule import LearningRateSchedule
+from emblema.shared.kernel.exceptions import InvalidLearningRateScheduleError
+from emblema.shared.kernel.learning_rate_schedule import LearningRateSchedule
 
 
 def schedule(*, warmup: int = 10, total: int = 110, final: float = 0.01) -> LearningRateSchedule:
@@ -76,8 +73,6 @@ def test_a_negative_step_is_rejected() -> None:
         schedule().factor(-1)
 
 
-def test_the_error_is_a_value_error_of_the_context() -> None:
-    with pytest.raises(PretrainingError):
-        schedule(total=0)
+def test_the_error_is_a_value_error() -> None:
     with pytest.raises(ValueError, match="total_steps"):
         schedule(total=0)
