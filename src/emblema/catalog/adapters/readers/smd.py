@@ -111,10 +111,10 @@ class SmdCorpusReader:
     def _locate(self, unit: UnitKey) -> Path:
         if not self._root.is_dir():
             raise CorpusDataNotFoundError(f"{self._root} is missing")
-        group, separator, machine = unit.value.partition(UnitKey.PART_SEPARATOR)
+        group, machine = unit.part, unit.name
         parts = machine.split("-")
         if (
-            not separator
+            group is None
             or group not in self._subsets
             or len(parts) != 3
             or parts[0] != _PREFIX

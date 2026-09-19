@@ -114,8 +114,8 @@ class EsaAdCorpusReader:
                 )
 
     def read_observations(self, unit: UnitKey) -> Iterator[Observation]:
-        name, separator, _ = unit.value.partition("/")
-        if not separator or name not in self._subsets:
+        name = unit.part
+        if name is None or name not in self._subsets:
             raise UnknownUnitError(f"{unit} is not a month of a selected mission")
         mission = self._mission(name)
         segment = mission.segment_keyed(unit)

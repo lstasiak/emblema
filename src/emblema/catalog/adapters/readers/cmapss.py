@@ -135,8 +135,8 @@ class CmapssCorpusReader:
             raise UnknownUnitError(f"{path.name} has no engine {engine}")
 
     def _locate(self, unit: UnitKey) -> tuple[str, int]:
-        name, separator, engine = unit.value.partition("/")
-        if not separator or name not in self._files or not (engine.isascii() and engine.isdigit()):
+        name, engine = unit.part, unit.name
+        if name is None or name not in self._files or not (engine.isascii() and engine.isdigit()):
             raise UnknownUnitError(f"{unit} is not an engine of a selected subset")
         return name, int(engine)
 

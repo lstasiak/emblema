@@ -113,17 +113,17 @@ class SkabCorpusReader:
         return UnitKey.within(path.parent.name, path.stem)
 
     def _locate(self, unit: UnitKey) -> Path:
-        subset, separator, experiment = unit.value.partition("/")
-        if not separator or subset not in self._subsets:
+        subset = unit.part
+        if subset is None or subset not in self._subsets:
             raise UnknownUnitError(f"{unit} is not an experiment of a selected folder")
         folder = self._root / subset
         if not folder.is_dir():
             raise CorpusDataNotFoundError(f"{folder} is missing")
-        path = folder / f"{experiment}.csv"
+        path = folder / f"{unit.name}.csv"
         # A key naming anything but a file of the folder — a nested path, a step upwards — names
         # no experiment, however the file system would resolve it.
         if path.parent != folder or not path.is_file():
-            raise UnknownUnitError(f"{folder} has no experiment {experiment}")
+            raise UnknownUnitError(f"{folder} has no experiment {unit.name}")
         return path
 
     @classmethod

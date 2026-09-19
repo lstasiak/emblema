@@ -184,7 +184,7 @@ class SyntheticCorpusReader:
 
     def _unit(self, index: int) -> CorpusUnit:
         return CorpusUnit(
-            key=UnitKey(self._key(index)),
+            key=self._key(index),
             extent=TimeExtent(0.0, self._length(index) * self._layout.time_step),
             static_features=(StaticFeature(GAIN, self._gain(index)),),
         )
@@ -212,8 +212,8 @@ class SyntheticCorpusReader:
         timed = (Channel(name) for name in self._layout.channel_names)
         return ChannelSchema(frozenset((*timed, Channel(GAIN, timeless=True))))
 
-    def _key(self, index: int) -> str:
-        return f"{self._layout.name}/{index}"
+    def _key(self, index: int) -> UnitKey:
+        return UnitKey.within(self._layout.name, str(index))
 
     def _locate(self, unit: UnitKey) -> int:
         """The index of the unit ``unit`` names.
@@ -221,10 +221,10 @@ class SyntheticCorpusReader:
         A key is held against the one its own index would have produced, so a reshaped form of a
         real key — padded with a zero, say — names no unit rather than quietly aliasing onto it.
         """
-        _, separator, index = unit.value.partition("/")
-        if separator and index.isascii() and index.isdigit():
+        index = unit.name
+        if index.isascii() and index.isdigit():
             number = int(index)
-            if number < self._layout.units and unit.value == self._key(number):
+            if number < self._layout.units and unit == self._key(number):
                 return number
         raise UnknownUnitError(f"{unit} is not a unit of layout {self._layout.name!r}")
 
