@@ -228,3 +228,120 @@ both to be chosen once the first errors were visible.
 **Measured when this changed.** Nothing on this backbone. The procedure has run on a two-engine
 sample of the corpus under a small untrained encoder, to show that each method trains and
 answers; no number from it is a result.
+
+### 2026-09-19 — the schedule of every arm, fixed on the validation side before the grid
+
+**Changed.** Nothing registered above; this fixes what the first run left open and names how
+the seeds enter the endpoint. Every arm learns under one shape of the learning rate: a linear
+warm-up over the first tenth of the run's optimiser steps, then a cosine decay to one per cent
+of the peak by the last step, thirty epochs, batches of sixteen, no weight decay. The peak
+rate per arm, one value for the whole grid, is: from scratch 3e-4, frozen probe 1e-2, low-rank
+updates 3e-3, full fine-tuning 3e-4. The low-rank updates keep rank 8, α = 16, no dropout,
+beside the attention's projections and the feed-forward network's linears.
+
+In the paired comparison of a cell, the five repeats of each arm are pooled per engine — the
+squared errors of every repeat are added per engine before the pair is made and resampled — so
+a cell's RMSE is the root of the mean squared error over its repeats and the interval is over
+the 18 engines as registered; the spread of RMSE over the five repeats is reported beside it
+and is the measured part of the practical floor. The p-value the Holm correction ranks is
+two-sided, twice the smaller share of bootstrap resamples on either side of zero. The grid runs
+on the free GPU platform in single precision, two accelerators in one session sharded by seed.
+
+**Why.** The first run of each arm (ADR-0030, 2026-09-18) used a constant rate and no warm-up,
+and the control arm trained from scratch ended above the mean predictor: the primary endpoint
+is measured against that arm, so a control at the trivial predictor would confirm the claim for
+the wrong reason. The rate's shape and each arm's peak were therefore chosen on the validation
+side at the endpoint's budget, one seed, before any cell of the grid — the one set per mode this
+registration allows — and by a rule fixed before the sweep: the lowest validation RMSE among
+three peaks per arm, the shape chosen for the control applying to every arm. The sweep first
+covered the control and the probe alone, with the other two arms keeping their first-run rates;
+when the control landed level with full fine-tuning, the other two arms were swept over three
+peaks the same way, so that no arm is tuned more than another. Tuning the control is
+conservative for the claim; tuning every arm equally is fair to it, and both are stated here
+with every number.
+
+**Measured when this changed.** The sweep, 200 labelled windows drawn under seed 1 from 73 of
+the 82 tuning engines, validation over the 18 held-out engines (535 windows), M1 Pro, MPS,
+fp32 (`docs/verification/label-efficiency-curve.md`); validation RMSE, the chosen cells in bold:
+
+| arm | peak rate | constant rate | warm-up 10 % + cosine to 1 % |
+| --- | --- | --- | --- |
+| from scratch | 1e-3 | 44.64 | 25.75 |
+| from scratch | 3e-4 | 39.14 | **22.38** |
+| from scratch | 1e-4 | 34.85 | 29.69 |
+| frozen probe | 1e-2 | 38.92 | **38.73** |
+| frozen probe | 3e-3 | 39.31 | 40.14 |
+| frozen probe | 1e-3 | 40.08 | 40.81 |
+| low-rank updates | 3e-3 | — | **20.70** |
+| low-rank updates | 1e-3 | 24.07 (first run) | 21.84 |
+| low-rank updates | 3e-4 | — | 22.90 |
+| full fine-tuning | 3e-4 | — | **21.10** |
+| full fine-tuning | 1e-4 | 22.30 (first run) | 22.08 |
+| full fine-tuning | 3e-5 | — | 22.16 |
+
+No cell of the grid had run. What these numbers already say is recorded so that the grid's
+reading cannot be mistaken for a surprise: at this budget and seed the control arm, once given
+a rate it can start at and a decay to settle under, stands within a few per cent of the two
+arms that update the pretrained encoder, and the mean predictor scores 41.11 on the same
+windows. Whether the endpoint holds is what the grid measures, over five seeds and with its
+interval; nothing here changes the endpoint, the threshold or the floor.
+
+### 2026-09-19 — how the registered rules are read, made precise before the grid
+
+**Changed.** Nothing registered above; this fixes, before any cell of the grid, five readings
+the registered text left to the code, so that none is chosen once the numbers are visible.
+
+1. *The floor binds the endpoint.* The claim is confirmed only when the reduction takes at
+   least 10 % off, keeps its whole interval above zero **and** is not smaller than the practical
+   floor. The registration calls a reduction under the floor practically nil; the same document
+   cannot call it confirmed. The floor's measured part is the standard deviation of the
+   from-scratch RMSE over its five seeds, so this binds only when the control's spread over
+   seeds exceeds a tenth of its error — the case in which five seeds do not agree on what the
+   control scores, and a difference of that size is not a result.
+2. *The secondary family is the registered eleven whatever has run.* A cell that has not run,
+   or whose control has not, enters the Holm correction with a p-value of one: it is never
+   rejected and holds the cells that ran to the levels the family of eleven sets. A partial grid
+   is therefore read more strictly than the whole one, never less; and the conclusion states
+   when the grid is incomplete — how many of the twelve compared cells and how many of the five
+   seeds it holds — because the reading of a partial grid is not the registered one. A secondary
+   cell's verdict follows the family's word, not its own interval, so the two never disagree.
+3. *The bootstrap p-value counts the observed reduction as one resample on its own side*,
+   ``(k + 1) / (B + 1)`` per side, twice the smaller. No p-value is zero; the smallest is two in
+   ten thousand and one, which says how many resamples were drawn.
+4. *The asymmetric score is reported as a mean per window*, not the benchmark's sum. The sum
+   over five hundred overlapping validation windows does not reproduce the benchmark, which sums
+   one answer per engine at a cut-off, and it would scale with the number of windows so that the
+   validation and the test side could not be read together; the mean removes only that factor.
+   Inside one grid the two differ by a constant, so no ranking or ratio changes. The score
+   stays read, not thresholded: on the smoke run ten of the 535 windows carry a fifth to a
+   quarter of it.
+5. *The last-window RMSE is the benchmark's protocol on the test side only.* The published
+   numbers are computed on trajectories cut short of failure, whose last window carries a
+   remaining life of roughly 7 to 145 cycles. On the validation side every engine runs to
+   failure, and its last window ends within four cycles of it (0 to 4 on the smoke run's 18
+   engines), so the reading there is the error at the end of life. It is reported with that
+   caption and is not to be set beside published errors; the comparison the registration
+   promised is made on the test side, once.
+
+**Why.** Each of the five was decided by the code rather than by the registered text, and a
+reviewer found each before the grid: the endpoint's rule and the floor's rule could conflict
+without the text saying which wins; the family the correction ran over was whatever lay on
+disk; a p-value of zero was printed for a bootstrap; the score's aggregation was unstated; and
+a caption invited a comparison the validation side cannot bear. Fixing them now costs nothing
+and leaves nothing to choose later.
+
+**A limit known now, recorded now.** At the smallest budget, fifty labelled windows in batches
+of sixteen make four optimiser steps an epoch and 120 in the run. On the smoke run at that
+budget the arm trained from scratch scored 41.11, the mean predictor's own number on these
+windows; the probe 40.82 and the low-rank updates 40.78. The registration's reason for tuning
+the control's schedule — that a control at the trivial predictor confirms the claim for the
+wrong reason — applies to the secondary cells at fifty as well: what they measure is as much a
+budget of optimisation as a budget of labels. The grid is not changed for it; the cells at fifty
+are read knowing it, and the crossing point, if there is one, is looked for above them.
+
+**Measured when this changed.** No cell of the grid. The smoke run of the grid's path — the
+four modes at fifty windows under one seed, M1 Pro, MPS, fp32
+(`docs/verification/label-efficiency-curve.md`) — had scored from scratch 41.11, probe 40.82,
+low-rank 40.78, full fine-tuning 34.81; it is a check of the path, and under the rules as read
+here its one secondary rejection, the probe at fifty (p = 0.0084), is rejected among three cells
+and not among the registered eleven, which is what item 2 is for.
