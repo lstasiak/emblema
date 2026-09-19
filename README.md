@@ -15,7 +15,7 @@
 | src/emblema/catalog/adapters/readers/esa\_ad.py                                           |      169 |        0 |       44 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/physionet2012.py                                     |      148 |        0 |       56 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/skab.py                                              |      116 |        0 |       38 |        0 |    100% |           |
-| src/emblema/catalog/adapters/readers/smd.py                                               |       76 |        0 |       24 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/smd.py                                               |       81 |        0 |       28 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/subsets.py                                           |        9 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/text.py                                              |       21 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/adapters/synthetic/dials.py                                           |        6 |        0 |        0 |        0 |    100% |           |
@@ -43,7 +43,7 @@
 | src/emblema/catalog/domain/channels/channel\_statistics.py                                |       19 |        0 |        6 |        0 |    100% |           |
 | src/emblema/catalog/domain/channels/channel\_vocabulary.py                                |       48 |        0 |       24 |        0 |    100% |           |
 | src/emblema/catalog/domain/exceptions.py                                                  |       84 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/domain/identifiers.py                                                 |       12 |        0 |        2 |        0 |    100% |           |
+| src/emblema/catalog/domain/identifiers.py                                                 |       31 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/domain/measurements/corpus\_unit.py                                   |       14 |        0 |        2 |        0 |    100% |           |
 | src/emblema/catalog/domain/measurements/observation.py                                    |       12 |        0 |        6 |        0 |    100% |           |
 | src/emblema/catalog/domain/measurements/static\_feature.py                                |       10 |        0 |        4 |        0 |    100% |           |
@@ -56,7 +56,7 @@
 | src/emblema/catalog/domain/registry/licence.py                                            |       10 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/archived\_corpus.py                               |       15 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/placed\_window.py                                 |        6 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/domain/tokenisation/split\_policy.py                                  |       22 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/domain/tokenisation/split\_policy.py                                  |       36 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/tokenisation\_manifest.py                         |       36 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/tokenisation\_scheme.py                           |       46 |        0 |       10 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/unit\_split.py                                    |       38 |        0 |       16 |        0 |    100% |           |
@@ -80,7 +80,7 @@
 | src/emblema/entrypoints/cli/publish\_corpus/adapters.py                                   |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/composition\_root.py                          |       67 |        0 |       14 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/known\_corpora.py                             |       19 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_cli.py                       |       50 |        0 |        6 |        0 |    100% |           |
+| src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_cli.py                       |       57 |        0 |       12 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_invocation.py                |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/services.py                                   |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/restored\_backbones.py                                        |       19 |        0 |        2 |        0 |    100% |           |
@@ -262,7 +262,7 @@
 | src/emblema/shared/ports/event\_subscriber.py                                             |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                                                    |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **6931** |   **12** | **1346** |   **16** | **99%** |           |
+| **TOTAL**                                                                                 | **6976** |   **12** | **1366** |   **16** | **99%** |           |
 
 74 empty files skipped.
 
