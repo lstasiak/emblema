@@ -95,3 +95,35 @@ class UnreadableTaskCorpusError(EvaluationError):
 
 class UnreadableGroundTruthError(EvaluationError):
     """The file the ground truth of a corpus is published in is missing or not what it claims."""
+
+
+class InvalidPairedUnitErrorsError(EvaluationError, ValueError):
+    pass
+
+
+class InvalidBootstrapIntervalError(EvaluationError, ValueError):
+    pass
+
+
+class InvalidPairedUnitBootstrapError(EvaluationError, ValueError):
+    pass
+
+
+class InvalidPairedDifferenceError(EvaluationError, ValueError):
+    pass
+
+
+class InvalidPracticalFloorError(EvaluationError, ValueError):
+    pass
+
+
+class InvalidHolmCorrectionError(EvaluationError, ValueError):
+    pass
+
+
+class InvalidRemainingLifeMetricsError(EvaluationError, ValueError):
+    pass
+
+
+class InvalidComparisonRulesError(EvaluationError, ValueError):
+    pass
