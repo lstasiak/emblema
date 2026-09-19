@@ -52,6 +52,8 @@ class InMemoryAdaptationRuntime:
             task=task.task_id,
             budget=sample.budget,
             sample_seed=sample.seed,
+            labelled_windows=len(sample.windows),
+            labelled_units=sample.unit_count,
             trainable_parameters=1,
             training_losses=(variance,) * plan.schedule.epochs,
             predictions=tuple(

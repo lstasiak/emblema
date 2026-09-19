@@ -23,3 +23,7 @@ class InvalidUtcDateTimeError(ValueError):
 
 class InvalidTokenWindowError(ValueError):
     pass
+
+
+class InvalidLearningRateScheduleError(ValueError):
+    pass

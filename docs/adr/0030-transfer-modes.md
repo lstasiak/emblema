@@ -186,3 +186,26 @@ grid's, since the primary endpoint is measured against it.
 - Kumar, A. et al. (2022). Fine-Tuning Can Distort Pretrained Features and Underperform
   Out-of-Distribution. ICLR.
 - Loshchilov, I. and Hutter, F. (2019). Decoupled Weight Decay Regularization. ICLR.
+
+### 2026-09-19 — the rate has a shape, and every arm's peak is fixed before the grid
+
+The constant rate of the first run is superseded. `AdaptationSchedule` states, beside the peak,
+a warm-up as a share of the run's optimiser steps and the fraction of the peak the rate decays
+to, and the runtime steps the rate under `LearningRateSchedule` — the same value object the
+pretraining budget uses, moved to the shared kernel because it is a pure function of the step
+with no context's language in it. A constant rate is the shape with no warm-up and a floor of
+one, so the first run repeats under the new field (44.64 again, to the device's scatter). The
+warm-up is a share rather than a count of epochs because an epoch is four steps at the smallest
+budget and a hundred and sixty at the largest.
+
+The shape and each arm's peak were fixed on the validation side at the endpoint's budget, one
+seed, by a rule stated before the sweep — lowest validation RMSE among three peaks per arm, the
+control's shape for every arm — and registered before the grid (`docs/preregistration.md`,
+2026-09-19; the numbers in `docs/verification/label-efficiency-curve.md`). Under a warm-up over
+a tenth of the run and a cosine decay to one per cent, the control arm goes from 44.64 to 22.38
+at a peak of 3e-4, the low-rank arm to 20.70 at 3e-3, full fine-tuning to 21.10 at 3e-4, and
+the probe stays at 38.73 at 1e-2. The three arms that step the encoder or an update beside it
+therefore stand within two RMSE of one another at 200 labels under one seed, and the arm the
+first run showed at the trivial predictor was the schedule's, not the data's, as the note
+suspected. The outcome now also states how many labelled windows and how many units the
+labels came from, so a budget is reported beside the engines behind it.

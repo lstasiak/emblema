@@ -73,6 +73,8 @@ class AdaptationPlan:
             "batch_size": self.schedule.batch_size,
             "learning_rate": float(self.schedule.learning_rate),
             "weight_decay": float(self.schedule.weight_decay),
+            "warmup_fraction": float(self.schedule.warmup_fraction),
+            "final_lr_fraction": float(self.schedule.final_lr_fraction),
             "lora_rank": 0 if self.lora is None else self.lora.rank,
             "lora_alpha": 0.0 if self.lora is None else float(self.lora.alpha),
             "lora_dropout": 0.0 if self.lora is None else float(self.lora.dropout),

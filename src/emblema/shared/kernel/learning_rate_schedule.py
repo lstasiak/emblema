@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass
 
-from emblema.pretraining.domain.exceptions import InvalidLearningRateScheduleError
+from emblema.shared.kernel.exceptions import InvalidLearningRateScheduleError
 
 
 @dataclass(frozen=True, kw_only=True)
