@@ -104,6 +104,36 @@ refused as in the SKAB reader; the released files never do.
 - The mixture's normalisation is fitted across corpora: the tails here and in SMD are the case
   against it.
 
+## 2026-09-19 — the held-out side is the challenge's own set B
+
+The publication holds out set B whole, and states it as a part rather than as units: a third
+split policy beside the drawn and the named one, `SubsetSplit`, holds out every unit read from
+one part of a corpus, and the command line asks for it with `--hold-out-subset set-b`.
+
+Why a part and not the two policies already there. The challenge divided these stays itself —
+set A to train on, set B to validate against, set C to score — and a publication that drew its
+own fifth would report numbers no reader could hold beside the ones published under the
+challenge, while blurring the line the downstream task's validation side is drawn on. Naming the
+units states the same division, but four thousand keys on a command line state it less legibly
+than the name the challenge gave them, and the manifest records both sides in full either way.
+
+Holding out a part asks the same of every corpus: that a unit's key says which part it was read
+from. Four of the five readers already keyed their units that way; the server corpus keyed a
+machine by its file name alone, which names its group in another shape (`machine-1-1`), and a
+part held out of it would have matched nothing. Its machines are now keyed within their group
+(`1/machine-1-1`), as the key of every other corpus that arrives in parts is. A seeded draw
+ranks units by their keys, so a republication of that corpus draws a different fifth than the
+versions published before today; the published versions themselves, and every number measured on
+them, are untouched — they are artifacts, not derivations.
+
+What the record raised and this settles: every one of the 44 channels is measured in both sets,
+so holding out set B leaves no channel without statistics. The rarest in set A are `Cholesterol`
+(315 measurements) and `TroponinI` (435), in set B `TroponinI` (376) and `Cholesterol` (356);
+reading both sets through the reader to compare the two sides takes 38 s on the development
+machine. Among the four stays of the sample it is still false — the one stay of set B measures
+`pH`, which none of the three stays of set A does — so the sample keeps naming its held-out
+stays, and the refusal that follows from holding out its set B is asserted as a test.
+
 ## Sources
 
 - Silva, I., Moody, G., Scott, D. J., Celi, L. A. and Mark, R. G. (2012). Predicting In-Hospital
