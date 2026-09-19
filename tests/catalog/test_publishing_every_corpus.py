@@ -15,7 +15,7 @@ import pytest
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.domain.exceptions import MissingChannelStatisticsError
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.tokenisation.split_policy import NamedSplit, SplitPolicy, SubsetSplit
+from emblema.catalog.domain.tokenisation.split_policy import NamedSplit, PartSplit, SplitPolicy
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
@@ -119,7 +119,7 @@ def test_a_corpus_published_by_its_publishers_division_holds_out_that_part_whole
     )
 
     ref = process.services.publish_corpus(
-        publish_command(corpus=corpus, window=SAMPLE_WINDOW, split=SubsetSplit(part))
+        publish_command(corpus=corpus, window=SAMPLE_WINDOW, split=PartSplit(part))
     )
 
     manifest = process.adapters.archive.read_manifest(ref)
@@ -153,6 +153,6 @@ def test_holding_out_a_part_that_measures_a_channel_the_rest_does_not_is_refused
             publish_command(
                 corpus="physionet2012",
                 window=WindowSpec(length=48.0, stride=48.0),
-                split=SubsetSplit("set-b"),
+                split=PartSplit("set-b"),
             )
         )

@@ -17,7 +17,7 @@ from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.exceptions import InvalidUnitSplitError
-from emblema.catalog.domain.tokenisation.split_policy import SeededSplit, SubsetSplit
+from emblema.catalog.domain.tokenisation.split_policy import PartSplit, SeededSplit
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
 from emblema.entrypoints.cli.publish_corpus.publish_corpus_cli import (
@@ -257,19 +257,26 @@ def test_a_subset_asked_for_is_the_only_one_read() -> None:
     assert invocation.subsets == ("FD001",)
 
 
-def test_naming_the_units_and_drawing_them_at_once_is_refused() -> None:
-    """A fraction or a seed beside named units draws nothing, so it is a contradiction."""
-    for contradiction in (["--seed", "7"], ["--validation-fraction", "0.3"]):
-        with pytest.raises(SystemExit):
-            PublishCorpusCli().parse([*ARGUMENTS, "--hold-out", "FD001_unit_1", *contradiction])
-        with pytest.raises(SystemExit):
-            PublishCorpusCli().parse([*ARGUMENTS, "--hold-out-subset", "FD001", *contradiction])
+@pytest.mark.parametrize(
+    "chosen",
+    [["--hold-out", "FD001_unit_1"], ["--hold-out-subset", "FD001"]],
+    ids=["by name", "by subset"],
+)
+@pytest.mark.parametrize(
+    "drawn", [["--seed", "7"], ["--validation-fraction", "0.3"]], ids=["seed", "fraction"]
+)
+def test_choosing_the_held_out_units_and_drawing_them_at_once_is_refused(
+    chosen: list[str], drawn: list[str]
+) -> None:
+    """A fraction or a seed beside units chosen by name or by subset draws nothing."""
+    with pytest.raises(SystemExit):
+        PublishCorpusCli().parse([*ARGUMENTS, *chosen, *drawn])
 
 
 def test_the_command_line_holds_out_the_subset_it_was_given() -> None:
     invocation = PublishCorpusCli().parse([*ARGUMENTS, "--hold-out-subset", "FD002"])
 
-    assert invocation.command.split == SubsetSplit("FD002")
+    assert invocation.command.split == PartSplit("FD002")
 
 
 def test_naming_the_units_and_holding_out_a_subset_at_once_is_refused() -> None:

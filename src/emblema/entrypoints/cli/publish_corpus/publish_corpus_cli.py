@@ -6,9 +6,9 @@ from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCo
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.tokenisation.split_policy import (
     NamedSplit,
+    PartSplit,
     SeededSplit,
     SplitPolicy,
-    SubsetSplit,
 )
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.config.settings import Settings
@@ -90,7 +90,7 @@ class PublishCorpusCli:
         if arguments.hold_out:
             return NamedSplit.of(UnitKey(key) for key in arguments.hold_out)
         if arguments.hold_out_subset:
-            return SubsetSplit(arguments.hold_out_subset)
+            return PartSplit(arguments.hold_out_subset)
         return SeededSplit(
             VALIDATION_FRACTION
             if arguments.validation_fraction is None

@@ -82,7 +82,7 @@ class NamedSplit:
 
 
 @dataclass(frozen=True)
-class SubsetSplit:
+class PartSplit:
     """Hold out every unit of one part of the corpus, whatever a draw would have done.
 
     What naming the units says, for a corpus whose parts already say it and whose units are too
@@ -90,14 +90,14 @@ class SubsetSplit:
     repeated them on its command line would state the same division less legibly.
 
     Attributes:
-        subset: Part of the corpus whose units are held out; recorded by the publication in place
+        part: Part of the corpus whose units are held out; recorded by the publication in place
             of a seed.
     """
 
-    subset: str
+    part: str
 
     def __post_init__(self) -> None:
-        if not self.subset or self.subset != self.subset.strip():
+        if not self.part or self.part != self.part.strip():
             raise InvalidUnitSplitError(
                 "the part held out must be non-blank without surrounding whitespace"
             )
@@ -109,9 +109,9 @@ class SubsetSplit:
             InvalidUnitSplitError: If a key repeats, no unit was read from that part, or a side
                 would be left empty.
         """
-        held_out = [key for key in keys if key.belongs_to(self.subset)]
+        held_out = [key for key in keys if key.belongs_to(self.part)]
         if not held_out:
-            raise InvalidUnitSplitError(f"no unit of the corpus was read from {self.subset}")
+            raise InvalidUnitSplitError(f"no unit of the corpus was read from {self.part}")
         return UnitSplit.of_held_out(keys, held_out)
 
     @property
@@ -120,4 +120,4 @@ class SubsetSplit:
         return None
 
 
-SplitPolicy = SeededSplit | NamedSplit | SubsetSplit
+SplitPolicy = SeededSplit | NamedSplit | PartSplit
