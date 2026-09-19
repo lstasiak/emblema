@@ -103,5 +103,16 @@ commit the order and the result carry is read
 from the installed package or the working tree: an order is placed only from a committed tree
 unless `--commit` states the revision, a run on other code than ordered stops before it trains,
 and a result made with other code, over other data or under another configuration is refused.
+
+The first backbone over the mixture — C-MAPSS, SKAB, SMD and the satellite corpus under one
+vocabulary, the reference shape of 4.75 million encoder parameters, eight epochs on a Kaggle T4
+in half precision — keeps its seventh epoch. Every corpus is learnt under the mixture; SMD is the
+one whose held-out loss rises while the mean still falls, which is the first thing the next run
+of the mixture weighs ([ADR-0029](docs/adr/0029-pretraining-over-a-mixture-of-corpora.md),
+[`docs/verification/manual-handoff.md`](docs/verification/manual-handoff.md)).
+
+![Validation loss of each corpus relative to the channel-mean predictor over the eight epochs of the mixed run; tier M, Kaggle T4, fp16; validation, not test](docs/verification/figures/pretraining-curve-backbone-mixed-m.png)
+
+*Tier M, Kaggle T4, fp16. Validation, not test.*
 Accepting records the replayed run against the MLflow server `--track` names, so the flag is
 required there.
