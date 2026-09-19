@@ -13,8 +13,9 @@ from pathlib import Path
 import pytest
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
+from emblema.catalog.domain.exceptions import MissingChannelStatisticsError
 from emblema.catalog.domain.identifiers import UnitKey
-from emblema.catalog.domain.tokenisation.split_policy import NamedSplit, SplitPolicy
+from emblema.catalog.domain.tokenisation.split_policy import NamedSplit, SplitPolicy, SubsetSplit
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
@@ -26,7 +27,8 @@ from tests.support.settings import unreachable_store
 # two days, so its windows are ten days long where the others are twenty cycles, seconds or
 # minutes. A clinical stay is windowed whole, and the stay that holds descriptors alone yields no
 # window; its stays are split by name, because a channel measured only on the held-out side has no
-# statistics to be normalised by, and four stays are too few for a seeded draw to avoid that.
+# statistics to be normalised by, and four stays are too few for a seeded draw, or for the sets
+# the challenge itself drew, to avoid that.
 CORPORA = [
     ("cmapss", ("FD001",), 2, 21, SAMPLE_WINDOW, DRAWN),
     ("skab", ("anomaly-free", "other", "valve1"), 3, 8, SAMPLE_WINDOW, DRAWN),
@@ -89,3 +91,68 @@ def test_a_sample_of_each_corpus_publishes_through_one_process(
         len(window)
         for window in process.adapters.archive.read_windows(manifest.archived, manifest.units)
     )
+
+
+@pytest.mark.parametrize(
+    ("corpus", "subsets", "part", "held_out"),
+    [
+        ("skab", ("anomaly-free", "other", "valve1"), "valve1", {"valve1/0"}),
+        ("smd", ("1", "2"), "2", {"2/machine-2-1"}),
+    ],
+)
+def test_a_corpus_published_by_its_publishers_division_holds_out_that_part_whole(
+    tmp_path: Path,
+    corpus: str,
+    subsets: tuple[str, ...],
+    part: str,
+    held_out: set[str],
+) -> None:
+    """What a challenge's own sets ask for: one part validates, the rest trains, nothing drawn."""
+    process = CompositionRoot(
+        unreachable_store(),
+        corpus=corpus,
+        corpus_root=sample(corpus),
+        workspace=tmp_path / "blocks",
+        subsets=subsets,
+        corpora=InMemoryCorpusRepository(),
+        store=LocalDirectoryArtifactStore(tmp_path / "store"),
+    )
+
+    ref = process.services.publish_corpus(
+        publish_command(corpus=corpus, window=SAMPLE_WINDOW, split=SubsetSplit(part))
+    )
+
+    manifest = process.adapters.archive.read_manifest(ref)
+    assert {str(key) for key in manifest.split.validation} == held_out
+    assert not any(key.belongs_to(part) for key in manifest.split.training)
+    assert manifest.split_seed is None
+
+
+def test_holding_out_a_part_that_measures_a_channel_the_rest_does_not_is_refused(
+    tmp_path: Path,
+) -> None:
+    """The statistics are fitted on the training side, so its channels are the ones it can hold.
+
+    The clinical sample is such a part: its one stay of set B measures a channel the three stays
+    of set A never do. The full corpus is not — every clinical variable is measured in both sets —
+    but a publication that holds out a part is refused here rather than writing a block whose
+    held-out windows no scheme could normalise.
+    """
+    process = CompositionRoot(
+        unreachable_store(),
+        corpus="physionet2012",
+        corpus_root=sample("physionet2012"),
+        workspace=tmp_path / "blocks",
+        subsets=("set-a", "set-b"),
+        corpora=InMemoryCorpusRepository(),
+        store=LocalDirectoryArtifactStore(tmp_path / "store"),
+    )
+
+    with pytest.raises(MissingChannelStatisticsError, match="pH"):
+        process.services.publish_corpus(
+            publish_command(
+                corpus="physionet2012",
+                window=WindowSpec(length=48.0, stride=48.0),
+                split=SubsetSplit("set-b"),
+            )
+        )
