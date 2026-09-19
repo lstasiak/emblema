@@ -25,6 +25,7 @@ import pytest
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
+from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
@@ -173,6 +174,29 @@ def esa_ad(tmp_path: Path) -> Harness:
     return Harness(EsaAdCorpusReader(root, subsets=subsets), change_one_value)
 
 
+def physionet2012(tmp_path: Path) -> Harness:
+    root = tmp_path / "physionet2012"
+    shutil.copytree(sample("physionet2012"), root)
+    subsets = ("set-a", "set-b")
+    rich = root / "set-a" / "132539.txt"
+    # Blank lines the released files do not have: a line that carries nothing must not end a
+    # stay early, and only counting what comes out shows that it does not.
+    rich.write_bytes(rich.read_bytes().replace(b"\n", b"\n\n"))
+    interleaved = root / "set-a" / "132548.txt"
+    # The released files end their lines with a line feed alone; a file written on Windows would
+    # not, and the carriage return belongs to the ending rather than to the value.
+    interleaved.write_bytes(interleaved.read_bytes().replace(b"\n", b"\r\n"))
+    twice_weighed = root / "set-b" / "149509.txt"
+    # A descriptor the file does not carry at all, rather than one recorded as unknown.
+    twice_weighed.write_bytes(twice_weighed.read_bytes().replace(b"00:00,ICUType,4\n", b""))
+
+    def change_one_value() -> CorpusReader:
+        rich.write_bytes(rich.read_bytes().replace(b"00:07,HR,73", b"00:07,HR,74", 1))
+        return Physionet2012CorpusReader(root, subsets=subsets)
+
+    return Harness(Physionet2012CorpusReader(root, subsets=subsets), change_one_value)
+
+
 def synthetic(tmp_path: Path) -> Harness:
     def change_the_specification() -> CorpusReader:
         noisier = HOSTILE.with_dials(noise=HOSTILE.noise * 2)
@@ -187,6 +211,7 @@ ADAPTERS: dict[str, Callable[[Path], Harness]] = {
     "skab": skab,
     "smd": smd,
     "esa_ad": esa_ad,
+    "physionet2012": physionet2012,
     "synthetic": synthetic,
 }
 

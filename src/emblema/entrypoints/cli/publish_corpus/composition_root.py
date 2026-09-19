@@ -5,6 +5,7 @@ from emblema.catalog.adapters.archive.block_corpus_archive import BlockCorpusArc
 from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
+from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
@@ -182,6 +183,8 @@ class CompositionRoot:
                 return SmdCorpusReader(root, subsets or SmdCorpusReader.SUBSETS)
             case "esa_ad":
                 return EsaAdCorpusReader(root, subsets or EsaAdCorpusReader.SUBSETS)
+            case "physionet2012":
+                return Physionet2012CorpusReader(root, subsets or Physionet2012CorpusReader.SUBSETS)
             case generated if generated in LAYOUTS:
                 return SyntheticCorpusReader(CONTROL_PROCESS, LAYOUTS[generated])
             case _:

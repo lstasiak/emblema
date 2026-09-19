@@ -84,6 +84,20 @@ class KnownCorpora:
                     url="https://creativecommons.org/licenses/by/3.0/igo/",
                 ),
             ),
+            # PhysioNet publishes the challenge data under the Open Data Commons Attribution
+            # licence, so a derivative may be redistributed with attribution.
+            KnownCorpus(
+                "physionet2012",
+                CorpusSource(
+                    "PhysioNet (Silva, Moody, Scott, Celi, Mark)",
+                    "https://physionet.org/content/challenge-2012/1.0.0/",
+                ),
+                Licence(
+                    "ODC-By-1.0",
+                    permits_derivatives=True,
+                    url="https://opendatacommons.org/licenses/by/1-0/",
+                ),
+            ),
             *(KnownCorpus(name, GENERATED_SOURCE, GENERATED_LICENCE) for name in LAYOUTS),
         )
 

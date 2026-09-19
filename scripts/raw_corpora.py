@@ -11,7 +11,12 @@ from pathlib import Path
 
 RAW = Path(__file__).resolve().parent.parent / "data" / "raw"
 
-MARKERS = {"skab": "data/valve1", "smd": "train/machine-1-1.txt", "esa_ad": "ESA-Mission1"}
+MARKERS = {
+    "skab": "data/valve1",
+    "smd": "train/machine-1-1.txt",
+    "esa_ad": "ESA-Mission1",
+    "physionet2012": "set-a",
+}
 
 
 def raw_root(corpus: str) -> Path | None:

@@ -394,8 +394,119 @@ window at 76,685 windows and 64,326,491 tokens from bin-start instants laid over
 series; the reader lays hours inside months, so the fraction of an hour at the start of a mission
 and at its cut is the 2,749 tokens between the two counts.
 
+## 2026-09-18 — Windows AMD64, the clinical stays
+
+The fifth downloaded corpus, the second irregular one and the first with static descriptors on
+real units: the 4,000 ICU stays of set A of the PhysioNet/CinC Challenge 2012, each a 48-hour
+protocol over which up to 37 variables were measured when they happened to be measured. Nothing
+behind the reader changed — the same tokenisation scheme, the same window arithmetic and the same
+archive — which is once more the claim this section supports; the reader's own decisions are in
+ADR-0031.
+
+```sh
+uv run scripts/fetch_corpora.py physionet2012
+uv run scripts/window_sanity_report.py --corpus physionet2012 --subset set-a --unit set-a/135365
+```
+
+|  |  |
+| --- | --- |
+| Machine | Windows-11-10.0.26200-SP0, Intel64 Family 6 Model 140 Stepping 1, GenuineIntel |
+| Python | 3.14.5 |
+| matplotlib | 3.11.2 |
+
+| Corpus | Window | Units | Unit drawn | Observations per window | Largest value error | Largest time error |
+| --- | --- | --- | --- | --- | --- | --- |
+| physionet2012, set A | length 48 h, stride 48 h | 4,000 | set-a/135365 | 1,497 | 5.68e-14 | 3.55e-15 |
+
+The window is the whole stay, so the three windows the script asks for collapse to one, and the
+unit drawn is the densest stay of the set rather than the longest — every stay is 48 hours long by
+protocol. The round trip sits eight orders of magnitude inside the 1e-06 the tests hold to, and
+every marker sits on the raw curve in the figure, at each channel's own scale, read on 2026-09-18.
+The pass over the set — describing it, then reading every stay again to fit the scheme — took
+58 s.
+
+### The clinical stream: sparse, wide-tailed, and five channels that never vary
+
+Set A holds 1,737,654 observations over its 4,000 stays: the 1,733,980 the data spike counted plus
+the 3,674 weights recorded at admission, which the spike took for descriptors and the reader
+takes for the first measurement of the `Weight` series. Three stays hold descriptors and nothing
+else, and yield no window. A stay measures a median of some four hundred values over 37 channels;
+the densest, drawn above, measures 1,497, and the figure shows what that sparsity looks like:
+laboratory values two to six times in two days, vital signs every few minutes, and a weight copied
+hourly at 94 kg through the whole stay.
+
+| Channel | Values | Mean | Spread | Lowest, deviations | Highest, deviations | Beyond 8 deviations |
+| --- | --- | --- | --- | --- | --- | --- |
+| ALP | 3,092 | 116.8 | 133.9 | -0.78 | 15.60 | 9 |
+| ALT | 3,177 | 394.5 | 1200 | -0.33 | 9.23 | 8 |
+| AST | 3,182 | 506.3 | 1516 | -0.33 | 11.82 | 7 |
+| Age | 4,000 | 64.25 | 17.56 | -2.80 | 1.47 | 0 |
+| Albumin | 2,356 | 2.922 | 0.6514 | -2.95 | 3.65 | 0 |
+| BUN | 13,916 | 27.42 | 23.39 | -1.17 | 7.25 | 0 |
+| Bilirubin | 3,191 | 2.909 | 5.904 | -0.48 | 7.59 | 0 |
+| Cholesterol | 315 | 156.5 | 45.99 | -2.79 | 3.77 | 0 |
+| Creatinine | 13,983 | 1.505 | 1.636 | -0.86 | 12.59 | 12 |
+| DiasABP | 145,567 | 59.29 | 13.32 | -4.45 | 15.67 | 12 |
+| FiO2 | 32,390 | 0.5452 | 0.1898 | -1.77 | 2.40 | 0 |
+| GCS | 61,563 | 11.4 | 3.973 | -2.11 | 0.91 | 0 |
+| Gender | 3,997 | 0.5619 | 0.4962 | -1.13 | 0.88 | 0 |
+| Glucose | 13,021 | 141.5 | 67.69 | -1.94 | 14.79 | 26 |
+| HCO3 | 13,613 | 23.12 | 4.71 | -3.85 | 5.71 | 0 |
+| HCT | 18,271 | 30.68 | 5.013 | -4.32 | 6.21 | 0 |
+| HR | 228,538 | 87.52 | 18.4 | -4.76 | 11.54 | 1 |
+| Height | 2,106 | 169.8 | 20.17 | -8.33 | 12.99 | 8 |
+| ICUType/cardiac_surgery_recovery | 874 | 1 | 0 (never varied) | 0.00 | 0.00 | 0 |
+| ICUType/coronary_care | 577 | 1 | 0 (never varied) | 0.00 | 0.00 | 0 |
+| ICUType/medical | 1,481 | 1 | 0 (never varied) | 0.00 | 0.00 | 0 |
+| ICUType/surgical | 1,068 | 1 | 0 (never varied) | 0.00 | 0.00 | 0 |
+| K | 14,440 | 4.136 | 0.7071 | -3.30 | 26.54 | 6 |
+| Lactate | 8,024 | 2.925 | 2.579 | -1.02 | 10.23 | 8 |
+| MAP | 145,760 | 79.74 | 16.93 | -4.71 | 13.01 | 163 |
+| MechVent | 31,144 | 1 | 0 (never varied) | 0.00 | 0.00 | 0 |
+| Mg | 13,590 | 2.028 | 0.4221 | -3.38 | 18.65 | 11 |
+| NIDiasABP | 98,210 | 57.95 | 15.55 | -3.73 | 9.20 | 3 |
+| NIMAP | 96,871 | 76.78 | 15.64 | -4.91 | 8.46 | 2 |
+| NISysABP | 98,331 | 118.6 | 23.26 | -5.10 | 7.63 | 0 |
+| Na | 13,570 | 139.1 | 5.191 | -7.91 | 7.31 | 0 |
+| PaCO2 | 23,293 | 40.47 | 9.126 | -4.40 | 6.52 | 0 |
+| PaO2 | 23,268 | 150.4 | 89.3 | -1.68 | 3.91 | 0 |
+| Platelets | 14,104 | 190.8 | 106.4 | -1.74 | 8.05 | 1 |
+| RespRate | 55,051 | 19.72 | 5.552 | -3.55 | 14.10 | 5 |
+| SaO2 | 8,185 | 96.64 | 3.4 | -20.78 | 0.99 | 23 |
+| SysABP | 145,650 | 118.7 | 25.02 | -4.74 | 7.05 | 0 |
+| Temp | 86,405 | 37.01 | 1.775 | -30.87 | 2.87 | 129 |
+| TroponinI | 435 | 7.151 | 9.756 | -0.70 | 4.31 | 0 |
+| TroponinT | 2,126 | 1.198 | 2.714 | -0.44 | 8.74 | 6 |
+| Urine | 136,918 | 120.8 | 184.7 | -0.65 | 58.89 | 295 |
+| WBC | 12,910 | 12.67 | 7.641 | -1.65 | 22.88 | 17 |
+| Weight | 128,839 | 83.6 | 24.72 | -3.38 | 8.76 | 28 |
+| pH | 24,355 | 7.489 | 8.244 | -0.79 | 88.25 | 9 |
+
+Five channels never vary: the four ward tokens, which are presence tokens by design and carry
+their information in the channel identity alone, and `MechVent`, which the challenge records only
+while a patient is ventilated. The scheme falls back to a scale of one for each, as it first did
+on SMD's `metric_08`, and their normalised value is zero.
+
+Twenty-three of the 44 channels hold values beyond eight fitted deviations, and the widest are not
+tails of a distribution but errors of the source: nine `pH` values 88 deviations out are pH on
+another scale, 129 temperatures are below zero, 295 urine outputs lie 59 deviations above the
+mean, and 23 oxygen saturations 21 below. The figure shows the same kind of thing at a smaller
+scale — an arterial pressure of zero at the start of the stay, where a line was not yet
+connected. The reader hands them on as published (ADR-0031): a rule that cleaned them would be a
+second corpus under the same checksum, and what a model makes of them is a result to report, not a
+choice to hide. After SMD this is the second corpus to argue for statistics fitted per corpus
+rather than across the mixture.
+
+Height is unrecorded in 47 % of the stays (2,106 values of 4,000), gender in three, so a stay
+carries between one and three numeric descriptors beside its ward token. Every one of the 37
+variables is measured in set A, the rarest — cholesterol — 315 times; a channel measured only on
+the held-out side of a split would have no statistics and its token would be refused, which is
+why the four-stay sample in the test suite is split by name rather than by draw.
+
+Figure: `figures/physionet2012-set-a-135365-w1.png`.
+
 ### What this note still owes
 
-One corpus of the mixture has no reader yet and therefore no section here: the clinical stream,
-which is the one irregular corpus with static descriptors on real patients. It adds a dated section
-as it arrives.
+Every corpus of the mixture now has a reader and a section. The clinical corpus has not yet
+travelled the road end to end: publishing sets A and B to the bucket with set B held out, on the
+machine that publishes, adds the last dated paragraph here when it runs.
