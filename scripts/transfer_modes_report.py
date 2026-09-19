@@ -1,30 +1,42 @@
-r"""Adapt the pretrained backbone to the turbofan task under every transfer mode, one run each.
+r"""Adapt the pretrained backbone to the turbofan task, one cell of the curve at a time.
 
-The first numbers of the label-efficiency comparison, before the grid: each mode learns the task
-from one budget of labels drawn under one seed and answers the validation engines. Runs are
-stored as CSV — a row per run, a row per epoch, a row per validation window — and the note's
-table is rendered from those files, never from what is still in memory, so a change of wording
-costs a rerender and not a run.
+A cell is a transfer mode at a budget of labels under a seed; the grid the curve is drawn from
+is every mode at every budget under every seed. Cells are stored as they finish — a row per run,
+a row per epoch, a row per validation window — so a session that drops leaves what it did, and
+the next one skips the cells already on file, refusing to go on under another configuration.
+Tables are rendered from those files, never from what is still in memory, so a change of
+wording costs a rerender and not a run.
+
+One cell, or a few, on this machine (the budget of 200 is the tier the machine serves):
 
     uv run --env-file .env.r2 scripts/transfer_modes_report.py \
-        --weights <key> <checksum> --manifest <key> <checksum> --budget 200 --device mps
+        --weights <key> <checksum> --manifest <key> <checksum> \
+        --budget 200 --seed 1 --mode from_scratch --device mps
 
-    uv run scripts/transfer_modes_report.py --report-only data/report/transfer/<run>
+The grid on a platform with two accelerators, sharded by seed and published to the bucket
+after every cell, so a session that drops has lost one cell at most:
+
+    python scripts/transfer_modes_report.py --weights ... --manifest ... \
+        --seed 1 --seed 3 --seed 5 --device cuda:0 --out shard-0 --publish
+
+A session started afresh resumes from the last reference the log printed: fetched into the
+same directory, the same command skips the cells it holds. Back here, fetched and rendered:
+
+    uv run --env-file .env.r2 scripts/transfer_modes_report.py --fetch <key> <checksum> --out DIR
+    uv run scripts/transfer_modes_report.py --report-only DIR
 
 The task is the turbofan one the preregistration names; which engines make it up, its label
-ceiling and its strata are stated in ``KnownTasks`` here until a process of the Evaluation
-context owns them. The ground truth is read from the downloaded corpus under ``data/raw``.
+ceiling and its strata are stated in ``KnownTasks`` (``scripts/transfer_grid.py``) until a
+process of the Evaluation context owns them. The ground truth is read from the downloaded
+corpus under ``data/raw``. One seed drives both the draw of the labels and the run, so the
+repeats of a cell differ in which labels they held as well as in what they learnt from them.
 """
 
 import argparse
-import csv
 import sys
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Iterator, Sequence
 from datetime import datetime
-from importlib.metadata import version
 from pathlib import Path
-from typing import Self
 
 # Run from anywhere: the sibling script modules live in this directory's package at the repository
 # root. The imports below follow, which is why this file is exempt from the import-order rule in
@@ -53,11 +65,9 @@ from emblema.evaluation.application.use_cases.run_adaptation import (
     RunAdaptationCommand,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
-from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
-from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
@@ -68,79 +78,33 @@ from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from scripts.raw_corpora import raw_root
 from scripts.reporting import dated_heading, machine, table
-
-RUNS, EPOCHS, PREDICTIONS = "runs.csv", "epochs.csv", "predictions.csv"
-RUN_COLUMNS = (
-    "mode",
-    "backbone",
-    "run_seed",
-    "epochs",
-    "batch_size",
-    "learning_rate",
-    "weight_decay",
-    "lora_rank",
-    "lora_alpha",
-    "lora_dropout",
-    "lora_targets",
-    "budget",
-    "sample_seed",
-    "trainable_parameters",
-    "rmse",
-    "seconds",
-    "device",
-    "commit",
-    "torch",
+from scripts.transfer_grid import (
+    BUDGETS,
+    SEEDS,
+    Cell,
+    KnownTask,
+    KnownTasks,
+    Stored,
+    budget_of,
 )
 
-
-@dataclass(frozen=True, kw_only=True)
-class KnownTask:
-    """What a supervised task is made of, as far as no adapter can read it off the corpus.
-
-    Attributes:
-        name: What the task is called in the reports.
-        corpus: Name the corpus was published under.
-        unit_prefix: What the keys of the task's units start with, inside that corpus.
-        ceiling: Largest remaining life a window is labelled with.
-        strata: How many groups of the target a budget is spread over.
-        test_source: Where the frozen test engines come from, as the set is known outside.
-        test_units: Keys of the frozen test engines.
-    """
-
-    name: str
-    corpus: str
-    unit_prefix: str
-    ceiling: float
-    strata: int
-    test_source: str
-    test_units: tuple[str, ...]
-
-    def units_of(self, keys: Sequence[str]) -> frozenset[UnitKey]:
-        """The task's units among the keys a published corpus names."""
-        return frozenset(UnitKey(key) for key in keys if key.startswith(self.unit_prefix))
-
-
-class KnownTasks:
-    """The tasks a report may run, each stated once."""
-
-    TURBOFAN_FD001 = KnownTask(
-        name="turbofan-fd001",
-        corpus="cmapss",
-        unit_prefix="FD001/",
-        ceiling=125.0,
-        strata=4,
-        test_source="cmapss/test/FD001",
-        test_units=tuple(f"FD001/test/{engine}" for engine in range(1, 101)),
-    )
-
-    @classmethod
-    def default(cls) -> KnownTask:
-        return cls.TURBOFAN_FD001
+# The peak rate of each mode, as fixed on the validation side before the grid
+# (docs/verification/label-efficiency-curve.md); the shape of the rate is fixed with them.
+LEARNING_RATES = {
+    TransferMode.FROM_SCRATCH: 3e-4,
+    TransferMode.FROZEN_PROBE: 1e-2,
+    TransferMode.LORA: 3e-3,
+    TransferMode.FULL_FINE_TUNING: 3e-4,
+}
+WARMUP_FRACTION, FINAL_LR_FRACTION = 0.1, 0.01
 
 
 def parse(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--report-only", type=Path, metavar="DIR", help="render a stored run")
+    parser.add_argument(
+        "--fetch", nargs=2, metavar=("KEY", "CHECKSUM"), help="unpack a published run into --out"
+    )
     parser.add_argument("--weights", nargs=2, metavar=("KEY", "CHECKSUM"), help="the backbone")
     parser.add_argument("--manifest", nargs=2, metavar=("KEY", "CHECKSUM"), help="the corpus")
     parser.add_argument(
@@ -150,30 +114,41 @@ def parse(argv: Sequence[str] | None = None) -> argparse.Namespace:
         choices=list(TransferMode),
         help="a mode to run; every mode unless given",
     )
-    parser.add_argument("--budget", default="200", help="labelled windows, or 'all'")
     parser.add_argument(
-        "--sample-seed", type=int, default=1, help="seed the labels are drawn under"
+        "--budget",
+        action="append",
+        help=f"labelled windows, or 'all'; may repeat; {' '.join(BUDGETS)} unless given",
     )
     parser.add_argument(
         "--seed",
+        action="append",
         type=int,
-        default=1,
-        help="seed of the run: the head, the fresh weights, the updates, the order of windows",
+        help=(
+            "seed of a cell: the draw of the labels, the head, the fresh weights, the updates, "
+            f"the order of windows; may repeat; {' '.join(map(str, SEEDS))} unless given"
+        ),
     )
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--weight-decay", type=float, default=0.0)
-    for mode, rate in (
-        (TransferMode.FROM_SCRATCH, 1e-3),
-        (TransferMode.FROZEN_PROBE, 1e-2),
-        (TransferMode.LORA, 1e-3),
-        (TransferMode.FULL_FINE_TUNING, 1e-4),
-    ):
+    parser.add_argument(
+        "--warmup-fraction",
+        type=float,
+        default=WARMUP_FRACTION,
+        help="share of the run's steps the rate climbs over; the same for every mode",
+    )
+    parser.add_argument(
+        "--final-lr-fraction",
+        type=float,
+        default=FINAL_LR_FRACTION,
+        help="fraction of the peak the rate decays to; one for a constant rate",
+    )
+    for mode, rate in LEARNING_RATES.items():
         parser.add_argument(
             f"--lr-{mode.value.replace('_', '-')}",
             type=float,
             default=rate,
-            help=f"learning rate of {mode.value}",
+            help=f"peak learning rate of {mode.value}",
         )
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-alpha", type=float, default=16.0)
@@ -195,7 +170,12 @@ def parse(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--out",
         type=Path,
         default=None,
-        help="where the run is stored; data/report/transfer/<timestamp> unless given",
+        help="where the run is stored or unpacked; data/report/transfer/<timestamp> unless given",
+    )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="after every cell, store the directory in the bucket and print its reference",
     )
     return parser.parse_args(argv)
 
@@ -205,12 +185,8 @@ def ref_of(pair: Sequence[str]) -> ArtifactRef:
     return ArtifactRef(key, Checksum.parse(checksum))
 
 
-def budget_of(text: str) -> LabelBudget:
-    return LabelBudget.everything() if text == "all" else LabelBudget.of(int(text))
-
-
-def plans_of(arguments: argparse.Namespace) -> dict[TransferMode, AdaptationPlan]:
-    """One plan per mode asked for, every knob read off the arguments."""
+def plans_of(arguments: argparse.Namespace, seed: int) -> dict[TransferMode, AdaptationPlan]:
+    """One plan per mode asked for under ``seed``, every knob read off the arguments."""
     weights = ref_of(arguments.weights)
     lora = LoraSpec(
         rank=arguments.lora_rank,
@@ -228,107 +204,28 @@ def plans_of(arguments: argparse.Namespace) -> dict[TransferMode, AdaptationPlan
                 batch_size=arguments.batch_size,
                 learning_rate=getattr(arguments, f"lr_{mode.value}"),
                 weight_decay=arguments.weight_decay,
+                warmup_fraction=arguments.warmup_fraction,
+                final_lr_fraction=arguments.final_lr_fraction,
             ),
             lora=lora if mode.adds_low_rank_updates else None,
-            seed=arguments.seed,
+            seed=seed,
         )
         for mode in modes
     }
 
 
-@dataclass(frozen=True, kw_only=True)
-class Stored:
-    """Where one report's runs are kept, and how a run is appended to them.
-
-    One directory holds one report: the epochs and the predictions are keyed by mode alone, so a
-    second report appended into the same files could not be told from the first.
-    """
-
-    directory: Path
-
-    @classmethod
-    def at(cls, directory: Path) -> Self:
-        """A directory for a report about to run.
-
-        Raises:
-            SystemExit: If a report is already stored there.
-        """
-        if (directory / RUNS).exists():
-            raise SystemExit(
-                f"{directory} already holds {RUNS}; choose another --out, "
-                "or --report-only to render it"
-            )
-        directory.mkdir(parents=True, exist_ok=True)
-        return cls(directory=directory)
-
-    @classmethod
-    def existing(cls, directory: Path) -> Self:
-        """A report already stored, to be rendered again.
-
-        Raises:
-            SystemExit: If nothing is stored there.
-        """
-        if not (directory / RUNS).is_file():
-            raise SystemExit(f"{directory} holds no {RUNS}; nothing to render")
-        return cls(directory=directory)
-
-    def add(self, outcome: AdaptationOutcome, *, device: str, commit: str) -> None:
-        """Append the run, its epochs and its predictions to the three files."""
-        row = {
-            **outcome.plan.parameters(),
-            "budget": "all" if outcome.budget.windows is None else outcome.budget.windows,
-            "sample_seed": outcome.sample_seed,
-            "trainable_parameters": outcome.trainable_parameters,
-            "rmse": f"{outcome.rmse:.6f}",
-            "seconds": f"{outcome.seconds:.3f}",
-            "device": device,
-            "commit": commit,
-            "torch": version("torch"),
-        }
-        self._append(RUNS, RUN_COLUMNS, [row])
-        mode = str(outcome.plan.mode)
-        self._append(
-            EPOCHS,
-            ("mode", "epoch", "loss"),
-            [
-                {"mode": mode, "epoch": epoch, "loss": f"{loss:.8f}"}
-                for epoch, loss in enumerate(outcome.training_losses)
-            ],
-        )
-        self._append(
-            PREDICTIONS,
-            ("mode", "unit", "position", "ends_at", "target", "predicted"),
-            [
-                {
-                    "mode": mode,
-                    "unit": str(p.window.unit),
-                    "position": p.window.position,
-                    "ends_at": p.window.ends_at,
-                    "target": p.target,
-                    "predicted": f"{p.predicted:.6f}",
-                }
-                for p in outcome.predictions
-            ],
-        )
-
-    def runs(self) -> list[dict[str, str]]:
-        with (self.directory / RUNS).open(newline="", encoding="utf-8") as handle:
-            return list(csv.DictReader(handle))
-
-    def _append(
-        self, name: str, columns: Sequence[str], rows: Sequence[Mapping[str, object]]
-    ) -> None:
-        path = self.directory / name
-        new = not path.exists()
-        with path.open("a", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-            if new:
-                writer.writeheader()
-            writer.writerows(rows)
+def cells_of(arguments: argparse.Namespace) -> Iterator[tuple[Cell, AdaptationPlan]]:
+    """Every cell asked for, the cheapest budgets first so a session reports early."""
+    budgets = [budget_of(text) for text in (arguments.budget or BUDGETS)]
+    for seed in arguments.seed or SEEDS:
+        plans = plans_of(arguments, seed)
+        for budget in budgets:
+            for mode, plan in plans.items():
+                yield Cell(mode=mode, budget=budget, seed=seed), plan
 
 
 def render(stored: Stored, task: KnownTask) -> str:
-    """The section a note pastes: one row per run, read back from what was stored."""
+    """The section a note pastes: one row per cell, read back from what was stored."""
     runs = stored.runs()
     lines = [
         dated_heading(),
@@ -341,9 +238,13 @@ def render(stored: Stored, task: KnownTask) -> str:
             (
                 "mode",
                 "budget",
-                "run seed",
+                "windows",
+                "engines",
+                "seed",
                 "epochs",
                 "lr",
+                "warm-up",
+                "final lr",
                 "trainable",
                 "RMSE",
                 "seconds",
@@ -353,9 +254,14 @@ def render(stored: Stored, task: KnownTask) -> str:
                 (
                     run["mode"],
                     run["budget"],
-                    run["run_seed"],
+                    # Runs stored before a column existed render it empty rather than not at all.
+                    run.get("windows", ""),
+                    run.get("engines", ""),
+                    run["sample_seed"],
                     run["epochs"],
                     run["learning_rate"],
+                    run.get("warmup_fraction", ""),
+                    run.get("final_lr_fraction", ""),
                     run["trainable_parameters"],
                     f"{float(run['rmse']):.2f}",
                     f"{float(run['seconds']):.0f}",
@@ -374,6 +280,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     if arguments.report_only is not None:
         print(render(Stored.existing(arguments.report_only), task))
         return
+    if arguments.fetch is not None:
+        if arguments.out is None:
+            raise SystemExit("--fetch needs --out, the directory to unpack into")
+        stored = Stored.fetch(configured_store(Settings()), ref_of(arguments.fetch), arguments.out)
+        print(render(stored, task))
+        return
     if arguments.weights is None or arguments.manifest is None:
         raise SystemExit("--weights and --manifest are required to run; --report-only to render")
     root = raw_root(task.corpus)
@@ -381,7 +293,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise SystemExit(f"the {task.corpus} corpus is not under data/raw; fetch it first")
     device = available_device() if arguments.device is None else arguments.device
     out = arguments.out or Path("data/report/transfer") / datetime.now().strftime("%Y%m%d-%H%M%S")
-    stored = Stored.at(out)
+    stored = Stored.open(out)
     commit = SourceRevision().current()
 
     store = configured_store(Settings())
@@ -408,23 +320,36 @@ def main(argv: Sequence[str] | None = None) -> None:
     run = RunAdaptation(
         tasks, corpus, lifetimes, DrawLabelBudget(tasks, corpus, lifetimes), runtime
     )
-    budget = budget_of(arguments.budget)
-    for mode, plan in plans_of(arguments).items():
-        print(f"{mode}: learning on {device} ...", flush=True)
-        outcome = run(
-            RunAdaptationCommand(
-                task=task_id, plan=plan, budget=budget, sample_seed=arguments.sample_seed
+    try:
+        for cell, plan in cells_of(arguments):
+            if stored.holds(cell, plan, commit=commit):
+                print(f"{cell}: already stored, skipped", flush=True)
+                continue
+            print(f"{cell}: learning on {device} ...", flush=True)
+            outcome = run(
+                RunAdaptationCommand(
+                    task=task_id, plan=plan, budget=cell.budget, sample_seed=cell.seed
+                )
             )
-        )
-        stored.add(outcome, device=device, commit=commit)
-        print(
-            f"{mode}: RMSE {outcome.rmse:.2f} over {len(outcome.predictions)} windows, "
-            f"{outcome.trainable_parameters} trainable, {outcome.seconds:.0f} s",
-            flush=True,
-        )
-    print()
-    print(render(stored, task))
-    print(f"\nstored under {out}")
+            stored.add(outcome, device=device, commit=commit)
+            print(
+                f"{cell}: RMSE {outcome.rmse:.2f} over {len(outcome.predictions)} windows, "
+                f"{outcome.labelled_units} engines labelled, "
+                f"{outcome.trainable_parameters} trainable, {outcome.seconds:.0f} s",
+                flush=True,
+            )
+            if arguments.publish:
+                published = stored.publish(store)
+                print(f"{cell}: published as {published.key} {published.checksum}", flush=True)
+    finally:
+        # A cell that raised is not stored; what is stored is rendered and published whatever
+        # stopped the loop, so a session that ends early still leaves its reference in the log.
+        print()
+        print(render(stored, task))
+        print(f"\nstored under {out}")
+        if arguments.publish and stored.runs():
+            published = stored.publish(store)
+            print(f"published as\n{published.key}\n{published.checksum}")
 
 
 if __name__ == "__main__":
