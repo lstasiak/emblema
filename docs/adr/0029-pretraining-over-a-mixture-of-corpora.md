@@ -1,6 +1,6 @@
 # ADR-0029: Pretraining over a mixture of corpora — one vocabulary chained through the publications, optimiser steps of one corpus each weighed by their count, the best epoch kept by the mean relative validation, and a run that says where it can be picked up from
 
-- Status: proposed
+- Status: accepted (2026-09-19, on the run in the dated section below)
 - Date: 2026-09-18
 
 ## Context
@@ -246,3 +246,30 @@ a micro-batch of eight, and no curve measured at it.
   unequal size.
 - Conneau, A. et al. (2020). Unsupervised Cross-lingual Representation Learning at Scale.
   ACL 2020 — the same sampling in self-supervised pretraining, with α = 0.3.
+
+## 2026-09-19 — the first run over the mixture
+
+Made as decided, on the platform in one session (`docs/verification/manual-handoff.md`, section
+of 2026-09-19): backbone `058188f2-…`, 8 epochs of 4,493 steps at 0.39–0.42 s a step, 4.6 h of
+epochs, the seventh epoch kept at a mean relative validation of 0.2295. Every corpus is learnt
+under the mixture — C-MAPSS to 0.7 % of the trivial predictor, SKAB to 26 %, SMD to 37 %, the
+satellite corpus to 28 %, where its own curve under the bounded reading had reached 27 % after
+four epochs — so the weights the count of steps gives the corpora are accepted as the first
+run's, and the record with them.
+
+Two of the conditions above were read against the run. **The first fires**: SMD rises from its
+first epoch (0.348 → 0.397 → 0.373) while the mean over the corpora falls, so its best epoch is
+one the rule that keeps a single epoch for the mixture cannot keep, and a weight per corpus —
+SMD's share of the steps turned down, or its windows seen once every other epoch — is now the
+first parameter of the mix, to be measured against this run before any other dial. **The second
+does not**: the mean falls to 0.2295 at the seventh epoch and stands at 0.2308 at the eighth, so
+the budget of eight epochs is not what limits the run, and the shape stays where ADR-0008 put it.
+
+Two things the run corrected on the way. The validation pass scored the loss in the
+prediction's half precision, outside autocast, and the first order of this run ended after one
+epoch on an infinite sum over a batch of SMD or the satellite corpus; the losses are read in
+single precision at least since, and training was never affected, since autocast had computed
+its loss in single precision all along. And the memory of a micro-batch of sixteen windows of
+1,900 tokens in half precision fits the platform's accelerator, which is the fact the refusal
+of a micro-batch that does not fit was waiting for; the amount itself was not read off the
+platform, so the refusal still has its arithmetic and no calibration.

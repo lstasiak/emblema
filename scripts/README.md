@@ -41,6 +41,8 @@ experiment — and the shape of a note: its CSV, its tables, its figures.
 | `training_loop_report.py` | measurement | [`training-loop.md`](../docs/verification/training-loop.md) | — |
 | `corpus_saturation_report.py` | measurement | [`corpus-saturation.md`](../docs/verification/corpus-saturation.md): one budget of steps over a growing share of a corpus, stored run by run and resumable | the evaluation harness, once a campaign of runs is something it persists |
 | `corpus_saturation_figures.py` | measurement | `figures/corpus-saturation-*.png` | — |
+| `pretraining_curve_report.py` | measurement | [`manual-handoff.md`](../docs/verification/manual-handoff.md): the epochs of an accepted pretraining result as one row per corpus and epoch, and the note's table rendered from that file | the tracker, once a curve is read from it rather than from the result |
+| `pretraining_curve_figures.py` | measurement | `figures/pretraining-curve-*.png` | — |
 | `excursion_report.py` | measurement | [`corpus-saturation.md`](../docs/verification/corpus-saturation.md): the stored backbones scored on the windows their runs scored, with the excursions read apart from the ordinary tokens; where a side's squared magnitude lies, from the block's values | the evaluation harness, once a stored backbone is something it scores |
 | `excursion_figures.py` | measurement | `figures/excursion-*.png` | — |
 | `held_out_units.py` | transitional | the units a publication of a corpus whose units differ in kind states, derived once from a published version's own values | the Catalog, if a second corpus ever needs the same derivation |

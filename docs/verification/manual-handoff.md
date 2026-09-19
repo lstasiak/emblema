@@ -206,16 +206,93 @@ epochs into the local MLflow server under the three experiment names, run `kaggl
   included; the mixed run's windows are longer and its attention is quadratic in them, so this
   number is the floor of that estimate, not the estimate.
 
+### 2026-09-19 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the backbone over the mixture
+
+The first full pretraining: one order over the four corpora chained through one vocabulary
+(ADR-0029), placed here from `main` and fulfilled in one Kaggle session with "Save & Run All",
+accepted back the next morning. Everything the run is made of:
+
+|  |  |
+| --- | --- |
+| Experiment | `experiments/backbone-mixed-m.toml`: tier M (256 wide, 6 blocks, 4,751,872 encoder parameters over 84 channels), fp16, Huber δ = 1, dropout 0, 8 epochs, micro-batch 16 with 2 accumulated, checkpoint every 2,000 steps, seed 1 |
+| Corpora | C-MAPSS 50 / 5 (`a00c3865…`, channels 1–21) → SKAB 100 / 10 s (`166ca516…`, 22–29) → SMD 50 / 10 min (`c8a2c9ae…`, 30–67) → ESA-AD 1 / 1 h (`f0842859…`, 68–84); 186.6M tokens an epoch after windowing, of which ESA-AD 51.3M — the "50–100M tokens" of the programme are counted after windowing |
+| Code | `265fc911958f6833d951dcc8a96909101c5fabf7`, installed in the notebook from the commit |
+| Backbone | `058188f2-cba7-46fc-91dd-6a4663090146`, order `durable/sha256/138ecdda…`, result `durable/sha256/64bc7796…`, weights `durable/sha256/d52dfef2…` (the seventh epoch's) |
+| Platform | Kaggle, GPU T4 x2 with one device used, Python 3.12, the platform's CUDA torch; the run's log on standard error, read live in the version's log and kept with it |
+| Cost | 0.39–0.42 s an optimiser step (4,493 steps an epoch), 2,055–2,071 s an epoch with its four validation passes, 4.6 h of epochs in one session; no out-of-memory at 16 windows of 1,900 tokens in half precision, the memory itself not read off the platform |
+
+Validation loss per hidden token relative to the channel-mean predictor's over the same
+tokens, each corpus on its own held-out side, under the run's bounded reading; the mean over the
+corpora is what keeps the epoch (`scripts/pretraining_curve_report.py`, curve stored under
+`data/report/pretraining/<backbone>`; figure `figures/pretraining-curve-backbone-mixed-m.png`):
+
+| epoch | training | cmapss | skab | smd | esa_ad | mean relative | seconds |  |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.09439 | 0.070 | 0.331 | 0.348 | 0.399 | 0.2870 | 2071 | kept |
+| 2 | 0.05242 | 0.045 | 0.308 | 0.383 | 0.335 | 0.2679 | 2066 | kept |
+| 3 | 0.04409 | 0.030 | 0.281 | 0.354 | 0.325 | 0.2477 | 2060 | kept |
+| 4 | 0.03924 | 0.015 | 0.270 | 0.379 | 0.309 | 0.2433 | 2059 | kept |
+| 5 | 0.03428 | 0.010 | 0.268 | 0.397 | 0.290 | 0.2411 | 2063 | kept |
+| 6 | 0.03119 | 0.009 | 0.265 | 0.375 | 0.294 | 0.2356 | 2055 | kept |
+| 7 | 0.02911 | 0.007 | 0.263 | 0.368 | 0.280 | 0.2295 | 2060 | backbone |
+| 8 | 0.02835 | 0.007 | 0.263 | 0.373 | 0.281 | 0.2308 | 2058 |  |
+
+Every number is validation, not test. What the run says:
+
+- **Every corpus is learnt under the mixture**, none sits at the trivial predictor: C-MAPSS to
+  0.7 % of it, the three others to 26–37 %. The satellite corpus, which its own curve under the
+  bounded reading took four epochs to bring to 0.27, stands at 0.28 here after seven, so the
+  mixture costs it nothing.
+- **SMD rises from its first epoch** (0.348 → 0.397 at the fifth, 0.373 at the last) while the
+  mean over the corpora still falls: the first condition ADR-0029 names for revisiting the
+  weights of the mix. Its best epoch is the first, which the rule that keeps one epoch for the
+  whole mixture cannot honour; the mixed backbone carries SMD at 0.368 rather than 0.348.
+- **The mean flattens at the end**: 0.2295 at the seventh epoch, 0.2308 at the eighth, so the
+  budget of eight epochs is not what limits this run and ADR-0008's second condition does not
+  fire.
+- **The first order of this run failed after one epoch** (`36416db3…`, commit `b9f3161`, 36
+  minutes of the accelerator): the validation pass scored the loss in the prediction's half
+  precision outside autocast, and the sum over one batch of a corpus with excursions of hundreds
+  of deviations passed 65,504 and came back infinite. Training was never affected — autocast
+  computes the loss in single precision — and the three C-MAPSS runs above never summed past a
+  few tens. Fixed on `main` before the second order: the losses are read in single precision at
+  least, whatever the prediction came in.
+- **PyTorch warned once** that the scheduler stepped before the optimiser: the gradient scaler
+  skips the first steps whose gradients overflow while it finds its scale, and the schedule
+  counts them. A handful of steps out of 35,944, and the same on the fp16 C-MAPSS runs.
+- **The log is what the dropped-session remedy came to** (ADR-0029): a progress line every 100
+  steps with the pace and the time left, a line per checkpoint with its reference, a line per
+  epoch with every corpus's loss. This run fitted one session, so the resume was tested on its
+  own, below.
+- **Resumed on the platform from a checkpoint inside an epoch.** A second session ran the same
+  order from the checkpoint written at step 26,000, inside the sixth epoch (`transient/sha256/d67c6cde…`,
+  the last checkpoint that epoch wrote), and finished the sixth, seventh and eighth epochs in
+  618 + 2,018 + 2,022 s; result `durable/sha256/15baac32…`, which names the checkpoint it
+  resumed from and signs the same run. Read against the uninterrupted run, relative validation
+  per corpus:
+
+  | epoch | cmapss | skab | smd | esa_ad | mean relative | uninterrupted mean |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | 6 | 0.008 | 0.264 | 0.379 | 0.290 | 0.2354 | 0.2356 |
+  | 7 | 0.007 | 0.263 | 0.365 | 0.282 | 0.2294 | 0.2295 |
+  | 8 | 0.007 | 0.263 | 0.368 | 0.282 | 0.2299 | 0.2308 |
+
+  The largest difference in any corpus's number is 0.005 (SMD, eighth epoch), the mean agrees to
+  0.001 or better, and the resumed run keeps the same epoch, the seventh, as its backbone — an
+  epoch's worth of the accelerator's own half-precision scatter, of the size the resume test of
+  `training-loop.md` calibrated on this machine's accelerator. The resumed run inherited the best
+  epoch the checkpoint carried (the fifth's 0.2411), improved on it at the sixth and seventh,
+  and reports the sixth epoch's training loss over the batches after the checkpoint alone, as
+  `training-loop.md` says it does. Its result is not accepted: the backbone was delivered by the
+  first run and refuses a second delivery, which is the registry doing its job.
+
 ### Open
 
-- The checkpoint reference a dropped session should be resumed from is known to MLflow when the
-  run is tracked and to nobody when it is not: the notebook has to print it. The three platform
-  runs were short enough not to need it, and the result document carries the last checkpoint of
-  each epoch once the run has ended; a run of hours on the platform still needs one of the two
-  remedies ADR-0024 names, decided before the mixed run.
-- Resuming from a remote checkpoint has been tested through the port and on this machine's
-  accelerator, not yet on the platform: the platform runs of 2026-09-18 left five checkpoints
-  each in the bucket, and a second run of one of their orders from one of them is the test that
-  remains, read against the scatter of two uninterrupted runs of the same order.
+- ~~The checkpoint reference a dropped session should be resumed from is known to nobody when
+  the run is not tracked.~~ Closed on 2026-09-19: the runtime logs every checkpoint it writes,
+  and the platform keeps the log (ADR-0029).
+- ~~Resuming from a remote checkpoint has been tested through the port and on this machine's
+  accelerator, not yet on the platform.~~ Closed on 2026-09-19: the mixed run's order was resumed
+  on the platform from a checkpoint inside its sixth epoch (section above).
 - The cost of `read` on a machine that fetches the block from the bucket was not measured on the
   platform: the run's wall clock includes it and the run itself does not time it.

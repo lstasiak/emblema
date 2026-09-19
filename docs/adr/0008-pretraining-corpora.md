@@ -347,3 +347,12 @@ label budgets.
 The second leg of the size axis on SMD is no longer needed for this decision and is not planned.
 The revisit condition above narrows to the mixed run's own curve: if it is still falling at the
 whole mix, the sweep past the reference shape reopens.
+
+## 2026-09-19 — the mixed run at the reference shape does not run out of budget
+
+The first backbone over the mixture (ADR-0029, section of 2026-09-19) trained eight epochs at
+the reference shape: the mean relative validation over the four corpora fell to 0.2295 at the
+seventh epoch and stood at 0.2308 at the eighth, so the budget in epochs is not what limits the
+run and neither the budget nor the shape grows on this reading. What the run asks for instead
+is a weight per corpus, since SMD rose from its first epoch while the mean fell — a parameter of
+the mix (ADR-0029), not of the shape.
