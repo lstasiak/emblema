@@ -30,7 +30,8 @@ class TokenisationManifest:
         window: Specification the windows were laid with.
         scheme: Vocabulary and fitted statistics the tokens were produced under.
         split: Which units fitted the scheme and which were held out.
-        split_seed: Seed the split was drawn with; ``None`` where its units were named.
+        split_seed: Seed the split was drawn with; ``None`` where its units were named or a part
+            of the corpus held out.
         empty_units: Units that yielded no window at all, a fact about the corpus that the block
             itself cannot state because it holds nothing for them.
     """

@@ -79,7 +79,7 @@ class PublishCorpus:
             ArtifactNotFoundError: If the manifest named for the vocabulary is not archived.
             MalformedManifestError: If it is archived but is not a manifest.
             CorpusReadError: If the reader cannot read or validate the data.
-            InvalidUnitSplitError: If the corpus holds too few units for the fraction asked.
+            InvalidUnitSplitError: If the split policy cannot split the units the corpus holds.
             WindowNotArchivableError: If a window cannot be stored at the archive's precision.
         """
         vocabulary = (
