@@ -390,13 +390,29 @@ What the sweep says:
 What it does not say: anything about the endpoint, which the grid measures over five seeds
 with its interval, or anything about the retrained backbone.
 
-The same script ran the same twelve configurations on this machine (M1 Pro, MPS, fp32,
-`data/report/transfer/sweep-20260920/<arm>-lr<peak>`) as the device check, the later
-directories under `c333ab0`, a revision that leaves the adaptation untouched. As this is
-written eight of the twelve have finished: the probe reproduces to the hundredth under every
-peak and seed (32.70, 32.86, 31.70 at 1e-2), the control at 1e-4 as well (22.20, 21.37,
-21.69), and the two higher peaks of the control and the low-rank arm at 3e-3 differ by a few
-tenths to one and a half points per seed (control at 1e-3: 20.76, 22.35, 21.53 for a mean of
-21.55 against 20.86; at 3e-4: 22.12 against 21.91; low-rank at 3e-3: 25.51 against 25.11). The
-rule chooses 1e-3 for the control on either accelerator. The remaining four directories are
-appended here when they finish.
+The same script ran the same twelve configurations on this machine as the device check (M1 Pro,
+MPS, fp32, `data/report/transfer/sweep-20260920/<arm>-lr<peak>`, 20–21 September, the later
+directories under revisions up to `a726b7b`, none of which touches the adaptation). Validation
+RMSE per seed on MPS, and its difference from the same run on the T4:
+
+| arm | peak | MPS seed 1 / 2 / 3 | MPS mean | T4 mean | MPS − T4 per seed | seconds |
+| --- | --- | --- | --- | --- | --- | --- |
+| from_scratch | 1e-3 | 20.76 / 22.35 / 21.53 | 21.55 | 20.86 | +0.06 / +1.44 / +0.56 | 1,067–1,195 |
+| from_scratch | 3e-4 | 21.94 / 22.82 / 21.58 | 22.12 | 21.91 | −1.45 / +1.76 / +0.30 | 976–1,117 |
+| from_scratch | 1e-4 | 22.20 / 21.37 / 21.69 | 21.75 | 21.75 | 0 / 0 / 0 | 973–1,008 |
+| frozen_probe | 1e-2, 3e-3, 1e-3 | as on the T4 | 32.42, 36.90, 39.45 | the same | 0 | 10–12 |
+| lora | 3e-3 | 26.12 / 24.23 / 26.18 | 25.51 | 25.11 | −0.23 / +0.74 / +0.68 | 1,148–1,206 |
+| lora | 1e-3 | 24.96 / 26.04 / 25.27 | 25.42 | 25.73 | −0.91 / 0 / 0 | 1,143–1,211 |
+| lora | 3e-4 | 21.21 / 23.56 / 22.77 | 22.51 | 22.51 | 0 / 0 / 0 | 1,148–1,150 |
+| full_fine_tuning | 3e-4 | 24.02 / 25.61 / 23.83 | 24.48 | 24.31 | +0.90 / −0.10 / −0.27 | 973–1,003 |
+| full_fine_tuning | 1e-4 | 22.02 / 26.37 / 25.76 | 24.72 | 24.64 | 0 / +0.28 / −0.05 | 1,014–1,136 |
+| full_fine_tuning | 3e-5 | 21.69 / 23.73 / 24.00 | 23.14 | 23.14 | 0 / 0 / 0 | 1,046–1,062 |
+
+The rule chooses the same four peaks on either accelerator. What the differences say: at the
+smallest peak of every arm, and for the probe at every peak, the two accelerators agree to the
+hundredth in every seed, and the disagreement grows with the peak — up to 1.8 RMSE in one seed
+at 3e-4 from scratch. A run that steps further amplifies the last bits of the arithmetic the two
+devices differ in; a run that steps less stays on one trajectory. The chosen peaks of the three
+arms that step the encoder or an update beside it are the smallest swept for two of them, so the
+grid's numbers under them should travel between accelerators better than the first grid's did.
+An arm at this budget costs 1.3–1.6× on MPS what it costs on the T4.
