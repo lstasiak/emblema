@@ -193,6 +193,26 @@ class KnownTasks:
         units_called="units",
         test=HeldOutShare(source="null-b/held-out", one_in=3, seed=1),
     )
+    # The same task on the wide layouts, where the held-out side is large enough for the paired
+    # interval to be narrower than the practical floor.
+    CONTROL_B_WIDE_FORECAST = KnownTask(
+        name="control-b-wide-forecast",
+        corpus="control-b-wide",
+        unit_prefix="control-b-wide/",
+        labels=ForecastScheme("s01", 12.0),
+        strata=4,
+        units_called="units",
+        test=HeldOutShare(source="control-b-wide/held-out", one_in=3, seed=1),
+    )
+    NULL_B_WIDE_FORECAST = KnownTask(
+        name="null-b-wide-forecast",
+        corpus="null-b-wide",
+        unit_prefix="null-b-wide/",
+        labels=ForecastScheme("s01", 12.0),
+        strata=4,
+        units_called="units",
+        test=HeldOutShare(source="null-b-wide/held-out", one_in=3, seed=1),
+    )
 
     @classmethod
     def default(cls) -> KnownTask:
@@ -200,7 +220,13 @@ class KnownTasks:
 
     @classmethod
     def all(cls) -> tuple[KnownTask, ...]:
-        return (cls.TURBOFAN_FD001, cls.CONTROL_B_FORECAST, cls.NULL_B_FORECAST)
+        return (
+            cls.TURBOFAN_FD001,
+            cls.CONTROL_B_FORECAST,
+            cls.NULL_B_FORECAST,
+            cls.CONTROL_B_WIDE_FORECAST,
+            cls.NULL_B_WIDE_FORECAST,
+        )
 
     @classmethod
     def names(cls) -> tuple[str, ...]:

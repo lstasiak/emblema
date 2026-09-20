@@ -78,7 +78,13 @@ def test_the_synthetic_tasks_forecast_the_first_sensor_of_the_second_layout() ->
         assert task.units_called == "units"
         assert task.labels_text == "the exact reading of s01 12 time units past the window"
     assert KnownTasks.named("null-b-forecast") is KnownTasks.NULL_B_FORECAST
-    assert KnownTasks.names() == ("turbofan-fd001", "control-b-forecast", "null-b-forecast")
+    assert KnownTasks.names() == (
+        "turbofan-fd001",
+        "control-b-forecast",
+        "null-b-forecast",
+        "control-b-wide-forecast",
+        "null-b-wide-forecast",
+    )
 
 
 def test_a_task_nobody_stated_is_refused() -> None:
