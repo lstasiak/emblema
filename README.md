@@ -116,3 +116,30 @@ of the mixture weighs ([ADR-0029](docs/adr/0029-pretraining-over-a-mixture-of-co
 *Tier M, Kaggle T4, fp16. Validation, not test.*
 Accepting records the replayed run against the MLflow server `--track` names, so the flag is
 required there.
+
+### Label efficiency (preliminary)
+
+The claim the programme tests is that the pretrained encoder lowers the number of labels a task
+needs. The first reading is the turbofan task under four transfer modes over four budgets of
+labelled windows and five seeds, judged by the rules registered before any of its numbers
+existed ([`docs/preregistration.md`](docs/preregistration.md)): the endpoint is full fine-tuning
+against training from scratch at 200 labelled windows, at least a tenth off the error with the
+whole paired interval over engines above zero and the reduction clearing a practical floor.
+
+**Not confirmed.** Full fine-tuning takes 21 % off the control's error at 200 windows (7.2 RMSE,
+interval [5.9, 8.6]), but the floor at that budget is 7.25: the control arm leaves the plateau
+of the mean predictor under two seeds of five and stays on it under three, so the reduction is
+mostly a difference in how often thirty epochs get an arm off the plateau. The one cell that
+clears its floor by a margin is the low-rank arm at 200 windows, whose five repeats all leave
+the plateau (22.3 ± 1.4 against 32.8 ± 7.3). Beyond a thousand labels the arm trained from
+scratch is the best one, and the frozen probe is far below every other arm at every budget.
+Thirty epochs give a cell about twice as many optimiser steps as it has labels, so no cell had converged
+when it was scored and the low budgets measure the speed of leaving the plateau as much as
+the labels; a budget stated in steps is the first correction of the next run. The synthetic
+control decides what this says about the encoder
+([ADR-0030](docs/adr/0030-transfer-modes.md), [ADR-0032](docs/adr/0032-statistics-of-a-paired-comparison.md),
+[`docs/verification/label-efficiency-curve.md`](docs/verification/label-efficiency-curve.md)).
+
+![Validation RMSE of every transfer mode over the budget of labelled windows, mean over five seeds with the spread as a band, and the reduction against the control arm with its paired interval over engines and the practical floor; tier M, Kaggle T4, fp32; validation, not test](docs/verification/figures/label-efficiency-curve.png)
+
+*Tier M, Kaggle T4, fp32. Preliminary; validation, not test.*
