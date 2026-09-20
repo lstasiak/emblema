@@ -11,7 +11,10 @@ import ast
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "emblema"
-ADAPTER_SEAMS = {"emblema.evaluation.adapters.torch.backbone_factory.BackboneFactory"}
+ADAPTER_SEAMS = {
+    "emblema.evaluation.adapters.torch.backbone_factory.BackboneFactory",
+    "emblema.shared.adapters.tensors.grown_parameters.GrownParameters",
+}
 
 
 def protocols_in(source: str, module: str) -> set[str]:
