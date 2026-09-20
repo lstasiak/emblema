@@ -22,7 +22,12 @@ LORA_UPDATES = 2 * 2 * ((32 + 96) + (32 + 32) + (32 + 64) + (64 + 32))
 def candidate(mode: TransferMode) -> tuple[AdaptedBackbone, SmallBackbones]:
     backbones = SmallBackbones()
     torch.manual_seed(5)
-    return AdaptedBackbone.under(plan(mode), backbones, starting_at=0.0), backbones
+    return (
+        AdaptedBackbone.under(
+            plan(mode), backbones, vocabulary_size=VOCABULARY_SIZE, starting_at=0.0
+        ),
+        backbones,
+    )
 
 
 @pytest.mark.parametrize(
@@ -51,7 +56,7 @@ def test_a_transfer_mode_asks_for_the_plans_weights(mode: TransferMode) -> None:
 
 def test_the_control_arm_starts_from_weights_of_its_own() -> None:
     built, backbones = candidate(TransferMode.FROM_SCRATCH)
-    pretrained = backbones.pretrained(WEIGHTS)
+    pretrained = backbones.pretrained(WEIGHTS, vocabulary_size=VOCABULARY_SIZE)
 
     assert backbones.requested == [WEIGHTS]
     assert not torch.equal(
@@ -76,6 +81,45 @@ def test_the_candidate_answers_one_number_per_window() -> None:
     built, _ = candidate(TransferMode.FULL_FINE_TUNING)
 
     answers = built(random_batch(3, 9, seed=2))
+
+    assert answers.shape == (3,)
+    assert torch.isfinite(answers).all()
+
+
+GROWN = 6
+GROWN_ROWS = GROWN * SMALL.width
+
+
+def grown(mode: TransferMode) -> AdaptedBackbone:
+    torch.manual_seed(5)
+    return AdaptedBackbone.under(
+        plan(mode), SmallBackbones(), vocabulary_size=VOCABULARY_SIZE + GROWN, starting_at=0.0
+    )
+
+
+@pytest.mark.parametrize(
+    ("mode", "trainable"),
+    [
+        (TransferMode.FROM_SCRATCH, ENCODER + GROWN_ROWS + HEAD),
+        (TransferMode.FROZEN_PROBE, GROWN_ROWS + HEAD),
+        (TransferMode.LORA, LORA_UPDATES + GROWN_ROWS + HEAD),
+        (TransferMode.FULL_FINE_TUNING, ENCODER + GROWN_ROWS + HEAD),
+    ],
+)
+def test_rows_grown_for_the_tasks_new_channels_train_under_every_mode(
+    mode: TransferMode, trainable: int
+) -> None:
+    built = grown(mode)
+
+    assert sum(p.numel() for p in built.trainable_parameters()) == trainable
+
+
+def test_a_grown_candidate_answers_windows_over_the_tasks_new_channels() -> None:
+    built = grown(TransferMode.FROZEN_PROBE)
+    batch = random_batch(3, 9, seed=2)
+    batch.channel_ids[0, :] = VOCABULARY_SIZE + GROWN  # the last new channel, on every token
+
+    answers = built(batch)
 
     assert answers.shape == (3,)
     assert torch.isfinite(answers).all()

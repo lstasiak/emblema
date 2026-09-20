@@ -6,6 +6,7 @@ from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.low_rank_adaptation import LowRankAdaptation
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
+from emblema.shared.adapters.tensors.grown_parameters import GrownParameters
 from emblema.shared.adapters.tensors.masked_mean_pooling import MaskedMeanPooling
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
@@ -29,12 +30,22 @@ class AdaptedBackbone(nn.Module):
         self.head = head
 
     @classmethod
-    def under(cls, plan: AdaptationPlan, backbones: BackboneFactory, *, starting_at: float) -> Self:
+    def under(
+        cls,
+        plan: AdaptationPlan,
+        backbones: BackboneFactory,
+        *,
+        vocabulary_size: int,
+        starting_at: float,
+    ) -> Self:
         """The candidate ``plan`` describes, built on the host from torch's current generator.
 
         The head is drawn first, so under one seed every mode starts it from the same weights,
         whatever the encoder draws after it; its bias starts at ``starting_at``, the mean of the
-        labels the run holds in units of the ceiling.
+        labels the run holds in the task's scale. The encoder is asked for over
+        ``vocabulary_size``, the channels of the task's corpus; rows it grew for channels it was
+        never trained on are trained under every mode, as the head is, because there is nothing
+        pretrained in them to freeze.
 
         Raises:
             UnknownBackboneError: If the plan names pretrained weights the factory does not
@@ -44,10 +55,14 @@ class AdaptedBackbone(nn.Module):
         """
         head = RegressionHead(backbones.width, starting_at=starting_at)
         if plan.backbone is None:
-            encoder = backbones.fresh()
+            encoder = backbones.fresh(vocabulary_size=vocabulary_size)
         else:
-            encoder = backbones.pretrained(plan.backbone)
+            encoder = backbones.pretrained(plan.backbone, vocabulary_size=vocabulary_size)
         encoder.requires_grad_(plan.mode.trains_backbone_weights)
+        for module in encoder.modules():
+            if isinstance(module, GrownParameters):
+                for parameter in module.grown_parameters():
+                    parameter.requires_grad_(True)
         if plan.lora is not None:
             LowRankAdaptation(plan.lora).applied_to(encoder)
         return cls(encoder, head)

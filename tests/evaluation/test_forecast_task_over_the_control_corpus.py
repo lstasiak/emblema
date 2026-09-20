@@ -105,9 +105,11 @@ def leg(tmp_path_factory: pytest.TempPathFactory) -> Leg:
     truth = SyntheticGroundTruth(
         SensorSignal(CONTROL_PROCESS, miniature(CONTROL_B, units=UNITS)), SCHEME
     )
-    vocabulary = len(blocks.manifest_of(manifest).channels)
+    # The backbone was pretrained on the first layout alone, so its table covers that layout's
+    # channels and grows for the second's, as the real backbone's does.
+    pretrained_on = len(blocks.manifest_of(refs[0]).channels)
     runtime = TorchAdaptationRuntime(
-        SmallBackbones(vocabulary_size=vocabulary), blocks, device="cpu"
+        SmallBackbones(vocabulary_size=pretrained_on), blocks, device="cpu"
     )
     task = tasks.get(task_id)
     return Leg(

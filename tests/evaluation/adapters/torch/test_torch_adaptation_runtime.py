@@ -88,7 +88,11 @@ def adapt(published: Published, stated: AdaptationPlan) -> AdaptationOutcome:
 
 
 def pretrained_weights() -> dict[str, Tensor]:
-    return SmallBackbones(vocabulary_size=len(CHANNELS)).pretrained(WEIGHTS).state_dict()
+    return (
+        SmallBackbones(vocabulary_size=len(CHANNELS))
+        .pretrained(WEIGHTS, vocabulary_size=len(CHANNELS))
+        .state_dict()
+    )
 
 
 def base_weights(encoder: nn.Module) -> dict[str, Tensor]:
@@ -219,7 +223,9 @@ def test_the_rate_follows_the_schedule_on_every_step_the_probe_included(
 def test_the_head_starts_where_it_is_told_whatever_the_mode(
     published: Published, mode: TransferMode
 ) -> None:
-    candidate = AdaptedBackbone.under(plan(mode), published.backbones, starting_at=0.6)
+    candidate = AdaptedBackbone.under(
+        plan(mode), published.backbones, vocabulary_size=len(CHANNELS), starting_at=0.6
+    )
 
     assert candidate.head.linear.bias.item() == pytest.approx(0.6)
 

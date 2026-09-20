@@ -5,6 +5,12 @@ torch = pytest.importorskip("torch")
 from emblema.entrypoints.cli.restored_backbones import RestoredBackbones  # noqa: E402
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory  # noqa: E402
 from emblema.evaluation.domain.exceptions import UnknownBackboneError  # noqa: E402
+from emblema.pretraining.adapters.encoder.grown_channel_embedding import (  # noqa: E402
+    GrownChannelEmbedding,
+)
+from emblema.pretraining.adapters.encoder.learned_channel_embedding import (  # noqa: E402
+    LearnedChannelEmbedding,
+)
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
 from emblema.pretraining.adapters.objective.masked_reconstruction import (  # noqa: E402
     MaskedReconstruction,
@@ -33,7 +39,7 @@ def test_the_pretrained_encoder_is_the_one_the_run_stored() -> None:
     # Annotated with the seam it implements, so the type checker holds it to that shape of call.
     backbones: BackboneFactory = RestoredBackbones(store, weights)
 
-    restored = backbones.pretrained(weights)
+    restored = backbones.pretrained(weights, vocabulary_size=CHANNELS)
 
     after, before = restored.state_dict(), encoder.state_dict()
     assert after.keys() == before.keys()
@@ -47,7 +53,7 @@ def test_a_fresh_encoder_has_the_stored_shape_and_weights_of_its_own() -> None:
     backbones = RestoredBackbones(store, weights)
 
     torch.manual_seed(11)
-    fresh = backbones.fresh()
+    fresh = backbones.fresh(vocabulary_size=CHANNELS)
 
     assert backbones.width == TINY.width
     assert fresh.state_dict().keys() == encoder.state_dict().keys()
@@ -63,7 +69,7 @@ def test_other_weights_than_the_process_was_built_over_are_refused() -> None:
     other, _ = stored(store, seed=4)
 
     with pytest.raises(UnknownBackboneError, match="serves the backbone"):
-        RestoredBackbones(store, weights).pretrained(other)
+        RestoredBackbones(store, weights).pretrained(other, vocabulary_size=CHANNELS)
 
 
 def test_an_artifact_that_is_not_a_trained_model_is_refused_when_the_process_is_built() -> None:
@@ -71,3 +77,33 @@ def test_an_artifact_that_is_not_a_trained_model_is_refused_when_the_process_is_
 
     with pytest.raises(UnreadableTrainedModelError):
         RestoredBackbones(store, store.put(b"not a model"))
+
+
+def test_the_pretrained_encoder_grows_rows_for_channels_past_its_table() -> None:
+    store = InMemoryArtifactStore()
+    weights, encoder = stored(store)
+    backbones = RestoredBackbones(store, weights)
+
+    grown = backbones.pretrained(weights, vocabulary_size=CHANNELS + 3)
+
+    table = grown.get_submodule("channel_embedding")
+    assert isinstance(table, GrownChannelEmbedding)
+    assert table.vocabulary_size == CHANNELS + 3
+    assert torch.equal(
+        table.learnt.table.weight, encoder.get_parameter("channel_embedding.table.weight")
+    )
+    assert table.grown.weight.shape == (3, TINY.width)
+    assert not grown.training
+
+
+def test_a_fresh_encoder_covers_the_larger_of_the_tasks_and_the_stored_vocabulary() -> None:
+    store = InMemoryArtifactStore()
+    weights, _ = stored(store)
+    backbones = RestoredBackbones(store, weights)
+
+    larger = backbones.fresh(vocabulary_size=CHANNELS + 3)
+    smaller = backbones.fresh(vocabulary_size=1)
+
+    tables = [larger.get_submodule("channel_embedding"), smaller.get_submodule("channel_embedding")]
+    assert all(isinstance(table, LearnedChannelEmbedding) for table in tables)
+    assert [table.vocabulary_size for table in tables] == [CHANNELS + 3, CHANNELS]

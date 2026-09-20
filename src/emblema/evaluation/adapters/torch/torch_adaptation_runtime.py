@@ -60,7 +60,8 @@ class TorchAdaptationRuntime:
         task.accept_sample(sample)
         if not validation:
             raise InvalidAdaptationOutcomeError("there is no validation window to answer")
-        block = self._blocks.block_of(self._blocks.manifest_of(task.manifest))
+        manifest = self._blocks.manifest_of(task.manifest)
+        block = self._blocks.block_of(manifest)
         tuning = block.at([labelled.window.position for labelled in sample.windows])
         held = block.at([labelled.window.position for labelled in validation])
         started = time.perf_counter()
@@ -70,7 +71,10 @@ class TorchAdaptationRuntime:
         ).to(self._device)
         torch.manual_seed(plan.seed)
         candidate = AdaptedBackbone.under(
-            plan, self._backbones, starting_at=sample.mean_target / scale
+            plan,
+            self._backbones,
+            vocabulary_size=len(manifest.channels),
+            starting_at=sample.mean_target / scale,
         ).to(self._device)
         forward = (
             self._over_stored_states(candidate, tuning, plan.schedule.batch_size)
