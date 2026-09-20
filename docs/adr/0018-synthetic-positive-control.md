@@ -207,3 +207,13 @@ particular — the generator is still an adapter of the corpus reader port, noth
 the presets are still constants — and the bytes of every corpus are unchanged, which the pinned
 checksums assert. The forecasting task the leg poses, and why the truth is read where it is,
 are in ADR-0033.
+
+### 2026-09-21 — one model holds both vocabularies only once it is grown to them
+
+The consequence above that "one model holds both" held for the pretraining leg, where a run reads
+both layouts under one vocabulary. In the transfer leg the backbone is pretrained on the first
+layout alone and its channel table ends where that layout's channels end; the second layout's
+channels lie past it. The first run of the transfer leg failed there, and the encoder now grows
+rows for the channels a task's corpus adds, drawn at build time and trained under every mode.
+Recorded with the decision in ADR-0033, 2026-09-21.
+

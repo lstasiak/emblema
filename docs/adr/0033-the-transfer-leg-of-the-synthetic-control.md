@@ -107,3 +107,45 @@ corpus's own sides less those units. The turbofan task keeps naming its official
 - The evaluation harness's campaigns take over the scripts' task registry; the frozen share of
   a generated corpus then becomes a field of the task definition rather than a rule of the
   composition root.
+
+### 2026-09-21 — a backbone grows rows for the channels the task's corpus adds
+
+**What the first run found.** The first cell of the null leg's pilot failed inside the encoder
+with an index past its channel table. The second corpus of a pair is published under the first's
+vocabulary, so its channels carry identifiers past the end of the first's, and the backbone
+pretrained on the first corpus alone has a table over the first's channels alone. The end-to-end
+test had not caught it because its stand-in backbone was sized to the second corpus's vocabulary,
+which the real one never is. The claim in ADR-0018 that one model holds both vocabularies was true
+of the pretraining leg, where one run reads both corpora, and not of transfer, where the model is
+built before the second corpus exists.
+
+**Decision.** An encoder asked for over a task's corpus grows rows for the channels its table
+does not cover. `SetEncoder.grown_to(vocabulary_size)` replaces the learnt channel table with
+`GrownChannelEmbedding`: the learnt rows stay, and every channel past them gets a row drawn from
+torch's generator at the moment of building, after the head as the candidate's seed order has
+it. The seam Evaluation gets its encoder through takes the task's vocabulary on every call —
+`pretrained(weights, vocabulary_size=…)` and `fresh(vocabulary_size=…)` — so the process that
+wires the seam grows the stored encoder and sizes a fresh one to the larger of the task's and
+the stored vocabulary, which keeps the control arm's parameter count equal to full fine-tuning's
+over the same task. The runtime reads the vocabulary off the task's manifest.
+
+**The grown rows are trained under every mode.** Nothing in them was pretrained, so a frozen
+probe that froze them would answer over random channel identities for the task's own sensors,
+and a low-rank arm would carry the same handicap. Like the head, they are new in every mode, and
+the adapter frees them after applying the mode's rule. Evaluation may not import the module that
+grows them, so a module holding grown rows says so through `GrownParameters`, a `Protocol` in
+`shared/adapters/tensors` beside the pooling both contexts already share; it is listed among the
+named adapter seams the architecture test admits. The trainable count a run reports includes the
+grown rows, which is the count that was trained.
+
+**Alternatives considered.** Publishing the pairs in the other order, the first corpus under the
+second's vocabulary, so that the backbone's table would cover both by construction: rejected,
+because it hides a general need — a task on sensors the backbone never saw — behind an ordering
+of two publications, and would make the table's rows for the second corpus depend on the
+pretraining seed rather than the run's. Freezing the grown rows with the rest of the backbone:
+rejected, as above; the frozen probe then measures a random projection of the new sensors rather
+than the pretrained encoder over them.
+
+**Measured when this changed.** Nothing of the leg had run: the failure was in the first cell of
+the pilot, before any number.
+
