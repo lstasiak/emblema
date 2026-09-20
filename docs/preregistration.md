@@ -366,11 +366,19 @@ and not among the registered eleven, which is what item 2 is for.
    including the transfer leg of the synthetic control.
 
 Nothing else moves. The endpoint, its threshold and its interval, the practical floor and its
-measured part, the secondary family and its correction, the budgets, the seeds, the metrics and
-the backbone stand as registered. The backbone is the next thing to be named again: the one the
-first grid used had trained for 2,532 steps with its validation loss still falling, and a run of
-the same objective to the plateau of that loss will be registered here by its weights, in a
-further dated section, before any cell is trained from it.
+measured part, the secondary family and its correction, the budgets, the seeds, the metrics and the
+backbone stand as registered. The backbone is the next thing to be named again: the one the first
+grid used had trained for 2,532 steps, four epochs, with its validation loss still falling by seven
+per cent an epoch. It is trained again under the same configuration with the budget doubled three
+times over, eight, sixteen and thirty-two epochs, each a run of its own with the warm-up and the
+decay spanning it, and the runs are read by the rule the saturation curve was read by: the first
+doubling that lowers the best epoch's validation loss over the whole held-out side by less than five
+per cent is the plateau, and the run at the end of that doubling is the backbone. If the last
+doubling still lowers it by five per cent or more, the budget is doubled again before anything is
+named. The backbone so chosen will be registered here by its weights, in a further dated section,
+before any cell is trained from it; the peaks of the three arms that start from it are then swept
+again under it, by the rule of point 3, and the control's peak stands, since the control never sees
+the backbone.
 
 **Why.** The first grid (`docs/verification/label-efficiency-curve.md`, 2026-09-20) was read
 under thirty epochs whatever the budget, so a cell had about twice as many optimiser steps as it
@@ -414,4 +422,6 @@ both pretrained arms. No run had been made under the floor, the head's start or 
 three arms that step the encoder, against 110,000 in the first grid; at the 0.39 s per step the
 platform showed, about eighteen hours of one T4, two sessions of the platform or one over two
 accelerators. The sweep spends 2,000 steps per run over three arms, three peaks and three seeds,
-about six hours of one T4, and the probe's runs are minutes.
+about six hours of one T4, and the probe's runs are minutes. The three runs of the backbone
+spend fifty-six epochs together, about three hours of one T4 at the 0.31 s per step its first
+run showed, and the second sweep of the three pretrained arms about four and a half hours more.
