@@ -38,7 +38,9 @@ and a figure are rendered from. Nothing here is computed from what is still in m
 On the platform, the grid is two processes in one session, one per accelerator, sharded by
 seed. The cell runs in one notebook cell that waits for both, and both log to the notebook's
 own output, because a session run non-interactively ends when its last cell returns and its
-working directory does not outlive it:
+working directory does not outlive it. The prefix is added unbuffered (`sed -u`): through a pipe
+`sed` otherwise holds its output until a block fills, and the log falls silent for many cells
+while the bucket already holds them:
 
 ```sh
 git clone https://github.com/lstasiak/emblema && cd emblema && git checkout <commit>
@@ -47,10 +49,10 @@ python scripts/fetch_corpora.py cmapss       # the ground truth is read from the
 # EMBLEMA_ARTIFACT_STORE__* from the notebook's secrets, as for the pretraining runs
 python scripts/transfer_modes_report.py --weights ... --manifest ... \
     --seed 1 --seed 3 --seed 5 --device cuda:0 --out shard-0 --publish 2>&1 \
-    | sed 's/^/[shard-0] /' &
+    | sed -u 's/^/[shard-0] /' &
 python scripts/transfer_modes_report.py --weights ... --manifest ... \
     --seed 2 --seed 4 --device cuda:1 --out shard-1 --publish 2>&1 \
-    | sed 's/^/[shard-1] /' &
+    | sed -u 's/^/[shard-1] /' &
 wait
 ```
 
@@ -134,3 +136,191 @@ report and the figure rendered from it, with the grid reported as incomplete and
 as not measured. Those numbers are a check of the path, not a reading of the curve; the one
 secondary cell they reject, the probe at fifty, is rejected among the three cells that ran and
 not among the registered eleven (`docs/preregistration.md`, the second section of 2026-09-19).
+
+## 2026-09-20 — Linux x86_64 (Kaggle, two Tesla T4, fp32): the grid
+
+Commit `0277f98` (the ticket branch rebased onto `86b0521`), Python 3.12, torch 2.10.0+cu128 as
+preinstalled, package installed editable from the clone; the corpus fetched from its source of
+record for the ground truth; the backbone and the manifest of the sweep. One session, two
+processes sharded by seed, each cell published as it landed (80 archives, the last one of a
+shard holding the whole shard): `cuda:0` seeds 1, 3, 5 — 48 cells, 7.53 h inside the cells,
+finished 02:52 UTC; `cuda:1` seeds 2, 4 — 32 cells, 4.71 h, finished 00:02 UTC. Fetched here as
+`data/report/transfer/grid-20260920/shard-{0,1}` (final references
+`durable/sha256/e69ebef2…` and `durable/sha256/ad92964c…`), read into
+`data/report/curve/grid-20260920` and drawn from there.
+
+**Cost on a T4, fp32**: 41–45 / 4 / 42 / 41 s for the four arms at 50 labelled windows,
+~150 s at 200, 740–770 s at 1,000 and 1,950–2,030 s at 2,651 for every arm that steps the
+encoder or an update beside it — 0.37 to 0.41 s per optimiser step, the same whichever arm —
+and 4 to 27 s for the probe. The first cells put the longer shard at seven hours, above the six
+per accelerator at which the decision on half precision was to be reopened; the grid was left to
+run because it fitted one session and the registration names single precision.
+
+**The platform reproduces this machine.** Under seed 1 the four arms at 50 windows score
+41.11 / 40.82 / 40.78 / 34.81, the smoke run's numbers to the second decimal, and at 200 they
+score 22.38 / 38.73 / 20.69 / 21.02 against the sweep's 22.38 / 38.73 / 20.70 / 21.10 on MPS.
+
+**Endpoint RMSE per cell, mean ± SD over seeds** (the engines column is how many engines the
+budget's labels came from, over the seeds):
+
+| budget | engines | from_scratch | frozen_probe | lora | full_fine_tuning |
+| --- | --- | --- | --- | --- | --- |
+| 50 | 33-38 | 40.97 ± 0.30 | 41.08 ± 0.25 | 39.58 ± 1.27 | 39.61 ± 2.91 |
+| 200 | 70-78 | 32.78 ± 7.25 | 39.47 ± 0.47 | 22.26 ± 1.37 | 25.76 ± 5.56 |
+| 1000 | 82 | 18.52 ± 0.96 | 33.03 ± 0.56 | 18.19 ± 1.67 | 19.75 ± 1.10 |
+| all | 82 | 14.43 ± 0.48 | 26.52 ± 0.30 | 21.05 ± 11.54 | 18.14 ± 1.45 |
+
+Trivial predictors over the same windows: mean predictor 41.11, ceiling predictor 66.85.
+
+**Against the control arm**, pooled over the seeds, the interval a bootstrap over the 18
+engines (10,000 resamples); the endpoint stands alone, the other eleven are the registered
+family under the Holm correction at 5 %:
+
+| mode | budget | control | candidate | reduction | relative | 95 % interval | p | floor | rejected | verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| frozen_probe | 50 | 40.97 | 41.08 | -0.11 | -0.3% | [-0.32, +0.08] | 0.2600 | 1.23 | no | indistinguishable |
+| lora | 50 | 40.97 | 39.60 | +1.37 | +3.3% | [+0.86, +1.84] | 0.0002 | 1.23 | yes | distinguishable |
+| full_fine_tuning | 50 | 40.97 | 39.69 | +1.28 | +3.1% | [+0.98, +1.56] | 0.0002 | 1.23 | yes | distinguishable |
+| frozen_probe | 200 | 33.41 | 39.47 | -6.06 | -18.1% | [-7.34, -4.77] | 0.0002 | 7.25 | yes | worse |
+| lora | 200 | 33.41 | 22.29 | +11.12 | +33.3% | [+9.07, +13.50] | 0.0002 | 7.25 | yes | distinguishable |
+| full_fine_tuning | 200 | 33.41 | 26.24 | +7.17 | +21.5% | [+5.92, +8.57] | 0.0002 | 7.25 | primary | distinguishable, practically nil |
+| frozen_probe | 1000 | 18.54 | 33.03 | -14.49 | -78.2% | [-17.56, -11.48] | 0.0002 | 0.96 | yes | worse |
+| lora | 1000 | 18.54 | 18.25 | +0.29 | +1.6% | [-1.71, +2.28] | 0.7947 | 0.96 | no | indistinguishable |
+| full_fine_tuning | 1000 | 18.54 | 19.77 | -1.23 | -6.6% | [-2.93, +0.55] | 0.1622 | 0.96 | no | indistinguishable |
+| frozen_probe | all | 14.44 | 26.53 | -12.09 | -83.7% | [-13.97, -10.14] | 0.0002 | 0.48 | yes | worse |
+| lora | all | 14.44 | 23.44 | -9.00 | -62.4% | [-10.48, -7.57] | 0.0002 | 0.48 | yes | worse |
+| full_fine_tuning | all | 14.44 | 18.18 | -3.75 | -25.9% | [-5.57, -1.98] | 0.0002 | 0.48 | yes | worse |
+
+![Label-efficiency curve](figures/label-efficiency-curve.png)
+
+**Verdict on the registered endpoint: not confirmed — distinguishable, practically nil.** Full
+fine-tuning at 200 labelled windows takes 21.5 % off the control's error (7.17 RMSE, interval
+[5.92, 8.57], five seeds pooled per engine), which clears the registered share and keeps the
+whole interval above zero; the practical floor at that budget is 7.25, and 7.17 does not clear
+it. The floor is the control's own spread over its five seeds, and that spread is the finding:
+
+- **The control arm at 200 is bimodal.** Under seeds 1 and 5 it leaves the plateau of the mean
+  predictor (22.4 and 28.1; training loss 0.033 and 0.046 in units of the ceiling squared) and
+  under seeds 2, 3 and 4 it stays on it (36.2 to 39.0; loss 0.083 to 0.101, the variance of the
+  target being 0.108). The sweep chose its peak under seed 1, one of the two seeds that escape.
+- **The pretrained arm escapes more often, not further.** Four of its five repeats leave the
+  plateau (21.0 to 25.8) and one stays (seed 2, 35.2, loss 0.087). Under seed 1, where both
+  arms escaped, the difference is 22.38 against 21.02 — six per cent, under the registered ten.
+  The endpoint's reduction is therefore mostly a difference in how often thirty epochs get an
+  arm off the plateau, which is what the measured part of the floor exists to catch.
+- Under the rules as they stood before the second amendment of 2026-09-19 the verdict would have
+  read *confirmed*; the amendment binding the endpoint to the floor was registered before any
+  cell ran, and this cell is the case it names.
+
+**The budget of optimisation, a limit of this design.** Every arm trains for thirty epochs, so
+the number of optimiser steps a cell gets grows with its budget of labels, and no cell of the
+grid had converged when it was scored (the training losses per epoch are in each shard's
+`epochs.csv`, in units of the ceiling squared; the variance of the target is 0.108):
+
+| budget | optimiser steps | the training loss at the thirtieth epoch |
+| --- | --- | --- |
+| 50 | 120 | every arm on the plateau of the mean predictor: a loss of 0.09–0.11 and answers spread under 2.5 cycles in 17 of the 20 runs |
+| 200 | 390 | the repeats that leave the plateau are still falling steeply (the control under seed 1: 0.072 → 0.051 → 0.033 over the last ten epochs); the others sit at 0.08–0.10 |
+| 1,000 | 1,890 | every arm still falling (0.014–0.021) |
+| all | 4,980 | every arm still falling (the control 0.011 → 0.009 over the last five epochs) |
+
+The registration read the cell at fifty as a budget of optimisation before the grid ran; the
+grid says the same of the cell at 200, where the decay to one per cent of the peak closes on
+the repeats that start to leave the plateau late (the control under seed 4 drifts off 0.10 only
+from the eighteenth epoch, with the rate already at half its peak and at a tenth by the
+twenty-fifth, and ends at 0.083). What the low
+budgets measure is therefore how fast an arm leaves the plateau under a fixed and small number
+of steps, not how many labels the task needs; a budget stated in optimiser steps rather than
+epochs, fixed before the next run, separates the two.
+
+**The shape of the curve.**
+
+- At 50 windows — 120 optimiser steps — every arm sits within 1.5 RMSE of the mean predictor;
+  the two cells the family rejects there clear a floor of 1.23 by 0.05 and 0.14 RMSE. The
+  amendment recorded this cell as a budget of optimisation before the grid ran.
+- **The one secondary cell that clears its floor by a margin is the low-rank arm at 200**: all
+  five of its repeats leave the plateau (20.7 to 23.9, 22.26 ± 1.37 over seeds) where the
+  control's leave under two, and its reduction of 11.12 RMSE, interval [9.07, 13.50], clears
+  the floor of 7.25 under the Holm correction. This is the ablation the transfer modes were
+  framed as (ADR-0030): fewer degrees of freedom beside a pretrained encoder where labels are
+  few. Read with the limit above: under seed 1, where the control leaves the plateau too, the
+  two arms end at 22.38 and 20.70, so the cell's margin is mostly how reliably thirty epochs
+  get an arm moving, and a longer budget of steps may close it.
+- At 1,000 the three arms that step the encoder or an update beside it are indistinguishable
+  (18.2 to 19.8).
+- At every label the arm trained from scratch (14.4) is better than full fine-tuning (18.1) and
+  than the low-rank updates (21.1), the whole interval of each below zero: the pretrained
+  weights cost error where labels are plentiful, under the peaks chosen at 200. The two arms
+  end at nearly the same training loss (0.010–0.015 against 0.008–0.012), and the pretrained
+  one starts lower (0.047 against 0.112 after the first epoch), so the pretrained weights speed
+  up the first epochs and then settle in a region that generalises worse to the held-out
+  engines, in all five repeats.
+- The probe is far below every other arm at every budget beyond the first (39.5 / 33.0 / 26.5
+  against 25.8 / 19.8 / 18.1 for full fine-tuning): the mean of the encoder's states is not a
+  linear summary of remaining life. This is the condition ADR-0030 named for a two-stage arm.
+- **One repeat of the low-rank arm at the whole budget diverged late**: seed 1 scores 41.47
+  where the other four score 13.4 to 18.1; its training loss fell to 0.033 by the tenth epoch
+  and rose back to 0.110 by the last, under a peak of 3e-3 that was chosen over 390 steps and
+  here ran 4,980. It is one repeat, reported and not dropped; the SD of 11.5 and the widened
+  band of the figure are this run.
+
+**Readings beside the endpoint**, mean ± SD over seeds — read, not thresholded:
+
+RMSE below the ceiling:
+
+| budget | engines | from_scratch | frozen_probe | lora | full_fine_tuning |
+| --- | --- | --- | --- | --- | --- |
+| 50 | 33-38 | 38.88 ± 0.96 | 39.43 ± 1.28 | 37.79 ± 1.34 | 37.97 ± 3.07 |
+| 200 | 70-78 | 30.96 ± 6.86 | 37.48 ± 0.43 | 21.09 ± 1.10 | 24.51 ± 5.30 |
+| 1000 | 82 | 18.35 ± 1.08 | 30.59 ± 1.22 | 17.46 ± 1.55 | 18.80 ± 1.13 |
+| all | 82 | 14.74 ± 0.50 | 24.28 ± 0.69 | 20.55 ± 10.93 | 17.75 ± 1.39 |
+
+RMSE on the last window of each engine (on the validation side an engine's last window ends within four cycles of its failure, so this is the error at the end of life; the benchmark's protocol, and the only reading comparable with published numbers, is the same over the test side's trajectories cut short of failure):
+
+| budget | engines | from_scratch | frozen_probe | lora | full_fine_tuning |
+| --- | --- | --- | --- | --- | --- |
+| 50 | 33-38 | 73.62 ± 2.24 | 74.72 ± 2.95 | 71.01 ± 2.87 | 70.83 ± 8.11 |
+| 200 | 70-78 | 50.61 ± 21.94 | 70.23 ± 1.15 | 10.49 ± 3.25 | 22.60 ± 22.21 |
+| 1000 | 82 | 4.12 ± 0.75 | 51.82 ± 3.18 | 6.23 ± 1.72 | 6.62 ± 1.27 |
+| all | 82 | 2.52 ± 0.47 | 32.34 ± 1.60 | 18.64 ± 32.24 | 4.93 ± 1.46 |
+
+Alpha-lambda accuracy (share of answers within 20 % of the label):
+
+| budget | engines | from_scratch | frozen_probe | lora | full_fine_tuning |
+| --- | --- | --- | --- | --- | --- |
+| 50 | 33-38 | 0.20 ± 0.00 | 0.21 ± 0.01 | 0.22 ± 0.01 | 0.22 ± 0.02 |
+| 200 | 70-78 | 0.30 ± 0.10 | 0.21 ± 0.00 | 0.45 ± 0.02 | 0.39 ± 0.07 |
+| 1000 | 82 | 0.58 ± 0.03 | 0.25 ± 0.01 | 0.55 ± 0.05 | 0.50 ± 0.02 |
+| all | 82 | 0.67 ± 0.03 | 0.37 ± 0.01 | 0.54 ± 0.18 | 0.56 ± 0.04 |
+
+Asymmetric score (mean per window, lower is better; its exponential tail is carried by a few engines):
+
+| budget | engines | from_scratch | frozen_probe | lora | full_fine_tuning |
+| --- | --- | --- | --- | --- | --- |
+| 50 | 33-38 | 152.24 ± 29.72 | 170.96 ± 42.57 | 143.47 ± 34.16 | 144.76 ± 81.00 |
+| 200 | 70-78 | 78.27 ± 60.02 | 119.76 ± 10.99 | 14.55 ± 4.50 | 39.54 ± 50.85 |
+| 1000 | 82 | 8.67 ± 1.41 | 52.32 ± 14.66 | 8.41 ± 2.01 | 10.48 ± 1.56 |
+| all | 82 | 4.15 ± 0.42 | 18.67 ± 2.24 | 41.77 ± 81.01 | 8.21 ± 1.78 |
+
+The last-window reading is the error at the end of life on this side and is not comparable with
+published test-side numbers (`docs/preregistration.md`, 2026-09-19). Two of them are worth a
+sentence: at the whole budget the arm trained from scratch answers within 2.5 cycles at the end
+of an engine's life and within a fifth of the label on two thirds of the windows, and at 200 the
+low-rank arm carries the lowest asymmetric score of the grid (14.6 against 78.3 for the control).
+
+**What the registered rules say to read next.** A negative result is read in a fixed order
+before it is a statement about pretraining: the synthetic control (the transfer leg, not yet
+run), whether the pretraining run was shown to have stopped learning (it was not: the backbone
+spent 2,532 steps of batch 32 — four epochs, thirteen minutes on a T4 — and its validation loss
+was still falling by seven per cent an epoch at the last one, `manual-handoff.md`; doubling the
+budget of the same objective on the control corpora still cut the loss by a quarter or more,
+`masked-reconstruction.md`; and the fine-tuning at the whole budget, 4,980 steps, spends more
+compute than the pretraining did), and whether the control at this budget is already at the
+floor of what the data support (it is not: two of its seeds reach 22 to 28 and at 1,000 it
+reaches 18.5). The pretraining corpus is the tuning side of the task — the same 82 engines,
+unlabelled — so at the whole budget the pretrained arm holds no data the control does not, and
+the claim lives in the small budgets alone. What this grid establishes on its own is
+that at 200 labelled windows the comparison is decided by which repeats leave the plateau under
+thirty epochs, and that beyond 1,000 the pretrained weights are a cost. Whether the encoder
+carries anything the task can use is what the synthetic control answers; the decision on the
+next stage waits for it.
