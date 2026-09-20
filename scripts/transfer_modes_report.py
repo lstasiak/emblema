@@ -53,7 +53,8 @@ from emblema.evaluation.adapters.blocks.published_corpus_blocks import Published
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
-from emblema.evaluation.adapters.readers.cmapss_unit_lifetimes import CmapssUnitLifetimes
+from emblema.evaluation.adapters.readers.cmapss_ground_truth import CmapssGroundTruth
+from emblema.evaluation.adapters.synthetic.synthetic_ground_truth import SyntheticGroundTruth
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import TorchAdaptationRuntime
 from emblema.evaluation.application.use_cases.define_downstream_task import (
     DefineDownstreamTask,
@@ -64,15 +65,17 @@ from emblema.evaluation.application.use_cases.run_adaptation import (
     RunAdaptation,
     RunAdaptationCommand,
 )
-from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
-from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
+from emblema.evaluation.ports.ground_truth import GroundTruth
 from emblema.pretraining.adapters.training.devices import available_device
+from emblema.shared.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
+from emblema.shared.adapters.synthetic.sensor_signal import SensorSignal
 from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
@@ -104,6 +107,12 @@ def parse(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--report-only", type=Path, metavar="DIR", help="render a stored run")
     parser.add_argument(
         "--fetch", nargs=2, metavar=("KEY", "CHECKSUM"), help="unpack a published run into --out"
+    )
+    parser.add_argument(
+        "--task",
+        choices=KnownTasks.names(),
+        default=KnownTasks.default().name,
+        help="the supervised task the grid is run on",
     )
     parser.add_argument("--weights", nargs=2, metavar=("KEY", "CHECKSUM"), help="the backbone")
     parser.add_argument("--manifest", nargs=2, metavar=("KEY", "CHECKSUM"), help="the corpus")
@@ -186,6 +195,30 @@ def parse(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def ground_truth_of(task: KnownTask) -> GroundTruth:
+    """Where the task's labels are read from.
+
+    The raw files of a real corpus, the generator of a synthetic one.
+
+    Raises:
+        SystemExit: If the task's ground truth is not at hand on this machine.
+    """
+    match task.labels:
+        case RemainingLifeScheme():
+            if task.corpus != "cmapss":
+                raise SystemExit(f"no reader of failures is known for the {task.corpus} corpus")
+            root = raw_root(task.corpus)
+            if root is None:
+                raise SystemExit(f"the {task.corpus} corpus is not under data/raw; fetch it first")
+            return CmapssGroundTruth(root)
+        case ForecastScheme():
+            if task.corpus not in LAYOUTS:
+                raise SystemExit(f"no generated layout is called {task.corpus!r}")
+            return SyntheticGroundTruth(
+                SensorSignal(CONTROL_PROCESS, LAYOUTS[task.corpus]), task.labels
+            )
+
+
 def ref_of(pair: Sequence[str]) -> ArtifactRef:
     key, checksum = pair
     return ArtifactRef(key, Checksum.parse(checksum))
@@ -237,8 +270,7 @@ def render(stored: Stored, task: KnownTask) -> str:
     lines = [
         dated_heading(),
         "",
-        f"Task `{task.name}`, ceiling {task.ceiling:g}, {task.strata} strata; "
-        f"machine: {machine()}.",
+        f"Task `{task.name}`, {task.labels_text}, {task.strata} strata; machine: {machine()}.",
         "Every number is validation, not test.",
         "",
         table(
@@ -246,7 +278,7 @@ def render(stored: Stored, task: KnownTask) -> str:
                 "mode",
                 "budget",
                 "windows",
-                "engines",
+                task.units_called,
                 "seed",
                 "epochs",
                 "steps",
@@ -285,7 +317,7 @@ def render(stored: Stored, task: KnownTask) -> str:
 
 def main(argv: Sequence[str] | None = None) -> None:
     arguments = parse(argv)
-    task = KnownTasks.default()
+    task = KnownTasks.named(arguments.task)
     if arguments.report_only is not None:
         print(render(Stored.existing(arguments.report_only), task))
         return
@@ -297,41 +329,37 @@ def main(argv: Sequence[str] | None = None) -> None:
         return
     if arguments.weights is None or arguments.manifest is None:
         raise SystemExit("--weights and --manifest are required to run; --report-only to render")
-    root = raw_root(task.corpus)
-    if root is None:
-        raise SystemExit(f"the {task.corpus} corpus is not under data/raw; fetch it first")
+    truth = ground_truth_of(task)
     device = available_device() if arguments.device is None else arguments.device
     out = arguments.out or Path("data/report/transfer") / datetime.now().strftime("%Y%m%d-%H%M%S")
     stored = Stored.open(out)
     commit = SourceRevision().current()
+    stored.require_configuration(task=task.name, commit=commit)
 
     store = configured_store(Settings())
     manifest = ref_of(arguments.manifest)
     blocks = PublishedCorpusBlocks(store, arguments.workspace)
     corpus = BlockCorpusWindows(blocks)
-    lifetimes = CmapssUnitLifetimes(root)
     tasks = InMemoryDownstreamTaskRepository()
     sides = corpus.describe(manifest)
+    test = task.frozen_test(task.units_of(sorted(str(u) for u in sides.validation)))
     task_id = DefineDownstreamTask(tasks, corpus, Uuid4IdGenerator())(
         DefineDownstreamTaskCommand(
             manifest=manifest,
-            units=task.units_of(sorted(str(u) for u in sides.training | sides.validation)),
-            test=FrozenTestSplit(
-                units=frozenset(UnitKey(key) for key in task.test_units), source=task.test_source
-            ),
-            labels=RemainingLifeScheme(task.ceiling),
+            units=task.units_of(sorted(str(u) for u in sides.training | sides.validation))
+            - test.units,
+            test=test,
+            labels=task.labels,
             strata=TargetBins(task.strata),
         )
     )
     runtime = TorchAdaptationRuntime(
         RestoredBackbones(store, ref_of(arguments.weights)), blocks, device=device
     )
-    run = RunAdaptation(
-        tasks, corpus, lifetimes, DrawLabelBudget(tasks, corpus, lifetimes), runtime
-    )
+    run = RunAdaptation(tasks, corpus, truth, DrawLabelBudget(tasks, corpus, truth), runtime)
     try:
         for cell, plan in cells_of(arguments):
-            if stored.holds(cell, plan, commit=commit):
+            if stored.holds(cell, plan, task=task.name, commit=commit):
                 print(f"{cell}: already stored, skipped", flush=True)
                 continue
             print(f"{cell}: learning on {device} ...", flush=True)
@@ -340,10 +368,10 @@ def main(argv: Sequence[str] | None = None) -> None:
                     task=task_id, plan=plan, budget=cell.budget, sample_seed=cell.seed
                 )
             )
-            stored.add(outcome, device=device, commit=commit)
+            stored.add(outcome, task=task.name, device=device, commit=commit)
             print(
                 f"{cell}: RMSE {outcome.rmse:.2f} over {len(outcome.predictions)} windows, "
-                f"{outcome.labelled_units} engines labelled, "
+                f"{outcome.labelled_units} {task.units_called} labelled, "
                 f"{outcome.trainable_parameters} trainable, {outcome.seconds:.0f} s",
                 flush=True,
             )

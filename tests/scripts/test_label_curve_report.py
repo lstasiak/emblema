@@ -74,7 +74,12 @@ def shards(tmp_path: Path) -> list[Stored]:
         shard = Stored.open(tmp_path / f"shard-{seed}")
         for budget in BUDGETS:
             for mode in TransferMode:
-                shard.add(outcome(mode, budget, seed, ERROR[mode]), device="cpu", commit="abc")
+                shard.add(
+                    outcome(mode, budget, seed, ERROR[mode]),
+                    task="turbofan-fd001",
+                    device="cpu",
+                    commit="abc",
+                )
         stored.append(shard)
     return stored
 
@@ -87,6 +92,7 @@ def test_every_stored_run_becomes_a_point_with_its_readings(shards: list[Stored]
     assert (first.mode, first.budget, first.seed, first.engines) == ("from_scratch", "50", 1, 3)
     assert first.rmse > 0.0
     assert first.rmse_below_ceiling == pytest.approx(first.rmse)
+    assert first.alpha_lambda_accuracy is not None
     assert 0.0 <= first.alpha_lambda_accuracy <= 1.0
     assert [b.name for b in curve.baselines] == ["mean predictor", "ceiling predictor"]
     assert curve.baselines[0].rmse == pytest.approx(11.180339887, abs=1e-6)
@@ -130,7 +136,12 @@ def test_budgets_sort_by_their_count_of_windows_with_everything_last(tmp_path: P
     shard = Stored.open(tmp_path / "shard")
     for budget in ("all", "200", "100", "50", "1000"):
         for mode in (TransferMode.FROM_SCRATCH, TransferMode.LORA):
-            shard.add(outcome(mode, budget, 1, ERROR[mode]), device="cpu", commit="abc")
+            shard.add(
+                outcome(mode, budget, 1, ERROR[mode]),
+                task="turbofan-fd001",
+                device="cpu",
+                commit="abc",
+            )
 
     curve = curve_of([shard], KnownTasks.default())
 
@@ -140,10 +151,19 @@ def test_budgets_sort_by_their_count_of_windows_with_everything_last(tmp_path: P
 
 def test_shards_that_do_not_make_one_grid_are_refused(tmp_path: Path) -> None:
     first = Stored.open(tmp_path / "first")
-    first.add(outcome(TransferMode.FROM_SCRATCH, "50", 1, 0.5), device="cpu", commit="abc")
-    first.add(outcome(TransferMode.LORA, "50", 1, 0.2), device="cpu", commit="abc")
+    first.add(
+        outcome(TransferMode.FROM_SCRATCH, "50", 1, 0.5),
+        task="turbofan-fd001",
+        device="cpu",
+        commit="abc",
+    )
+    first.add(
+        outcome(TransferMode.LORA, "50", 1, 0.2), task="turbofan-fd001", device="cpu", commit="abc"
+    )
     other_commit = Stored.open(tmp_path / "other-commit")
-    other_commit.add(outcome(TransferMode.LORA, "50", 2, 0.2), device="cpu", commit="def")
+    other_commit.add(
+        outcome(TransferMode.LORA, "50", 2, 0.2), task="turbofan-fd001", device="cpu", commit="def"
+    )
     other_plan = Stored.open(tmp_path / "other-plan")
     other_plan.add(
         outcome(
@@ -153,6 +173,7 @@ def test_shards_that_do_not_make_one_grid_are_refused(tmp_path: Path) -> None:
             0.2,
             schedule=adaptation_schedule(epochs=2, learning_rate=3e-3),
         ),
+        task="turbofan-fd001",
         device="cpu",
         commit="abc",
     )
@@ -206,7 +227,9 @@ def test_a_cell_held_by_two_shards_is_refused(shards: list[Stored], tmp_path: Pa
 def test_a_curve_without_the_endpoint_says_so(tmp_path: Path) -> None:
     shard = Stored.open(tmp_path / "shard")
     for mode in (TransferMode.FROM_SCRATCH, TransferMode.LORA):
-        shard.add(outcome(mode, "50", 1, ERROR[mode]), device="cpu", commit="abc")
+        shard.add(
+            outcome(mode, "50", 1, ERROR[mode]), task="turbofan-fd001", device="cpu", commit="abc"
+        )
 
     curve = curve_of([shard], KnownTasks.default())
 
@@ -222,7 +245,12 @@ def test_the_whole_grid_is_read_without_the_incomplete_warning(tmp_path: Path) -
     for seed in (1, 2, 3, 4, 5):
         for budget in ("50", "200", "1000", "all"):
             for mode in TransferMode:
-                shard.add(outcome(mode, budget, seed, ERROR[mode]), device="cpu", commit="abc")
+                shard.add(
+                    outcome(mode, budget, seed, ERROR[mode]),
+                    task="turbofan-fd001",
+                    device="cpu",
+                    commit="abc",
+                )
 
     curve = curve_of([shard], KnownTasks.default())
 
@@ -234,3 +262,44 @@ def test_the_whole_grid_is_read_without_the_incomplete_warning(tmp_path: Path) -
 def test_a_directory_without_a_curve_is_not_rendered(tmp_path: Path) -> None:
     with pytest.raises(SystemExit, match="nothing to render"):
         read(tmp_path / "missing")
+
+
+def forecast_shard(directory: Path) -> Stored:
+    """A shard of the synthetic forecasting task: the control and full fine-tuning at 200."""
+    shard = Stored.open(directory)
+    for mode in (TransferMode.FROM_SCRATCH, TransferMode.FULL_FINE_TUNING):
+        for seed in SEEDS:
+            shard.add(
+                outcome(mode, "200", seed, ERROR[mode]),
+                task=KnownTasks.CONTROL_B_FORECAST.name,
+                device="cpu",
+                commit="abc",
+            )
+    return shard
+
+
+def test_a_forecasting_task_reads_the_endpoint_alone_and_no_ceiling(tmp_path: Path) -> None:
+    task = KnownTasks.CONTROL_B_FORECAST
+
+    curve = curve_of([forecast_shard(tmp_path / "forecast")], task)
+
+    assert [b.name for b in curve.baselines] == ["mean predictor"]
+    assert all(p.rmse > 0 for p in curve.points)
+    assert all(
+        (p.rmse_below_ceiling, p.last_window_rmse, p.alpha_lambda_accuracy, p.asymmetric_score)
+        == (None, None, None, None)
+        for p in curve.points
+    )
+    write(curve, tmp_path / "out")
+    assert read(tmp_path / "out") == curve
+    rendered = render(curve, task)
+    assert "the exact reading of s01 12 time units past the window" in rendered
+    assert "| budget | units |" in rendered
+    assert "Alpha-lambda" not in rendered
+
+
+def test_shards_of_another_task_than_asked_are_refused(tmp_path: Path) -> None:
+    shard = forecast_shard(tmp_path / "forecast")
+
+    with pytest.raises(SystemExit, match="pass --task"):
+        curve_of([shard], KnownTasks.default())

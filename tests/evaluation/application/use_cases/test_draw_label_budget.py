@@ -6,14 +6,14 @@ from emblema.evaluation.adapters.in_memory.corpus_windows import InMemoryCorpusW
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
-from emblema.evaluation.adapters.in_memory.unit_lifetimes import InMemoryUnitLifetimes
+from emblema.evaluation.adapters.in_memory.ground_truth import InMemoryGroundTruth
 from emblema.evaluation.application.use_cases.draw_label_budget import (
     DrawLabelBudget,
     DrawLabelBudgetCommand,
 )
 from emblema.evaluation.domain.exceptions import (
     TaskNotFoundError,
-    UnknownUnitLifetimeError,
+    UnknownGroundTruthError,
     UnlabelledWindowError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
@@ -42,7 +42,7 @@ def draw(
     use_case = DrawLabelBudget(
         tasks,
         InMemoryCorpusWindows(PUBLISHED, ENDS, MANIFEST),
-        InMemoryUnitLifetimes(failures),
+        InMemoryGroundTruth(failures),
     )
     return use_case(DrawLabelBudgetCommand(task=TASK, budget=budget, seed=seed))
 
@@ -53,7 +53,7 @@ def test_the_strata_come_from_the_task_and_not_from_the_request() -> None:
     tasks = InMemoryDownstreamTaskRepository()
     tasks.save(replace(task(), strata=TargetBins(1)))
     corpus = InMemoryCorpusWindows(PUBLISHED, ENDS, MANIFEST)
-    lifetimes = InMemoryUnitLifetimes(FAILURES)
+    lifetimes = InMemoryGroundTruth(FAILURES)
     command = DrawLabelBudgetCommand(task=TASK, budget=LabelBudget.of(4), seed=3)
 
     coarse = DrawLabelBudget(tasks, corpus, lifetimes)(command)
@@ -93,7 +93,7 @@ def test_another_seed_draws_other_windows() -> None:
 
 
 def test_a_tuning_unit_without_a_known_failure_stops_the_draw() -> None:
-    with pytest.raises(UnknownUnitLifetimeError, match="no failure time"):
+    with pytest.raises(UnknownGroundTruthError, match="no ground truth"):
         draw(failures={UnitKey("a"): 300.0, UnitKey("c"): 200.0})
 
 
@@ -106,7 +106,7 @@ def test_drawing_from_a_task_nobody_defined_is_refused() -> None:
     use_case = DrawLabelBudget(
         InMemoryDownstreamTaskRepository(),
         InMemoryCorpusWindows(PUBLISHED, ENDS, MANIFEST),
-        InMemoryUnitLifetimes(FAILURES),
+        InMemoryGroundTruth(FAILURES),
     )
 
     with pytest.raises(TaskNotFoundError):

@@ -6,32 +6,44 @@ from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import (
     ForeignLabelSampleError,
     FrozenTestSplitClosedError,
-    UnknownUnitLifetimeError,
+    UnknownGroundTruthError,
     UnlabelledWindowError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
-from tests.evaluation.support import TASK, TEST_SIDE, labelled, task, units, window
+from tests.evaluation.support import FORECAST, TASK, TEST_SIDE, labelled, task, units, window
 
 
 def test_a_task_labels_windows_by_its_scheme_from_the_failure_of_their_unit() -> None:
     windows = [window("a", 0, 100.0), window("a", 1, 250.0), window("b", 2, 40.0)]
 
-    read = task().labelled(windows, {UnitKey("a"): 300.0, UnitKey("b"): 50.0})
+    failed = {UnitKey("a"): 300.0, UnitKey("b"): 50.0}
+
+    read = task().labelled(windows, {w: failed[w.unit] for w in windows})
 
     assert [(w.window.position, w.target) for w in read] == [(0, 125.0), (1, 50.0), (2, 10.0)]
 
 
 def test_a_window_past_the_failure_of_its_unit_cannot_be_labelled() -> None:
     with pytest.raises(UnlabelledWindowError):
-        task().labelled([window("a", 0, 301.0)], {UnitKey("a"): 300.0})
+        task().labelled([window("a", 0, 301.0)], {window("a", 0, 301.0): 300.0})
 
 
-def test_a_window_of_a_unit_with_no_failure_time_cannot_be_labelled() -> None:
-    with pytest.raises(UnknownUnitLifetimeError, match="unit b"):
-        task().labelled([window("a", 0, 100.0), window("b", 1, 40.0)], {UnitKey("a"): 300.0})
+def test_a_window_the_ground_truth_says_nothing_about_cannot_be_labelled() -> None:
+    with pytest.raises(UnknownGroundTruthError, match="unit b at 1"):
+        task().labelled(
+            [window("a", 0, 100.0), window("b", 1, 40.0)], {window("a", 0, 100.0): 300.0}
+        )
+
+
+def test_a_forecasting_task_labels_a_window_with_the_exact_reading_it_is_given() -> None:
+    windows = [window("a", 0, 100.0), window("b", 1, 40.0)]
+
+    read = task(labels=FORECAST).labelled(windows, {windows[0]: -0.25, windows[1]: 1.5})
+
+    assert [w.target for w in read] == [-0.25, 1.5]
 
 
 def test_a_sample_drawn_from_the_task_is_accepted() -> None:

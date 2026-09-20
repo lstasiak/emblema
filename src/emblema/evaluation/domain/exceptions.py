@@ -89,8 +89,8 @@ class UnknownTaskUnitsError(EvaluationError):
     """A task was defined over units the published corpus does not name."""
 
 
-class UnknownUnitLifetimeError(EvaluationError):
-    """No failure time is known for a unit the task draws labels from."""
+class UnknownGroundTruthError(EvaluationError):
+    """The ground truth says nothing about a window or a unit the task reads labels for."""
 
 
 class UnreadableTaskCorpusError(EvaluationError):

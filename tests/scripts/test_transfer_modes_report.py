@@ -6,10 +6,11 @@ import pytest
 
 pytest.importorskip("torch")
 
+from emblema.evaluation.adapters.synthetic.synthetic_ground_truth import SyntheticGroundTruth
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from scripts.transfer_grid import Cell, KnownTasks, Stored
-from scripts.transfer_modes_report import cells_of, parse, plans_of, render
+from scripts.transfer_modes_report import cells_of, ground_truth_of, parse, plans_of, render
 from tests.scripts.test_transfer_grid import outcome
 
 pytestmark = pytest.mark.ml
@@ -91,8 +92,10 @@ def test_a_shard_names_its_own_seeds_and_budgets() -> None:
 
 def test_stored_cells_render_into_the_notes_table(tmp_path: Path) -> None:
     stored = Stored.open(tmp_path / "run")
-    stored.add(outcome(TransferMode.FROZEN_PROBE), device="cpu", commit="abc123")
-    stored.add(outcome(TransferMode.LORA), device="cpu", commit="abc123")
+    stored.add(
+        outcome(TransferMode.FROZEN_PROBE), task="turbofan-fd001", device="cpu", commit="abc123"
+    )
+    stored.add(outcome(TransferMode.LORA), task="turbofan-fd001", device="cpu", commit="abc123")
 
     rendered = render(stored, KnownTasks.default())
 
@@ -117,3 +120,22 @@ def test_a_run_stored_before_a_column_existed_still_renders(tmp_path: Path) -> N
     rendered = render(Stored.existing(tmp_path / "old"), KnownTasks.default())
 
     assert "| lora | 200 |  |  | 1 | 30 |  | 0.001 |  |  | 196865 | 24.07 | 232 | mps |" in rendered
+
+
+def test_a_synthetic_task_reads_its_truth_off_the_generator() -> None:
+    assert isinstance(ground_truth_of(KnownTasks.CONTROL_B_FORECAST), SyntheticGroundTruth)
+    assert isinstance(ground_truth_of(KnownTasks.NULL_B_FORECAST), SyntheticGroundTruth)
+
+
+def test_a_real_task_whose_corpus_was_not_fetched_stops_before_anything_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("scripts.transfer_modes_report.raw_root", lambda corpus: None)
+
+    with pytest.raises(SystemExit, match="not under data/raw"):
+        ground_truth_of(KnownTasks.default())
+
+
+def test_the_task_is_an_argument_and_defaults_to_the_turbofan_one() -> None:
+    assert parse(arguments()).task == "turbofan-fd001"
+    assert parse(arguments("--task", "null-b-forecast")).task == "null-b-forecast"

@@ -64,7 +64,7 @@ class TorchAdaptationRuntime:
         tuning = block.at([labelled.window.position for labelled in sample.windows])
         held = block.at([labelled.window.position for labelled in validation])
         started = time.perf_counter()
-        scale = task.labels.ceiling
+        scale = task.labels.scale
         targets = torch.tensor(
             [labelled.target / scale for labelled in sample.windows], dtype=torch.float32
         ).to(self._device)

@@ -22,7 +22,7 @@ from emblema.evaluation.adapters.blocks.published_corpus_blocks import Published
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
-from emblema.evaluation.adapters.readers.cmapss_unit_lifetimes import CmapssUnitLifetimes
+from emblema.evaluation.adapters.readers.cmapss_ground_truth import CmapssGroundTruth
 from emblema.evaluation.application.use_cases.define_downstream_task import (
     DefineDownstreamTask,
     DefineDownstreamTaskCommand,
@@ -90,7 +90,7 @@ def published(tmp_path_factory: pytest.TempPathFactory) -> Published:
     )
     block = PublishedCorpusManifestJson().decode(store.get(manifest)).block
     return Published(
-        DrawLabelBudget(tasks, corpus, CmapssUnitLifetimes(SAMPLE)),
+        DrawLabelBudget(tasks, corpus, CmapssGroundTruth(SAMPLE)),
         task,
         store,
         workspace / block.checksum.digest,

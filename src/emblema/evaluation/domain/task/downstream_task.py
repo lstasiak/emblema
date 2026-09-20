@@ -5,9 +5,10 @@ from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import (
     ForeignLabelSampleError,
     FrozenTestSplitClosedError,
-    UnknownUnitLifetimeError,
+    UnknownGroundTruthError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
@@ -34,7 +35,9 @@ class DownstreamTask:
         corpus: Name of the published corpus the units come from.
         manifest: Reference to the manifest the task was defined against.
         split: Which units tune, which validate and which are held for the final run.
-        labels: How a window's target is read from the moment its unit failed.
+        labels: How a window's target is read from what the ground truth says about it: the
+            moment its unit failed, or the exact reading it is asked to forecast. A closed set
+            of schemes, because which one a task uses decides what the ground truth has to say.
         strata: How many groups of the target a budget is spread over.
     """
 
@@ -42,7 +45,7 @@ class DownstreamTask:
     corpus: str
     manifest: ArtifactRef
     split: TaskSplit
-    labels: RemainingLifeScheme
+    labels: RemainingLifeScheme | ForecastScheme
     strata: TargetBins
 
     @property
@@ -56,23 +59,27 @@ class DownstreamTask:
         return self.split.validation
 
     def labelled(
-        self, windows: Iterable[TaskWindow], failed_at: Mapping[UnitKey, float]
+        self, windows: Iterable[TaskWindow], truths: Mapping[TaskWindow, float]
     ) -> tuple[LabelledWindow, ...]:
         """Those windows with the target the task's scheme reads for each, in the order given.
 
         Raises:
-            UnknownUnitLifetimeError: If a window's unit has no failure time in ``failed_at``.
+            UnknownGroundTruthError: If ``truths`` says nothing about one of the windows.
             UnlabelledWindowError: If a window reaches past the failure of its unit.
         """
-        return tuple(self._labelled(window, failed_at) for window in windows)
+        return tuple(self._labelled(window, truths) for window in windows)
 
-    def _labelled(self, window: TaskWindow, failed_at: Mapping[UnitKey, float]) -> LabelledWindow:
-        if window.unit not in failed_at:
-            raise UnknownUnitLifetimeError(f"no failure time known for unit {window.unit}")
-        return LabelledWindow(
-            window=window,
-            target=self.labels.target(failed_at=failed_at[window.unit], ends_at=window.ends_at),
-        )
+    def _labelled(self, window: TaskWindow, truths: Mapping[TaskWindow, float]) -> LabelledWindow:
+        if window not in truths:
+            raise UnknownGroundTruthError(
+                f"no ground truth known for unit {window.unit} at {window.position}"
+            )
+        match self.labels:
+            case RemainingLifeScheme():
+                target = self.labels.target(failed_at=truths[window], ends_at=window.ends_at)
+            case ForecastScheme():
+                target = self.labels.target(exact=truths[window])
+        return LabelledWindow(window=window, target=target)
 
     def accept_sample(self, sample: LabelSample) -> None:
         """Refuse a sample of labels drawn from another task.

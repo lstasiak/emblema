@@ -11,7 +11,7 @@ from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.ports.adaptation_runtime import AdaptationRuntime
 from emblema.evaluation.ports.corpus_windows import CorpusWindows
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
-from emblema.evaluation.ports.unit_lifetimes import UnitLifetimes
+from emblema.evaluation.ports.ground_truth import GroundTruth
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -44,13 +44,13 @@ class RunAdaptation:
         self,
         tasks: DownstreamTaskRepository,
         corpus: CorpusWindows,
-        lifetimes: UnitLifetimes,
+        truth: GroundTruth,
         draw_label_budget: DrawLabelBudget,
         runtime: AdaptationRuntime,
     ) -> None:
         self._tasks = tasks
         self._corpus = corpus
-        self._lifetimes = lifetimes
+        self._truth = truth
         self._draw = draw_label_budget
         self._runtime = runtime
 
@@ -59,7 +59,8 @@ class RunAdaptation:
 
         Raises:
             TaskNotFoundError: If the task is unknown.
-            UnknownUnitLifetimeError: If a unit of either side has no known failure time.
+            UnknownGroundTruthError: If the ground truth says nothing about a window of either
+                side.
             InvalidLabelBudgetError: If the tuning side holds fewer windows than asked for.
             UnknownBackboneError: If the plan names pretrained weights the runtime cannot supply.
             LoraTargetNotFoundError: If the plan's low-rank updates name a layer the backbone
@@ -71,8 +72,6 @@ class RunAdaptation:
                 task=command.task, budget=command.budget, seed=command.sample_seed
             )
         )
-        validation = task.labelled(
-            self._corpus.windows_of(task.manifest, task.validation_units),
-            self._lifetimes.failure_times(task.validation_units),
-        )
+        windows = self._corpus.windows_of(task.manifest, task.validation_units)
+        validation = task.labelled(windows, self._truth.truths_of(windows))
         return self._runtime.adapt(command.plan, task, sample, validation)

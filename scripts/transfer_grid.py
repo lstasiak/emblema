@@ -16,11 +16,15 @@ from pathlib import Path
 from typing import Self
 
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
+from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.ordering import seeded_rank
 from emblema.shared.ports.artifact_store import ArtifactStore
 
 RUNS, EPOCHS, PREDICTIONS = "runs.csv", "epochs.csv", "predictions.csv"
@@ -43,6 +47,7 @@ PLAN_COLUMNS = (
 )
 RUN_COLUMNS = (
     *PLAN_COLUMNS,
+    "task",
     "budget",
     "windows",
     "steps",
@@ -63,6 +68,53 @@ MODES = tuple(str(mode) for mode in TransferMode)
 
 
 @dataclass(frozen=True, kw_only=True)
+class NamedTestUnits:
+    """A frozen test side named outright: the units an official test set holds.
+
+    Attributes:
+        source: Where the units come from, as the set is known outside this system.
+        units: Keys of the frozen test units.
+    """
+
+    source: str
+    units: tuple[str, ...]
+
+    def frozen_split(self, held_out: frozenset[UnitKey]) -> FrozenTestSplit:
+        """The named units, whatever the corpus holds out: an official test set is not cut."""
+        return FrozenTestSplit(
+            units=frozenset(UnitKey(key) for key in self.units), source=self.source
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
+class HeldOutShare:
+    """A frozen test side cut from the corpus's own held-out units, for a corpus without a test set.
+
+    The held-out units are ranked under the seed and one in every ``one_in`` of them, rounded
+    up, is frozen from the top of that ranking, so the same corpus always freezes the same units
+    whatever order they are named in. A count rather than a fraction, so the arithmetic is exact.
+
+    Attributes:
+        source: Where the units come from, as the set is known outside this system.
+        one_in: One unit in this many is frozen; at least two, so that some are left to validate on.
+        seed: Seed of the ranking.
+    """
+
+    source: str
+    one_in: int
+    seed: int
+
+    def __post_init__(self) -> None:
+        if self.one_in < 2:
+            raise ValueError(f"one_in must be at least two, got {self.one_in}")
+
+    def frozen_split(self, held_out: frozenset[UnitKey]) -> FrozenTestSplit:
+        ranked = sorted(held_out, key=lambda unit: seeded_rank(self.seed, str(unit)))
+        count = -(-len(ranked) // self.one_in)
+        return FrozenTestSplit(units=frozenset(ranked[:count]), source=self.source)
+
+
+@dataclass(frozen=True, kw_only=True)
 class KnownTask:
     """What a supervised task is made of, as far as no adapter can read it off the corpus.
 
@@ -70,23 +122,40 @@ class KnownTask:
         name: What the task is called in the reports.
         corpus: Name the corpus was published under.
         unit_prefix: What the keys of the task's units start with, inside that corpus.
-        ceiling: Largest remaining life a window is labelled with.
+        labels: How a window's target is read: the remaining life under a ceiling, or the exact
+            reading of a sensor a fixed time past the window.
         strata: How many groups of the target a budget is spread over.
-        test_source: Where the frozen test engines come from, as the set is known outside.
-        test_units: Keys of the frozen test engines.
+        units_called: What the task's units are called in prose, engines or units.
+        test: How the frozen test side is made.
     """
 
     name: str
     corpus: str
     unit_prefix: str
-    ceiling: float
+    labels: RemainingLifeScheme | ForecastScheme
     strata: int
-    test_source: str
-    test_units: tuple[str, ...]
+    units_called: str
+    test: NamedTestUnits | HeldOutShare
 
     def units_of(self, keys: Sequence[str]) -> frozenset[UnitKey]:
         """The task's units among the keys a published corpus names."""
         return frozenset(UnitKey(key) for key in keys if key.startswith(self.unit_prefix))
+
+    def frozen_test(self, held_out: frozenset[UnitKey]) -> FrozenTestSplit:
+        """The frozen test side, given the task's units the corpus holds out."""
+        return self.test.frozen_split(held_out)
+
+    @property
+    def labels_text(self) -> str:
+        """The label scheme in a few words, for a heading."""
+        match self.labels:
+            case RemainingLifeScheme():
+                return f"remaining life under a ceiling of {self.labels.ceiling:g}"
+            case ForecastScheme():
+                return (
+                    f"the exact reading of {self.labels.channel} "
+                    f"{self.labels.horizon:g} time units past the window"
+                )
 
 
 class KnownTasks:
@@ -96,15 +165,58 @@ class KnownTasks:
         name="turbofan-fd001",
         corpus="cmapss",
         unit_prefix="FD001/",
-        ceiling=125.0,
+        labels=RemainingLifeScheme(125.0),
         strata=4,
-        test_source="cmapss/test/FD001",
-        test_units=tuple(f"FD001/test/{engine}" for engine in range(1, 101)),
+        units_called="engines",
+        test=NamedTestUnits(
+            source="cmapss/test/FD001",
+            units=tuple(f"FD001/test/{engine}" for engine in range(1, 101)),
+        ),
+    )
+    # The synthetic control's transfer leg: the forecasting task on the second layout of each
+    # pair, a third of the held-out units frozen because a generated corpus has no test set.
+    CONTROL_B_FORECAST = KnownTask(
+        name="control-b-forecast",
+        corpus="control-b",
+        unit_prefix="control-b/",
+        labels=ForecastScheme("s01", 12.0),
+        strata=4,
+        units_called="units",
+        test=HeldOutShare(source="control-b/held-out", one_in=3, seed=1),
+    )
+    NULL_B_FORECAST = KnownTask(
+        name="null-b-forecast",
+        corpus="null-b",
+        unit_prefix="null-b/",
+        labels=ForecastScheme("s01", 12.0),
+        strata=4,
+        units_called="units",
+        test=HeldOutShare(source="null-b/held-out", one_in=3, seed=1),
     )
 
     @classmethod
     def default(cls) -> KnownTask:
         return cls.TURBOFAN_FD001
+
+    @classmethod
+    def all(cls) -> tuple[KnownTask, ...]:
+        return (cls.TURBOFAN_FD001, cls.CONTROL_B_FORECAST, cls.NULL_B_FORECAST)
+
+    @classmethod
+    def names(cls) -> tuple[str, ...]:
+        return tuple(task.name for task in cls.all())
+
+    @classmethod
+    def named(cls, name: str) -> KnownTask:
+        """The task called ``name``.
+
+        Raises:
+            KeyError: If no task is called that.
+        """
+        for task in cls.all():
+            if task.name == name:
+                return task
+        raise KeyError(name)
 
 
 def budget_of(text: str) -> LabelBudget:
@@ -167,8 +279,8 @@ class Stored:
             raise SystemExit(f"{directory} holds no {RUNS}; nothing to render")
         return cls(directory=directory)
 
-    def holds(self, cell: Cell, plan: AdaptationPlan, *, commit: str) -> bool:
-        """Whether the cell is stored under this plan and this commit.
+    def holds(self, cell: Cell, plan: AdaptationPlan, *, task: str, commit: str) -> bool:
+        """Whether the cell is stored under this plan, this task and this commit.
 
         Raises:
             SystemExit: If the cell is stored under another plan or commit: a grid resumed
@@ -179,6 +291,8 @@ class Stored:
             if (row["mode"], row["budget"], row["sample_seed"]) != cell.key:
                 continue
             differing = [name for name, value in stated.items() if row.get(name) != value]
+            if row.get("task") != task:
+                differing.append("task")
             if row["commit"] != commit:
                 differing.append("commit")
             if differing:
@@ -190,11 +304,28 @@ class Stored:
             return True
         return False
 
+    def require_configuration(self, *, task: str, commit: str) -> None:
+        """Refuse to continue a directory whose stored runs belong to another task or commit.
+
+        Checked once before any cell trains, so a session that would have to be refused is
+        refused before it spends an hour rather than at the first cell it meets again.
+
+        Raises:
+            SystemExit: If a stored run names another task or another commit.
+        """
+        found = sorted({(row.get("task") or "", row["commit"]) for row in self.runs()})
+        other = [f"{t or '?'} at {c[:7]}" for t, c in found if (t, c) != (task, commit)]
+        if other:
+            raise SystemExit(
+                f"{self.directory} holds runs of {', '.join(other)}, not of {task} at "
+                f"{commit[:7]}; a grid is not resumed across tasks or commits, choose another --out"
+            )
+
     def cells(self) -> set[tuple[str, str, str]]:
         """The keys of the cells the directory holds whole."""
         return {(row["mode"], row["budget"], row["sample_seed"]) for row in self.runs()}
 
-    def add(self, outcome: AdaptationOutcome, *, device: str, commit: str) -> None:
+    def add(self, outcome: AdaptationOutcome, *, task: str, device: str, commit: str) -> None:
         """Append the cell's predictions, its epochs and, last, its run to the three files."""
         budget = budget_text(outcome.budget)
         cell = {"mode": str(outcome.plan.mode), "budget": budget, "seed": outcome.sample_seed}
@@ -227,6 +358,7 @@ class Stored:
             [
                 {
                     **outcome.plan.parameters(),
+                    "task": task,
                     "budget": budget,
                     "windows": outcome.labelled_windows,
                     "steps": outcome.optimiser_steps,
@@ -291,6 +423,14 @@ class Stored:
     ) -> None:
         path = self.directory / name
         new = not path.exists()
+        if not new:
+            with path.open(newline="", encoding="utf-8") as handle:
+                header = tuple(csv.DictReader(handle).fieldnames or ())
+            if header != tuple(columns):
+                raise SystemExit(
+                    f"{path} was written under other columns ({', '.join(header)}); a grid is "
+                    "not continued across versions of the report, choose another --out"
+                )
         with path.open("a", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
             if new:

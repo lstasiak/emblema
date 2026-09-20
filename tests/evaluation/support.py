@@ -10,6 +10,7 @@ from uuid import UUID
 
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
@@ -30,6 +31,7 @@ CORPUS = "turbofans"
 MANIFEST = ArtifactRef(key="durable/manifest", checksum=Checksum.of_bytes(b"manifest"))
 TASK = TaskId(UUID(int=1))
 SCHEME = RemainingLifeScheme(125.0)
+FORECAST = ForecastScheme("s01", 12.0)
 STRATA = TargetBins(4)
 TEST_SIDE = FrozenTestSplit(units=frozenset({UnitKey("held/1")}), source="turbofans/test")
 WEIGHTS = ArtifactRef(key="durable/weights", checksum=Checksum.of_bytes(b"weights"))
@@ -56,13 +58,14 @@ def task(
     tuning: frozenset[UnitKey] = units("a", "b"),
     validation: frozenset[UnitKey] = units("c"),
     test: FrozenTestSplit = TEST_SIDE,
+    labels: RemainingLifeScheme | ForecastScheme = SCHEME,
 ) -> DownstreamTask:
     return DownstreamTask(
         task_id=TASK,
         corpus=CORPUS,
         manifest=MANIFEST,
         split=TaskSplit(tuning=tuning, validation=validation, test=test),
-        labels=SCHEME,
+        labels=labels,
         strata=STRATA,
     )
 
