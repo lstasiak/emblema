@@ -2,8 +2,8 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import Field, model_validator
 
-from emblema.catalog.adapters.synthetic.dials import Dials
-from emblema.catalog.adapters.synthetic.draws import Draws
+from emblema.shared.adapters.synthetic.dials import Dials
+from emblema.shared.adapters.synthetic.draws import Draws
 
 
 class LatentFactorProcess(Dials):

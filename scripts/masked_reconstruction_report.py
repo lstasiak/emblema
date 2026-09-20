@@ -38,9 +38,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
-from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
@@ -100,6 +97,9 @@ from emblema.pretraining.ports.experiment_tracker import ExperimentTracker
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
+from emblema.shared.adapters.synthetic.latent_factor_process import LatentFactorProcess
+from emblema.shared.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow

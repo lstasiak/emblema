@@ -8,7 +8,6 @@ from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
@@ -29,6 +28,7 @@ from emblema.entrypoints.cli.publish_corpus.adapters import Adapters
 from emblema.entrypoints.cli.publish_corpus.services import Services
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
+from emblema.shared.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
 from emblema.shared.adapters.system.clock import SystemClock
 from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator
 from emblema.shared.ports.artifact_store import ArtifactStore

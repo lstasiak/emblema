@@ -9,7 +9,7 @@ clear the excess threshold and the null ones must not, and the report says which
     uv run scripts/synthetic_control_report.py
 
 Prints markdown for the verification note and writes the figures beside it. Why the control exists
-is stated in ``emblema.catalog.adapters.synthetic.layouts``.
+is stated in ``emblema.shared.adapters.synthetic.layouts``.
 """
 
 import argparse
@@ -37,11 +37,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.domain.identifiers import UnitKey
+from emblema.shared.adapters.synthetic.latent_factor_process import LatentFactorProcess
+from emblema.shared.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
 from scripts.reporting import table
 
 FIGURES = REPO_ROOT / "docs" / "verification" / "figures"

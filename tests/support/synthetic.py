@@ -11,8 +11,8 @@ baseline a measurement is read against climbs.
 all and a channel of another stays silent, which is what the port contract has to hold for.
 """
 
-from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
+from emblema.shared.adapters.synthetic.latent_factor_process import LatentFactorProcess
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
 
 PROCESS = LatentFactorProcess(
     factors=3, harmonics=2, shortest_period=4.0, longest_period=40.0, seed=7

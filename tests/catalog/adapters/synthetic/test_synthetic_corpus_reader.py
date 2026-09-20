@@ -2,14 +2,6 @@ from collections import Counter
 
 import pytest
 
-from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
-from emblema.catalog.adapters.synthetic.layouts import (
-    CONTROL_A,
-    CONTROL_B,
-    CONTROL_PROCESS,
-    NULL_A,
-)
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import (
     GAIN,
     SyntheticCorpusReader,
@@ -17,6 +9,14 @@ from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import (
 from emblema.catalog.domain.channels.channel_schema import Channel
 from emblema.catalog.domain.exceptions import UnknownUnitError
 from emblema.catalog.domain.identifiers import UnitKey
+from emblema.shared.adapters.synthetic.latent_factor_process import LatentFactorProcess
+from emblema.shared.adapters.synthetic.layouts import (
+    CONTROL_A,
+    CONTROL_B,
+    CONTROL_PROCESS,
+    NULL_A,
+)
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.shared.kernel.sampling import SamplingRegime
 from tests.support.synthetic import HOSTILE, PROCESS, miniature
 

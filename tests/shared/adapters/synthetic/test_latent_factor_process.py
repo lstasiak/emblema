@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
+from emblema.shared.adapters.synthetic.latent_factor_process import LatentFactorProcess
 from tests.support.synthetic import PROCESS
 
 DENSE = np.arange(0.0, 400.0, 0.25)

@@ -3,9 +3,6 @@ from collections.abc import Iterator
 import numpy as np
 from numpy.typing import NDArray
 
-from emblema.catalog.adapters.synthetic.draws import Draws
-from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.exceptions import UnknownUnitError
 from emblema.catalog.domain.identifiers import UnitKey
@@ -15,15 +12,11 @@ from emblema.catalog.domain.measurements.static_feature import StaticFeature
 from emblema.catalog.domain.measurements.time_extent import TimeExtent
 from emblema.catalog.domain.registry.corpus_content import CorpusContent
 from emblema.catalog.domain.registry.corpus_description import CorpusDescription
+from emblema.shared.adapters.synthetic.draws import Draws
+from emblema.shared.adapters.synthetic.latent_factor_process import LatentFactorProcess
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
+from emblema.shared.adapters.synthetic.sensor_signal import PRECISION, SensorSignal
 from emblema.shared.kernel.checksums import Checksum
-
-# Decimals a value is emitted with, so that two machines can agree on a checksum: the sine that
-# produced the value need not agree with itself to the last bit across processors and library
-# builds. Rounding narrows that window rather than closing it — numpy promises nothing about its
-# transcendental functions across versions, builds or vector widths — which the pinned checksums
-# in the tests turn into a loud failure. Where it is not loud is the registry: a frozen version
-# whose bytes moved no longer matches the reader that claims to generate it.
-PRECISION = 6
 
 # The channel a unit's gain is reported under, beside the timed sensors. A fact about what this
 # reader writes rather than a dial of the layout, so it is stated here and not there.
@@ -50,20 +43,8 @@ class SyntheticCorpusReader:
         Raises:
             ValueError: If a channel is to respond to more factors than the process has.
         """
-        if layout.factors_per_channel > process.factors:
-            raise ValueError(
-                f"a channel cannot respond to {layout.factors_per_channel} of "
-                f"{process.factors} factors"
-            )
-        self._process = process
         self._layout = layout
-        self._projection = self._drawn_projection(process, layout)
-        # The factors a layout has to itself: as many as it has channels, one each, and drawn
-        # under its own seed so that two layouts of one control share none of them. This is what
-        # a channel follows when the coupling is zero, and it is built like the shared factors so
-        # that an uncoupled channel differs from a coupled one in where its signal comes from
-        # rather than in how it looks.
-        self._private = process.with_dials(factors=layout.channels, seed=layout.seed)
+        self._signal = SensorSignal(process, layout)
 
     def describe(self) -> CorpusDescription:
         """Generate the whole corpus, checksum it and count it, keeping none of it.
@@ -109,12 +90,12 @@ class SyntheticCorpusReader:
 
     def _readings_of(self, index: int) -> list[tuple[float, int, float]]:
         """One unit's observations as ``(time, channel, value)``, ordered by both in turn."""
-        length, gain = self._length(index), self._gain(index)
+        length = self._length(index)
         readings: list[tuple[float, int, float]] = []
         for channel in range(self._layout.channels):
             steps = self._steps(index, channel, length)
             times = steps.astype(np.float64) * self._layout.time_step
-            values = self._values(index, channel, times, gain)
+            values = self._values(index, channel, times)
             readings.extend(
                 (time, channel, value)
                 for time, value in zip(times.tolist(), values.tolist(), strict=True)
@@ -122,31 +103,14 @@ class SyntheticCorpusReader:
         readings.sort(key=lambda reading: (reading[0], reading[1]))
         return readings
 
-    def _values(
-        self, index: int, channel: int, times: NDArray[np.float64], gain: float
-    ) -> NDArray[np.float64]:
-        """What one channel reports at ``times``: shared signal, private signal and noise.
+    def _values(self, index: int, channel: int, times: NDArray[np.float64]) -> NDArray[np.float64]:
+        """What one channel reports at ``times``: the exact signal, plus measurement noise.
 
-        The two signals are mixed by the root of the coupling so that their variances add to one
-        whatever it is set to, and the unit's gain scales what they add up to rather than the
-        shared part alone. Scaling one part would have left a null corpus quieter than its
-        coupled twin by the spread of the gain, and a null that is also the fainter corpus cannot
-        settle whether transfer failed for want of structure or for want of signal. The noise is
-        added after the gain, as measurement noise is.
+        The noise is added after the gain, as measurement noise is, and the reading is rounded
+        to the precision of the corpus.
         """
-        layout = self._layout
-        shared = (
-            self._process.values_at(times, trajectory_seed=layout.trajectory_seed, unit=index)
-            @ self._projection[channel]
-        )
-        private = self._private.values_at(times, trajectory_seed=layout.seed, unit=index)[
-            :, channel
-        ]
-        noise = Draws(layout.seed, "noise", index, channel).normal(len(times))
-        values = (
-            gain * (np.sqrt(layout.coupling) * shared + np.sqrt(1.0 - layout.coupling) * private)
-            + layout.noise * noise
-        )
+        noise = Draws(self._layout.seed, "noise", index, channel).normal(len(times))
+        values = self._signal.values_at(index, channel, times) + self._layout.noise * noise
         return np.round(values, PRECISION)
 
     def _steps(self, index: int, channel: int, length: int) -> NDArray[np.int64]:
@@ -178,9 +142,7 @@ class SyntheticCorpusReader:
         return layout.shortest_unit + int(fraction * span)
 
     def _gain(self, index: int) -> float:
-        """How strongly this unit's sensors report, against the layout's nominal one."""
-        drawn = float(Draws(self._layout.seed, "gain", index).uniform())
-        return round(1.0 + self._layout.gain_spread * (2.0 * drawn - 1.0), PRECISION)
+        return self._signal.gain(index)
 
     def _unit(self, index: int) -> CorpusUnit:
         return CorpusUnit(
@@ -227,22 +189,3 @@ class SyntheticCorpusReader:
             if number < self._layout.units and unit == self._key(number):
                 return number
         raise UnknownUnitError(f"{unit} is not a unit of layout {self._layout.name!r}")
-
-    @staticmethod
-    def _drawn_projection(
-        process: LatentFactorProcess, layout: SensorLayout
-    ) -> NDArray[np.float64]:
-        """How strongly each channel responds to each factor; most of them not at all.
-
-        A channel responds to a few factors rather than all of them, so that no single channel
-        carries the whole state and a model has to put the picture together from several. The
-        weights of a channel are scaled to unit norm, so every channel's shared signal has the
-        same size whichever factors it was given.
-        """
-        draws = Draws(layout.seed, "projection")
-        chosen = np.argsort(draws.uniform(layout.channels, process.factors), axis=1)
-        chosen = chosen[:, : layout.factors_per_channel]
-        weights = np.zeros((layout.channels, process.factors))
-        rows = np.arange(layout.channels)[:, None]
-        weights[rows, chosen] = draws.normal(layout.channels, layout.factors_per_channel)
-        return weights / np.linalg.norm(weights, axis=1, keepdims=True)

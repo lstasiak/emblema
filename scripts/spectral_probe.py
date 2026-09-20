@@ -9,9 +9,9 @@ sensors, instants, losses and noise, so a difference in the spectrum has one cau
 Kept out of the control registry on purpose: a probe is not a control and is never transferred.
 """
 
-from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_A, CONTROL_PROCESS
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
+from emblema.shared.adapters.synthetic.latent_factor_process import LatentFactorProcess
+from emblema.shared.adapters.synthetic.layouts import CONTROL_A, CONTROL_PROCESS
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
 
 SPECTRAL_PROCESS: LatentFactorProcess = CONTROL_PROCESS.with_dials(
     shortest_period=6.0, longest_period=32.0

@@ -10,13 +10,13 @@ import argparse
 import numpy as np
 import pytest
 
-from emblema.catalog.adapters.synthetic.layouts import (
+from emblema.shared.adapters.synthetic.layouts import (
     CONTROL_A,
     CONTROL_B,
     CONTROL_PROCESS,
     LAYOUTS,
 )
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
 from scripts.synthetic_control_report import (
     COUPLED_EXCESS,
     NULL_EXCESS,

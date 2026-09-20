@@ -1,4 +1,4 @@
-from emblema.catalog.adapters.synthetic.layouts import (
+from emblema.shared.adapters.synthetic.layouts import (
     CONTROL_A,
     CONTROL_B,
     LAYOUTS,
