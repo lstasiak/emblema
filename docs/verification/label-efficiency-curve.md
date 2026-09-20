@@ -324,3 +324,79 @@ that at 200 labelled windows the comparison is decided by which repeats leave th
 thirty epochs, and that beyond 1,000 the pretrained weights are a cost. Whether the encoder
 carries anything the task can use is what the synthetic control answers; the decision on the
 next stage waits for it.
+
+## 2026-09-20 — Linux x86_64 (Kaggle, two Tesla T4, fp32): the sweep under the floor
+
+Code `605a5e0`, installed in the notebook from the commit: the floor of optimiser steps and the
+head's start registered the same day (`docs/preregistration.md`, 2026-09-20), the platform's
+torch 2.10.0+cu128. The same backbone, corpus, task and validation windows as the sweep of
+2026-09-19: `backbone-cmapss-m` (`de3815c9-…`, weights `sha256:6830e117…`), manifest
+`sha256:a00c3865…`, `turbofan-fd001`, the 18 held-out engines and their 535 windows. What
+differs: 200 labelled windows drawn under three seeds, 1, 2 and 3 (73, 70 and 76 engines), and
+every run lifted from thirty epochs to the floor of 2,000 steps — 154 epochs, 2,002 steps in
+batches of 16, the warm-up over the first tenth and the cosine decay to one per cent spanning
+the lengthened run, the head's bias starting at the mean label of the draw. The three peaks per
+arm are the ones swept on 2026-09-19. The rule, fixed before the sweep: an arm takes the peak
+with the lowest mean validation RMSE over the three seeds. The twelve configurations were dealt
+by hand over the two accelerators, each published to the bucket as its own archive and fetched
+back here into `data/report/transfer/sweep-20260920-kaggle/<arm>-lr<peak>` (archives
+`durable/sha256/6354b176…`, `c02da1e2…`, `0b5d1461…` for the control at 1e-3, 3e-4, 1e-4;
+`cedf1500…`, `20ae11f6…`, `93fa1aa1…` for the probe at 1e-2, 3e-3, 1e-3; `c0d5b199…`,
+`3b2d8652…`, `be14e4b6…` for the low-rank arm at 3e-3, 1e-3, 3e-4; `0d81ba53…`, `95c90ea6…`,
+`1c5360c5…` for full fine-tuning at 3e-4, 1e-4, 3e-5). Validation RMSE in cycles, the chosen
+peaks in bold:
+
+| arm | peak | trainable | seed 1 | seed 2 | seed 3 | mean | seconds |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **from_scratch** | **1e-3** | 4,752,129 | 20.70 | 20.92 | 20.97 | **20.86** | 755–762 |
+| from_scratch | 3e-4 | 4,752,129 | 23.39 | 21.06 | 21.28 | 21.91 | 760–763 |
+| from_scratch | 1e-4 | 4,752,129 | 22.20 | 21.37 | 21.69 | 21.75 | 760–763 |
+| **frozen_probe** | **1e-2** | 257 | 32.70 | 32.86 | 31.70 | **32.42** | 6–12 |
+| frozen_probe | 3e-3 | 257 | 37.15 | 37.02 | 36.54 | 36.90 | 6–8 |
+| frozen_probe | 1e-3 | 257 | 39.55 | 39.45 | 39.35 | 39.45 | 6–8 |
+| lora | 3e-3 | 196,865 | 26.35 | 23.49 | 25.50 | 25.11 | 785–798 |
+| lora | 1e-3 | 196,865 | 25.87 | 26.04 | 25.27 | 25.73 | 801–804 |
+| **lora** | **3e-4** | 196,865 | 21.21 | 23.56 | 22.77 | **22.51** | 751–756 |
+| full_fine_tuning | 3e-4 | 4,752,129 | 23.11 | 25.71 | 24.10 | 24.31 | 718–720 |
+| full_fine_tuning | 1e-4 | 4,752,129 | 22.01 | 26.10 | 25.81 | 24.64 | 719–721 |
+| **full_fine_tuning** | **3e-5** | 4,752,129 | 21.69 | 23.73 | 24.00 | **23.14** | 719–721 |
+
+What the sweep says:
+
+- **The control's peak moves up, to 1e-3, and its seeds agree.** Under 390 steps the same peak
+  scored 25.75 and 3e-4 won; under 2,002 the order reverses, and the three seeds at 1e-3 lie
+  within 0.27 of one another (SD 0.14). Every seed of every control peak leaves the plateau of
+  the mean predictor (41.11 on these windows): the bimodality the grid was read under was a
+  fact about 390 steps.
+- **The peaks of the two arms that update the pretrained encoder move down a notch**: the
+  low-rank updates from 3e-3 to 3e-4, full fine-tuning from 3e-4 to 3e-5, by 2.6 and 1.2 RMSE
+  over the peak chosen at 390 steps. A run five times longer wants a smaller peak.
+- **On this backbone, under the floor, the control is the best arm at 200**: 20.86 against
+  22.51 with the low-rank updates, 23.14 with full fine-tuning and 32.42 for the probe, and
+  the two pretrained arms spread nine times wider over the seeds (SD 1.2 and 1.3 against 0.14).
+  This is a reading at one budget on the validation side, on a backbone that trained for
+  2,532 steps with its validation loss still falling and is being trained again; the peaks of
+  the three arms that start from it are swept again under the retrained one before any cell
+  of the next grid. What it already says is that the first grid's reading at 200, a pretrained
+  arm ahead of a control on the plateau, does not survive giving the control the steps to
+  leave it.
+- **The probe gains six points from the steps and is still limited by its rate**: 32.42 at
+  1e-2 against 38.73 under thirty epochs, and monotone in the peak over the three swept, as
+  it was on 2026-09-19.
+- **Cost on a T4, fp32**: 0.36–0.40 s per optimiser step, 718–804 s per run for an arm that
+  steps the encoder or an update beside it, 6–12 s for the probe; the twelve configurations
+  took 3.3 h over the two accelerators.
+
+What it does not say: anything about the endpoint, which the grid measures over five seeds
+with its interval, or anything about the retrained backbone.
+
+The same script ran the same twelve configurations on this machine (M1 Pro, MPS, fp32,
+`data/report/transfer/sweep-20260920/<arm>-lr<peak>`) as the device check, the later
+directories under `c333ab0`, a revision that leaves the adaptation untouched. As this is
+written eight of the twelve have finished: the probe reproduces to the hundredth under every
+peak and seed (32.70, 32.86, 31.70 at 1e-2), the control at 1e-4 as well (22.20, 21.37,
+21.69), and the two higher peaks of the control and the low-rank arm at 3e-3 differ by a few
+tenths to one and a half points per seed (control at 1e-3: 20.76, 22.35, 21.53 for a mean of
+21.55 against 20.86; at 3e-4: 22.12 against 21.91; low-rank at 3e-3: 25.51 against 25.11). The
+rule chooses 1e-3 for the control on either accelerator. The remaining four directories are
+appended here when they finish.
