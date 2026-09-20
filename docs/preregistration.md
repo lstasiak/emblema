@@ -468,3 +468,96 @@ every arm has the steps to leave the plateau, the control is the best arm at thi
 ninth of theirs. Whether that stands under the retrained backbone is what its second sweep and
 the grid measure; nothing here changes the endpoint, the threshold or the floor.
 
+### 2026-09-21 — the synthetic control's transfer leg: corpora, sweep and power, before its grid
+
+**Changed.** Nothing under "The synthetic control" above; this states how that leg is run, in
+the terms the curve's registration uses, so that nothing about it is chosen once its numbers are
+visible.
+
+- *The task* is the exact reading of the sensor `s01` twelve time units past the window's end,
+  the same on both pairs (ADR-0033); four strata of the target; its error is the RMSE in the
+  sensor's own units, and the mean predictor is its trivial baseline.
+- *The backbones* are the first layout of each pair pretrained at tier S for 24 epochs of batch
+  32 in single precision: `control-a-s` (weights `sha256:f285de7f…`) and `null-a-s`
+  (`sha256:9a2e4814…`), whose validation loss per hidden token ended at 0.01371 and 0.32654, 0.014
+  and 0.334 of the trivial predictor's.
+- *The corpora the transfer is measured on* are the second layouts with 800 units in place of
+  120 and no other dial turned, `control-b-wide` and `null-b-wide`, published under the first
+  layouts' vocabularies with windows of 32 at stride 12, half the units held out under seed 1:
+  400 tuning units, 400 held out, of which one in three is frozen as the test side (133) and the
+  rest, 267, are the validation units every interval is paired over. A backbone grows rows for
+  the second layout's channels (ADR-0033, 2026-09-21).
+- *The grid* is the curve's: 50, 200, 1,000 and all labelled windows, seeds 1 to 5, the floor
+  of 2,000 optimiser steps, the head starting at the mean label, batches of 16, the four arms,
+  read by the curve's rules with the endpoint at 200 and the practical floor as defined, in the
+  sensor's units; then the coupled pair by its rule and the null pair by its equivalence.
+- *The peaks are swept on each pair's own task*, by the rule of 2026-09-20 — 200 windows,
+  seeds 1, 2 and 3, three peaks per arm, the lowest mean — and not carried over from the
+  turbofan task. Three peaks per arm: from scratch 1e-3, 3e-4, 1e-4; frozen probe 1e-2, 3e-3,
+  1e-3; low-rank updates 3e-3, 1e-3, 3e-4; full fine-tuning 1e-3, 3e-4, 1e-4, a decade above the
+  turbofan grid. Every arm is swept over the same number of peaks.
+- *Power.* The number of validation units was chosen from the pilot below: the spread over units
+  of a paired difference of per-unit RMSE between two arms of the control under two seeds was
+  0.042, which at 20 units gives a half-width of 0.019 against a floor of 0.0056, and needs about
+  220 units to bring the half-width under the floor; 267 are held. The same spread is read again
+  off the chosen cells of the sweep, three seeds at 200, and reported with the sweep before the
+  grid; if it asks for more units, the layout is widened again before the grid and not after.
+
+**Why.** The peak of full fine-tuning registered on 2026-09-20 was chosen on a backbone of
+4.75 million parameters over a target counted in cycles; on a backbone of 1.79 million over a
+target of unit variance the pilot found it a decade too small (below). A null pair on which one
+arm is left undertrained fails its equivalence for a reason that has nothing to do with transfer,
+and a coupled pair on which the pretrained arm is undertrained cannot show what it carries. The
+sweep rule itself is unchanged; it is applied per task, as its own reason — the schedule chosen
+on the validation side at the endpoint's budget — always meant. The sentence of 2026-09-20 that
+the peaks apply to this leg is withdrawn for the arms; the shape of the rate, the floor and the
+head's start stand.
+
+**Measured when this changed.** The pilot on the null pair's narrow corpus (`null-b`, 120 units,
+20 validation units), 200 labelled windows under seeds 1 and 2, the floor of 2,000 steps: from
+scratch at 1e-3 scored 0.185 (SD 0.004 over the seeds), full fine-tuning at 3e-5 scored 0.508
+(SD 0.054), the mean predictor 0.974; the reduction's paired interval was [−0.35, −0.29]. The
+wide corpora had been published and nothing had been run on them; no sweep and no cell of the
+grid of this leg had run.
+
+**Cost, declared now.** The two sweeps: 72 runs of about a minute on this machine's accelerator.
+The two grids: 160 runs, about nine hours on the same accelerator, the cells at every labelled
+window making most of it.
+
+### 2026-09-21 — the backbone named again: sixty-four epochs, the plateau reached by the rule
+
+**Changed.** The backbone every pretrained arm of the turbofan curve starts from is
+`backbone-cmapss-m-64` (`ccd28046-a8bd-45e3-ac18-345a0dae61d8`), weights
+`durable/sha256/78b3c201b4fd11e9e9ed3d2898afa42fc07ea84593456d84bfb6986d9b828274`: the same
+experiment as the backbone registered on 2026-09-18, with the budget doubled four times over,
+64 epochs of batch 32, 40,512 optimiser steps, half precision on a T4, seed 1. The peaks of the
+three arms that start from it are swept again under it by the rule of 2026-09-20, over the
+three peaks per arm of that sweep, and the section that reports them precedes the grid. The
+control's peak stands at 1e-3.
+
+**Why.** The rule of 2026-09-20 asked for the first doubling of the budget that lowers the best
+epoch's validation loss over the whole held-out side by less than five per cent, and named the
+run at the end of that doubling. The four doublings measured, per hidden token:
+
+| epochs | steps | best epoch | validation loss | fall on the doubling | minutes of epochs on a T4 |
+| --- | --- | --- | --- | --- | --- |
+| 4 | 2,532 | 4 | 0.00469 | — | 13 |
+| 8 | 5,064 | 7 | 0.00291 | 38 % | 25 |
+| 16 | 10,128 | 14 | 0.00208 | 29 % | 50 |
+| 32 | 20,256 | 30 | 0.00172 | 17 % | 96 |
+| 64 | 40,512 | 64 | 0.00176 | −2.5 % | 189 |
+
+The fourth doubling lowers nothing: the run of 64 epochs ends two and a half per cent above the
+run of 32, a difference of the size the last epochs of either run move by. By the letter of the
+rule the run at the end of that doubling is the backbone, and the letter is kept, because a
+choice between two runs that the rule calls equal, made after seeing which is lower, is the kind
+of choice this document exists to prevent. The runs are recorded in
+`docs/verification/manual-handoff.md`, 2026-09-21.
+
+**Measured when this changed.** The four runs above and nothing else: no arm had been adapted
+from any of them.
+
+**Cost, declared now.** The second sweep of the three pretrained arms under this backbone, nine
+configurations of three seeds at 200 labelled windows and 2,002 steps, about four hours of one
+T4 and minutes for the probe; the grid's cost stands as declared on 2026-09-20.
+
