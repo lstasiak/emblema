@@ -25,6 +25,10 @@ class UnlabelledWindowError(EvaluationError, ValueError):
     """A window ends at or after the moment its unit failed, so it carries no remaining life."""
 
 
+class EmptyLabelSampleError(EvaluationError, ValueError):
+    """A sample without a window has no mean label to start from."""
+
+
 class InvalidLabelBudgetError(EvaluationError, ValueError):
     """A budget asks for no window, for a fraction of one, or for more than the pool holds."""
 

@@ -22,7 +22,7 @@ LORA_UPDATES = 2 * 2 * ((32 + 96) + (32 + 32) + (32 + 64) + (64 + 32))
 def candidate(mode: TransferMode) -> tuple[AdaptedBackbone, SmallBackbones]:
     backbones = SmallBackbones()
     torch.manual_seed(5)
-    return AdaptedBackbone.under(plan(mode), backbones), backbones
+    return AdaptedBackbone.under(plan(mode), backbones, starting_at=0.0), backbones
 
 
 @pytest.mark.parametrize(

@@ -133,6 +133,7 @@ def plan_of(mode: TransferMode) -> AdaptationPlan:
         backbone=WEIGHTS if mode.starts_from_pretrained_weights else None,
         schedule=AdaptationSchedule(
             epochs=EPOCHS,
+            min_steps=0,
             batch_size=4,
             learning_rate=1e-2,
             weight_decay=0.0,

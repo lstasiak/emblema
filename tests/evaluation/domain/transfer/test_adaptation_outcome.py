@@ -8,7 +8,7 @@ from emblema.evaluation.domain.exceptions import InvalidAdaptationOutcomeError
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
-from tests.evaluation.support import TASK, plan, prediction
+from tests.evaluation.support import TASK, adaptation_schedule, plan, prediction
 
 # Unit b first, so an order by unit is the method's and not the input's.
 PREDICTIONS = (
@@ -64,6 +64,14 @@ def test_the_training_losses_are_one_per_planned_epoch() -> None:
         outcome(training_losses=(0.5,))
 
 
+def test_the_planned_epochs_are_the_ones_the_floor_of_steps_asks_for() -> None:
+    lifted = plan(schedule=adaptation_schedule(epochs=2, min_steps=3, batch_size=2))
+
+    assert len(outcome(plan=lifted, training_losses=(0.5, 0.4, 0.3)).training_losses) == 3
+    with pytest.raises(InvalidAdaptationOutcomeError, match=r"2 training losses .* 3 planned"):
+        outcome(plan=lifted, training_losses=(0.5, 0.4))
+
+
 @pytest.mark.parametrize("loss", [nan, inf, -0.1])
 def test_a_training_loss_that_is_not_a_finite_non_negative_number_is_refused(loss: float) -> None:
     with pytest.raises(InvalidAdaptationOutcomeError, match="training loss"):
@@ -92,3 +100,10 @@ def test_a_run_that_trained_nothing_is_refused() -> None:
 def test_a_time_taken_that_is_not_a_finite_non_negative_number_is_refused(seconds: float) -> None:
     with pytest.raises(InvalidAdaptationOutcomeError, match="seconds"):
         outcome(seconds=seconds)
+
+
+def test_the_outcome_counts_the_optimiser_steps_the_run_took() -> None:
+    # Two labelled windows in batches of two: one step an epoch, two epochs.
+    assert outcome().optimiser_steps == 2
+    lifted = plan(schedule=adaptation_schedule(epochs=2, min_steps=3, batch_size=2))
+    assert outcome(plan=lifted, training_losses=(0.5, 0.4, 0.3)).optimiser_steps == 3

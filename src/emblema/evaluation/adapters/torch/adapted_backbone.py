@@ -29,11 +29,12 @@ class AdaptedBackbone(nn.Module):
         self.head = head
 
     @classmethod
-    def under(cls, plan: AdaptationPlan, backbones: BackboneFactory) -> Self:
+    def under(cls, plan: AdaptationPlan, backbones: BackboneFactory, *, starting_at: float) -> Self:
         """The candidate ``plan`` describes, built on the host from torch's current generator.
 
         The head is drawn first, so under one seed every mode starts it from the same weights,
-        whatever the encoder draws after it.
+        whatever the encoder draws after it; its bias starts at ``starting_at``, the mean of the
+        labels the run holds in units of the ceiling.
 
         Raises:
             UnknownBackboneError: If the plan names pretrained weights the factory does not
@@ -41,7 +42,7 @@ class AdaptedBackbone(nn.Module):
             LoraTargetNotFoundError: If the plan's low-rank updates name a layer the backbone
                 does not have.
         """
-        head = RegressionHead(backbones.width)
+        head = RegressionHead(backbones.width, starting_at=starting_at)
         if plan.backbone is None:
             encoder = backbones.fresh()
         else:

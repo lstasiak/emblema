@@ -338,7 +338,9 @@ def require_one_configuration(shards: Sequence[Stored]) -> None:
         raise SystemExit(f"the shards adapt more than one backbone: {', '.join(backbones)}")
     settings = [name for name in PLAN_COLUMNS if name not in ("mode", "run_seed")]
     for mode in MODES:
-        plans = {tuple(run[name] for name in settings) for run in runs if run["mode"] == mode}
+        plans = {
+            tuple(run.get(name, "") for name in settings) for run in runs if run["mode"] == mode
+        }
         if len(plans) > 1:
             differing = sorted(
                 name

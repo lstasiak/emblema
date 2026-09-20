@@ -80,6 +80,7 @@ def prediction(unit: str, position: int, target: float, predicted: float) -> Win
 def adaptation_schedule(**overrides: Any) -> AdaptationSchedule:
     stated = AdaptationSchedule(
         epochs=2,
+        min_steps=0,
         batch_size=2,
         learning_rate=1e-2,
         weight_decay=0.0,

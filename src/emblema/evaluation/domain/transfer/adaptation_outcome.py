@@ -50,16 +50,26 @@ class AdaptationOutcome:
     predictions: tuple[WindowPrediction, ...]
     seconds: float
 
+    @property
+    def optimiser_steps(self) -> int:
+        """Optimiser steps the run took: its epochs over the batches its labelled windows make.
+
+        The schedule's floor of steps lengthens a run in whole epochs, so what a cell cost in
+        steps is read off the outcome rather than off the schedule.
+        """
+        return len(self.training_losses) * self.plan.schedule.steps_per_epoch(self.labelled_windows)
+
     def __post_init__(self) -> None:
         if not self.predictions:
             raise InvalidAdaptationOutcomeError("an outcome must predict at least one window")
         places = [(str(p.window.unit), p.window.position) for p in self.predictions]
         if len(set(places)) != len(places):
             raise InvalidAdaptationOutcomeError("a window is predicted twice")
-        if len(self.training_losses) != self.plan.schedule.epochs:
+        epochs = self.plan.schedule.epochs_over(self.labelled_windows)
+        if len(self.training_losses) != epochs:
             raise InvalidAdaptationOutcomeError(
                 f"{len(self.training_losses)} training losses reported for "
-                f"{self.plan.schedule.epochs} planned epochs"
+                f"{epochs} planned epochs over {self.labelled_windows} windows"
             )
         for loss in self.training_losses:
             if not isfinite(loss) or loss < 0.0:

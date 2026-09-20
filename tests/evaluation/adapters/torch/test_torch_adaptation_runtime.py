@@ -18,6 +18,7 @@ from torch import Tensor, nn  # noqa: E402
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import (  # noqa: E402
     PublishedCorpusBlocks,
 )
+from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import (  # noqa: E402
     TorchAdaptationRuntime,
@@ -209,3 +210,20 @@ def test_the_rate_follows_the_schedule_on_every_step_the_probe_included(
     assert len(stepped_under) == shape.total_steps == 6
     assert stepped_under == pytest.approx([1e-2 * shape.factor(step) for step in range(6)])
     assert stepped_under[0] < stepped_under[1] == 1e-2 > stepped_under[-1]
+
+
+@pytest.mark.parametrize("mode", list(TransferMode))
+def test_the_head_starts_where_it_is_told_whatever_the_mode(
+    published: Published, mode: TransferMode
+) -> None:
+    candidate = AdaptedBackbone.under(plan(mode), published.backbones, starting_at=0.6)
+
+    assert candidate.head.linear.bias.item() == pytest.approx(0.6)
+
+
+def test_a_sample_under_the_floor_of_steps_is_learnt_for_more_epochs(published: Published) -> None:
+    stated = plan(schedule=adaptation_schedule(epochs=1, min_steps=5, batch_size=2))
+
+    outcome = adapt(published, stated)
+
+    assert len(outcome.training_losses) == 3

@@ -69,7 +69,9 @@ class TorchAdaptationRuntime:
             [labelled.target / scale for labelled in sample.windows], dtype=torch.float32
         ).to(self._device)
         torch.manual_seed(plan.seed)
-        candidate = AdaptedBackbone.under(plan, self._backbones).to(self._device)
+        candidate = AdaptedBackbone.under(
+            plan, self._backbones, starting_at=sample.mean_target / scale
+        ).to(self._device)
         forward = (
             self._over_stored_states(candidate, tuning, plan.schedule.batch_size)
             if plan.mode is TransferMode.FROZEN_PROBE
@@ -102,6 +104,9 @@ class TorchAdaptationRuntime:
     ) -> list[float]:
         """The schedule's epochs over the sample, in the plan's seeded order; the mean loss of each.
 
+        The epochs are the schedule's over this sample: the stated ones, or more where the floor
+        of steps asks for them.
+
         The rate follows the schedule's shape step by step, the frozen probe's included: its head
         is trained by the same loop over stored states.
 
@@ -120,7 +125,7 @@ class TorchAdaptationRuntime:
         order = SeededShuffleSampler(len(targets), seed=plan.seed)
         losses = []
         candidate.train()
-        for epoch in range(schedule.epochs):
+        for epoch in range(schedule.epochs_over(len(targets))):
             order.set_epoch(epoch)
             positions = list(order)
             total = 0.0

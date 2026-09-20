@@ -129,6 +129,12 @@ def parse(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument(
+        "--min-steps",
+        type=int,
+        default=2000,
+        help="optimiser steps a run takes at least, in whole epochs; 0 for the epochs alone",
+    )
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument(
@@ -201,6 +207,7 @@ def plans_of(arguments: argparse.Namespace, seed: int) -> dict[TransferMode, Ada
             backbone=weights if mode.starts_from_pretrained_weights else None,
             schedule=AdaptationSchedule(
                 epochs=arguments.epochs,
+                min_steps=arguments.min_steps,
                 batch_size=arguments.batch_size,
                 learning_rate=getattr(arguments, f"lr_{mode.value}"),
                 weight_decay=arguments.weight_decay,
@@ -242,6 +249,7 @@ def render(stored: Stored, task: KnownTask) -> str:
                 "engines",
                 "seed",
                 "epochs",
+                "steps",
                 "lr",
                 "warm-up",
                 "final lr",
@@ -259,6 +267,7 @@ def render(stored: Stored, task: KnownTask) -> str:
                     run.get("engines", ""),
                     run["sample_seed"],
                     run["epochs"],
+                    run.get("steps", ""),
                     run["learning_rate"],
                     run.get("warmup_fraction", ""),
                     run.get("final_lr_fraction", ""),

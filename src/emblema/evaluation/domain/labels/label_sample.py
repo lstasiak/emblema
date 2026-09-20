@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Self
 
 from emblema.evaluation.contracts.identifiers import TaskId
+from emblema.evaluation.domain.exceptions import EmptyLabelSampleError
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.target_bins import TargetBins
@@ -83,6 +84,20 @@ class LabelSample:
     def unit_count(self) -> int:
         """How many units the windows came from — fewer than the windows, which overlap."""
         return len({labelled.window.unit for labelled in self.windows})
+
+    @property
+    def mean_target(self) -> float:
+        """The mean label of the sample: what a candidate that has learnt nothing yet answers.
+
+        Summed in the sample's fixed order in double precision, so the value is the same on
+        every machine and does not depend on where a run's arithmetic happens.
+
+        Raises:
+            EmptyLabelSampleError: If the sample holds no window.
+        """
+        if not self.windows:
+            raise EmptyLabelSampleError("a sample without a window has no mean label")
+        return sum(labelled.target for labelled in self.windows) / len(self.windows)
 
     @staticmethod
     def _ordered(

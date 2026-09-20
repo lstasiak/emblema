@@ -98,7 +98,7 @@ def test_stored_cells_render_into_the_notes_table(tmp_path: Path) -> None:
 
     assert "| lr | warm-up | final lr |" in rendered
     assert (
-        "| frozen_probe | 50 | 50 | 2 | 1 | 2 | 0.01 | 0.0 | 1.0 | 33 | 3.54 | 2 | cpu |"
+        "| frozen_probe | 50 | 50 | 2 | 1 | 2 | 50 | 0.01 | 0.0 | 1.0 | 33 | 3.54 | 2 | cpu |"
         in rendered
     )
     assert "| lora |" in rendered
@@ -116,4 +116,4 @@ def test_a_run_stored_before_a_column_existed_still_renders(tmp_path: Path) -> N
 
     rendered = render(Stored.existing(tmp_path / "old"), KnownTasks.default())
 
-    assert "| lora | 200 |  |  | 1 | 30 | 0.001 |  |  | 196865 | 24.07 | 232 | mps |" in rendered
+    assert "| lora | 200 |  |  | 1 | 30 |  | 0.001 |  |  | 196865 | 24.07 | 232 | mps |" in rendered

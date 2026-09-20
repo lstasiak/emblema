@@ -26,6 +26,7 @@ def test_a_schedule_states_every_knob_of_the_learning() -> None:
     [
         ("epochs", 0, "epochs must be positive"),
         ("batch_size", 0, "batch_size must be positive"),
+        ("min_steps", -1, "min_steps must not be negative"),
         ("learning_rate", 0.0, "learning_rate must be positive"),
         ("learning_rate", inf, "learning_rate must be positive and finite"),
         ("learning_rate", nan, "learning_rate must be positive and finite"),
@@ -52,6 +53,30 @@ def test_an_epoch_takes_one_step_per_batch_and_one_for_the_remainder() -> None:
     assert schedule.steps_per_epoch(16) == 1
     assert schedule.steps_per_epoch(17) == 2
     assert schedule.steps_per_epoch(200) == 13
+
+
+def test_a_run_under_the_floor_of_steps_takes_as_many_whole_epochs_as_reach_it() -> None:
+    schedule = adaptation_schedule(epochs=30, min_steps=2000, batch_size=16)
+
+    assert schedule.epochs_over(50) == 500
+    assert schedule.epochs_over(200) == 154
+    assert schedule.epochs_over(1000) == 32
+    assert schedule.epochs_over(2651) == 30
+
+
+def test_a_run_over_the_floor_of_steps_keeps_its_epochs() -> None:
+    assert adaptation_schedule(epochs=30, min_steps=0, batch_size=16).epochs_over(50) == 30
+    assert adaptation_schedule(epochs=30, min_steps=100, batch_size=16).epochs_over(50) == 30
+
+
+def test_the_rate_decays_over_the_epochs_the_floor_asks_for() -> None:
+    schedule = adaptation_schedule(
+        epochs=30, min_steps=2000, batch_size=16, warmup_fraction=0.1, final_lr_fraction=0.01
+    )
+
+    rate = schedule.learning_rate_schedule(200)
+
+    assert (rate.warmup_steps, rate.total_steps) == (200, 2002)
 
 
 def test_the_warmup_is_a_share_of_the_whole_run_in_steps() -> None:

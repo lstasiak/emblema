@@ -83,7 +83,7 @@ def test_the_outcome_carries_what_places_it_on_the_curve(adapted: Adapted) -> No
 
     assert (outcome.plan, outcome.task) == (stated, TASK)
     assert (outcome.budget, outcome.sample_seed) == (LabelBudget.of(2), 7)
-    assert len(outcome.training_losses) == stated.schedule.epochs
+    assert len(outcome.training_losses) == stated.schedule.epochs_over(len(SAMPLE.windows))
     assert outcome.trainable_parameters >= 1
 
 
