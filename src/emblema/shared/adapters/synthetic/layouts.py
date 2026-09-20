@@ -72,6 +72,14 @@ CONTROL_B = SensorLayout(
 NULL_A = CONTROL_A.with_dials(name="null-a", coupling=0.0)
 NULL_B = CONTROL_B.with_dials(name="null-b", coupling=0.0)
 
+# The second layout of each pair with more units and nothing else turned: the corpus a transfer
+# is measured on, where the width of the paired interval over held-out units is what decides
+# whether an equivalence can be read at all. The first hundred and twenty units are the narrow
+# layout's own, draw for draw, because a unit's draws are addressed by its position.
+CONTROL_B_WIDE = CONTROL_B.with_dials(name="control-b-wide", units=800)
+NULL_B_WIDE = NULL_B.with_dials(name="null-b-wide", units=800)
+
 LAYOUTS: Mapping[str, SensorLayout] = {
-    layout.name: layout for layout in (CONTROL_A, CONTROL_B, NULL_A, NULL_B)
+    layout.name: layout
+    for layout in (CONTROL_A, CONTROL_B, NULL_A, NULL_B, CONTROL_B_WIDE, NULL_B_WIDE)
 }

@@ -1,15 +1,24 @@
 from emblema.shared.adapters.synthetic.layouts import (
     CONTROL_A,
     CONTROL_B,
+    CONTROL_B_WIDE,
     LAYOUTS,
     NULL_A,
     NULL_B,
+    NULL_B_WIDE,
 )
 from emblema.shared.kernel.sampling import SamplingRegime
 
 
 def test_every_layout_is_registered_under_its_own_name() -> None:
-    assert set(LAYOUTS) == {"control-a", "control-b", "null-a", "null-b"}
+    assert set(LAYOUTS) == {
+        "control-a",
+        "control-b",
+        "null-a",
+        "null-b",
+        "control-b-wide",
+        "null-b-wide",
+    }
     assert all(name == layout.name for name, layout in LAYOUTS.items())
 
 
@@ -25,7 +34,7 @@ def test_the_control_pair_differs_on_both_axes_of_heterogeneity() -> None:
 
 
 def test_a_null_layout_is_its_control_with_one_dial_turned() -> None:
-    for control, null in ((CONTROL_A, NULL_A), (CONTROL_B, NULL_B)):
+    for control, null in ((CONTROL_A, NULL_A), (CONTROL_B, NULL_B), (CONTROL_B_WIDE, NULL_B_WIDE)):
         differences = {
             field
             for field, value in control.model_dump().items()
@@ -35,3 +44,15 @@ def test_a_null_layout_is_its_control_with_one_dial_turned() -> None:
         assert differences == {"name", "coupling"}
         assert control.coupling == 1.0
         assert null.coupling == 0.0
+
+
+def test_a_wide_layout_is_its_narrow_one_with_more_units_and_nothing_else() -> None:
+    for narrow, wide in ((CONTROL_B, CONTROL_B_WIDE), (NULL_B, NULL_B_WIDE)):
+        differences = {
+            field
+            for field, value in narrow.model_dump().items()
+            if wide.model_dump()[field] != value
+        }
+
+        assert differences == {"name", "units"}
+        assert wide.units > narrow.units
