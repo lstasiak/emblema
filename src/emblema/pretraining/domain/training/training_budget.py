@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from math import ceil, isfinite
 
 from emblema.pretraining.domain.exceptions import InvalidTrainingBudgetError
-from emblema.pretraining.domain.learning_rate_schedule import LearningRateSchedule
+from emblema.shared.kernel.learning_rate_schedule import LearningRateSchedule
 
 
 @dataclass(frozen=True, kw_only=True)

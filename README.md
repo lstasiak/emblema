@@ -15,6 +15,67 @@
 
 Emblema is a research platform for label-efficient representation learning on heterogeneous sensor streams. A single permutation-invariant, variable-channel transformer encoder is pretrained without labels on measurement corpora that differ in channel count and sampling regime, then transferred to new, small labelled tasks. The platform measures, with confidence intervals and strong classical baselines, whether and when that pretraining actually pays off, and serves the winning candidate through an API.
 
+## The name
+
+In a Roman mosaic the *emblema* is the central figurative panel: laid in a workshop from the
+finest tesserae, then carried to the site and set into a floor of coarser tiles. The pretrained
+core here is made once, over many corpora, and carried into new arrangements of sensors. A
+single measurement stays a *tessera*: a self-contained token of channel, time and value, and the
+model learns to see the whole from them.
+
+![A mosaic emblema with Pegasus inside a guilloche border, second century AD, Archaeological Museum of Córdoba](docs/images/emblema.jpg)
+
+*Emblema with Pegasus, second century AD, Archaeological Museum of Córdoba. Photograph by
+[Carole Raddato](https://commons.wikimedia.org/wiki/File:Mosaic_emblema_with_Pegasus,_the_immortal_winged_horse_which_sprang_forth_from_the_neck_of_Medusa_when_she_was_beheaded_by_the_hero_Perseus,_2nd_century_AD,_Archaeological_Museum_of_C%C3%B3rdoba,_Spain_(24783223879).jpg),
+[CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/), via Wikimedia Commons; scaled down.*
+
+## Results so far
+
+Everything below is preliminary and measured on the validation side; the frozen test side of every
+task is opened once, at the end. Each figure names the compute tier and the hardware it was made
+on.
+
+### Label efficiency
+
+The claim the programme tests is that the pretrained encoder lowers the number of labels a task
+needs. The first reading is the turbofan task under four transfer modes over four budgets of
+labelled windows and five seeds, judged by the rules registered before any of its numbers
+existed ([`docs/preregistration.md`](docs/preregistration.md)): the endpoint is full fine-tuning
+against training from scratch at 200 labelled windows, at least a tenth off the error with the
+whole paired interval over engines above zero and the reduction clearing a practical floor.
+
+**Not confirmed.** Full fine-tuning takes 21 % off the control's error at 200 windows (7.2 RMSE,
+interval [5.9, 8.6]), but the floor at that budget is 7.25: the control arm leaves the plateau
+of the mean predictor under two seeds of five and stays on it under three, so the reduction is
+mostly a difference in how often thirty epochs get an arm off the plateau. The one cell that
+clears its floor by a margin is the low-rank arm at 200 windows, whose five repeats all leave
+the plateau (22.3 ± 1.4 against 32.8 ± 7.3). Beyond a thousand labels the arm trained from
+scratch is the best one, and the frozen probe is far below every other arm at every budget.
+Thirty epochs give a cell about twice as many optimiser steps as it has labels, so no cell had
+converged when it was scored and the low budgets measure the speed of leaving the plateau as
+much as the labels; a budget stated in steps is the first correction of the next run. The
+synthetic control decides what this says about the encoder
+([ADR-0030](docs/adr/0030-transfer-modes.md),
+[ADR-0032](docs/adr/0032-statistics-of-a-paired-comparison.md),
+[`docs/verification/label-efficiency-curve.md`](docs/verification/label-efficiency-curve.md)).
+
+![Validation RMSE of every transfer mode over the budget of labelled windows, mean over five seeds with the spread as a band, and the reduction against the control arm with its paired interval over engines and the practical floor; tier M, Kaggle T4, fp32; validation, not test](docs/verification/figures/label-efficiency-curve.png)
+
+*Tier M, Kaggle T4, fp32. Preliminary; validation, not test.*
+
+### The first backbone over a mixture of corpora
+
+The first backbone over the mixture — C-MAPSS, SKAB, SMD and the satellite corpus under one
+vocabulary, the reference shape of 4.75 million encoder parameters, eight epochs on a Kaggle T4
+in half precision — keeps its seventh epoch. Every corpus is learnt under the mixture; SMD is the
+one whose held-out loss rises while the mean still falls, which is the first thing the next run
+of the mixture weighs ([ADR-0029](docs/adr/0029-pretraining-over-a-mixture-of-corpora.md),
+[`docs/verification/manual-handoff.md`](docs/verification/manual-handoff.md)).
+
+![Validation loss of each corpus relative to the channel-mean predictor over the eight epochs of the mixed run; tier M, Kaggle T4, fp16; validation, not test](docs/verification/figures/pretraining-curve-backbone-mixed-m.png)
+
+*Tier M, Kaggle T4, fp16. Validation, not test.*
+
 ## Methodology
 
 The criteria that decide whether pretraining paid off — which comparison is primary, how large a
@@ -92,27 +153,15 @@ uv run python -m emblema.entrypoints.cli.pretrain accept \
     --result <result key> <result checksum> --track http://127.0.0.1:5000
 ```
 
-Every parameter of a run lives in its experiment file under `experiments/`; the shape of the model
-and the share of each corpus's training units a run reads come from the compute tier the file
-declares unless the file states its own. A file names the corpora a run reads in the order
-their vocabulary was chained through the publications, and the order takes one `--corpus` per
-name in that order. A run over several corpora batches and steps each corpus on its own and
-scores each held-out side apart; every run keeps the epoch whose mean relative validation over
-its corpora is lowest, which for a run over one corpus is its lowest validation loss. The
-commit the order and the result carry is read
-from the installed package or the working tree: an order is placed only from a committed tree
-unless `--commit` states the revision, a run on other code than ordered stops before it trains,
-and a result made with other code, over other data or under another configuration is refused.
-
-The first backbone over the mixture — C-MAPSS, SKAB, SMD and the satellite corpus under one
-vocabulary, the reference shape of 4.75 million encoder parameters, eight epochs on a Kaggle T4
-in half precision — keeps its seventh epoch. Every corpus is learnt under the mixture; SMD is the
-one whose held-out loss rises while the mean still falls, which is the first thing the next run
-of the mixture weighs ([ADR-0029](docs/adr/0029-pretraining-over-a-mixture-of-corpora.md),
-[`docs/verification/manual-handoff.md`](docs/verification/manual-handoff.md)).
-
-![Validation loss of each corpus relative to the channel-mean predictor over the eight epochs of the mixed run; tier M, Kaggle T4, fp16; validation, not test](docs/verification/figures/pretraining-curve-backbone-mixed-m.png)
-
-*Tier M, Kaggle T4, fp16. Validation, not test.*
 Accepting records the replayed run against the MLflow server `--track` names, so the flag is
-required there.
+required there. Every parameter of a run lives in its experiment file under `experiments/`; the
+shape of the model and the share of each corpus's training units a run reads come from the
+compute tier the file declares unless the file states its own. A file names the corpora a run
+reads in the order their vocabulary was chained through the publications, and the order takes
+one `--corpus` per name in that order. A run over several corpora batches and steps each corpus
+on its own and scores each held-out side apart; every run keeps the epoch whose mean relative
+validation over its corpora is lowest, which for a run over one corpus is its lowest validation
+loss. The commit the order and the result carry is read from the installed package or the
+working tree: an order is placed only from a committed tree unless `--commit` states the
+revision, a run on other code than ordered stops before it trains, and a result made with other
+code, over other data or under another configuration is refused.

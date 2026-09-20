@@ -78,7 +78,14 @@ def prediction(unit: str, position: int, target: float, predicted: float) -> Win
 
 
 def adaptation_schedule(**overrides: Any) -> AdaptationSchedule:
-    stated = AdaptationSchedule(epochs=2, batch_size=2, learning_rate=1e-2, weight_decay=0.0)
+    stated = AdaptationSchedule(
+        epochs=2,
+        batch_size=2,
+        learning_rate=1e-2,
+        weight_decay=0.0,
+        warmup_fraction=0.0,
+        final_lr_fraction=1.0,
+    )
     return replace(stated, **overrides)
 
 

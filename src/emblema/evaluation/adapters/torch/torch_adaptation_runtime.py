@@ -82,6 +82,8 @@ class TorchAdaptationRuntime:
             task=task.task_id,
             budget=sample.budget,
             sample_seed=sample.seed,
+            labelled_windows=len(sample.windows),
+            labelled_units=sample.unit_count,
             trainable_parameters=sum(p.numel() for p in candidate.trainable_parameters()),
             training_losses=tuple(losses),
             predictions=tuple(
@@ -100,6 +102,9 @@ class TorchAdaptationRuntime:
     ) -> list[float]:
         """The schedule's epochs over the sample, in the plan's seeded order; the mean loss of each.
 
+        The rate follows the schedule's shape step by step, the frozen probe's included: its head
+        is trained by the same loop over stored states.
+
         Raises:
             DivergedAdaptationError: If a batch's loss stops being finite.
         """
@@ -108,6 +113,9 @@ class TorchAdaptationRuntime:
             candidate.trainable_parameters(),
             lr=schedule.learning_rate,
             weight_decay=schedule.weight_decay,
+        )
+        rate = torch.optim.lr_scheduler.LambdaLR(
+            optimiser, schedule.learning_rate_schedule(len(targets)).factor
         )
         order = SeededShuffleSampler(len(targets), seed=plan.seed)
         losses = []
@@ -125,6 +133,7 @@ class TorchAdaptationRuntime:
                 optimiser.zero_grad(set_to_none=True)
                 loss.backward()
                 optimiser.step()
+                rate.step()
                 total += mean * len(indices)
             losses.append(total / len(positions))
         return losses

@@ -186,3 +186,53 @@ grid's, since the primary endpoint is measured against it.
 - Kumar, A. et al. (2022). Fine-Tuning Can Distort Pretrained Features and Underperform
   Out-of-Distribution. ICLR.
 - Loshchilov, I. and Hutter, F. (2019). Decoupled Weight Decay Regularization. ICLR.
+
+### 2026-09-19 — the rate has a shape, and every arm's peak is fixed before the grid
+
+The constant rate of the first run is superseded. `AdaptationSchedule` states, beside the peak,
+a warm-up as a share of the run's optimiser steps and the fraction of the peak the rate decays
+to, and the runtime steps the rate under `LearningRateSchedule` — the same value object the
+pretraining budget uses, moved to the shared kernel because it is a pure function of the step
+with no context's language in it. A constant rate is the shape with no warm-up and a floor of
+one, so the first run repeats under the new field (44.64 again, to the device's scatter). The
+warm-up is a share rather than a count of epochs because an epoch is four steps at the smallest
+budget and a hundred and sixty at the largest.
+
+The shape and each arm's peak were fixed on the validation side at the endpoint's budget, one
+seed, by a rule stated before the sweep — lowest validation RMSE among three peaks per arm, the
+control's shape for every arm — and registered before the grid (`docs/preregistration.md`,
+2026-09-19; the numbers in `docs/verification/label-efficiency-curve.md`). Under a warm-up over
+a tenth of the run and a cosine decay to one per cent, the control arm goes from 44.64 to 22.38
+at a peak of 3e-4, the low-rank arm to 20.70 at 3e-3, full fine-tuning to 21.10 at 3e-4, and
+the probe stays at 38.73 at 1e-2. The three arms that step the encoder or an update beside it
+therefore stand within two RMSE of one another at 200 labels under one seed, and the arm the
+first run showed at the trivial predictor was the schedule's, not the data's, as the note
+suspected. The outcome now also states how many labelled windows and how many units the
+labels came from, so a budget is reported beside the engines behind it.
+
+### 2026-09-20 — the grid's reading, and which conditions above it meets
+
+The grid ran on two T4 accelerators in single precision, four modes over four budgets under
+five seeds, and was read by the registered rules (`docs/verification/label-efficiency-curve.md`).
+The endpoint is not confirmed: full fine-tuning at 200 labelled windows takes 21.5 % off the
+control's error with its whole interval above zero, and the practical floor — the control's
+spread over its seeds, 7.25 — swallows the 7.17. The control arm leaves the plateau of the mean
+predictor under two seeds of five under the schedule fixed on one seed above; the pretrained
+arm leaves it under four. Where both leave it the difference is six per cent. At a thousand
+labels the three arms that step the encoder or an update beside it are indistinguishable, and at
+every label the arm trained from scratch is better than both (14.4 against 18.1 and 21.1, the
+intervals below zero). One repeat of the low-rank arm at the whole budget rose off its minimum
+late in the decay, under a peak chosen over a run thirteen times shorter.
+
+Of the conditions above, two are touched. The probe is far below fine-tuning at every budget
+beyond the first (39.5 / 33.0 / 26.5 against 25.8 / 19.8 / 18.1), so the two-stage arm is the
+next ablation of this axis when the axis is next extended. Half precision was not needed: the
+longer shard took seven hours, above the six set beforehand as the point to reopen it, and
+fitted one session; the
+registration names single precision, and the decision stands. What the grid adds to the record
+is a condition of its own: the schedule of an arm fixed on one seed at one budget does not fix
+how often that arm leaves the plateau, the peaks chosen at 200 are a cost at 1,000 and above,
+and a run measured in epochs gives the small budgets too few steps to converge — no cell of the
+grid had, and the next run states its budget in optimiser steps.
+The reading of this as a statement about the encoder waits for the synthetic control's transfer
+leg, as the registration orders.
