@@ -29,6 +29,9 @@ from emblema.evaluation.domain.exceptions import (  # noqa: E402
 )
 from emblema.evaluation.domain.labels.label_budget import LabelBudget  # noqa: E402
 from emblema.evaluation.domain.labels.label_sample import LabelSample  # noqa: E402
+from emblema.evaluation.domain.labels.remaining_life_scheme import (  # noqa: E402
+    RemainingLifeScheme,
+)
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
@@ -76,7 +79,7 @@ def published(tmp_path: Path) -> Published:
     runtime = TorchAdaptationRuntime(
         backbones, PublishedCorpusBlocks(store, tmp_path / "workspace"), device="cpu"
     )
-    defined = replace(task(), manifest=manifest, labels=replace(task().labels, ceiling=CEILING))
+    defined = replace(task(), manifest=manifest, labels=RemainingLifeScheme(CEILING))
     return Published(runtime, defined, backbones)
 
 
