@@ -1,0 +1,35 @@
+# The C-MAPSS backbone at the published tier, trained sixteen times as long: 64 epochs, 40,512
+# steps of batch 32, everything else as the file of the registered backbone states
+# (backbone-cmapss-m.toml).
+#
+# The fourth doubling. The three before it, eight, sixteen and thirty-two epochs, each lowered the
+# best epoch's held-out loss by more than the five per cent the rule of the saturation curve calls
+# a plateau (38, 29 and 17 per cent), so the rule asks for one more before a backbone is named.
+# The schedule spans the whole run, warm-up and decay alike, so a longer run is a different run
+# and not the earlier one carried on, which is why each budget has its own file.
+name = "backbone-cmapss-m-64"
+tier = "M"
+corpora = ["cmapss"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[budget]
+epochs = 64
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+# A state every 4,000 steps: ten over the run, each about sixty megabytes, and a dropped session
+# loses at most twenty minutes of the platform.
+[checkpoint]
+every_steps = 4000
