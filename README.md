@@ -96,32 +96,41 @@
 | src/emblema/evaluation/adapters/torch/lora\_linear.py                                     |       17 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/low\_rank\_adaptation.py                            |       24 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/regression\_head.py                                 |        7 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/torch/torch\_adaptation\_runtime.py                       |       81 |        0 |        8 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/torch/torch\_adaptation\_runtime.py                       |       83 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/application/use\_cases/define\_downstream\_task.py                 |       28 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/application/use\_cases/draw\_label\_budget.py                      |       19 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/application/use\_cases/open\_test\_split.py                        |       23 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/application/use\_cases/run\_adaptation.py                          |       24 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/contracts/events.py                                                |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/contracts/identifiers.py                                           |        4 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/domain/exceptions.py                                               |       24 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/exceptions.py                                               |       40 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/identifiers.py                                              |        9 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/domain/labels/label\_budget.py                                     |       20 |        0 |        6 |        0 |    100% |           |
-| src/emblema/evaluation/domain/labels/label\_sample.py                                     |       32 |        0 |       10 |        1 |     98% |   75-\>74 |
+| src/emblema/evaluation/domain/labels/label\_sample.py                                     |       35 |        0 |       10 |        1 |     98% |   75-\>74 |
 | src/emblema/evaluation/domain/labels/labelled\_window.py                                  |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/labels/remaining\_life\_scheme.py                           |       13 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/labels/target\_bins.py                                      |       21 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/domain/labels/task\_window.py                                      |       11 |        0 |        4 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/bootstrap\_interval.py                           |       20 |        0 |        4 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/comparison\_rules.py                             |       38 |        0 |       16 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/comparison\_verdict.py                           |       10 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/holm\_correction.py                              |       25 |        0 |       14 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/paired\_difference.py                            |       17 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/paired\_unit\_bootstrap.py                       |       31 |        0 |        4 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/paired\_unit\_errors.py                          |       66 |        0 |       22 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/practical\_floor.py                              |       23 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/domain/task/corpus\_sides.py                                       |       13 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/domain/task/downstream\_task.py                                    |       35 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/domain/task/frozen\_test\_split.py                                 |       10 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/task/run\_purpose.py                                        |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/task/task\_split.py                                         |       15 |        0 |        8 |        0 |    100% |           |
-| src/emblema/evaluation/domain/transfer/adaptation\_outcome.py                             |       34 |        0 |       16 |        0 |    100% |           |
+| src/emblema/evaluation/domain/transfer/adaptation\_outcome.py                             |       34 |        0 |       18 |        0 |    100% |           |
 | src/emblema/evaluation/domain/transfer/adaptation\_plan.py                                |       15 |        0 |        4 |        0 |    100% |           |
-| src/emblema/evaluation/domain/transfer/adaptation\_schedule.py                            |       13 |        0 |        8 |        0 |    100% |           |
+| src/emblema/evaluation/domain/transfer/adaptation\_schedule.py                            |       25 |        0 |       14 |        0 |    100% |           |
 | src/emblema/evaluation/domain/transfer/lora\_spec.py                                      |       22 |        0 |       14 |        0 |    100% |           |
+| src/emblema/evaluation/domain/transfer/remaining\_life\_metrics.py                        |       43 |        0 |       18 |        0 |    100% |           |
 | src/emblema/evaluation/domain/transfer/transfer\_mode.py                                  |       15 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/domain/transfer/unit\_error.py                                     |       26 |        0 |        8 |        0 |    100% |           |
+| src/emblema/evaluation/domain/transfer/unit\_error.py                                     |       32 |        0 |       10 |        0 |    100% |           |
 | src/emblema/evaluation/domain/transfer/window\_prediction.py                              |       13 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/ports/adaptation\_runtime.py                                       |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/ports/corpus\_windows.py                                           |        9 |        0 |        0 |        0 |    100% |           |
@@ -191,11 +200,10 @@
 | src/emblema/pretraining/domain/backbone/backbone.py                                       |       53 |        0 |       16 |        0 |    100% |           |
 | src/emblema/pretraining/domain/backbone/pretraining\_input.py                             |       12 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/domain/encoder\_architecture.py                                   |       29 |        0 |        8 |        0 |    100% |           |
-| src/emblema/pretraining/domain/exceptions.py                                              |       56 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/domain/exceptions.py                                              |       54 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/handoff/pretraining\_order.py                              |       29 |        0 |       12 |        0 |    100% |           |
 | src/emblema/pretraining/domain/handoff/pretraining\_result.py                             |       51 |        0 |       16 |        0 |    100% |           |
 | src/emblema/pretraining/domain/identifiers.py                                             |        4 |        0 |        0 |        0 |    100% |           |
-| src/emblema/pretraining/domain/learning\_rate\_schedule.py                                |       21 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/domain/mask\_kind.py                                              |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/masking\_strategy.py                                       |       18 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/domain/saturation/saturation\_curve.py                            |       22 |        0 |        8 |        0 |    100% |           |
@@ -250,8 +258,9 @@
 | src/emblema/shared/kernel/artifacts.py                                                    |        8 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/kernel/checksums.py                                                    |       42 |        0 |        8 |        0 |    100% |           |
 | src/emblema/shared/kernel/compute.py                                                      |        5 |        0 |        0 |        0 |    100% |           |
-| src/emblema/shared/kernel/exceptions.py                                                   |       10 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/kernel/exceptions.py                                                   |       12 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/kernel/identifiers.py                                                  |       17 |        0 |        2 |        0 |    100% |           |
+| src/emblema/shared/kernel/learning\_rate\_schedule.py                                     |       21 |        0 |       10 |        0 |    100% |           |
 | src/emblema/shared/kernel/ordering.py                                                     |       10 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/kernel/sampling.py                                                     |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/kernel/timestamps.py                                                   |       11 |        0 |        4 |        0 |    100% |           |
@@ -262,9 +271,9 @@
 | src/emblema/shared/ports/event\_subscriber.py                                             |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/exceptions.py                                                    |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **6976** |   **12** | **1366** |   **16** | **99%** |           |
+| **TOTAL**                                                                                 | **7288** |   **12** | **1468** |   **16** | **99%** |           |
 
-74 empty files skipped.
+75 empty files skipped.
 
 
 ## Setup coverage badge
