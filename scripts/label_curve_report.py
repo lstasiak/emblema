@@ -19,6 +19,7 @@ import csv
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from math import sqrt
 from pathlib import Path
 from statistics import mean, pstdev, stdev
 from typing import NamedTuple, Self
@@ -421,7 +422,7 @@ def readings_of(predictions: Sequence[WindowPrediction], task: KnownTask) -> Rea
 
 
 def rmse_of(predictions: Sequence[WindowPrediction]) -> float:
-    return (sum((p.predicted - p.target) ** 2 for p in predictions) / len(predictions)) ** 0.5
+    return sqrt(sum((p.predicted - p.target) ** 2 for p in predictions) / len(predictions))
 
 
 def comparisons_of(
