@@ -4,7 +4,9 @@ Two panels over one axis of budgets. The upper one is the curve itself: the vali
 every transfer mode at every budget, the mean over seeds with the spread between seeds as a
 band, and the mean predictor as the line any candidate has to get under. The lower one is what
 the registered rules judge: the reduction of the error against the control arm, with the paired
-interval over engines, the endpoint ringed. The budgets are labelled with how many engines the
+interval over engines, the endpoint ringed, and the practical floor of each budget as a band
+around zero, so that a reduction the floor swallows reads as nil where it is drawn. The budgets
+are labelled with how many engines the
 labels came from, because windows of one engine overlap and the count of windows overstates
 what a budget holds.
 
@@ -153,7 +155,21 @@ def draw(curve: Curve, path: Path, *, caption: str = CAPTION) -> Path:
                     va="top",
                     color="#0b0b0b",
                 )
+    for budget in budgets:
+        floors = [row.floor for row in curve.comparisons if row.budget == budget]
+        if floors:
+            x = windows[budget]
+            lower.fill_between(
+                [x * 0.86, x * 1.14],
+                -max(floors),
+                max(floors),
+                color="#52514e",
+                alpha=0.12,
+                linewidth=0,
+                label="practical floor" if budget == budgets[0] else None,
+            )
     lower.axhline(0.0, color="#52514e", linewidth=1)
+    lower.legend(fontsize=8, loc="lower left")
     lower.set_ylabel("RMSE reduction vs from scratch\n(95 % interval over engines)")
     lower.set_xscale("log")
     lower.set_xticks(positions)
