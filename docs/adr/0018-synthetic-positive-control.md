@@ -195,3 +195,15 @@ test is what keeps the claim from being a comment.
   Econometrica 70(1), 191–221.
 - Shukla, S. N. and Marlin, B. M. (2021). Multi-Time Attention Networks for Irregularly Sampled
   Time Series. ICLR.
+
+### 2026-09-20 — the specification moves to shared code, the reader stays
+
+The transfer leg needs the exact reading of a sensor at an instant, answered on the Evaluation
+side, and Evaluation may not import the Catalog's adapters. The latent process, the layouts,
+the draws and the presets now live in `shared/adapters/synthetic`, with the noiseless signal
+model extracted from the reader as `SensorSignal`; `SyntheticCorpusReader` stays in the Catalog
+and adds the noise, the gaps and the rounding over it. The decision above holds in every
+particular — the generator is still an adapter of the corpus reader port, nothing is stored,
+the presets are still constants — and the bytes of every corpus are unchanged, which the pinned
+checksums assert. The forecasting task the leg poses, and why the truth is read where it is,
+are in ADR-0033.

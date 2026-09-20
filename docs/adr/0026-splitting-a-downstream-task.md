@@ -116,3 +116,11 @@ ways to the same units would leave the weaker one in place.
   richer result is better than two.
 - Campaigns arrive and bring a run identity: the event would then name the run that opened the
   frozen side, not only the task.
+
+### 2026-09-20 — a second kind of task arrived, and the port became one with a richer result
+
+The transfer leg of the synthetic control poses a forecasting task whose truth varies along a
+unit. `UnitLifetimes.failure_times(units)` is now `GroundTruth.truths_of(windows)`: one number
+per window, read by the task's label scheme, which the aggregate holds as a closed set of two.
+The turbofan adapter answers every window of an engine with the moment it failed, so nothing
+this record decided about the remaining-life task moves. ADR-0033 records the choice.
