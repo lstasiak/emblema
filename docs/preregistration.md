@@ -425,3 +425,46 @@ accelerators. The sweep spends 2,000 steps per run over three arms, three peaks 
 about six hours of one T4, and the probe's runs are minutes. The three runs of the backbone
 spend fifty-six epochs together, about three hours of one T4 at the 0.31 s per step its first
 run showed, and the second sweep of the three pretrained arms about four and a half hours more.
+
+### 2026-09-20 — the peaks under the floor, from the sweep over three seeds
+
+**Changed.** The peak rate of every arm, chosen by point 3 of the section above: from scratch
+1e-3, frozen probe 1e-2, low-rank updates 3e-4, full fine-tuning 3e-5. The control's peak is
+the one every run from here uses, the transfer leg of the synthetic control included. The three
+peaks of the arms that start from the backbone stand until the retrained backbone is named;
+the section that names it sweeps them again under it by the same rule and states them. The leg
+the peaks are read from is the one on the platform the grid runs on, CUDA in single precision;
+the development machine's leg of the same sweep is the device check and is reported in the note.
+
+**Why.** The rule was fixed on 2026-09-19 and amended above before any run under the floor;
+nothing here is chosen on the numbers beyond what the rule chooses. The peak of the control is
+read now rather than with the others because the control never sees the backbone, so the
+second sweep cannot move it.
+
+**Measured when this changed.** The sweep, 200 labelled windows under seeds 1, 2 and 3 (73, 70
+and 76 engines), validation over the 18 held-out engines (535 windows), every run at 2,002
+optimiser steps, two Tesla T4 in single precision (`docs/verification/label-efficiency-curve.md`,
+2026-09-20, the sweep); mean validation RMSE over the three seeds, the chosen cells in bold:
+
+| arm | peak rate | mean RMSE over seeds 1–3 |
+| --- | --- | --- |
+| from scratch | 1e-3 | **20.86** |
+| from scratch | 3e-4 | 21.91 |
+| from scratch | 1e-4 | 21.75 |
+| frozen probe | 1e-2 | **32.42** |
+| frozen probe | 3e-3 | 36.90 |
+| frozen probe | 1e-3 | 39.45 |
+| low-rank updates | 3e-3 | 25.11 |
+| low-rank updates | 1e-3 | 25.73 |
+| low-rank updates | 3e-4 | **22.51** |
+| full fine-tuning | 3e-4 | 24.31 |
+| full fine-tuning | 1e-4 | 24.64 |
+| full fine-tuning | 3e-5 | **23.14** |
+
+No cell of a grid under the floor had run. What these numbers already say is recorded so that
+the next grid's reading cannot be mistaken for a surprise: on the backbone of 2,532 steps, once
+every arm has the steps to leave the plateau, the control is the best arm at this budget, by
+1.7 RMSE over the low-rank updates and 2.3 over full fine-tuning, with a spread over seeds a
+ninth of theirs. Whether that stands under the retrained backbone is what its second sweep and
+the grid measure; nothing here changes the endpoint, the threshold or the floor.
+
