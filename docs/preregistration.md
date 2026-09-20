@@ -345,3 +345,73 @@ four modes at fifty windows under one seed, M1 Pro, MPS, fp32
 low-rank 40.78, full fine-tuning 34.81; it is a check of the path, and under the rules as read
 here its one secondary rejection, the probe at fifty (p = 0.0084), is rejected among three cells
 and not among the registered eleven, which is what item 2 is for.
+
+### 2026-09-20 — a floor of optimiser steps, the head's start, and a sweep over three seeds
+
+**Changed.** Three parts of the procedure, after the first grid and before any run under them.
+
+1. *Every run stands on a floor of 2,000 optimiser steps.* A run trains for thirty epochs or for
+   as many whole epochs as reach 2,000 steps, whichever is more, and the warm-up and the decay
+   span the run so lengthened. At the registered budgets, in batches of sixteen, that is 500
+   epochs at 50 labelled windows, 154 at 200, 32 at 1,000 and the thirty already stated at
+   2,651: no cell trains for fewer steps than before, and no cell trains for fewer than the cell
+   at 1,000 did in the first grid.
+2. *The head's bias starts at the mean of the labels the run holds*, in units of the ceiling,
+   under every mode. Its weights are drawn as before.
+3. *The peak rate of every arm is chosen again under this floor*, by the rule of 2026-09-19 with
+   one change: the sweep runs at 200 labelled windows under three seeds, 1, 2 and 3, and an arm
+   takes the peak with the lowest mean validation RMSE over the three. The three peaks per arm
+   are the three swept on 2026-09-19; the shape stays a warm-up over the first tenth and a cosine decay to one per cent.
+   The peaks so chosen replace the ones registered on 2026-09-19 for every run from then on,
+   including the transfer leg of the synthetic control.
+
+Nothing else moves. The endpoint, its threshold and its interval, the practical floor and its
+measured part, the secondary family and its correction, the budgets, the seeds, the metrics and
+the backbone stand as registered. The backbone is the next thing to be named again: the one the
+first grid used had trained for 2,532 steps with its validation loss still falling, and a run of
+the same objective to the plateau of that loss will be registered here by its weights, in a
+further dated section, before any cell is trained from it.
+
+**Why.** The first grid (`docs/verification/label-efficiency-curve.md`, 2026-09-20) was read
+under thirty epochs whatever the budget, so a cell had about twice as many optimiser steps as it
+had labels: 120 at 50 windows, 390 at 200, 1,890 at 1,000 and 4,980 at 2,651. No cell had
+converged when it was scored, and at 200 the endpoint was decided by how often thirty epochs got
+an arm off the plateau of the mean predictor — two seeds of five for the control, four for the
+pretrained arm — which is a fact about optimisation under a small number of steps, not about
+what the labels teach. The registration's own reason for tuning the control's schedule, that a
+control at the trivial predictor confirms the claim for the wrong reason, applies to a control
+that thirty epochs leave on the plateau under three seeds of five. A floor in steps gives every
+cell the same chance to leave it and leaves the budget of labels as the only thing that differs
+between cells of one arm. Two thousand is the number of steps the cell at 1,000 had, where the
+three arms that step the encoder had become indistinguishable, rounded up; it is not a claim of
+convergence, which the next grid measures as the first did, from the losses per epoch.
+
+The head's default bias is a draw, and under three seeds of five in the first grid the first
+epoch's loss stood at five to twelve times the variance of the target: a run of 390 steps spent
+a share of them walking the bias back to the mean. Starting it there is what a predictor with no
+information says and costs no seed its comparability, because every arm of a cell starts from
+the same value.
+
+The peaks are chosen again because the ones registered on 2026-09-19 were chosen over 390 steps
+and one seed, and one seed does not see how often an arm leaves the plateau: the control's peak
+was chosen under seed 1, one of the two seeds it left the plateau under. Three seeds and the
+mean over them see it. The rule, the three peaks per arm and the shape are otherwise unchanged,
+and every arm is swept the same way, so no arm is tuned more than another.
+
+**What this is, stated plainly.** These are corrections made after a result was seen, and they
+are recorded as such. What keeps them from being a choice made on the numbers is that they are
+fixed here before any run under them, that they apply to every arm alike, and that the next
+grid is read by the same endpoint, threshold, floor and family as the first. The first grid's
+reading stands in its note as the reading under the rules of its day.
+
+**Measured when this changed.** The first grid in full, 80 cells over two accelerators: the
+endpoint at 200 not confirmed (reduction 7.17 RMSE, interval [5.92, 8.57], floor 7.25); the
+low-rank arm at 200 distinguishable above the floor (11.12, [9.07, 13.50]); at 1,000 the three
+arms that step the encoder indistinguishable; at 2,651 the arm trained from scratch better than
+both pretrained arms. No run had been made under the floor, the head's start or the new peaks.
+
+**Cost, declared now.** Under the floor the grid spends about 165,000 optimiser steps in the
+three arms that step the encoder, against 110,000 in the first grid; at the 0.39 s per step the
+platform showed, about eighteen hours of one T4, two sessions of the platform or one over two
+accelerators. The sweep spends 2,000 steps per run over three arms, three peaks and three seeds,
+about six hours of one T4, and the probe's runs are minutes.

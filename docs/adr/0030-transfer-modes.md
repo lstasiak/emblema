@@ -234,5 +234,20 @@ is a condition of its own: the schedule of an arm fixed on one seed at one budge
 how often that arm leaves the plateau, the peaks chosen at 200 are a cost at 1,000 and above,
 and a run measured in epochs gives the small budgets too few steps to converge — no cell of the
 grid had, and the next run states its budget in optimiser steps.
+
+### 2026-09-20 — a floor of steps under the epochs, and where the head starts
+
+Two corrections of the procedure, registered in `docs/preregistration.md` on the same day
+before any run under them. `AdaptationSchedule` gains a floor of optimiser steps: a run takes
+its stated epochs or as many whole epochs as reach the floor, whichever is more, and the rate's
+warm-up and decay span the lengthened run. The floor is a field of the schedule rather than a
+replacement of the epochs, so a run over the whole budget keeps the epochs it had and stays
+comparable with the first grid, while the small budgets are lifted to the same number of steps;
+it renders in the plan's parameters, so a grid stored under one floor is not resumed under
+another and shards under different floors are refused as one curve. The head's bias starts at
+the mean of the labels the run holds, in units of the ceiling, under every mode: the runtime
+passes the mean of the sample's targets when it builds the candidate, and the head's weights are
+drawn as before, so the draw under a seed is unchanged. Neither touches the mode: the probe,
+the low-rank updates and full fine-tuning differ in the backbone alone, as before.
 The reading of this as a statement about the encoder waits for the synthetic control's transfer
 leg, as the registration orders.
