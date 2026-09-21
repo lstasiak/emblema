@@ -183,3 +183,56 @@ the corpus or a mix-up of artefacts.
   in place would teach the dynamics the task needs; it is the largest change and the last to
   try, because the two above can be measured in an hour.
 
+## 2026-09-21 — the window against the factors' periods: the coupled pair at a window of 128
+
+Declared before it ran (`docs/preregistration.md`, 2026-09-21, "the window against the factors'
+periods"). The coupled pair's corpora republished with windows of 128 time units at the same
+stride of 12: `control-a` (manifest `sha256:eb997d64…`, validation 0.25, seed 1) and
+`control-b-wide` under its vocabulary (`sha256:9fb6c129…`, half the units held out, seed 1; 266
+validation units, 7,906 validation windows). `control-a-s` pretrained again on the new corpus
+under the same experiment file (backbone `ace3fb98-…`, weights `sha256:488be6bd…`, 24 epochs of
+batch 32 on MPS, 1,867 s; validation loss per hidden token 0.01722, 0.017 of the trivial
+predictor's, against 0.01371 at the window of 32). The runs are the endpoint's under the peaks
+registered for the pair at 32, carried over as declared; code `b463ed1`.
+
+| arm | seed 1 | 2 | 3 | 4 | 5 | mean | SD | seconds |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| from_scratch | 0.466 | 0.416 | 0.335 | 0.376 | 0.341 | 0.387 | 0.055 | 97–104 |
+| frozen_probe | 0.898 | 0.848 | 0.861 | 0.894 | 0.900 | 0.880 | 0.024 | 11–12 |
+| lora | 0.290 | 0.294 | 0.292 | 0.325 | 0.276 | 0.296 | 0.018 | 117–129 |
+| full_fine_tuning | 0.294 | 0.284 | 0.306 | 0.310 | 0.291 | 0.297 | 0.011 | 95–101 |
+
+The mean predictor scores 1.002 on these windows; the floor is 0.055, the control's spread over
+the seeds, which at this window is five times what it was at 32.
+
+| comparison against from scratch | control | candidate | reduction | 95 % interval | floor | reading |
+| --- | --- | --- | --- | --- | --- | --- |
+| full fine-tuning | 0.387 | 0.297 | **+0.093** | [+0.088, +0.098] | 0.055 | **the rule's condition met**: above the floor, the whole interval above zero |
+| low-rank updates | 0.387 | 0.296 | +0.094 | [+0.088, +0.099] | 0.055 | distinguishable, above the floor |
+| frozen probe | 0.387 | 0.880 | −0.491 | [−0.508, −0.474] | 0.055 | worse |
+
+**What the diagnostic says.** With windows that span the factors' periods, the pretrained
+backbone transfers: full fine-tuning and the low-rank updates end a quarter below the fresh
+encoder, on every seed, with the fresh encoder's own spread five times the pretrained arms'. The
+window was the fault. A 32-step window under masked reconstruction taught interpolation; a
+128-step one teaches something the forecasting head can use and a fresh encoder does not learn
+from 200 windows in 2,002 steps. Two things in the same table keep the reading honest: the
+control got worse and noisier at the longer window (0.387 ± 0.055 against 0.365 ± 0.011), so
+part of the advantage is the fresh encoder's difficulty with four times the tokens at the same
+budget of steps, which is a real property of the comparison and not an artefact; and the frozen
+probe got worse (0.88 against 0.66), so the states the longer-window backbone produces are less
+linearly readable while being a better start to fine-tune from.
+
+**What was checked.** The cells ran under the backbone accepted for this corpus (`488be6bd…`),
+the manifest at 128, the registered plan (2,002 steps, batches of 16, the schedule, the peaks
+of the pair) and the run's seed equal to the draw's, as `runs.csv` records; the pretraining
+converged to a loss of the same order as at 32.
+
+**What follows, each a registration before a run.** By the reading declared beforehand, the
+control's registration moves to the longer window before the pair is measured again under its
+rule: the peaks swept at 128 on each pair's own task, the null pair republished and pretrained at
+128 and measured for its equivalence, and the coupled pair read again with swept peaks. Only
+then does the control pass "both ways", and only then is a result on real data read. The
+turbofan task's own window, 50 cycles against lives of hundreds, is the same question asked of
+the real data, to be stated in its registration before any grid.
+
