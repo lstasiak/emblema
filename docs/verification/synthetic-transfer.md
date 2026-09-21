@@ -508,3 +508,45 @@ worse than nothing, the family, the family with the structure, and the fresh enc
 middle as zero. That is the calibration the same question on real data will be read against: a
 pretrained backbone that helps on a corpus it was not pretrained on is carrying the family of
 the signals, and the leave-one-corpus-out leg is where that is measured on real data.
+
+## 2026-09-21 — the pretext window apart from the task's: a backbone pretrained at 128 does not help a task at 32
+
+Declared before it ran (`docs/preregistration.md`, 2026-09-21, "the turbofan backbone's pretext
+window"), with its prediction. The coupled pair's backbone pretrained at 128 (`control-a-s`,
+weights `sha256:488be6bd…`) fine-tuned on `control-b-wide-forecast` at 32 (manifest
+`sha256:ddb58ea1…`), whose channel ids, normalisation statistics and split equal those of the
+version at 128, as the two published manifests show; a fresh encoder in the same invocation,
+five seeds, the peaks the sweep at 32 chose (1e-3 for both arms), 2,002 steps; code `7a8627c`,
+MPS, fp32, nine minutes.
+
+| arm | seed 1 | 2 | 3 | 4 | 5 | mean | SD |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| from_scratch | 0.394 | 0.370 | 0.363 | 0.357 | 0.347 | 0.366 | 0.018 |
+| full fine-tuning of the backbone at 128 | 0.383 | 0.390 | 0.441 | 0.438 | 0.399 | 0.410 | 0.027 |
+
+The three combinations of the two windows now measured on the coupled pair, the advantage of
+full fine-tuning over a fresh encoder, paired over the 266 validation units, five seeds pooled:
+
+| pretrained on windows of | fine-tuned and scored on windows of | advantage | 95 % interval | floor |
+| --- | --- | --- | --- | --- |
+| 32 | 32 | −0.019 | [−0.022, −0.015] | 0.011 |
+| 128 | 32 | **−0.044** | [−0.049, −0.040] | 0.018 |
+| 128 | 128 | +0.094 | [+0.089, +0.099] | 0.053 |
+
+**Against the prediction.** It failed. The longer pretext alone does not carry the transfer: a
+backbone pretrained on windows of 128 is a worse start on windows of 32 than a fresh encoder, and
+worse than the backbone pretrained at 32. Transfer appeared only where both the pretext and the
+task spanned the process's time scales. The consistent reading is that the backbone at 128
+learnt to read dynamics over a span a window of 32 does not contain, and on windows a quarter as
+long its states lie off the distribution it was trained on; what the task at 32 can use of them
+is less than nothing.
+
+**What was checked.** Every row carries the task, the backbone at 128 (`488be6bd…`) on the
+fine-tuned arm and none on the fresh one, 2,002 steps, batches of 16, the peaks, the run's seed
+equal to the draw's and one commit; the fresh encoder reproduces the endpoint at 32 (0.366
+against 0.365).
+
+**What follows for the turbofan task.** The pretext window cannot be lengthened on its own. By
+the branch the registration declared, a turbofan task at 100 cycles is proposed with its cost —
+30 of the task's 100 test engines without one full window, against 7 at 50 — and decided before
+anything runs under it; the backbone ladder at 100 is only worth its cost under that task.
