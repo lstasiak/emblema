@@ -703,3 +703,90 @@ is the regime of the task or the pretext itself. The count of windows a unit yie
 smaller than at 32 by the difference of the spans over the stride; the numbers of windows per
 side are reported with the result.
 
+### 2026-09-21 — the synthetic control moves to a window of 128: sweep, null pair, and the reading of both rules
+
+**Changed.** The corpora of the synthetic control's transfer leg are the ones published with
+windows of 128 time units at stride 12: `control-a` (`sha256:eb997d64…`) and `control-b-wide`
+(`sha256:9fb6c129…`) as above, and `null-a` and `null-b-wide` published the same way before the
+runs below, the null pair's backbone `null-a-s` pretrained again on its new corpus under the same
+experiment file. Everything else of the leg stands as registered on 2026-09-21: the task and its
+horizon, half the units held out, one in three frozen, the endpoint's budget alone, seeds 1 to
+5, the floor of 2,000 steps, the head's start, the two rules and the practical floor. Three
+steps, in this order:
+
+1. *The peaks*, swept at 128 on each pair's own task by the rule of 2026-09-20 — 200 windows,
+   seeds 1 to 3, three peaks per arm, the lowest mean — over the same three peaks per arm as at
+   32: from scratch 1e-3, 3e-4, 1e-4; frozen probe 1e-2, 3e-3, 1e-3; low-rank updates 3e-3, 1e-3,
+   3e-4; full fine-tuning 1e-3, 3e-4, 1e-4.
+2. *The null pair* at 128 under its chosen peaks: five seeds of the four arms, read by its
+   equivalence, the whole interval of full fine-tuning against the control within ±the floor.
+3. *The coupled pair* at 128 under its chosen peaks: five seeds of the four arms, read by its
+   rule, the advantage of full fine-tuning over the control above the floor with the whole
+   interval above zero. The diagnostic run above, under carried-over peaks, is superseded by
+   this reading and kept as the diagnostic it was.
+
+The control passes when both rules hold at this window; if the null pair fails its equivalence
+the pipeline finds structure where there is none, and nothing on real data is read until that is
+understood.
+
+**Why.** The diagnostic showed the window of 32 to be what kept the pretext from teaching the
+dynamics the task needs, and the reading declared for it moves the registration to the longer
+window before the pair is measured again under its rule. The peaks are swept again because a
+window four times longer is a different optimisation, as the control's own spread at 128
+already shows. The null pair is measured at the same window because equivalence at 32, where
+nothing transferred, says nothing about a window where something does.
+
+**Measured when this changed.** The diagnostic above and nothing under this registration: no
+sweep at 128, no cell of the null pair at 128.
+
+**Cost, declared now.** The two sweeps at 128, 72 runs of about two minutes; the null pair's
+publication and pretraining, about forty minutes; the two endpoints, 40 runs of about two
+minutes: four to five hours of this machine's accelerator in all.
+
+
+### 2026-09-21 — the control at 128 read: the coupled pair passes, the null pair fails, and the family's share is measured by swapping the backbones
+
+**Measured under the registration above** (record in `docs/verification/synthetic-transfer.md`,
+"the control closed at a window of 128"). The peaks at 128, swept on each pair's own task, are
+the same on both pairs and the same the sweep at 32 chose: from scratch 1e-3, frozen probe 1e-2,
+low-rank updates 3e-3, full fine-tuning 1e-3. Under them, five seeds, 266 validation units on
+either pair: the coupled pair's rule holds — full fine-tuning +0.094 below the fresh encoder,
+interval [+0.089, +0.099], floor 0.053 — and the null pair's equivalence fails — full
+fine-tuning +0.025, interval [+0.020, +0.029], wholly above the floor of 0.013. No configuration
+error was found in the null pair's cells.
+
+**What the failure means, stated before the next run.** The null pair shares with the coupled
+pair everything but the frequencies and the cross-channel structure: the private factors a
+channel follows at a coupling of zero are built like the shared ones, in the same band of
+periods with the same harmonics, by the generator's own design. A backbone pretrained on one
+layout of the null pair therefore learns the family of signals and carries that to the other,
+which is real structure and not the pipeline's invention. The rule of 2026-09-21 asked the
+family's share of the transfer to be zero, which the generator never promised. The reading that
+replaces it: the control put shared frequencies into the coupled pair and not into the null pair,
+so what the control can decide is whether the transfer *tracks* that structure — whether the
+advantage on the coupled pair exceeds the advantage the family alone gives.
+
+**Changed: one more diagnostic, then the reading of the control.** The backbones are swapped
+between the pairs and full fine-tuning is measured against a fresh encoder in the same
+invocation, at 128, five seeds each, under the peaks above, everything else as registered:
+
+1. the coupled pair's backbone (`control-a-s`, weights `sha256:488be6bd…`) fine-tuned on
+   `null-b-wide-forecast` (manifest `sha256:7df203eb…`);
+2. the null pair's backbone (`null-a-s`, weights `sha256:30f71255…`) fine-tuned on
+   `control-b-wide-forecast` (manifest `sha256:9fb6c129…`).
+
+**Predictions, written down now.** If the transfer tracks the shared structure, the swapped
+backbone on the null task ends near the null pair's own advantage, +0.025, because it carries
+frequencies the null task does not have; and the swapped backbone on the coupled task ends
+short of +0.094 by more than the floor of 0.053, because it carries the family and no shared
+frequency. The control then passes: the part of the transfer attributable to the structure put
+in on purpose is the coupled pair's advantage less the swapped backbone's on the same task, and
+it is read as the control's result. If instead the null pair's backbone gives the coupled task an
+advantage within the floor of +0.094, the shared frequencies contribute nothing the family did
+not, the control does not discriminate structure, and the fault is in the control's design — the
+null pair would have to be rebuilt so that its family differs — before anything on real data is
+read. A swapped backbone on the null task ending far from +0.025 in either direction is reported
+and interpreted, since neither reading depends on it.
+
+**Cost, declared now.** Four cells of five seeds, about two minutes each: some thirty-five
+minutes of this machine's accelerator.

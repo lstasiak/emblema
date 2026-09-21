@@ -251,3 +251,18 @@ that window for its equivalence, and the peaks are swept at it, before either ru
 record is in `docs/verification/synthetic-transfer.md`. The revisit condition on the window's
 length against the process's time scales now applies to every task, the turbofan's included.
 
+### 2026-09-21 — the coupled pair passes at 128 and the null pair does not: the null shares the family
+
+With the peaks swept at 128 the coupled pair's rule holds (full fine-tuning +0.094 below the
+fresh encoder, interval [+0.089, +0.099] over 266 units, floor 0.053) and the null pair's
+equivalence fails (+0.025, interval [+0.020, +0.029], floor 0.013), with no configuration error
+found. The failure is the design's, not the pipeline's: at a coupling of zero a channel follows a
+private factor built like the shared ones, in the same band with the same harmonics, so the two
+layouts of the null pair share the family of signals and differ only in frequencies and in
+cross-channel structure. A backbone carries the family, and the null rule asked that share to be
+zero. The control's question becomes whether the transfer tracks the structure put in on purpose,
+read by swapping the backbones between the pairs, declared in `docs/preregistration.md` before
+its run. Two asymmetries of the layouts are recorded for whoever rebuilds the null: a coupled
+channel is six sinusoids and a private one three, so the null task is the easier forecast; and
+the fresh encoder's spread over seeds at 128 is four times larger on the coupled task. Record in
+`docs/verification/synthetic-transfer.md`.
