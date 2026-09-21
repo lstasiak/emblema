@@ -927,3 +927,50 @@ pretrained at 32 (−0.019). The prediction failed: transfer needs the task's wi
 pretext's to span the process's time scales. Under the branch declared above, nothing runs under
 the backbone at 100 until the turbofan task's own window is decided and registered here; the
 edges of step 3 under the backbone of 64 epochs do not depend on it and may run.
+
+### 2026-09-21 — the turbofan corpus normalised within one operating condition: a backbone on FD001 and FD003, before any run
+
+**Found.** The published `cmapss` joins the four subsets under one normalisation per channel,
+fitted on all of them, and its reader leaves the operational settings out. In FD002 and FD004,
+71 per cent of the rows, the operating condition explains a median of 100 per cent of a sensor's
+variance and never less than 88, so after the z-score a sensor jumps by several units from one
+cycle to the next with nothing in the window to say why, and the task's subset occupies a sliver
+of the scale: FD001's spread is 0.5 per cent of it for the median sensor, and an engine's whole
+degradation 0.012 units. A masked reconstruction over such a corpus is solved by reading the
+condition off the other channels — the backbone's loss is 0.7 per cent of the trivial
+predictor's — while the degradation the task needs is next to constant in its input. Every result
+under the floor fits: the control best at 200 windows, the probe weak, the pretrained arms worse
+at the full budget in the grid of 2026-09-20. Normalised on FD001 and FD003 alone, one operating
+condition each, FD001's spread is 76 per cent of the scale and an engine's degradation 1.6 units,
+while the ratio of degradation to early-life noise within FD001 stays where it was (4.6 against
+4.2): the normalisation changes the scale the backbone learns at, not the information.
+
+**Changed.**
+
+1. *The corpus.* `cmapss` published at window 50 and stride 5 with the subsets FD001 and FD003
+   only, everything else as the version of four. The task `turbofan-fd001` keeps its window,
+   labels, strata and test engines and takes its tuning and validation engines from this
+   version's division, so the validation engines are ones no backbone pretrained on it has read.
+2. *The backbone.* The ladder of 4, 8, 16, 32 and 64 epochs, and 128 if the last doubling still
+   gains 5 per cent or more, over the same experiment files, run `colab-fd13` on a notebook
+   accelerator, selected by the rule of 2026-09-20. The orders of the ladder at 100 cycles
+   (run `colab-w100`) are withdrawn unfulfilled.
+3. *The peaks.* All four arms swept on this version at 200 windows, seeds 1 to 3, the lowest mean,
+   over grids centred where the edge rule pointed under the old corpus: from scratch 3e-3, 1e-3,
+   3e-4; frozen probe 3e-2, 1e-2, 3e-3; low-rank updates 1e-3, 3e-4, 1e-4; full fine-tuning
+   1e-3, 3e-4, 1e-4; then extended by the edge rule. The control does not depend on the
+   backbone and is swept while the ladder runs.
+4. *The endpoint.* Five seeds of the four arms at 200 windows under the chosen peaks, read by the
+   endpoint's rule. Prediction: full fine-tuning's advantage over the control lies above the
+   floor with the whole interval above zero.
+5. *The decision.* If the rule holds, this corpus and its backbone are the configuration of the
+   grid under the floor and of the single test run. If it does not, the next registrations are
+   a normalisation within each operating condition over all four subsets and the longer window
+   of both the pretext and the task, in that order. Nothing runs under the old corpus again; its
+   numbers stay in the record as what they were. One edge ran under it before this was found:
+   the frozen probe at 3e-2 under the backbone of 64 epochs, 22.42 over three seeds against 23.00
+   at 1e-2, which is the edge rule's case in point.
+
+**Cost, declared now.** The ladder, about 21,000 steps at 50 cycles: under an hour on the notebook
+accelerator. The sweep, 36 runs, and the endpoint, 20, with several processes sharing the device:
+two hours or less.
