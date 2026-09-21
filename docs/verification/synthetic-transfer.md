@@ -301,7 +301,8 @@ The null pair, `null-b-wide-forecast` (mean predictor 1.010):
 
 The coupled pair's cells are the window diagnostic's within the accelerator's own scatter: the
 peaks are the same, the seeds are the same, and the two runs of the same cell differ by up to
-0.009 on the fresh encoder and by less than 0.005 on the pretrained arms, which is what
+0.011 on the fresh encoder, by 0.004 at most on full fine-tuning and not at all on the probe
+and the low-rank updates, which is what
 non-deterministic kernels on MPS do over 2,002 steps and is the reason a registered result is
 five seeds and an interval rather than one number.
 
@@ -428,7 +429,10 @@ contribute little beyond what the family of signals contributes, and the null pa
 does not let the control discriminate the structure put in on purpose.
 
 **The structure's share, paired over the same units.** The two fine-tuned arms on one task
-predict the same validation windows, so their difference can be paired unit by unit: on the
+predict the same validation windows, so their difference can be paired unit by unit. The curve
+report compares every arm against the fresh encoder only, so this difference was computed from
+the two runs' stored predictions directly: the squared errors of a unit pooled over its windows
+and the five seeds, every unit weighted equally, 10,000 resamples of the units. On the
 coupled task the pair's own backbone ends +0.011 below the swapped one, interval [+0.008,
 +0.015]; on the null task the swapped-in `control-a-s` ends 0.008 below the pair's own,
 interval [0.006, 0.010] — the better-trained encoder is the marginally better start even where
@@ -454,3 +458,53 @@ control of leakage and of pairing, and not, as the registration of 2026-09-21 re
 of structure. The decision on what the control's null is to be — the same layouts under a
 different family, or the reading above under an amended registration — is recorded in
 `docs/preregistration.md` when it is taken; until then nothing on real data is read.
+
+## 2026-09-21 — a backbone pretrained on noise: the mechanics alone are a worse start than none
+
+Declared before it ran (`docs/preregistration.md`, 2026-09-21, "a backbone pretrained on
+noise"). The layout `noise-a` — `null-a` with its signal drowned under noise of a hundred times
+the signal's deviation, the same channels, cadence, losses and units — published at 128 and
+stride 12 with a quarter of the units held out (manifest `sha256:05b5fd90…`), and `noise-a-s`
+pretrained on it under the null pair's experiment file (backbone `0bb1e014-…`, weights
+`sha256:95f64fa4…`, 24 epochs, 1,873 s on MPS). The pretraining converged to the trivial
+predictor exactly: validation loss 1.000 of the mean predictor's from the first epoch to the
+last, which is what masked reconstruction of white noise can reach. The backbone was then fine-
+tuned on both tasks against a fresh encoder in the same invocation, five seeds, peaks 1e-3 for
+both arms, 2,002 steps; code `3311640`.
+
+| task | arm | seed 1 | 2 | 3 | 4 | 5 | mean | SD |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| null-b-wide | from scratch | 0.241 | 0.237 | 0.250 | 0.229 | 0.263 | 0.244 | 0.013 |
+| null-b-wide | full fine-tuning of `noise-a-s` | 0.250 | 0.241 | 0.264 | 0.284 | 0.301 | 0.268 | 0.025 |
+| control-b-wide | from scratch | 0.473 | 0.414 | 0.329 | 0.375 | 0.341 | 0.387 | 0.059 |
+| control-b-wide | full fine-tuning of `noise-a-s` | 0.444 | 0.506 | 0.311 | 0.334 | 0.381 | 0.395 | 0.080 |
+
+The whole scale, the advantage of full fine-tuning over a fresh encoder on each task, paired
+over the 266 validation units, the five seeds pooled:
+
+| backbone pretrained on | carries | on null-b-wide | on control-b-wide |
+| --- | --- | --- | --- |
+| noise (`noise-a-s`) | the mechanics alone | **−0.025** [−0.028, −0.022] | **−0.011** [−0.016, −0.007] |
+| the other pair's layout | the family | +0.027 [+0.023, +0.031] | +0.082 [+0.077, +0.086] |
+| the pair's own layout | the family and the shared frequencies | +0.025 [+0.020, +0.029] | +0.094 [+0.089, +0.099] |
+| floor | | 0.013–0.018 | 0.051–0.059 |
+
+**Against the prediction.** It held, in its stronger form: the noise backbone is below the
+family's advantage on both tasks by more than the floor, and it is negative on both. A backbone
+that learnt to predict the mean is a worse start than a random one, by more on the easier task;
+on the coupled task its fine-tuning is also the most variable arm of the leg (SD 0.080 over the
+seeds, against 0.012 under the pair's own backbone and 0.059 for the fresh encoder beside it).
+
+**What was checked.** Every row carries the task, the noise backbone's key (`95f64fa4…`),
+2,002 steps, the peaks, the run's seed equal to the draw's and one commit; the fresh encoders
+reproduce the closing's and the swap's within the scatter recorded above (0.244 and 0.387).
+
+**What the scale says.** Nothing of the transfer is the warm start of "any pretraining at all":
+the mechanics without a signal cost rather than give. All of it is what the encoder learnt
+about signals of this family — smooth sums of a few harmonics in a known band, through gaps
+and noise — and on the coupled task a hundredth of it more is the frequencies the two layouts
+share. The control's leg therefore ends with four points on one scale, each with its interval:
+worse than nothing, the family, the family with the structure, and the fresh encoder in the
+middle as zero. That is the calibration the same question on real data will be read against: a
+pretrained backbone that helps on a corpus it was not pretrained on is carrying the family of
+the signals, and the leave-one-corpus-out leg is where that is measured on real data.
