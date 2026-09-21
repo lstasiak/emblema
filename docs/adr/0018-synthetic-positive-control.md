@@ -239,3 +239,15 @@ periods; the note states the order and the cost of each.
 The control has done its job: no result on real data is read until a pair that shares structure
 by construction shows transfer.
 
+### 2026-09-21 — the window was the fault: at 128 time units the coupled pair transfers
+
+The second diagnostic republished the coupled pair with windows of 128 at the same stride and
+pretrained the first layout again. Full fine-tuning ends 0.093 below the fresh encoder, interval
+[+0.088, +0.098] over 266 units against a floor of 0.055, on every seed; the low-rank arm the
+same. A window of 32 against periods of 24 to 300 had let masked reconstruction be solved by
+interpolation; a window spanning several periods teaches the dynamics the forecast needs. The
+control's window therefore moves to 128 in its registration, the null pair is measured again at
+that window for its equivalence, and the peaks are swept at it, before either rule is read; the
+record is in `docs/verification/synthetic-transfer.md`. The revisit condition on the window's
+length against the process's time scales now applies to every task, the turbofan's included.
+

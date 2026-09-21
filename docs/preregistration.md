@@ -678,3 +678,28 @@ verdict of the pair; both direct the next step. With 53 validation units the int
 two and a half times wider than on the wide corpora, roughly the floor; a reading within the
 floor either way is reported as such.
 
+### 2026-09-21 — the window against the factors' periods: the coupled pair at a window of 128
+
+**Changed.** Nothing registered; a second diagnostic declared before it runs. The ceiling above
+put the fault above the data, and the first candidate is the window: 32 time units against
+factor periods of 24 to 300. Masked reconstruction inside a window shorter than most periods is
+solved by local interpolation, which needs no model of the factors' dynamics; the forecast asks
+for that model. The diagnostic republishes the coupled pair's corpora with windows of 128 at the
+same stride of 12, so that the count of windows and everything else stay as they were and only
+the span of a window changes: `control-a` at 128 (validation 0.25, seed 1) for the pretraining,
+`control-b-wide` at 128 under its vocabulary (half the units held out, seed 1) for the task.
+The backbone is `control-a-s` pretrained again on the new corpus under the same experiment file
+(24 epochs of batch 32), and the runs are the endpoint's — 200 labelled windows, seeds 1 to 5,
+the four arms, the floor of 2,000 steps, the head's start — under the peaks registered for the
+pair at the window of 32, carried over rather than swept again, because this is a diagnostic
+and not a reading of the rule. The forecast's horizon stays at twelve time units past the
+window's end.
+
+**How it is read.** If full fine-tuning beats the control here, above the floor with the
+interval above zero, the window was what kept the pretext from teaching the dynamics, and the
+control's registration is amended to the longer window before the pair is measured again under
+its rule, with peaks swept. If it does not, the window is not the fault and the next candidate
+is the regime of the task or the pretext itself. The count of windows a unit yields at 128 is
+smaller than at 32 by the difference of the spans over the stride; the numbers of windows per
+side are reported with the result.
+
