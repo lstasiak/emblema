@@ -266,3 +266,16 @@ its run. Two asymmetries of the layouts are recorded for whoever rebuilds the nu
 channel is six sinusoids and a private one three, so the null task is the easier forecast; and
 the fresh encoder's spread over seeds at 128 is four times larger on the coupled task. Record in
 `docs/verification/synthetic-transfer.md`.
+
+### 2026-09-21 — the backbones swapped: what transfers is the family, and the null is a control of leakage
+
+Fine-tuned on the other pair's task, the coupled pair's backbone gives the null task +0.027
+(the null pair's own gives +0.025), and the null pair's backbone gives the coupled task +0.082
+(the coupled pair's own gives +0.094; the structure's own share, paired over units, +0.011
+[+0.008, +0.015], a fifth of the floor). Nothing leaks between the pairs and the advantage on a
+task barely depends on which backbone is fine-tuned; what a pretrained encoder carries at this
+tier and budget is the family of signals, not the frequencies the layouts share. The null pair
+therefore controls leakage and pairing, not structure, and the positive control holds. Whether
+the null is rebuilt under a different family or the control's reading is amended is decided
+and registered in `docs/preregistration.md` before the next run. Record in
+`docs/verification/synthetic-transfer.md`.

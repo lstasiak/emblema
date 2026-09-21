@@ -790,3 +790,21 @@ and interpreted, since neither reading depends on it.
 
 **Cost, declared now.** Four cells of five seeds, about two minutes each: some thirty-five
 minutes of this machine's accelerator.
+
+### 2026-09-21 — the swapped backbones measured: the first prediction held, the second did not
+
+**Measured under the registration above** (record in `docs/verification/synthetic-transfer.md`,
+"the backbones swapped between the pairs"). The coupled pair's backbone on the null task:
++0.027, interval [+0.023, +0.031], where +0.025 was predicted — held. The null pair's backbone on
+the coupled task: +0.082, interval [+0.077, +0.086], against the pair's own +0.094; the
+difference, 0.012, lies within the floor of 0.053 — the second prediction failed, and by the
+reading declared above the control as built does not discriminate the structure put in on
+purpose. Paired over the same units the structure's share on the coupled task is +0.011
+[+0.008, +0.015], real and a fifth of the floor. No configuration error was found.
+
+**Not yet changed.** The registration above named the remedy — the null pair rebuilt so that
+its family differs — before the measurement showed how small the structure's own share is. The
+choice between that rebuild and an amendment that reads the null pair as the control of leakage
+and pairing it turned out to be, with the swap as the control's reading of the structure's
+share, is a design decision taken outside this document and registered here, dated, before
+anything further runs or anything on real data is read.
