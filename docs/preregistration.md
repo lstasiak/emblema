@@ -561,3 +561,95 @@ from any of them.
 configurations of three seeds at 200 labelled windows and 2,002 steps, about four hours of one
 T4 and minutes for the probe; the grid's cost stands as declared on 2026-09-20.
 
+### 2026-09-21 — the synthetic leg's peaks and its power, read off the sweep, before its grid
+
+**Changed.** The peaks of the synthetic leg, chosen by the rule of the section above on each
+pair's own task (200 labelled windows, seeds 1 to 3, 2,002 optimiser steps, the mean over the
+seeds), are the same on both pairs: from scratch 1e-3, frozen probe 1e-2, low-rank updates
+3e-3, full fine-tuning 1e-3. The validation side holds 266 units on either pair, and the paired
+interval read off the chosen cells is narrower than the floor, so the grid runs on the corpora
+as published, with no further widening.
+
+**Measured when this changed.** Mean validation RMSE over the three seeds, in the sensor's
+units, the chosen cells in bold (`data/report/transfer/sweep-<task>/<arm>-lr<peak>`, M1 Pro,
+MPS, fp32, 49–65 s a run, the probe 9–11 s):
+
+| arm | peak | null pair | coupled pair |
+| --- | --- | --- | --- |
+| from scratch | 1e-3 | **0.194** | **0.368** |
+| from scratch | 3e-4 | 0.195 | 0.405 |
+| from scratch | 1e-4 | 0.202 | 0.423 |
+| frozen probe | 1e-2 | **0.898** | **0.661** |
+| frozen probe | 3e-3 | 0.903 | 0.686 |
+| frozen probe | 1e-3 | 0.907 | 0.712 |
+| low-rank updates | 3e-3 | **0.242** | **0.373** |
+| low-rank updates | 1e-3 | 0.307 | 0.413 |
+| low-rank updates | 3e-4 | 0.347 | 0.461 |
+| full fine-tuning | 1e-3 | **0.232** | **0.369** |
+| full fine-tuning | 3e-4 | 0.319 | 0.395 |
+| full fine-tuning | 1e-4 | 0.376 | 0.426 |
+
+Power, from the chosen cells of the control and of full fine-tuning with the three seeds pooled
+per unit: the spread over the 266 validation units of the paired difference of per-unit RMSE is
+0.033 on the null pair and 0.035 on the coupled pair, a half-width of 0.004 on either, against a
+practical floor of 0.010 (the control's spread over seeds, above three per cent of its RMSE) on
+the null pair and 0.011 on the coupled pair. About forty units would have sufficed; the 266 stand.
+
+What these numbers already say is recorded so that the grid's reading cannot be mistaken for a
+surprise. On the coupled pair, at 200 labelled windows and under three seeds, full fine-tuning
+and the low-rank updates land on the control's number (0.369 and 0.373 against 0.368) and the
+probe far above it; on the null pair the two pretrained arms land above the control by 0.04 to
+0.05, four to five times the floor, and both take the largest peak swept. Whether the coupled
+pair clears its rule and the null pair its equivalence is what the grid measures, over five
+seeds and with its intervals, at every budget; nothing here changes either rule.
+
+### 2026-09-21 — the peaks of the three pretrained arms under the backbone of sixty-four epochs
+
+**Changed.** The peak rates of the arms that start from `backbone-cmapss-m-64` (weights
+`sha256:78b3c201…`), chosen by the rule of 2026-09-20 under that backbone: frozen probe 1e-2,
+low-rank updates 3e-4, full fine-tuning 3e-4. The control's peak stands at 1e-3. These are the
+peaks of the grid under the floor, which may now run; nothing else moves.
+
+**Measured when this changed.** The sweep, 200 labelled windows under seeds 1, 2 and 3, every
+run at 2,002 optimiser steps, two Tesla T4 in single precision, code `5658c88`
+(`docs/verification/label-efficiency-curve.md`, 2026-09-21); mean validation RMSE over the three
+seeds, the chosen cells in bold, beside the same cells under the first backbone:
+
+| arm | peak rate | under `78b3c201…` (64 epochs) | under `6830e117…` (4 epochs) |
+| --- | --- | --- | --- |
+| frozen probe | 1e-2 | **23.00** | 32.42 |
+| frozen probe | 3e-3 | 23.77 | 36.90 |
+| frozen probe | 1e-3 | 24.51 | 39.45 |
+| low-rank updates | 3e-3 | 22.79 | 25.11 |
+| low-rank updates | 1e-3 | 22.33 | 25.73 |
+| low-rank updates | 3e-4 | **21.94** | 22.51 |
+| full fine-tuning | 3e-4 | **22.95** | 24.31 |
+| full fine-tuning | 1e-4 | 23.66 | 24.64 |
+| full fine-tuning | 3e-5 | 23.35 | 23.14 |
+
+No cell of the grid under the floor had run. What these numbers already say is recorded so that
+the grid's reading cannot be mistaken for a surprise: the retrained backbone moves the probe by
+nine points, from 32.4 to 23.0, and the two arms that update it by half a point to a point, and
+at this budget under three seeds the control trained from scratch, at 20.86, still stands below
+all three. Whether the endpoint holds is what the grid measures, over five seeds and with its
+interval; nothing here changes the endpoint, the threshold or the floor.
+
+### 2026-09-21 — the synthetic leg is measured at the endpoint's budget alone
+
+**Changed.** The grid of the synthetic leg stated on 2026-09-21 above — four budgets, five seeds,
+four arms on each pair — is reduced to the budget of the endpoint: 200 labelled windows, seeds 1
+to 5, the four arms, on both pairs, under the peaks registered above. The rules stand as they
+are: the coupled pair by the curve's rule at that budget, the null pair by its equivalence.
+
+**Why.** The rules under "The synthetic control" ask one question of each pair at the endpoint's
+budget, and the other budgets answer none of it: they would draw a curve, which is the turbofan
+task's deliverable, not the control's. The cells at every labelled window of a corpus of 400
+tuning units would have cost most of nine hours of this machine's accelerator for a reading the
+registration never asks for. Reduced before the leg's numbers under five seeds exist; the sweep's
+three seeds at this budget are recorded above. A budget of 50 may be added later as a diagnostic
+of whether pretraining helps at very few labels, stated here before it runs if it does.
+
+**Measured when this changed.** Twelve cells of the coupled pair at 50 labelled windows had run
+before the grid was stopped (`data/report/transfer/grid-control-b-wide-forecast`); they are not
+part of the reading and are kept as they are.
+
