@@ -392,3 +392,65 @@ the transfer and the control does not discriminate structure at all, which would
 the control's design. The two swapped cells are declared in `docs/preregistration.md`
 (2026-09-21, "the family's share"), each with its own fresh-encoder control at five seeds;
 nothing on real data is read before they are.
+
+## 2026-09-21 — the backbones swapped between the pairs: the family's share is nearly the whole advantage
+
+Declared before it ran (`docs/preregistration.md`, 2026-09-21, "the family's share is measured
+by swapping the backbones"), with two predictions written down. Each pair's backbone fine-tuned
+on the other pair's task at 128, against a fresh encoder in the same invocation, five seeds,
+under the peaks swept at 128 (from scratch 1e-3, full fine-tuning 1e-3), the floor of 2,002
+steps and the head's start as registered; code `74fffe4`, MPS, fp32, 33 minutes in all.
+
+| task | backbone fine-tuned | seed 1 | 2 | 3 | 4 | 5 | mean | SD |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| null-b-wide | none (from scratch) | 0.241 | 0.226 | 0.230 | 0.235 | 0.271 | 0.241 | 0.018 |
+| null-b-wide | `control-a-s`, swapped in | 0.187 | 0.200 | 0.236 | 0.238 | 0.205 | 0.213 | 0.023 |
+| control-b-wide | none (from scratch) | 0.461 | 0.413 | 0.348 | 0.373 | 0.338 | 0.387 | 0.051 |
+| control-b-wide | `null-a-s`, swapped in | 0.340 | 0.279 | 0.267 | 0.350 | 0.292 | 0.306 | 0.037 |
+
+Paired bootstrap over the 266 validation units, the five seeds pooled, beside the pairs' own
+readings from the section above:
+
+| task | backbone | advantage of full fine-tuning over from scratch | 95 % interval | floor |
+| --- | --- | --- | --- | --- |
+| null-b-wide | own, `null-a-s` | +0.025 | [+0.020, +0.029] | 0.013 |
+| null-b-wide | swapped, `control-a-s` | **+0.027** | [+0.023, +0.031] | 0.018 |
+| control-b-wide | own, `control-a-s` | +0.094 | [+0.089, +0.099] | 0.053 |
+| control-b-wide | swapped, `null-a-s` | **+0.082** | [+0.077, +0.086] | 0.051 |
+
+**Against the predictions.** The first held: the coupled pair's backbone on the null task ends
+where the null pair's own backbone ends, +0.027 against +0.025, so the null task's advantage does
+not depend on which backbone is fine-tuned, and there is no leak between the pairs. The second
+did not: the null pair's backbone, which never saw the coupled pair's frequencies, gives the
+coupled task +0.082 of the +0.094 its own backbone gives. The difference of 0.012 is a fifth of
+the floor of 0.053, and the registration's declared reading applies: the shared frequencies
+contribute little beyond what the family of signals contributes, and the null pair, as built,
+does not let the control discriminate the structure put in on purpose.
+
+**The structure's share, paired over the same units.** The two fine-tuned arms on one task
+predict the same validation windows, so their difference can be paired unit by unit: on the
+coupled task the pair's own backbone ends +0.011 below the swapped one, interval [+0.008,
++0.015]; on the null task the swapped-in `control-a-s` ends 0.008 below the pair's own,
+interval [0.006, 0.010] — the better-trained encoder is the marginally better start even where
+its frequencies are of no use. Two runs of the same fresh-encoder cell, the closing's and this
+one's, differ by 0.001 [−0.002, +0.001] on the coupled task and by 0.006 [0.004, 0.008] on the
+null task, which is the accelerator's own scatter under this interval and the scale against
+which those differences of a hundredth are to be read: real, small, and far below the floor.
+
+**What was checked.** Every row of `runs.csv` carries the task it was run on, the swapped
+backbone's key (`488be6bd…` on the null task, `30f71255…` on the coupled task), 2,002 steps,
+batches of 16, the peaks, the run's seed equal to the draw's and the same commit; the fresh
+encoders reproduce the closing's within the scatter above.
+
+**What the control says, all of it together.** The pipeline transfers where structure was put
+in, at a window that spans the structure's time scales: the positive control holds. Nothing
+leaks between corpora, and the advantage on a task does not depend on which of the two
+backbones is fine-tuned beyond a hundredth. And at this tier and budget, what a pretrained
+encoder carries to a forecast on 200 labelled windows is overwhelmingly the family of the
+signals — smooth sums of a few harmonics in a known band, seen through gaps — and only a
+hundredth of it the particular frequencies the two layouts share. That last finding is what the
+null pair, built to share the family and not the frequencies, can and cannot show: it is a
+control of leakage and of pairing, and not, as the registration of 2026-09-21 read it, a control
+of structure. The decision on what the control's null is to be — the same layouts under a
+different family, or the reading above under an amended registration — is recorded in
+`docs/preregistration.md` when it is taken; until then nothing on real data is read.
