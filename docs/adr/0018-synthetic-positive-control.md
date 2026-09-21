@@ -292,3 +292,12 @@ the trivial predictor and is a worse start than a fresh encoder on both tasks (â
 family (+0.027 and +0.082), and the family with the shared frequencies (+0.025 and +0.094). The
 positive control holds, and what transfers at this tier and budget is the family of the signals.
 Record in `docs/verification/synthetic-transfer.md`.
+
+### 2026-09-21 â€” both windows or neither: a long pretext does not help a short task
+
+A backbone pretrained on windows of 128 and fine-tuned on the coupled task at 32 ends 0.044
+above a fresh encoder, interval [0.040, 0.049] over 266 units, where the backbone pretrained at 32
+ends 0.019 above and the pair at 128 on both sides ends 0.094 below. Transfer on the control
+appears only when the pretext and the task both span the process's time scales. The revisit
+condition on the window's length therefore binds a task's window together with its backbone's:
+lengthening the pretext alone is not a remedy. Record in `docs/verification/synthetic-transfer.md`.

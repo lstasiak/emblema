@@ -864,3 +864,66 @@ family's advantage by more than the floor on both, and negative on both, as the 
 allowed. The transfer measured on the control is the family of the signals in whole, and none
 of it the warm start of any pretraining. The leg's scale is complete and nothing else on the
 synthetic control is declared.
+
+### 2026-09-21 — the turbofan backbone's pretext window, and peaks at the edge of their grids, before any run
+
+**Why now.** The synthetic control transferred once its windows spanned the process's time
+scales (the sections above). The turbofan backbone is pretrained on windows of 50 cycles against
+lives of 128 to 362 in the task's subset, and under the floor its pretrained arms end above the
+control at 200 windows (21.9 to 23.0 against 20.86). Two questions follow before the grid under
+the floor runs, and a third was found on reading that sweep again.
+
+**1. The pretext window apart from the task's window, on the synthetic control.** At 128 both
+the pretraining and the task changed window, and the fresh encoder got worse on the longer task,
+so the diagnostic did not say which of the two carried the transfer. The versions of each
+synthetic corpus at 32 and at 128 share their channel ids, normalisation statistics and split,
+as their published manifests show, so a backbone pretrained at one window can be fine-tuned at
+the other. One cell: `control-a-s` pretrained at 128 (`sha256:488be6bd…`) fine-tuned on
+`control-b-wide-forecast` at 32 (manifest `sha256:ddb58ea1…`), against a fresh encoder in the
+same invocation, five seeds, the peaks the sweep at 32 chose for both arms (1e-3), 2,002 steps.
+Prediction: the advantage of full fine-tuning lies above the floor with the whole interval above
+zero, and the pretext window is what carries the transfer. If not, the task's window matters as
+well, and the turbofan task's own window becomes a question of its own under 2.
+
+**2. The turbofan backbone pretrained on windows of 100 cycles.** `cmapss` published again at
+window 100 and stride 5, everything else as the version at 50, its channel ids, statistics and
+training units checked equal to that version's before any run. The backbone is chosen again by
+the rule of 2026-09-20 over the same experiment files — 4, 8, 16, 32 and 64 epochs, and 128 if the
+last doubling still gains 5 per cent or more — on a paid notebook accelerator, so the two
+backbones differ in the window alone. The task stays at 50 cycles if 1 holds: a window of 100
+leaves 30 of the task's 100 test engines without one full window, against 7 at 50, and changes
+the task for every arm, the control included. If 1 fails, a task at 100 is proposed with that
+cost and decided before anything runs under it.
+
+**3. Peaks at the edge of their grid, post hoc with respect to the sweep and before the grid.**
+Every peak chosen under the floor sits at an edge of the grid it was chosen from: the control at
+1e-3, the probe at 1e-2 and full fine-tuning at 3e-4 at the top, the low-rank updates at 3e-4 at
+the bottom. A better peak beyond the grid was not excluded, and the comparison between the arms
+can turn on it. The rule from now: a peak chosen at an edge is followed by one peak beyond that
+edge, a half-decade away, at the same seeds and budget, and the rule chooses again, at most twice
+per arm. Applied first under the backbone of 64 epochs: from scratch 3e-3, frozen probe 3e-2,
+low-rank updates 1e-4, full fine-tuning 1e-3, three seeds each at 200 windows; then to every
+sweep under a new backbone, the one at 100 included.
+
+**Which backbone the grid under the floor runs under.** Under the backbone at 100, the three
+pretrained arms swept over the grids of 2026-09-21 (probe 1e-2, 3e-3, 1e-3; low-rank updates 3e-3,
+1e-3, 3e-4; full fine-tuning 3e-4, 1e-4, 3e-5) and extended by the edge rule; then five seeds of
+the four arms at 200 windows under the chosen peaks, read by the endpoint's rule. If full
+fine-tuning's advantage over the control lies above the floor with the whole interval above
+zero, the grid runs under the backbone at 100; otherwise under the backbone of 64 epochs, with
+the peaks the edge rule leaves it. Both backbones' sweeps and endpoints are reported whichever is
+chosen. The choice is made on validation windows; the test set is not touched.
+
+**Cost, declared now.** Step 1, a quarter of an hour of this machine. On the notebook accelerator
+the smoke run measured 0.12 s a step for each of two processes sharing it at 50 cycles: the
+edges, twelve runs, under half an hour; the ladder, 124 epochs at about 1.8 times the cost of an
+epoch at 50, two to three hours; the sweep and the endpoint under it, about fifty runs, two
+hours. Four to six hours before the grid itself.
+
+**Measured, step 1** (record in `docs/verification/synthetic-transfer.md`, "the pretext window
+apart from the task's"). The backbone pretrained at 128 fine-tuned on the task at 32: −0.044,
+interval [−0.049, −0.040], floor 0.018 — worse than a fresh encoder, and worse than the backbone
+pretrained at 32 (−0.019). The prediction failed: transfer needs the task's window as well as the
+pretext's to span the process's time scales. Under the branch declared above, nothing runs under
+the backbone at 100 until the turbofan task's own window is decided and registered here; the
+edges of step 3 under the backbone of 64 epochs do not depend on it and may run.
