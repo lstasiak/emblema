@@ -808,3 +808,59 @@ choice between that rebuild and an amendment that reads the null pair as the con
 and pairing it turned out to be, with the swap as the control's reading of the structure's
 share, is a design decision taken outside this document and registered here, dated, before
 anything further runs or anything on real data is read.
+
+### 2026-09-21 — the null pair read as the control of leakage it is, and a backbone pretrained on noise to bound what any pretraining gives
+
+**Changed, post hoc and named as such.** The equivalence rule of the null pair (registered with
+the leg and restated on 2026-09-21) asked full fine-tuning under a backbone pretrained on
+`null-a` to end within ±the floor of a fresh encoder on `null-b-wide`. The swap measured on the
+same day showed why it cannot: the two layouts of the null pair share the family of their
+signals by the generator's design, and a backbone carries the family. The rule is withdrawn
+after its measurement, which is the definition of post hoc, and what replaces it was not
+predicted in advance; the record says so. The control's reading from here:
+
+- *The positive control* is the coupled pair under its rule — the advantage of full fine-tuning
+  over a fresh encoder above the floor with the whole interval above zero — at a window that
+  spans the process's time scales. It holds at 128: +0.094, [+0.089, +0.099], floor 0.053.
+- *The null pair* controls leakage and pairing, not structure: its reading is that the advantage
+  on the null task does not depend on which pair's backbone is fine-tuned, by more than the
+  floor. It holds: +0.025 under the pair's own backbone, +0.027 under the coupled pair's.
+- *The structure's own share* is the coupled task's advantage under its own backbone less that
+  under the null pair's backbone, paired over the same units: +0.011, [+0.008, +0.015]. It is
+  reported as measured, below the floor, and is the leg's finding about what transfers at this
+  tier and budget: the family of the signals, and a hundredth of it the frequencies shared on
+  purpose.
+
+The transfer leg of the control is read as passed under this reading. What the earlier rule was
+meant to catch — a pipeline that transfers by leaking, or an evaluation that favours a
+pretrained arm whatever it was pretrained on — the leakage reading and the swap catch.
+
+**Added: the share of any pretraining at all.** One more layout, `noise-a`: the null pair's first
+layout with its signal drowned (`noise` 100 against a signal of unit variance), the same
+channels, cadence, losses and units. Published at 128 and stride 12 like `null-a`, pretrained
+under the same experiment file as `noise-a-s`, and fine-tuned on both tasks against a fresh
+encoder in the same invocation, five seeds, under the peaks swept at 128, everything else as
+registered. Its advantage on each task is the warm start of the mechanics alone — embeddings,
+normalisation, attention over a window — with nothing learnt about any signal.
+
+**Predictions, written down now.** The noise backbone's advantage lies below the family's on
+both tasks by more than the task's floor: below +0.025 on the null task and below +0.082 on the
+coupled task, and it may be negative, since a backbone that learnt to predict the mean can be a
+worse start than a random one. If instead it lies within the floor of the family's advantage on
+the coupled task, the family carries nothing the mechanics did not, and what the control measures
+is the warm start of any pretraining; that too is reported as the leg's finding. This arm adds a
+point to the scale and changes no reading above; the leg does not wait for it.
+
+**Cost, declared now.** The publication, a pretraining of 24 epochs and four cells of five
+seeds: about an hour and a quarter of this machine's accelerator, in the background.
+
+### 2026-09-21 — the noise backbone measured: the mechanics alone are worse than a fresh encoder
+
+**Measured under the registration above** (record in `docs/verification/synthetic-transfer.md`,
+"a backbone pretrained on noise"). The pretraining converged to the trivial predictor (1.000 of
+the mean predictor's loss). Fine-tuned from it, the advantage over a fresh encoder is −0.025
+[−0.028, −0.022] on the null task and −0.011 [−0.016, −0.007] on the coupled task: below the
+family's advantage by more than the floor on both, and negative on both, as the prediction
+allowed. The transfer measured on the control is the family of the signals in whole, and none
+of it the warm start of any pretraining. The leg's scale is complete and nothing else on the
+synthetic control is declared.

@@ -279,3 +279,16 @@ therefore controls leakage and pairing, not structure, and the positive control 
 the null is rebuilt under a different family or the control's reading is amended is decided
 and registered in `docs/preregistration.md` before the next run. Record in
 `docs/verification/synthetic-transfer.md`.
+
+### 2026-09-21 — the null pair read as a control of leakage, and a noise backbone closes the scale
+
+The equivalence rule of the null pair is withdrawn after its measurement, post hoc and named
+so in `docs/preregistration.md`: the null pair shares the family of signals by this record's
+own design and controls leakage and pairing, which it passes (+0.025 under its own backbone,
++0.027 under the coupled pair's). A further layout, `noise-a` — the null pair's first layout
+with its signal drowned — bounds what any pretraining at all gives: its backbone converges to
+the trivial predictor and is a worse start than a fresh encoder on both tasks (−0.025 and
+−0.011). The leg ends with one scale of four points: worse than nothing, the fresh encoder, the
+family (+0.027 and +0.082), and the family with the shared frequencies (+0.025 and +0.094). The
+positive control holds, and what transfers at this tier and budget is the family of the signals.
+Record in `docs/verification/synthetic-transfer.md`.
