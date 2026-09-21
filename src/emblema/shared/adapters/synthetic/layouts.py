@@ -86,6 +86,12 @@ CONTROL_B_SHARED = CONTROL_B.with_dials(
     name="control-b-shared", units=CONTROL_A.units, trajectory_seed=CONTROL_A.trajectory_seed
 )
 
+# The first layout of the null pair with its signal drowned: the sensors report noise, with the
+# same channels, cadence and losses. A backbone pretrained here learns the mechanics of reading a
+# corpus — embeddings, normalisation, attention over a window — and nothing about any signal,
+# which is the share of a transfer that any pretraining at all would give.
+NOISE_A = NULL_A.with_dials(name="noise-a", noise=100.0)
+
 LAYOUTS: Mapping[str, SensorLayout] = {
     layout.name: layout
     for layout in (
@@ -96,5 +102,6 @@ LAYOUTS: Mapping[str, SensorLayout] = {
         CONTROL_B_WIDE,
         NULL_B_WIDE,
         CONTROL_B_SHARED,
+        NOISE_A,
     )
 }

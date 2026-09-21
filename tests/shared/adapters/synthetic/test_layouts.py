@@ -4,6 +4,7 @@ from emblema.shared.adapters.synthetic.layouts import (
     CONTROL_B_SHARED,
     CONTROL_B_WIDE,
     LAYOUTS,
+    NOISE_A,
     NULL_A,
     NULL_B,
     NULL_B_WIDE,
@@ -20,6 +21,7 @@ def test_every_layout_is_registered_under_its_own_name() -> None:
         "control-b-wide",
         "null-b-wide",
         "control-b-shared",
+        "noise-a",
     }
     assert all(name == layout.name for name, layout in LAYOUTS.items())
 
@@ -71,3 +73,14 @@ def test_the_shared_layout_watches_the_first_layouts_trajectories_and_nothing_el
     assert CONTROL_B_SHARED.trajectory_seed == CONTROL_A.trajectory_seed
     assert CONTROL_B_SHARED.units == CONTROL_A.units
     assert CONTROL_B_SHARED.seed == CONTROL_B.seed
+
+
+def test_the_noise_layout_is_the_null_ones_first_layout_with_its_signal_drowned() -> None:
+    differences = {
+        field
+        for field, value in NULL_A.model_dump().items()
+        if NOISE_A.model_dump()[field] != value
+    }
+
+    assert differences == {"name", "noise"}
+    assert NOISE_A.noise >= 100.0 * NULL_A.noise
