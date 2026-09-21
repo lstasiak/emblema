@@ -79,7 +79,22 @@ NULL_B = CONTROL_B.with_dials(name="null-b", coupling=0.0)
 CONTROL_B_WIDE = CONTROL_B.with_dials(name="control-b-wide", units=800)
 NULL_B_WIDE = NULL_B.with_dials(name="null-b-wide", units=800)
 
+# The second layout watching the first's own factor trajectories, unit for unit: a leak, not a
+# control, and therefore the ceiling of what transfer between the two can give. As many units as
+# the first layout has, so that every trajectory here is one the first layout was pretrained on.
+CONTROL_B_SHARED = CONTROL_B.with_dials(
+    name="control-b-shared", units=CONTROL_A.units, trajectory_seed=CONTROL_A.trajectory_seed
+)
+
 LAYOUTS: Mapping[str, SensorLayout] = {
     layout.name: layout
-    for layout in (CONTROL_A, CONTROL_B, NULL_A, NULL_B, CONTROL_B_WIDE, NULL_B_WIDE)
+    for layout in (
+        CONTROL_A,
+        CONTROL_B,
+        NULL_A,
+        NULL_B,
+        CONTROL_B_WIDE,
+        NULL_B_WIDE,
+        CONTROL_B_SHARED,
+    )
 }

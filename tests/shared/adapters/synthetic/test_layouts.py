@@ -1,6 +1,7 @@
 from emblema.shared.adapters.synthetic.layouts import (
     CONTROL_A,
     CONTROL_B,
+    CONTROL_B_SHARED,
     CONTROL_B_WIDE,
     LAYOUTS,
     NULL_A,
@@ -18,6 +19,7 @@ def test_every_layout_is_registered_under_its_own_name() -> None:
         "null-b",
         "control-b-wide",
         "null-b-wide",
+        "control-b-shared",
     }
     assert all(name == layout.name for name, layout in LAYOUTS.items())
 
@@ -56,3 +58,16 @@ def test_a_wide_layout_is_its_narrow_one_with_more_units_and_nothing_else() -> N
 
         assert differences == {"name", "units"}
         assert wide.units > narrow.units
+
+
+def test_the_shared_layout_watches_the_first_layouts_trajectories_and_nothing_else_of_it() -> None:
+    differences = {
+        field
+        for field, value in CONTROL_B.model_dump().items()
+        if CONTROL_B_SHARED.model_dump()[field] != value
+    }
+
+    assert differences == {"name", "units", "trajectory_seed"}
+    assert CONTROL_B_SHARED.trajectory_seed == CONTROL_A.trajectory_seed
+    assert CONTROL_B_SHARED.units == CONTROL_A.units
+    assert CONTROL_B_SHARED.seed == CONTROL_B.seed
