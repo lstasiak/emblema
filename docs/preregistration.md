@@ -974,3 +974,33 @@ while the ratio of degradation to early-life noise within FD001 stays where it w
 **Cost, declared now.** The ladder, about 21,000 steps at 50 cycles: under an hour on the notebook
 accelerator. The sweep, 36 runs, and the endpoint, 20, with several processes sharing the device:
 two hours or less.
+
+### 2026-09-22 — the endpoint on FD001 and FD003 read by the endpoint's own rule, and where it runs, before any of it runs
+
+**Found on reading the sweep.** The section above reads the endpoint "by the endpoint's rule",
+and its prediction names only the floor and the interval. The two part where full fine-tuning
+takes off less than 10 per cent with its whole interval above zero and above the floor, and the
+sweep puts it there: its cells at the peaks chosen so far, read as the endpoint will be, give
++1.82 (+9.7 per cent), interval [+0.58, +3.09], floor 1.10 — three seeds, the same ones the peaks
+were chosen on, so an estimate biased in the candidate's favour and not a reading.
+
+**Settled, the stricter of the two.** The rule holds when the endpoint's verdict is confirmed: a
+relative reduction of at least 10 per cent, the whole 95 per cent interval above zero, and a
+reduction the practical floor does not swallow. The configuration the grid and the single test
+run are made under has to meet on validation the rule its claim is judged by on test. Below
+10 per cent, however distinguishable, this corpus and its backbone stay as the fallback, and the
+next registration is the normalisation within each operating condition over all four subsets,
+as the section above orders.
+
+**Where it runs.** The edges and the endpoint run on this machine's accelerator (M1 Pro, MPS,
+fp32), at the commit that holds this section; the sweep ran on the notebook accelerator (NVIDIA L4,
+fp32). The adaptation uses no reduced precision on either, and the commits between differ in this
+file alone. The peaks so far: from scratch 3e-3, inside its grid once its edge at 1e-2 came out
+worse; frozen probe 3e-2, low-rank updates 1e-4 and full fine-tuning 1e-3, each at an edge. The
+edges run one at a time, each only when the edge rule asks for it — frozen probe 1e-1, low-rank
+updates 3e-5 and full fine-tuning 3e-3 first — and the rule's trace is kept beside the results.
+The endpoint is one directory per arm and seed, seeds 1 to 5, read together.
+
+**Cost, declared now.** A run of an arm that updates the encoder takes 970 to 1,150 s here and a
+probe two to three minutes: the edges two to four hours, the endpoint's twenty runs about five,
+overnight.
