@@ -653,3 +653,28 @@ of whether pretraining helps at very few labels, stated here before it runs if i
 before the grid was stopped (`data/report/transfer/grid-control-b-wide-forecast`); they are not
 part of the reading and are kept as they are.
 
+### 2026-09-21 — the ceiling of the synthetic transfer: the second layout over the first's trajectories
+
+**Changed.** Nothing registered; this declares a diagnostic before it runs. Both pairs of the
+synthetic control failed their rules at the endpoint (`docs/verification/synthetic-transfer.md`,
+2026-09-21), and the first question the failure raises is whether transfer fails above the
+structure of the data or in it. The diagnostic is the layout `control-b-shared`: the second
+layout of the coupled pair with the first layout's `trajectory_seed` and as many units as the
+first, so that unit *i* of it watches the very factor trajectories unit *i* of the first layout
+was pretrained on, under the second layout's sensors, sampling, noise and private factors. It is
+a leak by construction, not a control, and therefore an upper bound: the most transfer between
+these two layouts can give. Published under the first layout's vocabulary with windows of 32 at
+stride 12, half of the 160 units held out under seed 1 (manifest `sha256:d3a0317a…`): 80 tuning
+units, 27 frozen, 53 validation units. The runs are the endpoint's: 200 labelled windows, seeds
+1 to 5, the four arms under the coupled pair's registered peaks, the backbone `control-a-s`, the
+floor of 2,000 steps, the head's start.
+
+**How it is read.** If full fine-tuning beats the control here, above the floor and with the
+interval above zero, transfer is possible between the two layouts and the coupled pair's failure
+is a fact about the pair's design — the private factors, the sampling, the task — rather than
+about the pipeline. If it does not beat the control even here, the fault is above the data: in
+the objective, the head, or the fine-tuning of a pretrained start. Neither outcome changes the
+verdict of the pair; both direct the next step. With 53 validation units the interval is about
+two and a half times wider than on the wide corpora, roughly the floor; a reading within the
+floor either way is reported as such.
+

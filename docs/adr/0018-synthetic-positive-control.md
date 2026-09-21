@@ -217,3 +217,25 @@ channels lie past it. The first run of the transfer leg failed there, and the en
 rows for the channels a task's corpus adds, drawn at build time and trained under every mode.
 Recorded with the decision in ADR-0033, 2026-09-21.
 
+### 2026-09-21 — both pairs fail the transfer leg; the ceiling puts the fault above the data
+
+The transfer leg ran at the endpoint's budget on wide second layouts (800 units; ADR-0033 and
+`docs/verification/synthetic-transfer.md`). The coupled pair fails its rule — full fine-tuning
+of the backbone pretrained on the first layout ends 0.019 above training from scratch, the
+interval below zero and beyond the floor — and the null pair fails its equivalence in the same
+direction, by four floors. The frozen probe separates the pairs by twenty floors (0.66 against
+0.86), so the encoder does learn the shared structure and it reaches the second layout's
+sensors; what it learns does not beat a fresh encoder at 200 labelled windows and 2,002 steps.
+
+The diagnostic this record foresaw was run next: `control-b-shared`, the second layout over the
+first's own trajectories, unit for unit. Fine-tuning ends where the fresh encoder ends, 0.369
+against 0.368, and the probe where it stood on the coupled pair. Removing the one difference in
+the trajectories changes nothing, so the pair's design — its private factors, sampling, noise,
+size — is not what fails. What remains is above the data: what masked reconstruction of a
+32-step window teaches when the factors' periods run from 24 to 300 time units, and what a
+forecasting head can take from it. The first change to try is the window's length against the
+periods; the note states the order and the cost of each.
+
+The control has done its job: no result on real data is read until a pair that shares structure
+by construction shows transfer.
+
