@@ -56,6 +56,7 @@ TITLES = {
     "null-b-forecast": "the null synthetic pair",
     "control-b-wide-forecast": "the coupled synthetic pair",
     "null-b-wide-forecast": "the null synthetic pair",
+    "control-b-shared-forecast": "the synthetic pair over shared trajectories (a ceiling)",
 }
 
 

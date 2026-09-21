@@ -213,6 +213,16 @@ class KnownTasks:
         units_called="units",
         test=HeldOutShare(source="null-b-wide/held-out", one_in=3, seed=1),
     )
+    # The ceiling: the second layout over the first's own trajectories, a leak by construction.
+    CONTROL_B_SHARED_FORECAST = KnownTask(
+        name="control-b-shared-forecast",
+        corpus="control-b-shared",
+        unit_prefix="control-b-shared/",
+        labels=ForecastScheme("s01", 12.0),
+        strata=4,
+        units_called="units",
+        test=HeldOutShare(source="control-b-shared/held-out", one_in=3, seed=1),
+    )
 
     @classmethod
     def default(cls) -> KnownTask:
@@ -226,6 +236,7 @@ class KnownTasks:
             cls.NULL_B_FORECAST,
             cls.CONTROL_B_WIDE_FORECAST,
             cls.NULL_B_WIDE_FORECAST,
+            cls.CONTROL_B_SHARED_FORECAST,
         )
 
     @classmethod

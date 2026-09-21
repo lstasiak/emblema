@@ -84,6 +84,7 @@ def test_the_synthetic_tasks_forecast_the_first_sensor_of_the_second_layout() ->
         "null-b-forecast",
         "control-b-wide-forecast",
         "null-b-wide-forecast",
+        "control-b-shared-forecast",
     )
 
 
