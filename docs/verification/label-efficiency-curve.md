@@ -416,3 +416,46 @@ devices differ in; a run that steps less stays on one trajectory. The chosen pea
 arms that step the encoder or an update beside it are the smallest swept for two of them, so the
 grid's numbers under them should travel between accelerators better than the first grid's did.
 An arm at this budget costs 1.3–1.6× on MPS what it costs on the T4.
+
+## 2026-09-21 — Linux x86_64 (Kaggle, two Tesla T4, fp32): the sweep of the pretrained arms under the retrained backbone
+
+The same sweep as on 2026-09-20 for the three arms that start from the backbone — three peaks
+per arm, 200 labelled windows under seeds 1, 2 and 3, 2,002 optimiser steps, the head's start —
+under `backbone-cmapss-m-64` (`ccd28046-…`, weights `sha256:78b3c201…`, 40,512 steps; the four
+doublings that chose it are in `manual-handoff.md`, 2026-09-21), code `5658c88`. The control
+was not run again: it never sees the backbone, and its cells of 2026-09-20 stand. Nine
+configurations dealt over the two accelerators, fetched back into
+`data/report/transfer/resweep-20260921-kaggle/<arm>-lr<peak>` (archives `9fe3a98e…`,
+`e90aeb5f…`, `1c5f9ca9…` for the probe at 1e-2, 3e-3, 1e-3; `3276792a…`, `dceae235…`, `f402449d…`
+for the low-rank arm at 3e-3, 1e-3, 3e-4; `048ba765…`, `17279f94…`, `749902ec…` for full
+fine-tuning at 3e-4, 1e-4, 3e-5). Validation RMSE in cycles, the chosen peaks in bold, and the
+mean of the same cell under the first backbone (2026-09-20) beside it:
+
+| arm | peak | seed 1 | seed 2 | seed 3 | mean | under the first backbone | seconds |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **frozen_probe** | **1e-2** | 23.57 | 22.73 | 22.69 | **23.00** | 32.42 | 7 |
+| frozen_probe | 3e-3 | 24.43 | 23.46 | 23.42 | 23.77 | 36.90 | 7 |
+| frozen_probe | 1e-3 | 25.05 | 24.33 | 24.16 | 24.51 | 39.45 | 7 |
+| lora | 3e-3 | 21.40 | 22.89 | 24.09 | 22.79 | 25.11 | 790–792 |
+| lora | 1e-3 | 22.59 | 21.58 | 22.81 | 22.33 | 25.73 | 790 |
+| **lora** | **3e-4** | 20.67 | 23.24 | 21.91 | **21.94** | 22.51 | 790 |
+| **full_fine_tuning** | **3e-4** | 23.28 | 22.34 | 23.24 | **22.95** | 24.31 | 767 |
+| full_fine_tuning | 1e-4 | 24.57 | 22.70 | 23.71 | 23.66 | 24.64 | 767 |
+| full_fine_tuning | 3e-5 | 24.53 | 22.32 | 23.20 | 23.35 | 23.14 | 769 |
+
+What the sweep says:
+
+- **The retrained backbone is a far better fixed representation.** The probe falls from 32.4 to
+  23.0 at every peak alike, nine points, and now stands within a point of the two arms that
+  update the encoder; on the first backbone it stood ten points above them. Sixteen times the
+  pretraining steps bought the frozen features most of what fine-tuning had been adding.
+- **The arms that update the encoder gain half a point to a point**, the low-rank updates from
+  22.51 to 21.94 and full fine-tuning from 23.14 to 22.95 at their best peaks, and full
+  fine-tuning's peak moves up a decade, to 3e-4: a converged backbone tolerates a larger step.
+- **The control still stands below all three at this budget**: 20.86 under three seeds, against
+  21.94, 22.95 and 23.00. On the validation side at 200 labelled windows, under the floor and
+  the retrained backbone, pretraining has not yet shown an advantage over training from scratch;
+  the grid measures it over five seeds and four budgets.
+- **Cost on a T4, fp32**: 0.38–0.40 s a step, as before; the nine configurations took 2.0 h
+  over the two accelerators.
+
