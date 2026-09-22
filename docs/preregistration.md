@@ -1170,3 +1170,46 @@ two seeds the sweep did not see, full fine-tuning leads by 5.0 per cent and the 
 by 15.6. At all labelled windows full fine-tuning at 1e-3 does not settle under two seeds of five
 while the control fits under every seed, so that column measures in part a peak chosen over 2,002
 steps and run for 4,830.
+
+### 2026-09-22 — the endpoint read again on seeds no sweep has seen, and whether a longer backbone helps this corpus, before either runs
+
+**Why.** Two facts above ask something the grid cannot answer. The peaks were swept at 200
+labelled windows under seeds 1, 2 and 3 and the endpoint pooled seeds 1 to 5, so three of its
+five seeds are runs the peaks were chosen on; over the other two full fine-tuning leads the
+control by 5.0 per cent where the low-rank updates lead by 15.6. And the doublings name a
+backbone by the pretext's loss alone: over FD001 and FD003 the check of 2026-09-22 found the task
+better served by 16 epochs than by the 8 the rule named, and the ladder over this corpus was
+stopped under the same rule.
+
+**What runs.** At 200 labelled windows under seeds 6 to 10 — seeds no sweep, endpoint or grid has
+used — with the registered peaks (from scratch 1e-3, frozen probe 3e-2, low-rank updates 1e-4,
+full fine-tuning 1e-3), the floor of 2,000 optimiser steps, the head's start, the corpus
+`d63f8e1b…` and the schedule of the configuration:
+
+1. the control from scratch;
+2. full fine-tuning, the low-rank updates and the probe under the backbone in force, of 8 epochs
+   (`sha256:6283c210…`);
+3. full fine-tuning and the probe under the backbone of 16 epochs of the same ladder
+   (`sha256:8cd60452…`, `docs/verification/manual-handoff.md`, 2026-09-22);
+4. the low-rank updates under 16 epochs last, if the session still has the time for them.
+
+It runs on the GPU platform's two T4s in single precision, at the commit this section is
+registered in, one process per device, each cell published as it lands. Every comparison below is
+made within this session, so within one kind of accelerator.
+
+**How it is read, and what it settles: nothing.**
+
+- The endpoint's rule over seeds 6 to 10 under the backbone in force is an estimate the choice of
+  the peaks did not touch. It is reported beside the endpoint of 2026-09-22 and does not replace
+  it: the endpoint stands as measured, over the seeds it was registered for.
+- The backbone of 16 epochs against the one in force is read by the arithmetic of the replacement
+  rule — the same arm, paired on the same engines and windows, pooled over the seeds, the whole
+  95 per cent interval of a bootstrap over the engines (10,000 resamples) above zero.
+- Neither reading changes the configuration of the grid or of the single test run. Another
+  backbone, or another arm as the endpoint, enters only by a registration of its own, written
+  before the run that measures it.
+
+**Cost, declared now.** Twenty runs of the arms that step the encoder or an update beside it,
+2,002 steps each at 0.29–0.41 s a step on a T4 — about two hours over the two devices — and ten
+runs of the probe of under a minute each; five more runs if the low-rank updates under 16 epochs
+fit the session.
