@@ -1004,3 +1004,15 @@ The endpoint is one directory per arm and seed, seeds 1 to 5, read together.
 **Cost, declared now.** A run of an arm that updates the encoder takes 970 to 1,150 s here and a
 probe two to three minutes: the edges two to four hours, the endpoint's twenty runs about five,
 overnight.
+
+**Measured** (record in `docs/verification/label-efficiency-curve.md`, 2026-09-22). The edges:
+the probe to 1e-1 and then 3e-1, where it stops at the top edge after its second step; the
+low-rank updates at 3e-5 and full fine-tuning at 3e-3 came out worse, so their peaks stay at 1e-4
+and 1e-3. The endpoint: full fine-tuning +2.02 (+10.5 per cent), interval [+0.98, +3.13], floor
+0.74 — confirmed; the low-rank updates +10.1 per cent, distinguishable; the probe
+indistinguishable. By the section above, this corpus and its backbone (`backbone-cmapss-m-8`,
+weights `sha256:259fdc70…`) are the configuration of the grid under the floor and of the single
+test run, under the peaks from scratch 3e-3, frozen probe 3e-1, low-rank updates 1e-4 and full
+fine-tuning 1e-3. Read over four seeds of the five, the verdict holds four times and falls below
+the tenth once, without the control's worst seed (+8.0 per cent): the margin is thin, and the
+grid reports it beside its own reading.
