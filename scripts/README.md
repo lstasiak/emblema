@@ -50,12 +50,13 @@ experiment — and the shape of a note: its CSV, its tables, its figures.
 | `transfer_modes_report.py` | measurement | the pretrained backbone adapted to the turbofan task, one cell of the grid at a time — a mode at a budget under a seed — stored cell by cell as CSV, resumable, sharded by seed across accelerators and published to the bucket as one archive; the task chosen by name from `KnownTasks` — the turbofan task or the forecasting task of a synthetic pair — with its label scheme, strata and frozen test side stated there | the evaluation harness, once a campaign of runs is something it persists; the task registry moves to the Evaluation process that owns it |
 | `label_curve_report.py` | measurement | [`label-efficiency-curve.md`](../docs/verification/label-efficiency-curve.md): the stored cells of the grid read as one curve — a row per cell and seed with its readings, a paired comparison against the control arm per cell with its interval over engines, the trivial predictors — and the note's tables and its one-sentence conclusion rendered from those files by the registered rules | the evaluation harness, once a campaign is scored and judged by the context that owns the statistics |
 | `label_curve_figures.py` | measurement | `figures/label-efficiency-curve.png` | — |
+| `backbone_comparison_report.py` | measurement | [`label-efficiency-curve.md`](../docs/verification/label-efficiency-curve.md): the rule by which one backbone replaces another — one mode under both, paired on the same engines and windows over the seeds both hold, with its interval over engines | the evaluation harness, once a campaign compares candidates by the context that owns the statistics |
 | `transfer_grid_shards.sh` | tooling | the grid run as several shards at once, the seeds dealt over the accelerators and over several processes per accelerator, each shard stored and published on its own; portable bash, so it runs on the notebook platforms as it runs here | the evaluation harness, once a campaign schedules its own runs |
 | `reporting.py` | shared | the heading and table shape of every report | — |
 
 ## Known debt
 
-- Twenty scripts put the repository root on `sys.path` before their imports, and each carries
+- Twenty-one scripts put the repository root on `sys.path` before their imports, and each carries
   a lint exemption (E402) for it in `pyproject.toml`.
 - `masked_reconstruction_report.py` is the largest thing here and does three jobs — publishing a
   corpus, diagnosing what a run learnt, and rendering a note. Each has tests; none of them is
