@@ -1057,6 +1057,13 @@ each of the four backbones, so that each is read at its own best peak; and full 
 epochs would enter only by a registration of its own, with its rule, before its endpoint runs.
 About an hour here.
 
+**Measured, the check** (record in `docs/verification/label-efficiency-curve.md`). Full fine-tuning
+under the backbone of 32 epochs scored 18.48, 16.37 and 17.60 against 17.12, 17.19 and 17.72 under
+8, worse on the first seed: the prediction failed, so the pretext's plateau is the task's as well
+and what a longer backbone on these two subsets lacks is data. The probe at its best peak, 3e-1
+under every backbone, scored 19.21, 18.66, 16.82 and 19.71 under 4, 8, 16 and 32 epochs; full
+fine-tuning under 16 epochs scored 16.13, 17.19 and 16.63. Nothing was chosen by it.
+
 ### 2026-09-22 — the four subsets read per operating condition: a backbone over all of C-MAPSS, and when it replaces the one over FD001 and FD003, before any run
 
 **Why.** The corpus of FD001 and FD003 restored the scale and the endpoint is confirmed, by a thin
@@ -1106,3 +1113,16 @@ of the pair come from one device: between devices this arm drifted by up to 0.7 
 (`docs/verification/label-efficiency-curve.md`), the size of the effect the rule looks for. The
 endpoint of FD001 and FD003 is not read again; run on this machine, the endpoint reads as
 registered above.
+
+**Measured** (record in `docs/verification/label-efficiency-curve.md`). The ladder named 8 epochs,
+its doublings gaining 0.95, 0.85 and 2.5 per cent. The sweep chose from scratch 1e-3, frozen probe
+3e-2, low-rank updates 1e-4 and full fine-tuning 1e-3. The endpoint ran on the notebook accelerator
+(an A100): full fine-tuning +2.34 (+12.3 per cent), interval [+1.49, +3.30], floor 0.57 —
+confirmed; the low-rank updates +15.4 and the probe +14.2 per cent, distinguishable. The
+replacement rule, full fine-tuning under this backbone against full fine-tuning under the backbone
+of FD001 and FD003 run again on the same accelerator: +0.55 (+3.2 per cent), interval
+[+0.05, +1.03], above zero. Both hold, so the four subsets read per operating condition and
+`backbone-cmapss-m-8` of run `colab-cond` (weights `sha256:6283c210…`) are the configuration of
+the grid under the floor and of the single test run. Read over four seeds of the five, the
+endpoint's reduction stays between 10.2 and 15.3 per cent; the replacement's interval includes
+zero in three of those five readings, so the new backbone leads by a narrow margin.
