@@ -1126,3 +1126,25 @@ of FD001 and FD003 run again on the same accelerator: +0.55 (+3.2 per cent), int
 the grid under the floor and of the single test run. Read over four seeds of the five, the
 endpoint's reduction stays between 10.2 and 15.3 per cent; the replacement's interval includes
 zero in three of those five readings, so the new backbone leads by a narrow margin.
+
+### 2026-09-22 — the grid under the floor on the four subsets read per operating condition, before it runs
+
+**The grid.** Budgets of 50, 1,000 and all labelled windows (2,568, the same tuning engines as
+before), the four arms, seeds 1 to 5, under the peaks the sweep over this corpus chose — from
+scratch 1e-3, frozen probe 3e-2, low-rank updates 1e-4, full fine-tuning 1e-3 — with the floor of
+2,000 optimiser steps and the head's start, the backbone of run `colab-cond` of 8 epochs (weights
+`sha256:6283c210…`) and the corpus `d63f8e1b…`. It runs at `fdf8053`, the commit its endpoint ran
+at, on the notebook accelerator in single precision, one directory per budget and seed holding the
+four arms, at most five processes at once, each cell published as it lands. The cell at 200
+labelled windows is the endpoint measured above and is not run again. Every cell of one budget
+runs on one kind of accelerator: a budget begun on one and resumed on another is run again whole on
+the second, so that each comparison, made within a budget, pairs runs of one device. The curve is
+read by the registered family over the four budgets — the endpoint standing alone, the eleven
+secondary cells under the Holm correction, each budget's floor from its own control's seeds.
+
+The grid over FD001 and FD003 on the GPU platform finishes as the record of that configuration and
+is reported beside this one, not in its place.
+
+**Cost, declared now.** 45 runs of the arms that step the encoder or an update beside it, 30 of
+about 2,000 steps and 15 of 4,830: about two and a half hours on an A100 shared by five processes,
+where a run of 2,002 steps took 620 s, and about six on an L4.
