@@ -208,96 +208,32 @@ the presets are still constants — and the bytes of every corpus are unchanged,
 checksums assert. The forecasting task the leg poses, and why the truth is read where it is,
 are in ADR-0033.
 
-### 2026-09-21 — one model holds both vocabularies only once it is grown to them
+### 2026-09-21 — the transfer leg read: the window, the family of the signals, and nothing from noise
 
-The consequence above that "one model holds both" held for the pretraining leg, where a run reads
-both layouts under one vocabulary. In the transfer leg the backbone is pretrained on the first
-layout alone and its channel table ends where that layout's channels end; the second layout's
-channels lie past it. The first run of the transfer leg failed there, and the encoder now grows
-rows for the channels a task's corpus adds, drawn at build time and trained under every mode.
-Recorded with the decision in ADR-0033, 2026-09-21.
+The transfer leg ran at the endpoint's budget on wide second layouts (ADR-0033). What bears on this
+decision is below; the runs, their intervals and the order they were made in are in
+`docs/verification/synthetic-transfer.md` and `docs/preregistration.md`.
 
-### 2026-09-21 — both pairs fail the transfer leg; the ceiling puts the fault above the data
+- **The window was the fault.** At a window of 32 against factor periods of 24 to 300 both pairs
+  failed, and so did the ceiling — `control-b-shared`, the second layout over the first's own
+  trajectories — which put the fault above the data. At 128 the coupled pair passes its rule:
+  full fine-tuning 0.094 below a fresh encoder, interval [+0.089, +0.099], floor 0.053. The window
+  must span the process's time scales in the pretext and the task together: a backbone pretrained
+  at 128 is a worse start than none on a task at 32.
+- **The null pair shares the family of the signals.** At a coupling of zero a channel follows a
+  private factor built like the shared ones, in the same band with the same harmonics, and a
+  backbone carries that family. Swapping the backbones between the pairs changes the advantage by
+  at most 0.012, the shared frequencies' own share (+0.011) is a fifth of the floor, and nothing
+  leaks between the pairs. The null pair's equivalence rule was withdrawn after its measurement,
+  post hoc and named so; the pair controls leakage and pairing, which it passes.
+- **Nothing is found where nothing was put.** `noise-a`, the null pair's first layout with its
+  signal drowned, pretrains a backbone that is a worse start than a fresh encoder on both tasks
+  (−0.025 and −0.011).
+- **One model holds both vocabularies only once it is grown to them.** The backbone is pretrained
+  on the first layout alone, so its channel table grows rows for the channels a task's corpus
+  adds (ADR-0033).
 
-The transfer leg ran at the endpoint's budget on wide second layouts (800 units; ADR-0033 and
-`docs/verification/synthetic-transfer.md`). The coupled pair fails its rule — full fine-tuning
-of the backbone pretrained on the first layout ends 0.019 above training from scratch, the
-interval below zero and beyond the floor — and the null pair fails its equivalence in the same
-direction, by four floors. The frozen probe separates the pairs by twenty floors (0.66 against
-0.86), so the encoder does learn the shared structure and it reaches the second layout's
-sensors; what it learns does not beat a fresh encoder at 200 labelled windows and 2,002 steps.
-
-The diagnostic this record foresaw was run next: `control-b-shared`, the second layout over the
-first's own trajectories, unit for unit. Fine-tuning ends where the fresh encoder ends, 0.369
-against 0.368, and the probe where it stood on the coupled pair. Removing the one difference in
-the trajectories changes nothing, so the pair's design — its private factors, sampling, noise,
-size — is not what fails. What remains is above the data: what masked reconstruction of a
-32-step window teaches when the factors' periods run from 24 to 300 time units, and what a
-forecasting head can take from it. The first change to try is the window's length against the
-periods; the note states the order and the cost of each.
-
-The control has done its job: no result on real data is read until a pair that shares structure
-by construction shows transfer.
-
-### 2026-09-21 — the window was the fault: at 128 time units the coupled pair transfers
-
-The second diagnostic republished the coupled pair with windows of 128 at the same stride and
-pretrained the first layout again. Full fine-tuning ends 0.093 below the fresh encoder, interval
-[+0.088, +0.098] over 266 units against a floor of 0.055, on every seed; the low-rank arm the
-same. A window of 32 against periods of 24 to 300 had let masked reconstruction be solved by
-interpolation; a window spanning several periods teaches the dynamics the forecast needs. The
-control's window therefore moves to 128 in its registration, the null pair is measured again at
-that window for its equivalence, and the peaks are swept at it, before either rule is read; the
-record is in `docs/verification/synthetic-transfer.md`. The revisit condition on the window's
-length against the process's time scales now applies to every task, the turbofan's included.
-
-### 2026-09-21 — the coupled pair passes at 128 and the null pair does not: the null shares the family
-
-With the peaks swept at 128 the coupled pair's rule holds (full fine-tuning +0.094 below the
-fresh encoder, interval [+0.089, +0.099] over 266 units, floor 0.053) and the null pair's
-equivalence fails (+0.025, interval [+0.020, +0.029], floor 0.013), with no configuration error
-found. The failure is the design's, not the pipeline's: at a coupling of zero a channel follows a
-private factor built like the shared ones, in the same band with the same harmonics, so the two
-layouts of the null pair share the family of signals and differ only in frequencies and in
-cross-channel structure. A backbone carries the family, and the null rule asked that share to be
-zero. The control's question becomes whether the transfer tracks the structure put in on purpose,
-read by swapping the backbones between the pairs, declared in `docs/preregistration.md` before
-its run. Two asymmetries of the layouts are recorded for whoever rebuilds the null: a coupled
-channel is six sinusoids and a private one three, so the null task is the easier forecast; and
-the fresh encoder's spread over seeds at 128 is four times larger on the coupled task. Record in
-`docs/verification/synthetic-transfer.md`.
-
-### 2026-09-21 — the backbones swapped: what transfers is the family, and the null is a control of leakage
-
-Fine-tuned on the other pair's task, the coupled pair's backbone gives the null task +0.027
-(the null pair's own gives +0.025), and the null pair's backbone gives the coupled task +0.082
-(the coupled pair's own gives +0.094; the structure's own share, paired over units, +0.011
-[+0.008, +0.015], a fifth of the floor). Nothing leaks between the pairs and the advantage on a
-task barely depends on which backbone is fine-tuned; what a pretrained encoder carries at this
-tier and budget is the family of signals, not the frequencies the layouts share. The null pair
-therefore controls leakage and pairing, not structure, and the positive control holds. Whether
-the null is rebuilt under a different family or the control's reading is amended is decided
-and registered in `docs/preregistration.md` before the next run. Record in
-`docs/verification/synthetic-transfer.md`.
-
-### 2026-09-21 — the null pair read as a control of leakage, and a noise backbone closes the scale
-
-The equivalence rule of the null pair is withdrawn after its measurement, post hoc and named
-so in `docs/preregistration.md`: the null pair shares the family of signals by this record's
-own design and controls leakage and pairing, which it passes (+0.025 under its own backbone,
-+0.027 under the coupled pair's). A further layout, `noise-a` — the null pair's first layout
-with its signal drowned — bounds what any pretraining at all gives: its backbone converges to
-the trivial predictor and is a worse start than a fresh encoder on both tasks (−0.025 and
-−0.011). The leg ends with one scale of four points: worse than nothing, the fresh encoder, the
-family (+0.027 and +0.082), and the family with the shared frequencies (+0.025 and +0.094). The
-positive control holds, and what transfers at this tier and budget is the family of the signals.
-Record in `docs/verification/synthetic-transfer.md`.
-
-### 2026-09-21 — both windows or neither: a long pretext does not help a short task
-
-A backbone pretrained on windows of 128 and fine-tuned on the coupled task at 32 ends 0.044
-above a fresh encoder, interval [0.040, 0.049] over 266 units, where the backbone pretrained at 32
-ends 0.019 above and the pair at 128 on both sides ends 0.094 below. Transfer on the control
-appears only when the pretext and the task both span the process's time scales. The revisit
-condition on the window's length therefore binds a task's window together with its backbone's:
-lengthening the pretext alone is not a remedy. Record in `docs/verification/synthetic-transfer.md`.
+The positive control holds: what transfers at this tier and budget is the family of the signals,
+the shared frequencies adding a fifth of the floor. A rebuilt null pair needs a different family,
+and two asymmetries of the present layouts: a coupled channel is six sinusoids and a private one
+three, and the fresh encoder's spread over seeds at 128 is four times larger on the coupled task.
