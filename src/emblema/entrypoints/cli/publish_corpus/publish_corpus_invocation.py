@@ -13,9 +13,11 @@ class PublishCorpusInvocation:
         corpus_root: Directory the raw corpus is read from.
         workspace: Directory blocks pass through on their way to the store.
         subsets: Subsets of the corpus to read.
+        per_condition: Whether each sensor is read as a channel per operating condition.
     """
 
     command: PublishCorpusCommand
     corpus_root: Path
     workspace: Path
     subsets: tuple[str, ...]
+    per_condition: bool = False

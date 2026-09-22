@@ -30,6 +30,7 @@ from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from tests.catalog.domain.support import SCHEMA, description, measured_units
+from tests.support.corpora import SAMPLE
 from tests.support.settings import unreachable_store
 
 DATA = b"records"
@@ -165,6 +166,36 @@ def test_every_corpus_the_command_line_offers_has_an_adapter_that_reads_it(
     assert type(root.adapters.reader).__module__.startswith("emblema.catalog.adapters")
 
 
+def test_a_reading_per_condition_reaches_the_reader_of_the_corpus_named(tmp_path: Path) -> None:
+    root = CompositionRoot.over(
+        corpora=InMemoryCorpusRepository(),
+        store=InMemoryArtifactStore(),
+        corpus="cmapss",
+        corpus_root=SAMPLE,
+        workspace=tmp_path / "workspace",
+        subsets=("FD001",),
+        per_condition=True,
+    )
+
+    names = root.adapters.reader.describe().channel_schema.names
+    assert len(names) == len(CmapssCorpusReader.SENSORS)
+    assert all(name.endswith("@0kft-M0.00-TRA100") for name in names)
+
+
+def test_a_reading_per_condition_of_a_corpus_flown_at_one_is_refused_when_assembled(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="only the cmapss corpus"):
+        CompositionRoot.over(
+            corpora=InMemoryCorpusRepository(),
+            store=InMemoryArtifactStore(),
+            corpus="skab",
+            corpus_root=tmp_path / "raw",
+            workspace=tmp_path / "workspace",
+            per_condition=True,
+        )
+
+
 def test_a_corpus_no_adapter_reads_is_refused_when_the_process_is_assembled(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="no adapter reads"):
         CompositionRoot(
@@ -234,6 +265,11 @@ def test_a_corpus_is_looked_for_under_its_own_name_unless_a_root_is_given() -> N
     )
 
     assert invocation.corpus_root == Path("data/raw/control-a")
+
+
+def test_the_command_line_reads_per_condition_only_when_asked() -> None:
+    assert PublishCorpusCli().parse(ARGUMENTS).per_condition is False
+    assert PublishCorpusCli().parse([*ARGUMENTS, "--per-operating-condition"]).per_condition
 
 
 def test_the_subsets_asked_for_are_the_ones_named() -> None:

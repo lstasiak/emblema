@@ -82,6 +82,7 @@ class PublishCorpusCli:
             corpus_root=arguments.root or RAW / known.name,
             workspace=arguments.workspace,
             subsets=tuple(arguments.subset or ()),
+            per_condition=arguments.per_operating_condition,
         )
 
     @staticmethod
@@ -106,6 +107,7 @@ class PublishCorpusCli:
             corpus_root=invocation.corpus_root,
             workspace=invocation.workspace,
             subsets=invocation.subsets,
+            per_condition=invocation.per_condition,
         )
         ref = root.services.publish_corpus(invocation.command)
         print(f"{ref.key}\n{ref.checksum}")
@@ -121,6 +123,12 @@ class PublishCorpusCli:
         )
         parser.add_argument(
             "--subset", action="append", help="subset to read; repeatable, all of them unless given"
+        )
+        parser.add_argument(
+            "--per-operating-condition",
+            action="store_true",
+            help="read each sensor as a channel per operating condition, scaled within it; only "
+            "a corpus flown at several conditions has a reader for it",
         )
         parser.add_argument("--window", type=float, required=True, help="window length, in time")
         parser.add_argument("--stride", type=float, required=True, help="stride between windows")
