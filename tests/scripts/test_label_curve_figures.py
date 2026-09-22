@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from scripts.label_curve_figures import STEM, draw, main, wording_of
+from scripts.label_curve_figures import STEM, draw, label_heights, main, wording_of
 from scripts.label_curve_report import (
     Baseline,
     Comparison,
@@ -110,6 +110,16 @@ def test_the_figure_lands_beside_the_curve_unless_told_otherwise(
 
     assert (tmp_path / "curve" / f"{STEM}.png").is_file()
     assert capsys.readouterr().out.strip().endswith(f"{STEM}.png")
+
+
+def test_labels_of_lines_that_end_close_together_are_set_apart_in_order() -> None:
+    heights = label_heights([12.9, 15.7, 12.8, 12.3], gap=1.0)
+
+    assert heights == pytest.approx([14.3, 15.7, 13.3, 12.3])
+
+
+def test_labels_of_lines_that_end_apart_stay_at_their_ends() -> None:
+    assert label_heights([30.0, 10.0, 20.0], gap=1.0) == [30.0, 10.0, 20.0]
 
 
 def test_the_turbofan_task_words_the_figure_in_engines_and_cycles() -> None:

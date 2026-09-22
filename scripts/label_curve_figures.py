@@ -16,6 +16,7 @@ are called, what its error is measured in, and what the figure is titled.
 """
 
 import argparse
+import math
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -94,6 +95,7 @@ def draw(
     figure, (upper, lower) = plt.subplots(
         2, 1, figsize=(7.5, 7.5), sharex=True, height_ratios=(3, 2)
     )
+    ends: list[tuple[str, float, float]] = []
     for mode in MODES:
         # A partial grid leaves a mode without some budgets; its line runs over those it has.
         rows = {
@@ -123,16 +125,7 @@ def draw(
             alpha=0.15,
             linewidth=0,
         )
-        upper.annotate(
-            LABELS[mode],
-            (xs[-1], means[-1]),
-            xytext=(6, 0),
-            textcoords="offset points",
-            fontsize=8,
-            color="#52514e",
-            va="center",
-            annotation_clip=False,
-        )
+        ends.append((mode, xs[-1], means[-1]))
     for baseline in curve.baselines:
         if baseline.name == "mean predictor":
             upper.axhline(baseline.rmse, color="#52514e", linestyle=":", linewidth=1)
@@ -148,6 +141,20 @@ def draw(
     upper.set_ylabel(f"validation RMSE ({words.error_unit})")
     upper.set_ylim(bottom=0)
     upper.margins(x=0.12)
+    bottom, top = upper.get_ylim()
+    # A line of the labels' text is about a thirtieth of the panel's height.
+    heights = label_heights([end for _, _, end in ends], (top - bottom) / 30)
+    for (mode, x, _), height in zip(ends, heights, strict=True):
+        upper.annotate(
+            LABELS[mode],
+            (x, height),
+            xytext=(6, 0),
+            textcoords="offset points",
+            fontsize=8,
+            color="#52514e",
+            va="center",
+            annotation_clip=False,
+        )
     upper.grid(True, alpha=0.25)
     upper.legend(
         fontsize=8, loc="lower left", title="mean over seeds; band = ±1 SD", title_fontsize=8
@@ -224,6 +231,20 @@ def draw(
 def _windows(curve: Curve, budget: str) -> float:
     """Where a budget sits on the axis: the count of windows it resolved to."""
     return float(max(p.windows for p in curve.points if p.budget == budget))
+
+
+def label_heights(ends: Sequence[float], gap: float) -> list[float]:
+    """Where each line's label sits: at the line's end, or raised clear of the label below it.
+
+    Lines of a curve often end within a few tenths of each other, and labels written at their
+    ends would print over one another.
+    """
+    heights = list(ends)
+    below = -math.inf
+    for index in sorted(range(len(ends)), key=lambda each: ends[each]):
+        heights[index] = max(ends[index], below + gap)
+        below = heights[index]
+    return heights
 
 
 def _range(values: Sequence[int]) -> str:
