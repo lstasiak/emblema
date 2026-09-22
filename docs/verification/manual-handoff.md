@@ -286,6 +286,112 @@ Every number is validation, not test. What the run says:
   `training-loop.md` says it does. Its result is not accepted: the backbone was delivered by the
   first run and refuses a second delivery, which is the registry doing its job.
 
+### 2026-09-21 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the C-MAPSS backbone to its plateau
+
+Four orders of the C-MAPSS backbone's experiment with the budget doubled each time — 8, 16, 32
+and 64 epochs, files `experiments/backbone-cmapss-m-{8,16,32,64}.toml`, otherwise the file of the
+backbone of 2026-09-18 — placed here from `96da833` (the first three) and `a726b7b` (the fourth),
+fulfilled in two Kaggle sessions on "GPU T4 x2" (the runs of 32 on one device and of 8 then 16 on
+the other in the first session, the run of 64 alone in the second) and accepted here. Every run:
+batch 32, one micro-batch, peak 1e-3 with a quarter-epoch warm-up and a cosine decay to one per
+cent spanning the run, checkpoints every 1,000 (8 epochs), 2,000 (16 and 32) or 4,000 steps (64).
+
+| Experiment | Backbone | Result | Weights | Steps | Best epoch | Validation loss | Training loss | Minutes of epochs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-cmapss-m-8` | `86dd091c-…` | `durable/sha256/0c3b0cb8…` | `durable/sha256/c68cd866…` | 5,064 | 7 | 0.00291 | 0.00276 | 25 |
+| `backbone-cmapss-m-16` | `0dade051-…` | `durable/sha256/37767e7d…` | `durable/sha256/d1692f10…` | 10,128 | 14 | 0.00208 | 0.00212 | 50 |
+| `backbone-cmapss-m-32` | `9a1007fe-…` | `durable/sha256/b57ebb74…` | `durable/sha256/9759bb67…` | 20,256 | 30 | 0.00172 | 0.00166 | 96 (5,910 s wall) |
+| `backbone-cmapss-m-64` | `ccd28046-…` | `durable/sha256/3f60cfa6…` | `durable/sha256/78b3c201…` | 40,512 | 64 | 0.00176 | 0.00175 | 189 (11,451 s wall) |
+
+Validation loss per hidden token over the whole held-out side, as on 2026-09-18, where the run of
+four epochs ended at 0.00469; the curves are stored under `data/report/pretraining/<backbone>`
+by `scripts/pretraining_curve_report.py`, which reads the results of these runs and not the
+older document of the four-epoch run.
+
+What the runs say:
+
+- **The doublings fall by 38, 29 and 17 per cent, then by nothing.** Under the rule the
+  registration fixed for this (`docs/preregistration.md`, 2026-09-20 and 2026-09-21), the run of
+  64 epochs is the backbone: the fourth doubling ended 2.5 per cent above the third, which is the
+  size of the last epochs' own movement in either run.
+- **Within a run the last third is flat and the schedule is why.** In the run of 32 the epochs
+  from 27 on stand at 0.0017; in the run of 64 the epochs from 50 on stand at 0.0017–0.0018. A
+  cosine decay to one per cent of the peak leaves the last epochs little to move by, so a run's
+  own tail does not say whether a longer run would go lower; the doubling does.
+- **Cost per step fell with the session**: 0.31 s on 2026-09-18, 0.29 s in the run of 32 and
+  0.27–0.28 s in the run of 64, the platform's variation rather than anything in the code.
+- **The weights of every new best epoch are written durably**, about 22 MB each: the run of 32
+  left some twenty-five such objects in the bucket and the run of 64 some forty. The registry
+  names one of them; the others are reachable by the result document alone.
+
+The two sessions cost about 6.3 hours of the platform's GPU quota in all.
+
+### 2026-09-21 — Colab, NVIDIA L4, fp16, against Cloudflare R2: the backbone over FD001 and FD003 to its plateau
+
+The same ladder over `cmapss` published again with the subsets FD001 and FD003 alone, one
+operating condition each (`durable/sha256/a9c73709…`; why, in `docs/preregistration.md`,
+2026-09-21): the experiment files of 4, 8, 16, 32 and 64 epochs, placed here from `c1c8a9c` as
+run `colab-fd13`, fulfilled on one L4 of a paid notebook with all five runs sharing the device,
+and accepted here. Every run as before: batch 32, peak 1e-3 with a quarter-epoch warm-up and a
+cosine decay to one per cent spanning the run, fp16, seed 1.
+
+| Experiment | Backbone | Result | Weights | Best epoch | Validation loss | Share of the trivial predictor's | Training loss | Minutes of epochs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-cmapss-m` | `c2a16506-…` | `durable/sha256/a146b33e…` | `durable/sha256/16d9d2e7…` | 4 | 0.13830 | 0.212 | 0.1253 | 3 |
+| `backbone-cmapss-m-8` | `101274ae-…` | `durable/sha256/8faf5a71…` | `durable/sha256/259fdc70…` | 8 | 0.13427 | 0.206 | 0.1230 | 16 |
+| `backbone-cmapss-m-16` | `e0d2f3ab-…` | `durable/sha256/459fbe28…` | `durable/sha256/1999ecf7…` | 15 | 0.13207 | 0.203 | 0.1189 | 32 |
+| `backbone-cmapss-m-32` | `7359e47a-…` | `durable/sha256/3971157d…` | `durable/sha256/696d75c2…` | 32 | 0.13079 | 0.201 | 0.1173 | 22 |
+
+Validation loss per hidden token over the whole held-out side; the order of 64 epochs
+(`7e010b17-…`) was stopped after about thirteen epochs, once the rule had named its backbone, and stays
+ordered and unfulfilled.
+
+What the runs say:
+
+- **The doublings fall by 2.9, 1.6 and 1.0 per cent.** Under the rule of 2026-09-20 the first
+  doubling already gains less than five per cent, so the run of 8 epochs is the backbone
+  (`259fdc70…`); the run of 32 was let finish as the curve's own evidence, and 8 to 32 epochs
+  together take 2.6 per cent off.
+- **The pretext is a task again.** Over the four subsets the backbone's loss fell to 0.7 per cent
+  of the trivial predictor's, because the operating condition, read off the other channels, gave
+  every masked value away; normalised within one condition the loss stays at a fifth of the
+  trivial predictor's, and what is left to predict is the engine's own state.
+- **Cost**: one epoch takes about 30 s on the L4 alone and 120 s with four runs sharing it; the
+  minutes above are the runs' own epochs, however many ran beside them.
+
+### 2026-09-22 — Colab, NVIDIA A100, fp16, against Cloudflare R2: the backbone over the four subsets read per operating condition to its plateau
+
+The same ladder over `cmapss` published again with all four subsets read per operating condition
+(ADR-0034; manifest `durable/sha256/d63f8e1b…`, 126 channels, 20,160 training and 5,235 held-out
+windows; why, in `docs/preregistration.md`, 2026-09-22). The experiment files of 4, 8, 16, 32 and
+64 epochs were placed here from `fdf8053` as run `colab-cond`, fulfilled one after another on one
+A100 of a paid notebook, and accepted here. Every run as before: batch 32, peak 1e-3 with a
+quarter-epoch warm-up and a cosine decay to one per cent spanning the run, fp16, seed 1.
+
+| Experiment | Backbone | Result | Weights | Best epoch | Validation loss | Share of the trivial predictor's | Training loss | Minutes of epochs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-cmapss-m` | `72917a2a-…` | `durable/sha256/27885a9f…` | `durable/sha256/96d9ec20…` | 4 | 0.22541 | 0.325 | 0.1641 | 8 |
+| `backbone-cmapss-m-8` | `ed3b1fa4-…` | `durable/sha256/1a728b19…` | `durable/sha256/6283c210…` | 8 | 0.22326 | 0.322 | 0.1637 | 19 |
+| `backbone-cmapss-m-16` | `d2913c98-…` | `durable/sha256/0759b266…` | `durable/sha256/8cd60452…` | 16 | 0.22136 | 0.319 | 0.1624 | 14 |
+| `backbone-cmapss-m-32` | `eecf8ec4-…` | `durable/sha256/d6ac405f…` | `durable/sha256/28350a30…` | 31 | 0.21579 | 0.311 | 0.1551 | 55 |
+
+Validation loss per hidden token over the whole held-out side. The order of 64 epochs
+(`durable/sha256/ea532e01…`) never started: the stream that ran the rungs one after another was
+stopped once the rule had named its backbone, while the run of 32 was already under way, and the
+order stays placed and unfulfilled.
+
+What the runs say:
+
+- **The doublings fall by 0.95, 0.85 and 2.5 per cent.** Under the rule of 2026-09-20 the first
+  doubling already gains less than five per cent, so the run of 8 epochs is the backbone
+  (`6283c210…`); the runs of 16 and 32 finished as the curve's own evidence, and 8 to 32 epochs
+  together take 3.3 per cent off.
+- **The loss is not comparable in level with the ladder over FD001 and FD003**: the corpus, its
+  channels and its held-out side differ. Within each ladder the doublings gain little.
+- **Cost**: the device was shared with the sweeps of the task for most of the ladder, so an
+  epoch took from 51 to 181 s; the minutes above are the runs' own epochs, however many ran
+  beside them.
+
 ### Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when

@@ -43,8 +43,6 @@ from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
@@ -57,6 +55,8 @@ from emblema.catalog.domain.tokenisation.tokenisation_scheme import Tokenisation
 from emblema.catalog.domain.tokenisation.window_reconstruction import WindowReconstruction
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_reader import CorpusReader
+from emblema.shared.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
 from scripts.budget_file import budget
 from scripts.raw_corpora import raw_root
 from scripts.reporting import table

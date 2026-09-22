@@ -70,6 +70,7 @@ class AdaptationPlan:
             "backbone": "" if self.backbone is None else self.backbone.key,
             "run_seed": self.seed,
             "epochs": self.schedule.epochs,
+            "min_steps": self.schedule.min_steps,
             "batch_size": self.schedule.batch_size,
             "learning_rate": float(self.schedule.learning_rate),
             "weight_decay": float(self.schedule.weight_decay),

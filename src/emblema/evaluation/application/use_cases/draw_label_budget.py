@@ -5,7 +5,7 @@ from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.ports.corpus_windows import CorpusWindows
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
-from emblema.evaluation.ports.unit_lifetimes import UnitLifetimes
+from emblema.evaluation.ports.ground_truth import GroundTruth
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -35,23 +35,23 @@ class DrawLabelBudget:
         self,
         tasks: DownstreamTaskRepository,
         corpus: CorpusWindows,
-        lifetimes: UnitLifetimes,
+        truth: GroundTruth,
     ) -> None:
         self._tasks = tasks
         self._corpus = corpus
-        self._lifetimes = lifetimes
+        self._truth = truth
 
     def __call__(self, command: DrawLabelBudgetCommand) -> LabelSample:
         """Label every window of the tuning side, then draw the budget across the strata.
 
         Raises:
             TaskNotFoundError: If the task is unknown.
-            UnknownUnitLifetimeError: If a tuning unit has no known failure time.
+            UnknownGroundTruthError: If the ground truth says nothing about a tuning window.
             UnlabelledWindowError: If a window reaches past the failure of its unit.
             InvalidLabelBudgetError: If the tuning side holds fewer windows than asked for.
             InvalidTargetBinsError: If it holds fewer windows than there are strata.
         """
         task = self._tasks.get(command.task)
         windows = self._corpus.windows_of(task.manifest, task.tuning_units)
-        pool = task.labelled(windows, self._lifetimes.failure_times(task.tuning_units))
+        pool = task.labelled(windows, self._truth.truths_of(windows))
         return LabelSample.drawn(task.task_id, pool, command.budget, task.strata, command.seed)

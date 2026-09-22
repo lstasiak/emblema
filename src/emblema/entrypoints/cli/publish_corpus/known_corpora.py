@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import Self
 
-from emblema.catalog.adapters.synthetic.layouts import LAYOUTS
 from emblema.catalog.domain.registry.corpus_source import CorpusSource
 from emblema.catalog.domain.registry.licence import Licence
+from emblema.shared.adapters.synthetic.layouts import LAYOUTS
 
 # A corpus generated here carries the repository's own terms and may be redistributed: the control
 # can travel with a published model, which is what lets a reader repeat it.

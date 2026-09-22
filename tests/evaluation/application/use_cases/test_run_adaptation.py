@@ -5,13 +5,13 @@ from emblema.evaluation.adapters.in_memory.corpus_windows import InMemoryCorpusW
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
-from emblema.evaluation.adapters.in_memory.unit_lifetimes import InMemoryUnitLifetimes
+from emblema.evaluation.adapters.in_memory.ground_truth import InMemoryGroundTruth
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget
 from emblema.evaluation.application.use_cases.run_adaptation import (
     RunAdaptation,
     RunAdaptationCommand,
 )
-from emblema.evaluation.domain.exceptions import TaskNotFoundError, UnknownUnitLifetimeError
+from emblema.evaluation.domain.exceptions import TaskNotFoundError, UnknownGroundTruthError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
@@ -38,7 +38,7 @@ def run(
     if save_task:
         tasks.save(task())
     corpus = InMemoryCorpusWindows(PUBLISHED, ENDS, MANIFEST)
-    lifetimes = InMemoryUnitLifetimes(failures)
+    lifetimes = InMemoryGroundTruth(failures)
     use_case = RunAdaptation(
         tasks,
         corpus,
@@ -88,5 +88,5 @@ def test_an_unknown_task_is_refused() -> None:
 
 
 def test_a_validation_unit_without_a_failure_time_is_refused() -> None:
-    with pytest.raises(UnknownUnitLifetimeError):
+    with pytest.raises(UnknownGroundTruthError):
         run(failures={UnitKey("a"): 300.0, UnitKey("b"): 260.0})

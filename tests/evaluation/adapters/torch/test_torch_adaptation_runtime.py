@@ -18,6 +18,7 @@ from torch import Tensor, nn  # noqa: E402
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import (  # noqa: E402
     PublishedCorpusBlocks,
 )
+from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import (  # noqa: E402
     TorchAdaptationRuntime,
@@ -28,6 +29,9 @@ from emblema.evaluation.domain.exceptions import (  # noqa: E402
 )
 from emblema.evaluation.domain.labels.label_budget import LabelBudget  # noqa: E402
 from emblema.evaluation.domain.labels.label_sample import LabelSample  # noqa: E402
+from emblema.evaluation.domain.labels.remaining_life_scheme import (  # noqa: E402
+    RemainingLifeScheme,
+)
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
@@ -75,7 +79,7 @@ def published(tmp_path: Path) -> Published:
     runtime = TorchAdaptationRuntime(
         backbones, PublishedCorpusBlocks(store, tmp_path / "workspace"), device="cpu"
     )
-    defined = replace(task(), manifest=manifest, labels=replace(task().labels, ceiling=CEILING))
+    defined = replace(task(), manifest=manifest, labels=RemainingLifeScheme(CEILING))
     return Published(runtime, defined, backbones)
 
 
@@ -84,7 +88,11 @@ def adapt(published: Published, stated: AdaptationPlan) -> AdaptationOutcome:
 
 
 def pretrained_weights() -> dict[str, Tensor]:
-    return SmallBackbones(vocabulary_size=len(CHANNELS)).pretrained(WEIGHTS).state_dict()
+    return (
+        SmallBackbones(vocabulary_size=len(CHANNELS))
+        .pretrained(WEIGHTS, vocabulary_size=len(CHANNELS))
+        .state_dict()
+    )
 
 
 def base_weights(encoder: nn.Module) -> dict[str, Tensor]:
@@ -209,3 +217,22 @@ def test_the_rate_follows_the_schedule_on_every_step_the_probe_included(
     assert len(stepped_under) == shape.total_steps == 6
     assert stepped_under == pytest.approx([1e-2 * shape.factor(step) for step in range(6)])
     assert stepped_under[0] < stepped_under[1] == 1e-2 > stepped_under[-1]
+
+
+@pytest.mark.parametrize("mode", list(TransferMode))
+def test_the_head_starts_where_it_is_told_whatever_the_mode(
+    published: Published, mode: TransferMode
+) -> None:
+    candidate = AdaptedBackbone.under(
+        plan(mode), published.backbones, vocabulary_size=len(CHANNELS), starting_at=0.6
+    )
+
+    assert candidate.head.linear.bias.item() == pytest.approx(0.6)
+
+
+def test_a_sample_under_the_floor_of_steps_is_learnt_for_more_epochs(published: Published) -> None:
+    stated = plan(schedule=adaptation_schedule(epochs=1, min_steps=5, batch_size=2))
+
+    outcome = adapt(published, stated)
+
+    assert len(outcome.training_losses) == 3

@@ -6,14 +6,14 @@ was put on purpose is a fault of ours, failing where none was put is the pipelin
 and share no trajectory. ``null-a`` and ``null-b`` have the same shape and signal strength but no
 shared structure, so whatever transfer finds between them the pipeline invented.
 
-Constants rather than a registry: they are the adapter's own specification, and a control whose
+Constants rather than a registry: they are the generator's own specification, and a control whose
 dials can be turned from a command line is not a control.
 """
 
 from collections.abc import Mapping
 
-from emblema.catalog.adapters.synthetic.latent_factor_process import LatentFactorProcess
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
+from emblema.shared.adapters.synthetic.latent_factor_process import LatentFactorProcess
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
 
 # Four factors over periods from a couple of dozen steps to a few hundred. The band is chosen
 # against the layouts that watch it: the sparsest of them reports every three steps, so the
@@ -72,6 +72,36 @@ CONTROL_B = SensorLayout(
 NULL_A = CONTROL_A.with_dials(name="null-a", coupling=0.0)
 NULL_B = CONTROL_B.with_dials(name="null-b", coupling=0.0)
 
+# The second layout of each pair with more units and nothing else turned: the corpus a transfer
+# is measured on, where the width of the paired interval over held-out units is what decides
+# whether an equivalence can be read at all. The first hundred and twenty units are the narrow
+# layout's own, draw for draw, because a unit's draws are addressed by its position.
+CONTROL_B_WIDE = CONTROL_B.with_dials(name="control-b-wide", units=800)
+NULL_B_WIDE = NULL_B.with_dials(name="null-b-wide", units=800)
+
+# The second layout watching the first's own factor trajectories, unit for unit: a leak, not a
+# control, and therefore the ceiling of what transfer between the two can give. As many units as
+# the first layout has, so that every trajectory here is one the first layout was pretrained on.
+CONTROL_B_SHARED = CONTROL_B.with_dials(
+    name="control-b-shared", units=CONTROL_A.units, trajectory_seed=CONTROL_A.trajectory_seed
+)
+
+# The first layout of the null pair with its signal drowned: the sensors report noise, with the
+# same channels, cadence and losses. A backbone pretrained here learns the mechanics of reading a
+# corpus — embeddings, normalisation, attention over a window — and nothing about any signal,
+# which is the share of a transfer that any pretraining at all would give.
+NOISE_A = NULL_A.with_dials(name="noise-a", noise=100.0)
+
 LAYOUTS: Mapping[str, SensorLayout] = {
-    layout.name: layout for layout in (CONTROL_A, CONTROL_B, NULL_A, NULL_B)
+    layout.name: layout
+    for layout in (
+        CONTROL_A,
+        CONTROL_B,
+        NULL_A,
+        NULL_B,
+        CONTROL_B_WIDE,
+        NULL_B_WIDE,
+        CONTROL_B_SHARED,
+        NOISE_A,
+    )
 }

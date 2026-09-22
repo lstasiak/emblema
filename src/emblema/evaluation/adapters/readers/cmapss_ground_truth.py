@@ -1,21 +1,23 @@
-from collections.abc import Collection, Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from emblema.evaluation.domain.exceptions import (
-    UnknownUnitLifetimeError,
+    UnknownGroundTruthError,
     UnreadableGroundTruthError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.task_window import TaskWindow
 
 
-class CmapssUnitLifetimes:
+class CmapssGroundTruth:
     """When each turbofan failed, counted from the run-to-failure files the corpus was read from.
 
     The ground truth of this corpus is not published beside it: each training engine is recorded
     until it fails, so the failure is the end of its record and the answer is the length of the
     record. The moment is expressed the way the corpus times its units — the first cycle at one,
     the axis running to one past the last — so that a window's end and a failure are comparable
-    without either side knowing how the other was built.
+    without either side knowing how the other was built. Every window of an engine is answered
+    with the same moment: the truth of a remaining-life task is a fact about the unit.
 
     Units are named ``<subset>/<engine>``, as the reader of this corpus names them.
     """
@@ -24,13 +26,17 @@ class CmapssUnitLifetimes:
         self._root = root
         self._lengths: dict[str, dict[int, int]] = {}
 
-    def failure_times(self, units: Collection[UnitKey]) -> Mapping[UnitKey, float]:
+    def truths_of(self, windows: Sequence[TaskWindow]) -> Mapping[TaskWindow, float]:
+        failures = self._failure_times({window.unit for window in windows})
+        return {window: failures[window.unit] for window in windows}
+
+    def _failure_times(self, units: set[UnitKey]) -> dict[UnitKey, float]:
         failures = {}
-        for unit in units:
+        for unit in sorted(units, key=str):
             subset, engine = self._parsed(unit)
             lengths = self._of_subset(subset, unit)
             if engine not in lengths:
-                raise UnknownUnitLifetimeError(f"{unit} is not an engine of subset {subset}")
+                raise UnknownGroundTruthError(f"{unit} is not an engine of subset {subset}")
             # The axis starts at cycle one and the extent runs one past the last cycle, so an
             # engine recorded for n cycles fails at n + 1.
             failures[unit] = float(lengths[engine] + 1)
@@ -40,7 +46,7 @@ class CmapssUnitLifetimes:
     def _parsed(unit: UnitKey) -> tuple[str, int]:
         subset, _, engine = str(unit).partition("/")
         if not subset or not engine.isdigit():
-            raise UnknownUnitLifetimeError(f"{unit} is not named <subset>/<engine>")
+            raise UnknownGroundTruthError(f"{unit} is not named <subset>/<engine>")
         return subset, int(engine)
 
     def _of_subset(self, subset: str, unit: UnitKey) -> dict[int, int]:

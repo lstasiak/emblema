@@ -1,6 +1,6 @@
 from pydantic import Field, model_validator
 
-from emblema.catalog.adapters.synthetic.dials import Dials
+from emblema.shared.adapters.synthetic.dials import Dials
 from emblema.shared.kernel.sampling import SamplingRegime
 
 

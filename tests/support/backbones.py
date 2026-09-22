@@ -30,14 +30,19 @@ class SmallBackbones:
     def width(self) -> int:
         return SMALL.width
 
-    def pretrained(self, weights: ArtifactRef) -> nn.Module:
+    def pretrained(self, weights: ArtifactRef, *, vocabulary_size: int) -> nn.Module:
         self.requested.append(weights)
         with torch.random.fork_rng():
             torch.manual_seed(PRETRAINED_SEED)
-            return self._kept(SetEncoder.for_vocabulary(SMALL, self._vocabulary_size).eval())
+            encoder = SetEncoder.for_vocabulary(SMALL, self._vocabulary_size).eval()
+        # Grown outside the forked generator, as the production factory grows: the rows for
+        # the task's new channels are drawn from the generator the runtime seeded.
+        return self._kept(encoder.grown_to(vocabulary_size))
 
-    def fresh(self) -> nn.Module:
-        return self._kept(SetEncoder.for_vocabulary(SMALL, self._vocabulary_size))
+    def fresh(self, *, vocabulary_size: int) -> nn.Module:
+        return self._kept(
+            SetEncoder.for_vocabulary(SMALL, max(vocabulary_size, self._vocabulary_size))
+        )
 
     def _kept(self, encoder: SetEncoder) -> SetEncoder:
         self.built.append(encoder)

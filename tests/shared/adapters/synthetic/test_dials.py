@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from emblema.catalog.adapters.synthetic.dials import Dials
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_A, CONTROL_PROCESS
+from emblema.shared.adapters.synthetic.dials import Dials
+from emblema.shared.adapters.synthetic.layouts import CONTROL_A, CONTROL_PROCESS
 
 
 @pytest.mark.parametrize(

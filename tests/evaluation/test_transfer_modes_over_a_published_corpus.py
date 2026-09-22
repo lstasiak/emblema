@@ -28,8 +28,8 @@ from emblema.evaluation.adapters.blocks.published_corpus_blocks import (  # noqa
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (  # noqa: E402
     InMemoryDownstreamTaskRepository,
 )
-from emblema.evaluation.adapters.readers.cmapss_unit_lifetimes import (  # noqa: E402
-    CmapssUnitLifetimes,
+from emblema.evaluation.adapters.readers.cmapss_ground_truth import (  # noqa: E402
+    CmapssGroundTruth,
 )
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import (  # noqa: E402
     TorchAdaptationRuntime,
@@ -106,7 +106,7 @@ def runs(tmp_path_factory: pytest.TempPathFactory) -> Runs:
     blocks = PublishedCorpusBlocks(store, root / "workspace")
     corpus = BlockCorpusWindows(blocks)
     tasks = InMemoryDownstreamTaskRepository()
-    lifetimes = CmapssUnitLifetimes(SAMPLE)
+    lifetimes = CmapssGroundTruth(SAMPLE)
     task = DefineDownstreamTask(tasks, corpus, SequentialIdGenerator())(
         DefineDownstreamTaskCommand(
             manifest=manifest,
@@ -133,6 +133,7 @@ def plan_of(mode: TransferMode) -> AdaptationPlan:
         backbone=WEIGHTS if mode.starts_from_pretrained_weights else None,
         schedule=AdaptationSchedule(
             epochs=EPOCHS,
+            min_steps=0,
             batch_size=4,
             learning_rate=1e-2,
             weight_decay=0.0,

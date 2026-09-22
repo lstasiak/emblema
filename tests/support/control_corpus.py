@@ -10,8 +10,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_A, CONTROL_B, CONTROL_PROCESS
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.tokenisation.split_policy import SeededSplit
@@ -24,6 +22,8 @@ from emblema.pretraining.adapters.blocks.block_training_corpus_reader import (
     BlockTrainingCorpusReader,
 )
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
+from emblema.shared.adapters.synthetic.layouts import CONTROL_A, CONTROL_B, CONTROL_PROCESS
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
 from tests.support.settings import unreachable_store
@@ -79,6 +79,8 @@ def process(
     workspace: Path,
     store: InMemoryArtifactStore,
     corpora: InMemoryCorpusRepository,
+    *,
+    units: int = 4,
 ) -> CompositionRoot:
     """The publishing process the command line assembles, over a corpus cut to a test's size."""
     return CompositionRoot(
@@ -86,7 +88,7 @@ def process(
         corpus_root=workspace / "raw",
         workspace=workspace,
         corpora=corpora,
-        reader=SyntheticCorpusReader(CONTROL_PROCESS, miniature(layout)),
+        reader=SyntheticCorpusReader(CONTROL_PROCESS, miniature(layout, units=units)),
         store=store,
     )
 

@@ -195,3 +195,45 @@ test is what keeps the claim from being a comment.
   Econometrica 70(1), 191–221.
 - Shukla, S. N. and Marlin, B. M. (2021). Multi-Time Attention Networks for Irregularly Sampled
   Time Series. ICLR.
+
+### 2026-09-20 — the specification moves to shared code, the reader stays
+
+The transfer leg needs the exact reading of a sensor at an instant, answered on the Evaluation
+side, and Evaluation may not import the Catalog's adapters. The latent process, the layouts,
+the draws and the presets now live in `shared/adapters/synthetic`, with the noiseless signal
+model extracted from the reader as `SensorSignal`; `SyntheticCorpusReader` stays in the Catalog
+and adds the noise, the gaps and the rounding over it. The decision above holds in every
+particular — the generator is still an adapter of the corpus reader port, nothing is stored,
+the presets are still constants — and the bytes of every corpus are unchanged, which the pinned
+checksums assert. The forecasting task the leg poses, and why the truth is read where it is,
+are in ADR-0033.
+
+### 2026-09-21 — the transfer leg read: the window, the family of the signals, and nothing from noise
+
+The transfer leg ran at the endpoint's budget on wide second layouts (ADR-0033). What bears on this
+decision is below; the runs, their intervals and the order they were made in are in
+`docs/verification/synthetic-transfer.md` and `docs/preregistration.md`.
+
+- **The window was the fault.** At a window of 32 against factor periods of 24 to 300 both pairs
+  failed, and so did the ceiling — `control-b-shared`, the second layout over the first's own
+  trajectories — which put the fault above the data. At 128 the coupled pair passes its rule:
+  full fine-tuning 0.094 below a fresh encoder, interval [+0.089, +0.099], floor 0.053. The window
+  must span the process's time scales in the pretext and the task together: a backbone pretrained
+  at 128 is a worse start than none on a task at 32.
+- **The null pair shares the family of the signals.** At a coupling of zero a channel follows a
+  private factor built like the shared ones, in the same band with the same harmonics, and a
+  backbone carries that family. Swapping the backbones between the pairs changes the advantage by
+  at most 0.012, the shared frequencies' own share (+0.011) is a fifth of the floor, and nothing
+  leaks between the pairs. The null pair's equivalence rule was withdrawn after its measurement,
+  post hoc and named so; the pair controls leakage and pairing, which it passes.
+- **Nothing is found where nothing was put.** `noise-a`, the null pair's first layout with its
+  signal drowned, pretrains a backbone that is a worse start than a fresh encoder on both tasks
+  (−0.025 and −0.011).
+- **One model holds both vocabularies only once it is grown to them.** The backbone is pretrained
+  on the first layout alone, so its channel table grows rows for the channels a task's corpus
+  adds (ADR-0033).
+
+The positive control holds: what transfers at this tier and budget is the family of the signals,
+the shared frequencies adding a fifth of the floor. A rebuilt null pair needs a different family,
+and two asymmetries of the present layouts: a coupled channel is six sinusoids and a private one
+three, and the fresh encoder's spread over seeds at 128 is four times larger on the coupled task.

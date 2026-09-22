@@ -8,7 +8,6 @@ from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
@@ -29,6 +28,7 @@ from emblema.entrypoints.cli.publish_corpus.adapters import Adapters
 from emblema.entrypoints.cli.publish_corpus.services import Services
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
+from emblema.shared.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
 from emblema.shared.adapters.system.clock import SystemClock
 from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator
 from emblema.shared.ports.artifact_store import ArtifactStore
@@ -56,6 +56,7 @@ class CompositionRoot:
         corpus_root: Path,
         workspace: Path,
         subsets: tuple[str, ...] = (),
+        per_condition: bool = False,
         corpora: CorpusRepository | None = None,
         reader: CorpusReader | None = None,
         store: ArtifactStore | None = None,
@@ -73,6 +74,8 @@ class CompositionRoot:
             corpus_root: Directory the raw corpus is read from, where it is read from files.
             workspace: Directory blocks pass through on their way in or out of the store.
             subsets: Subsets of the corpus to read; all of them where empty.
+            per_condition: Whether the named corpus is read with a channel per sensor and
+                operating condition, which only a corpus flown at several conditions offers.
             corpora: Repository of corpora; the configured metadata database unless given.
             reader: Reader of the raw corpus; the adapter of the named corpus unless given.
                 One of the two has to be stated.
@@ -83,7 +86,8 @@ class CompositionRoot:
 
         Raises:
             ValueError: If the store or the repository is left to the root without settings to
-                build it from, or the reader is left to it without a corpus it has an adapter for.
+                build it from, or the reader is left to it without a corpus it has an adapter for,
+                or with a reading per condition its corpus does not offer.
         """
         chosen_store = configured_store(settings_for(settings, "store")) if store is None else store
         self.adapters = Adapters(
@@ -92,7 +96,11 @@ class CompositionRoot:
                 if corpora is None
                 else corpora
             ),
-            reader=self._corpus_reader(corpus, corpus_root, subsets) if reader is None else reader,
+            reader=(
+                self._corpus_reader(corpus, corpus_root, subsets, per_condition)
+                if reader is None
+                else reader
+            ),
             store=chosen_store,
             archive=BlockCorpusArchive(chosen_store, workspace, PublishedCorpusManifestAssembler()),
             clock=SystemClock() if clock is None else clock,
@@ -110,6 +118,7 @@ class CompositionRoot:
         corpus_root: Path,
         workspace: Path,
         subsets: tuple[str, ...] = (),
+        per_condition: bool = False,
         reader: CorpusReader | None = None,
         clock: Clock | None = None,
         ids: IdGenerator | None = None,
@@ -125,6 +134,7 @@ class CompositionRoot:
             corpus_root=corpus_root,
             workspace=workspace,
             subsets=subsets,
+            per_condition=per_condition,
             corpora=corpora,
             reader=reader,
             store=store,
@@ -161,7 +171,9 @@ class CompositionRoot:
         )
 
     @staticmethod
-    def _corpus_reader(corpus: str | None, root: Path, subsets: tuple[str, ...]) -> CorpusReader:
+    def _corpus_reader(
+        corpus: str | None, root: Path, subsets: tuple[str, ...], per_condition: bool = False
+    ) -> CorpusReader:
         """Which adapter reads which corpus, and what it takes from the process to do it.
 
         A corpus read from files is handed the directory it was downloaded to; a generated one is
@@ -170,13 +182,20 @@ class CompositionRoot:
         adapters' business, and a caller that had to know would be choosing the adapter itself.
 
         Raises:
-            ValueError: If no corpus was named, or none of that name has an adapter.
+            ValueError: If no corpus was named, none of that name has an adapter, or a reading
+                per condition was asked of a corpus that was not flown at several.
         """
+        if per_condition and corpus != "cmapss":
+            raise ValueError(
+                f"only the cmapss corpus is read per operating condition, not {corpus!r}"
+            )
         match corpus:
             case None:
                 raise ValueError("the process needs a corpus to read or a reader to read it with")
             case "cmapss":
-                return CmapssCorpusReader(root, subsets or CmapssCorpusReader.SUBSETS)
+                return CmapssCorpusReader(
+                    root, subsets or CmapssCorpusReader.SUBSETS, per_condition=per_condition
+                )
             case "skab":
                 return SkabCorpusReader(root, subsets or SkabCorpusReader.SUBSETS)
             case "smd":

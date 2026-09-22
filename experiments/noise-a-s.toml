@@ -1,0 +1,41 @@
+# Masked reconstruction on the noise layout, at the tier a laptop runs: the same budget as the
+# pair's backbones, so what this one carries to a transfer differs in the corpus alone — noise in
+# place of a signal, the share any pretraining at all would give.
+#
+# The epochs are measured rather than guessed: the fewest for which halving and doubling the
+# budget left every kind of mask with the same verdict. The loss has not converged there, and a
+# run of this file says so in its own report.
+name = "noise-a-s"
+tier = "S"
+corpora = ["noise-a"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+# The whole layout, not the tenth the tier states: the tier's share is sized for the real
+# corpora, and the generated ones are already small.
+corpus_fraction = 1.0
+
+# Blocks and whole channels carry most of the hiding, single tokens are the minority ingredient,
+# and together they take close to half of a window.
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# One epoch of warmup is a hundred-odd steps on this corpus — enough for Adam's moments to settle
+# before the peak rate — and a floor of one per cent of the peak is where the steps are too small
+# to move the verdicts.
+[budget]
+epochs = 24
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 1
+final_lr_fraction = 0.01
+seed = 1
+
+# Roughly twice an epoch: often enough that a dropped session loses minutes, rare enough that the
+# store does not fill with states nobody will read.
+[checkpoint]
+every_steps = 200

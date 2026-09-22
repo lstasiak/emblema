@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from emblema.catalog.adapters.synthetic.sensor_layout import SensorLayout
+from emblema.shared.adapters.synthetic.sensor_layout import SensorLayout
 from emblema.shared.kernel.sampling import SamplingRegime
 from tests.support.synthetic import HOSTILE
 

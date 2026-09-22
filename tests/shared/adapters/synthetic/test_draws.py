@@ -1,6 +1,6 @@
 import numpy as np
 
-from emblema.catalog.adapters.synthetic.draws import Draws
+from emblema.shared.adapters.synthetic.draws import Draws
 
 
 def test_the_same_address_gives_the_same_numbers() -> None:

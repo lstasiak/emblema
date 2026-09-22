@@ -14,9 +14,9 @@ is a batch the encoder accepts, with no axis for channels to disagree on.
 import pytest
 import torch
 
-from emblema.catalog.adapters.synthetic.layouts import CONTROL_A, CONTROL_B
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
+from emblema.shared.adapters.synthetic.layouts import CONTROL_A, CONTROL_B
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from tests.support.control_corpus import Control
 from tests.support.encoders import SMALL

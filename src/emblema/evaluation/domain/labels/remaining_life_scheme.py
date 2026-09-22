@@ -26,6 +26,11 @@ class RemainingLifeScheme:
         if not (isfinite(self.ceiling) and self.ceiling > 0):
             raise InvalidLabelSchemeError(f"ceiling must be positive and finite: {self.ceiling}")
 
+    @property
+    def scale(self) -> float:
+        """The unit targets are learnt in: the ceiling, so every target lies in ``[0, 1]``."""
+        return self.ceiling
+
     def target(self, *, failed_at: float, ends_at: float) -> float:
         """What a window ending at ``ends_at`` has left of a unit that failed at ``failed_at``.
 

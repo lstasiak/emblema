@@ -73,7 +73,7 @@ def in_memory(tmp_path: Path) -> Harness:
     return Harness(reader, change_data)
 
 
-def cmapss(tmp_path: Path) -> Harness:
+def cmapss(tmp_path: Path, *, per_condition: bool = False) -> Harness:
     root = tmp_path / "cmapss"
     shutil.copytree(SAMPLE, root)
     file = root / "train_FD001.txt"
@@ -83,9 +83,16 @@ def cmapss(tmp_path: Path) -> Harness:
 
     def change_one_value() -> CorpusReader:
         file.write_bytes(file.read_bytes().replace(b"518.67", b"518.68", 1))
-        return CmapssCorpusReader(root, subsets=("FD001",))
+        return CmapssCorpusReader(root, subsets=("FD001",), per_condition=per_condition)
 
-    return Harness(CmapssCorpusReader(root, subsets=("FD001",)), change_one_value)
+    return Harness(
+        CmapssCorpusReader(root, subsets=("FD001",), per_condition=per_condition),
+        change_one_value,
+    )
+
+
+def cmapss_per_condition(tmp_path: Path) -> Harness:
+    return cmapss(tmp_path, per_condition=True)
 
 
 def skab(tmp_path: Path) -> Harness:
@@ -208,6 +215,7 @@ def synthetic(tmp_path: Path) -> Harness:
 ADAPTERS: dict[str, Callable[[Path], Harness]] = {
     "in_memory": in_memory,
     "cmapss": cmapss,
+    "cmapss_per_condition": cmapss_per_condition,
     "skab": skab,
     "smd": smd,
     "esa_ad": esa_ad,

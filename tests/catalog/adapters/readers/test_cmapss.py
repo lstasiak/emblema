@@ -253,3 +253,123 @@ def test_full_corpus_agrees_with_the_facts_measured_by_the_data_spike() -> None:
     assert description.content.unit_count == measured["units"]
     assert len(description.channel_schema) == measured["channels"]
     assert description.content.observation_count == measured["observations"]
+
+
+SEA_LEVEL = "0kft-M0.00-TRA100"
+# Settings as the released files scatter them around four of the six conditions.
+FLOWN = {
+    SEA_LEVEL: ("-0.0007", "0.0003", "100.0"),
+    "42kft-M0.84-TRA100": ("42.0049", "0.8405", "100.0"),
+    "25kft-M0.62-TRA60": ("24.9988", "0.6218", "60.0"),
+    "10kft-M0.25-TRA100": ("9.9981", "0.2500", "100.0"),
+}
+
+
+def flown_row(unit: int, cycle: int, settings: Sequence[str], sensor: str = "1.5") -> str:
+    return row(unit, cycle, (*settings, *(sensor,) * len(SENSORS)))
+
+
+def per_condition(root: Path, subsets: tuple[str, ...]) -> CmapssCorpusReader:
+    return CmapssCorpusReader(root, subsets=subsets, per_condition=True)
+
+
+def test_per_condition_a_single_condition_subset_has_the_sensors_of_the_first_condition() -> None:
+    schema = per_condition(SAMPLE, ("FD001",)).describe().channel_schema
+
+    assert schema.channels == frozenset(
+        Channel(f"{sensor.name}@{SEA_LEVEL}", sensor.unit) for sensor in SENSORS
+    )
+
+
+def test_per_condition_a_subset_flown_at_six_conditions_has_a_channel_per_sensor_and_each(
+    tmp_path: Path,
+) -> None:
+    # The schema is the subset's, not the rows': it names all six even where the file flies four.
+    content = "\n".join(
+        flown_row(1, cycle, settings) for cycle, settings in enumerate(FLOWN.values(), 1)
+    )
+    root = with_subsets(tmp_path, {"FD002": (content + "\n").encode("ascii")})
+
+    schema = per_condition(root, ("FD002",)).describe().channel_schema
+
+    assert len(schema) == 6 * len(SENSORS)
+    assert Channel("T24@42kft-M0.84-TRA100", "°R") in schema.channels
+    assert Channel("T24@35kft-M0.84-TRA100", "°R") in schema.channels
+
+
+def test_per_condition_each_cycle_lands_on_the_channels_of_the_condition_it_was_flown_at(
+    tmp_path: Path,
+) -> None:
+    labels = list(FLOWN)
+    content = "\n".join(
+        flown_row(1, cycle, FLOWN[label], sensor=f"{cycle}.5")
+        for cycle, label in enumerate(labels, 1)
+    )
+    root = with_subsets(tmp_path, {"FD004": (content + "\n").encode("ascii")})
+
+    observations = list(per_condition(root, ("FD004",)).read_observations(UnitKey("FD004/1")))
+
+    assert len(observations) == len(labels) * len(SENSORS)
+    for cycle, label in enumerate(labels, 1):
+        at_cycle = [o for o in observations if o.time == float(cycle)]
+        assert [o.channel for o in at_cycle] == [f"{sensor.name}@{label}" for sensor in SENSORS]
+        assert {o.value for o in at_cycle} == {cycle + 0.5}
+
+
+def test_per_condition_the_content_and_the_readings_are_the_default_ones_renamed(
+    reader: CmapssCorpusReader,
+) -> None:
+    qualified = per_condition(SAMPLE, ("FD001",))
+
+    assert qualified.describe().content == reader.describe().content
+    assert list(qualified.read_units()) == list(reader.read_units())
+    plain = list(reader.read_observations(UnitKey("FD001/39")))
+    renamed = list(qualified.read_observations(UnitKey("FD001/39")))
+    assert [(o.time, o.value) for o in renamed] == [(o.time, o.value) for o in plain]
+    assert [o.channel for o in renamed] == [f"{o.channel}@{SEA_LEVEL}" for o in plain]
+
+
+@pytest.mark.parametrize(
+    ("subset", "settings"),
+    [
+        ("FD002", ("30.0", "0.50", "80.0")),
+        ("FD002", ("42.0", "0.62", "100.0")),
+        ("FD002", ("25.0", "0.62", "100.0")),
+        ("FD001", ("42.0049", "0.8405", "100.0")),
+    ],
+    ids=["no condition", "altitude of one, Mach of another", "throttle off", "not flown there"],
+)
+def test_per_condition_a_row_whose_settings_name_none_of_its_subsets_conditions_is_malformed(
+    tmp_path: Path, subset: str, settings: tuple[str, str, str]
+) -> None:
+    content = flown_row(1, 1, FLOWN[SEA_LEVEL]) + "\n" + flown_row(1, 2, settings) + "\n"
+    root = with_subsets(tmp_path, {subset: content.encode("ascii")})
+    reader = per_condition(root, (subset,))
+
+    with pytest.raises(MalformedCorpusDataError, match=f"train_{subset}.txt, line 2"):
+        reader.describe()
+    with pytest.raises(MalformedCorpusDataError, match="name none of the conditions"):
+        list(reader.read_observations(UnitKey(f"{subset}/1")))
+
+
+def test_by_default_the_settings_are_left_out_whatever_they_hold(tmp_path: Path) -> None:
+    content = flown_row(1, 1, ("30.0", "0.50", "80.0")) + "\n"
+    root = with_subsets(tmp_path, {"FD002": content.encode("ascii")})
+
+    observations = list(CmapssCorpusReader(root, ("FD002",)).read_observations(UnitKey("FD002/1")))
+
+    assert [o.channel for o in observations] == [sensor.name for sensor in SENSORS]
+
+
+@pytest.mark.skipif(
+    raw_root() is None,
+    reason="the raw C-MAPSS files are not on this machine (scripts/fetch_corpora.py cmapss)",
+)
+def test_full_corpus_per_condition_names_a_condition_for_every_row() -> None:
+    root = raw_root()
+    assert root is not None
+
+    description = per_condition(root, SUBSETS).describe()
+
+    assert len(description.channel_schema) == 6 * len(SENSORS)
+    assert description.content == CmapssCorpusReader(root).describe().content

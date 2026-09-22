@@ -19,9 +19,10 @@ import csv
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from math import sqrt
 from pathlib import Path
 from statistics import mean, pstdev, stdev
-from typing import Self
+from typing import NamedTuple, Self
 
 # Run from anywhere: the sibling script modules live in this directory's package at the repository
 # root. The imports below follow, which is why this file is exempt from the import-order rule in
@@ -30,6 +31,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
+from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVerdict
@@ -96,9 +99,9 @@ class CurvePoint:
     trainable_parameters: int
     rmse: float
     rmse_below_ceiling: float | None
-    last_window_rmse: float
-    alpha_lambda_accuracy: float
-    asymmetric_score: float
+    last_window_rmse: float | None
+    alpha_lambda_accuracy: float | None
+    asymmetric_score: float | None
     seconds: float
 
     COLUMNS = (
@@ -125,12 +128,10 @@ class CurvePoint:
             "engines": str(self.engines),
             "trainable_parameters": str(self.trainable_parameters),
             "rmse": repr(self.rmse),
-            "rmse_below_ceiling": ""
-            if self.rmse_below_ceiling is None
-            else repr(self.rmse_below_ceiling),
-            "last_window_rmse": repr(self.last_window_rmse),
-            "alpha_lambda_accuracy": repr(self.alpha_lambda_accuracy),
-            "asymmetric_score": repr(self.asymmetric_score),
+            "rmse_below_ceiling": _text(self.rmse_below_ceiling),
+            "last_window_rmse": _text(self.last_window_rmse),
+            "alpha_lambda_accuracy": _text(self.alpha_lambda_accuracy),
+            "asymmetric_score": _text(self.asymmetric_score),
             "seconds": repr(self.seconds),
         }
 
@@ -144,14 +145,20 @@ class CurvePoint:
             engines=int(record["engines"]),
             trainable_parameters=int(record["trainable_parameters"]),
             rmse=float(record["rmse"]),
-            rmse_below_ceiling=(
-                None if record["rmse_below_ceiling"] == "" else float(record["rmse_below_ceiling"])
-            ),
-            last_window_rmse=float(record["last_window_rmse"]),
-            alpha_lambda_accuracy=float(record["alpha_lambda_accuracy"]),
-            asymmetric_score=float(record["asymmetric_score"]),
+            rmse_below_ceiling=_number(record["rmse_below_ceiling"]),
+            last_window_rmse=_number(record["last_window_rmse"]),
+            alpha_lambda_accuracy=_number(record["alpha_lambda_accuracy"]),
+            asymmetric_score=_number(record["asymmetric_score"]),
             seconds=float(record["seconds"]),
         )
+
+
+def _text(value: float | None) -> str:
+    return "" if value is None else repr(value)
+
+
+def _number(text: str) -> float | None:
+    return None if text == "" else float(text)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -320,8 +327,10 @@ def predictions_of(shards: Sequence[Stored]) -> dict[CellKey, tuple[WindowPredic
     return {key: tuple(rows) for key, rows in cells.items()}
 
 
-def require_one_configuration(shards: Sequence[Stored]) -> None:
-    """Refuse shards that do not make one grid: one commit, one backbone, one plan per mode.
+def require_one_configuration(shards: Sequence[Stored], task: KnownTask) -> None:
+    """Refuse shards that do not make one grid.
+
+    One task, one commit, one backbone, one plan per mode.
 
     Two shards run on two accelerators differ in their device and may in what torch reports;
     they must not differ in what was learnt from, how, or under which code.
@@ -336,9 +345,17 @@ def require_one_configuration(shards: Sequence[Stored]) -> None:
     backbones = sorted({run["backbone"] for run in runs if run["backbone"]})
     if len(backbones) > 1:
         raise SystemExit(f"the shards adapt more than one backbone: {', '.join(backbones)}")
+    # A grid stored before the task was a column is the first task's.
+    tasks = sorted({run.get("task") or KnownTasks.default().name for run in runs})
+    if tasks != [task.name]:
+        raise SystemExit(
+            f"the shards hold the task(s) {', '.join(tasks)}, not {task.name}; pass --task"
+        )
     settings = [name for name in PLAN_COLUMNS if name not in ("mode", "run_seed")]
     for mode in MODES:
-        plans = {tuple(run[name] for name in settings) for run in runs if run["mode"] == mode}
+        plans = {
+            tuple(run.get(name, "") for name in settings) for run in runs if run["mode"] == mode
+        }
         if len(plans) > 1:
             differing = sorted(
                 name
@@ -358,7 +375,6 @@ def points_of(
     for shard in shards:
         for run in shard.runs():
             key = (run["mode"], run["budget"], int(run["sample_seed"]))
-            metrics = RemainingLifeMetrics.of(cells[key], ceiling=task.ceiling)
             points.append(
                 CurvePoint(
                     mode=run["mode"],
@@ -367,15 +383,46 @@ def points_of(
                     seed=int(run["sample_seed"]),
                     engines=int(run["engines"]),
                     trainable_parameters=int(run["trainable_parameters"]),
-                    rmse=metrics.rmse,
-                    rmse_below_ceiling=metrics.rmse_below_ceiling,
-                    last_window_rmse=metrics.last_window_rmse,
-                    alpha_lambda_accuracy=metrics.alpha_lambda_accuracy,
-                    asymmetric_score=metrics.asymmetric_score,
+                    **readings_of(cells[key], task)._asdict(),
                     seconds=float(run["seconds"]),
                 )
             )
     return tuple(sorted(points, key=lambda p: (budget_rank(p.budget), MODES.index(p.mode), p.seed)))
+
+
+class Readings(NamedTuple):
+    """What a cell's predictions read as under a task's scheme; blank where the scheme has none."""
+
+    rmse: float
+    rmse_below_ceiling: float | None
+    last_window_rmse: float | None
+    alpha_lambda_accuracy: float | None
+    asymmetric_score: float | None
+
+
+def readings_of(predictions: Sequence[WindowPrediction], task: KnownTask) -> Readings:
+    """The readings a cell's predictions give under the task's scheme.
+
+    The endpoint is the RMSE whatever the scheme; the readings beside it are the remaining-life
+    task's own — a forecast has no ceiling, no last window at the end of a life and no
+    benchmark score — and are left blank for any other.
+    """
+    match task.labels:
+        case RemainingLifeScheme():
+            metrics = RemainingLifeMetrics.of(predictions, ceiling=task.labels.ceiling)
+            return Readings(
+                rmse=metrics.rmse,
+                rmse_below_ceiling=metrics.rmse_below_ceiling,
+                last_window_rmse=metrics.last_window_rmse,
+                alpha_lambda_accuracy=metrics.alpha_lambda_accuracy,
+                asymmetric_score=metrics.asymmetric_score,
+            )
+        case ForecastScheme():
+            return Readings(rmse_of(predictions), None, None, None, None)
+
+
+def rmse_of(predictions: Sequence[WindowPrediction]) -> float:
+    return sqrt(sum((p.predicted - p.target) ** 2 for p in predictions) / len(predictions))
 
 
 def comparisons_of(
@@ -412,12 +459,8 @@ def comparisons_of(
                 control=[UnitError.per_unit(run) for run in control_runs],
                 candidate=[UnitError.per_unit(run) for run in candidate_runs],
             )
-            control_rmses = [
-                RemainingLifeMetrics.of(run, ceiling=task.ceiling).rmse for run in control_runs
-            ]
-            candidate_rmses = [
-                RemainingLifeMetrics.of(run, ceiling=task.ceiling).rmse for run in candidate_runs
-            ]
+            control_rmses = [rmse_of(run) for run in control_runs]
+            candidate_rmses = [rmse_of(run) for run in candidate_runs]
             difference = bootstrap.compare(paired)
             floor = rules.floor_of(paired.rmse_control, control_rmses)
             primary = (TransferMode(mode), budget) == PRIMARY
@@ -467,16 +510,22 @@ def _spread(values: Sequence[float]) -> float:
 def baselines_of(
     cells: Mapping[CellKey, tuple[WindowPrediction, ...]], task: KnownTask
 ) -> tuple[Baseline, ...]:
-    """The mean and the ceiling predictors over the validation windows any cell answered."""
+    """The trivial predictors over the validation windows any cell answered.
+
+    The mean, and for a remaining-life task the ceiling as well.
+    """
     first = next(iter(cells.values()))
     targets = [prediction.target for prediction in first]
-    return (
-        Baseline(name="mean predictor", rmse=pstdev(targets)),
-        Baseline(
-            name="ceiling predictor",
-            rmse=(sum((task.ceiling - target) ** 2 for target in targets) / len(targets)) ** 0.5,
-        ),
-    )
+    baselines = [Baseline(name="mean predictor", rmse=pstdev(targets))]
+    if isinstance(task.labels, RemainingLifeScheme):
+        ceiling = task.labels.ceiling
+        baselines.append(
+            Baseline(
+                name="ceiling predictor",
+                rmse=(sum((ceiling - target) ** 2 for target in targets) / len(targets)) ** 0.5,
+            )
+        )
+    return tuple(baselines)
 
 
 def curve_of(shards: Sequence[Stored], task: KnownTask) -> Curve:
@@ -485,7 +534,7 @@ def curve_of(shards: Sequence[Stored], task: KnownTask) -> Curve:
     Raises:
         SystemExit: If the shards hold no whole cell, or do not make one grid.
     """
-    require_one_configuration(shards)
+    require_one_configuration(shards, task)
     cells = predictions_of(shards)
     if not cells:
         raise SystemExit("the shards hold no prediction")
@@ -559,12 +608,23 @@ def sentence(curve: Curve) -> str:
     lost = [row.budget for row in others if row.budget not in held]
     shape = ""
     if others:
+        if held and lost:
+            where_held = f"at {_spoken(held)}, not at {_spoken(lost)}"
+        elif held:
+            where_held = f"at each of them ({_spoken(held)})"
+        else:
+            where_held = f"at none of them ({_spoken(lost)})"
         shape = (
             f"; among the secondary budgets the advantage of full fine-tuning holds under the "
-            f"Holm correction and above the floor at {', '.join(held) if held else 'none'} and "
-            f"not at {', '.join(lost) if lost else 'none'}"
+            f"Holm correction and above the floor {where_held}"
         )
     return f"{partial}{opening}{shape}. Preliminary; validation, not test."
+
+
+def _spoken(budgets: Sequence[str]) -> str:
+    # The budget of every label is named in words, because "not at all" reads as "never".
+    names = ["the full label set" if budget == "all" else budget for budget in budgets]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 def render(curve: Curve, task: KnownTask) -> str:
@@ -610,23 +670,52 @@ def render(curve: Curve, task: KnownTask) -> str:
             for row in curve.comparisons
         ]
 
+    units = task.units_called
+    remaining_life_readings = (
+        [
+            "",
+            "**Readings beside the endpoint**, mean ± SD over seeds:",
+            "",
+            "RMSE below the ceiling:",
+            "",
+            table(("budget", units, *MODES), cell_rows("rmse_below_ceiling")),
+            "",
+            "RMSE on the last window of each engine (on the validation side an engine's last "
+            "window ends within four cycles of its failure, so this is the error at the end of "
+            "life; the benchmark's protocol, and the only reading comparable with published "
+            "numbers, is the same over the test side's trajectories cut short of failure):",
+            "",
+            table(("budget", units, *MODES), cell_rows("last_window_rmse")),
+            "",
+            "Alpha-lambda accuracy (share of answers within 20 % of the label):",
+            "",
+            table(("budget", units, *MODES), cell_rows("alpha_lambda_accuracy")),
+            "",
+            "Asymmetric score (mean per window, lower is better; its exponential tail is "
+            "carried by a few engines):",
+            "",
+            table(("budget", units, *MODES), cell_rows("asymmetric_score")),
+        ]
+        if isinstance(task.labels, RemainingLifeScheme)
+        else []
+    )
     lines = [
         dated_heading(),
         "",
-        f"Task `{task.name}`, ceiling {task.ceiling:g}, {task.strata} strata. Every number is "
+        f"Task `{task.name}`, {task.labels_text}, {task.strata} strata. Every number is "
         "validation, not test; the result is preliminary.",
         "",
-        "**Endpoint RMSE per cell, mean ± SD over seeds** (the engines column is how many "
-        "engines the budget's labels came from, over the seeds):",
+        f"**Endpoint RMSE per cell, mean ± SD over seeds** (the {units} column is how many "
+        f"{units} the budget's labels came from, over the seeds):",
         "",
-        table(("budget", "engines", *MODES), cell_rows("rmse")),
+        table(("budget", units, *MODES), cell_rows("rmse")),
         "",
         "Trivial predictors over the same windows: "
         + ", ".join(f"{b.name} {b.rmse:.2f}" for b in curve.baselines)
         + ".",
         "",
         "**Against the control arm**, pooled over the seeds both arms hold, the interval a "
-        "bootstrap over engines (10,000 resamples); the endpoint stands alone and the rest are "
+        f"bootstrap over {units} (10,000 resamples); the endpoint stands alone and the rest are "
         f"the registered family of {COMPARED_CELLS - 1} under the Holm correction at 5 %, a "
         "cell that has not run counting as never rejected:",
         "",
@@ -646,32 +735,11 @@ def render(curve: Curve, task: KnownTask) -> str:
             ),
             comparison_rows(),
         ),
-        "",
-        "**Readings beside the endpoint**, mean ± SD over seeds:",
-        "",
-        "RMSE below the ceiling:",
-        "",
-        table(("budget", "engines", *MODES), cell_rows("rmse_below_ceiling")),
-        "",
-        "RMSE on the last window of each engine (on the validation side an engine's last window "
-        "ends within four cycles of its failure, so this is the error at the end of life; the "
-        "benchmark's protocol, and the only reading comparable with published numbers, is the "
-        "same over the test side's trajectories cut short of failure):",
-        "",
-        table(("budget", "engines", *MODES), cell_rows("last_window_rmse")),
-        "",
-        "Alpha-lambda accuracy (share of answers within 20 % of the label):",
-        "",
-        table(("budget", "engines", *MODES), cell_rows("alpha_lambda_accuracy")),
-        "",
-        "Asymmetric score (mean per window, lower is better; its exponential tail is carried by "
-        "a few engines):",
-        "",
-        table(("budget", "engines", *MODES), cell_rows("asymmetric_score")),
+        *remaining_life_readings,
         "",
         "Seconds per run:",
         "",
-        table(("budget", "engines", *MODES), cell_rows("seconds")),
+        table(("budget", units, *MODES), cell_rows("seconds")),
         "",
         f"**Conclusion.** {sentence(curve)}",
     ]
@@ -684,6 +752,12 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         "shards", nargs="*", type=Path, help="directories the transfer report stored cells under"
     )
     parser.add_argument("--report-only", type=Path, metavar="DIR", help="render a stored curve")
+    parser.add_argument(
+        "--task",
+        choices=KnownTasks.names(),
+        default=KnownTasks.default().name,
+        help="the supervised task the shards were run on",
+    )
     parser.add_argument(
         "--out",
         type=Path,
@@ -698,7 +772,7 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> None:
     arguments = parse_arguments(argv)
-    task = KnownTasks.default()
+    task = KnownTasks.named(arguments.task)
     if arguments.report_only is not None:
         print(render(read(arguments.report_only), task))
         return

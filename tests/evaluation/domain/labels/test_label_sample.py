@@ -1,6 +1,6 @@
 import pytest
 
-from emblema.evaluation.domain.exceptions import InvalidLabelBudgetError
+from emblema.evaluation.domain.exceptions import EmptyLabelSampleError, InvalidLabelBudgetError
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
@@ -101,3 +101,20 @@ def test_the_sample_counts_the_units_its_windows_came_from() -> None:
     assert LabelSample.drawn(TASK, pool(), LabelBudget.everything(), BINS, seed=3).unit_count == 4
     assert LabelSample.drawn(TASK, pool(), LabelBudget.of(6), BINS, seed=3).unit_count == 3
     assert LabelSample.drawn(TASK, pool(), LabelBudget.of(1), BINS, seed=3).unit_count == 1
+
+
+def test_the_sample_knows_the_mean_of_its_labels() -> None:
+    sample = LabelSample.drawn(TASK, pool(), LabelBudget.of(6), BINS, seed=3)
+
+    expected = sum(labelled.target for labelled in sample.windows) / 6
+    assert sample.mean_target == pytest.approx(expected)
+    assert (
+        LabelSample.drawn(TASK, pool(), LabelBudget.everything(), BINS, seed=3).mean_target == 5.5
+    )
+
+
+def test_a_sample_without_a_window_has_no_mean_label() -> None:
+    empty = LabelSample(task=TASK, windows=(), budget=LabelBudget.of(1), seed=1)
+
+    with pytest.raises(EmptyLabelSampleError):
+        _ = empty.mean_target

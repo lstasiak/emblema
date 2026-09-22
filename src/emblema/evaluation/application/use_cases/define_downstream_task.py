@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import UnknownTaskUnitsError
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
@@ -30,7 +31,7 @@ class DefineDownstreamTaskCommand:
     manifest: ArtifactRef
     units: frozenset[UnitKey]
     test: FrozenTestSplit
-    labels: RemainingLifeScheme
+    labels: RemainingLifeScheme | ForecastScheme
     strata: TargetBins
 
 
