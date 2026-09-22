@@ -1064,6 +1064,15 @@ and what a longer backbone on these two subsets lacks is data. The probe at its 
 under every backbone, scored 19.21, 18.66, 16.82 and 19.71 under 4, 8, 16 and 32 epochs; full
 fine-tuning under 16 epochs scored 16.13, 17.19 and 16.63. Nothing was chosen by it.
 
+**Measured, the grid** (record in `docs/verification/label-efficiency-curve.md`). The 60 runs
+landed at `d5a181e` as registered. Against the control, full fine-tuning: +12.5 per cent at 50 and
+at 1,000 labelled windows, distinguishable; −3.6 at all, indistinguishable. The low-rank updates:
++12.0 at 50 and +15.2 at all, distinguishable; +2.7 at 1,000, indistinguishable. The probe is
+distinguishable nowhere. At all labelled windows neither the control at 3e-3 nor full fine-tuning
+settled within 4,830 steps — the control's training loss ended at 0.0065–0.0135, full
+fine-tuning's jumped by 1.6 to 6.8 times — so that column is no comparison. The configuration had
+moved before this grid finished (below); this is its record.
+
 ### 2026-09-22 — the four subsets read per operating condition: a backbone over all of C-MAPSS, and when it replaces the one over FD001 and FD003, before any run
 
 **Why.** The corpus of FD001 and FD003 restored the scale and the endpoint is confirmed, by a thin
@@ -1148,3 +1157,16 @@ is reported beside this one, not in its place.
 **Cost, declared now.** 45 runs of the arms that step the encoder or an update beside it, 30 of
 about 2,000 steps and 15 of 4,830: about two and a half hours on an A100 shared by five processes,
 where a run of 2,002 steps took 620 s, and about six on an L4.
+
+**Measured** (record in `docs/verification/label-efficiency-curve.md`). The 60 runs landed at
+`fdf8053` on the A100 as registered; read again here from the fetched archives, the comparisons
+match the notebook's digit for digit. Against the control, full fine-tuning: +16.0 per cent at 50
+labelled windows, interval [+2.55, +5.03], and +9.0 at 1,000, [+0.42, +2.32], distinguishable;
+−5.1 at all, [−1.55, +0.26], indistinguishable. The low-rank updates: +22.2 at 50, distinguishable;
++5.2 at 1,000 and −4.3 at all, indistinguishable. The probe: +20.6 at 50, distinguishable; −5.4 at
+1,000, indistinguishable; −28.0 at all, worse. Over four seeds of the five the endpoint and every
+cell at 50 hold, and full fine-tuning at 1,000 is distinguishable in two readings. At 200, over the
+two seeds the sweep did not see, full fine-tuning leads by 5.0 per cent and the low-rank updates
+by 15.6. At all labelled windows full fine-tuning at 1e-3 does not settle under two seeds of five
+while the control fits under every seed, so that column measures in part a peak chosen over 2,002
+steps and run for 4,830.
