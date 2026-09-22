@@ -1016,3 +1016,34 @@ test run, under the peaks from scratch 3e-3, frozen probe 3e-1, low-rank updates
 fine-tuning 1e-3. Read over four seeds of the five, the verdict holds four times and falls below
 the tenth once, without the control's worst seed (+8.0 per cent): the margin is thin, and the
 grid reports it beside its own reading.
+
+### 2026-09-22 — the grid under the floor on FD001 and FD003, and whether a longer backbone helps the task, before either runs
+
+**The grid.** Budgets of 50, 1,000 and all labelled windows (2,568 on this version), the four
+arms, seeds 1 to 5, under the peaks of the section above — from scratch 3e-3, frozen probe 3e-1,
+low-rank updates 1e-4, full fine-tuning 1e-3 — with the floor of 2,000 optimiser steps and the
+head's start, the backbone `backbone-cmapss-m-8` and the corpus `a9c73709…`. It runs at
+`d5a181e`, the commit the endpoint ran at, whose code every later commit on this branch so far
+shares, on the GPU platform's two T4s in single precision, one process per device at a time, each
+cell published as it lands. The cell at 200 labelled windows is the endpoint measured on
+2026-09-22 and is not run again: the endpoint is measured once and read once. The curve is read
+by the registered family over the four budgets — the endpoint standing alone, the eleven
+secondary cells under the Holm correction, each budget's floor from its own control's seeds —
+and every comparison sits within one budget, so within one device. A smoke of the new budgets on
+this machine, one epoch each, checked the path before this section; its numbers decide nothing.
+
+**Whether a longer backbone helps the task, exploratory.** The doublings named the backbone of 8
+epochs on the pretext's loss, which fell by 2.6 per cent more from 8 to 32 epochs; whether the
+task gains what the pretext no longer shows is not measured. On this machine, at 200 labelled
+windows under seeds 1 to 3: the probe at 3e-1 under the backbones of 4, 16 and 32 epochs, and
+full fine-tuning at 1e-3 under the backbone of 32, against the same cells under the backbone of
+8 in the endpoint (the probe 18.30, 18.53, 19.15; full fine-tuning 17.12, 17.19, 17.72). Nothing
+is chosen by it: the configuration of the grid and of the test run stays as registered, and the
+reading goes to the budget of the backbones still to be registered. If full fine-tuning under 32
+epochs lies below its value under 8 on each of the three seeds, the task gains from pretraining
+that the pretext no longer measures; if not, the pretext's plateau is the task's as well, and
+what a longer backbone would lack is data rather than steps.
+
+**Cost, declared now.** The grid: 45 runs of the arms that step the encoder or an update beside
+it, 30 of about 2,000 steps and 15 of 4,830, at 0.37–0.41 s a step on a T4 — about seven and a
+half hours over the two devices. The check: under an hour here.
