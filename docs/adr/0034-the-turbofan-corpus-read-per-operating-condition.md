@@ -69,7 +69,10 @@ readings apart instead of taking one for the other.
   backbone it serves was pretrained on.
 - Whether the four subsets pretrain a better backbone for the turbofan task is measured, not
   assumed: a configuration changes only by a registration of its own, read on the same
-  validation engines.
+  validation engines. Measured so: on the same 21 engines the backbone over the four subsets
+  beats the one over FD001 and FD003 by 3.2 per cent, a narrow margin, and the endpoint is
+  confirmed on it, so this reading is the configuration
+  (`docs/verification/label-efficiency-curve.md`).
 
 ## Alternatives considered
 
