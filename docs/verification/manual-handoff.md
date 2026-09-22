@@ -326,6 +326,39 @@ What the runs say:
 
 The two sessions cost about 6.3 hours of the platform's GPU quota in all.
 
+### 2026-09-21 — Colab, NVIDIA L4, fp16, against Cloudflare R2: the backbone over FD001 and FD003 to its plateau
+
+The same ladder over `cmapss` published again with the subsets FD001 and FD003 alone, one
+operating condition each (`durable/sha256/a9c73709…`; why, in `docs/preregistration.md`,
+2026-09-21): the experiment files of 4, 8, 16, 32 and 64 epochs, placed here from `c1c8a9c` as
+run `colab-fd13`, fulfilled on one L4 of a paid notebook with all five runs sharing the device,
+and accepted here. Every run as before: batch 32, peak 1e-3 with a quarter-epoch warm-up and a
+cosine decay to one per cent spanning the run, fp16, seed 1.
+
+| Experiment | Backbone | Result | Weights | Best epoch | Validation loss | Share of the trivial predictor's | Training loss | Minutes of epochs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-cmapss-m` | `c2a16506-…` | `durable/sha256/a146b33e…` | `durable/sha256/16d9d2e7…` | 4 | 0.13830 | 0.212 | 0.1253 | 3 |
+| `backbone-cmapss-m-8` | `101274ae-…` | `durable/sha256/8faf5a71…` | `durable/sha256/259fdc70…` | 8 | 0.13427 | 0.206 | 0.1230 | 16 |
+| `backbone-cmapss-m-16` | `e0d2f3ab-…` | `durable/sha256/459fbe28…` | `durable/sha256/1999ecf7…` | 15 | 0.13207 | 0.203 | 0.1189 | 32 |
+| `backbone-cmapss-m-32` | `7359e47a-…` | `durable/sha256/3971157d…` | `durable/sha256/696d75c2…` | 32 | 0.13079 | 0.201 | 0.1173 | 22 |
+
+Validation loss per hidden token over the whole held-out side; the order of 64 epochs
+(`7e010b17-…`) was stopped after about thirteen epochs, once the rule had named its backbone, and stays
+ordered and unfulfilled.
+
+What the runs say:
+
+- **The doublings fall by 2.9, 1.6 and 1.0 per cent.** Under the rule of 2026-09-20 the first
+  doubling already gains less than five per cent, so the run of 8 epochs is the backbone
+  (`259fdc70…`); the run of 32 was let finish as the curve's own evidence, and 8 to 32 epochs
+  together take 2.6 per cent off.
+- **The pretext is a task again.** Over the four subsets the backbone's loss fell to 0.7 per cent
+  of the trivial predictor's, because the operating condition, read off the other channels, gave
+  every masked value away; normalised within one condition the loss stays at a fifth of the
+  trivial predictor's, and what is left to predict is the engine's own state.
+- **Cost**: one epoch takes about 30 s on the L4 alone and 120 s with four runs sharing it; the
+  minutes above are the runs' own epochs, however many ran beside them.
+
 ### Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when

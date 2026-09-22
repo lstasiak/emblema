@@ -459,3 +459,135 @@ What the sweep says:
 - **Cost on a T4, fp32**: 0.38–0.40 s a step, as before; the nine configurations took 2.0 h
   over the two accelerators.
 
+
+## 2026-09-21 — Linux x86_64 (Colab, NVIDIA L4, fp32): the sweep on the corpus normalised within one operating condition
+
+The corpus the backbones had been pretrained on joined the four C-MAPSS subsets under one
+normalisation per channel, and in FD002 and FD004 the operating condition swamps every sensor, so
+the task's subset occupied a sliver of the scale (`docs/preregistration.md`, 2026-09-21). The
+corpus published again with FD001 and FD003 alone (`durable/sha256/a9c73709…`), its backbone
+chosen by the doublings of `manual-handoff.md` (2026-09-21, FD001 and FD003: 8 epochs, weights
+`sha256:259fdc70…`), and all four arms swept on it by the rule of 2026-09-20: 200 labelled windows
+under seeds 1, 2 and 3, 2,002 optimiser steps, the head's start, grids centred where the edge
+rule had pointed on the old corpus. The task keeps its window, labels, strata and test engines and
+takes its tuning and validation engines from this version's division — 79 and 21, against 82 and
+18 before — so its numbers compare with the sections above in kind, not to the hundredth. Code
+`c1c8a9c`, five processes sharing the device; each configuration published as it finished and
+fetched back into `data/report/transfer/fd13-sweep/<arm>-lr<peak>` (archives, in the table's
+order: `fd46eb61…`, `2ec07503…`, `c06abeb5…`, `02a6a293…`; `a6e55796…`, `66c7bea3…`, `43ec6e50…`;
+`b2c49d62…`, `6911f941…`, `4442bb04…`; `8aad577b…`, `eae69043…`, `f3c9aa97…`). Validation RMSE in
+cycles, the lowest mean of each arm in bold:
+
+| arm | peak | seed 1 | seed 2 | seed 3 | mean | SD | seconds |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| from_scratch | 1e-2 | 22.77 | 20.65 | 22.38 | 21.93 | 1.13 | 1,530–1,537 |
+| **from_scratch** | **3e-3** | 17.45 | 19.38 | 19.32 | **18.72** | 1.10 | 1,180–1,189 |
+| from_scratch | 1e-3 | 17.87 | 20.99 | 20.56 | 19.81 | 1.69 | 1,179–1,188 |
+| from_scratch | 3e-4 | 19.96 | 22.08 | 21.62 | 21.22 | 1.11 | 1,180–1,189 |
+| **frozen_probe** | **3e-2** | 19.73 | 19.88 | 20.16 | **19.93** | 0.22 | 52–53 |
+| frozen_probe | 1e-2 | 21.47 | 21.59 | 21.65 | 21.57 | 0.09 | 52–55 |
+| frozen_probe | 3e-3 | 23.23 | 23.27 | 23.43 | 23.31 | 0.11 | 50–52 |
+| lora | 1e-3 | 16.69 | 18.88 | 18.52 | 18.03 | 1.17 | 1,487–1,837 |
+| lora | 3e-4 | 16.53 | 20.94 | 19.57 | 19.01 | 2.26 | 730–935 |
+| **lora** | **1e-4** | 15.95 | 18.44 | 17.39 | **17.26** | 1.25 | 730–932 |
+| **full_fine_tuning** | **1e-3** | 16.44 | 17.00 | 17.30 | **16.91** | 0.44 | 1,533–1,538 |
+| full_fine_tuning | 3e-4 | 17.27 | 20.08 | 18.59 | 18.65 | 1.40 | 1,533–1,537 |
+| full_fine_tuning | 1e-4 | 18.80 | 22.23 | 19.61 | 20.21 | 1.79 | 1,533–1,538 |
+
+What the sweep says:
+
+- **The pretrained arms stand below the control for the first time.** Full fine-tuning 16.91 and
+  the low-rank updates 17.26 against 18.72; on the four subsets under the backbone of 64 epochs
+  they stood above it, 22.95 and 21.94 against 20.86. The probe falls from 23.00 to 19.93:
+  the frozen features now carry the engine's state, where before they carried its operating
+  condition.
+- **The control gains too**, from 20.86 to 18.72, because the task's windows are normalised by
+  the same corpus's statistics, so its input spans the scale as well.
+- **Three of the four peaks sit at an edge** — the probe and full fine-tuning at the top, the
+  low-rank updates at the bottom — and go on to the edge rule; the control's edge at 1e-2 came
+  out worse, which leaves it inside its grid at 3e-3.
+- **Every arm that updates the encoder fits its 200 windows exactly**: the training loss ends
+  at 0.0000 over the 2,002 steps, without weight decay; the low-rank updates at 1e-4 end at
+  0.006–0.008 and the probe cannot fit them at all. The schedule is the same for every arm.
+- **The runs are stamped `c1c8a9c…-dirty`** because the run directory lay untracked inside the
+  checkout, which the revision reads as a change; the code is that commit's.
+- **Cost**: 1,180–1,540 s a run with five sharing the device, about 2.5 hours for the thirteen
+  configurations.
+
+## 2026-09-22 — Darwin arm64 (MacBook Pro M1 Pro, MPS, fp32): the edges and the endpoint on FD001 and FD003
+
+The rule the endpoint is read by settled before either ran (`docs/preregistration.md`,
+2026-09-22): confirmed when the relative reduction is at least 10 per cent, the whole 95 per cent
+interval lies above zero and the practical floor does not swallow it. Code `d5a181e`, one run at
+a time, overnight; each edge run only when the edge rule asked for it, then five seeds of the
+four arms under the peaks it named, one directory per arm and seed
+(`data/report/transfer/fd13-edges/`, `data/report/transfer/fd13-endpoint/`), read together by
+`scripts/label_curve_report.py` (`data/report/curve/fd13-endpoint/`). The edges, three seeds
+each:
+
+| arm | peak | seed 1 | seed 2 | seed 3 | mean | SD | seconds |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| frozen_probe | 1e-1 | 18.91 | 19.06 | 19.19 | 19.05 | 0.14 | 12–14 |
+| **frozen_probe** | **3e-1** | 18.30 | 18.53 | 19.15 | **18.66** | 0.44 | 12–13 |
+| lora | 3e-5 | 20.45 | 21.49 | 22.26 | 21.40 | 0.91 | 1,143–1,268 |
+| full_fine_tuning | 3e-3 | 26.64 | 21.10 | 20.40 | 22.71 | 3.42 | 970–971 |
+
+The probe's peak moved twice and stops at 3e-1, still at the top edge, where the rule allows no
+third step; the low-rank updates stay at 1e-4 and full fine-tuning at 1e-3, both now inside their
+grids. The endpoint, validation RMSE per seed:
+
+| arm | peak | seed 1 | seed 2 | seed 3 | seed 4 | seed 5 | mean | SD |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| from_scratch | 3e-3 | 18.75 | 19.22 | 19.24 | 18.75 | 20.55 | 19.30 | 0.74 |
+| frozen_probe | 3e-1 | 18.30 | 18.53 | 19.15 | 19.06 | 19.29 | 18.86 | 0.43 |
+| lora | 1e-4 | 15.95 | 18.44 | 17.39 | 17.32 | 17.58 | 17.34 | 0.89 |
+| full_fine_tuning | 1e-3 | 17.12 | 17.19 | 17.72 | 17.82 | 16.56 | 17.28 | 0.51 |
+
+Against the control, pooled over the five seeds, the interval a bootstrap over the 21 validation
+engines (10,000 resamples); trivial predictors over the same 618 windows: the mean 40.84, the
+ceiling 67.07.
+
+| mode | control | candidate | reduction | relative | 95 % interval | p | floor | verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| frozen_probe | 19.31 | 18.87 | +0.44 | +2.3 % | [−1.08, +1.93] | 0.5625 | 0.74 | indistinguishable |
+| lora | 19.31 | 17.35 | +1.96 | +10.1 % | [+0.58, +3.44] | 0.0034 | 0.74 | distinguishable |
+| **full_fine_tuning** | 19.31 | 17.29 | **+2.02** | **+10.5 %** | **[+0.98, +3.13]** | 0.0002 | 0.74 | **confirmed** |
+
+Beside it, mean over the seeds: RMSE below the ceiling 18.87, 17.56, 17.20 and 16.90 in the
+table's order of arms (control first); on each engine's last window 4.89, 9.10, 6.69 and 4.27;
+the share within 20 per cent of the label 0.53, 0.48, 0.54 and 0.56; the asymmetric score 10.55,
+6.45, 6.49 and 6.30.
+
+How much the verdict rests on, read the same way over fewer seeds:
+
+| seeds read | control | full fine-tuning | relative | 95 % interval | verdict |
+| --- | --- | --- | --- | --- | --- |
+| all five | 19.31 | 17.29 | +10.5 % | [+0.98, +3.13] | confirmed |
+| without seed 1 | 19.45 | 17.33 | +10.9 % | [+0.98, +3.31] | confirmed |
+| without seed 2 | 19.33 | 17.31 | +10.5 % | [+0.89, +3.21] | confirmed |
+| without seed 3 | 19.33 | 17.18 | +11.1 % | [+1.25, +3.14] | confirmed |
+| without seed 4 | 19.45 | 17.15 | +11.8 % | [+1.13, +3.53] | confirmed |
+| without seed 5 | 18.99 | 17.47 | +8.0 % | [+0.35, +2.74] | below the registered reduction |
+| seeds 1–3 | 19.07 | 17.35 | +9.0 % | [+0.31, +3.15] | below the registered reduction |
+
+What the endpoint says:
+
+- **Confirmed by the registered rule, on the validation side**: at 200 labelled windows full
+  fine-tuning from the backbone takes 10.5 per cent off training from scratch, its whole interval
+  above zero and more than twice the floor. The low-rank updates come within a tenth of a point of
+  it and are distinguishable in the family. Preliminary: the grid over four budgets and the single
+  test run are still to come.
+- **The margin over 10 per cent is thin.** The interval says the reduction is real; whether it
+  reaches a tenth rests on the control's fifth seed, its worst at 20.55: without that seed the
+  reduction is 8.0 per cent, and over seeds 1–3 it is 9.0 here and 9.7 on the L4. The
+  reduction lies near the threshold, and one more run of five seeds could fall on either side.
+- **The two accelerators agree where a run steps little.** The low-rank updates at 1e-4
+  reproduce the L4's three seeds to the hundredth; the arms at larger peaks drift by up to 0.7
+  (full fine-tuning) and 1.3 (the control's first seed), as on 2026-09-20. The edges read on
+  this machine against the sweep on the L4 are decided by far larger differences — 21.40 and
+  22.71 against 17.26 and 16.91 — so the drift did not choose a peak.
+- **The probe is weakest at the end of life**, 9.10 on each engine's last window against 4.27 to
+  6.69 for the others, while on the windows below the ceiling it stands ahead of the control: a
+  fixed linear read-out of the features places an engine's stage well and its last cycles poorly.
+- **Cost**: 970 s a run of full fine-tuning or from scratch, 1,144 s of the low-rank updates,
+  13 s of the probe; the edges and the endpoint, 32 runs, 6.2 hours.
