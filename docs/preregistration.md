@@ -1056,3 +1056,44 @@ each of the four backbones, so that each is read at its own best peak; and full 
 1e-3 under the backbone of 16 epochs. As above, nothing is chosen by them; a backbone other than 8
 epochs would enter only by a registration of its own, with its rule, before its endpoint runs.
 About an hour here.
+
+### 2026-09-22 — the four subsets read per operating condition: a backbone over all of C-MAPSS, and when it replaces the one over FD001 and FD003, before any run
+
+**Why.** The corpus of FD001 and FD003 restored the scale and the endpoint is confirmed, by a thin
+margin: read over four seeds of the five it holds four times and falls below the tenth once. That
+corpus holds 200 of the 709 engines, and its backbone stopped gaining on the pretext after 8
+epochs, which says it lacks data rather than steps. The four subsets read per operating condition
+(ADR-0034) give 25,395 windows against 7,192, while the task's own channels keep their scale: the
+sea-level channels' statistics lie within 5 per cent of those of the version of two subsets.
+
+**What runs.**
+
+1. *The corpus.* `cmapss` read per operating condition at window 50 and stride 5, manifest
+   `durable/sha256/d63f8e1b…`, holding out the units of FD001 and FD003 exactly as the version of
+   those two holds them out — the task's 79 tuning and 21 validation engines are unchanged — and a
+   seeded fifth of FD002 and FD004, 101 of their 509.
+2. *The backbone.* The ladder of 4, 8, 16, 32 and 64 epochs, and 128 if the last doubling still
+   gains 5 per cent or more, over the same experiment files, run `colab-cond` on the notebook
+   accelerator, named by the rule of 2026-09-20.
+3. *The peaks.* All four arms swept at 200 windows under seeds 1 to 3, the lowest mean, over grids
+   centred on the peaks the version of two subsets chose — from scratch 1e-3, 3e-3, 1e-2; frozen
+   probe 1e-1, 3e-1, 1; low-rank updates 3e-5, 1e-4, 3e-4; full fine-tuning 3e-4, 1e-3, 3e-3 —
+   then the edge rule.
+4. *The endpoint.* Five seeds of the four arms at 200 windows under the chosen peaks, on this
+   machine as the endpoint of 2026-09-22 was, read by the endpoint's rule.
+5. *When it replaces the configuration.* Both must hold: the endpoint is confirmed by the
+   endpoint's rule; and full fine-tuning under this backbone beats full fine-tuning under the
+   backbone of FD001 and FD003, paired on the same 21 validation engines and the same windows,
+   pooled over the five seeds, with the whole 95 per cent interval of a bootstrap over the engines
+   (10,000 resamples) above zero. Comparing the two reductions instead would choose whichever run
+   was luckier. If either fails, FD001 and FD003 stay the configuration of the grid and the test
+   run, and this corpus is reported as measured. If both hold, the grid under the floor runs again
+   on this configuration before the test run.
+
+Prediction: full fine-tuning's reduction grows with the corpus, and the paired comparison clears
+zero.
+
+**Cost, declared now.** The ladder, about 79,000 optimiser steps: under four hours on the notebook
+accelerator, less where the rule names a backbone before the last rung. The sweep, 36 runs, about
+two and a half hours there; the endpoint, twenty runs, a night here. A second grid, if the
+configuration changes: about seven and a half hours on the GPU platform.
