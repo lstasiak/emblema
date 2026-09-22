@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/emblema/catalog/adapters/synthetic/layouts.py: 100%</title>
+    <title>Coverage for src/emblema/shared/adapters/synthetic/layouts.py: 100%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -11,7 +11,7 @@
 <header>
     <div class="content">
         <h1>
-            <span class="text">Coverage for </span><b>src<span class="sep">/</span>emblema<span class="sep">/</span>catalog<span class="sep">/</span>adapters<span class="sep">/</span>synthetic<span class="sep">/</span>layouts.py</b>:
+            <span class="text">Coverage for </span><b>src<span class="sep">/</span>emblema<span class="sep">/</span>shared<span class="sep">/</span>adapters<span class="sep">/</span>synthetic<span class="sep">/</span>layouts.py</b>:
             <span class="pc_cov">100%</span>
         </h1>
         <aside id="help_panel_wrapper">
@@ -55,19 +55,19 @@
             </div>
         </aside>
         <h2>
-            <span class="text">9 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">9<span class="text"> run</span></button>
+            <span class="text">13 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">13<span class="text"> run</span></button>
             <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">0<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
             <button type="button" class="par run show_par button_toggle_par" value="par" data-shortcut="p" title="Toggle lines partially run">0<span class="text"> partial</span></button>
         </h2>
         <p class="text">
-            <a id="prevFileLink" class="nav" href="z_38ec9a787705af4d_latent_factor_process_py.html">&#xab; prev</a> &nbsp; &nbsp;
+            <a id="prevFileLink" class="nav" href="z_218ca96979a04b53_latent_factor_process_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a id="nextFileLink" class="nav" href="z_38ec9a787705af4d_sensor_layout_py.html">&#xbb; next</a>
+            <a id="nextFileLink" class="nav" href="z_218ca96979a04b53_sensor_layout_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-09-20 13:41 +0000
+            created at 2026-09-22 17:37 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -90,14 +90,14 @@
     <p class="pln"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t"><span class="str">and share no trajectory. ``null-a`` and ``null-b`` have the same shape and signal strength but no</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t"><span class="str">shared structure, so whatever transfer finds between them the pipeline invented.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="str">Constants rather than a registry: they are the adapter&#x27;s own specification, and a control whose</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="str">Constants rather than a registry: they are the generator&#x27;s own specification, and a control whose</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t"><span class="str">dials can be turned from a command line is not a control.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t"><span class="str">&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t12" href="#t12">12</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t"><span class="key">from</span> <span class="nam">collections</span><span class="op">.</span><span class="nam">abc</span> <span class="key">import</span> <span class="nam">Mapping</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">catalog</span><span class="op">.</span><span class="nam">adapters</span><span class="op">.</span><span class="nam">synthetic</span><span class="op">.</span><span class="nam">latent_factor_process</span> <span class="key">import</span> <span class="nam">LatentFactorProcess</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">catalog</span><span class="op">.</span><span class="nam">adapters</span><span class="op">.</span><span class="nam">synthetic</span><span class="op">.</span><span class="nam">sensor_layout</span> <span class="key">import</span> <span class="nam">SensorLayout</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">shared</span><span class="op">.</span><span class="nam">adapters</span><span class="op">.</span><span class="nam">synthetic</span><span class="op">.</span><span class="nam">latent_factor_process</span> <span class="key">import</span> <span class="nam">LatentFactorProcess</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">shared</span><span class="op">.</span><span class="nam">adapters</span><span class="op">.</span><span class="nam">synthetic</span><span class="op">.</span><span class="nam">sensor_layout</span> <span class="key">import</span> <span class="nam">SensorLayout</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t"><span class="com"># Four factors over periods from a couple of dozen steps to a few hundred. The band is chosen</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t"><span class="com"># against the layouts that watch it: the sparsest of them reports every three steps, so the</span>&nbsp;</span><span class="r"></span></p>
@@ -156,19 +156,49 @@
     <p class="run"><span class="n"><a id="t72" href="#t72">72</a></span><span class="t"><span class="nam">NULL_A</span> <span class="op">=</span> <span class="nam">CONTROL_A</span><span class="op">.</span><span class="nam">with_dials</span><span class="op">(</span><span class="nam">name</span><span class="op">=</span><span class="str">&quot;null-a&quot;</span><span class="op">,</span> <span class="nam">coupling</span><span class="op">=</span><span class="num">0.0</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t73" href="#t73">73</a></span><span class="t"><span class="nam">NULL_B</span> <span class="op">=</span> <span class="nam">CONTROL_B</span><span class="op">.</span><span class="nam">with_dials</span><span class="op">(</span><span class="nam">name</span><span class="op">=</span><span class="str">&quot;null-b&quot;</span><span class="op">,</span> <span class="nam">coupling</span><span class="op">=</span><span class="num">0.0</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t74" href="#t74">74</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t75" href="#t75">75</a></span><span class="t"><span class="nam">LAYOUTS</span><span class="op">:</span> <span class="nam">Mapping</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">SensorLayout</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t76" href="#t76">76</a></span><span class="t">    <span class="nam">layout</span><span class="op">.</span><span class="nam">name</span><span class="op">:</span> <span class="nam">layout</span> <span class="key">for</span> <span class="nam">layout</span> <span class="key">in</span> <span class="op">(</span><span class="nam">CONTROL_A</span><span class="op">,</span> <span class="nam">CONTROL_B</span><span class="op">,</span> <span class="nam">NULL_A</span><span class="op">,</span> <span class="nam">NULL_B</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t77" href="#t77">77</a></span><span class="t"><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t75" href="#t75">75</a></span><span class="t"><span class="com"># The second layout of each pair with more units and nothing else turned: the corpus a transfer</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t76" href="#t76">76</a></span><span class="t"><span class="com"># is measured on, where the width of the paired interval over held-out units is what decides</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t77" href="#t77">77</a></span><span class="t"><span class="com"># whether an equivalence can be read at all. The first hundred and twenty units are the narrow</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t78" href="#t78">78</a></span><span class="t"><span class="com"># layout&#x27;s own, draw for draw, because a unit&#x27;s draws are addressed by its position.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t79" href="#t79">79</a></span><span class="t"><span class="nam">CONTROL_B_WIDE</span> <span class="op">=</span> <span class="nam">CONTROL_B</span><span class="op">.</span><span class="nam">with_dials</span><span class="op">(</span><span class="nam">name</span><span class="op">=</span><span class="str">&quot;control-b-wide&quot;</span><span class="op">,</span> <span class="nam">units</span><span class="op">=</span><span class="num">800</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t80" href="#t80">80</a></span><span class="t"><span class="nam">NULL_B_WIDE</span> <span class="op">=</span> <span class="nam">NULL_B</span><span class="op">.</span><span class="nam">with_dials</span><span class="op">(</span><span class="nam">name</span><span class="op">=</span><span class="str">&quot;null-b-wide&quot;</span><span class="op">,</span> <span class="nam">units</span><span class="op">=</span><span class="num">800</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t81" href="#t81">81</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t82" href="#t82">82</a></span><span class="t"><span class="com"># The second layout watching the first&#x27;s own factor trajectories, unit for unit: a leak, not a</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t83" href="#t83">83</a></span><span class="t"><span class="com"># control, and therefore the ceiling of what transfer between the two can give. As many units as</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t84" href="#t84">84</a></span><span class="t"><span class="com"># the first layout has, so that every trajectory here is one the first layout was pretrained on.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t85" href="#t85">85</a></span><span class="t"><span class="nam">CONTROL_B_SHARED</span> <span class="op">=</span> <span class="nam">CONTROL_B</span><span class="op">.</span><span class="nam">with_dials</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t86" href="#t86">86</a></span><span class="t">    <span class="nam">name</span><span class="op">=</span><span class="str">&quot;control-b-shared&quot;</span><span class="op">,</span> <span class="nam">units</span><span class="op">=</span><span class="nam">CONTROL_A</span><span class="op">.</span><span class="nam">units</span><span class="op">,</span> <span class="nam">trajectory_seed</span><span class="op">=</span><span class="nam">CONTROL_A</span><span class="op">.</span><span class="nam">trajectory_seed</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t87" href="#t87">87</a></span><span class="t"><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t88" href="#t88">88</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t89" href="#t89">89</a></span><span class="t"><span class="com"># The first layout of the null pair with its signal drowned: the sensors report noise, with the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t"><span class="com"># same channels, cadence and losses. A backbone pretrained here learns the mechanics of reading a</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t"><span class="com"># corpus &#8212; embeddings, normalisation, attention over a window &#8212; and nothing about any signal,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t92" href="#t92">92</a></span><span class="t"><span class="com"># which is the share of a transfer that any pretraining at all would give.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t93" href="#t93">93</a></span><span class="t"><span class="nam">NOISE_A</span> <span class="op">=</span> <span class="nam">NULL_A</span><span class="op">.</span><span class="nam">with_dials</span><span class="op">(</span><span class="nam">name</span><span class="op">=</span><span class="str">&quot;noise-a&quot;</span><span class="op">,</span> <span class="nam">noise</span><span class="op">=</span><span class="num">100.0</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t94" href="#t94">94</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t95" href="#t95">95</a></span><span class="t"><span class="nam">LAYOUTS</span><span class="op">:</span> <span class="nam">Mapping</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">SensorLayout</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t96" href="#t96">96</a></span><span class="t">    <span class="nam">layout</span><span class="op">.</span><span class="nam">name</span><span class="op">:</span> <span class="nam">layout</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t97" href="#t97">97</a></span><span class="t">    <span class="key">for</span> <span class="nam">layout</span> <span class="key">in</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t98" href="#t98">98</a></span><span class="t">        <span class="nam">CONTROL_A</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t99" href="#t99">99</a></span><span class="t">        <span class="nam">CONTROL_B</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t100" href="#t100">100</a></span><span class="t">        <span class="nam">NULL_A</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t101" href="#t101">101</a></span><span class="t">        <span class="nam">NULL_B</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t102" href="#t102">102</a></span><span class="t">        <span class="nam">CONTROL_B_WIDE</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t103" href="#t103">103</a></span><span class="t">        <span class="nam">NULL_B_WIDE</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t104" href="#t104">104</a></span><span class="t">        <span class="nam">CONTROL_B_SHARED</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t105" href="#t105">105</a></span><span class="t">        <span class="nam">NOISE_A</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t106" href="#t106">106</a></span><span class="t">    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t107" href="#t107">107</a></span><span class="t"><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
         <p>
-            <a class="nav" href="z_38ec9a787705af4d_latent_factor_process_py.html">&#xab; prev</a> &nbsp; &nbsp;
+            <a class="nav" href="z_218ca96979a04b53_latent_factor_process_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a class="nav" href="z_38ec9a787705af4d_sensor_layout_py.html">&#xbb; next</a>
+            <a class="nav" href="z_218ca96979a04b53_sensor_layout_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-09-20 13:41 +0000
+            created at 2026-09-22 17:37 +0000
         </p>
     </div>
 </footer>
