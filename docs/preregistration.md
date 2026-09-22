@@ -1047,3 +1047,12 @@ what a longer backbone would lack is data rather than steps.
 **Cost, declared now.** The grid: 45 runs of the arms that step the encoder or an update beside
 it, 30 of about 2,000 steps and 15 of 4,830, at 0.37–0.41 s a step on a T4 — about seven and a
 half hours over the two devices. The check: under an hour here.
+
+**Added to the check after its probes ran and before anything below.** Under a fixed peak of 3e-1
+the probe scored 19.21, 18.66, 16.82 and 19.71 over seeds 1 to 3 under the backbones of 4, 8, 16
+and 32 epochs, and a peak chosen under one backbone may not suit the features of another. Two
+more exploratory cells, on the same machine, windows and seeds: the probe at 1e-1, 3e-1 and 1 under
+each of the four backbones, so that each is read at its own best peak; and full fine-tuning at
+1e-3 under the backbone of 16 epochs. As above, nothing is chosen by them; a backbone other than 8
+epochs would enter only by a registration of its own, with its rule, before its endpoint runs.
+About an hour here.
