@@ -1097,3 +1097,12 @@ zero.
 accelerator, less where the rule names a backbone before the last rung. The sweep, 36 runs, about
 two and a half hours there; the endpoint, twenty runs, a night here. A second grid, if the
 configuration changes: about seven and a half hours on the GPU platform.
+
+**Where the endpoint may run, added before it runs.** The endpoint may run on the notebook
+accelerator in place of this machine. Then the old side of the replacement rule is not the
+endpoint of FD001 and FD003 measured here but full fine-tuning under that backbone run again on
+the same accelerator — its corpus, its peak of 1e-3, 200 windows, seeds 1 to 5 — so that both sides
+of the pair come from one device: between devices this arm drifted by up to 0.7 RMSE in a seed
+(`docs/verification/label-efficiency-curve.md`), the size of the effect the rule looks for. The
+endpoint of FD001 and FD003 is not read again; run on this machine, the endpoint reads as
+registered above.
