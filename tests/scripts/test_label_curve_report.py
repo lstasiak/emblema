@@ -211,7 +211,7 @@ def test_the_conclusion_names_the_endpoint_and_the_secondary_shape(shards: list[
     assert conclusion.startswith(
         f"{INCOMPLETE}Confirmed on the registered endpoint: at 200 labelled windows"
     )
-    assert "Holm correction and above the floor at 50 and not at none" in conclusion
+    assert "Holm correction and above the floor at each of them (50)." in conclusion
     assert conclusion.endswith("Preliminary; validation, not test.")
     rendered = render(curve, KnownTasks.default())
     assert "| 50 | 3 |" in rendered
@@ -257,6 +257,27 @@ def test_the_whole_grid_is_read_without_the_incomplete_warning(tmp_path: Path) -
     assert len(curve.comparisons) == 12
     assert sentence(curve).startswith("Confirmed on the registered endpoint")
     assert "Incomplete" not in sentence(curve)
+
+
+def test_the_conclusion_names_the_budget_of_every_label_in_words(tmp_path: Path) -> None:
+    shard = Stored.open(tmp_path / "shard")
+    for seed in (1, 2, 3, 4, 5):
+        for budget in ("50", "200", "1000", "all"):
+            for mode in TransferMode:
+                # Full fine-tuning draws level with the control once every label is used.
+                matched = (mode, budget) == (TransferMode.FULL_FINE_TUNING, "all")
+                error = ERROR[TransferMode.FROM_SCRATCH] if matched else ERROR[mode]
+                shard.add(
+                    outcome(mode, budget, seed, error),
+                    task="turbofan-fd001",
+                    device="cpu",
+                    commit="abc",
+                )
+
+    conclusion = sentence(curve_of([shard], KnownTasks.default()))
+
+    assert "above the floor at 50 and 1000, not at the full label set." in conclusion
+    assert "not at all" not in conclusion
 
 
 def test_a_directory_without_a_curve_is_not_rendered(tmp_path: Path) -> None:

@@ -608,12 +608,23 @@ def sentence(curve: Curve) -> str:
     lost = [row.budget for row in others if row.budget not in held]
     shape = ""
     if others:
+        if held and lost:
+            where_held = f"at {_spoken(held)}, not at {_spoken(lost)}"
+        elif held:
+            where_held = f"at each of them ({_spoken(held)})"
+        else:
+            where_held = f"at none of them ({_spoken(lost)})"
         shape = (
             f"; among the secondary budgets the advantage of full fine-tuning holds under the "
-            f"Holm correction and above the floor at {', '.join(held) if held else 'none'} and "
-            f"not at {', '.join(lost) if lost else 'none'}"
+            f"Holm correction and above the floor {where_held}"
         )
     return f"{partial}{opening}{shape}. Preliminary; validation, not test."
+
+
+def _spoken(budgets: Sequence[str]) -> str:
+    # The budget of every label is named in words, because "not at all" reads as "never".
+    names = ["the full label set" if budget == "all" else budget for budget in budgets]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 def render(curve: Curve, task: KnownTask) -> str:
