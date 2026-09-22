@@ -54,13 +54,14 @@ readings apart instead of taking one for the other.
   channels over the four subsets and stays at 21 over the single-condition ones. In an FD002 or
   FD004 window a channel is observed only at the cycles flown at its condition, so its sampling is
   irregular; the encoder takes that without change.
-- Twelve channels are constant within their condition, the sensors a condition sets (T2 and P2
-  among them); they take a scale of one and carry the condition through their identity.
-- Measured on the four subsets read per condition, through the reader and with the statistics a
-  publication would fit: the units of the most compressed subset move over 0.51 of a channel's
-  scale for the median channel, against 0.004 read by sensor, and consecutive readings within a
-  unit correlate at 0.69, against 0.02. The single-condition subsets read per condition give the
-  values they give by sensor, renamed.
+- Twenty-eight channels are constant within their condition: the five sensors a condition sets
+  (T2, P2, farB and the two demanded fan speeds) hold still on 28 of their 30 channels. They take
+  a scale of one and carry the condition through their identity.
+- Measured on the four subsets read per condition, through the reader, over the 98 channels that
+  vary: the units of the most compressed subset move over 0.56 of a channel's scale for the median
+  channel, against 0.004 read by sensor and 0.53 for FD001 and FD003 alone, and consecutive
+  readings within a unit correlate at 0.63, against 0.02 and 0.75. The single-condition subsets
+  read per condition give the values they give by sensor, renamed.
 - The default reading's description, units and all 3,367,539 observations of the four subsets,
   hashed before the change and after it, are identical, so every version published so far reads
   as it did.
