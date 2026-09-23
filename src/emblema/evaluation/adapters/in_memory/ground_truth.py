@@ -20,7 +20,8 @@ class InMemoryGroundTruth:
         self._by_unit = dict(by_unit or {})
         self._by_window = dict(by_window or {})
 
-    def truths_of(self, windows: Sequence[TaskWindow]) -> Mapping[TaskWindow, float]:
+    def truths_of(self, corpus: str, windows: Sequence[TaskWindow]) -> Mapping[TaskWindow, float]:
+        # Stated truths are stated for one task, so the corpus adds nothing to look them up by.
         truths: dict[TaskWindow, float] = {}
         missing: list[str] = []
         for window in windows:

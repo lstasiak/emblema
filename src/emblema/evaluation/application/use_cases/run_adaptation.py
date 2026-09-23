@@ -95,7 +95,7 @@ class RunAdaptation:
             )
         )
         windows = self._corpus.windows_of(task.manifest, self._scored_units(task, command.purpose))
-        scored = task.labelled(windows, self._truth.truths_of(windows))
+        scored = task.labelled(windows, self._truth.truths_of(task.corpus, windows))
         return self._runtime.adapt(command.plan, task, sample, scored, retain=command.retain)
 
     def _scored_units(self, task: DownstreamTask, purpose: RunPurpose) -> frozenset[UnitKey]:

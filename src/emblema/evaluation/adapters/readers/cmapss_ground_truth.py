@@ -26,7 +26,8 @@ class CmapssGroundTruth:
         self._root = root
         self._lengths: dict[str, dict[int, int]] = {}
 
-    def truths_of(self, windows: Sequence[TaskWindow]) -> Mapping[TaskWindow, float]:
+    def truths_of(self, corpus: str, windows: Sequence[TaskWindow]) -> Mapping[TaskWindow, float]:
+        # This adapter is the truth of one corpus, so the name is the composite's business.
         failures = self._failure_times({window.unit for window in windows})
         return {window: failures[window.unit] for window in windows}
 

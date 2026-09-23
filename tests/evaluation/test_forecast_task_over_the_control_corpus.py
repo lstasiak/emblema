@@ -78,6 +78,7 @@ class Leg(NamedTuple):
 
     run: RunAdaptation
     task_id: TaskId
+    corpus: str
     validation_windows: int
     tuning_windows: int
 
@@ -134,6 +135,7 @@ def leg(tmp_path_factory: pytest.TempPathFactory) -> Leg:
             runtime,
         ),
         task_id,
+        task.corpus,
         len(corpus.windows_of(manifest, task.validation_units)),
         len(corpus.windows_of(manifest, task.tuning_units)),
     )
@@ -181,5 +183,6 @@ def test_the_labels_are_the_generators_readings_and_not_something_the_block_hold
     )
 
     windows = [p.window for p in outcome.predictions]
-    assert [p.target for p in outcome.predictions] == [truth.truths_of(windows)[w] for w in windows]
+    read = truth.truths_of(leg.corpus, windows)
+    assert [p.target for p in outcome.predictions] == [read[w] for w in windows]
     assert all(str(w.unit).startswith("control-b/") for w in windows)
