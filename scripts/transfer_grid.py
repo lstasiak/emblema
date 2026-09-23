@@ -257,11 +257,11 @@ class KnownTasks:
 
 
 def budget_of(text: str) -> LabelBudget:
-    return LabelBudget.everything() if text == "all" else LabelBudget.of(int(text))
+    return LabelBudget.parse(text)
 
 
 def budget_text(budget: LabelBudget) -> str:
-    return "all" if budget.windows is None else str(budget.windows)
+    return budget.text()
 
 
 def budget_rank(budget: str) -> float:

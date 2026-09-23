@@ -39,6 +39,7 @@ from emblema.evaluation.application.use_cases.define_downstream_task import (  #
     DefineDownstreamTaskCommand,
 )
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget  # noqa: E402
+from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit  # noqa: E402
 from emblema.evaluation.application.use_cases.run_adaptation import (  # noqa: E402
     RunAdaptation,
     RunAdaptationCommand,
@@ -48,6 +49,7 @@ from emblema.evaluation.domain.identifiers import UnitKey  # noqa: E402
 from emblema.evaluation.domain.labels.label_budget import LabelBudget  # noqa: E402
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme  # noqa: E402
 from emblema.evaluation.domain.labels.target_bins import TargetBins  # noqa: E402
+from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol  # noqa: E402
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
@@ -56,10 +58,14 @@ from emblema.evaluation.domain.transfer.adaptation_schedule import (  # noqa: E4
 )
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec  # noqa: E402
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
+from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher  # noqa: E402
+from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber  # noqa: E402
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator  # noqa: E402
 from emblema.shared.adapters.storage.local_directory import (  # noqa: E402
     LocalDirectoryArtifactStore,
 )
+from emblema.shared.adapters.system.clock import SystemClock  # noqa: E402
+from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator  # noqa: E402
 from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
 from emblema.shared.kernel.checksums import Checksum  # noqa: E402
 from tests.support.backbones import SmallBackbones  # noqa: E402
@@ -112,6 +118,7 @@ def runs(tmp_path_factory: pytest.TempPathFactory) -> Runs:
             manifest=manifest,
             units=frozenset(ENGINES),
             test=HELD,
+            protocol=EvaluationProtocol.LABEL_BUDGET,
             labels=RemainingLifeScheme(CEILING),
             strata=TargetBins(2),
         )
@@ -121,7 +128,19 @@ def runs(tmp_path_factory: pytest.TempPathFactory) -> Runs:
     )
     validation = corpus.windows_of(manifest, tasks.get(task).validation_units)
     return Runs(
-        RunAdaptation(tasks, corpus, lifetimes, DrawLabelBudget(tasks, corpus, lifetimes), runtime),
+        RunAdaptation(
+            tasks,
+            corpus,
+            lifetimes,
+            DrawLabelBudget(tasks, corpus, lifetimes),
+            OpenTestSplit(
+                tasks,
+                Uuid4IdGenerator(),
+                SystemClock(),
+                InMemoryEventPublisher(InMemoryEventSubscriber()),
+            ),
+            runtime,
+        ),
         task,
         len(validation),
     )

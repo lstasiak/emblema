@@ -45,9 +45,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.configured import configured_store
 from emblema.entrypoints.cli.pretrain.source_revision import SourceRevision
-from emblema.entrypoints.cli.restored_backbones import RestoredBackbones
+from emblema.entrypoints.configured import configured_store
+from emblema.entrypoints.restored_backbones import RestoredBackbones
 from emblema.evaluation.adapters.blocks.block_corpus_windows import BlockCorpusWindows
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
@@ -61,6 +61,7 @@ from emblema.evaluation.application.use_cases.define_downstream_task import (
     DefineDownstreamTaskCommand,
 )
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget
+from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit
 from emblema.evaluation.application.use_cases.run_adaptation import (
     RunAdaptation,
     RunAdaptationCommand,
@@ -68,14 +69,18 @@ from emblema.evaluation.application.use_cases.run_adaptation import (
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
+from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.ports.ground_truth import GroundTruth
 from emblema.pretraining.adapters.training.devices import available_device
+from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
+from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
 from emblema.shared.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS
 from emblema.shared.adapters.synthetic.sensor_signal import SensorSignal
+from emblema.shared.adapters.system.clock import SystemClock
 from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
@@ -349,6 +354,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             units=task.units_of(sorted(str(u) for u in sides.training | sides.validation))
             - test.units,
             test=test,
+            protocol=EvaluationProtocol.LABEL_BUDGET,
             labels=task.labels,
             strata=TargetBins(task.strata),
         )
@@ -356,7 +362,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     runtime = TorchAdaptationRuntime(
         RestoredBackbones(store, ref_of(arguments.weights)), blocks, device=device
     )
-    run = RunAdaptation(tasks, corpus, truth, DrawLabelBudget(tasks, corpus, truth), runtime)
+    ids = Uuid4IdGenerator()
+    # A tuning report never opens the frozen side, but the use case is what decides that, so it
+    # is given the operation rather than trusted not to need it.
+    open_test = OpenTestSplit(
+        tasks, ids, SystemClock(), InMemoryEventPublisher(InMemoryEventSubscriber())
+    )
+    run = RunAdaptation(
+        tasks, corpus, truth, DrawLabelBudget(tasks, corpus, truth), open_test, runtime
+    )
     try:
         for cell, plan in cells_of(arguments):
             if stored.holds(cell, plan, task=task.name, commit=commit):

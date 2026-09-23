@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 
 from emblema.evaluation.adapters.in_memory.adaptation_runtime import InMemoryAdaptationRuntime
@@ -7,6 +9,7 @@ from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
 )
 from emblema.evaluation.adapters.in_memory.ground_truth import InMemoryGroundTruth
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget
+from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit
 from emblema.evaluation.application.use_cases.run_adaptation import (
     RunAdaptation,
     RunAdaptationCommand,
@@ -16,7 +19,14 @@ from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
+from emblema.shared.adapters.in_memory.clock import FixedClock
+from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
+from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
+from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
+from emblema.shared.kernel.timestamps import UtcDateTime
 from tests.evaluation.support import MANIFEST, TASK, plan, sides, task, units
+
+NOW = UtcDateTime(datetime(2026, 1, 1, tzinfo=UTC))
 
 ENDS = {
     UnitKey("a"): [60.0, 120.0, 180.0, 240.0],
@@ -44,6 +54,12 @@ def run(
         corpus,
         lifetimes,
         DrawLabelBudget(tasks, corpus, lifetimes),
+        OpenTestSplit(
+            tasks,
+            SequentialIdGenerator(),
+            FixedClock(NOW),
+            InMemoryEventPublisher(InMemoryEventSubscriber()),
+        ),
         InMemoryAdaptationRuntime() if runtime is None else runtime,
     )
     return use_case(

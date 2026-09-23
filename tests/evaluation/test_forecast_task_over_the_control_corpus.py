@@ -35,6 +35,7 @@ from emblema.evaluation.application.use_cases.define_downstream_task import (  #
     DefineDownstreamTaskCommand,
 )
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget  # noqa: E402
+from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit  # noqa: E402
 from emblema.evaluation.application.use_cases.run_adaptation import (  # noqa: E402
     RunAdaptation,
     RunAdaptationCommand,
@@ -43,10 +44,13 @@ from emblema.evaluation.contracts.identifiers import TaskId  # noqa: E402
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme  # noqa: E402
 from emblema.evaluation.domain.labels.label_budget import LabelBudget  # noqa: E402
 from emblema.evaluation.domain.labels.target_bins import TargetBins  # noqa: E402
+from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol  # noqa: E402
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
+from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher  # noqa: E402
+from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber  # noqa: E402
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator  # noqa: E402
 from emblema.shared.adapters.synthetic.layouts import (  # noqa: E402
     CONTROL_A,
@@ -54,6 +58,8 @@ from emblema.shared.adapters.synthetic.layouts import (  # noqa: E402
     CONTROL_PROCESS,
 )
 from emblema.shared.adapters.synthetic.sensor_signal import SensorSignal  # noqa: E402
+from emblema.shared.adapters.system.clock import SystemClock  # noqa: E402
+from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator  # noqa: E402
 from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
 from tests.evaluation.support import LORA, WEIGHTS, adaptation_schedule  # noqa: E402
 from tests.support.backbones import SmallBackbones  # noqa: E402
@@ -98,6 +104,7 @@ def leg(tmp_path_factory: pytest.TempPathFactory) -> Leg:
             manifest=manifest,
             units=(sides.training | sides.validation) - test.units,
             test=test,
+            protocol=EvaluationProtocol.LABEL_BUDGET,
             labels=SCHEME,
             strata=TargetBins(2),
         )
@@ -113,7 +120,19 @@ def leg(tmp_path_factory: pytest.TempPathFactory) -> Leg:
     )
     task = tasks.get(task_id)
     return Leg(
-        RunAdaptation(tasks, corpus, truth, DrawLabelBudget(tasks, corpus, truth), runtime),
+        RunAdaptation(
+            tasks,
+            corpus,
+            truth,
+            DrawLabelBudget(tasks, corpus, truth),
+            OpenTestSplit(
+                tasks,
+                Uuid4IdGenerator(),
+                SystemClock(),
+                InMemoryEventPublisher(InMemoryEventSubscriber()),
+            ),
+            runtime,
+        ),
         task_id,
         len(corpus.windows_of(manifest, task.validation_units)),
         len(corpus.windows_of(manifest, task.tuning_units)),
