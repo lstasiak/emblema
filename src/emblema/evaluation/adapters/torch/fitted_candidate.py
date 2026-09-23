@@ -1,4 +1,6 @@
 import io
+import pickle
+import zipfile
 from dataclasses import dataclass
 from typing import Any, Self
 
@@ -7,6 +9,20 @@ import torch
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
+
+# What comes back from handing torch bytes it did not write. The reasons differ and to a caller
+# they are one thing: this artifact is not ours. Stated again rather than shared with the
+# Pretraining reader of stored models, because a context imports no other context's adapters.
+UNREADABLE_BYTES = (
+    KeyError,
+    IndexError,
+    TypeError,
+    ValueError,
+    RuntimeError,
+    EOFError,
+    pickle.UnpicklingError,
+    zipfile.BadZipFile,
+)
 
 
 @dataclass(frozen=True)
@@ -83,7 +99,7 @@ class FittedCandidate:
                 target_scale=stored["target_scale"],
                 weights=stored["weights"],
             )
-        except (KeyError, RuntimeError, EOFError) as error:
+        except UNREADABLE_BYTES as error:
             raise UnreadableFittedCandidateError(
-                "these bytes are not a fitted candidate"
+                f"not a fitted candidate this can read: {error}"
             ) from error
