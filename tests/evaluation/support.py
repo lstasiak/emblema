@@ -19,6 +19,9 @@ from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.campaign.compute_budget import ComputeBudget
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
+from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
+from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
@@ -114,6 +117,28 @@ def adaptation_schedule(**overrides: Any) -> AdaptationSchedule:
         warmup_fraction=0.0,
         final_lr_fraction=1.0,
     )
+    return replace(stated, **overrides)
+
+
+def boosting(**overrides: Any) -> GradientBoostingSpec:
+    """Few shallow trees: enough to fit something, fast enough for a domain test."""
+    stated = GradientBoostingSpec(
+        rounds=8,
+        max_depth=3,
+        learning_rate=0.3,
+        row_share=1.0,
+        feature_share=1.0,
+        min_leaf_weight=1.0,
+        l2_penalty=1.0,
+    )
+    return replace(stated, **overrides)
+
+
+def recipe(
+    features: FeatureScheme = FeatureScheme.PER_CHANNEL, **overrides: Any
+) -> ClassicalRecipe:
+    """A recipe that holds together under ``features``; anything named is replaced afterwards."""
+    stated = ClassicalRecipe(features=features, boosting=boosting(), seed=1, sources=())
     return replace(stated, **overrides)
 
 

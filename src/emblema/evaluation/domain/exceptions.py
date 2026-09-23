@@ -49,6 +49,18 @@ class InvalidAdaptationPlanError(EvaluationError, ValueError):
     """A plan names weights a mode does not start from, or low-rank updates a mode does not add."""
 
 
+class InvalidGradientBoostingSpecError(EvaluationError, ValueError):
+    """A boosting run asks for no tree, a rate that is not positive, or a share outside (0, 1]."""
+
+
+class InvalidClassicalRecipeError(EvaluationError, ValueError):
+    """A recipe repeats a source task, or would fit a channel-bound layout over several corpora."""
+
+
+class InvalidClassicalOutcomeError(EvaluationError, ValueError):
+    """A fit predicts nothing, predicts a window twice, or reports a time that is not finite."""
+
+
 class InvalidWindowPredictionError(EvaluationError, ValueError):
     """A prediction or its target is not a finite number."""
 
