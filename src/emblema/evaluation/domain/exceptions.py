@@ -161,6 +161,10 @@ class CampaignClosedError(EvaluationError):
     """A campaign that has already finished was asked to record another cell."""
 
 
+class CampaignChangedElsewhereError(EvaluationError):
+    """Another process changed the campaign between this one reading it and writing it back."""
+
+
 class IncompleteCampaignError(EvaluationError):
     """A campaign was asked to finish while cells of its grid had not run."""
 

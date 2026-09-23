@@ -1,4 +1,4 @@
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from emblema.evaluation.adapters.persistence.evaluation_campaign_record import (
@@ -6,7 +6,10 @@ from emblema.evaluation.adapters.persistence.evaluation_campaign_record import (
 )
 from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
-from emblema.evaluation.domain.exceptions import CampaignNotFoundError
+from emblema.evaluation.domain.exceptions import (
+    CampaignChangedElsewhereError,
+    CampaignNotFoundError,
+)
 
 
 class SqlAlchemyEvaluationCampaignRepository:
@@ -16,6 +19,12 @@ class SqlAlchemyEvaluationCampaignRepository:
     to run a cell is the design, and what it needs in order to know whether the grid is now
     finished is every cell already recorded. Writing the whole state merges the cells by their
     own key, so a cell recorded twice is refused by the primary key rather than duplicated.
+
+    Writing whole is why the revision is claimed first. Two workers that both read a grid, ran
+    a cell each and wrote back would each write the cells it knew of, and the second would
+    delete the first's. The row is locked and its revision compared before anything is written,
+    so the check and the write cannot be interleaved and the loser is told rather than obeyed.
+    The lock is held for the length of a save, which is a statement or two; a cell is minutes.
     """
 
     def __init__(self, engine: Engine) -> None:
@@ -28,6 +37,24 @@ class SqlAlchemyEvaluationCampaignRepository:
                 raise CampaignNotFoundError(f"no campaign stored under {campaign_id}")
             return record.to_campaign()
 
-    def save(self, campaign: EvaluationCampaign) -> None:
+    def save(self, campaign: EvaluationCampaign, *, seen: int) -> None:
+        """Store the campaign, provided nothing has changed it since revision ``seen``.
+
+        Raises:
+            CampaignChangedElsewhereError: If it has moved on since that revision.
+        """
         with Session(self._engine) as session, session.begin():
+            stored = session.execute(
+                select(EvaluationCampaignRecord.version)
+                .where(EvaluationCampaignRecord.id == campaign.campaign_id.value)
+                .with_for_update()
+            ).scalar_one_or_none()
+            if stored is None:
+                session.add(EvaluationCampaignRecord.from_campaign(campaign))
+                return
+            if stored != seen:
+                raise CampaignChangedElsewhereError(
+                    f"campaign {campaign.campaign_id} was read at revision {seen} and stands "
+                    f"at {stored}"
+                )
             session.merge(EvaluationCampaignRecord.from_campaign(campaign))

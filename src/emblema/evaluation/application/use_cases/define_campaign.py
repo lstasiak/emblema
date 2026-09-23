@@ -99,5 +99,5 @@ class DefineCampaign:
             ),
             opened_at=self._clock.now(),
         )
-        self._campaigns.save(campaign)
+        self._campaigns.save(campaign, seen=campaign.revision)
         return campaign.campaign_id

@@ -8,7 +8,11 @@ from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.cell_result import CellResult
-from emblema.evaluation.domain.exceptions import UnknownCampaignCellError
+from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.exceptions import (
+    CampaignChangedElsewhereError,
+    UnknownCampaignCellError,
+)
 from emblema.evaluation.ports.candidate_provider import CandidateProvider
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
 
@@ -34,7 +38,17 @@ class RunCampaignCell:
     grid after a crash without knowing what survived, costs a lookup instead of a run — and,
     more to the point, cannot produce a second answer for a point the campaign has already
     recorded one for.
+
+    Losing the race to record is not losing the work. Another process finishing a cell of the
+    same grid while this one was running its own is the ordinary case once a campaign is worked
+    by more than one worker, so the campaign is read again and the result put against the state
+    that now stands. What was expensive has already happened, and the cell is answered once.
     """
+
+    # A retry is lost only to another process recording a cell, and a grid holds finitely many.
+    # The bound is here so that a store that keeps refusing surfaces as a failure rather than
+    # as a worker that spins.
+    ATTEMPTS = 8
 
     def __init__(
         self,
@@ -73,11 +87,38 @@ class RunCampaignCell:
                 starts_from=campaign.design.get_candidate(command.cell.candidate).starts_from,
             )
         )
-        campaign = campaign.record(result)
-        self._campaigns.save(campaign)
-        if campaign.is_complete:
-            self._complete(CompleteCampaignCommand(campaign=campaign.campaign_id))
-        return result
+        return self._record(campaign, command, result)
+
+    def _record(
+        self, campaign: EvaluationCampaign, command: RunCampaignCellCommand, result: CellResult
+    ) -> CellResult:
+        """Put ``result`` against the campaign, reading it again while others get there first.
+
+        Whoever records the cell that completes the grid is whoever reads a state the rest of
+        the grid is already in, which is why closing it is decided on the state that was
+        actually written and not on the one this process started from.
+
+        Raises:
+            CampaignChangedElsewhereError: If the campaign kept moving for as many attempts as
+                are allowed.
+        """
+        for _ in range(self.ATTEMPTS):
+            already = self._recorded(campaign.results, command.cell)
+            if already is not None:
+                return already
+            recorded = campaign.record(result)
+            try:
+                self._campaigns.save(recorded, seen=campaign.revision)
+            except CampaignChangedElsewhereError:
+                campaign = self._campaigns.get(command.campaign)
+                continue
+            if recorded.is_complete:
+                self._complete(CompleteCampaignCommand(campaign=recorded.campaign_id))
+            return result
+        raise CampaignChangedElsewhereError(
+            f"campaign {command.campaign} moved on under every one of {self.ATTEMPTS} attempts "
+            f"to record {command.cell}"
+        )
 
     @staticmethod
     def _recorded(results: tuple[CellResult, ...], cell: CampaignCell) -> CellResult | None:

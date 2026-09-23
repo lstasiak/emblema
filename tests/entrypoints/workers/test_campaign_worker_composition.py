@@ -79,7 +79,7 @@ def process(tmp_path: Path) -> tuple[CompositionRoot, InMemoryEvaluationCampaign
     tasks = InMemoryDownstreamTaskRepository()
     tasks.save(task())
     campaigns = InMemoryEvaluationCampaignRepository()
-    campaigns.save(campaign())
+    campaigns.save(campaign(), seen=0)
     root = CompositionRoot.over(
         store=InMemoryArtifactStore(),
         tasks=tasks,

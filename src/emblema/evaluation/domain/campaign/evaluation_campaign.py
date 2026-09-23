@@ -100,6 +100,21 @@ class EvaluationCampaign:
         )
 
     @property
+    def revision(self) -> int:
+        """How many times this campaign has changed since it was designed.
+
+        A campaign gains cells and then closes, and nothing else about it ever moves: who
+        competes, over what and how the result will be read are settled before anything runs.
+        So counting the cells and the closing counts the changes, and the number rises by one
+        with every one of them without a field to keep in step with the state.
+
+        It is what tells two processes working one grid apart: the state a process read is the
+        state it is entitled to write over, and one whose read has been overtaken is told so
+        rather than allowed to write over a cell it never saw.
+        """
+        return len(self.results) + (1 if self.is_finished else 0)
+
+    @property
     def is_complete(self) -> bool:
         """Whether every cell of the grid has run."""
         return not self.pending()
