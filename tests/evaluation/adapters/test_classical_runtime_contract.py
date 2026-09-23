@@ -31,6 +31,7 @@ from emblema.evaluation.ports.classical_runtime import ClassicalRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.ports.artifact_store import ArtifactStore
 from tests.evaluation.support import TASK, labelled, recipe, task
+from tests.support.openmp import skip_if_torch_shares_the_process
 
 OTHER_TASK = TaskId(UUID(int=11))
 # The block holds four windows; three are fitted on and the held-out one is scored.
@@ -58,6 +59,7 @@ def in_memory(tmp_path: Path, *, keeping: bool) -> Adapted:
 
 
 def over_xgboost(tmp_path: Path, *, keeping: bool) -> Adapted:
+    skip_if_torch_shares_the_process()
     from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
     from emblema.evaluation.adapters.xgboost.xgboost_classical_runtime import (
         XgboostClassicalRuntime,
