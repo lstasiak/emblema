@@ -83,8 +83,11 @@ class CampaignCli:
                 sides = adapters.corpus.describe(corpus)
                 return str(services.define_downstream_task(task.defined_over(corpus, sides)))
             case "define":
+                # The task is settled before the file is opened: an invocation that names none
+                # is refused without anything on disk being read.
+                over = self._task(invocation.task)
                 declared = CampaignFile.load(self._named(invocation.file))
-                return str(services.define_campaign(self._design(declared, invocation.task)))
+                return str(services.define_campaign(self._design(declared, over)))
             case _:
                 submitted = services.advance_campaign(
                     AdvanceCampaignCommand(campaign=self._campaign(invocation.campaign))
@@ -92,16 +95,10 @@ class CampaignCli:
                 return str(submitted)
 
     @staticmethod
-    def _design(declared: CampaignFile, task: str | None) -> DefineCampaignCommand:
-        """The campaign the file declares, over the task the invocation names.
-
-        Raises:
-            SystemExit: If no task was named.
-        """
-        if task is None:
-            raise SystemExit("a campaign is declared over a task: give --task")
+    def _design(declared: CampaignFile, task: TaskId) -> DefineCampaignCommand:
+        """The campaign the file declares, over the task the invocation names."""
         return DefineCampaignCommand(
-            task=TaskId.parse(task),
+            task=task,
             purpose=declared.purpose,
             tier=declared.tier,
             candidates=declared.competing(),
@@ -129,6 +126,17 @@ class CampaignCli:
             raise SystemExit(
                 f"no task called {name!r}; this process knows {', '.join(KnownTasks.names())}"
             ) from None
+
+    @staticmethod
+    def _task(text: str | None) -> TaskId:
+        """The task the invocation declares a campaign over.
+
+        Raises:
+            SystemExit: If none was named.
+        """
+        if text is None:
+            raise SystemExit("a campaign is declared over a task: give --task")
+        return TaskId.parse(text)
 
     @staticmethod
     def _campaign(text: str | None) -> CampaignId:

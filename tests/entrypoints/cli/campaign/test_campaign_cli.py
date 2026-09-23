@@ -13,6 +13,7 @@ import pytest
 
 from emblema.entrypoints.cli.campaign.adapters import Adapters
 from emblema.entrypoints.cli.campaign.campaign_cli import CampaignCli
+from emblema.entrypoints.cli.campaign.campaign_invocation import CampaignInvocation
 from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
 from emblema.entrypoints.cli.campaign.services import Services
 from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
@@ -79,16 +80,19 @@ class Process:
         )
         jobs = ImmediateJobQueue({RUN_CAMPAIGN_CELL: self.submitted.append})
         ids = SequentialIdGenerator()
-        self.adapters = Adapters(corpus=corpus, tasks=tasks, campaigns=campaigns, jobs=jobs)
+        catalogue = InMemoryCandidateProvider(
+            (candidate(CONTROL), candidate(TREES)), (), lambda _: ()
+        )
+        self.adapters = Adapters(
+            corpus=corpus,
+            candidates=catalogue,
+            tasks=tasks,
+            campaigns=campaigns,
+            jobs=jobs,
+        )
         self.services = Services(
             define_downstream_task=DefineDownstreamTask(tasks, corpus, ids),
-            define_campaign=DefineCampaign(
-                tasks,
-                campaigns,
-                InMemoryCandidateProvider((candidate(CONTROL), candidate(TREES)), (), lambda _: ()),
-                ids,
-                FixedClock(OPENED_AT),
-            ),
+            define_campaign=DefineCampaign(tasks, campaigns, catalogue, ids, FixedClock(OPENED_AT)),
             advance_campaign=AdvanceCampaign(campaigns, jobs),
         )
 
@@ -168,3 +172,19 @@ def test_a_task_nothing_is_registered_under_is_refused_before_anything_is_stored
             process.adapters,
             process.services,
         )
+
+
+@pytest.mark.parametrize(
+    ("invocation", "complaint"),
+    [
+        (CampaignInvocation(what="define"), "give --task"),
+        (CampaignInvocation(what="advance"), "give --campaign"),
+    ],
+)
+def test_an_invocation_missing_what_it_acts_on_is_refused(
+    process: Process, invocation: CampaignInvocation, complaint: str
+) -> None:
+    # The parser demands both, so this is what happens when something other than the parser
+    # builds an invocation — which is the only way `execute` is reached in a test.
+    with pytest.raises(SystemExit, match=complaint):
+        CampaignCli().execute(invocation, process.adapters, process.services)

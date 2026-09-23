@@ -65,8 +65,10 @@ class CompositionRoot:
             ValueError: If the settings name no store, database or broker.
         """
         process = CampaignProcess(settings, workspace=workspace, corpora=corpora)
+        catalogue = self._candidates(schedule, lora, backbone, boosting)
         self.adapters = Adapters(
             corpus=process.corpus,
+            candidates=catalogue,
             tasks=process.tasks,
             campaigns=process.campaigns,
             jobs=process.jobs,
@@ -76,7 +78,7 @@ class CompositionRoot:
             define_campaign=DefineCampaign(
                 process.tasks,
                 process.campaigns,
-                self._candidates(schedule, lora, backbone, boosting),
+                catalogue,
                 process.ids,
                 process.clock,
             ),
