@@ -59,7 +59,7 @@ class AdvanceCampaign:
         kind = campaign.design.get_candidate(cell.candidate).kind
         return QueuedJob(
             name=RUN_CAMPAIGN_CELL,
-            pool=WorkerPool.ML if kind.shares_the_compute_budget else WorkerPool.CPU,
+            pool=WorkerPool.ML if kind.shares_the_compute_budget else WorkerPool.GENERAL,
             arguments={
                 "campaign": str(campaign.campaign_id),
                 "candidate": str(cell.candidate),
