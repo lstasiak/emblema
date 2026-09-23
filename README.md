@@ -134,7 +134,12 @@ The suite runs in an image too, against that stack: same interpreter, same wheel
 docker compose run --rm tests pytest -o addopts="-ra --strict-markers" --cov
 ```
 
-The tests gated on Apple-silicon MPS skip there, so the development machine runs the suite as well (`uv run pytest`); a skip on that machine is a fault in its environment.
+The tests gated on Apple-silicon MPS skip there, so the development machine runs the suite as well (`uv run pytest`). Each environment skips what it cannot do and nothing else: on macOS the fits of real gradient-boosted trees skip, because the XGBoost wheel for that platform carries no OpenMP runtime and takes the system one, which cannot share a process with the copy torch carries. They run there in a process of their own, and every one of them runs in the image.
+
+```sh
+uv run pytest tests/evaluation/adapters/xgboost \
+              tests/evaluation/adapters/test_classical_runtime_contract.py
+```
 
 The artifact store speaks S3 to Garage locally and to a Cloudflare R2 bucket that GPU platforms can reach. The same contract tests run against the remote bucket by configuration alone: `uv run --env-file .env.r2 pytest -m integration` (variables in `env.example`). `docker compose down -v` removes the stack and its data.
 
