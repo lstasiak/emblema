@@ -22,6 +22,11 @@ classifiers = [
 dependencies = [
     "alembic>=1.13",
     "boto3>=1.43",
+    # The queue evaluation campaigns and other background work pass through. Core rather than an
+    # extra: both sides of it — whoever enqueues and whoever consumes — are server-side
+    # processes, like the database. The AMQP driver comes with kombu, so the broker needs no
+    # extra of its own.
+    "celery>=5.5",
     "psycopg[binary]>=3.2",
     "pydantic>=2.11",
     "pydantic-settings>=2.10",
@@ -169,11 +174,15 @@ disallow_untyped_defs = false
 disallow_incomplete_defs = false
 disallow_untyped_calls = false
 disallow_any_generics = false
+disallow_untyped_decorators = false
 warn_return_any = false
 
 [[tool.mypy.overrides]]
 # Third-party packages that ship no type information of their own.
-module = ["onnxruntime", "onnxruntime.*", "pandas", "pandas.*"]
+module = [
+    "onnxruntime", "onnxruntime.*", "pandas", "pandas.*",
+    "celery", "celery.*", "kombu", "kombu.*",
+]
 ignore_missing_imports = true
 
 [tool.ty.environment]
@@ -233,10 +242,12 @@ layers = ["(adapters)", "(application)", "(ports)", "(domain)"]
 
 [[tool.importlinter.contracts]]
 id = "shared-layers"
-name = "Shared layers point inwards: adapters -> ports -> events -> kernel"
+name = "Shared layers point inwards: adapters -> ports -> events -> jobs -> kernel"
 type = "layers"
 containers = ["emblema.shared"]
-layers = ["(adapters)", "(ports)", "(events)", "kernel"]
+# `events` and `jobs` are sibling type-only packages; the order between them says only that
+# neither may reach a port, which is what keeps the vocabulary framework-free.
+layers = ["(adapters)", "(ports)", "(events)", "(jobs)", "kernel"]
 
 [[tool.importlinter.contracts]]
 id = "pure-core"
@@ -245,13 +256,14 @@ type = "forbidden"
 # Only the framework-free parts of `emblema.shared`; `emblema.shared.adapters` may use frameworks.
 source_modules = [
     "emblema.shared.kernel", "emblema.shared.ports", "emblema.shared.events",
+    "emblema.shared.jobs",
     "emblema.*.domain", "emblema.*.ports", "emblema.*.application", "emblema.*.contracts",
 ]
 forbidden_modules = [
     "torch", "numpy", "pandas", "onnx", "onnxruntime", "onnxscript",
     "sqlalchemy", "alembic",
     "fastapi", "starlette", "pydantic", "pydantic_settings",
-    "celery", "redis", "mlflow", "boto3", "botocore",
+    "celery", "kombu", "amqp", "mlflow", "boto3", "botocore",
 ]
 
 [[tool.importlinter.contracts]]
@@ -260,6 +272,7 @@ name = "Configuration is read by adapters and entrypoints only"
 type = "forbidden"
 source_modules = [
     "emblema.shared.kernel", "emblema.shared.ports", "emblema.shared.events",
+    "emblema.shared.jobs",
     "emblema.*.domain", "emblema.*.ports", "emblema.*.application", "emblema.*.contracts",
 ]
 forbidden_modules = ["emblema.config"]
@@ -294,6 +307,9 @@ forbidden_modules = ["emblema.evaluation.contracts"]
 ignore_imports = [
     "emblema.evaluation.domain.** -> emblema.evaluation.contracts.identifiers",
     "emblema.evaluation.ports.** -> emblema.evaluation.contracts.identifiers",
+    # What a candidate is made of means the same inside this context and outside it, and a
+    # second copy of the enum would have to be kept equal to this one by hand.
+    "emblema.evaluation.domain.** -> emblema.evaluation.contracts.candidate_kind",
 ]
 
 [[tool.importlinter.contracts]]
