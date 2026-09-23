@@ -88,3 +88,16 @@ def test_other_service_errors_propagate_unchanged(stubbed: Stubbed) -> None:
 
     with pytest.raises(ClientError):
         stubbed.store.exists(REF)
+
+
+def test_a_read_refused_by_the_service_is_not_reported_as_a_missing_artifact(
+    stubbed: Stubbed,
+) -> None:
+    # A bucket that refuses us and a key that is not there are different facts, and only the
+    # second one means the artifact does not exist.
+    stubbed.responses.add_client_error(
+        "get_object", service_error_code="AccessDenied", http_status_code=403
+    )
+
+    with pytest.raises(ClientError):
+        stubbed.store.get(REF)

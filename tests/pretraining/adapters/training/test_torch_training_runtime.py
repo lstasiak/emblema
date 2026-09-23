@@ -37,6 +37,7 @@ from emblema.pretraining.adapters.objective.reconstruction_loss import (  # noqa
 )
 from emblema.pretraining.adapters.training.torch_training_runtime import (  # noqa: E402
     TorchTrainingRuntime,
+    _duration,
 )
 from emblema.pretraining.adapters.training.trained_model import TrainedModel  # noqa: E402
 from emblema.pretraining.adapters.training.training_checkpoint import (  # noqa: E402
@@ -373,3 +374,13 @@ def test_the_run_says_how_far_the_epoch_has_come_every_so_many_steps(
 def test_a_negative_progress_interval_is_refused() -> None:
     with pytest.raises(ValueError, match="progress_every"):
         TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu", progress_every=-1)
+
+
+@pytest.mark.parametrize(
+    ("seconds", "said"),
+    [(-1.0, "0 min"), (0.0, "0 min"), (90.0, "2 min"), (3599.0, "60 min"), (5400.0, "1.5 h")],
+)
+def test_a_log_says_how_long_is_left_in_the_unit_a_person_reads(seconds: float, said: str) -> None:
+    # The only line of a long run a person watches, so its unit switches at the hour rather than
+    # counting thousands of minutes.
+    assert _duration(seconds) == said
