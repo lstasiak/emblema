@@ -3,6 +3,7 @@ from typing import Self
 
 from emblema.config.settings import Settings
 from emblema.entrypoints.configured import configured_engine, configured_store, settings_for
+from emblema.entrypoints.known_ground_truths import KnownGroundTruths
 from emblema.entrypoints.restored_backbones import RestoredBackbones
 from emblema.entrypoints.workers.adapters import Adapters
 from emblema.entrypoints.workers.known_arms import KnownArms
@@ -18,7 +19,6 @@ from emblema.evaluation.adapters.persistence.downstream_task_repository import (
 from emblema.evaluation.adapters.persistence.evaluation_campaign_repository import (
     SqlAlchemyEvaluationCampaignRepository,
 )
-from emblema.evaluation.adapters.readers.cmapss_ground_truth import CmapssGroundTruth
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import TorchAdaptationRuntime
 from emblema.evaluation.application.assemblers.campaign_completed_assembler import (
     CampaignCompletedAssembler,
@@ -232,7 +232,7 @@ class CompositionRoot:
             )
         blocks = PublishedCorpusBlocks(store, workspace)
         corpus = BlockCorpusWindows(blocks)
-        truth = CmapssGroundTruth(corpora)
+        truth = KnownGroundTruths.under(corpora)
         return BackboneCandidateProvider(
             KnownArms.over(backbone, lora),
             schedule,
