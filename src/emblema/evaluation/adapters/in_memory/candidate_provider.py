@@ -6,7 +6,7 @@ from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.exceptions import (
-    CandidateMethodMismatchError,
+    CandidateMismatchError,
     CandidateNotRetainableError,
     UnknownCandidateError,
 )
@@ -62,14 +62,14 @@ class InMemoryCandidateProvider:
 
         Raises:
             UnknownCandidateError: If this provider supplies no candidate of that name.
-            CandidateMethodMismatchError: If the campaign recorded the candidate under other
-                settings than this provider states for it.
+            CandidateMismatchError: If the campaign recorded the candidate as anything other
+                than what this provider states for it.
         """
         declared = self.describe(request.cell.candidate)
-        if request.method != declared.method:
-            raise CandidateMethodMismatchError(
-                f"the campaign recorded {request.cell.candidate} under other settings than this "
-                f"provider states: {request.method.parameters} against {declared.method.parameters}"
+        if request.declared != declared:
+            raise CandidateMismatchError(
+                f"the campaign recorded {request.cell.candidate} as something this provider does "
+                f"not state: {request.declared} against {declared}"
             )
         errors = self._errors(request.cell)
         return CellResult(

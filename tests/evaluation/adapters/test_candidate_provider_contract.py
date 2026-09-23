@@ -50,9 +50,8 @@ from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEva
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import (
-    CandidateMethodMismatchError,
+    CandidateMismatchError,
     CandidateNotRetainableError,
-    UnknownBackboneError,
     UnknownCandidateError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
@@ -107,17 +106,15 @@ BASELINES = ClassicalBaselineCatalogue(
 
 
 class Supplied(NamedTuple):
-    """An adapter, the candidate asked of it here, and what a campaign records that one as.
+    """An adapter and the candidate asked of it here.
 
-    A network starts from weights and shares the grid's compute budget; a baseline does
-    neither. Both are true of the port, so what differs is stated beside each adapter instead
-    of being asserted as if one of the two were the rule.
+    What a campaign records that candidate as is not stated beside it: a network starts from
+    weights and shares the grid's budget, a baseline does neither, and either way the answer is
+    the adapter's own. Asking it is what a campaign does when it is designed.
     """
 
     provider: CandidateProvider
     contender: CandidateRef
-    starts_from: ArtifactRef | None
-    shares_a_budget: bool
 
 
 def drawing() -> tuple[InMemoryDownstreamTaskRepository, DrawRunLabels, DrawLabelBudget]:
@@ -154,8 +151,6 @@ def stated_provider(store: InMemoryArtifactStore | None) -> Supplied:
             store,
         ),
         contender=CONTENDER,
-        starts_from=WEIGHTS,
-        shares_a_budget=True,
     )
 
 
@@ -166,8 +161,6 @@ def backbone_provider(store: InMemoryArtifactStore | None) -> Supplied:
             ARMS, RunAdaptation(labels, InMemoryAdaptationRuntime(store))
         ),
         contender=CONTENDER,
-        starts_from=WEIGHTS,
-        shares_a_budget=True,
     )
 
 
@@ -178,8 +171,6 @@ def classical_provider(store: InMemoryArtifactStore | None) -> Supplied:
             BASELINES, RunClassicalFit(tasks, labels, budgets, InMemoryClassicalRuntime(store))
         ),
         contender=TREES,
-        starts_from=None,
-        shares_a_budget=False,
     )
 
 
@@ -194,8 +185,6 @@ def routed_provider(store: InMemoryArtifactStore | None) -> Supplied:
             }
         ),
         contender=TREES,
-        starts_from=None,
-        shares_a_budget=False,
     )
 
 
@@ -226,8 +215,7 @@ def request_of(supplied: Supplied, retain: bool = False) -> CandidateEvaluation:
         cell=cell(supplied.contender, BUDGET, 1),
         purpose=RunPurpose.TUNING,
         retain=retain,
-        starts_from=supplied.starts_from,
-        method=supplied.provider.describe(supplied.contender).method,
+        declared=supplied.provider.describe(supplied.contender),
     )
 
 
@@ -235,8 +223,7 @@ def test_a_candidate_is_described_in_the_terms_a_design_is_stated_in(supplied: S
     described = supplied.provider.describe(supplied.contender)
 
     assert described.ref == supplied.contender
-    assert (described.budget is not None) == supplied.shares_a_budget
-    assert described.starts_from == supplied.starts_from
+    assert (described.budget is None) == (described.kind is CandidateKind.CLASSICAL)
 
 
 def test_a_candidate_the_provider_does_not_supply_is_refused(supplied: Supplied) -> None:
@@ -287,11 +274,13 @@ def test_a_low_rank_arm_records_which_layers_it_updates_and_how_strongly() -> No
 
 
 def test_the_backbone_adapter_refuses_a_cell_run_over_other_weights() -> None:
+    supplied = backbone_provider(None)
     other = ArtifactRef(key="durable/other", checksum=WEIGHTS.checksum)
-    asked = replace(request_of(backbone_provider(None)), starts_from=other)
+    asked = request_of(supplied)
+    elsewhere = replace(asked, declared=replace(asked.declared, starts_from=other))
 
-    with pytest.raises(UnknownBackboneError, match="other weights"):
-        backbone_provider(None).provider.evaluate(asked)
+    with pytest.raises(CandidateMismatchError):
+        supplied.provider.evaluate(elsewhere)
 
 
 def test_a_baseline_records_how_it_reads_a_window_and_how_hard_it_fits() -> None:
@@ -311,10 +300,11 @@ def test_the_classical_adapter_refuses_a_cell_the_campaign_recorded_as_starting_
     None
 ):
     supplied = classical_provider(None)
-    asked = replace(request_of(supplied), starts_from=WEIGHTS)
+    asked = request_of(supplied)
+    elsewhere = replace(asked, declared=replace(asked.declared, starts_from=WEIGHTS))
 
-    with pytest.raises(UnknownBackboneError, match="starting from weights"):
-        supplied.provider.evaluate(asked)
+    with pytest.raises(CandidateMismatchError):
+        supplied.provider.evaluate(elsewhere)
 
 
 def test_each_name_reaches_the_supplier_the_process_named_for_it() -> None:
@@ -335,9 +325,29 @@ def test_a_cell_recorded_under_other_settings_than_the_provider_holds_is_refused
     # A worker configured otherwise would answer a point of the curve under settings the grid
     # never declared, and the grid would read as though one candidate had been compared at one
     # setting. The comparison is of the text a provider states, never of what it means.
+    asked = request_of(supplied)
     elsewhere = replace(
-        request_of(supplied), method=CandidateMethod.of(learning_rate=0.5, weight_decay=0.5)
+        asked,
+        declared=replace(
+            asked.declared, method=CandidateMethod.of(learning_rate=0.5, weight_decay=0.5)
+        ),
     )
 
-    with pytest.raises(CandidateMethodMismatchError):
+    with pytest.raises(CandidateMismatchError):
+        supplied.provider.evaluate(elsewhere)
+
+
+def test_a_cell_recorded_under_other_arithmetic_than_the_process_spends_is_refused() -> None:
+    # The budget is what a campaign promises its arms were held to in common. A worker started
+    # with another one would fill points of the curve with numbers the grid never claimed, and
+    # the grid would still read as though one budget had been in force.
+    supplied = backbone_provider(None)
+    asked = request_of(supplied)
+    stated = asked.declared.budget
+    assert stated is not None
+    elsewhere = replace(
+        asked, declared=replace(asked.declared, budget=replace(stated, epochs=stated.epochs + 1))
+    )
+
+    with pytest.raises(CandidateMismatchError):
         supplied.provider.evaluate(elsewhere)

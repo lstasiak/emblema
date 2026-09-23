@@ -10,10 +10,7 @@ from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandid
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
-from emblema.evaluation.domain.exceptions import (
-    CandidateMethodMismatchError,
-    UnknownBackboneError,
-)
+from emblema.evaluation.domain.exceptions import CandidateMismatchError
 
 
 class ClassicalCandidateProvider:
@@ -49,17 +46,12 @@ class ClassicalCandidateProvider:
         """
         cell = request.cell
         declared = self._catalogue.describe(cell.candidate)
+        if request.declared != declared:
+            raise CandidateMismatchError(
+                f"the campaign recorded {cell.candidate} as something this process does not "
+                f"supply: {request.declared} against {declared}"
+            )
         arm = self._catalogue.arm_of(cell.candidate)
-        if request.starts_from is not None:
-            raise UnknownBackboneError(
-                f"the campaign recorded {cell.candidate} as starting from weights, and a "
-                f"baseline starts from none"
-            )
-        if request.method != declared.method:
-            raise CandidateMethodMismatchError(
-                f"the campaign recorded {cell.candidate} under other settings than this process "
-                f"holds: {request.method.parameters} against {declared.method.parameters}"
-            )
         outcome = self._run(
             RunClassicalFitCommand(
                 task=request.task,

@@ -101,8 +101,8 @@ class UnknownBackboneError(EvaluationError):
     """A plan names pretrained weights the runtime was not given and cannot supply."""
 
 
-class CandidateMethodMismatchError(EvaluationError):
-    """A cell was recorded under other settings than the process asked to run it holds."""
+class CandidateMismatchError(EvaluationError):
+    """A campaign recorded a candidate as something other than what a process supplies."""
 
 
 class UnknownTaskUnitsError(EvaluationError):

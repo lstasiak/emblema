@@ -85,8 +85,7 @@ class RunCampaignCell:
                 cell=command.cell,
                 purpose=campaign.purpose,
                 retain=campaign.design.retains(command.cell),
-                starts_from=declared.starts_from,
-                method=declared.method,
+                declared=declared,
             )
         )
         return self._record(campaign, command, result)
