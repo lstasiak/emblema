@@ -15,6 +15,14 @@ from alembic.migration import MigrationContext
 from sqlalchemy import MetaData
 
 from emblema.catalog.adapters.persistence.corpus_record import CorpusRecord
+
+# Imported so that the task's tables register on the Evaluation metadata, as in migrations/env.py.
+from emblema.evaluation.adapters.persistence.downstream_task_record import (  # noqa: F401
+    DownstreamTaskRecord,
+)
+from emblema.evaluation.adapters.persistence.evaluation_campaign_record import (
+    EvaluationCampaignRecord,
+)
 from emblema.pretraining.adapters.persistence.backbone_record import BackboneRecord
 from emblema.pretraining.adapters.persistence.backbone_repository import (
     SqlAlchemyBackboneRepository,
@@ -32,7 +40,7 @@ SECOND_MANIFEST = ArtifactRef("durable/second", Checksum.of_bytes(b"second manif
 
 @pytest.mark.parametrize(
     "metadata",
-    [CorpusRecord.metadata, BackboneRecord.metadata],
+    [CorpusRecord.metadata, BackboneRecord.metadata, EvaluationCampaignRecord.metadata],
     ids=lambda metadata: str(metadata.schema),
 )
 def test_the_migrations_produce_exactly_the_tables_the_model_describes(metadata: MetaData) -> None:

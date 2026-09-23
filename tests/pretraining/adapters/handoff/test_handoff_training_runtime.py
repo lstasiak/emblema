@@ -18,7 +18,7 @@ from emblema.pretraining.domain.handoff.pretraining_result import PretrainingRes
 from emblema.pretraining.domain.training.training_outcome import TrainingOutcome
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import Retention
+from emblema.shared.kernel.retention import Retention
 from emblema.shared.ports.exceptions import ArtifactNotFoundError
 from tests.support.experiments import WEIGHTS, budget, configuration, corpus, mixture
 from tests.support.handoff import CHECKPOINT, CONFIGURATION, MIXTURE, order, outcome, result

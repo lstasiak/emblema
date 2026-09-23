@@ -7,6 +7,7 @@ from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
+from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.evaluation.domain.task.task_split import TaskSplit
 from emblema.evaluation.ports.corpus_windows import CorpusWindows
@@ -24,15 +25,18 @@ class DefineDownstreamTaskCommand:
         units: Units the task covers; a corpus published from several subsets holds more than one
             task's worth, and which of them answer this question is a fact about the task.
         test: Units held for the final run, and where they come from.
-        labels: How a window's target is read.
-        strata: How many groups of the target a budget is spread over.
+        protocol: Which question the task asks.
+        labels: How a window's target is read; ``None`` where the protocol spends no labels.
+        strata: How many groups of the target a budget is spread over; ``None`` where the
+            protocol spends no labels.
     """
 
     manifest: ArtifactRef
     units: frozenset[UnitKey]
     test: FrozenTestSplit
-    labels: RemainingLifeScheme | ForecastScheme
-    strata: TargetBins
+    protocol: EvaluationProtocol
+    labels: RemainingLifeScheme | ForecastScheme | None
+    strata: TargetBins | None
 
 
 class DefineDownstreamTask:
@@ -62,6 +66,7 @@ class DefineDownstreamTask:
             UnknownTaskUnitsError: If the task covers units the corpus does not name.
             InvalidTaskSplitError: If either side comes out empty or a unit sits on two sides.
             UnreadableTaskCorpusError: If the manifest is not one the port can read.
+            ProtocolMismatchError: If the label scheme and the protocol disagree.
         """
         sides = self._corpus.describe(command.manifest)
         unknown = sorted(str(unit) for unit in command.units - (sides.training | sides.validation))
@@ -76,6 +81,7 @@ class DefineDownstreamTask:
                 validation=command.units & sides.validation,
                 test=command.test,
             ),
+            protocol=command.protocol,
             labels=command.labels,
             strata=command.strata,
         )

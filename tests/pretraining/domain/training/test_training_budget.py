@@ -71,3 +71,14 @@ def test_an_invalid_budget_reads_as_a_value_error_at_the_edge() -> None:
             seed=1,
         )
     assert issubclass(InvalidTrainingBudgetError, PretrainingError)
+
+
+def test_an_epoch_without_a_batch_takes_no_step() -> None:
+    with pytest.raises(InvalidTrainingBudgetError, match="must hold a batch"):
+        budget().takes_a_step_at(0, batches=0)
+
+
+@pytest.mark.parametrize("index", [-1, 4])
+def test_a_micro_batch_outside_the_epoch_takes_no_step(index: int) -> None:
+    with pytest.raises(InvalidTrainingBudgetError, match="must lie in"):
+        budget().takes_a_step_at(index, batches=4)

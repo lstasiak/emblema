@@ -20,8 +20,9 @@ from emblema.shared.adapters.windows.block_workspace import BlockWorkspace
 from emblema.shared.adapters.windows.exceptions import MalformedBlockError, UnstorableWindowError
 from emblema.shared.adapters.windows.window_block_writer import WindowBlockWriter
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.retention import Retention
 from emblema.shared.kernel.tokens import TokenWindow
-from emblema.shared.ports.artifact_store import ArtifactStore, Retention
+from emblema.shared.ports.artifact_store import ArtifactStore
 
 
 class BlockCorpusArchive:

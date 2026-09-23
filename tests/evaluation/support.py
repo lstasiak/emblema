@@ -4,32 +4,53 @@ The overrides are typed ``Any`` because each names a field of the value object i
 carries that field's type; the value object refuses anything else on the way in.
 """
 
+from collections.abc import Sequence
 from dataclasses import replace
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from emblema.evaluation.contracts.identifiers import TaskId
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
+from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
+from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
+from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
+from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
+from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
+from emblema.evaluation.domain.campaign.cell_result import CellResult
+from emblema.evaluation.domain.campaign.compute_budget import ComputeBudget
+from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
+from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.labels.task_window import TaskWindow
+from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
+from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
+from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.task.corpus_sides import CorpusSides
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
+from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
+from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.task.task_split import TaskSplit
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
+from emblema.evaluation.domain.transfer.unit_error import UnitError
 from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.compute import ComputeTier
+from emblema.shared.kernel.timestamps import UtcDateTime
 
 CORPUS = "turbofans"
 MANIFEST = ArtifactRef(key="durable/manifest", checksum=Checksum.of_bytes(b"manifest"))
 TASK = TaskId(UUID(int=1))
+CAMPAIGN = CampaignId(UUID(int=2))
+OPENED_AT = UtcDateTime(datetime(2026, 1, 1, tzinfo=UTC))
 SCHEME = RemainingLifeScheme(125.0)
 FORECAST = ForecastScheme("s01", 12.0)
 STRATA = TargetBins(4)
@@ -58,15 +79,18 @@ def task(
     tuning: frozenset[UnitKey] = units("a", "b"),
     validation: frozenset[UnitKey] = units("c"),
     test: FrozenTestSplit = TEST_SIDE,
-    labels: RemainingLifeScheme | ForecastScheme = SCHEME,
+    labels: RemainingLifeScheme | ForecastScheme | None = SCHEME,
+    protocol: EvaluationProtocol = EvaluationProtocol.LABEL_BUDGET,
+    strata: TargetBins | None = STRATA,
 ) -> DownstreamTask:
     return DownstreamTask(
         task_id=TASK,
         corpus=CORPUS,
         manifest=MANIFEST,
         split=TaskSplit(tuning=tuning, validation=validation, test=test),
+        protocol=protocol,
         labels=labels,
-        strata=STRATA,
+        strata=strata,
     )
 
 
@@ -103,3 +127,82 @@ def plan(mode: TransferMode = TransferMode.FULL_FINE_TUNING, **overrides: Any) -
         seed=1,
     )
     return replace(stated, **overrides)
+
+
+CONTROL = CandidateRef("from_scratch")
+CONTENDER = CandidateRef("full_fine_tuning")
+PROBE = CandidateRef("frozen_probe")
+BUDGETS = (LabelBudget.of(50), LabelBudget.of(200))
+RULES = ComparisonRules(
+    minimum_relative_reduction=0.1,
+    floor_share=0.02,
+    holm=HolmCorrection(alpha=0.05),
+    secondary_family_size=8,
+)
+# Few resamples on purpose: a whole campaign is exercised here, and an interval read off ten
+# thousand of them per comparison would make the cycle slower than the thing it stands in for.
+BOOTSTRAP = PairedUnitBootstrap(resamples=200, seed=1, level=0.95)
+COMPUTE = ComputeBudget(epochs=2, min_steps=0, batch_size=2)
+METHOD = CandidateMethod.of(learning_rate=1e-2, weight_decay=0.0)
+
+
+def candidate(ref: CandidateRef, **overrides: Any) -> CampaignCandidate:
+    stated = CampaignCandidate(
+        ref=ref,
+        kind=CandidateKind.NEURAL,
+        budget=COMPUTE,
+        method=METHOD,
+        starts_from=None if ref == CONTROL else WEIGHTS,
+    )
+    return replace(stated, **overrides)
+
+
+def design(**overrides: Any) -> CampaignDesign:
+    stated = CampaignDesign(
+        candidates=(candidate(CONTROL), candidate(CONTENDER)),
+        control=CONTROL,
+        endpoint=CONTENDER,
+        budgets=BUDGETS,
+        endpoint_budget=LabelBudget.of(200),
+        seeds=(1, 2),
+        rules=RULES,
+        bootstrap=BOOTSTRAP,
+    )
+    return replace(stated, **overrides)
+
+
+def cell(ref: CandidateRef, budget: LabelBudget, seed: int) -> CampaignCell:
+    return CampaignCell(candidate=ref, budget=budget, seed=seed)
+
+
+def result(
+    ref: CandidateRef, budget: LabelBudget, seed: int, errors: Sequence[float], **overrides: Any
+) -> CellResult:
+    """A cell scored over as many units as ``errors`` names, one window each."""
+    stated = CellResult(
+        cell=cell(ref, budget, seed),
+        errors=tuple(
+            UnitError(unit=UnitKey(f"c{index}"), squared_error=error**2, windows=1)
+            for index, error in enumerate(errors)
+        ),
+        seconds=0.0,
+        artifact=None,
+    )
+    return replace(stated, **overrides)
+
+
+def campaign(**overrides: Any) -> EvaluationCampaign:
+    stated = EvaluationCampaign.designed(
+        campaign_id=CAMPAIGN,
+        task=TASK,
+        purpose=RunPurpose.TUNING,
+        tier=ComputeTier.S,
+        design=design(),
+        opened_at=OPENED_AT,
+    )
+    return replace(stated, **overrides)
+
+
+def artifact(name: str) -> ArtifactRef:
+    """A reference to bytes named after what they stand for, for a test that keeps one."""
+    return ArtifactRef(key=f"durable/{name}", checksum=Checksum.of_bytes(name.encode()))

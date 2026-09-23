@@ -50,8 +50,8 @@ sys.path.insert(0, str(REPO_ROOT))
 from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.configured import configured_store
 from emblema.entrypoints.cli.pretrain.source_revision import SourceRevision
+from emblema.entrypoints.configured import configured_store
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.adapters.training.devices import available_device

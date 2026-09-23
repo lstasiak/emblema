@@ -23,9 +23,9 @@ from emblema.catalog.application.use_cases.tokenise_corpus_version import Tokeni
 from emblema.catalog.ports.corpus_reader import CorpusReader
 from emblema.catalog.ports.corpus_repository import CorpusRepository
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.configured import configured_engine, configured_store, settings_for
 from emblema.entrypoints.cli.publish_corpus.adapters import Adapters
 from emblema.entrypoints.cli.publish_corpus.services import Services
+from emblema.entrypoints.configured import configured_engine, configured_store, settings_for
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
 from emblema.shared.adapters.synthetic.layouts import CONTROL_PROCESS, LAYOUTS

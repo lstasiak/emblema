@@ -70,7 +70,7 @@ def adapted(request: pytest.FixtureRequest, tmp_path: Path) -> Adapted:
 def test_every_validation_window_is_answered_in_the_order_given(
     adapted: Adapted, mode: TransferMode
 ) -> None:
-    outcome = adapted.runtime.adapt(plan(mode), adapted.task, SAMPLE, VALIDATION)
+    outcome = adapted.runtime.adapt(plan(mode), adapted.task, SAMPLE, VALIDATION, retain=False)
 
     assert [p.window for p in outcome.predictions] == [w.window for w in VALIDATION]
     assert [p.target for p in outcome.predictions] == [w.target for w in VALIDATION]
@@ -79,7 +79,7 @@ def test_every_validation_window_is_answered_in_the_order_given(
 def test_the_outcome_carries_what_places_it_on_the_curve(adapted: Adapted) -> None:
     stated = plan(TransferMode.FROZEN_PROBE)
 
-    outcome = adapted.runtime.adapt(stated, adapted.task, SAMPLE, VALIDATION)
+    outcome = adapted.runtime.adapt(stated, adapted.task, SAMPLE, VALIDATION, retain=False)
 
     assert (outcome.plan, outcome.task) == (stated, TASK)
     assert (outcome.budget, outcome.sample_seed) == (LabelBudget.of(2), 7)
@@ -93,9 +93,9 @@ def test_a_sample_of_another_task_is_refused(adapted: Adapted) -> None:
     )
 
     with pytest.raises(ForeignLabelSampleError):
-        adapted.runtime.adapt(plan(), adapted.task, foreign, VALIDATION)
+        adapted.runtime.adapt(plan(), adapted.task, foreign, VALIDATION, retain=False)
 
 
 def test_a_run_with_nothing_to_score_is_refused(adapted: Adapted) -> None:
     with pytest.raises(InvalidAdaptationOutcomeError):
-        adapted.runtime.adapt(plan(), adapted.task, SAMPLE, ())
+        adapted.runtime.adapt(plan(), adapted.task, SAMPLE, (), retain=False)

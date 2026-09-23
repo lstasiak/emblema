@@ -141,3 +141,19 @@ def test_a_share_that_picks_only_the_unit_without_windows_leaves_no_training_sid
 
     with pytest.raises(InvalidTrainingCorpusError, match="training side"):
         harness.reader.read(harness.published.manifest, lone)
+
+
+def test_the_in_memory_reader_refuses_units_that_do_not_match_its_windows(
+    tmp_path: Path,
+) -> None:
+    # Only the in-memory adapter is told its units; naming a different number of them than the
+    # corpus has training windows would make a share read a share of something else.
+    published = publish(InMemoryArtifactStore(), tmp_path / "publisher")
+
+    with pytest.raises(ValueError, match="units named for"):
+        InMemoryTrainingCorpusReader().publish(
+            published.manifest,
+            published.described,
+            published.corpus,
+            TRAINING_UNITS[:-1],
+        )

@@ -1,4 +1,5 @@
-# Minimal local stack: metadata database, S3-compatible artifact store, experiment tracking.
+# Minimal local stack: metadata database, S3-compatible artifact store, experiment tracking,
+# and the broker background work passes through.
 # `docker compose up -d --wait` brings it up; values come from `.env` (copy `env.example`).
 # Credentials are defined once, as the application reads them, and mapped here onto the services:
 # the artifact key onto Garage's default key, MLflow's S3 client and the bootstrap job; the
@@ -23,6 +24,22 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${EMBLEMA_DATABASE__USER:?set in .env} -d ${EMBLEMA_DATABASE__NAME:?set in .env}"]
       interval: 5s
       timeout: 3s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:4-alpine
+    # The broker a campaign's cells are handed to. Workers are not here: the one that trains runs
+    # on the host, beside the accelerator a container cannot see.
+    environment:
+      RABBITMQ_DEFAULT_USER: ${EMBLEMA_BROKER__USER:?set in .env}
+      RABBITMQ_DEFAULT_PASS: ${EMBLEMA_BROKER__PASSWORD:?set in .env}
+      RABBITMQ_DEFAULT_VHOST: ${EMBLEMA_BROKER__VHOST:?set in .env}
+    ports:
+      - "127.0.0.1:${EMBLEMA_BROKER__PORT:?set in .env}:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
       retries: 12
 
   garage:

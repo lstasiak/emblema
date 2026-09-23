@@ -33,7 +33,7 @@ from emblema.shared.adapters.storage.layout import content_address
 from emblema.shared.adapters.system.clock import SystemClock
 from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import Retention
+from emblema.shared.kernel.retention import Retention
 from emblema.shared.ports.exceptions import ArtifactNotFoundError
 from tests.catalog.domain.support import (
     LICENCE,

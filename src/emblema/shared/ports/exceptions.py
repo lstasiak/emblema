@@ -15,3 +15,7 @@ class ArtifactNotFoundError(ArtifactStoreError):
 
 class ArtifactIntegrityError(ArtifactStoreError):
     """The stored bytes do not hash to the checksum of the given reference."""
+
+
+class JobQueueError(Exception):
+    """A job could not be handed to the queue; nothing was accepted."""

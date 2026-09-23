@@ -3,6 +3,9 @@ from typing import Self
 
 from emblema.evaluation.domain.exceptions import InvalidLabelBudgetError
 
+EVERYTHING = "all"
+"""What the budget of every labelled window the tuning side holds is called."""
+
 
 @dataclass(frozen=True)
 class LabelBudget:
@@ -37,6 +40,30 @@ class LabelBudget:
     def everything(cls) -> Self:
         """A budget of every labelled window the tuning side holds."""
         return cls(None)
+
+    @classmethod
+    def parse(cls, text: str) -> Self:
+        """The budget that canonical text names.
+
+        Raises:
+            InvalidLabelBudgetError: If the text is neither a count of windows nor the word for
+                every window there is.
+        """
+        if text == EVERYTHING:
+            return cls.everything()
+        try:
+            return cls.of(int(text))
+        except ValueError as error:
+            raise InvalidLabelBudgetError(f"not a budget: {text!r}") from error
+
+    def text(self) -> str:
+        """The budget as one word, its canonical form: a count, or every window there is.
+
+        A budget is a coordinate — of a cell, of a row in a report, of a key in a store — and a
+        coordinate needs one spelling. The largest budget has no count to write, so it is named
+        rather than numbered.
+        """
+        return EVERYTHING if self.windows is None else str(self.windows)
 
     def drawn_from(self, pool: int) -> int:
         """How many windows this budget takes from a pool of ``pool`` windows.

@@ -5,10 +5,23 @@ from sqlalchemy import create_engine
 
 from emblema.catalog.adapters.persistence.corpus_record import CorpusRecord
 from emblema.config.settings import Settings
+
+# Imported so that the task's tables register on the Evaluation metadata: a campaign and a
+# task are separate aggregates, so neither record module reaches the other.
+from emblema.evaluation.adapters.persistence.downstream_task_record import (  # noqa: F401
+    DownstreamTaskRecord,
+)
+from emblema.evaluation.adapters.persistence.evaluation_campaign_record import (
+    EvaluationCampaignRecord,
+)
 from emblema.pretraining.adapters.persistence.backbone_record import BackboneRecord
 
 # Every context's tables, so that a comparison covers the whole database.
-target_metadata = [CorpusRecord.metadata, BackboneRecord.metadata]
+target_metadata = [
+    CorpusRecord.metadata,
+    BackboneRecord.metadata,
+    EvaluationCampaignRecord.metadata,
+]
 
 
 def run_migrations_offline() -> None:

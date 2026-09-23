@@ -63,6 +63,7 @@ def outcome(
             for place in range(WINDOWS)
         ),
         seconds=3.0,
+        artifact=None,
     )
 
 

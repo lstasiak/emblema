@@ -19,11 +19,13 @@ from emblema.evaluation.adapters.blocks.published_corpus_blocks import (  # noqa
     PublishedCorpusBlocks,
 )
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
+from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import (  # noqa: E402
     TorchAdaptationRuntime,
 )
 from emblema.evaluation.domain.exceptions import (  # noqa: E402
+    CandidateNotRetainableError,
     DivergedAdaptationError,
     LoraTargetNotFoundError,
 )
@@ -84,7 +86,38 @@ def published(tmp_path: Path) -> Published:
 
 
 def adapt(published: Published, stated: AdaptationPlan) -> AdaptationOutcome:
-    return published.runtime.adapt(stated, published.task, SAMPLE, VALIDATION)
+    return published.runtime.adapt(stated, published.task, SAMPLE, VALIDATION, retain=False)
+
+
+def test_a_run_asked_to_keep_what_it_fitted_stores_a_candidate_that_reads_back(
+    tmp_path: Path,
+) -> None:
+    # What a campaign keeps of its endpoint, and the one thing another context may promote: it
+    # has to come out of the store as a candidate, not as bytes nobody can rebuild.
+    store = InMemoryArtifactStore()
+    manifest = publish(store, tmp_path / "scratch").manifest
+    backbones = SmallBackbones(vocabulary_size=len(CHANNELS))
+    runtime = TorchAdaptationRuntime(
+        backbones,
+        PublishedCorpusBlocks(store, tmp_path / "workspace"),
+        device="cpu",
+        store=store,
+    )
+    defined = replace(task(), manifest=manifest, labels=RemainingLifeScheme(CEILING))
+
+    outcome = runtime.adapt(plan(), defined, SAMPLE, VALIDATION, retain=True)
+
+    assert outcome.artifact is not None
+    kept = FittedCandidate.read(store.get(outcome.artifact))
+    assert kept.vocabulary_size == len(CHANNELS)
+    assert kept.target_scale == CEILING
+
+
+def test_a_runtime_with_nowhere_to_keep_a_candidate_refuses_to_keep_one(
+    published: Published,
+) -> None:
+    with pytest.raises(CandidateNotRetainableError):
+        published.runtime.adapt(plan(), published.task, SAMPLE, VALIDATION, retain=True)
 
 
 def pretrained_weights() -> dict[str, Tensor]:

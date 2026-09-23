@@ -10,7 +10,8 @@ from emblema.pretraining.domain.training.run_position import RunPosition
 from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import ArtifactStore, Retention
+from emblema.shared.kernel.retention import Retention
+from emblema.shared.ports.artifact_store import ArtifactStore
 
 
 class InMemoryTrainingRuntime:

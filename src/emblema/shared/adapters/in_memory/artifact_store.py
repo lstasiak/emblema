@@ -3,7 +3,7 @@ from pathlib import Path
 from emblema.shared.adapters.storage.files import chunks_of, write_verified
 from emblema.shared.adapters.storage.layout import content_address
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import Retention
+from emblema.shared.kernel.retention import Retention
 from emblema.shared.ports.exceptions import ArtifactIntegrityError, ArtifactNotFoundError
 
 

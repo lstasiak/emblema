@@ -21,6 +21,9 @@ from sqlalchemy import Engine, MetaData, create_engine, text
 from emblema.catalog.adapters.persistence.corpus_record import CorpusRecord
 from emblema.config.database_settings import DatabaseSettings
 from emblema.config.settings import Settings
+from emblema.evaluation.adapters.persistence.evaluation_campaign_record import (
+    EvaluationCampaignRecord,
+)
 from emblema.pretraining.adapters.persistence.backbone_record import BackboneRecord
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -81,6 +84,11 @@ def clear_catalog(engine: Engine) -> None:
 def clear_pretraining(engine: Engine) -> None:
     """Empty Pretraining's tables, so a test starts from a registry that holds nothing."""
     _truncate(engine, BackboneRecord.metadata)
+
+
+def clear_evaluation(engine: Engine) -> None:
+    """Empty Evaluation's tables, so a test starts from a registry that holds nothing."""
+    _truncate(engine, EvaluationCampaignRecord.metadata)
 
 
 def _create_if_missing(settings: DatabaseSettings) -> None:

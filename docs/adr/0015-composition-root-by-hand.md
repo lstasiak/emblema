@@ -1,6 +1,6 @@
 # ADR-0015: The composition root is written by hand
 
-- Status: proposed
+- Status: accepted (settled by the third process, the campaign worker)
 - Date: 2026-09-12
 
 ## Context
@@ -94,3 +94,33 @@ accepts a result and a tracker by whether it has a tracking URI, and neither has
 other's adapters. Both roots still build everything once and exit; no scope per request has been
 needed. The status stays `proposed`: the third process, the evaluation worker, is the one with
 per-task lifetimes, and the decision is taken there.
+
+## 2026-09-22 — the third process, and the decision
+
+The campaign worker is the third composition root and the first process that outlives a single
+command. It is what this ADR said it was waiting for, and what it showed is this.
+
+**The repetition between roots is still three function calls.** What the worker shares with the
+two command lines is the store built from the settings, the engine built from them, and the
+guard that refuses either without settings. Those moved from `entrypoints/cli/configured.py` up
+to `entrypoints/configured.py` when the third caller appeared, which is the threshold this ADR
+named. The seam that turns stored weights into an encoder moved the same way, to
+`entrypoints/restored_backbones.py`, for the same reason. Everything else the worker wires — the
+candidate provider, the two registries, the scheduler, the publisher and what subscribes to it —
+is its own, and a container would have registered each of them once to resolve each of them
+once.
+
+**The per-task scope this ADR expected did not appear.** The one dependency worth scoping per
+task is the backbone, and scoping it per task would read a backbone out of the store for every
+cell of a grid — eighty downloads to avoid holding one copy. So the worker is told which
+backbone it serves, holds it, and refuses a cell of a campaign that ran over other weights
+(ADR-0035). The lifetimes are all process-scoped and the class says so; a `@contextmanager` per
+task would have been bookkeeping around a decision that goes the other way.
+
+**The composition test reads public fields, as before.** The worker's test assembles the same
+process over adapters that touch nothing and checks what each use case got, and a process given
+no overrides is checked to reach the bucket, the database and the broker its settings name.
+
+The status therefore moves to `accepted`. The revision thresholds stay as they were: wiring
+duplicated between processes beyond a handful of lines, or a scope that hand-written wiring
+makes unobvious.

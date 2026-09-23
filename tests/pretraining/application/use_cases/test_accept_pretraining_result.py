@@ -21,7 +21,7 @@ from emblema.pretraining.domain.exceptions import (
     PretrainingResultRejectedError,
 )
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import Retention
+from emblema.shared.kernel.retention import Retention
 from tests.support.experiments import budget, configuration, corpus
 from tests.support.handoff import COMMIT, MANIFEST, ORDERED_AT, OTHER_COMMIT, backbone_id, result
 from tests.support.handoff import pretraining_input as described

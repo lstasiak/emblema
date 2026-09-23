@@ -11,7 +11,7 @@ from pathlib import Path
 from emblema.shared.adapters.storage.files import chunks_of
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
-from emblema.shared.ports.artifact_store import Retention
+from emblema.shared.kernel.retention import Retention
 
 
 def address_of(checksum: Checksum, retention: Retention) -> ArtifactRef:

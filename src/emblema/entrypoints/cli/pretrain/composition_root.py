@@ -2,9 +2,9 @@ from pathlib import Path
 from typing import Self
 
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.configured import configured_engine, configured_store, settings_for
 from emblema.entrypoints.cli.pretrain.adapters import Adapters
 from emblema.entrypoints.cli.pretrain.services import Services
+from emblema.entrypoints.configured import configured_engine, configured_store, settings_for
 from emblema.pretraining.adapters.blocks.block_training_corpus_reader import (
     BlockTrainingCorpusReader,
 )

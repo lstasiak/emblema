@@ -7,6 +7,7 @@ from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.unit_error import UnitError
 from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
+from emblema.shared.kernel.artifacts import ArtifactRef
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -37,6 +38,9 @@ class AdaptationOutcome:
         training_losses: Mean training loss per epoch, in the order trained.
         predictions: The candidate's answer for every validation window, in block order.
         seconds: What the run took, learning and scoring together.
+        artifact: The candidate as this run fitted it, where the run was asked to keep it;
+            ``None`` otherwise. A reference, never weights: what crosses a port is where the
+            bytes are and what they hash to.
     """
 
     plan: AdaptationPlan
@@ -49,6 +53,7 @@ class AdaptationOutcome:
     training_losses: tuple[float, ...]
     predictions: tuple[WindowPrediction, ...]
     seconds: float
+    artifact: ArtifactRef | None
 
     @property
     def optimiser_steps(self) -> int:

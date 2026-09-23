@@ -4,7 +4,9 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from emblema.config.artifact_store_settings import ArtifactStoreSettings
+from emblema.config.broker_settings import BrokerSettings
 from emblema.config.database_settings import DatabaseSettings
+from emblema.config.worker_settings import WorkerSettings
 from emblema.shared.kernel.compute import ComputeTier
 
 Environment = Literal["dev", "test", "prod"]
@@ -43,6 +45,44 @@ class Settings(BaseSettings):
             "trains — a notebook fulfilling an order — has none to reach and leaves it unset."
         ),
     )
+
+    broker: BrokerSettings | None = Field(
+        default=None,
+        description=(
+            "The queue background work passes through. A process that runs everything where it "
+            "was asked — a report, a notebook — has none to reach and leaves it unset."
+        ),
+    )
+
+    worker: WorkerSettings | None = Field(
+        default=None,
+        description=(
+            "What the campaign worker serves and under which schedule. Every other process "
+            "leaves it unset: only the one that runs cells is told these."
+        ),
+    )
+
+    def require_worker(self) -> WorkerSettings:
+        """What a process that runs campaign cells was told to run them with.
+
+        Raises:
+            ValueError: If nothing is configured; the worker fails as it is assembled rather
+                than running a grid under a schedule nobody declared.
+        """
+        if self.worker is None:
+            raise ValueError("the process runs campaign cells and EMBLEMA_WORKER__* is not set")
+        return self.worker
+
+    def require_broker(self) -> BrokerSettings:
+        """The broker settings of a process that cannot run without a queue.
+
+        Raises:
+            ValueError: If none are configured; the process fails as it is assembled rather
+                than reaching for a broker nobody named.
+        """
+        if self.broker is None:
+            raise ValueError("the process needs the queue and EMBLEMA_BROKER__* is not set")
+        return self.broker
 
     def require_database(self) -> DatabaseSettings:
         """The database settings of a process that cannot run without a registry.

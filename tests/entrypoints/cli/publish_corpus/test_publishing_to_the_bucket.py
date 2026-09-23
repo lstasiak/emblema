@@ -22,7 +22,7 @@ from emblema.config.settings import Settings
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import Retention
+from emblema.shared.kernel.retention import Retention
 from tests.support.corpora import CORPUS, SAMPLE, SUBSET, publish_command
 
 if TYPE_CHECKING:

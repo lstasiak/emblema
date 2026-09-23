@@ -1,12 +1,15 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from emblema.evaluation.domain.exceptions import CandidateNotRetainableError
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
+from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.ports.artifact_store import ArtifactStore
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -28,9 +31,14 @@ class InMemoryAdaptationRuntime:
     window in the order given, the identities that place the outcome on the curve, and a refusal
     of a sample from another task. The training loss it reports is the sample's variance, the
     loss the mean leaves, in every epoch; its one trainable parameter is the mean.
+
+    Given a store it can be asked to keep what it fitted, which for this runtime is the mean it
+    learnt: a campaign assembled over it then names artifacts that really exist and really hash
+    to what the message says, rather than references to nothing.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, store: ArtifactStore | None = None) -> None:
+        self._store = store
         self.adaptations: list[Adaptation] = []
 
     def adapt(
@@ -39,6 +47,8 @@ class InMemoryAdaptationRuntime:
         task: DownstreamTask,
         sample: LabelSample,
         validation: Sequence[LabelledWindow],
+        *,
+        retain: bool,
     ) -> AdaptationOutcome:
         task.accept_sample(sample)
         self.adaptations.append(
@@ -61,4 +71,17 @@ class InMemoryAdaptationRuntime:
                 for labelled in validation
             ),
             seconds=0.0,
+            artifact=self._kept(mean) if retain else None,
         )
+
+    def _kept(self, mean: float) -> ArtifactRef:
+        """The mean this runtime learnt, stored, so a retained cell names real bytes.
+
+        Raises:
+            CandidateNotRetainableError: If the runtime was given nowhere to keep it.
+        """
+        if self._store is None:
+            raise CandidateNotRetainableError(
+                "this runtime was asked to keep what it fitted and was given no store"
+            )
+        return self._store.put(repr(mean).encode())
