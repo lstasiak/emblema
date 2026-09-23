@@ -101,6 +101,10 @@ class UnknownBackboneError(EvaluationError):
     """A plan names pretrained weights the runtime was not given and cannot supply."""
 
 
+class CandidateMethodMismatchError(EvaluationError):
+    """A cell was recorded under other settings than the process asked to run it holds."""
+
+
 class UnknownTaskUnitsError(EvaluationError):
     """A task was defined over units the published corpus does not name."""
 

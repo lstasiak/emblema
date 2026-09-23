@@ -78,13 +78,15 @@ class RunCampaignCell:
             raise UnknownCampaignCellError(
                 f"{command.cell} is not a cell of campaign {command.campaign}"
             )
+        declared = campaign.design.get_candidate(command.cell.candidate)
         result = self._candidates.evaluate(
             CandidateEvaluation(
                 task=campaign.task,
                 cell=command.cell,
                 purpose=campaign.purpose,
                 retain=campaign.design.retains(command.cell),
-                starts_from=campaign.design.get_candidate(command.cell.candidate).starts_from,
+                starts_from=declared.starts_from,
+                method=declared.method,
             )
         )
         return self._record(campaign, command, result)

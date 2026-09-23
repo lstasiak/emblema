@@ -12,7 +12,11 @@ from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEva
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.campaign.compute_budget import ComputeBudget
-from emblema.evaluation.domain.exceptions import UnknownBackboneError, UnknownCandidateError
+from emblema.evaluation.domain.exceptions import (
+    CandidateMethodMismatchError,
+    UnknownBackboneError,
+    UnknownCandidateError,
+)
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 
@@ -63,12 +67,19 @@ class BackboneCandidateProvider:
             UnknownCandidateError: If this provider supplies no arm of that name.
             UnknownBackboneError: If the campaign recorded the arm as starting from other
                 weights than this provider was built over.
+            CandidateMethodMismatchError: If it recorded the arm under another schedule or
+                another low-rank update than this process runs.
         """
         cell = request.cell
         arm = self._arm(cell.candidate)
         if request.starts_from != arm.backbone:
             raise UnknownBackboneError(
                 f"the campaign ran {cell.candidate} over other weights than this provider serves"
+            )
+        if request.method != self._method(arm):
+            raise CandidateMethodMismatchError(
+                f"the campaign recorded {cell.candidate} under other settings than this process "
+                f"holds: {request.method.parameters} against {self._method(arm).parameters}"
             )
         outcome = self._run(
             RunAdaptationCommand(

@@ -13,7 +13,11 @@ from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
-from emblema.evaluation.domain.exceptions import UnknownBackboneError, UnknownCandidateError
+from emblema.evaluation.domain.exceptions import (
+    CandidateMethodMismatchError,
+    UnknownBackboneError,
+    UnknownCandidateError,
+)
 
 
 class ClassicalCandidateProvider:
@@ -55,6 +59,8 @@ class ClassicalCandidateProvider:
             UnknownCandidateError: If this provider supplies no baseline of that name.
             UnknownBackboneError: If the campaign recorded the baseline as starting from
                 pretrained weights, which nothing here could have used.
+            CandidateMethodMismatchError: If it recorded the baseline under other boosting knobs
+                than this process fits by.
         """
         cell = request.cell
         arm = self._arm(cell.candidate)
@@ -62,6 +68,11 @@ class ClassicalCandidateProvider:
             raise UnknownBackboneError(
                 f"the campaign recorded {cell.candidate} as starting from weights, and a "
                 f"baseline starts from none"
+            )
+        if request.method != self._method(arm):
+            raise CandidateMethodMismatchError(
+                f"the campaign recorded {cell.candidate} under other settings than this process "
+                f"holds: {request.method.parameters} against {self._method(arm).parameters}"
             )
         outcome = self._run(
             RunClassicalFitCommand(

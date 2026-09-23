@@ -43,8 +43,10 @@ from emblema.evaluation.application.use_cases.run_classical_fit import RunClassi
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
+from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import (
+    CandidateMethodMismatchError,
     CandidateNotRetainableError,
     UnknownBackboneError,
     UnknownCandidateError,
@@ -214,12 +216,14 @@ def keeping(request: pytest.FixtureRequest) -> Supplied:
 
 
 def request_of(supplied: Supplied, retain: bool = False) -> CandidateEvaluation:
+    """A cell as a campaign designed over this very provider would have recorded it."""
     return CandidateEvaluation(
         task=task().task_id,
         cell=cell(supplied.contender, BUDGET, 1),
         purpose=RunPurpose.TUNING,
         retain=retain,
         starts_from=supplied.starts_from,
+        method=supplied.provider.describe(supplied.contender).method,
     )
 
 
@@ -319,3 +323,17 @@ def test_each_name_reaches_the_supplier_the_process_named_for_it() -> None:
 def test_a_name_no_supplier_was_named_for_is_refused_before_anyone_is_asked() -> None:
     with pytest.raises(UnknownCandidateError, match="this process supplies no candidate"):
         routed_provider(None).provider.describe(CandidateRef("lora"))
+
+
+def test_a_cell_recorded_under_other_settings_than_the_provider_holds_is_refused(
+    supplied: Supplied,
+) -> None:
+    # A worker configured otherwise would answer a point of the curve under settings the grid
+    # never declared, and the grid would read as though one candidate had been compared at one
+    # setting. The comparison is of the text a provider states, never of what it means.
+    elsewhere = replace(
+        request_of(supplied), method=CandidateMethod.of(learning_rate=0.5, weight_decay=0.5)
+    )
+
+    with pytest.raises(CandidateMethodMismatchError):
+        supplied.provider.evaluate(elsewhere)

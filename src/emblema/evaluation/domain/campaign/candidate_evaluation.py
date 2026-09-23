@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
+from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.shared.kernel.artifacts import ArtifactRef
 
@@ -24,6 +25,9 @@ class CandidateEvaluation:
         starts_from: The weights the campaign recorded this candidate as starting from, so a
             provider serving other ones refuses the cell instead of quietly answering it with
             the wrong backbone; ``None`` for a candidate that starts from none.
+        method: What the campaign recorded this candidate as being set to. A process configured
+            otherwise would answer a point of the curve under settings the grid never declared,
+            and the grid would read as though one candidate had been compared at one setting.
     """
 
     task: TaskId
@@ -31,3 +35,4 @@ class CandidateEvaluation:
     purpose: RunPurpose
     retain: bool
     starts_from: ArtifactRef | None
+    method: CandidateMethod
