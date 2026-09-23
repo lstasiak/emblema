@@ -44,6 +44,11 @@ ml = [
     "onnxscript>=0.7",
 ]
 
+# The classical candidates a campaign compares the network against. Its own extra rather than
+# part of `ml`: the worker that fits them needs no accelerator and no torch, and the whole point
+# of a baseline is that it costs less to run than the thing it is a baseline for.
+baselines = ["numpy>=2.2", "xgboost>=3.0", "scikit-learn>=1.6", "joblib>=1.4"]
+
 # Tracking is its own extra: only a process that trains logs runs, and MLflow's client pulls in
 # a stack the API and the inference worker have no use for.
 tracking = ["mlflow-skinny>=3.1"]
@@ -182,6 +187,7 @@ warn_return_any = false
 module = [
     "onnxruntime", "onnxruntime.*", "pandas", "pandas.*",
     "celery", "celery.*", "kombu", "kombu.*",
+    "sklearn", "sklearn.*", "joblib", "joblib.*",
 ]
 ignore_missing_imports = true
 
@@ -261,6 +267,7 @@ source_modules = [
 ]
 forbidden_modules = [
     "torch", "numpy", "pandas", "onnx", "onnxruntime", "onnxscript",
+    "xgboost", "sklearn", "joblib",
     "sqlalchemy", "alembic",
     "fastapi", "starlette", "pydantic", "pydantic_settings",
     "celery", "kombu", "amqp", "mlflow", "boto3", "botocore",
