@@ -122,10 +122,10 @@ uv run pytest -m integration
 
 The metadata database holds one schema per bounded context and one [Alembic](https://alembic.sqlalchemy.org/) migration tree for all of them (`migrations/`); `uv run alembic check` reports any table the model has and the migrations do not. The integration tests never write to the configured database: they create, migrate and empty one of their own, named after it with `_test` appended, so a registry with work in progress survives a test run.
 
-Background work — the cells of an evaluation campaign — passes through RabbitMQ, and the workers that consume it are images built from this repository. They are behind a profile, because a worker is told which backbone it serves and there is none until a pretraining run has been accepted:
+Background work — the cells of an evaluation campaign — passes through RabbitMQ, and the workers that consume it are images built from this repository. There are two, because a campaign compares a network against classical methods and the two need nothing of each other: `worker-ml` carries the training stack and adapts a backbone, `worker-general` carries none of it and fits the baselines, which is less than half the image. Each assembles itself where it is started, so one that was not told what it serves exits with the reason instead of reporting for work and failing every cell it takes. They are behind a profile, because a worker is told which backbone it serves and there is none until a pretraining run has been accepted:
 
 ```sh
-docker compose --profile workers up -d worker-ml
+docker compose --profile workers up -d worker-ml worker-general
 ```
 
 The suite runs in an image too, against that stack: same interpreter, same wheels, same operating system as the processes it tests. This is the run that gates a merge.
@@ -202,7 +202,7 @@ is what a test or a toy model needs. Whoever has an accelerator runs the same en
 host against the same broker, and that is the only thing the host run is for:
 
 ```sh
-uv run celery -A emblema.entrypoints.workers.celery_app worker --queues ml --pool=solo \
+uv run celery -A emblema.entrypoints.workers.ml.celery_app worker --queues ml --pool=solo \
   --without-mingle --without-gossip
 ```
 
