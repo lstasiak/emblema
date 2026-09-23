@@ -90,3 +90,31 @@ pools of workers gave up the name `JobQueue` for `WorkerPool`, which is what it 
 and `ScheduledJob` became `QueuedJob`. Celery's own word, `task`, stays inside the Celery adapter
 and `@app.task`, where it is Celery's to use: the plan wrote this port for arq, a Kubernetes Job
 and an in-process runner as well, and only one of those four says "task".
+
+## 2026-09-23 — every worker is an image, and the host run is an escape hatch
+
+**This record made a property of one laptop into a property of the system.** It said the neural
+worker runs natively because MPS is not visible inside Docker on macOS, and the plan repeated it.
+That is a true sentence about a development machine and a false one about the design: what is
+deployed has to be an image, and a process that exists only as a command someone remembers to
+type is not deployable, not testable in the shape it will run, and not something a second person
+can start.
+
+**So every process of the application is now a container image.** One recipe, one image per set
+of optional dependencies, and which process an image runs is the command. `worker-ml` sits in the
+stack beside the services it talks to and computes on the processor. Whoever has an accelerator
+runs the same entry point on the host against the same broker — that, and only that, is what the
+host run is for. It is an option, not the architecture, and nothing is designed around it.
+
+Nothing is lost by it. Long runs never went to a container anyway: they go to a free GPU platform
+through the artifact handoff (ADR-0024), and what a container computes is what a test or a toy
+model needs. The two queues stay, and for better reasons than the accelerator: a process that has
+imported the training stack cannot safely fork, so it runs one job at a time while the classical
+worker forks and runs many; a cell that trains for minutes must not hold seconds-long work behind
+it; and an image that fits trees has no use for the training stack.
+
+**The gate moves with them.** Once the processes are images, the honest place to run the suite is
+the image: the same interpreter, the same wheels and the same operating system the code will run
+on, against the stack it will talk to. The cost is that the tests gated on the accelerator skip
+there — eight of them — so this machine keeps running the suite too, and a skip here is still the
+fault it always was.

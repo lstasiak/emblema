@@ -1,11 +1,21 @@
-# Minimal local stack: metadata database, S3-compatible artifact store, experiment tracking,
-# and the broker background work passes through.
+# The local stack: metadata database, S3-compatible artifact store, experiment tracking, the
+# broker background work passes through, and the application's own processes.
 # `docker compose up -d --wait` brings it up; values come from `.env` (copy `env.example`).
 # Credentials are defined once, as the application reads them, and mapped here onto the services:
 # the artifact key onto Garage's default key, MLflow's S3 client and the bootstrap job; the
 # database role onto Postgres and MLflow's backend store. Nothing that authenticates has a
 # default: a stack that starts on a fallback password runs with a password anyone can read here.
 name: emblema
+
+# Every process of the application sees the stack by service name rather than by the published
+# port: inside the network there is no loopback to reach it on. Stated once and pointed at by
+# each process, so that a service renamed is renamed in one place.
+x-in-network: &in-network
+  EMBLEMA_DATABASE__HOST: postgres
+  EMBLEMA_DATABASE__PORT: "5432"
+  EMBLEMA_BROKER__HOST: rabbitmq
+  EMBLEMA_BROKER__PORT: "5672"
+  EMBLEMA_ARTIFACT_STORE__ENDPOINT_URL: http://garage:3900
 
 services:
   postgres:
@@ -28,8 +38,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:4-alpine
-    # The broker a campaign's cells are handed to. Workers are not here: the one that trains runs
-    # on the host, beside the accelerator a container cannot see.
+    # The broker a campaign's cells are handed to; the workers that consume them are below.
     environment:
       RABBITMQ_DEFAULT_USER: ${EMBLEMA_BROKER__USER:?set in .env}
       RABBITMQ_DEFAULT_PASS: ${EMBLEMA_BROKER__PASSWORD:?set in .env}
@@ -117,7 +126,77 @@ services:
       - ./scripts:/scripts:ro
     restart: "no"
 
+  worker-ml:
+    # Consumes the cells that train or score a network. Behind a profile because a worker is told
+    # which backbone it serves and there is none until a pretraining run has been accepted, so a
+    # fresh clone brings up the stack without it: `docker compose --profile workers up -d`.
+    #
+    # One job at a time and no forking: a process that has imported the training stack cannot
+    # safely fork. Here it computes on the processor; whoever has an accelerator runs the same
+    # command on the host instead, which is the only thing the host run is for.
+    profiles: ["workers"]
+    build:
+      context: .
+      target: runtime
+      args:
+        EXTRAS: ml
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      <<: *in-network
+      EMBLEMA_WORKER__DEVICE: cpu
+    volumes:
+      # The corpora are an input and a task's labels are read out of them; the workspace is where
+      # blocks are fetched to, and it is the process's own rather than the host directory the
+      # worker on the host uses.
+      - ./data/raw:/home/emblema/data/raw:ro
+      - worker-workspace:/home/emblema/data/workspace
+    # No healthcheck: what would answer one is Celery's remote control, and the mailbox it runs
+    # over is a kind of queue RabbitMQ 4 has withdrawn, so the application switches it off. That a
+    # worker reported for work is read from its log.
+    command:
+      - celery
+      - -A
+      - emblema.entrypoints.workers.celery_app
+      - worker
+      - --queues=ml
+      - --pool=solo
+      - --without-mingle
+      - --without-gossip
+      # A worker that says nothing cannot be operated: at the default level it reports neither
+      # the connection it made nor the job it took.
+      - --loglevel=info
+
+  tests:
+    # The suite as it is run before a merge: everything installed, the repository mounted so a run
+    # needs no rebuild, and the stack reachable, so the tests that need services run here too.
+    # `docker compose run --rm tests` for the whole of it, arguments appended for a part.
+    profiles: ["tests"]
+    build:
+      context: .
+      target: tests
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      <<: *in-network
+    volumes:
+      - .:/app
+    working_dir: /app
+
 volumes:
   postgres-data:
+  worker-workspace:
   garage-meta:
   garage-data:

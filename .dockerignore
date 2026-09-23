@@ -1,0 +1,20 @@
+# What never belongs in a build context: the corpora and the artefacts they produce (tens of
+# gigabytes, mounted at run time where a process needs them), anything holding a credential, and
+# everything a build regenerates.
+.git
+.github
+.venv
+data
+docs
+experiments
+htmlcov
+.env
+.env.*
+*.egg-info
+.mypy_cache
+.pytest_cache
+.ruff_cache
+__pycache__
+.coverage
+.coverage.*
+.DS_Store
