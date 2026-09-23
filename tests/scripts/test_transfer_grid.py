@@ -39,6 +39,7 @@ def outcome(mode: TransferMode, seed: int = 1) -> AdaptationOutcome:
         training_losses=(0.5, 0.25),
         predictions=(prediction("a", 0, 10.0, 13.0), prediction("b", 1, 20.0, 16.0)),
         seconds=2.0,
+        artifact=None,
     )
 
 

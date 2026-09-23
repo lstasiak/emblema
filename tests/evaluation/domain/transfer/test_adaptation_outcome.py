@@ -32,6 +32,7 @@ def outcome(
         training_losses=(0.5, 0.25),
         predictions=predictions,
         seconds=1.5,
+        artifact=None,
     )
     return replace(stated, **overrides)
 

@@ -9,7 +9,9 @@ from torch.nn.functional import mse_loss
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
+from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate
 from emblema.evaluation.domain.exceptions import (
+    CandidateNotRetainableError,
     DivergedAdaptationError,
     InvalidAdaptationOutcomeError,
 )
@@ -22,7 +24,9 @@ from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
 from emblema.shared.adapters.loaders.seeded_shuffle_sampler import SeededShuffleSampler
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
+from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
+from emblema.shared.ports.artifact_store import ArtifactStore
 
 # What the candidate is asked per batch: the indices of the windows to answer, in sample order.
 Forward = Callable[[Sequence[int]], Tensor]
@@ -37,7 +41,12 @@ class TorchAdaptationRuntime:
     """
 
     def __init__(
-        self, backbones: BackboneFactory, blocks: PublishedCorpusBlocks, *, device: str
+        self,
+        backbones: BackboneFactory,
+        blocks: PublishedCorpusBlocks,
+        *,
+        device: str,
+        store: ArtifactStore | None = None,
     ) -> None:
         """Adapt backbones from ``backbones`` over the corpora ``blocks`` reads.
 
@@ -45,10 +54,13 @@ class TorchAdaptationRuntime:
             backbones: Where the encoder comes from, pretrained or fresh.
             blocks: Where the published manifests and blocks are read from.
             device: Where the arithmetic happens.
+            store: Where a candidate this runtime is asked to keep is put; a process that never
+                keeps one needs none.
         """
         self._backbones = backbones
         self._blocks = blocks
         self._device = device
+        self._store = store
 
     def adapt(
         self,
@@ -56,6 +68,8 @@ class TorchAdaptationRuntime:
         task: DownstreamTask,
         sample: LabelSample,
         validation: Sequence[LabelledWindow],
+        *,
+        retain: bool,
     ) -> AdaptationOutcome:
         task.accept_sample(sample)
         if not validation:
@@ -65,7 +79,7 @@ class TorchAdaptationRuntime:
         tuning = block.at([labelled.window.position for labelled in sample.windows])
         held = block.at([labelled.window.position for labelled in validation])
         started = time.perf_counter()
-        scale = task.labels.scale
+        scale = task.label_scheme().scale
         targets = torch.tensor(
             [labelled.target / scale for labelled in sample.windows], dtype=torch.float32
         ).to(self._device)
@@ -97,7 +111,31 @@ class TorchAdaptationRuntime:
                 for labelled, answer in zip(validation, predicted.tolist(), strict=True)
             ),
             seconds=time.perf_counter() - started,
+            artifact=(
+                self._kept(plan, candidate, len(manifest.channels), scale) if retain else None
+            ),
         )
+
+    def _kept(
+        self,
+        plan: AdaptationPlan,
+        candidate: AdaptedBackbone,
+        vocabulary_size: int,
+        target_scale: float,
+    ) -> ArtifactRef:
+        """The candidate this run fitted, stored whole, so the campaign can name it.
+
+        Raises:
+            CandidateNotRetainableError: If the runtime was given nowhere to keep it.
+        """
+        if self._store is None:
+            raise CandidateNotRetainableError(
+                "this runtime was asked to keep what it fitted and was given no store"
+            )
+        fitted = FittedCandidate.of(
+            plan, candidate, vocabulary_size=vocabulary_size, target_scale=target_scale
+        )
+        return self._store.put(fitted.to_bytes())
 
     def _train(
         self,

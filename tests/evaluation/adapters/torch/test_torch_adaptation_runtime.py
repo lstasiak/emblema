@@ -84,7 +84,7 @@ def published(tmp_path: Path) -> Published:
 
 
 def adapt(published: Published, stated: AdaptationPlan) -> AdaptationOutcome:
-    return published.runtime.adapt(stated, published.task, SAMPLE, VALIDATION)
+    return published.runtime.adapt(stated, published.task, SAMPLE, VALIDATION, retain=False)
 
 
 def pretrained_weights() -> dict[str, Tensor]:
