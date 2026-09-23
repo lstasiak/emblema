@@ -9,7 +9,7 @@ from botocore.exceptions import ClientError
 from emblema.shared.adapters.storage.files import CHUNK_SIZE, write_verified
 from emblema.shared.adapters.storage.layout import content_address, file_address
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import Retention
+from emblema.shared.kernel.retention import Retention
 from emblema.shared.ports.exceptions import ArtifactIntegrityError, ArtifactNotFoundError
 
 if TYPE_CHECKING:

@@ -25,7 +25,8 @@ from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.ports.training_runtime import TrainingRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import ArtifactStore, Retention
+from emblema.shared.kernel.retention import Retention
+from emblema.shared.ports.artifact_store import ArtifactStore
 from tests.support.experiments import budget, configuration, continued, corpus, mixture
 from tests.support.platform import SimulatedPlatform
 

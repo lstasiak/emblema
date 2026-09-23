@@ -14,7 +14,7 @@ from emblema.pretraining.domain.exceptions import (
 )
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import Retention
+from emblema.shared.kernel.retention import Retention
 from emblema.shared.ports.exceptions import ArtifactNotFoundError
 from tests.support.experiments import share
 from tests.support.published import (

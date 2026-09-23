@@ -3,7 +3,8 @@ from emblema.pretraining.adapters.documents.pretraining_result_json import Pretr
 from emblema.pretraining.domain.handoff.pretraining_order import PretrainingOrder
 from emblema.pretraining.domain.handoff.pretraining_result import PretrainingResult
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import ArtifactStore, Retention
+from emblema.shared.kernel.retention import Retention
+from emblema.shared.ports.artifact_store import ArtifactStore
 
 
 class ArtifactStoreHandoffExchange:

@@ -19,7 +19,8 @@ from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifa
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
-from emblema.shared.ports.artifact_store import ArtifactStore, Retention
+from emblema.shared.kernel.retention import Retention
+from emblema.shared.ports.artifact_store import ArtifactStore
 from emblema.shared.ports.exceptions import ArtifactIntegrityError, ArtifactNotFoundError
 
 if TYPE_CHECKING:

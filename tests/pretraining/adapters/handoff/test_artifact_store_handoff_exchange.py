@@ -7,7 +7,7 @@ from emblema.pretraining.adapters.handoff.artifact_store_handoff_exchange import
 )
 from emblema.pretraining.domain.exceptions import UnreadableHandoffDocumentError
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
-from emblema.shared.ports.artifact_store import Retention
+from emblema.shared.kernel.retention import Retention
 from tests.support.handoff import order, result
 
 

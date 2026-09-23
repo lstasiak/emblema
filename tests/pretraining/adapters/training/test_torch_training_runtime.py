@@ -18,8 +18,8 @@ from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.retention import Retention
 from emblema.shared.kernel.tokens import Token, TokenWindow
-from emblema.shared.ports.artifact_store import Retention
 from tests.support.experiments import (
     CHANNEL_NAMES,
     budget,

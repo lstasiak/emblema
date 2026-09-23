@@ -27,7 +27,8 @@ from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.adapters.loaders.interleaved_loader import InterleavedLoader
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.ports.artifact_store import ArtifactStore, Retention
+from emblema.shared.kernel.retention import Retention
+from emblema.shared.ports.artifact_store import ArtifactStore
 
 # Validation masks are drawn from a generator of their own per batch, seeded by the run's seed
 # and the batch's index within its corpus, so that the curve moves with the model rather than
