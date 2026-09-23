@@ -118,3 +118,32 @@ the image: the same interpreter, the same wheels and the same operating system t
 on, against the stack it will talk to. The cost is that the tests gated on the accelerator skip
 there — eight of them — so this machine keeps running the suite too, and a skip here is still the
 fault it always was.
+
+## 2026-09-23 — the pools are named for what an image carries, not for hardware
+
+The two pools were called `ml` and `cpu`. Once every process became an image, `cpu` stopped
+being true of one of them and started being true of both: the target platform is a container
+with no accelerator in it, so the worker that adapts a backbone computes on the processor as
+surely as the one that fits trees. A name that states hardware which does not separate them
+invites the question of why there are two at all, and the answer was never the hardware.
+
+The pools are now `ml` and `general`, named for what an image carries. From that one fact all
+three reasons for the split follow: a process that has imported the training stack cannot safely
+fork, so it takes one job at a time; a cell that trains for minutes must not hold seconds-long
+work behind it; and an image with that stack in it is more than twice the size of one without.
+The default queue moves to `general` with the name, because a job submitted without naming one
+should not land in the largest image.
+
+Where a job goes and what a worker consumes are stated once each: the job carries its pool and
+the worker is started with its queue. The task declaration states neither. Celery shares a task
+registered on one application with every other application in the process, so a third statement
+of the same fact would be one the first-imported module answered for.
+
+**Each process assembles itself where it is started.** The two roots compose one `CampaignProcess`
+— store, registries, queue, clock, identifiers, and the drawing of labels every candidate is run
+over — and differ only in the provider they build on top of it, which is the whole of what
+separates them. A worker demands what it competes with as it starts rather than when a cell
+arrives, so one that was told nothing about a backbone, or nothing about how hard to fit, exits
+with the reason. Celery keeps what a signal handler raises to itself and reports it through a
+logger it has not configured that early, so the refusal leaves the process rather than being
+raised into it.
