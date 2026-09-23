@@ -47,7 +47,17 @@ ml = [
 # The classical candidates a campaign compares the network against. Its own extra rather than
 # part of `ml`: the worker that fits them needs no accelerator and no torch, and the whole point
 # of a baseline is that it costs less to run than the thing it is a baseline for.
-baselines = ["numpy>=2.2", "xgboost>=3.0", "scikit-learn>=1.6", "joblib>=1.4"]
+baselines = [
+    "numpy>=2.2",
+    "scikit-learn>=1.6",
+    "joblib>=1.4",
+    # The same library under two names. The default distribution declares an NVIDIA collective
+    # communications library on Linux, which is 347 MB of CUDA in an image whose whole point is
+    # that it needs no accelerator; the `-cpu` one is the same build without it and is published
+    # for every platform but macOS, where there is no GPU support to leave out.
+    "xgboost>=3.0; sys_platform == 'darwin'",
+    "xgboost-cpu>=3.0; sys_platform != 'darwin'",
+]
 
 # Tracking is its own extra: only a process that trains logs runs, and MLflow's client pulls in
 # a stack the API and the inference worker have no use for.
