@@ -17,10 +17,14 @@ from typing import NamedTuple
 import pytest
 
 from emblema.evaluation.adapters.candidates.backbone_arm import BackboneArm
+from emblema.evaluation.adapters.candidates.backbone_arm_catalogue import BackboneArmCatalogue
 from emblema.evaluation.adapters.candidates.backbone_candidate_provider import (
     BackboneCandidateProvider,
 )
 from emblema.evaluation.adapters.candidates.classical_arm import ClassicalArm
+from emblema.evaluation.adapters.candidates.classical_baseline_catalogue import (
+    ClassicalBaselineCatalogue,
+)
 from emblema.evaluation.adapters.candidates.classical_candidate_provider import (
     ClassicalCandidateProvider,
 )
@@ -87,6 +91,19 @@ PUBLISHED = sides(training=units("a", "b"), validation=units("c"))
 LOW_RANK = CandidateRef("lora")
 TREES = CandidateRef("boosted_trees_per_channel")
 BUDGET = LabelBudget.of(2)
+# What a campaign is designed against and what a cell is checked against, built once: the two
+# have to be the same text or every cell of a mixed grid would be refused.
+ARMS = BackboneArmCatalogue(
+    (
+        BackboneArm(ref=CONTROL, mode=TransferMode.FROM_SCRATCH, backbone=None, lora=None),
+        BackboneArm(ref=CONTENDER, mode=TransferMode.FULL_FINE_TUNING, backbone=WEIGHTS, lora=None),
+        BackboneArm(ref=LOW_RANK, mode=TransferMode.LORA, backbone=WEIGHTS, lora=LORA),
+    ),
+    adaptation_schedule(),
+)
+BASELINES = ClassicalBaselineCatalogue(
+    (ClassicalArm(ref=TREES, features=FeatureScheme.PER_CHANNEL, sources=()),), boosting()
+)
 
 
 class Supplied(NamedTuple):
@@ -146,18 +163,7 @@ def backbone_provider(store: InMemoryArtifactStore | None) -> Supplied:
     _, labels, _ = drawing()
     return Supplied(
         provider=BackboneCandidateProvider(
-            (
-                BackboneArm(ref=CONTROL, mode=TransferMode.FROM_SCRATCH, backbone=None, lora=None),
-                BackboneArm(
-                    ref=CONTENDER,
-                    mode=TransferMode.FULL_FINE_TUNING,
-                    backbone=WEIGHTS,
-                    lora=None,
-                ),
-                BackboneArm(ref=LOW_RANK, mode=TransferMode.LORA, backbone=WEIGHTS, lora=LORA),
-            ),
-            adaptation_schedule(),
-            RunAdaptation(labels, InMemoryAdaptationRuntime(store)),
+            ARMS, RunAdaptation(labels, InMemoryAdaptationRuntime(store))
         ),
         contender=CONTENDER,
         starts_from=WEIGHTS,
@@ -169,9 +175,7 @@ def classical_provider(store: InMemoryArtifactStore | None) -> Supplied:
     tasks, labels, budgets = drawing()
     return Supplied(
         provider=ClassicalCandidateProvider(
-            (ClassicalArm(ref=TREES, features=FeatureScheme.PER_CHANNEL, sources=()),),
-            boosting(),
-            RunClassicalFit(tasks, labels, budgets, InMemoryClassicalRuntime(store)),
+            BASELINES, RunClassicalFit(tasks, labels, budgets, InMemoryClassicalRuntime(store))
         ),
         contender=TREES,
         starts_from=None,
@@ -262,7 +266,7 @@ def test_a_provider_with_nowhere_to_keep_what_it_fits_refuses_to_keep_it(
 
 
 def stated_method(candidate: CandidateRef) -> dict[str, str]:
-    described = backbone_provider(None).provider.describe(candidate)
+    described = ARMS.describe(candidate)
     return {parameter.name: parameter.value for parameter in described.method.parameters}
 
 

@@ -149,11 +149,6 @@ def test_the_arms_are_the_four_modes_over_the_backbone_the_process_serves() -> N
     assert arms[2].lora == LORA
 
 
-def test_the_schedule_and_the_updates_are_the_ones_the_environment_declares() -> None:
-    assert CompositionRoot.schedule_of(DECLARED_SCHEDULE) == SCHEDULE
-    assert CompositionRoot.lora_of(DECLARED_LORA) == LORA
-
-
 def test_the_frozen_side_is_opened_through_the_publisher_the_process_holds(
     tmp_path: Path,
 ) -> None:

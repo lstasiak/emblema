@@ -1,11 +1,10 @@
 from pathlib import Path
 from typing import Self
 
-from emblema.config.lora_settings import LoraSettings
-from emblema.config.schedule_settings import ScheduleSettings
 from emblema.config.settings import Settings
 from emblema.entrypoints.restored_backbones import RestoredBackbones
 from emblema.entrypoints.workers.campaign_process import CampaignProcess
+from emblema.entrypoints.workers.declared_worker import DeclaredWorker
 from emblema.entrypoints.workers.known_arms import KnownArms
 from emblema.evaluation.adapters.candidates.backbone_candidate_provider import (
     BackboneCandidateProvider,
@@ -107,7 +106,7 @@ class CompositionRoot:
             ids=ids,
         )
         self.adapters, self.services = process.assemble(
-            self._arms(process, backbone, lora, schedule, device)
+            self.arms_over(process, backbone, lora, schedule, device)
             if candidates is None
             else candidates
         )
@@ -122,12 +121,13 @@ class CompositionRoot:
         """
         settings = Settings()
         worker = settings.require_worker()
+        declared = DeclaredWorker(worker)
         return cls(
             settings,
             workspace=worker.workspace,
             corpora=worker.corpora,
-            schedule=cls.schedule_of(worker.require_schedule()),
-            lora=cls.lora_of(worker.require_lora()),
+            schedule=declared.schedule(),
+            lora=declared.lora(),
             backbone=worker.require_backbone_ref(),
             device=worker.device,
             jobs=jobs,
@@ -171,47 +171,14 @@ class CompositionRoot:
         )
 
     @staticmethod
-    def schedule_of(settings: ScheduleSettings) -> AdaptationSchedule:
-        """How every cell of this process's campaigns learns, as the environment declares it.
-
-        Raises:
-            InvalidAdaptationScheduleError: If what it declares is not a schedule that stands up.
-        """
-        return AdaptationSchedule(
-            epochs=settings.epochs,
-            min_steps=settings.min_steps,
-            batch_size=settings.batch_size,
-            learning_rate=settings.learning_rate,
-            weight_decay=settings.weight_decay,
-            warmup_fraction=settings.warmup_fraction,
-            final_lr_fraction=settings.final_lr_fraction,
-        )
-
-    @staticmethod
-    def lora_of(settings: LoraSettings) -> LoraSpec:
-        """The low-rank updates the arm of that name adds, as the environment declares them.
-
-        Raises:
-            InvalidLoraSpecError: If what it declares is not a specification that stands up.
-        """
-        return LoraSpec(
-            rank=settings.rank,
-            alpha=settings.alpha,
-            dropout=settings.dropout,
-            targets=tuple(
-                target.strip() for target in settings.targets.split(",") if target.strip()
-            ),
-        )
-
-    @staticmethod
-    def _arms(
+    def arms_over(
         process: CampaignProcess,
         backbone: ArtifactRef | None,
         lora: LoraSpec | None,
         schedule: AdaptationSchedule,
         device: str | None,
     ) -> CandidateProvider:
-        """The four ways of using the backbone this process serves.
+        """The four ways of using a backbone, over the parts a campaign process holds.
 
         Raises:
             ValueError: If the process was left to build them without a backbone and updates.
@@ -222,8 +189,7 @@ class CompositionRoot:
                 "given, not built"
             )
         return BackboneCandidateProvider(
-            KnownArms.over(backbone, lora),
-            schedule,
+            KnownArms.catalogue(backbone, lora, schedule),
             RunAdaptation(
                 process.draw_run_labels,
                 TorchAdaptationRuntime(

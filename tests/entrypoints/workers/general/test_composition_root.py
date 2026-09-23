@@ -109,10 +109,6 @@ def test_a_process_left_to_build_baselines_without_the_knobs_to_fit_them_is_refu
         )
 
 
-def test_the_fit_is_the_one_the_environment_declares() -> None:
-    assert CompositionRoot.boosting_of(DECLARED) == boosting()
-
-
 def test_left_to_build_its_own_candidates_the_process_serves_both_baselines(
     tmp_path: Path,
 ) -> None:

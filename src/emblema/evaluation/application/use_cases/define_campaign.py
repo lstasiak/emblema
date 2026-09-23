@@ -7,7 +7,7 @@ from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
-from emblema.evaluation.ports.candidate_provider import CandidateProvider
+from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
 from emblema.shared.kernel.compute import ComputeTier
@@ -50,17 +50,21 @@ class DefineCampaignCommand:
 class DefineCampaign:
     """Lays out a campaign's grid and stores it, with nothing run.
 
-    What each candidate is comes from the provider rather than from the caller: the compute
+    What each candidate is comes from the catalogue rather than from the caller: the compute
     budget a candidate is held to has to be the one it will actually spend, and a figure written
     down beside a candidate can disagree with what the candidate does. Asking here means the
     disagreement is impossible rather than merely unlikely.
+
+    A catalogue and not a provider, because declaring a comparison never runs one: the process
+    that declares a campaign then carries no runtime, which on the platform this is developed
+    on is what lets it exist at all.
     """
 
     def __init__(
         self,
         tasks: DownstreamTaskRepository,
         campaigns: EvaluationCampaignRepository,
-        candidates: CandidateProvider,
+        candidates: CandidateCatalogue,
         ids: IdGenerator,
         clock: Clock,
     ) -> None:

@@ -1,9 +1,9 @@
 from pathlib import Path
 from typing import Self
 
-from emblema.config.boosting_settings import BoostingSettings
 from emblema.config.settings import Settings
 from emblema.entrypoints.workers.campaign_process import CampaignProcess
+from emblema.entrypoints.workers.declared_worker import DeclaredWorker
 from emblema.entrypoints.workers.known_baselines import KnownBaselines
 from emblema.evaluation.adapters.candidates.classical_candidate_provider import (
     ClassicalCandidateProvider,
@@ -92,7 +92,7 @@ class CompositionRoot:
             ids=ids,
         )
         self.adapters, self.services = process.assemble(
-            self._baselines(process, boosting, sources) if candidates is None else candidates
+            self.baselines_over(process, boosting, sources) if candidates is None else candidates
         )
 
     @classmethod
@@ -109,7 +109,7 @@ class CompositionRoot:
             settings,
             workspace=worker.workspace,
             corpora=worker.corpora,
-            boosting=cls.boosting_of(worker.require_boosting()),
+            boosting=DeclaredWorker(worker).boosting(),
             jobs=jobs,
         )
 
@@ -145,30 +145,12 @@ class CompositionRoot:
         )
 
     @staticmethod
-    def boosting_of(settings: BoostingSettings) -> GradientBoostingSpec:
-        """How hard every baseline of this process fits, as the environment declares it.
-
-        Raises:
-            InvalidGradientBoostingSpecError: If what it declares is not a fit that stands up.
-        """
-        return GradientBoostingSpec(
-            rounds=settings.rounds,
-            max_depth=settings.max_depth,
-            learning_rate=settings.learning_rate,
-            row_share=settings.row_share,
-            feature_share=settings.feature_share,
-            min_leaf_weight=settings.min_leaf_weight,
-            l2_penalty=settings.l2_penalty,
-            threads=settings.threads,
-        )
-
-    @staticmethod
-    def _baselines(
+    def baselines_over(
         process: CampaignProcess,
         boosting: GradientBoostingSpec | None,
         sources: tuple[TaskId, ...],
     ) -> CandidateProvider:
-        """The two baselines every campaign competes.
+        """The two baselines every campaign competes, over the parts a campaign process holds.
 
         Raises:
             ValueError: If the process was left to build them without the knobs to fit them by.
@@ -178,8 +160,7 @@ class CompositionRoot:
                 "without the boosting knobs the process needs its candidates given, not built"
             )
         return ClassicalCandidateProvider(
-            KnownBaselines.over(sources),
-            boosting,
+            KnownBaselines.catalogue(boosting, sources),
             RunClassicalFit(
                 process.tasks,
                 process.draw_run_labels,

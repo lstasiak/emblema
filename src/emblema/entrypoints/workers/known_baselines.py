@@ -1,8 +1,12 @@
 from collections.abc import Sequence
 
 from emblema.evaluation.adapters.candidates.classical_arm import ClassicalArm
+from emblema.evaluation.adapters.candidates.classical_baseline_catalogue import (
+    ClassicalBaselineCatalogue,
+)
 from emblema.evaluation.contracts.identifiers import CandidateRef, TaskId
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
+from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
 
 
 class KnownBaselines:
@@ -37,3 +41,10 @@ class KnownBaselines:
     def refs(cls) -> tuple[CandidateRef, ...]:
         """What the baselines are called, in reporting order."""
         return (cls.PER_CHANNEL, cls.ACROSS_CHANNELS)
+
+    @classmethod
+    def catalogue(
+        cls, boosting: GradientBoostingSpec, sources: Sequence[TaskId] = ()
+    ) -> ClassicalBaselineCatalogue:
+        """What the two baselines are, with nothing that could fit one."""
+        return ClassicalBaselineCatalogue(cls.over(sources), boosting)

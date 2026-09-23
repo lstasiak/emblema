@@ -68,6 +68,7 @@ class CampaignProcess:
         clock: Source of the current instant.
         ids: Source of new identifiers.
         blocks: Published corpora, fetched and mapped — what a runtime reads windows through.
+        corpus: The division and window placements of a published corpus.
         open_test_split: The operation that records the asking for the frozen side.
         draw_label_budget: One budget of labels, drawn from a task's tuning side.
         draw_run_labels: What a run of any candidate is given before anything is fitted.
@@ -115,11 +116,11 @@ class CampaignProcess:
         self.jobs = self._jobs(settings) if jobs is None else jobs
         self.open_test_split = OpenTestSplit(self.tasks, self.ids, self.clock, self.events)
         self.blocks = PublishedCorpusBlocks(self.store, workspace)
-        corpus = BlockCorpusWindows(self.blocks)
+        self.corpus = BlockCorpusWindows(self.blocks)
         truth = KnownGroundTruths.under(corpora)
-        self.draw_label_budget = DrawLabelBudget(self.tasks, corpus, truth)
+        self.draw_label_budget = DrawLabelBudget(self.tasks, self.corpus, truth)
         self.draw_run_labels = DrawRunLabels(
-            self.tasks, corpus, truth, self.draw_label_budget, self.open_test_split
+            self.tasks, self.corpus, truth, self.draw_label_budget, self.open_test_split
         )
 
     def assemble(self, candidates: CandidateProvider) -> tuple[Adapters, Services]:
