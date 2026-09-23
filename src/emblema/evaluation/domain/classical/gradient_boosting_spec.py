@@ -14,8 +14,15 @@ class GradientBoostingSpec:
     the method. The counts are the whole of what a fit costs, so they are also what a campaign
     records when it records what this candidate was set to.
 
-    Invariants: at least one round and one level of depth; the rate is positive and finite; the
-    two shares lie in ``(0, 1]``; the leaf weight and the penalty are finite and not negative.
+    The threads are here rather than in the environment that happens to run the fit, because
+    they are part of the answer and not a setting of convenience: a histogram is summed in the
+    order the work was split in, so two machines agree on what a recipe produced only if they
+    agree on this. A campaign that recorded every other knob and left this one to whichever
+    worker picked the cell up would record a recipe that does not identify its own result.
+
+    Invariants: at least one round, one level of depth and one thread; the rate is positive and
+    finite; the two shares lie in ``(0, 1]``; the leaf weight and the penalty are finite and not
+    negative.
 
     Attributes:
         rounds: Trees grown, one per boosting round.
@@ -27,6 +34,7 @@ class GradientBoostingSpec:
             count of windows.
         l2_penalty: Penalty on the leaf values, which keeps a leaf standing on few windows from
             taking a large one.
+        threads: How many threads a fit may use, which is part of what it answers.
     """
 
     rounds: int
@@ -36,9 +44,14 @@ class GradientBoostingSpec:
     feature_share: float
     min_leaf_weight: float
     l2_penalty: float
+    threads: int
 
     def __post_init__(self) -> None:
-        for label, count in (("rounds", self.rounds), ("max_depth", self.max_depth)):
+        for label, count in (
+            ("rounds", self.rounds),
+            ("max_depth", self.max_depth),
+            ("threads", self.threads),
+        ):
             if count < 1:
                 raise InvalidGradientBoostingSpecError(f"{label} must be positive, got {count}")
         if not isfinite(self.learning_rate) or self.learning_rate <= 0.0:

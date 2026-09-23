@@ -292,6 +292,9 @@ def test_a_baseline_records_how_it_reads_a_window_and_how_hard_it_fits() -> None
 
     assert stated["features"] == "per_channel"
     assert stated["rounds"] == "8"
+    # What a fit answers depends on it, so a campaign that recorded every other knob and
+    # left this one would record a method that does not identify its own result.
+    assert stated["threads"] == "1"
     assert stated["sources"] == ""
     assert "fit_seed" not in stated
 

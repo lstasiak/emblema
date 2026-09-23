@@ -121,7 +121,7 @@ def adaptation_schedule(**overrides: Any) -> AdaptationSchedule:
 
 
 def boosting(**overrides: Any) -> GradientBoostingSpec:
-    """Few shallow trees: enough to fit something, fast enough for a domain test."""
+    """Few shallow trees on one thread: enough to fit something, fast enough for a domain test."""
     stated = GradientBoostingSpec(
         rounds=8,
         max_depth=3,
@@ -130,6 +130,7 @@ def boosting(**overrides: Any) -> GradientBoostingSpec:
         feature_share=1.0,
         min_leaf_weight=1.0,
         l2_penalty=1.0,
+        threads=1,
     )
     return replace(stated, **overrides)
 

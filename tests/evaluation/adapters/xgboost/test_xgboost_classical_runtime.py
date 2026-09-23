@@ -57,7 +57,7 @@ def published(tmp_path: Path) -> Published:
     store = InMemoryArtifactStore()
     manifest = publish(store, tmp_path / "scratch").manifest
     runtime = XgboostClassicalRuntime(
-        PublishedCorpusBlocks(store, tmp_path / "workspace"), threads=1, store=store
+        PublishedCorpusBlocks(store, tmp_path / "workspace"), store=store
     )
     defined = replace(task(), manifest=manifest, labels=RemainingLifeScheme(CEILING))
     return Published(runtime, defined, store, tmp_path)
@@ -154,8 +154,3 @@ def test_what_a_fit_keeps_answers_the_same_rows_the_fit_itself_did(published: Pu
     rows = ChannelAggregatedFeatures().of(blocks.block_of(manifest).at([2]))
     answered = kept.booster().inplace_predict(rows) * kept.target_scale
     assert float(answered[0]) == pytest.approx(outcome.predictions[0].predicted, rel=1e-6)
-
-
-def test_a_fit_needs_a_thread_to_run_on() -> None:
-    with pytest.raises(ValueError, match="at least one thread"):
-        XgboostClassicalRuntime(PublishedCorpusBlocks(InMemoryArtifactStore(), Path()), threads=0)

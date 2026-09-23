@@ -97,6 +97,7 @@ class ClassicalCandidateProvider:
             feature_share=self._boosting.feature_share,
             min_leaf_weight=self._boosting.min_leaf_weight,
             l2_penalty=self._boosting.l2_penalty,
+            threads=self._boosting.threads,
         )
 
     def _arm(self, candidate: CandidateRef) -> ClassicalArm:

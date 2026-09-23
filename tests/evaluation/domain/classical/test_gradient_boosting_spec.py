@@ -1,11 +1,11 @@
 import pytest
 
 from emblema.evaluation.domain.exceptions import InvalidGradientBoostingSpecError
-from tests.evaluation.support import boosting
+from tests.evaluation.support import boosting, recipe
 
 
-@pytest.mark.parametrize(("field", "value"), [("rounds", 0), ("max_depth", 0)])
-def test_a_fit_that_grows_nothing_is_refused(field: str, value: int) -> None:
+@pytest.mark.parametrize(("field", "value"), [("rounds", 0), ("max_depth", 0), ("threads", 0)])
+def test_a_fit_that_grows_nothing_or_runs_on_nothing_is_refused(field: str, value: int) -> None:
     with pytest.raises(InvalidGradientBoostingSpecError, match="must be positive"):
         boosting(**{field: value})
 
@@ -36,3 +36,9 @@ def test_a_penalty_that_is_negative_or_not_a_number_is_refused(field: str, value
 
 def test_no_penalty_at_all_is_allowed() -> None:
     assert boosting(min_leaf_weight=0.0, l2_penalty=0.0).l2_penalty == 0.0
+
+
+def test_the_threads_a_fit_runs_on_are_part_of_what_it_reports() -> None:
+    # Two machines agree on what a recipe produced only if they agree on this, so it travels
+    # with the recipe rather than with whichever worker picked the cell up.
+    assert recipe(boosting=boosting(threads=4)).parameters()["threads"] == 4

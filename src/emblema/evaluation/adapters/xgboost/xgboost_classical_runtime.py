@@ -47,26 +47,20 @@ class XgboostClassicalRuntime:
         self,
         blocks: PublishedCorpusBlocks,
         *,
-        threads: int,
         store: ArtifactStore | None = None,
     ) -> None:
         """Fit over the corpora ``blocks`` reads.
 
+        How many threads a fit runs on is not settled here but by the recipe, because it is part
+        of what the recipe answers rather than a property of the machine that happened to pick
+        the cell up.
+
         Args:
             blocks: Where the published manifests and blocks are read from.
-            threads: Threads a fit may use. Part of the result and not a tuning knob: the
-                histogram a tree is grown from is summed in an order the split of work decides,
-                so two machines agree on an answer only if they agree on this.
             store: Where a candidate this runtime is asked to keep is put; a process that never
                 keeps one needs none.
-
-        Raises:
-            ValueError: If a fit is given no thread to run on.
         """
-        if threads < 1:
-            raise ValueError(f"a fit needs at least one thread, got {threads}")
         self._blocks = blocks
-        self._threads = threads
         self._store = store
 
     def fit(
@@ -152,7 +146,7 @@ class XgboostClassicalRuntime:
             objective="reg:squarederror",
             tree_method="hist",
             random_state=recipe.seed,
-            n_jobs=self._threads,
+            n_jobs=boosting.threads,
         )
         model.fit(rows, targets)
         return model

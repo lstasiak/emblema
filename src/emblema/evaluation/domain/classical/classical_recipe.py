@@ -64,4 +64,5 @@ class ClassicalRecipe:
             "feature_share": float(self.boosting.feature_share),
             "min_leaf_weight": float(self.boosting.min_leaf_weight),
             "l2_penalty": float(self.boosting.l2_penalty),
+            "threads": self.boosting.threads,
         }

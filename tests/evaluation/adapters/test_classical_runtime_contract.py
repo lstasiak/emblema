@@ -70,7 +70,6 @@ def over_xgboost(tmp_path: Path, *, keeping: bool) -> Adapted:
     manifest = publish(store, tmp_path / "scratch").manifest
     runtime = XgboostClassicalRuntime(
         PublishedCorpusBlocks(store, tmp_path / "workspace"),
-        threads=1,
         store=store if keeping else None,
     )
     return Adapted(runtime, replace(task(), manifest=manifest), store)
