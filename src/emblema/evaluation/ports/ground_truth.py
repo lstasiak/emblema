@@ -17,10 +17,15 @@ class GroundTruth(Protocol):
     same way.
     """
 
-    def truths_of(self, windows: Sequence[TaskWindow]) -> Mapping[TaskWindow, float]:
-        """What the ground truth says about each of those windows.
+    def truths_of(self, corpus: str, windows: Sequence[TaskWindow]) -> Mapping[TaskWindow, float]:
+        """What the ground truth says about each of those windows of that corpus.
+
+        The corpus is named on every call rather than fixed when the adapter is built, because a
+        candidate fitted across corpora draws labels from several of them in one run, and a unit
+        key is only unique within the corpus it was cut from.
 
         Raises:
-            UnknownGroundTruthError: If the ground truth says nothing about one of the windows.
+            UnknownGroundTruthError: If the ground truth says nothing about one of the windows,
+                or nothing at all about that corpus.
         """
         ...
