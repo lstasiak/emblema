@@ -16,7 +16,7 @@ class DeviceGenerator:
 
     def state(self) -> Tensor | None:
         """What this device's generator holds, or ``None`` where it keeps nothing of its own."""
-        if self._kind == "cuda":
+        if self._kind == "cuda":  # pragma: no cover - exercised on the GPU platforms, never here
             return torch.cuda.get_rng_state()
         if self._kind == "mps":
             return torch.mps.get_rng_state()
@@ -26,7 +26,7 @@ class DeviceGenerator:
         """Put back what ``state`` took, where there was anything to take."""
         if state is None:
             return
-        if self._kind == "cuda":
+        if self._kind == "cuda":  # pragma: no cover - exercised on the GPU platforms, never here
             torch.cuda.set_rng_state(state)
         elif self._kind == "mps":
             torch.mps.set_rng_state(state)

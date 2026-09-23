@@ -29,7 +29,9 @@ class CampaignWorker:
         self._root = root
 
     @classmethod
-    def from_environment(cls, jobs: JobQueue | None = None) -> Self:
+    def from_environment(  # pragma: no cover - environment
+        cls, jobs: JobQueue | None = None
+    ) -> Self:
         """The worker the environment describes, submitting through ``jobs`` where one is given.
 
         Args:
