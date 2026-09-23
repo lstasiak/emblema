@@ -196,6 +196,28 @@ and the rules a verdict is read by — and is then only the record of running it
 finishes when every cell of its grid has run and not before, so a curve is never read from the
 cells that happened to finish.
 
+It is declared from a file that is committed first, because budgets, seeds and the rule for what
+counts as a difference passed as command-line arguments are a decision nobody can date. Three
+invocations, none of which runs a cell:
+
+```sh
+uv run python -m emblema.entrypoints.cli.campaign define-task \
+  --corpus <manifest key> <checksum> --task turbofan-fd001
+uv run python -m emblema.entrypoints.cli.campaign define \
+  --file campaigns/baselines-fd001.toml --task <task id>
+uv run python -m emblema.entrypoints.cli.campaign advance --campaign <campaign id>
+```
+
+Each prints the identifier the next one takes. What competes is a network adapted from
+pretrained weights or a classical method fitted from the labels alone, and a campaign is made of
+either without knowing which: the second kind is what keeps the headline comparison from having
+"a summary of each window and a few hundred trees would have done as well" standing beside it
+unanswered. A grid made only of the classical ones runs with the context that trains backbones
+absent altogether.
+
+Declaring a campaign asks each competitor what it is and never runs one, so the process that
+declares it carries neither the training stack nor the one the baselines are fitted with.
+
 The cells are handed to a queue and run by a worker, one at a time, because a process that has
 imported the training stack cannot safely fork. In the stack it computes on the processor, which
 is what a test or a toy model needs. Whoever has an accelerator runs the same entry point on the
@@ -211,11 +233,13 @@ kind of queue RabbitMQ 4 has withdrawn, and this system's workers have nothing t
 other anyway. Without them the worker never finishes starting. Work that runs for hours goes to
 neither: it goes to a free GPU platform through the artifact handoff described above.
 
-The worker reads its workspace, the raw corpora, the backbone it serves and the schedule every
-arm learns under from the environment (`EMBLEMA_WORKER__*` in `env.example`), and each candidate
-records what it was set to, so a stored campaign still says how its arms learnt and not only how
-long. A campaign whose arms name other weights is refused rather than answered with the wrong
-ones. Submitting a campaign again hands over exactly the cells that have not run, so a broker
+A worker reads from the environment (`EMBLEMA_WORKER__*` in `env.example`) what it needs for
+what it competes, and demands it where it is started rather than at the first cell: the one that
+adapts a backbone needs the backbone, the schedule and the low-rank updates, the one that fits
+baselines needs the knobs they fit by, and either exits with the reason if it was told nothing
+about them. Each candidate records what it was set to, so a stored campaign still says how its
+arms learnt and not only how long — and a process configured otherwise is refused the cell
+rather than allowed to answer it under settings the grid never declared. Submitting a campaign again hands over exactly the cells that have not run, so a broker
 that lost every message costs a resubmission rather than the grid. When the last cell is
 recorded the campaign closes, reads its verdict and publishes what another context can act on —
 each candidate, what it scored at each budget, the artifact of the one cell the design kept, and
