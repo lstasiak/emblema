@@ -85,28 +85,52 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Mint credentials for the local stack
-        # The stack lives and dies inside this runner, so its secrets last one run. Garage expects
-        # its access key as `GK` followed by 32 hex digits.
+      - name: Configure the stack
+        # As the README has a person do it, with the worker group uncommented rather than copied
+        # here: what the worker is told is stated once, in the template, and this run is what
+        # proves the template still says all of it. A later assignment in the file wins, so the
+        # values that must not be readable here come last and live and die inside this runner.
+        # Garage expects its access key as `GK` followed by 32 hex digits, and the backbone is a
+        # reference to nothing — reporting for work reads nothing out of the store.
         run: |
+          sed 's/^# \(EMBLEMA_WORKER__\)/\1/' env.example > .env
           {
             echo "EMBLEMA_DATABASE__PASSWORD=$(openssl rand -hex 16)"
             echo "EMBLEMA_BROKER__PASSWORD=$(openssl rand -hex 16)"
             echo "EMBLEMA_ARTIFACT_STORE__ACCESS_KEY=GK$(openssl rand -hex 16)"
             echo "EMBLEMA_ARTIFACT_STORE__SECRET_KEY=$(openssl rand -hex 32)"
-          } >> "$GITHUB_ENV"
+            echo "EMBLEMA_WORKER__BACKBONE=dev/durable/absent@sha256:$(openssl rand -hex 32)"
+          } >> .env
       - name: Validate the compose file
-        run: docker compose config --quiet
+        run: docker compose --profile workers --profile tests config --quiet
+      - name: Build the worker image
+        # The recipe every process of the application is deployed from. The test image shares its
+        # stages and differs only in what it installs, so it is left to the machine that runs the
+        # suite in it.
+        run: docker compose --profile workers build worker-ml
       - name: Bring the stack up
         run: docker compose up -d --wait --wait-timeout 300
       - name: Smoke test
         run: bash scripts/smoke.sh
+      - name: The worker reports for work from inside the stack
+        # The failure this catches is a worker that starts, never finishes starting and consumes
+        # nothing — which is what a broker refusing a queue Celery declares looks like.
+        run: |
+          docker compose --profile workers up -d worker-ml
+          for _ in $(seq 1 45); do
+            if docker compose logs worker-ml --no-color | grep -q 'ready\.'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "the worker never reported ready" >&2
+          exit 1
       - name: Service logs
         if: failure()
-        run: docker compose logs --no-color
+        run: docker compose --profile workers logs --no-color
       - name: Tear down
         if: always()
-        run: docker compose down -v
+        run: docker compose --profile workers --profile tests down -v
 
   test:
     # The environment must build on the requires-python floor (GPU platforms) and on the local
