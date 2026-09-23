@@ -110,7 +110,7 @@ Architecture rules (framework-free core, inward-pointing layers, bounded context
 
 ### Local environment
 
-Postgres, an S3-compatible artifact store ([Garage](https://garagehq.deuxfleurs.fr/)) and MLflow run in Docker. One command brings the stack up, a second checks it, a third creates the application's tables, a fourth runs the adapter contracts against it:
+Postgres, an S3-compatible artifact store ([Garage](https://garagehq.deuxfleurs.fr/)), MLflow and a RabbitMQ broker run in Docker. One command brings the stack up, a second checks it, a third creates the application's tables, a fourth runs the adapter contracts against it:
 
 ```sh
 cp env.example .env
@@ -121,6 +121,8 @@ uv run pytest -m integration
 ```
 
 The metadata database holds one schema per bounded context and one [Alembic](https://alembic.sqlalchemy.org/) migration tree for all of them (`migrations/`); `uv run alembic check` reports any table the model has and the migrations do not. The integration tests never write to the configured database: they create, migrate and empty one of their own, named after it with `_test` appended, so a registry with work in progress survives a test run.
+
+Background work — the cells of an evaluation campaign — passes through RabbitMQ. The worker that runs them is not in the stack: it trains, and the accelerator this machine has is not visible from inside a container, so it is started on the host beside it.
 
 The artifact store speaks S3 to Garage locally and to a Cloudflare R2 bucket that GPU platforms can reach. The same contract tests run against the remote bucket by configuration alone: `uv run --env-file .env.r2 pytest -m integration` (variables in `env.example`). `docker compose down -v` removes the stack and its data.
 
@@ -168,3 +170,33 @@ loss. The commit the order and the result carry is read from the installed packa
 working tree: an order is placed only from a committed tree unless `--commit` states the
 revision, a run on other code than ordered stops before it trains, and a result made with other
 code, over other data or under another configuration is refused.
+
+### Evaluation campaigns
+
+A comparison is declared in full before any of it runs — who competes, over which budgets of
+labels, under which seeds, which arm is the control, which single comparison is the endpoint,
+and the rules a verdict is read by — and is then only the record of running it. The campaign
+finishes when every cell of its grid has run and not before, so a curve is never read from the
+cells that happened to finish.
+
+The cells are handed to a queue and run by a worker started on the host, one at a time, beside
+the accelerator:
+
+```sh
+uv run celery -A emblema.entrypoints.workers.celery_app worker --queues ml --pool=solo \
+  --without-mingle --without-gossip
+```
+
+The two flags switch off the handshakes a worker performs with its neighbours: they run over a
+kind of queue RabbitMQ 4 has withdrawn, and this system's workers have nothing to say to each
+other anyway. Without them the worker never finishes starting.
+
+The worker reads its workspace, the raw corpora, the backbone it serves and the schedule every
+arm learns under from the environment (`EMBLEMA_WORKER__*` in `env.example`), and each candidate
+records what it was set to, so a stored campaign still says how its arms learnt and not only how
+long. A campaign whose arms name other weights is refused rather than answered with the wrong
+ones. Submitting a campaign again hands over exactly the cells that have not run, so a broker
+that lost every message costs a resubmission rather than the grid. When the last cell is
+recorded the campaign closes, reads its verdict and publishes what another context can act on —
+each candidate, what it scored at each budget, the artifact of the one cell the design kept, and
+where it stands against the control.
