@@ -17,6 +17,8 @@ MLFLOW_URL=${MLFLOW_URL:-http://127.0.0.1:${MLFLOW_PORT:-5000}}
 BUCKET=${EMBLEMA_ARTIFACT_STORE__BUCKET:-emblema}
 PG_USER=${EMBLEMA_DATABASE__USER:?EMBLEMA_DATABASE__USER is required (copy env.example to .env)}
 PG_DB=${EMBLEMA_DATABASE__NAME:?EMBLEMA_DATABASE__NAME is required (copy env.example to .env)}
+BROKER_USER=${EMBLEMA_BROKER__USER:?EMBLEMA_BROKER__USER is required (copy env.example to .env)}
+BROKER_VHOST=${EMBLEMA_BROKER__VHOST:?EMBLEMA_BROKER__VHOST is required (copy env.example to .env)}
 
 fail() {
   echo "FAIL: $*" >&2
@@ -32,6 +34,19 @@ echo "postgres: databases and context schemas"
   || fail "database mlflow is missing"
 schemas=$(psql_scalar "select string_agg(schema_name, ',' order by schema_name) from information_schema.schemata where schema_name in ('catalog', 'evaluation', 'pretraining', 'serving')")
 [[ $schemas == "catalog,evaluation,pretraining,serving" ]] || fail "expected four context schemas, got '${schemas}'"
+
+echo "broker: the virtual host and the role the application connects as"
+# Read whole, then matched: a healthcheck says the node is up, this says the vhost and the role
+# the application's URL names are the ones the broker actually has. The default vhost is "/",
+# which only survives the URL percent-encoded, so a wrong one shows up here rather than at the
+# first job.
+# `tail -n +2` drops the column header, which would otherwise match a vhost called "name".
+vhosts=$(docker compose exec -T rabbitmq rabbitmqctl -q list_vhosts | tail -n +2)
+grep -qx -- "$BROKER_VHOST" <<<"$vhosts" \
+  || fail "the broker has no virtual host '${BROKER_VHOST}' (has: $(echo "$vhosts" | tr '\n' ' '))"
+permissions=$(docker compose exec -T rabbitmq rabbitmqctl -q list_permissions --vhost "$BROKER_VHOST" | tail -n +2)
+grep -q "^${BROKER_USER}[[:space:]]" <<<"$permissions" \
+  || fail "role '${BROKER_USER}' has no permissions on virtual host '${BROKER_VHOST}'"
 
 echo "bucket: lifecycle rules"
 # `-T` denies the container a terminal, which aws-cli v2 would take as an invitation to page its
@@ -63,4 +78,4 @@ curl -fsS "${MLFLOW_URL}/api/2.0/mlflow/runs/get?run_id=${run}" \
 [[ $(curl -fsS "${MLFLOW_URL}/api/2.0/mlflow-artifacts/artifacts/${experiment}/${run}/artifacts/smoke.txt") == "smoke" ]] \
   || fail "artifact not readable back from run ${run}"
 
-echo "OK: postgres, bucket and mlflow are ready"
+echo "OK: postgres, broker, bucket and mlflow are ready"
