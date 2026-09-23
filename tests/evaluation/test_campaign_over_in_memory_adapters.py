@@ -43,7 +43,10 @@ from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
-from emblema.evaluation.domain.exceptions import UnknownCampaignCellError
+from emblema.evaluation.domain.exceptions import (
+    CampaignChangedElsewhereError,
+    UnknownCampaignCellError,
+)
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -297,3 +300,33 @@ def test_the_worker_that_records_last_is_the_one_that_closes_the_grid(running: C
 
     assert running.campaigns.get(campaign_id).is_finished
     assert len(running.published) == 1
+
+
+class AlwaysOvertaken:
+    """A repository that is always one step ahead of whoever tries to write to it."""
+
+    def __init__(self, campaigns: InMemoryEvaluationCampaignRepository) -> None:
+        self._campaigns = campaigns
+
+    def get(self, campaign_id: CampaignId) -> EvaluationCampaign:
+        return self._campaigns.get(campaign_id)
+
+    def save(self, campaign: EvaluationCampaign, *, seen: int) -> None:
+        raise CampaignChangedElsewhereError("something got there first, and keeps getting there")
+
+
+def test_a_worker_that_keeps_losing_the_race_gives_up_rather_than_spinning(
+    running: Campaign,
+) -> None:
+    # A store that refuses every write is a failure, not a race, and a worker that treated the
+    # two the same would sit in the queue repeating an expensive cell for as long as it lasted.
+    campaign_id = running.declared()
+    cell = running.campaigns.get(campaign_id).design.cells()[0]
+    run_cell = RunCampaignCell(
+        AlwaysOvertaken(running.campaigns), running.candidates, running.complete
+    )
+
+    with pytest.raises(CampaignChangedElsewhereError, match="every one of"):
+        run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=cell))
+
+    assert running.campaigns.get(campaign_id).results == ()
