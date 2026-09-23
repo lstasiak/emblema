@@ -122,7 +122,19 @@ uv run pytest -m integration
 
 The metadata database holds one schema per bounded context and one [Alembic](https://alembic.sqlalchemy.org/) migration tree for all of them (`migrations/`); `uv run alembic check` reports any table the model has and the migrations do not. The integration tests never write to the configured database: they create, migrate and empty one of their own, named after it with `_test` appended, so a registry with work in progress survives a test run.
 
-Background work — the cells of an evaluation campaign — passes through RabbitMQ. The worker that runs them is not in the stack: it trains, and the accelerator this machine has is not visible from inside a container, so it is started on the host beside it.
+Background work — the cells of an evaluation campaign — passes through RabbitMQ, and the workers that consume it are images built from this repository. They are behind a profile, because a worker is told which backbone it serves and there is none until a pretraining run has been accepted:
+
+```sh
+docker compose --profile workers up -d worker-ml
+```
+
+The suite runs in an image too, against that stack: same interpreter, same wheels, same operating system as the processes it tests. This is the run that gates a merge.
+
+```sh
+docker compose run --rm tests pytest -o addopts="-ra --strict-markers" --cov
+```
+
+The tests gated on Apple-silicon MPS skip there, so the development machine runs the suite as well (`uv run pytest`); a skip on that machine is a fault in its environment.
 
 The artifact store speaks S3 to Garage locally and to a Cloudflare R2 bucket that GPU platforms can reach. The same contract tests run against the remote bucket by configuration alone: `uv run --env-file .env.r2 pytest -m integration` (variables in `env.example`). `docker compose down -v` removes the stack and its data.
 
@@ -179,8 +191,10 @@ and the rules a verdict is read by — and is then only the record of running it
 finishes when every cell of its grid has run and not before, so a curve is never read from the
 cells that happened to finish.
 
-The cells are handed to a queue and run by a worker started on the host, one at a time, beside
-the accelerator:
+The cells are handed to a queue and run by a worker, one at a time, because a process that has
+imported the training stack cannot safely fork. In the stack it computes on the processor, which
+is what a test or a toy model needs. Whoever has an accelerator runs the same entry point on the
+host against the same broker, and that is the only thing the host run is for:
 
 ```sh
 uv run celery -A emblema.entrypoints.workers.celery_app worker --queues ml --pool=solo \
@@ -189,7 +203,8 @@ uv run celery -A emblema.entrypoints.workers.celery_app worker --queues ml --poo
 
 The two flags switch off the handshakes a worker performs with its neighbours: they run over a
 kind of queue RabbitMQ 4 has withdrawn, and this system's workers have nothing to say to each
-other anyway. Without them the worker never finishes starting.
+other anyway. Without them the worker never finishes starting. Work that runs for hours goes to
+neither: it goes to a free GPU platform through the artifact handoff described above.
 
 The worker reads its workspace, the raw corpora, the backbone it serves and the schedule every
 arm learns under from the environment (`EMBLEMA_WORKER__*` in `env.example`), and each candidate
