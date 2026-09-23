@@ -58,8 +58,7 @@ dispatch. They share the registry object because in-process delivery has no brok
 
 **Anti-corruption layer placement.** An ACL implements a port of the consuming context or handles
 a foreign event, so it is an adapter of the consumer: `<context>/adapters/acl/<upstream>.py`
-(`evaluation/adapters/acl/pretraining.py` for `CandidateProvider`,
-`serving/adapters/acl/evaluation.py` for the `CampaignCompleted` handler feeding
+(`serving/adapters/acl/evaluation.py` for the `CampaignCompleted` handler feeding
 `PromotableArtifact`). One named module per upstream context, never mapping functions scattered
 across adapters. Published-language relationships (Catalog → Pretraining) need no ACL: the
 consumer uses `CorpusVersionRef` as is. No ACL exists yet; this record fixes its place so the
@@ -120,3 +119,18 @@ first one does not have to.
   Pretraining context can check an artifact without fetching it, and that adapter may import
   neither `catalog/domain` nor `catalog/adapters`. A codec there would have left every consumer
   to duplicate it or break the independence contract.
+
+## 2026-09-22 — the Evaluation side of the backbone relationship is not an ACL
+
+This record first named `evaluation/adapters/acl/pretraining.py` as the place where Evaluation
+would defend itself against Pretraining. What was built there defends against nothing: it
+implements `CandidateProvider` over four ways of using one backbone, and it imports not a line of
+the upstream context, because the weights reach it as an artifact reference and a checksum —
+published language, used as it stands. The translation that does happen, from a stored trained
+model to an encoder, lives in the process that knows both sides (`entrypoints/restored_backbones.py`,
+ADR-0017), and a process is not a context.
+
+So the provider is an ordinary adapter, `evaluation/adapters/candidates/`, and the rule above is
+unchanged: an ACL is named after the upstream context it defends against, and the first one will
+be the `CampaignCompleted` handler in Serving. A directory named after an upstream context that
+imports nothing of it promises a seam that is not there.

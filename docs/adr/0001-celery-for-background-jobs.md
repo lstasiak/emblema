@@ -9,7 +9,7 @@ Evaluation campaigns are grids of hundreds of small runs; pretraining hand-offs,
 efficiency benchmarks also run outside the request cycle. The API is FastAPI. Two worker modes share
 one code base: a containerised `worker-cpu` for classical baselines, statistics and export, and a
 natively run `worker-ml` for neural runs, because MPS is not available inside Docker on macOS (plan
-section 10). The queue is behind the `JobScheduler` port in the shared kernel; the broker is an
+section 10). The queue is behind the `JobQueue` port in the shared kernel; the broker is an
 adapter detail. Campaign state (which runs exist, which finished, whether the grid is complete)
 lives in the `EvaluationCampaign` aggregate in Postgres, never in the queue.
 
@@ -19,7 +19,7 @@ features are available when needed rather than adopted under pressure later.
 
 ## Decision
 
-Use **Celery** with Redis as the broker as the default `JobScheduler` adapter.
+Use **Celery** with Redis as the broker as the default `JobQueue` adapter.
 
 - Maturity and operations: retries with backoff, late acknowledgement, visibility timeouts, task
   routing, monitoring (Flower), periodic tasks (beat). Drift monitoring and scheduled re-pretraining
@@ -56,5 +56,37 @@ Use **Celery** with Redis as the broker as the default `JobScheduler` adapter.
   new tool on the project's critical path.
 - **Dramatiq** — simpler than Celery, thread-based, fewer moving parts. Rejected: no advantage over
   Celery given existing experience; smaller ecosystem.
-- **Synchronous in-process execution** — kept as the test adapter of `JobScheduler`, not as the
+- **Synchronous in-process execution** — kept as the test adapter of `JobQueue`, not as the
   production path.
+
+## 2026-09-23 — RabbitMQ replaces Redis, and the port is renamed
+
+**The broker.** This record chose Redis in passing: the alternatives it weighed were arq, Dramatiq
+and running work in process, never another broker. Redis turned out to serve nothing else here —
+no result backend, no cache — so it stood on its own merits, and on those it loses. Redis has no
+acknowledgement of its own; Celery emulates one with a visibility timeout, a number that has to be
+guessed above the longest a job can take and that redelivers anything slower to a second consumer.
+A campaign's cell trains a network for as long as it takes. RabbitMQ acknowledges natively: a job
+stays unacknowledged for exactly as long as the worker holds it, and publishing waits for the
+broker's confirmation, so a submission that returns is one the broker took responsibility for.
+Both are now configured in `celery_application`.
+
+What this costs is a heavier service in the local stack, and it removes nothing the project used:
+the state a campaign is resumed from was never in the queue.
+
+**RabbitMQ 4 withdrew transient non-exclusive queues, and Celery declares them.** Not a
+configuration detail — a worker that opens one never finishes starting, which is how this was
+found. Celery uses that kind of queue for the mailbox workers talk to each other and to `celery
+inspect` through. It is switched off rather than the broker asked to permit what it has
+deprecated: `worker_enable_remote_control = False` in the application, and `--without-mingle
+--without-gossip` on the worker, because the startup handshakes are command-line flags with no
+setting behind them. The cost is live inspection of workers, Flower included, which nothing in
+this project uses and which ADR-0001 listed as available rather than needed.
+
+**The port is `JobQueue`, not `JobScheduler`.** Scheduling in Celery's vocabulary is Beat, which
+runs work on a clock; this port hands work over and returns. The name would have collided with
+the beat scheduler this record anticipates for drift monitoring. The enum that named the two
+pools of workers gave up the name `JobQueue` for `WorkerPool`, which is what it always described,
+and `ScheduledJob` became `QueuedJob`. Celery's own word, `task`, stays inside the Celery adapter
+and `@app.task`, where it is Celery's to use: the plan wrote this port for arq, a Kubernetes Job
+and an in-process runner as well, and only one of those four says "task".

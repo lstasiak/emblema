@@ -23,7 +23,7 @@ Format: context, decision, consequences, alternatives considered. Status is one 
 | [0012](0012-where-tokenisation-lives.md) | Where tokenisation lives: the window in the shared kernel, the array codec beside it, the tokeniser a port of the Catalog | accepted |
 | [0013](0013-feeding-the-model.md) | Feeding the model: a dataset is a sequence of windows, an epoch's order comes from a digest framed part by part, and the loading layer is shared | accepted |
 | [0014](0014-published-corpus-format.md) | A published corpus is a block of windows beside a manifest, in a format we own | accepted |
-| [0015](0015-composition-root-by-hand.md) | The composition root is written by hand, without a DI container | proposed |
+| [0015](0015-composition-root-by-hand.md) | The composition root is written by hand, without a DI container | accepted |
 | [0016](0016-catalog-persistence.md) | The Catalog persists its aggregate as plain tables, migrated by one Alembic tree | accepted |
 | [0017](0017-encoder-architecture.md) | The encoder: full self-attention over a set of tokens, time at fixed frequencies, one learned vector per channel | accepted |
 | [0018](0018-synthetic-positive-control.md) | The positive control is a corpus reader: one latent process, two sensor layouts, disjoint trajectories | accepted |
@@ -43,3 +43,4 @@ Format: context, decision, consequences, alternatives considered. Status is one 
 | [0032](0032-statistics-of-a-paired-comparison.md) | Statistics of a paired comparison: the engine is the unit resampled, repeats pool per engine, and the arithmetic a verdict rests on lives in the Evaluation domain | proposed |
 | [0033](0033-the-transfer-leg-of-the-synthetic-control.md) | The transfer leg of the synthetic control: a forecasting task whose truth is generated, one ground-truth port for every task, and the generator's specification shared by both sides | accepted |
 | [0034](0034-the-turbofan-corpus-read-per-operating-condition.md) | The turbofan corpus read per operating condition: a channel per sensor and condition, scaled within it, and the default reading left as it was | accepted |
+| [0035](0035-the-evaluation-campaign.md) | The evaluation campaign: a grid of candidates declared before it runs, a verdict only once it is whole, and one narrow message out of it | accepted |
