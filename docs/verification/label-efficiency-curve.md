@@ -856,8 +856,9 @@ fresh. Over them the probe and the low-rank updates keep what they show over see
 (+13.3 and +15.6 per cent against +14.7 and +15.2), but full fine-tuning falls from +17.6 to +5.0
 (+0.3 under seed 4, +9.4 under seed 5). Its sweep was flat near the peak (15.83 at 1e-3, 16.02 at
 3e-4), so the choice of the peak explains little of the gap. Full fine-tuning, which fits its 200
-windows exactly with 4.8 million weights, varies most with the draw of the labels; its margin over
-the tenth rests on the seeds the peak was chosen on, where the low-rank updates' does not.
+windows exactly with 4.8 million weights, varies most with the draw of the labels. Whether its
+margin rested on the seeds the peak was chosen on is answered by the run of five fresh seeds
+below: it did not, and the low-rank updates turn out to vary nearly as much.
 
 What the curve says:
 
@@ -919,3 +920,80 @@ engines):
 **Cost** on the A100 shared by five processes: a run of an arm that steps the encoder or an update
 beside it took 507–536 s at 50 labelled windows, 646–675 s at 1,000 and 1,567–1,622 s at all; a
 run of the probe 17–34 s. The 60 runs took about 2.3 hours, as declared.
+
+## 2026-09-22 — Linux x86_64 (Kaggle, two Tesla T4, fp32): the endpoint on seeds no sweep has seen, and whether a longer backbone helps this corpus, exploratory
+
+Two readings above rest on something they cannot check. The peaks were swept at 200 labelled
+windows under seeds 1 to 3 and the endpoint pooled seeds 1 to 5, so three of its five seeds are
+runs the peaks were chosen on; over the other two full fine-tuning led the control by 5.0 per
+cent where the low-rank updates led by 15.6. And the doublings name a backbone by the pretext's
+loss alone, while the check of 2026-09-22 found the task over FD001 and FD003 better served by 16
+epochs than by the 8 that rule named. Both were registered as readings that choose nothing
+(`docs/preregistration.md`, 2026-09-22).
+
+It ran at `060394b`, the commit the registration was written in, on two T4s in single precision,
+at 200 labelled windows under seeds 6 to 10 — seeds no sweep, endpoint or grid has used — with
+the registered peaks, the floor of 2,000 optimiser steps, the corpus `d63f8e1b…` and the
+schedule of the configuration. Thirty cells: the control, full fine-tuning, the probe and the
+low-rank updates under the backbone in force of 8 epochs (`6283c210…`), and full fine-tuning and
+the probe under the backbone of 16 epochs of the same ladder (`8cd60452…`). Each cell was
+published as it landed; the archives are `5c5668d2…` (control, full fine-tuning, probe under 8
+epochs), `161044e0…` (the low-rank updates under 8) and `c2f4f602…` (16 epochs), fetched back
+into `data/report/transfer/cond-fresh/`.
+
+**The endpoint over the fresh seeds**, by the registered rule, against the endpoint of record
+over seeds 1 to 5:
+
+| arm | seeds | control | arm | reduction | 95 % interval | p | verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| frozen_probe | 1–5 | 19.02 | 16.33 | +2.69 (+14.2 %) | [+1.44, +4.04] | 0.0002 | distinguishable |
+| frozen_probe | 6–10 | 18.68 | 16.34 | +2.34 (+12.5 %) | [+1.03, +3.64] | 0.0004 | distinguishable |
+| lora | 1–5 | 19.02 | 16.10 | +2.92 (+15.4 %) | [+1.46, +4.46] | 0.0002 | distinguishable |
+| lora | 6–10 | 18.68 | 15.95 | +2.73 (+14.6 %) | [+1.11, +4.37] | 0.0014 | distinguishable |
+| **full_fine_tuning** | **1–5** | 19.02 | 16.68 | **+2.34 (+12.3 %)** | [+1.49, +3.30] | 0.0002 | **confirmed** |
+| **full_fine_tuning** | **6–10** | 18.68 | 16.29 | **+2.39 (+12.8 %)** | [+1.49, +3.27] | 0.0002 | **confirmed** |
+
+**The backbone of 16 epochs against the one in force**, by the replacement rule — the same arm,
+paired on the same 21 engines and 618 windows a seed, pooled over seeds 6 to 10:
+
+| arm | 8 epochs | 16 epochs | reduction | 95 % interval | p | reading |
+| --- | --- | --- | --- | --- | --- | --- |
+| full_fine_tuning | 16.291 | 16.198 | +0.093 (+0.6 %) | [−0.631, +0.808] | 0.7901 | the backbone in force stays |
+| frozen_probe | 16.338 | 17.497 | −1.159 (−7.1 %) | [−2.691, +0.292] | 0.1290 | the backbone in force stays |
+
+**Reduction against the control per seed**, under the backbone in force:
+
+| seed | control | frozen_probe | lora | full_fine_tuning |
+| --- | --- | --- | --- | --- |
+| 6 | 17.66 | 6.6 % | 15.4 % | 2.1 % |
+| 7 | 18.41 | 14.2 % | 15.8 % | 11.4 % |
+| 8 | 19.57 | 15.8 % | 18.6 % | 17.3 % |
+| 9 | 18.65 | 9.9 % | 17.1 % | 17.2 % |
+| 10 | 19.04 | 15.5 % | 6.7 % | 15.1 % |
+
+What the run says:
+
+- **The endpoint does not rest on the seeds its peaks were chosen on.** Over five seeds no sweep
+  has touched, full fine-tuning lowers the validation RMSE by 12.8 per cent, against 12.3 over
+  the seeds of record, and the two intervals are all but the same: [+1.49, +3.27] against
+  [+1.49, +3.30]. The other two arms reproduce within 1.6 points. The 5.0 per cent over seeds 4
+  and 5 was the spread of two seeds, not the mark of a peak chosen on the rest. The endpoint of
+  record stands as measured; this does not replace it.
+- **A longer backbone does not help this corpus, and the probe says it hurts.** Full fine-tuning
+  gains 0.6 per cent from doubling the pretext, an interval straddling zero at p 0.79. The probe
+  — what the representation carries as it stands, with nothing else moving — is 7.1 per cent
+  worse, and while its interval also straddles zero it points the other way throughout. Over
+  FD001 and FD003 the same doubling helped both arms. So which side of 8 epochs the task prefers
+  is a fact about the corpus, not about the length of the pretext, and the rule that names a
+  backbone by the pretext's loss alone predicts neither.
+- **The margin of the low-rank updates varies with the draw of the labels too.** The reading of
+  2026-09-22 below says full fine-tuning varies most with the draw where the low-rank updates do
+  not. Over these five seeds full fine-tuning still spreads widest, 2.1 to 17.3 per cent, but the
+  low-rank updates spread 6.7 to 18.6 and the probe 6.6 to 15.8. The difference is one of degree;
+  neither arm's margin is steady seed by seed, and only the pooled estimate is read.
+- **The low-rank updates under 16 epochs were not run.** They were registered last and
+  conditional on the session, which was 129 minutes old against the two hours the condition
+  named, so the cell skipped itself by the rule it carries. The replacement rule is therefore
+  unread for that arm.
+- **Cost**: 726–769 s a run of an arm that steps the encoder or an update beside it, 8 s a run of
+  the probe; the thirty cells took about 2.1 hours over the two devices, as declared.
