@@ -46,6 +46,7 @@ from emblema.shared.adapters.queues.immediate_job_queue import ImmediateJobQueue
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.jobs.job_argument import JobArgument
 from emblema.shared.ports.exceptions import JobQueueError
+from tests.entrypoints.test_restored_backbones import stored
 from tests.evaluation.support import (
     CONTENDER,
     CONTROL,
@@ -241,3 +242,52 @@ def test_a_tuning_run_is_refused_the_frozen_side_and_records_nothing(tmp_path: P
         )
 
     assert heard == []
+
+
+def test_a_job_the_worker_is_handed_runs_the_cell_it_names(tmp_path: Path) -> None:
+    # The hop the Celery task makes: arguments in, a recorded cell out, through the process's
+    # own use case rather than through anything the test stands in for.
+    root, campaigns = process(tmp_path)
+    stated = campaign()
+
+    CampaignWorker(root).run_campaign_cell(
+        {
+            "campaign": str(stated.campaign_id),
+            "candidate": str(CONTROL),
+            "budget": "200",
+            "seed": 2,
+        }
+    )
+
+    recorded = campaigns.get(stated.campaign_id).results
+    assert [(r.cell.candidate, r.cell.budget, r.cell.seed) for r in recorded] == [
+        (CONTROL, LabelBudget.of(200), 2)
+    ]
+
+
+def test_left_to_build_its_own_candidates_the_process_serves_the_backbone_it_was_given(
+    tmp_path: Path,
+) -> None:
+    # The one path the overrides usually skip: the provider built from a store, a backbone and a
+    # schedule, which is what a worker started from the environment actually runs on.
+    store = InMemoryArtifactStore()
+    weights, _ = stored(store)
+    root = CompositionRoot(
+        unreachable_store(),
+        workspace=tmp_path,
+        corpora=tmp_path,
+        backbone=weights,
+        lora=LORA,
+        schedule=SCHEDULE,
+        store=store,
+        tasks=InMemoryDownstreamTaskRepository(),
+        campaigns=InMemoryEvaluationCampaignRepository(),
+        jobs=ImmediateJobQueue({}),
+    )
+
+    described = root.adapters.candidates.describe(KnownArms.LORA)
+
+    assert described.starts_from == weights
+    stated = {parameter.name: parameter.value for parameter in described.method.parameters}
+    assert stated["transfer_mode"] == "lora"
+    assert stated["lora_rank"] == str(LORA.rank)
