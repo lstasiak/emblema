@@ -1,0 +1,35 @@
+# A grid with no network in it at all, over the turbofans.
+#
+# What it is for: the Evaluation context is meant to compare a network against methods that learn
+# from labels alone, and nothing about that comparison may depend on the context that trains
+# networks. A campaign made only of these runs end to end where the training stack is not
+# installed, which is the only way to show it rather than assert it.
+#
+# The two differ in one thing: what a window is turned into. One vector is as wide as the corpus
+# has channels; the other is the same width whatever the layout, which is what lets a fit take in
+# a second corpus's labels. Comparing them says whether that independence costs anything.
+
+name = "classical-only-fd001"
+purpose = "tuning"
+tier = "S"
+
+[candidates]
+competing = ["boosted_trees_per_channel", "boosted_trees_across_channels"]
+control = "boosted_trees_per_channel"
+endpoint = "boosted_trees_across_channels"
+
+[budgets]
+labels = ["50", "200"]
+endpoint = "200"
+seeds = [1, 2]
+
+[rules]
+minimum_relative_reduction = 0.1
+floor_share = 0.02
+alpha = 0.05
+secondary_family_size = 8
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
