@@ -36,4 +36,21 @@ def test_the_turbofans_are_read_from_the_raw_corpora_the_process_was_given(
     with pytest.raises(UnreadableGroundTruthError) as refused:
         truths.truths_of(KnownGroundTruths.CMAPSS, [WINDOW])
 
-    assert str(tmp_path / "train_FD001.txt") in str(refused.value)
+    assert str(tmp_path / "cmapss" / "train_FD001.txt") in str(refused.value)
+
+
+def test_the_records_are_found_wherever_the_archive_put_them(tmp_path: Path) -> None:
+    # Each publisher ships its own shape and the archives are unpacked as they come, so the
+    # directory a reader binds to is nested differently for each corpus and is not the one the
+    # process was given.
+    nested = tmp_path / "cmapss" / "6. Turbofan Engine Degradation" / "CMAPSSData"
+    nested.mkdir(parents=True)
+    (nested / "train_FD001.txt").write_text("1 1 0.0\n", encoding="utf-8")
+
+    assert KnownGroundTruths.turbofans_under(tmp_path) == nested
+
+
+def test_a_corpus_nobody_fetched_resolves_to_where_it_would_have_been(tmp_path: Path) -> None:
+    # A worker serving campaigns over another corpus has no business stopping because this one
+    # is absent: what fails is reading a named file, not assembling the process.
+    assert KnownGroundTruths.turbofans_under(tmp_path) == tmp_path / "cmapss"
