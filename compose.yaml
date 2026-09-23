@@ -150,6 +150,10 @@ services:
     env_file: .env
     environment:
       <<: *in-network
+      # Where the corpora and the workspace sit is decided by this image and the volumes below,
+      # not by whoever wrote the file: a path from somebody's host means nothing in here.
+      EMBLEMA_WORKER__WORKSPACE: /home/emblema/data/workspace
+      EMBLEMA_WORKER__CORPORA: /home/emblema/data/raw
       EMBLEMA_WORKER__DEVICE: cpu
     volumes:
       # The corpora are an input and a task's labels are read out of them; the workspace is where
@@ -163,7 +167,7 @@ services:
     command:
       - celery
       - -A
-      - emblema.entrypoints.workers.celery_app
+      - emblema.entrypoints.workers.ml.celery_app
       - worker
       - --queues=ml
       - --pool=solo
@@ -171,6 +175,46 @@ services:
       - --without-gossip
       # A worker that says nothing cannot be operated: at the default level it reports neither
       # the connection it made nor the job it took.
+      - --loglevel=info
+
+  worker-general:
+    # Consumes everything that needs nothing of the machine-learning stack, which today is the
+    # classical candidates a campaign compares the network against. A separate image rather than
+    # another command on the same one: this one carries no training stack, which is less than
+    # half the size, and a campaign made only of baselines then proves that the Evaluation
+    # context needs nothing of the Pretraining one by running where that stack is not installed.
+    profiles: ["workers"]
+    build:
+      context: .
+      target: runtime
+      args:
+        EXTRAS: baselines
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      <<: *in-network
+      EMBLEMA_WORKER__WORKSPACE: /home/emblema/data/workspace
+      EMBLEMA_WORKER__CORPORA: /home/emblema/data/raw
+    volumes:
+      - ./data/raw:/home/emblema/data/raw:ro
+      - general-workspace:/home/emblema/data/workspace
+    # Solo like its neighbour, though for a plainer reason: a fit holds the processor for as long
+    # as it runs, so a second one beside it would take the threads the first was told to use.
+    command:
+      - celery
+      - -A
+      - emblema.entrypoints.workers.general.celery_app
+      - worker
+      - --queues=general
+      - --pool=solo
+      - --without-mingle
+      - --without-gossip
       - --loglevel=info
 
   tests:
@@ -198,5 +242,6 @@ services:
 volumes:
   postgres-data:
   worker-workspace:
+  general-workspace:
   garage-meta:
   garage-data:
