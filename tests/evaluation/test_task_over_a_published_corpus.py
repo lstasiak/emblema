@@ -37,6 +37,7 @@ from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
+from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
@@ -84,6 +85,7 @@ def published(tmp_path_factory: pytest.TempPathFactory) -> Published:
             manifest=manifest,
             units=frozenset(ENGINES),
             test=HELD,
+            protocol=EvaluationProtocol.LABEL_BUDGET,
             labels=RemainingLifeScheme(CEILING),
             strata=TargetBins(2),
         )

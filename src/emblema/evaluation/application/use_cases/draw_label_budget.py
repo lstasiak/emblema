@@ -54,4 +54,6 @@ class DrawLabelBudget:
         task = self._tasks.get(command.task)
         windows = self._corpus.windows_of(task.manifest, task.tuning_units)
         pool = task.labelled(windows, self._truth.truths_of(windows))
-        return LabelSample.drawn(task.task_id, pool, command.budget, task.strata, command.seed)
+        return LabelSample.drawn(
+            task.task_id, pool, command.budget, task.stratification(), command.seed
+        )

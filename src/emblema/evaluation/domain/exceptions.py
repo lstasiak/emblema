@@ -69,6 +69,10 @@ class FrozenTestSplitClosedError(EvaluationError):
     """The frozen test side was asked for in a run that is not the final one."""
 
 
+class ProtocolMismatchError(EvaluationError):
+    """A task carries a label scheme its protocol has no use for, or lacks one it needs."""
+
+
 class ForeignLabelSampleError(EvaluationError):
     """A sample of labels was drawn from another task than the one it is used on."""
 
@@ -93,12 +97,68 @@ class UnknownGroundTruthError(EvaluationError):
     """The ground truth says nothing about a window or a unit the task reads labels for."""
 
 
+class UnreadableFittedCandidateError(EvaluationError):
+    """The bytes an artifact holds are not a fitted candidate this context wrote."""
+
+
+class CandidateNotRetainableError(EvaluationError):
+    """A run was asked to keep the candidate it fitted, in a process with nowhere to keep it."""
+
+
 class UnreadableTaskCorpusError(EvaluationError):
     """A published corpus is not one this context can read."""
 
 
 class UnreadableGroundTruthError(EvaluationError):
     """The file the ground truth of a corpus is published in is missing or not what it claims."""
+
+
+class InvalidComputeBudgetError(EvaluationError, ValueError):
+    """A compute budget asks for no epoch, no window per batch, or a negative floor of steps."""
+
+
+class InvalidCandidateMethodError(EvaluationError, ValueError):
+    """A method leaves a parameter unnamed or blank, or names one of them twice."""
+
+
+class InvalidCampaignCandidateError(EvaluationError, ValueError):
+    """A candidate declares a compute budget its kind does not share, or lacks one it must."""
+
+
+class InvalidCampaignDesignError(EvaluationError, ValueError):
+    """A design repeats a coordinate, names a candidate it does not hold, or leaves no control."""
+
+
+class InvalidCellResultError(EvaluationError, ValueError):
+    """A cell's result scores no unit, or reports a time that is not finite and not negative."""
+
+
+class UnknownCandidateError(EvaluationError):
+    """A campaign was asked about a candidate its design does not name."""
+
+
+class UnknownCampaignCellError(EvaluationError):
+    """A result was recorded against a cell the campaign's grid does not hold."""
+
+
+class CampaignCellAlreadyRecordedError(EvaluationError):
+    """A cell of the grid was recorded twice; a repeat is another seed, not another attempt."""
+
+
+class CampaignClosedError(EvaluationError):
+    """A campaign that has already finished was asked to record another cell."""
+
+
+class IncompleteCampaignError(EvaluationError):
+    """A campaign was asked to finish while cells of its grid had not run."""
+
+
+class CampaignNotCompletedError(EvaluationError):
+    """A verdict was asked of a campaign that has not finished."""
+
+
+class CampaignNotFoundError(EvaluationError):
+    """No campaign is stored under that identity."""
 
 
 class InvalidPairedUnitErrorsError(EvaluationError, ValueError):

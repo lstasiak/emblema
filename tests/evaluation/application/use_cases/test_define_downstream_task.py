@@ -10,6 +10,7 @@ from emblema.evaluation.application.use_cases.define_downstream_task import (
 )
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import InvalidTaskSplitError, UnknownTaskUnitsError
+from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from tests.evaluation.support import MANIFEST, SCHEME, STRATA, TEST_SIDE, sides, units
@@ -26,7 +27,12 @@ def define(
     )
     task_id = use_case(
         DefineDownstreamTaskCommand(
-            manifest=MANIFEST, units=covering, test=TEST_SIDE, labels=SCHEME, strata=STRATA
+            manifest=MANIFEST,
+            units=covering,
+            test=TEST_SIDE,
+            protocol=EvaluationProtocol.LABEL_BUDGET,
+            labels=SCHEME,
+            strata=STRATA,
         )
     )
     return tasks, task_id
@@ -76,6 +82,7 @@ def test_a_task_whose_frozen_units_also_tune_it_is_refused() -> None:
                 manifest=MANIFEST,
                 units=units("a", "b", "c"),
                 test=held,
+                protocol=EvaluationProtocol.LABEL_BUDGET,
                 labels=SCHEME,
                 strata=STRATA,
             )
