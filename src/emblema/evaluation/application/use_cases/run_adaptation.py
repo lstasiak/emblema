@@ -1,24 +1,15 @@
 from dataclasses import dataclass
 
-from emblema.evaluation.application.use_cases.draw_label_budget import (
-    DrawLabelBudget,
-    DrawLabelBudgetCommand,
-)
-from emblema.evaluation.application.use_cases.open_test_split import (
-    OpenTestSplit,
-    OpenTestSplitCommand,
+from emblema.evaluation.application.use_cases.draw_run_labels import (
+    DrawRunLabels,
+    DrawRunLabelsCommand,
 )
 from emblema.evaluation.contracts.identifiers import TaskId
-from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
-from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.ports.adaptation_runtime import AdaptationRuntime
-from emblema.evaluation.ports.corpus_windows import CorpusWindows
-from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
-from emblema.evaluation.ports.ground_truth import GroundTruth
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -43,33 +34,15 @@ class RunAdaptationCommand:
 
 
 class RunAdaptation:
-    """Draws one budget of labels, teaches a candidate from them, scores it on the right side.
+    """Teaches a candidate made out of a backbone from one budget of labels, and scores it.
 
-    The labels always come from the tuning side; which side the answers are scored on is what
-    the run's purpose decides, and the decision is made here rather than by whoever calls. A
-    tuning run is scored on the validation units and never asks for the frozen ones. The final
-    run asks for them through the operation that records the asking, so that the claim of a
-    single reading of the test set rests on a record rather than on a convention.
-
-    The scoring windows are labelled here, by the same scheme the sample was, so a candidate is
-    scored against the targets it was taught to predict and not against a scheme chosen at
-    scoring time.
+    Which labels those are is not this use case's business: drawing them is the same for every
+    candidate a campaign compares, so it is done in one place and this one is left with the
+    single step that is its own.
     """
 
-    def __init__(
-        self,
-        tasks: DownstreamTaskRepository,
-        corpus: CorpusWindows,
-        truth: GroundTruth,
-        draw_label_budget: DrawLabelBudget,
-        open_test_split: OpenTestSplit,
-        runtime: AdaptationRuntime,
-    ) -> None:
-        self._tasks = tasks
-        self._corpus = corpus
-        self._truth = truth
-        self._draw = draw_label_budget
-        self._open = open_test_split
+    def __init__(self, draw_run_labels: DrawRunLabels, runtime: AdaptationRuntime) -> None:
+        self._labels = draw_run_labels
         self._runtime = runtime
 
     def __call__(self, command: RunAdaptationCommand) -> AdaptationOutcome:
@@ -88,18 +61,14 @@ class RunAdaptation:
             CandidateNotRetainableError: If the run was to keep what it fitted and the runtime
                 has nowhere to keep it.
         """
-        task = self._tasks.get(command.task)
-        sample = self._draw(
-            DrawLabelBudgetCommand(
-                task=command.task, budget=command.budget, seed=command.sample_seed
+        labels = self._labels(
+            DrawRunLabelsCommand(
+                task=command.task,
+                budget=command.budget,
+                seed=command.sample_seed,
+                purpose=command.purpose,
             )
         )
-        windows = self._corpus.windows_of(task.manifest, self._scored_units(task, command.purpose))
-        scored = task.labelled(windows, self._truth.truths_of(task.corpus, windows))
-        return self._runtime.adapt(command.plan, task, sample, scored, retain=command.retain)
-
-    def _scored_units(self, task: DownstreamTask, purpose: RunPurpose) -> frozenset[UnitKey]:
-        """Which units the run answers: the validation side, or the frozen one for the last run."""
-        if purpose is RunPurpose.TUNING:
-            return task.validation_units
-        return self._open(OpenTestSplitCommand(task=task.task_id, purpose=purpose)).units
+        return self._runtime.adapt(
+            command.plan, labels.task, labels.sample, labels.scored, retain=command.retain
+        )

@@ -27,6 +27,7 @@ from emblema.evaluation.application.use_cases.advance_campaign import AdvanceCam
 from emblema.evaluation.application.use_cases.complete_campaign import CompleteCampaign
 from emblema.evaluation.application.use_cases.define_campaign import DefineCampaign
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget
+from emblema.evaluation.application.use_cases.draw_run_labels import DrawRunLabels
 from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit
 from emblema.evaluation.application.use_cases.run_adaptation import RunAdaptation
 from emblema.evaluation.application.use_cases.run_campaign_cell import RunCampaignCell
@@ -236,11 +237,9 @@ class CompositionRoot:
             KnownArms.over(backbone, lora),
             schedule,
             RunAdaptation(
-                tasks,
-                corpus,
-                truth,
-                DrawLabelBudget(tasks, corpus, truth),
-                open_test_split,
+                DrawRunLabels(
+                    tasks, corpus, truth, DrawLabelBudget(tasks, corpus, truth), open_test_split
+                ),
                 TorchAdaptationRuntime(
                     RestoredBackbones(store, backbone),
                     blocks,

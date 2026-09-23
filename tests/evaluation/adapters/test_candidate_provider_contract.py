@@ -24,6 +24,7 @@ from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
 )
 from emblema.evaluation.adapters.in_memory.ground_truth import InMemoryGroundTruth
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget
+from emblema.evaluation.application.use_cases.draw_run_labels import DrawRunLabels
 from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit
 from emblema.evaluation.application.use_cases.run_adaptation import RunAdaptation
 from emblema.evaluation.contracts.identifiers import CandidateRef
@@ -96,15 +97,17 @@ def backbone_provider(store: InMemoryArtifactStore | None) -> CandidateProvider:
         ),
         adaptation_schedule(),
         RunAdaptation(
-            tasks,
-            corpus,
-            truth,
-            DrawLabelBudget(tasks, corpus, truth),
-            OpenTestSplit(
+            DrawRunLabels(
                 tasks,
-                SequentialIdGenerator(),
-                FixedClock(OPENED_AT),
-                InMemoryEventPublisher(InMemoryEventSubscriber()),
+                corpus,
+                truth,
+                DrawLabelBudget(tasks, corpus, truth),
+                OpenTestSplit(
+                    tasks,
+                    SequentialIdGenerator(),
+                    FixedClock(OPENED_AT),
+                    InMemoryEventPublisher(InMemoryEventSubscriber()),
+                ),
             ),
             InMemoryAdaptationRuntime(store),
         ),

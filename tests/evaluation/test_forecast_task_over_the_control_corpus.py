@@ -35,6 +35,7 @@ from emblema.evaluation.application.use_cases.define_downstream_task import (  #
     DefineDownstreamTaskCommand,
 )
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget  # noqa: E402
+from emblema.evaluation.application.use_cases.draw_run_labels import DrawRunLabels  # noqa: E402
 from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit  # noqa: E402
 from emblema.evaluation.application.use_cases.run_adaptation import (  # noqa: E402
     RunAdaptation,
@@ -122,15 +123,17 @@ def leg(tmp_path_factory: pytest.TempPathFactory) -> Leg:
     task = tasks.get(task_id)
     return Leg(
         RunAdaptation(
-            tasks,
-            corpus,
-            truth,
-            DrawLabelBudget(tasks, corpus, truth),
-            OpenTestSplit(
+            DrawRunLabels(
                 tasks,
-                Uuid4IdGenerator(),
-                SystemClock(),
-                InMemoryEventPublisher(InMemoryEventSubscriber()),
+                corpus,
+                truth,
+                DrawLabelBudget(tasks, corpus, truth),
+                OpenTestSplit(
+                    tasks,
+                    Uuid4IdGenerator(),
+                    SystemClock(),
+                    InMemoryEventPublisher(InMemoryEventSubscriber()),
+                ),
             ),
             runtime,
         ),

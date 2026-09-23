@@ -61,6 +61,7 @@ from emblema.evaluation.application.use_cases.define_downstream_task import (
     DefineDownstreamTaskCommand,
 )
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget
+from emblema.evaluation.application.use_cases.draw_run_labels import DrawRunLabels
 from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit
 from emblema.evaluation.application.use_cases.run_adaptation import (
     RunAdaptation,
@@ -369,7 +370,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         tasks, ids, SystemClock(), InMemoryEventPublisher(InMemoryEventSubscriber())
     )
     run = RunAdaptation(
-        tasks, corpus, truth, DrawLabelBudget(tasks, corpus, truth), open_test, runtime
+        DrawRunLabels(tasks, corpus, truth, DrawLabelBudget(tasks, corpus, truth), open_test),
+        runtime,
     )
     try:
         for cell, plan in cells_of(arguments):
