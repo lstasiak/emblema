@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.configured import configured_store
+from emblema.entrypoints.configured import configured_store
 from emblema.pretraining.adapters.handoff.artifact_store_handoff_exchange import (
     ArtifactStoreHandoffExchange,
 )

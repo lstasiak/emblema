@@ -41,8 +41,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.configured import configured_store
 from emblema.entrypoints.cli.pretrain.source_revision import SourceRevision
+from emblema.entrypoints.configured import configured_store
 from emblema.pretraining.adapters.blocks.block_training_corpus_reader import (
     BlockTrainingCorpusReader,
 )
@@ -75,8 +75,9 @@ from emblema.pretraining.ports.training_runtime import TrainingRuntime
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.retention import Retention
 from emblema.shared.kernel.tokens import TokenWindow
-from emblema.shared.ports.artifact_store import ArtifactStore, Retention
+from emblema.shared.ports.artifact_store import ArtifactStore
 from scripts.masked_reconstruction_report import DEVICES, device_available
 from scripts.reporting import dated_heading, machine, table
 

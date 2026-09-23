@@ -2,7 +2,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from emblema.entrypoints.cli.restored_backbones import RestoredBackbones  # noqa: E402
+from emblema.entrypoints.restored_backbones import RestoredBackbones  # noqa: E402
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory  # noqa: E402
 from emblema.evaluation.domain.exceptions import UnknownBackboneError  # noqa: E402
 from emblema.pretraining.adapters.encoder.grown_channel_embedding import (  # noqa: E402
