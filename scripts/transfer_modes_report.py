@@ -45,6 +45,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.config.settings import Settings
+from emblema.entrypoints.cli.campaign.known_tasks import KnownTask, KnownTasks
 from emblema.entrypoints.cli.pretrain.source_revision import SourceRevision
 from emblema.entrypoints.configured import configured_store
 from emblema.entrypoints.restored_backbones import RestoredBackbones
@@ -87,15 +88,7 @@ from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from scripts.raw_corpora import raw_root
 from scripts.reporting import dated_heading, machine, table
-from scripts.transfer_grid import (
-    BUDGETS,
-    SEEDS,
-    Cell,
-    KnownTask,
-    KnownTasks,
-    Stored,
-    budget_of,
-)
+from scripts.transfer_grid import BUDGETS, SEEDS, Cell, Stored, budget_of
 
 # The peak rate of each mode, as fixed on the validation side before the grid
 # (docs/verification/label-efficiency-curve.md); the shape of the rate is fixed with them.

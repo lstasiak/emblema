@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from emblema.entrypoints.cli.campaign.known_tasks import HeldOutShare, KnownTasks, NamedTestUnits
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
@@ -17,9 +18,6 @@ from scripts.transfer_grid import (
     PREDICTIONS,
     RUNS,
     Cell,
-    HeldOutShare,
-    KnownTasks,
-    NamedTestUnits,
     Stored,
     budget_of,
     budget_rank,
