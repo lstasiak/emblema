@@ -9,18 +9,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # A role name authenticates nobody. Every secret the local stack needs is minted per run by the
-  # jobs that start it, so no password or access key is written down in this repository.
-  EMBLEMA_DATABASE__HOST: 127.0.0.1
-  EMBLEMA_DATABASE__PORT: "5432"
-  EMBLEMA_DATABASE__NAME: emblema
-  EMBLEMA_DATABASE__USER: ci
-  EMBLEMA_BROKER__HOST: 127.0.0.1
-  EMBLEMA_BROKER__PORT: "5672"
-  EMBLEMA_BROKER__USER: ci
-  EMBLEMA_BROKER__VHOST: "/"
-
 jobs:
   lint:
     name: lint (ruff)
@@ -147,8 +135,23 @@ jobs:
       matrix:
         python: ["3.12", "3.14"]
     env:
-      # The bucket the contract tests reach: the Garage service started below, published on the
+      # What this job configures the stack with, stated here rather than for the whole workflow:
+      # the job that brings the stack up the way a person does reads everything out of `.env`,
+      # and a variable in the runner's environment would win the interpolation against that file
+      # and leave the services and the smoke test disagreeing about who the role is.
+      #
+      # A role name authenticates nobody. Every secret the local stack needs is minted per run by
+      # the jobs that start it, so no password or access key is written down in this repository.
+      # The bucket the contract tests reach is the Garage service started below, published on the
       # runner's loopback interface. No field of the store has a default value.
+      EMBLEMA_DATABASE__HOST: 127.0.0.1
+      EMBLEMA_DATABASE__PORT: "5432"
+      EMBLEMA_DATABASE__NAME: emblema
+      EMBLEMA_DATABASE__USER: ci
+      EMBLEMA_BROKER__HOST: 127.0.0.1
+      EMBLEMA_BROKER__PORT: "5672"
+      EMBLEMA_BROKER__USER: ci
+      EMBLEMA_BROKER__VHOST: "/"
       EMBLEMA_ARTIFACT_STORE__ENDPOINT_URL: http://127.0.0.1:3900
       EMBLEMA_ARTIFACT_STORE__REGION: garage
       EMBLEMA_ARTIFACT_STORE__BUCKET: emblema
