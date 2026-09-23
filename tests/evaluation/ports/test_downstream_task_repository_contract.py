@@ -16,6 +16,7 @@ from emblema.evaluation.adapters.persistence.downstream_task_repository import (
     SqlAlchemyDownstreamTaskRepository,
 )
 from emblema.evaluation.domain.exceptions import TaskNotFoundError
+from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
 from tests.evaluation.support import FORECAST, TASK, task
 from tests.support.database import clear_evaluation, migrated_engine
@@ -84,3 +85,17 @@ def test_saving_again_replaces_the_sides_rather_than_adding_to_them(
 def test_a_task_nobody_stored_is_refused(tasks: DownstreamTaskRepository) -> None:
     with pytest.raises(TaskNotFoundError):
         tasks.get(TASK)
+
+
+def test_a_detection_task_comes_back_reading_no_label_per_window(
+    tasks: DownstreamTaskRepository,
+) -> None:
+    # The protocol that spends no labels stores no scheme and no stratification; read back as
+    # anything else it would claim a budget axis it does not have.
+    detection = task(protocol=EvaluationProtocol.ANOMALY_DETECTION, labels=None, strata=None)
+    tasks.save(detection)
+
+    read = tasks.get(TASK)
+
+    assert read == detection
+    assert (read.labels, read.strata) == (None, None)

@@ -162,3 +162,21 @@ def test_a_cell_is_the_coordinates_and_reads_as_them() -> None:
     stated = CampaignCell(candidate=CONTENDER, budget=LabelBudget.everything(), seed=3)
 
     assert str(stated) == "full_fine_tuning at all under seed 3"
+
+
+def test_a_pairing_the_campaign_never_compared_is_refused() -> None:
+    verdict = run_everything().complete(OPENED_AT).verdict()
+
+    with pytest.raises(UnknownCandidateError, match="no comparison of"):
+        verdict.get_comparison(CandidateRef("absent"), LabelBudget.of(200))
+
+
+def test_a_budget_the_campaign_never_ran_is_refused_by_the_verdict() -> None:
+    verdict = run_everything().complete(OPENED_AT).verdict()
+
+    with pytest.raises(UnknownCandidateError, match="at a budget of all"):
+        verdict.get_comparison(CONTENDER, LabelBudget.everything())
+
+
+def test_a_campaign_that_has_kept_nothing_names_no_artifact() -> None:
+    assert campaign().artifact_of(CONTROL) is None

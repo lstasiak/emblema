@@ -41,6 +41,7 @@ from emblema.evaluation.contracts.candidate_standing import CandidateStanding
 from emblema.evaluation.contracts.events import CampaignCompleted
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
+from emblema.evaluation.domain.exceptions import UnknownCampaignCellError
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -115,16 +116,13 @@ class Campaign:
         )
 
     def _run(self, arguments: Mapping[str, JobArgument]) -> None:
-        budget, seed = arguments["budget"], arguments["seed"]
         self.run_cell(
             RunCampaignCellCommand(
                 campaign=CampaignId.parse(str(arguments["campaign"])),
                 cell=CampaignCell(
                     candidate=CandidateRef(str(arguments["candidate"])),
-                    budget=LabelBudget.everything()
-                    if budget is None
-                    else LabelBudget.of(int(str(budget))),
-                    seed=int(str(seed)),
+                    budget=LabelBudget.parse(str(arguments["budget"])),
+                    seed=int(str(arguments["seed"])),
                 ),
             )
         )
@@ -222,3 +220,18 @@ def test_the_outcome_carries_what_serving_needs_and_nothing_more(running: Campai
         "standing",
         "metrics",
     }
+
+
+def test_a_cell_outside_the_grid_is_refused_rather_than_recorded(running: Campaign) -> None:
+    # The queue may deliver anything; what the campaign answers for is its own design.
+    declared = running.declared()
+
+    with pytest.raises(UnknownCampaignCellError, match="is not a cell of campaign"):
+        running.run_cell(
+            RunCampaignCellCommand(
+                campaign=declared,
+                cell=CampaignCell(candidate=CONTENDER, budget=LabelBudget.of(7), seed=1),
+            )
+        )
+
+    assert running.campaigns.get(declared).results == ()
