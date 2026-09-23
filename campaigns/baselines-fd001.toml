@@ -1,0 +1,36 @@
+# A campaign of nothing but classical candidates, over the turbofans.
+#
+# What it is for: the Evaluation context is meant to compare a network against methods that
+# learn from labels alone, and a grid made only of the latter runs without the context that
+# trains backbones being asked for anything. This is the file that shows it.
+#
+# Committed before the campaign runs, and that is the point of it being a file. The budgets, the
+# seeds and the rule for what counts as a difference are a registration when they are written
+# down first, and a decision nobody can date when they are passed on a command line.
+
+name = "baselines-fd001"
+purpose = "tuning"
+tier = "S"
+
+[candidates]
+# The control learns the task from nothing pretrained, so a baseline that beats it has shown
+# that the task is answerable without representation learning at all.
+competing = ["from_scratch", "boosted_trees_per_channel", "boosted_trees_across_channels"]
+control = "from_scratch"
+endpoint = "boosted_trees_per_channel"
+
+[budgets]
+labels = ["50", "200"]
+endpoint = "200"
+seeds = [1, 2, 3]
+
+[rules]
+minimum_relative_reduction = 0.1
+floor_share = 0.02
+alpha = 0.05
+secondary_family_size = 8
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
