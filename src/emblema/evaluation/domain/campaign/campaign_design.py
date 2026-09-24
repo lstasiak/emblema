@@ -193,7 +193,11 @@ class CampaignDesign:
         One cell per candidate: the operating point the campaign's claim is made at, under the
         reference seed. Keeping every cell would store a grid's worth of weights to promote one
         of them, and keeping the best would be choosing on the numbers the campaign produced.
+        A selection keeps nothing: what it produces is a choice, and the comparison that runs
+        the chosen variant keeps its own.
         """
+        if self.inner_holdout is not None:
+            return False
         return cell.budget == self.endpoint_budget and cell.seed == self.reference_seed
 
     def is_endpoint(self, candidate: CandidateRef, budget: LabelBudget) -> bool:

@@ -26,11 +26,16 @@ class CompleteCampaignCommand:
 class CompleteCampaign:
     """Closes a finished grid, reads the verdict its rules give, and publishes it.
 
-    The verdict is computed after the campaign is closed rather than before, because closing is
-    what makes computing it legitimate: a grid read while cells are outstanding reports the ones
-    that happened to finish, and which those are is never independent of what they found. The
-    campaign is stored before the message goes out, so nothing is announced that was not first
-    recorded.
+    The verdict is read off the campaign as closed, because closing is what makes reading it
+    legitimate: a grid read while cells are outstanding reports the ones that happened to finish,
+    and which those are is never independent of what they found. It is read before the closed
+    campaign is stored, so a verdict that cannot be read leaves the campaign open to be closed
+    again rather than closed for good with nothing announced; and the campaign is stored before
+    the message goes out, so nothing is announced that was not first recorded.
+
+    A selection closes and announces nothing. What it answers is which variant a comparison
+    should run, read from its results when the comparison is declared; it has no verdict and no
+    candidate for another context to promote.
     """
 
     def __init__(
@@ -47,8 +52,10 @@ class CompleteCampaign:
         self._ids = ids
         self._events = events
 
-    def __call__(self, command: CompleteCampaignCommand) -> CampaignCompleted:
+    def __call__(self, command: CompleteCampaignCommand) -> CampaignCompleted | None:
         """Close the campaign, publish what it concluded, and return the message.
+
+        A selection is closed and ``None`` returned, since it concludes nothing to publish.
 
         Raises:
             CampaignNotFoundError: If the campaign is unknown.
@@ -62,12 +69,15 @@ class CompleteCampaign:
         at = self._clock.now()
         read = self._campaigns.get(command.campaign)
         campaign = read.complete(at)
-        self._campaigns.save(campaign, seen=read.revision)
+        if campaign.selects:
+            self._campaigns.save(campaign, seen=read.revision)
+            return None
         completed = self._outcomes.assemble(
             campaign,
             campaign.verdict(),
             event_id=self._ids.generate(EventId),
             occurred_at=at,
         )
+        self._campaigns.save(campaign, seen=read.revision)
         self._events.publish(completed)
         return completed

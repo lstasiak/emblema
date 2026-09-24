@@ -263,3 +263,7 @@ class SelectionNotReadableError(EvaluationError):
 
 class TunedChoiceMismatchError(EvaluationError):
     """A design names a variant its selection campaign, read by its rule, did not choose."""
+
+
+class SelectionHasNoVerdictError(EvaluationError):
+    """A selection was asked for a verdict, which a choice among variants does not have."""

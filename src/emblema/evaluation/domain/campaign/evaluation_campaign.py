@@ -15,6 +15,7 @@ from emblema.evaluation.domain.exceptions import (
     CampaignNotCompletedError,
     IncompleteCampaignError,
     InvalidCampaignDesignError,
+    SelectionHasNoVerdictError,
     SelectionNotReadableError,
     UnknownCampaignCellError,
     UnknownCandidateError,
@@ -232,14 +233,26 @@ class EvaluationCampaign:
             raise CampaignClosedError(f"campaign {self.campaign_id} has already finished")
         return replace(self, completed_at=at)
 
+    @property
+    def selects(self) -> bool:
+        """Whether this campaign chooses among variants rather than compares candidates."""
+        return self.purpose is RunPurpose.SELECTION
+
     def verdict(self) -> CampaignVerdict:
         """What the campaign concluded, read by the rules its design registered.
 
         Raises:
             CampaignNotCompletedError: If the campaign has not finished.
+            SelectionHasNoVerdictError: If the campaign is a selection, whose repeats score
+                different units and which is asked what it chose instead.
             InvalidPairedUnitErrorsError: If the candidate and the control were scored on
                 different units.
         """
+        if self.selects:
+            raise SelectionHasNoVerdictError(
+                f"campaign {self.campaign_id} is a selection: it is asked which variant it "
+                "chose, not what it concluded"
+            )
         if not self.is_finished:
             raise CampaignNotCompletedError(
                 f"campaign {self.campaign_id} has no verdict until it has finished"
