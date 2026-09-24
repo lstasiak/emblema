@@ -15,12 +15,23 @@ from emblema.evaluation.adapters.persistence.evaluation_campaign_record import (
     EvaluationCampaignRecord,
 )
 from emblema.pretraining.adapters.persistence.backbone_record import BackboneRecord
+from emblema.serving.adapters.persistence.promotable_artifact_record import (
+    PromotableArtifactRecord,
+)
+
+# Imported so that the served model's table registers on the Serving metadata: a model and the
+# projection it was promoted out of are separate aggregates, so neither record module reaches the
+# other.
+from emblema.serving.adapters.persistence.served_model_record import (  # noqa: F401
+    ServedModelRecord,
+)
 
 # Every context's tables, so that a comparison covers the whole database.
 target_metadata = [
     CorpusRecord.metadata,
     BackboneRecord.metadata,
     EvaluationCampaignRecord.metadata,
+    PromotableArtifactRecord.metadata,
 ]
 
 
