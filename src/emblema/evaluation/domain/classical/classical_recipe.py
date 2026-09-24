@@ -53,16 +53,9 @@ class ClassicalRecipe:
         The sources are rendered as one field rather than one per task, so every recipe renders
         the same columns whatever it transfers from.
         """
-        return {
+        stated: dict[str, str | int | float] = {
             "features": str(self.features),
             "fit_seed": self.seed,
             "sources": " ".join(str(source) for source in self.sources),
-            "rounds": self.boosting.rounds,
-            "max_depth": self.boosting.max_depth,
-            "learning_rate": float(self.boosting.learning_rate),
-            "row_share": float(self.boosting.row_share),
-            "feature_share": float(self.boosting.feature_share),
-            "min_leaf_weight": float(self.boosting.min_leaf_weight),
-            "l2_penalty": float(self.boosting.l2_penalty),
-            "threads": self.boosting.threads,
         }
+        return stated | self.boosting.parameters()

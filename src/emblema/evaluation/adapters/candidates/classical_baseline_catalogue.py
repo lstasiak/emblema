@@ -40,19 +40,12 @@ class ClassicalBaselineCatalogue:
         for arm in self._arms:
             if arm.ref == candidate:
                 return arm
-        raise UnknownCandidateError(f"this provider supplies no candidate {candidate}")
+        raise UnknownCandidateError(f"this catalogue holds no baseline called {candidate}")
 
     def _method(self, arm: ClassicalArm) -> CandidateMethod:
         """What the baseline was set to, beyond the seed each cell of the grid supplies itself."""
         return CandidateMethod.of(
             features=arm.features,
             sources=" ".join(str(source) for source in arm.sources),
-            rounds=self.boosting.rounds,
-            max_depth=self.boosting.max_depth,
-            learning_rate=self.boosting.learning_rate,
-            row_share=self.boosting.row_share,
-            feature_share=self.boosting.feature_share,
-            min_leaf_weight=self.boosting.min_leaf_weight,
-            l2_penalty=self.boosting.l2_penalty,
-            threads=self.boosting.threads,
+            **self.boosting.parameters(),
         )

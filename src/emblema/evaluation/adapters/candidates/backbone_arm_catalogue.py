@@ -51,7 +51,7 @@ class BackboneArmCatalogue:
         for arm in self._arms:
             if arm.ref == candidate:
                 return arm
-        raise UnknownCandidateError(f"this provider supplies no candidate {candidate}")
+        raise UnknownCandidateError(f"this catalogue holds no arm called {candidate}")
 
     def _method(self, arm: BackboneArm) -> CandidateMethod:
         """What the arm was set to, beyond the arithmetic its budget allows.

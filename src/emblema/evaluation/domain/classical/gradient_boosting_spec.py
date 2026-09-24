@@ -46,6 +46,19 @@ class GradientBoostingSpec:
     l2_penalty: float
     threads: int
 
+    def parameters(self) -> dict[str, int | float]:
+        """The knobs flattened to scalars, in a fixed order, for whoever records a fit."""
+        return {
+            "rounds": self.rounds,
+            "max_depth": self.max_depth,
+            "learning_rate": self.learning_rate,
+            "row_share": self.row_share,
+            "feature_share": self.feature_share,
+            "min_leaf_weight": self.min_leaf_weight,
+            "l2_penalty": self.l2_penalty,
+            "threads": self.threads,
+        }
+
     def __post_init__(self) -> None:
         for label, count in (
             ("rounds", self.rounds),
