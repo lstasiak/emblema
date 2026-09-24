@@ -1,3 +1,6 @@
+from dataclasses import replace
+from typing import Any
+
 import pytest
 
 from emblema.evaluation.domain.classical.classical_outcome import ClassicalOutcome
@@ -12,9 +15,10 @@ ANSWERS = (
 )
 
 
-def outcome(**overrides: object) -> ClassicalOutcome:
-    stated: dict[str, object] = {"predictions": ANSWERS, "seconds": 1.5, "artifact": None}
-    return ClassicalOutcome(**{**stated, **overrides})  # type: ignore[arg-type]
+def outcome(**overrides: Any) -> ClassicalOutcome:
+    """An outcome that holds together; anything named is replaced afterwards."""
+    stated = ClassicalOutcome(predictions=ANSWERS, seconds=1.5, artifact=None)
+    return replace(stated, **overrides)
 
 
 def test_a_fit_that_answered_nothing_is_refused() -> None:
