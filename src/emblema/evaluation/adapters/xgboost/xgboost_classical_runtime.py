@@ -5,6 +5,8 @@ import numpy as np
 import xgboost
 from numpy.typing import NDArray
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
+from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.blocks.read_corpus import ReadCorpus
 from emblema.evaluation.adapters.features.channel_aggregated_features import (
@@ -14,6 +16,7 @@ from emblema.evaluation.adapters.features.per_channel_features import PerChannel
 from emblema.evaluation.adapters.features.spectral_features import SpectralFeatures
 from emblema.evaluation.adapters.features.window_features import WindowFeatures
 from emblema.evaluation.adapters.xgboost.fitted_baseline import FittedBaseline
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
@@ -60,7 +63,7 @@ class XgboostClassicalRuntime:
         A process that never keeps a candidate needs no store.
         """
         self._blocks = blocks
-        self._store = store
+        self._kept_candidates = None if store is None else KeptCandidates(store)
 
     def fit(
         self,
@@ -98,7 +101,7 @@ class XgboostClassicalRuntime:
                 for labelled, answer in zip(scored, predicted.tolist(), strict=True)
             ),
             seconds=time.perf_counter() - started,
-            artifact=self._kept(recipe, model, features, scale) if retain else None,
+            artifact=self._kept(recipe, model, features, task, scale) if retain else None,
         )
 
     @staticmethod
@@ -174,18 +177,26 @@ class XgboostClassicalRuntime:
         recipe: ClassicalRecipe,
         model: xgboost.XGBRegressor,
         features: WindowFeatures,
+        task: DownstreamTask,
         target_scale: float,
     ) -> ArtifactRef:
-        """The candidate this fit produced, stored whole, so the campaign can name it.
+        """The candidate this fit produced, stored whole under its manifest, for the campaign.
+
+        The trees are the measured form and the only one: the document another context loads
+        them from is already free of the fitting stack.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep it.
         """
-        if self._store is None:
+        if self._kept_candidates is None:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it fitted and was given no store"
             )
         fitted = FittedBaseline.of(
             recipe, model, feature_names=features.names(), target_scale=target_scale
         )
-        return self._store.put(fitted.to_bytes())
+        return self._kept_candidates.keep(
+            CandidateKind.CLASSICAL,
+            corpus_manifest=task.manifest,
+            measured=RepresentationBytes(FittedBaseline.FORMAT, fitted.to_bytes()),
+        )

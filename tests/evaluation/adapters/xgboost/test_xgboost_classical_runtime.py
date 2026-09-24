@@ -13,9 +13,11 @@ import numpy as np
 import pytest
 
 from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.xgboost.fitted_baseline import FittedBaseline
 from emblema.evaluation.adapters.xgboost.xgboost_classical_runtime import XgboostClassicalRuntime
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.classical.fitting_source import FittingSource
@@ -161,7 +163,11 @@ def test_what_a_fit_keeps_answers_the_same_rows_the_fit_itself_did(published: Pu
     )
 
     assert outcome.artifact is not None
-    kept = FittedBaseline.read(published.store.get(outcome.artifact))
+    candidate = KeptCandidates(published.store).read(outcome.artifact)
+    assert candidate.kind is CandidateKind.CLASSICAL
+    assert candidate.corpus_manifest == published.task.manifest
+    assert candidate.measured_as == FittedBaseline.FORMAT
+    kept = FittedBaseline.read(published.store.get(candidate.measured.artifact))
     assert kept.target_scale == CEILING
     assert kept.feature_names == ChannelAggregatedFeatures().names()
     blocks = PublishedCorpusBlocks(published.store, published.workspace / "read")

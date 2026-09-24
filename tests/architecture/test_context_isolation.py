@@ -11,11 +11,10 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-INTERIOR = (
-    "emblema.catalog.domain",
-    "emblema.catalog.ports",
-    "emblema.catalog.application",
-    "emblema.catalog.adapters",
+INTERIOR = tuple(
+    f"emblema.{context}.{layer}"
+    for context in ("catalog", "pretraining", "evaluation", "serving")
+    for layer in ("domain", "ports", "application", "adapters")
 )
 
 
@@ -43,9 +42,13 @@ def loaded_modules_after_importing(module: str) -> list[str]:
             "emblema.catalog.contracts.published_corpus_manifest_json",
             "emblema.catalog.contracts.published_corpus_manifest",
         ),
+        (
+            "emblema.evaluation.contracts.kept_candidate_manifest_json",
+            "emblema.evaluation.contracts.kept_candidate_manifest",
+        ),
     ],
 )
-def test_importing_the_published_language_loads_no_catalog_interior(
+def test_importing_the_published_language_loads_no_interior_of_any_context(
     module: str, message: str
 ) -> None:
     loaded = loaded_modules_after_importing(module)
