@@ -136,8 +136,15 @@ def test_a_variant_of_a_baseline_is_described_with_its_knob_turned_and_nothing_e
         "boosted_trees_per_channel@max_depth=deep",
         "boosted_trees_per_channel@max_depth=5,learning_rate=0.1",
         "full_fine_tuning@learning_rate=0.1",
+        "boosted_trees_per_channel@max_depth=3",
     ],
-    ids=["not a knob", "not its type", "out of order", "a network has no knobs yet"],
+    ids=[
+        "not a knob",
+        "not its type",
+        "out of order",
+        "a network has no knobs yet",
+        "the default under another name",
+    ],
 )
 def test_a_variant_no_holder_can_read_is_refused(name: str) -> None:
     with pytest.raises(UnknownCandidateError):

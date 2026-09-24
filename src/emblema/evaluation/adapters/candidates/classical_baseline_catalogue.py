@@ -62,6 +62,9 @@ class ClassicalBaselineCatalogue:
                 method = method.tuned(knob, value)
             except UnknownKnobError as error:
                 raise UnknownCandidateError(f"{variant.ref} names no variant: {error}") from error
+        if variant.knobs and method == arm.method:
+            # Two names for one model would let a selection weigh the default against itself.
+            raise UnknownCandidateError(f"{variant.ref} turns no knob away from {arm.ref}")
         return replace(arm, ref=variant.ref, method=method)
 
     def _method(self, arm: ClassicalArm) -> CandidateMethod:
