@@ -16,6 +16,21 @@ def test_a_regular_window_on_as_many_steps_as_readings_is_laid_without_loss() ->
     assert laid[1].tolist() == [1.0] * 8
 
 
+@pytest.mark.parametrize("readings", [50, 64, 128])
+def test_readings_stored_at_the_start_of_every_step_in_single_precision_fill_every_step(
+    readings: int,
+) -> None:
+    # Times as a published window stores them: k / n in float32, a hair below k / n for some k.
+    times = (np.arange(readings, dtype=np.float32) / np.float32(readings)).tolist()
+
+    laid = RegularGrid(readings, 1).of(
+        [window(timed(1, [(float(k), t) for k, t in enumerate(times)]))]
+    )[0]
+
+    assert laid[1].tolist() == [1.0] * readings
+    assert laid[0].tolist() == [float(k) for k in range(readings)]
+
+
 def test_a_step_without_a_reading_carries_the_last_one_and_says_it_was_not_observed() -> None:
     laid = RegularGrid(4, 1).of([window(timed(1, [(3.0, 0.1), (7.0, 0.8)]))])[0]
 

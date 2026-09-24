@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import ClassVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -25,6 +26,12 @@ class RegularGrid:
     in vocabulary order, then their masks in the same order. The channels are an axis here, and
     that is why nothing laid on this grid can leave its corpus.
     """
+
+    # A token's time is stored in single precision, so a reading at the start of a step can land
+    # a hair before it — k / 50 is 0.0199999995 — and a floor would put it one step early,
+    # leaving its own step empty and doubling the one before. A tolerance far above the rounding
+    # of single precision and far below any spacing of readings puts every reading back.
+    _TOLERANCE: ClassVar[float] = 1e-3
 
     def __init__(self, steps: int, channels: int) -> None:
         """Lay windows of a corpus of ``channels`` channels on ``steps`` equal steps.
@@ -59,7 +66,9 @@ class RegularGrid:
         values = np.asarray(window.values, dtype=np.float64)
         timeless = np.asarray(window.timeless, dtype=bool)
         steps = np.minimum(
-            (np.asarray(window.times, dtype=np.float64) * self._steps).astype(np.int64),
+            np.floor(
+                np.asarray(window.times, dtype=np.float64) * self._steps + self._TOLERANCE
+            ).astype(np.int64),
             self._steps - 1,
         )
         grid = np.zeros((self._channels, self._steps), dtype=np.float64)
