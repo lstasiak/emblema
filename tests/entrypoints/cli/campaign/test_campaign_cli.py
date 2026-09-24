@@ -24,16 +24,22 @@ from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
 from emblema.evaluation.adapters.in_memory.evaluation_campaign_repository import (
     InMemoryEvaluationCampaignRepository,
 )
+from emblema.evaluation.application.assemblers.campaign_completed_assembler import (
+    CampaignCompletedAssembler,
+)
 from emblema.evaluation.application.use_cases.advance_campaign import (
     RUN_CAMPAIGN_CELL,
     AdvanceCampaign,
 )
+from emblema.evaluation.application.use_cases.complete_campaign import CompleteCampaign
 from emblema.evaluation.application.use_cases.define_campaign import DefineCampaign
 from emblema.evaluation.application.use_cases.define_downstream_task import DefineDownstreamTask
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.task.corpus_sides import CorpusSides
 from emblema.shared.adapters.in_memory.clock import FixedClock
+from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
+from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.adapters.queues.immediate_job_queue import ImmediateJobQueue
 from emblema.shared.jobs.job_argument import JobArgument
@@ -79,7 +85,7 @@ class Process:
             MANIFEST,
         )
         jobs = ImmediateJobQueue({RUN_CAMPAIGN_CELL: self.submitted.append})
-        ids = SequentialIdGenerator()
+        ids, clock = SequentialIdGenerator(), FixedClock(OPENED_AT)
         catalogue = InMemoryCandidateProvider(
             (candidate(CONTROL), candidate(TREES)), (), lambda _: ()
         )
@@ -92,8 +98,18 @@ class Process:
         )
         self.services = Services(
             define_downstream_task=DefineDownstreamTask(tasks, corpus, ids),
-            define_campaign=DefineCampaign(tasks, campaigns, catalogue, ids, FixedClock(OPENED_AT)),
-            advance_campaign=AdvanceCampaign(campaigns, jobs),
+            define_campaign=DefineCampaign(tasks, campaigns, catalogue, ids, clock),
+            advance_campaign=AdvanceCampaign(
+                campaigns,
+                jobs,
+                CompleteCampaign(
+                    campaigns,
+                    CampaignCompletedAssembler(),
+                    clock,
+                    ids,
+                    InMemoryEventPublisher(InMemoryEventSubscriber()),
+                ),
+            ),
         )
 
     def run(self, *argv: str) -> str:
@@ -188,3 +204,17 @@ def test_an_invocation_missing_what_it_acts_on_is_refused(
     # builds an invocation — which is the only way `execute` is reached in a test.
     with pytest.raises(SystemExit, match=complaint):
         CampaignCli().execute(invocation, process.adapters, process.services)
+
+
+def test_an_invocation_asking_for_something_else_is_refused_rather_than_advanced(
+    process: Process,
+) -> None:
+    # The parser admits three names, so this too is what happens when something other than the
+    # parser builds an invocation. Answering it as the last branch would hand out a grid's cells
+    # for a subcommand nobody wrote.
+    with pytest.raises(SystemExit, match="does not 'publish'"):
+        CampaignCli().execute(
+            CampaignInvocation(what="publish"), process.adapters, process.services
+        )
+
+    assert process.submitted == []

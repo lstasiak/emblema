@@ -11,7 +11,11 @@ from emblema.entrypoints.workers.known_baselines import KnownBaselines
 from emblema.evaluation.adapters.candidates.routed_candidate_catalogue import (
     RoutedCandidateCatalogue,
 )
+from emblema.evaluation.application.assemblers.campaign_completed_assembler import (
+    CampaignCompletedAssembler,
+)
 from emblema.evaluation.application.use_cases.advance_campaign import AdvanceCampaign
+from emblema.evaluation.application.use_cases.complete_campaign import CompleteCampaign
 from emblema.evaluation.application.use_cases.define_campaign import DefineCampaign
 from emblema.evaluation.application.use_cases.define_downstream_task import DefineDownstreamTask
 from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
@@ -31,8 +35,8 @@ class CompositionRoot:
     campaign will be read through.
 
     Catalogues and not providers, so this process carries neither the training stack nor the one
-    the baselines are fitted with. On the platform this is developed on that is not a saving but
-    a condition: the two cannot share a process, and merely importing one poisons the other.
+    the baselines are fitted with — which on the platform this is developed on is the condition
+    under which it can exist, since the two cannot share a process.
 
     Attributes:
         adapters: The port implementations the process runs on.
@@ -82,7 +86,17 @@ class CompositionRoot:
                 process.ids,
                 process.clock,
             ),
-            advance_campaign=AdvanceCampaign(process.campaigns, process.jobs),
+            advance_campaign=AdvanceCampaign(
+                process.campaigns,
+                process.jobs,
+                CompleteCampaign(
+                    process.campaigns,
+                    CampaignCompletedAssembler(),
+                    process.clock,
+                    process.ids,
+                    process.events,
+                ),
+            ),
         )
 
     @classmethod

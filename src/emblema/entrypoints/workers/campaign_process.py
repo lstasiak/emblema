@@ -151,7 +151,7 @@ class CampaignProcess:
                 adapters.ids,
                 adapters.clock,
             ),
-            advance_campaign=AdvanceCampaign(adapters.campaigns, adapters.jobs),
+            advance_campaign=AdvanceCampaign(adapters.campaigns, adapters.jobs, complete),
             run_campaign_cell=RunCampaignCell(adapters.campaigns, adapters.candidates, complete),
             complete_campaign=complete,
             open_test_split=self.open_test_split,

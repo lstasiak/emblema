@@ -101,7 +101,7 @@ class Campaign:
         )
         self.run_cell = RunCampaignCell(self.campaigns, self.candidates, self.complete)
         self.jobs = ImmediateJobQueue({RUN_CAMPAIGN_CELL: self._run})
-        self.advance = AdvanceCampaign(self.campaigns, self.jobs)
+        self.advance = AdvanceCampaign(self.campaigns, self.jobs, self.complete)
 
     def declared(self) -> CampaignId:
         return self.define(
@@ -298,6 +298,25 @@ def test_the_worker_that_records_last_is_the_one_that_closes_the_grid(running: C
     # whole grid; the state it ends up writing does, and that is what has to close the campaign.
     run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=mine))
 
+    assert running.campaigns.get(campaign_id).is_finished
+    assert len(running.published) == 1
+
+
+def test_a_grid_left_whole_but_open_is_closed_by_advancing_it(running: Campaign) -> None:
+    # Recording a cell and closing the grid are two writes, so a worker lost between them leaves
+    # a campaign with nothing to submit and no cell to run again — one nothing else would close.
+    campaign_id = running.declared()
+    stood = running.campaigns.get(campaign_id)
+    for cell in stood.design.cells():
+        recorded = stood.record(
+            result(cell.candidate, cell.budget, cell.seed, ERRORS[cell.candidate])
+        )
+        running.campaigns.save(recorded, seen=stood.revision)
+        stood = recorded
+
+    submitted = running.advance(AdvanceCampaignCommand(campaign=campaign_id))
+
+    assert submitted == 0
     assert running.campaigns.get(campaign_id).is_finished
     assert len(running.published) == 1
 
