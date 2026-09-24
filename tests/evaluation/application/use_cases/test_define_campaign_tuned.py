@@ -25,6 +25,7 @@ from emblema.evaluation.application.use_cases.select_tuned_variants import (
 )
 from emblema.evaluation.contracts.identifiers import CandidateRef, TaskId
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
+from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.domain.exceptions import (
     SelectionNotReadableError,
     TunedChoiceMismatchError,
@@ -57,13 +58,13 @@ class Process:
         self.tasks = InMemoryDownstreamTaskRepository()
         self.tasks.save(task())
         self.campaigns = InMemoryEvaluationCampaignRepository()
-        self.campaigns.save(selection(), seen=0)
         catalogue = ClassicalBaselineCatalogue(
             (
                 ClassicalArm(ref=ROCKET, method=convolutions(), sources=()),
                 ClassicalArm(ref=OTHER, method=convolutions(), sources=()),
             )
         )
+        self.campaigns.save(described_by(catalogue), seen=0)
         self.define = DefineCampaign(
             self.tasks, self.campaigns, catalogue, SequentialIdGenerator(), FixedClock(OPENED_AT)
         )
@@ -84,6 +85,17 @@ class Process:
             bootstrap=BOOTSTRAP,
             tuned=tuned,
         )
+
+
+def described_by(catalogue: ClassicalBaselineCatalogue) -> EvaluationCampaign:
+    """The finished selection, its candidates described as ``catalogue`` describes them."""
+    chosen = selection()
+    return replace(
+        chosen,
+        design=replace(
+            chosen.design, candidates=(catalogue.describe(ROCKET), catalogue.describe(FINER))
+        ),
+    )
 
 
 def chose(variant: CandidateRef, budget: LabelBudget = AT_200) -> TunedChoice:
@@ -132,3 +144,20 @@ def test_a_selection_over_another_task_cannot_tune_this_comparison() -> None:
 
     with pytest.raises(TunedChoiceMismatchError, match="ran over task"):
         process.define(replace(process.declared(chose(FINER)), task=elsewhere.task_id))
+
+
+def test_a_variant_the_selection_ran_under_another_configuration_is_refused() -> None:
+    # The same names, another model: the selection ran the grids over fewer features than this
+    # process would, so what it chose is not what the comparison would run.
+    process = Process()
+    elsewhere = ClassicalBaselineCatalogue(
+        (
+            ClassicalArm(
+                ref=ROCKET, method=convolutions().tuned("convolution_features", "168"), sources=()
+            ),
+        )
+    )
+    process.campaigns.save(described_by(elsewhere), seen=selection().revision)
+
+    with pytest.raises(TunedChoiceMismatchError, match="describes it as"):
+        process.define(process.declared(chose(FINER)))

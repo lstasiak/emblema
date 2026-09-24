@@ -1,6 +1,8 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
+from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.domain.exceptions import TunedChoiceMismatchError
@@ -101,15 +103,21 @@ class DefineCampaign:
         """
         task = self._tasks.get(command.task)
         task.accept_campaign()
+        described = {
+            ref: self._candidates.describe(ref)
+            for ref in dict.fromkeys(
+                (*command.candidates, *(choice.variant for choice in command.tuned))
+            )
+        }
         for choice in command.tuned:
-            self._check(choice, task.task_id)
+            self._check(choice, task.task_id, described)
         campaign = EvaluationCampaign.designed(
             campaign_id=self._ids.generate(CampaignId),
             task=task.task_id,
             purpose=command.purpose,
             tier=command.tier,
             design=CampaignDesign(
-                candidates=tuple(self._candidates.describe(ref) for ref in command.candidates),
+                candidates=tuple(described[ref] for ref in command.candidates),
                 control=command.control,
                 endpoint=command.endpoint,
                 budgets=command.budgets,
@@ -120,7 +128,7 @@ class DefineCampaign:
                 inner_holdout=command.inner_holdout,
                 tuned=command.tuned,
                 variants=tuple(
-                    self._candidates.describe(ref)
+                    described[ref]
                     for ref in dict.fromkeys(choice.variant for choice in command.tuned)
                 ),
             ),
@@ -129,13 +137,23 @@ class DefineCampaign:
         self._campaigns.save(campaign, seen=campaign.revision)
         return campaign.campaign_id
 
-    def _check(self, choice: TunedChoice, task: TaskId) -> None:
+    def _check(
+        self,
+        choice: TunedChoice,
+        task: TaskId,
+        described: Mapping[CandidateRef, CampaignCandidate],
+    ) -> None:
         """Refuse a choice its selection, read again by its rule, did not make.
+
+        A name is not enough: the variant and the candidate it varies must be described here
+        exactly as the selection described them when it ran, or a change of configuration in
+        between would run another model under the name the selection chose.
 
         Raises:
             CampaignNotFoundError: If the selection is not stored.
             SelectionNotReadableError: If it cannot choose for that pairing.
-            TunedChoiceMismatchError: If it chose otherwise, or selected over another task.
+            TunedChoiceMismatchError: If it chose otherwise, selected over another task, or
+                described the variant or its base otherwise than this process does.
         """
         selection = self._campaigns.get(choice.selected_by)
         if selection.task != task:
@@ -148,3 +166,10 @@ class DefineCampaign:
                 f"selection {choice.selected_by} chose {chosen} for {choice.candidate} at "
                 f"{choice.budget}, not {choice.variant}"
             )
+        for ref in (choice.candidate, choice.variant):
+            ran = selection.design.get_candidate(ref)
+            if ran != described[ref]:
+                raise TunedChoiceMismatchError(
+                    f"selection {choice.selected_by} ran {ref} as {ran}, and this process "
+                    f"describes it as {described[ref]}"
+                )
