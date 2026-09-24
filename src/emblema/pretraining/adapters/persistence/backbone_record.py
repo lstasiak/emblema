@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Self
 from uuid import UUID
 
@@ -16,9 +16,9 @@ from emblema.pretraining.adapters.persistence.pretraining_input_record import (
 from emblema.pretraining.domain.backbone.backbone import Backbone
 from emblema.pretraining.domain.identifiers import BackboneId
 from emblema.pretraining.domain.training.run_signature import RunSignature
+from emblema.shared.adapters.persistence.datetimes import as_utc
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
-from emblema.shared.kernel.timestamps import UtcDateTime
 
 ORDERED, READY = "ordered", "ready"
 CONFIGURATIONS = ExperimentConfigurationDocument()
@@ -109,10 +109,10 @@ class BackboneRecord(Base):
             run=self.run,
             git_commit=self.git_commit,
             signature=RunSignature(self.signature),
-            ordered_at=self._utc(self.ordered_at),
+            ordered_at=as_utc(self.ordered_at),
             result=self._ref(self.result_key, self.result_algorithm, self.result_digest),
             artifact=self._ref(self.artifact_key, self.artifact_algorithm, self.artifact_digest),
-            delivered_at=None if self.delivered_at is None else self._utc(self.delivered_at),
+            delivered_at=None if self.delivered_at is None else as_utc(self.delivered_at),
         )
 
     @staticmethod
@@ -120,9 +120,3 @@ class BackboneRecord(Base):
         if key is None or algorithm is None or digest is None:
             return None
         return ArtifactRef(key, Checksum(HashAlgorithm(algorithm), digest))
-
-    @staticmethod
-    def _utc(at: datetime) -> UtcDateTime:
-        # The database answers in the session's time zone; the value object requires offset
-        # zero, so the boundary that produced the value normalises it.
-        return UtcDateTime(at.astimezone(UTC))

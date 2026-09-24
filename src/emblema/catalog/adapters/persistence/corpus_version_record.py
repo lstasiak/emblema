@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Self
 from uuid import UUID
 
@@ -22,9 +22,9 @@ from emblema.catalog.domain.identifiers import CorpusId
 from emblema.catalog.domain.registry.corpus_content import CorpusContent
 from emblema.catalog.domain.registry.corpus_version import CorpusVersion
 from emblema.catalog.domain.registry.licence import Licence
+from emblema.shared.adapters.persistence.datetimes import as_utc
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
 from emblema.shared.kernel.sampling import SamplingRegime
-from emblema.shared.kernel.timestamps import UtcDateTime
 
 
 class CorpusVersionRecord(Base):
@@ -100,11 +100,7 @@ class CorpusVersionRecord(Base):
                 self.licence_identifier, self.licence_permits_derivatives, self.licence_url
             ),
             content=self._content(),
-            # The database answers in the session's time zone; the value object requires offset
-            # zero, so the boundary that produced the value normalises it.
-            frozen_at=None
-            if self.frozen_at is None
-            else UtcDateTime(self.frozen_at.astimezone(UTC)),
+            frozen_at=None if self.frozen_at is None else as_utc(self.frozen_at),
         )
 
     def _content(self) -> CorpusContent | None:
