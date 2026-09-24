@@ -48,6 +48,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
+from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import (
     CandidateMismatchError,
@@ -101,7 +102,13 @@ ARMS = BackboneArmCatalogue(
     adaptation_schedule(),
 )
 BASELINES = ClassicalBaselineCatalogue(
-    (ClassicalArm(ref=TREES, features=FeatureScheme.PER_CHANNEL, sources=()),), boosting()
+    (
+        ClassicalArm(
+            ref=TREES,
+            method=BoostedTrees(features=FeatureScheme.PER_CHANNEL, boosting=boosting()),
+            sources=(),
+        ),
+    )
 )
 
 

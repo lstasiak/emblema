@@ -25,14 +25,15 @@ from emblema.evaluation.application.use_cases.run_classical_fit import (
     RunClassicalFitCommand,
 )
 from emblema.evaluation.contracts.identifiers import TaskId
-from emblema.evaluation.domain.classical.classical_outcome import ClassicalOutcome
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import TaskNotFoundError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.in_memory.clock import FixedClock
@@ -71,7 +72,8 @@ def run(
     runtime: InMemoryClassicalRuntime | None = None,
     purpose: RunPurpose = RunPurpose.TUNING,
     retain: bool = False,
-) -> ClassicalOutcome:
+    holdout: InnerHoldout | None = None,
+) -> ScoredOutcome:
     tasks = InMemoryDownstreamTaskRepository()
     tasks.save(task(test=FROZEN))
     tasks.save(elsewhere())
@@ -103,6 +105,7 @@ def run(
             sample_seed=3,
             purpose=purpose,
             retain=retain,
+            holdout=holdout,
         )
     )
 
@@ -177,3 +180,20 @@ def test_a_fit_asked_to_keep_what_it_produced_names_an_artifact() -> None:
 def test_a_source_task_nobody_stored_is_refused() -> None:
     with pytest.raises(TaskNotFoundError):
         run(made_of=replace(ACROSS, sources=(MISSING,)))
+
+
+def test_a_selection_fit_learns_and_is_scored_on_the_two_parts_of_the_tuning_side() -> None:
+    runtime = InMemoryClassicalRuntime()
+
+    run(
+        made_of=recipe(),
+        runtime=runtime,
+        purpose=RunPurpose.SELECTION,
+        holdout=InnerHoldout(one_in=2),
+    )
+
+    (fitting,) = runtime.fittings
+    learnt = {str(w.window.unit) for w in fitting.sample.windows}
+    scored = {str(w.window.unit) for w in fitting.scored}
+    assert learnt | scored == {"a", "b"}
+    assert not learnt & scored

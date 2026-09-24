@@ -15,7 +15,13 @@ tier = "S"
 [candidates]
 # The control learns the task from nothing pretrained, so a baseline that beats it has shown
 # that the task is answerable without representation learning at all.
-competing = ["from_scratch", "boosted_trees_per_channel", "boosted_trees_across_channels"]
+competing = [
+    "from_scratch",
+    "boosted_trees_per_channel",
+    "boosted_trees_spectral",
+    "boosted_trees_across_channels",
+    "minirocket",
+]
 control = "from_scratch"
 endpoint = "boosted_trees_per_channel"
 

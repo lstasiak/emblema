@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from emblema.evaluation.ports.campaign_handoff import CampaignHandoff
 from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
 from emblema.evaluation.ports.corpus_windows import CorpusWindows
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
@@ -23,3 +24,4 @@ class Adapters:
     tasks: DownstreamTaskRepository
     campaigns: EvaluationCampaignRepository
     jobs: JobQueue
+    handoff: CampaignHandoff

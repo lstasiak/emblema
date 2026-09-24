@@ -9,7 +9,7 @@ from emblema.config.settings import Settings
 from emblema.entrypoints.cli.pretrain.composition_root import CompositionRoot
 from emblema.entrypoints.cli.pretrain.pretrain_invocation import PretrainInvocation
 from emblema.entrypoints.cli.pretrain.services import Services
-from emblema.entrypoints.cli.pretrain.source_revision import SourceRevision
+from emblema.entrypoints.source_revision import SourceRevision
 from emblema.pretraining.adapters.experiments.experiment_file import ExperimentFile
 from emblema.pretraining.application.use_cases.accept_pretraining_result import (
     AcceptPretrainingResultCommand,

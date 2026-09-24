@@ -3,6 +3,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from emblema.config.boosting_settings import BoostingSettings
+from emblema.config.convolution_settings import ConvolutionSettings
 from emblema.config.lora_settings import LoraSettings
 from emblema.config.schedule_settings import ScheduleSettings
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -17,10 +18,10 @@ class WorkerSettings(BaseModel):
     hardware is the one thing an experiment does not declare.
 
     What a worker needs depends on what it competes. The one that adapts a backbone has no use
-    for the boosting knobs and the one that fits trees has no use for a backbone, a schedule or
-    low-rank updates, so each of them is optional here and demanded by the process that cannot
-    run without it. Demanded as it is assembled, so a worker told to serve something it was not
-    configured for stops at startup rather than at the first cell it is handed.
+    for the classical knobs and the one that fits baselines has no use for a backbone, a
+    schedule or low-rank updates, so each of them is optional here and demanded by the process
+    that cannot run without it. Demanded as it is assembled, so a worker told to serve something
+    it was not configured for stops at startup rather than at the first cell it is handed.
     """
 
     workspace: Path = Field(description="Directory corpus blocks are fetched to and mapped from.")
@@ -31,6 +32,7 @@ class WorkerSettings(BaseModel):
     schedule: ScheduleSettings | None = None
     lora: LoraSettings | None = None
     boosting: BoostingSettings | None = None
+    convolutions: ConvolutionSettings | None = None
     device: str | None = Field(
         default=None, description="Where a cell computes; the machine's accelerator unless given."
     )
@@ -64,6 +66,16 @@ class WorkerSettings(BaseModel):
         if self.boosting is None:
             raise ValueError("this worker fits classical candidates and was given no boosting")
         return self.boosting
+
+    def require_convolutions(self) -> ConvolutionSettings:
+        """How the MiniRocket candidate of this process's campaigns reads and fits.
+
+        Raises:
+            ValueError: If nothing is configured.
+        """
+        if self.convolutions is None:
+            raise ValueError("this worker fits classical candidates and was given no convolutions")
+        return self.convolutions
 
     def require_backbone_ref(self) -> ArtifactRef:
         """The backbone as the registry holds it: a key and the checksum of its bytes.

@@ -3,9 +3,9 @@ from typing import Any
 
 import pytest
 
-from emblema.evaluation.domain.classical.classical_outcome import ClassicalOutcome
-from emblema.evaluation.domain.exceptions import InvalidClassicalOutcomeError
+from emblema.evaluation.domain.exceptions import InvalidScoredOutcomeError
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
 from tests.evaluation.support import prediction
 
 ANSWERS = (
@@ -15,25 +15,25 @@ ANSWERS = (
 )
 
 
-def outcome(**overrides: Any) -> ClassicalOutcome:
+def outcome(**overrides: Any) -> ScoredOutcome:
     """An outcome that holds together; anything named is replaced afterwards."""
-    stated = ClassicalOutcome(predictions=ANSWERS, seconds=1.5, artifact=None)
+    stated = ScoredOutcome(predictions=ANSWERS, seconds=1.5, artifact=None)
     return replace(stated, **overrides)
 
 
-def test_a_fit_that_answered_nothing_is_refused() -> None:
-    with pytest.raises(InvalidClassicalOutcomeError, match="at least one window"):
+def test_a_run_that_answered_nothing_is_refused() -> None:
+    with pytest.raises(InvalidScoredOutcomeError, match="at least one window"):
         outcome(predictions=())
 
 
 def test_a_window_answered_twice_is_refused() -> None:
-    with pytest.raises(InvalidClassicalOutcomeError, match="predicted twice"):
+    with pytest.raises(InvalidScoredOutcomeError, match="predicted twice"):
         outcome(predictions=(ANSWERS[0], ANSWERS[0]))
 
 
 @pytest.mark.parametrize("seconds", [-0.1, float("inf"), float("nan")])
 def test_a_time_that_is_negative_or_not_a_number_is_refused(seconds: float) -> None:
-    with pytest.raises(InvalidClassicalOutcomeError, match="finite and not negative"):
+    with pytest.raises(InvalidScoredOutcomeError, match="finite and not negative"):
         outcome(seconds=seconds)
 
 

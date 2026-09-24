@@ -41,6 +41,6 @@ class AdaptationRuntime(Protocol):
             UnknownBackboneError: If the plan names pretrained weights the runtime cannot supply.
             LoraTargetNotFoundError: If the plan's low-rank updates name a layer the backbone
                 does not have.
-            InvalidAdaptationOutcomeError: If there is no validation window to answer.
+            InvalidScoredOutcomeError: If there is no validation window to answer.
         """
         ...

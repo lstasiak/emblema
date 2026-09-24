@@ -4,7 +4,7 @@ import pytest
 
 from emblema.evaluation.domain.exceptions import InvalidUnitErrorError
 from emblema.evaluation.domain.identifiers import UnitKey
-from emblema.evaluation.domain.transfer.unit_error import UnitError
+from emblema.evaluation.domain.scoring.unit_error import UnitError
 from tests.evaluation.support import prediction
 
 A = UnitKey("a")

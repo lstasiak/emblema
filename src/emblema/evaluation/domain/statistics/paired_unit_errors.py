@@ -5,7 +5,7 @@ from typing import Self
 
 from emblema.evaluation.domain.exceptions import InvalidPairedUnitErrorsError
 from emblema.evaluation.domain.identifiers import UnitKey
-from emblema.evaluation.domain.transfer.unit_error import UnitError
+from emblema.evaluation.domain.scoring.unit_error import UnitError
 
 
 @dataclass(frozen=True, kw_only=True)

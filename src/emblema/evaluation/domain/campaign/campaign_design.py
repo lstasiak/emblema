@@ -10,6 +10,8 @@ from emblema.evaluation.domain.exceptions import (
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
+from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -27,10 +29,16 @@ class CampaignDesign:
     campaign was designed to test — and the rest are the secondary family, held to a correction
     over the family the rules name rather than to their own intervals.
 
+    A candidate may run as a tuned variant at some budgets: the pairing is still the
+    candidate's, and the curve still reads it under its own name, but the cell runs the variant
+    a selection chose for that budget.
+
     Invariants: at least two candidates, none named twice; the control and the endpoint are
     among them and are not the same; at least one budget and one seed, none repeated; the
     endpoint's budget is one of the budgets; every candidate that shares the compute budget
-    declares the same one; the secondary comparisons the grid holds fit the registered family.
+    declares the same one; the secondary comparisons the grid holds fit the registered family;
+    every tuned pairing is of a candidate and a budget of the grid, none twice, and its variant
+    is described among the variants, of the same kind and compute budget as its base.
 
     Attributes:
         candidates: Every competitor, the control included, in the order the campaign reports
@@ -44,6 +52,11 @@ class CampaignDesign:
             selection.
         rules: What the campaign's registration said a verdict requires.
         bootstrap: How the interval around each comparison is drawn.
+        inner_holdout: How the tuning side is divided, for a campaign that selects among
+            variants; ``None`` for one that compares.
+        tuned: Which variant a candidate runs at a budget, for each pairing a selection chose.
+        variants: Every variant ``tuned`` names, as it was described when the design was
+            written, so a cell is checked against the variant it runs rather than its base.
     """
 
     candidates: tuple[CampaignCandidate, ...]
@@ -54,11 +67,50 @@ class CampaignDesign:
     seeds: tuple[int, ...]
     rules: ComparisonRules
     bootstrap: PairedUnitBootstrap
+    inner_holdout: InnerHoldout | None = None
+    tuned: tuple[TunedChoice, ...] = ()
+    variants: tuple[CampaignCandidate, ...] = ()
 
     def __post_init__(self) -> None:
         self._check_candidates()
         self._check_axes()
         self._check_family()
+        self._check_tuned()
+
+    def _check_tuned(self) -> None:
+        pairings = [(choice.candidate, choice.budget) for choice in self.tuned]
+        if len(set(pairings)) != len(pairings):
+            raise InvalidCampaignDesignError("a pairing is tuned twice")
+        described = {variant.ref: variant for variant in self.variants}
+        if len(described) != len(self.variants):
+            raise InvalidCampaignDesignError("a variant is described twice")
+        for choice in self.tuned:
+            if choice.budget not in self.budgets:
+                raise InvalidCampaignDesignError(
+                    f"{choice.candidate} is tuned at {choice.budget}, a budget the grid lacks"
+                )
+            base = self.get_candidate(choice.candidate)
+            variant = described.get(choice.variant)
+            if variant is None:
+                raise InvalidCampaignDesignError(f"{choice.variant} is tuned but not described")
+            if (variant.kind, variant.budget) != (base.kind, base.budget):
+                raise InvalidCampaignDesignError(
+                    f"{choice.variant} is not of the kind and compute budget of {base.ref}"
+                )
+        if {variant.ref for variant in self.variants} != {c.variant for c in self.tuned}:
+            raise InvalidCampaignDesignError("a variant is described that no pairing runs")
+
+    def declared_for(self, cell: CampaignCell) -> CampaignCandidate:
+        """The candidate a cell runs: the variant its pairing was tuned to, or the base.
+
+        Raises:
+            UnknownCandidateError: If the design names no such candidate.
+        """
+        base = self.get_candidate(cell.candidate)
+        for choice in self.tuned:
+            if choice.candidate == cell.candidate and choice.budget == cell.budget:
+                return next(v for v in self.variants if v.ref == choice.variant)
+        return base
 
     def _check_candidates(self) -> None:
         if len(self.candidates) < 2:

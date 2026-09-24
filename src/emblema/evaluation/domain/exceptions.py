@@ -57,8 +57,20 @@ class InvalidClassicalRecipeError(EvaluationError, ValueError):
     """A recipe repeats a source task, or would fit a channel-bound layout over several corpora."""
 
 
-class InvalidClassicalOutcomeError(EvaluationError, ValueError):
-    """A fit predicts nothing, predicts a window twice, or reports a time that is not finite."""
+class InvalidMiniRocketSpecError(EvaluationError, ValueError):
+    """A set of random convolutions is too small to fill every kernel of the family."""
+
+
+class InvalidRidgeSpecError(EvaluationError, ValueError):
+    """A ridge fit names no penalty, a penalty that is not positive, or no thread."""
+
+
+class UnsupportedClassicalMethodError(EvaluationError):
+    """A runtime was handed a classical method it has no means of fitting."""
+
+
+class InvalidScoredOutcomeError(EvaluationError, ValueError):
+    """A run predicts nothing, predicts a window twice, or reports a time that is not finite."""
 
 
 class InvalidWindowPredictionError(EvaluationError, ValueError):
@@ -69,8 +81,8 @@ class InvalidUnitErrorError(EvaluationError, ValueError):
     """A unit's error covers no window or is not a finite, non-negative sum."""
 
 
-class InvalidAdaptationOutcomeError(EvaluationError, ValueError):
-    """An outcome predicts nothing or a window twice, or reports other epochs than were planned."""
+class InvalidAdaptationOutcomeError(InvalidScoredOutcomeError):
+    """An adaptation reports other epochs than planned, or labels its budget did not ask for."""
 
 
 class DivergedAdaptationError(EvaluationError):
@@ -211,3 +223,43 @@ class InvalidRemainingLifeMetricsError(EvaluationError, ValueError):
 
 class InvalidComparisonRulesError(EvaluationError, ValueError):
     pass
+
+
+class InvalidCampaignOrderError(EvaluationError, ValueError):
+    """An order names no cell, a cell twice, a cell of another task, or cells of both pools."""
+
+
+class CampaignOrderRejectedError(EvaluationError):
+    """An order is run on other code than it names, or answered with cells it never held."""
+
+
+class InvalidCampaignOrderResultError(EvaluationError, ValueError):
+    """A result of an order answers no cell, answers one twice, or names no commit."""
+
+
+class UnreadableCampaignDocumentError(EvaluationError):
+    """What a reference holds is not the order or the result of an order it was read as."""
+
+
+class InvalidInnerHoldoutError(EvaluationError, ValueError):
+    """An inner holdout keeps no unit to fit on, or holds out none to score."""
+
+
+class InvalidCandidateVariantError(EvaluationError, ValueError):
+    """A variant's name is not a candidate and its knobs, or names a knob twice or none at all."""
+
+
+class UnknownKnobError(EvaluationError, ValueError):
+    """A variant turns a knob its method does not have, or sets it to what it cannot take."""
+
+
+class InvalidTunedChoiceError(EvaluationError, ValueError):
+    """A tuned choice names a variant of another candidate, or the design cannot hold it."""
+
+
+class SelectionNotReadableError(EvaluationError):
+    """A campaign cannot choose a variant: it is not a finished selection, or holds none."""
+
+
+class TunedChoiceMismatchError(EvaluationError):
+    """A design names a variant its selection campaign, read by its rule, did not choose."""

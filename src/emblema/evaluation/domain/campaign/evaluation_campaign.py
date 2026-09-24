@@ -7,12 +7,15 @@ from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
 from emblema.evaluation.domain.campaign.campaign_verdict import CampaignVerdict
 from emblema.evaluation.domain.campaign.candidate_comparison import CandidateComparison
+from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.exceptions import (
     CampaignCellAlreadyRecordedError,
     CampaignClosedError,
     CampaignNotCompletedError,
     IncompleteCampaignError,
+    InvalidCampaignDesignError,
+    SelectionNotReadableError,
     UnknownCampaignCellError,
     UnknownCandidateError,
 )
@@ -21,6 +24,8 @@ from emblema.evaluation.domain.statistics.paired_difference import PairedDiffere
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
 from emblema.evaluation.domain.statistics.practical_floor import PracticalFloor
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
+from emblema.evaluation.domain.tuning.candidate_variant import CandidateVariant
+from emblema.evaluation.domain.tuning.one_standard_error_rule import OneStandardErrorRule
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.compute import ComputeTier
 from emblema.shared.kernel.timestamps import UtcDateTime
@@ -39,8 +44,13 @@ class EvaluationCampaign:
     A dropped process loses nothing: what has been recorded is stored, and what is left is the
     grid minus it. Resuming is asking the campaign what is still pending.
 
+    A campaign whose purpose is selection chooses among variants of a candidate rather than
+    comparing candidates: it is scored inside the tuning side, and what it answers is which
+    variant a comparison should run at each budget.
+
     Invariants: every result names a cell of the design's grid; no cell is recorded twice; a
-    campaign is finished only with no cell pending.
+    campaign is finished only with no cell pending; a selection campaign divides the tuning
+    side and no other campaign does.
 
     Attributes:
         campaign_id: Identity of the campaign.
@@ -74,6 +84,10 @@ class EvaluationCampaign:
         if self.completed_at is not None and len(recorded) != len(planned):
             raise IncompleteCampaignError(
                 f"a campaign finished with {len(planned) - len(recorded)} cells still pending"
+            )
+        if (self.purpose is RunPurpose.SELECTION) != (self.design.inner_holdout is not None):
+            raise InvalidCampaignDesignError(
+                "a selection campaign divides the tuning side, and only a selection campaign does"
             )
 
     @classmethod
@@ -135,6 +149,63 @@ class EvaluationCampaign:
         """The cells still to run, in the grid's order — what resuming a campaign asks for."""
         recorded = {result.cell for result in self.results}
         return tuple(cell for cell in self.design.cells() if cell not in recorded)
+
+    def evaluation_of(self, cell: CampaignCell) -> CandidateEvaluation:
+        """What running ``cell`` asks of its candidate, whichever process runs it.
+
+        One place builds the request, so a cell handed to a queue and a cell written into an
+        order for another machine ask the candidate the same thing.
+
+        Raises:
+            UnknownCampaignCellError: If the grid does not hold that cell.
+        """
+        if cell not in self.design.cells():
+            raise UnknownCampaignCellError(f"{cell} is not a cell of campaign {self.campaign_id}")
+        return CandidateEvaluation(
+            task=self.task,
+            cell=cell,
+            purpose=self.purpose,
+            retain=self.design.retains(cell),
+            declared=self.design.declared_for(cell),
+            holdout=self.design.inner_holdout,
+        )
+
+    def selected(self, candidate: CandidateRef, budget: LabelBudget) -> CandidateRef:
+        """The variant of ``candidate`` this selection chooses at ``budget``, by its rule.
+
+        The variants are the candidates of the grid whose name is ``candidate`` with knobs
+        turned, the base included; each is read by its error in every repeat, and the rule of
+        one standard error chooses among them.
+
+        Raises:
+            SelectionNotReadableError: If this is not a finished selection, or it holds no
+                variant of that candidate at that budget besides the base.
+        """
+        holdout = self.design.inner_holdout
+        if self.purpose is not RunPurpose.SELECTION or holdout is None or not self.is_finished:
+            raise SelectionNotReadableError(
+                f"campaign {self.campaign_id} is not a finished selection"
+            )
+        variants = [
+            named
+            for named in self.design.candidates
+            if CandidateVariant.parse(named.ref).base == candidate
+        ]
+        defaults = [named for named in variants if named.ref == candidate]
+        if not defaults or len(variants) < 2 or budget not in self.design.budgets:
+            raise SelectionNotReadableError(
+                f"campaign {self.campaign_id} holds no choice between {candidate} and a variant "
+                f"of it at {budget}"
+            )
+        default = defaults[0].method
+        return OneStandardErrorRule().choose(
+            errors={
+                named.ref: [result.rmse for result in self.results_of(named.ref, budget)]
+                for named in variants
+            },
+            closeness={named.ref: named.method.departure_from(default) for named in variants},
+            test_to_train=holdout.test_to_train,
+        )
 
     def record(self, result: CellResult) -> Self:
         """The campaign with one more cell run.

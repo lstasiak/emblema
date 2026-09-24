@@ -9,10 +9,12 @@ from emblema.evaluation.application.use_cases.open_test_split import (
     OpenTestSplitCommand,
 )
 from emblema.evaluation.contracts.identifiers import TaskId
+from emblema.evaluation.domain.exceptions import InvalidInnerHoldoutError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.run_labels import RunLabels
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.ports.corpus_windows import CorpusWindows
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
@@ -28,12 +30,14 @@ class DrawRunLabelsCommand:
         budget: How many labelled windows the run learns from.
         seed: Seed the draw is made under; repeats give the same windows.
         purpose: What the run is for, which decides which side it is scored on.
+        holdout: How the tuning side is divided, for a selection run; ``None`` for any other.
     """
 
     task: TaskId
     budget: LabelBudget
     seed: int
     purpose: RunPurpose = RunPurpose.TUNING
+    holdout: InnerHoldout | None = None
 
 
 class DrawRunLabels:
@@ -41,7 +45,10 @@ class DrawRunLabels:
 
     The labels always come from the tuning side; which side the answers are scored on is what
     the run's purpose decides, and the decision is made here rather than by whoever calls. A
-    tuning run is scored on the validation units and never asks for the frozen ones. The final
+    tuning run is scored on the validation units and never asks for the frozen ones. A
+    selection run never leaves the tuning side at all: the seed divides it, the budget is drawn
+    from one part and the answers are scored on the other, so choosing a variant reads nothing
+    the comparison it is chosen for is later read from. The final
     run asks for them through the operation that records the asking, so that the claim of a
     single reading of the test set rests on a record rather than on a convention.
 
@@ -73,17 +80,43 @@ class DrawRunLabels:
             UnknownGroundTruthError: If the ground truth says nothing about a window of either
                 side.
             InvalidLabelBudgetError: If the tuning side holds fewer windows than asked for.
+            InvalidInnerHoldoutError: If a selection run was given no division of the tuning
+                side, or another run was given one.
         """
         task = self._tasks.get(command.task)
+        fitted, scored_units = self._sides(task, command)
         sample = self._draw(
-            DrawLabelBudgetCommand(task=command.task, budget=command.budget, seed=command.seed)
+            DrawLabelBudgetCommand(
+                task=command.task, budget=command.budget, seed=command.seed, within=fitted
+            )
         )
-        windows = self._corpus.windows_of(task.manifest, self._scored_units(task, command.purpose))
+        windows = self._corpus.windows_of(task.manifest, scored_units)
         scored = task.labelled(windows, self._truth.truths_of(task.corpus, windows))
         return RunLabels(task=task, sample=sample, scored=scored)
 
-    def _scored_units(self, task: DownstreamTask, purpose: RunPurpose) -> frozenset[UnitKey]:
-        """Which units the run answers: the validation side, or the frozen one for the last run."""
-        if purpose is RunPurpose.TUNING:
-            return task.validation_units
-        return self._open(OpenTestSplitCommand(task=task.task_id, purpose=purpose)).units
+    def _sides(
+        self, task: DownstreamTask, command: DrawRunLabelsCommand
+    ) -> tuple[frozenset[UnitKey] | None, frozenset[UnitKey]]:
+        """The units the budget is drawn within, and the units the run answers.
+
+        Raises:
+            InvalidInnerHoldoutError: If the division and the purpose do not go together.
+        """
+        match command.purpose, command.holdout:
+            case RunPurpose.SELECTION, InnerHoldout() as holdout:
+                return holdout.divided(task.tuning_units, command.seed)
+            case RunPurpose.SELECTION, None:
+                raise InvalidInnerHoldoutError(
+                    "a selection run needs a division of the tuning side"
+                )
+            case _, InnerHoldout():
+                raise InvalidInnerHoldoutError(
+                    f"a {command.purpose.value} run is scored outside the tuning side"
+                )
+            case RunPurpose.TUNING, None:
+                return None, task.validation_units
+            case _:
+                opened = self._open(
+                    OpenTestSplitCommand(task=task.task_id, purpose=command.purpose)
+                )
+                return None, opened.units

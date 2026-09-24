@@ -1,17 +1,15 @@
 from dataclasses import dataclass
-from math import isfinite, sqrt
+from math import isfinite
 
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import InvalidAdaptationOutcomeError
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
-from emblema.evaluation.domain.transfer.unit_error import UnitError
-from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
-from emblema.shared.kernel.artifacts import ArtifactRef
 
 
 @dataclass(frozen=True, kw_only=True)
-class AdaptationOutcome:
+class AdaptationOutcome(ScoredOutcome):
     """What one cell of the curve produced: the candidate's answers on the validation side.
 
     A point on the curve is only a point if it can be placed: the plan, the task, the budget of
@@ -19,10 +17,12 @@ class AdaptationOutcome:
     compared knowing what differs between them. The predictions are kept per window because the
     summaries a comparison needs are several and every one is arithmetic over them.
 
-    Invariants: at least one prediction, no window predicted twice; one training loss per
-    planned epoch, each finite and not negative; at least one trainable parameter; the labels
-    are at least one window from at least one unit, no more units than windows, and as many
-    windows as a counted budget asked for; the time taken is not negative.
+    Everything a scored outcome holds, and what only a network has to say about its run.
+
+    Invariants: those of a scored outcome; one training loss per planned epoch, each finite and
+    not negative; at least one trainable parameter; the labels are at least one window from at
+    least one unit, no more units than windows, and as many windows as a counted budget asked
+    for.
 
     Attributes:
         plan: How the candidate was made out of the backbone.
@@ -36,11 +36,6 @@ class AdaptationOutcome:
             says beside each budget how many units stood behind it.
         trainable_parameters: How many weights the run could change.
         training_losses: Mean training loss per epoch, in the order trained.
-        predictions: The candidate's answer for every validation window, in block order.
-        seconds: What the run took, learning and scoring together.
-        artifact: The candidate as this run fitted it, where the run was asked to keep it;
-            ``None`` otherwise. A reference, never weights: what crosses a port is where the
-            bytes are and what they hash to.
     """
 
     plan: AdaptationPlan
@@ -51,9 +46,6 @@ class AdaptationOutcome:
     labelled_units: int
     trainable_parameters: int
     training_losses: tuple[float, ...]
-    predictions: tuple[WindowPrediction, ...]
-    seconds: float
-    artifact: ArtifactRef | None
 
     @property
     def optimiser_steps(self) -> int:
@@ -65,11 +57,7 @@ class AdaptationOutcome:
         return len(self.training_losses) * self.plan.schedule.steps_per_epoch(self.labelled_windows)
 
     def __post_init__(self) -> None:
-        if not self.predictions:
-            raise InvalidAdaptationOutcomeError("an outcome must predict at least one window")
-        places = [(str(p.window.unit), p.window.position) for p in self.predictions]
-        if len(set(places)) != len(places):
-            raise InvalidAdaptationOutcomeError("a window is predicted twice")
+        super().__post_init__()
         epochs = self.plan.schedule.epochs_over(self.labelled_windows)
         if len(self.training_losses) != epochs:
             raise InvalidAdaptationOutcomeError(
@@ -95,16 +83,3 @@ class AdaptationOutcome:
             raise InvalidAdaptationOutcomeError(
                 f"a run must have trained a parameter, got {self.trainable_parameters}"
             )
-        if not isfinite(self.seconds) or self.seconds < 0.0:
-            raise InvalidAdaptationOutcomeError(
-                f"seconds must be finite and not negative, got {self.seconds}"
-            )
-
-    @property
-    def rmse(self) -> float:
-        """The root mean squared error over every validation window."""
-        return sqrt(sum(p.squared_error for p in self.predictions) / len(self.predictions))
-
-    def by_unit(self) -> tuple[UnitError, ...]:
-        """The error per validation unit, in unit order — what a paired comparison resamples."""
-        return UnitError.per_unit(self.predictions)

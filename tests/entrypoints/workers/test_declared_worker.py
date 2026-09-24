@@ -10,11 +10,12 @@ from pathlib import Path
 import pytest
 
 from emblema.config.boosting_settings import BoostingSettings
+from emblema.config.convolution_settings import ConvolutionSettings
 from emblema.config.lora_settings import LoraSettings
 from emblema.config.schedule_settings import ScheduleSettings
 from emblema.config.worker_settings import WorkerSettings
 from emblema.entrypoints.workers.declared_worker import DeclaredWorker
-from tests.evaluation.support import LORA, adaptation_schedule, boosting
+from tests.evaluation.support import LORA, adaptation_schedule, boosting, convolutions
 
 DECLARED = WorkerSettings(
     workspace=Path("data/workspace"),
@@ -41,6 +42,7 @@ DECLARED = WorkerSettings(
         l2_penalty=1.0,
         threads=1,
     ),
+    convolutions=ConvolutionSettings(features=84, ridge_penalties="0.1, 1, 10", threads=1),
 )
 BARE = WorkerSettings(workspace=Path("data/workspace"), corpora=Path("data/raw"))
 
@@ -62,7 +64,25 @@ def test_the_fit_is_the_one_the_environment_declares() -> None:
     assert DeclaredWorker(DECLARED).boosting() == boosting()
 
 
-@pytest.mark.parametrize("missing", ["schedule", "lora", "boosting"])
+def test_the_convolutions_are_the_ones_the_environment_declares() -> None:
+    # The penalties travel as one string, for the reason the layers do.
+    assert DeclaredWorker(DECLARED).convolutions() == convolutions()
+
+
+def test_a_penalty_that_is_not_a_number_is_refused() -> None:
+    garbled = DECLARED.model_copy(
+        update={
+            "convolutions": DECLARED.require_convolutions().model_copy(
+                update={"ridge_penalties": "0.1, ten"}
+            )
+        }
+    )
+
+    with pytest.raises(ValueError, match="ten"):
+        DeclaredWorker(garbled).convolutions()
+
+
+@pytest.mark.parametrize("missing", ["schedule", "lora", "boosting", "convolutions"])
 def test_a_value_the_worker_was_not_given_is_refused_where_it_is_asked_for(missing: str) -> None:
     with pytest.raises(ValueError, match="this worker"):
         getattr(DeclaredWorker(BARE), missing)()

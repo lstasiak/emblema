@@ -29,34 +29,26 @@ class ClassicalCandidateProvider:
         return self._catalogue.describe(candidate)
 
     def evaluate(self, request: CandidateEvaluation) -> CellResult:
-        """Fit one cell of a campaign in this process.
+        """Fit one cell of a campaign in this process, as the variant the cell was declared to run.
 
         Raises:
             UnknownCandidateError: If the catalogue holds no baseline of that name.
             CandidateMismatchError: If the campaign recorded the baseline as anything other
-                than what this process supplies — other features, sources or boosting knobs.
+                than what this process supplies — another method, other knobs or sources.
         """
         cell = request.cell
-        request.declared.must_match(self._catalogue.describe(cell.candidate))
-        arm = self._catalogue.arm_of(cell.candidate)
+        runs = request.declared.ref
+        request.declared.must_match(self._catalogue.describe(runs))
+        arm = self._catalogue.arm_of(runs)
         outcome = self._run(
             RunClassicalFitCommand(
                 task=request.task,
-                recipe=ClassicalRecipe(
-                    features=arm.features,
-                    boosting=self._catalogue.boosting,
-                    seed=cell.seed,
-                    sources=arm.sources,
-                ),
+                recipe=ClassicalRecipe(method=arm.method, seed=cell.seed, sources=arm.sources),
                 budget=cell.budget,
                 sample_seed=cell.seed,
                 purpose=request.purpose,
                 retain=request.retain,
+                holdout=request.holdout,
             )
         )
-        return CellResult(
-            cell=cell,
-            errors=outcome.by_unit(),
-            seconds=outcome.seconds,
-            artifact=outcome.artifact,
-        )
+        return CellResult.of(cell, outcome)

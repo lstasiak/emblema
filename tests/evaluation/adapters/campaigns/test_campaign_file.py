@@ -5,14 +5,18 @@ nothing acts on would read as though it had been in force.
 """
 
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
 
 from emblema.evaluation.adapters.campaigns.campaign_file import CampaignFile
-from emblema.evaluation.domain.exceptions import InvalidLabelBudgetError
+from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
+from emblema.evaluation.domain.exceptions import InvalidLabelBudgetError, InvalidTunedChoiceError
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
+from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 from emblema.shared.kernel.compute import ComputeTier
 
 DECLARED = """
@@ -91,3 +95,59 @@ def test_a_budget_that_is_neither_a_count_nor_every_window_is_refused(tmp_path: 
 def test_a_campaign_missing_a_section_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match="budgets"):
         written(DECLARED.split("[budgets]")[0], tmp_path)
+
+
+def test_a_selection_declares_how_it_divides_the_tuning_side(tmp_path: Path) -> None:
+    declared = written(
+        DECLARED.replace('name = "', 'purpose = "selection"\nname = "', 1)
+        + "\n[selection]\none_in = 5\n",
+        tmp_path,
+    )
+
+    assert declared.purpose is RunPurpose.SELECTION
+    assert declared.inner_holdout() == InnerHoldout(one_in=5)
+
+
+def test_a_comparison_names_each_tuned_pairing_and_the_selection_behind_it(
+    tmp_path: Path,
+) -> None:
+    declared = written(
+        DECLARED
+        + """
+[[tuned]]
+candidate = "minirocket"
+budget = "200"
+variant = "minirocket@grid_resolution=2"
+selected_by = "00000000-0000-0000-0000-000000000003"
+""",
+        tmp_path,
+    )
+
+    assert declared.inner_holdout() is None
+    assert declared.tuned_choices() == (
+        TunedChoice(
+            candidate=CandidateRef("minirocket"),
+            budget=LabelBudget.of(200),
+            variant=CandidateRef("minirocket@grid_resolution=2"),
+            selected_by=CampaignId(UUID(int=3)),
+        ),
+    )
+
+
+def test_a_tuned_pairing_naming_a_variant_of_another_candidate_is_refused(
+    tmp_path: Path,
+) -> None:
+    declared = written(
+        DECLARED
+        + """
+[[tuned]]
+candidate = "minirocket"
+budget = "200"
+variant = "boosted_trees_spectral@max_depth=3"
+selected_by = "00000000-0000-0000-0000-000000000003"
+""",
+        tmp_path,
+    )
+
+    with pytest.raises(InvalidTunedChoiceError, match="not a variant"):
+        declared.tuned_choices()

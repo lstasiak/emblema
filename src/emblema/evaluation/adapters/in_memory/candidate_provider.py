@@ -10,7 +10,7 @@ from emblema.evaluation.domain.exceptions import (
     UnknownCandidateError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
-from emblema.evaluation.domain.transfer.unit_error import UnitError
+from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore
 

@@ -8,7 +8,7 @@ from emblema.evaluation.adapters.persistence.orm import Base
 from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.identifiers import UnitKey
-from emblema.evaluation.domain.transfer.unit_error import UnitError
+from emblema.evaluation.domain.scoring.unit_error import UnitError
 
 
 class CampaignUnitErrorRecord(Base):

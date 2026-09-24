@@ -9,5 +9,6 @@ from emblema.evaluation.adapters.features.channel_aggregated_features import (
     ChannelAggregatedFeatures,
 )
 from emblema.evaluation.adapters.features.per_channel_features import PerChannelFeatures
+from emblema.evaluation.adapters.features.spectral_features import SpectralFeatures
 
-type WindowFeatures = PerChannelFeatures | ChannelAggregatedFeatures
+type WindowFeatures = PerChannelFeatures | SpectralFeatures | ChannelAggregatedFeatures

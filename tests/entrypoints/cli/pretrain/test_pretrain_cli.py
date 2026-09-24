@@ -7,7 +7,7 @@ import pytest
 
 from emblema.entrypoints.cli.pretrain.pretrain_cli import NO_REGISTRY, PretrainCli
 from emblema.entrypoints.cli.pretrain.services import Services
-from emblema.entrypoints.cli.pretrain.source_revision import SourceRevision
+from emblema.entrypoints.source_revision import SourceRevision
 from emblema.pretraining.adapters.experiments.experiment_file import ExperimentFile
 from emblema.pretraining.adapters.in_memory.experiment_tracker import InMemoryExperimentTracker
 from emblema.pretraining.adapters.in_memory.training_runtime import InMemoryTrainingRuntime

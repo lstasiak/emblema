@@ -4,7 +4,11 @@ from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.cell_result import CellResult
-from emblema.evaluation.domain.exceptions import UnknownCandidateError
+from emblema.evaluation.domain.exceptions import (
+    InvalidCandidateVariantError,
+    UnknownCandidateError,
+)
+from emblema.evaluation.domain.tuning.candidate_variant import CandidateVariant
 from emblema.evaluation.ports.candidate_provider import CandidateProvider
 
 
@@ -34,12 +38,18 @@ class RoutedCandidateProvider:
     def _supplier(self, candidate: CandidateRef) -> CandidateProvider:
         """Whoever this process was told supplies ``candidate``.
 
+        A variant is supplied by whoever supplies the candidate it varies.
+
         Raises:
             UnknownCandidateError: If nothing in this process supplies that name.
         """
-        if candidate not in self._by_candidate:
+        try:
+            base = CandidateVariant.parse(candidate).base
+        except InvalidCandidateVariantError as error:
+            raise UnknownCandidateError(f"{candidate} names no variant: {error}") from error
+        if base not in self._by_candidate:
             raise UnknownCandidateError(
-                f"this process supplies no candidate {candidate}; it supplies "
+                f"this process supplies no candidate {base}; it supplies "
                 f"{sorted(str(ref) for ref in self._by_candidate)}"
             )
-        return self._by_candidate[candidate]
+        return self._by_candidate[base]

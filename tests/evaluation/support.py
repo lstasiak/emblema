@@ -19,9 +19,14 @@ from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.campaign.compute_budget import ComputeBudget
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
+from emblema.evaluation.domain.classical.classical_method import ClassicalMethod
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
+from emblema.evaluation.domain.classical.minirocket_spec import MiniRocketSpec
+from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
+from emblema.evaluation.domain.classical.ridge_spec import RidgeSpec
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
@@ -29,6 +34,8 @@ from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.labels.task_window import TaskWindow
+from emblema.evaluation.domain.scoring.unit_error import UnitError
+from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
@@ -36,14 +43,13 @@ from emblema.evaluation.domain.task.corpus_sides import CorpusSides
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.task.task_split import TaskSplit
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
-from emblema.evaluation.domain.transfer.unit_error import UnitError
-from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.compute import ComputeTier
@@ -135,11 +141,32 @@ def boosting(**overrides: Any) -> GradientBoostingSpec:
     return replace(stated, **overrides)
 
 
+def convolutions(**overrides: Any) -> RandomConvolutions:
+    """One family of kernels on one thread: MiniRocket at its smallest."""
+    stated = RandomConvolutions(
+        convolutions=MiniRocketSpec(features=84),
+        ridge=RidgeSpec(penalties=(0.1, 1.0, 10.0), threads=1),
+    )
+    return replace(stated, **overrides)
+
+
 def recipe(
-    features: FeatureScheme = FeatureScheme.PER_CHANNEL, **overrides: Any
+    features: FeatureScheme = FeatureScheme.PER_CHANNEL,
+    *,
+    trees: GradientBoostingSpec | None = None,
+    method: ClassicalMethod | None = None,
+    **overrides: Any,
 ) -> ClassicalRecipe:
-    """A recipe that holds together under ``features``; anything named is replaced afterwards."""
-    stated = ClassicalRecipe(features=features, boosting=boosting(), seed=1, sources=())
+    """A recipe that holds together; anything named is replaced afterwards.
+
+    Boosted trees under ``features`` and ``trees`` unless another ``method`` is named.
+    """
+    fitted = (
+        BoostedTrees(features=features, boosting=boosting() if trees is None else trees)
+        if method is None
+        else method
+    )
+    stated = ClassicalRecipe(method=fitted, seed=1, sources=())
     return replace(stated, **overrides)
 
 
@@ -263,3 +290,49 @@ def ran_campaign(
 def closed_campaign(kept: ArtifactRef | None = None) -> EvaluationCampaign:
     """The campaign of ``ran_campaign``, closed at ``CLOSED_AT``."""
     return ran_campaign(kept).complete(CLOSED_AT)
+
+
+ROCKET = CandidateRef("minirocket")
+FINER = CandidateRef("minirocket@grid_resolution=2")
+SELECTED_BY = CampaignId(UUID(int=3))
+
+
+def baseline(ref: CandidateRef, resolution: float = 1.0) -> CampaignCandidate:
+    """A classical candidate, its grid at ``resolution``, as a catalogue would describe it."""
+    return CampaignCandidate(
+        ref=ref,
+        kind=CandidateKind.CLASSICAL,
+        budget=None,
+        method=CandidateMethod.of(method="random_convolutions", grid_resolution=resolution),
+        starts_from=None,
+    )
+
+
+def selection(errors: dict[CandidateRef, tuple[float, ...]] | None = None) -> EvaluationCampaign:
+    """A finished selection between the default grid and a finer one, three repeats each.
+
+    Without ``errors`` the finer grid errs less by far more than the spread of the repeats.
+    """
+    stated = errors or {ROCKET: (10.0, 10.2, 9.8), FINER: (6.0, 6.1, 5.9)}
+    grid = EvaluationCampaign.designed(
+        campaign_id=SELECTED_BY,
+        task=TASK,
+        purpose=RunPurpose.SELECTION,
+        tier=ComputeTier.S,
+        design=CampaignDesign(
+            candidates=(baseline(ROCKET), baseline(FINER, 2.0)),
+            control=ROCKET,
+            endpoint=FINER,
+            budgets=BUDGETS,
+            endpoint_budget=LabelBudget.of(200),
+            seeds=(1, 2, 3),
+            rules=RULES,
+            bootstrap=BOOTSTRAP,
+            inner_holdout=InnerHoldout(one_in=5),
+        ),
+        opened_at=OPENED_AT,
+    )
+    for run in grid.design.cells():
+        error = stated[run.candidate][run.seed - 1]
+        grid = grid.record(result(run.candidate, run.budget, run.seed, (error,)))
+    return grid.complete(OPENED_AT)

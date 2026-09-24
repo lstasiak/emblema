@@ -6,9 +6,22 @@ from emblema.evaluation.adapters.persistence.campaign_design_document import (
     CampaignDesignDocument,
 )
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
+from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
-from tests.evaluation.support import CONTENDER, CONTROL, PROBE, candidate, design
+from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
+from tests.evaluation.support import (
+    CONTENDER,
+    CONTROL,
+    FINER,
+    PROBE,
+    ROCKET,
+    SELECTED_BY,
+    baseline,
+    candidate,
+    design,
+    selection,
+)
 
 DOCUMENTS = CampaignDesignDocument()
 
@@ -74,3 +87,30 @@ def test_the_registered_rules_and_the_bootstrap_survive_the_round_trip() -> None
 
     assert read.bootstrap == stated.bootstrap
     assert read.rules == stated.rules
+
+
+def test_a_selection_and_a_comparison_of_tuned_variants_survive_the_round_trip() -> None:
+    chosen = selection().design
+    tuned = replace(
+        design(),
+        candidates=(baseline(ROCKET), baseline(CandidateRef("other"))),
+        control=CandidateRef("other"),
+        endpoint=ROCKET,
+        tuned=(
+            TunedChoice(
+                candidate=ROCKET, budget=LabelBudget.of(200), variant=FINER, selected_by=SELECTED_BY
+            ),
+        ),
+        variants=(baseline(FINER, 2.0),),
+    )
+
+    assert DOCUMENTS.decode(DOCUMENTS.encode(chosen)) == chosen
+    assert DOCUMENTS.decode(DOCUMENTS.encode(tuned)) == tuned
+
+
+def test_a_design_stored_before_selections_existed_reads_back_tuning_nothing() -> None:
+    written = DOCUMENTS.encode(design())
+    for key in ("inner_holdout", "tuned", "variants"):
+        del written[key]
+
+    assert DOCUMENTS.decode(written) == design()

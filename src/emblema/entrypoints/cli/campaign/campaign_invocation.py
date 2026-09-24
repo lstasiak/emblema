@@ -18,6 +18,9 @@ class CampaignInvocation:
         corpus: Manifest of the published corpus a task is cut out of.
         file: The file a campaign is declared in.
         campaign: Identifier of the campaign whose cells are handed out, or that is announced.
+        pool: Which kind of process an order's cells are for.
+        candidate: The candidate whose tuned variants are read.
+        result: Result of an order, to be recorded.
     """
 
     what: str
@@ -25,3 +28,6 @@ class CampaignInvocation:
     corpus: ArtifactRef | None = None
     file: Path | None = None
     campaign: str | None = None
+    pool: str | None = None
+    candidate: str | None = None
+    result: ArtifactRef | None = None

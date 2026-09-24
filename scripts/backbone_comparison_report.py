@@ -25,11 +25,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from emblema.evaluation.domain.scoring.unit_error import UnitError
+from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
-from emblema.evaluation.domain.transfer.unit_error import UnitError
-from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
 from scripts.label_curve_report import RESAMPLES, predictions_of
 from scripts.transfer_grid import Stored
 

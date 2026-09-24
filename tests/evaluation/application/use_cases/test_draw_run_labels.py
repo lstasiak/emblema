@@ -22,6 +22,7 @@ from emblema.evaluation.application.use_cases.draw_run_labels import (
 from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit
 from emblema.evaluation.contracts.events import FrozenTestSplitOpened
 from emblema.evaluation.domain.exceptions import (
+    InvalidInnerHoldoutError,
     InvalidLabelBudgetError,
     TaskNotFoundError,
     UnknownGroundTruthError,
@@ -30,6 +31,7 @@ from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.run_labels import RunLabels
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.shared.adapters.in_memory.clock import FixedClock
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
@@ -63,6 +65,7 @@ def drawn(
     save_task: bool = True,
     purpose: RunPurpose = RunPurpose.TUNING,
     heard: list[FrozenTestSplitOpened] | None = None,
+    holdout: InnerHoldout | None = None,
 ) -> RunLabels:
     tasks = InMemoryDownstreamTaskRepository()
     if save_task:
@@ -81,7 +84,9 @@ def drawn(
             tasks, SequentialIdGenerator(), FixedClock(NOW), InMemoryEventPublisher(subscriptions)
         ),
     )
-    return use_case(DrawRunLabelsCommand(task=TASK, budget=budget, seed=3, purpose=purpose))
+    return use_case(
+        DrawRunLabelsCommand(task=TASK, budget=budget, seed=3, purpose=purpose, holdout=holdout)
+    )
 
 
 def test_the_budget_is_drawn_from_the_tuning_side_alone() -> None:
@@ -139,3 +144,25 @@ def test_an_answered_unit_without_a_failure_time_is_refused() -> None:
 def test_a_budget_wider_than_the_tuning_side_is_refused() -> None:
     with pytest.raises(InvalidLabelBudgetError):
         drawn(budget=LabelBudget.of(9))
+
+
+def test_a_selection_run_learns_and_is_answered_inside_the_tuning_side_alone() -> None:
+    heard: list[FrozenTestSplitOpened] = []
+
+    labels = drawn(purpose=RunPurpose.SELECTION, holdout=InnerHoldout(one_in=2), heard=heard)
+
+    learnt = {str(w.window.unit) for w in labels.sample.windows}
+    answered = {str(w.window.unit) for w in labels.scored}
+    assert learnt | answered == {"a", "b"}
+    assert not learnt & answered
+    assert heard == []
+
+
+def test_a_selection_run_given_no_division_is_refused() -> None:
+    with pytest.raises(InvalidInnerHoldoutError, match="division"):
+        drawn(purpose=RunPurpose.SELECTION)
+
+
+def test_a_tuning_run_given_a_division_is_refused() -> None:
+    with pytest.raises(InvalidInnerHoldoutError, match="outside the tuning side"):
+        drawn(holdout=InnerHoldout(one_in=2))

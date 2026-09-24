@@ -14,12 +14,14 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict
 
-from emblema.evaluation.contracts.identifiers import CandidateRef
+from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
+from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 from emblema.shared.kernel.compute import ComputeTier
 
 
@@ -93,6 +95,32 @@ class _Bootstrap(_Section):
     level: float = 0.95
 
 
+class _Selection(_Section):
+    """How a campaign that chooses among variants divides the tuning side.
+
+    Attributes:
+        one_in: One tuning unit in this many is held out to score the variants on.
+    """
+
+    one_in: int
+
+
+class _Tuned(_Section):
+    """One variant a comparison runs at one budget, and the selection that chose it.
+
+    Attributes:
+        candidate: The candidate as the comparison names it.
+        budget: The budget the variant runs at.
+        variant: The variant the selection chose.
+        selected_by: Identifier of the finished selection campaign.
+    """
+
+    candidate: str
+    budget: str
+    variant: str
+    selected_by: str
+
+
 class CampaignFile(_Section):
     """A campaign as it is declared before anything of it runs.
 
@@ -109,6 +137,8 @@ class CampaignFile(_Section):
         budgets: At how many labels, and how many times.
         rules: What a verdict requires.
         bootstrap: How each interval is drawn.
+        selection: How the tuning side is divided, in a campaign that selects among variants.
+        tuned: Which variant each tuned pairing runs, in a campaign that compares.
     """
 
     name: str
@@ -118,6 +148,8 @@ class CampaignFile(_Section):
     budgets: _Budgets
     rules: _Rules
     bootstrap: _Bootstrap = _Bootstrap()
+    selection: _Selection | None = None
+    tuned: tuple[_Tuned, ...] = ()
 
     @classmethod
     def load(cls, path: Path) -> Self:
@@ -181,4 +213,31 @@ class CampaignFile(_Section):
             resamples=self.bootstrap.resamples,
             seed=self.bootstrap.seed,
             level=self.bootstrap.level,
+        )
+
+    def inner_holdout(self) -> InnerHoldout | None:
+        """How the tuning side is divided, if this campaign selects among variants.
+
+        Raises:
+            InvalidInnerHoldoutError: If one unit in fewer than two is to be held out.
+        """
+        return None if self.selection is None else InnerHoldout(one_in=self.selection.one_in)
+
+    def tuned_choices(self) -> tuple[TunedChoice, ...]:
+        """Every tuned pairing the file names.
+
+        Raises:
+            InvalidCandidateRefError: If a candidate or a variant is not a name.
+            InvalidLabelBudgetError: If a budget is not one.
+            ValueError: If a selection is not named by a campaign's identifier.
+            InvalidTunedChoiceError: If a variant is not of the candidate it is named for.
+        """
+        return tuple(
+            TunedChoice(
+                candidate=CandidateRef(tuned.candidate),
+                budget=LabelBudget.parse(tuned.budget),
+                variant=CandidateRef(tuned.variant),
+                selected_by=CampaignId.parse(tuned.selected_by),
+            )
+            for tuned in self.tuned
         )

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from math import isfinite, log
 from typing import Self
 
 from emblema.evaluation.domain.exceptions import InvalidCandidateMethodError
@@ -64,3 +65,31 @@ class CandidateMethod:
                 for name, value in sorted(parameters.items())
             )
         )
+
+    def departure_from(self, default: "CandidateMethod") -> tuple[int, float]:
+        """How far this method departs from ``default``: how many knobs differ, then how far.
+
+        A knob with a positive number on both sides departs by the size of the ratio between
+        them on a log scale, so doubling and halving are as far as each other; any other knob
+        that differs departs by one. What a selection breaks ties towards is the smaller of two
+        departures, which is what makes it prefer the setting a method was published with.
+        """
+        stated = {parameter.name: parameter.value for parameter in default.parameters}
+        changed, distance = 0, 0.0
+        for parameter in self.parameters:
+            before = stated.get(parameter.name)
+            if before == parameter.value:
+                continue
+            changed += 1
+            distance += self._ratio(before, parameter.value)
+        return changed, distance
+
+    @staticmethod
+    def _ratio(before: str | None, after: str) -> float:
+        try:
+            was, now = float(before or ""), float(after)
+        except ValueError:
+            return 1.0
+        if not (isfinite(was) and isfinite(now)) or was <= 0.0 or now <= 0.0:
+            return 1.0
+        return abs(log(now / was))

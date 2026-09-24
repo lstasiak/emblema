@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from emblema.entrypoints.cli.pretrain import source_revision
-from emblema.entrypoints.cli.pretrain.source_revision import SourceRevision
+from emblema.entrypoints import source_revision
+from emblema.entrypoints.source_revision import SourceRevision
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
 

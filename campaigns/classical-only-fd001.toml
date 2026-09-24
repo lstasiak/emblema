@@ -5,16 +5,23 @@
 # networks. A campaign made only of these runs end to end where the training stack is not
 # installed, which is the only way to show it rather than assert it.
 #
-# The two differ in one thing: what a window is turned into. One vector is as wide as the corpus
-# has channels; the other is the same width whatever the layout, which is what lets a fit take in
-# a second corpus's labels. Comparing them says whether that independence costs anything.
+# Three grow trees and differ in what a window is turned into: statistics per channel, the
+# spectrum per channel, or both summarised across channels — the only reading whose width is the
+# same whatever the layout, which is what lets a fit take in a second corpus's labels. The fourth
+# lays the window on a grid and convolves it. The control is the reading bound to one corpus, so
+# every other candidate is read against it.
 
 name = "classical-only-fd001"
 purpose = "tuning"
 tier = "S"
 
 [candidates]
-competing = ["boosted_trees_per_channel", "boosted_trees_across_channels"]
+competing = [
+    "boosted_trees_per_channel",
+    "boosted_trees_spectral",
+    "boosted_trees_across_channels",
+    "minirocket",
+]
 control = "boosted_trees_per_channel"
 endpoint = "boosted_trees_across_channels"
 

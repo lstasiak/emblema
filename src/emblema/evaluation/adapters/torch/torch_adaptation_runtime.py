@@ -13,15 +13,15 @@ from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     DivergedAdaptationError,
-    InvalidAdaptationOutcomeError,
+    InvalidScoredOutcomeError,
 )
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
-from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
 from emblema.shared.adapters.loaders.seeded_shuffle_sampler import SeededShuffleSampler
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -73,7 +73,7 @@ class TorchAdaptationRuntime:
     ) -> AdaptationOutcome:
         task.accept_sample(sample)
         if not validation:
-            raise InvalidAdaptationOutcomeError("there is no validation window to answer")
+            raise InvalidScoredOutcomeError("there is no validation window to answer")
         manifest = self._blocks.manifest_of(task.manifest)
         block = self._blocks.block_of(manifest)
         tuning = block.at([labelled.window.position for labelled in sample.windows])

@@ -9,10 +9,11 @@ from emblema.evaluation.application.use_cases.draw_run_labels import (
     DrawRunLabelsCommand,
 )
 from emblema.evaluation.contracts.identifiers import TaskId
-from emblema.evaluation.domain.classical.classical_outcome import ClassicalOutcome
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.fitting_source import FittingSource
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.ports.classical_runtime import ClassicalRuntime
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
@@ -28,6 +29,7 @@ class RunClassicalFitCommand:
         budget: How many labelled windows it learns from, per task it learns from.
         sample_seed: Seed the labels are drawn under; the recipe carries the seed of the fit.
         purpose: What the run is for, which decides which side it is scored on.
+        holdout: How the tuning side is divided, for a selection run; ``None`` for any other.
         retain: Whether the candidate this run fits is kept as an artifact.
     """
 
@@ -37,6 +39,7 @@ class RunClassicalFitCommand:
     sample_seed: int
     purpose: RunPurpose = RunPurpose.TUNING
     retain: bool = False
+    holdout: InnerHoldout | None = None
 
 
 class RunClassicalFit:
@@ -66,7 +69,7 @@ class RunClassicalFit:
         self._draw = draw_label_budget
         self._runtime = runtime
 
-    def __call__(self, command: RunClassicalFitCommand) -> ClassicalOutcome:
+    def __call__(self, command: RunClassicalFitCommand) -> ScoredOutcome:
         """Draw, fit, score; return the candidate's answer for every scored window.
 
         Raises:
@@ -85,6 +88,7 @@ class RunClassicalFit:
                 budget=command.budget,
                 seed=command.sample_seed,
                 purpose=command.purpose,
+                holdout=command.holdout,
             )
         )
         sources = tuple(
