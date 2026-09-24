@@ -158,3 +158,58 @@ too, about twice eager at tier M (23.3 ms against 12.0 ms) and 1.6× at the smal
 architectures now agree, so the reading is not a property of one thermally unsteady laptop:
 exporting buys portability, and the speed question is the one ADR-0007 defers to the target
 container with tuned session options.
+
+## 2026-09-24 — Windows x86_64, development machine — the fitted candidate
+
+The export adapter exists (`evaluation/adapters/onnx/`, ADR-0040), and from here the suite and
+this report export the candidate a campaign keeps rather than the bare encoder: the encoder under
+a transfer mode, the pooling and the task's head, with the answer multiplied back into the task's
+unit. The graph has two outputs, `pooled_embedding` and `prediction`. The candidates are the small
+test encoder under each of the four modes, over a vocabulary three channels wider than the
+backbone's — so every pretrained mode carries grown rows — with every trainable part nudged off
+its starting value, so a low-rank update contributes to the comparison rather than exporting as
+zero. The suite moved to `tests/evaluation/adapters/onnx`; run it and the report as before:
+
+```sh
+uv run pytest tests/evaluation/adapters/onnx
+uv run python -m tests.evaluation.adapters.onnx.report
+```
+
+Versions: Python 3.14.5, torch 2.14.0+cpu, onnxruntime 1.29.0, onnx 1.22.0, onnxscript 0.7.2,
+numpy 2.5.3. CPU: Intel family 6 model 140 (mobile).
+
+| Check | Result |
+|-------|--------|
+| `from_scratch`: opset 20, tokens 41–4104, batch 1–3, padded and unpadded | pass, `max abs diff = 9.5e-07` on the state, `1.5e-05` on the answer over a ceiling of 125; 296 KiB, exported in 11.0 s; empty window finite |
+| `frozen_probe`: same | pass, `1.0e-06` on the state, `3.8e-06` on the answer; 304 KiB, 4.4 s; finite |
+| `lora`: same | pass, `8.9e-07` on the state, `1.9e-05` on the answer; 392 KiB, 6.6 s; finite |
+| `full_fine_tuning`: same | pass, `8.9e-07` on the state, `7.6e-06` on the answer; 308 KiB, 6.2 s; finite |
+| a window over the task's grown channels, every mode | pass, within the same tolerances (suite) |
+| opset 23 (fused `Attention` node present) | exports, loads, fails on execution — as before |
+| `torch.jit.trace` | reproduces eager exactly, on the answer |
+
+| Model | ONNX (opset 20) | TorchScript (traced) | eager |
+|---|---|---|---|
+| test candidate, 0.02M, full fine-tuning | 308 KiB; 14.0 ms | 145 KiB; 5.7 ms | 5.5 ms |
+| candidate at tier M, 4.78M, 256 wide, 6 blocks | 19 175 KiB; 114.1 ms | 18 812 KiB; 113.7 ms | 71.5 ms |
+
+Latency is one window of 512 tokens. The first export of a process took 11.0 s and the rest 4 to
+8 s; the exporter warms up once.
+
+**Everything the encoder leg established holds on the fitted candidate, under every mode.** The
+low-rank wrappers, the grown channel table read through a select, and the head with its scale
+trace and run; the two axes stay the only symbolic ones; the deviation on the state is where it
+was (`1.0e-06` against a tolerance of `1e-5`), and on the answer it is that deviation through a
+linear head and a ceiling of 125 (`1.9e-05` against `1.25e-3`).
+
+**The check a runtime makes before it keeps a graph passes with room.** The torch runtime runs
+the graph on the validation windows it has just scored and records the largest difference from
+its own answers; the runtime test over the published test corpus sees a deviation below `1e-4`
+in the task's unit against a refusal threshold of `1e-3` of the ceiling (ADR-0040).
+
+**The latency ordering is unchanged.** ONNX Runtime is slowest at both sizes on this machine, as
+in every run above; at tier M the traced and the ONNX graph are level and eager is fastest. The
+reading is the one ADR-0007 recorded and defers to the target container with tuned session
+options. The arm64 leg, and the MPS leg the suite carries (`test_inference_graph_from_mps.py`,
+a candidate held on the accelerator exported once moved to the host), are recorded here when
+they run.
