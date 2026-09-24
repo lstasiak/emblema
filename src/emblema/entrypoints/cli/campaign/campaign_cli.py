@@ -12,8 +12,10 @@ from emblema.entrypoints.cli.campaign.known_tasks import KnownTask, KnownTasks
 from emblema.entrypoints.cli.campaign.services import Services
 from emblema.evaluation.adapters.campaigns.campaign_file import CampaignFile
 from emblema.evaluation.application.use_cases.advance_campaign import AdvanceCampaignCommand
+from emblema.evaluation.application.use_cases.announce_campaign import AnnounceCampaignCommand
 from emblema.evaluation.application.use_cases.define_campaign import DefineCampaignCommand
 from emblema.evaluation.contracts.identifiers import CampaignId, TaskId
+from emblema.evaluation.domain.exceptions import EvaluationError
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 
@@ -21,7 +23,7 @@ from emblema.shared.kernel.checksums import Checksum
 class CampaignCli:
     """Command line of a comparison: define the task, declare the campaign, hand out its cells.
 
-    Three invocations, and none of them runs a cell. On the machine that keeps the registry::
+    Four invocations, and none of them runs a cell. On the machine that keeps the registry::
 
         uv run python -m emblema.entrypoints.cli.campaign define-task
             --corpus <manifest key> <checksum> --task turbofan-fd001
@@ -37,7 +39,12 @@ class CampaignCli:
 
     which submits every cell that has not run and prints how many it handed over. Running them
     is the workers' business: each cell goes to the queue its candidate belongs to, and a grid
-    resumed after a crash costs a second `advance` and nothing else.
+    resumed after a crash costs a second `advance` and nothing else. Once it has closed::
+
+        uv run python -m emblema.entrypoints.cli.campaign announce --campaign <campaign id>
+
+    publishes its conclusion again, for when the delivery made on closing failed, and prints
+    the checksum of every artifact it kept — what a promotion names.
 
     The design comes from the file and not from flags, which is the whole reason there is a
     file. Budgets, seeds and the rule for what counts as a difference passed on a command line
@@ -52,6 +59,7 @@ class CampaignCli:
     DEFINE_TASK = "define-task"
     DEFINE = "define"
     ADVANCE = "advance"
+    ANNOUNCE = "announce"
 
     def parse(self, argv: Sequence[str] | None = None) -> CampaignInvocation:
         """What the arguments ask for, as far as it can be known without reading anything."""
@@ -79,27 +87,41 @@ class CampaignCli:
         """Carry out the invocation and return what the process prints for it.
 
         Raises:
-            SystemExit: If the invocation names a task or a campaign nothing knows, or asks for
-                something this command line does not do.
+            SystemExit: If the invocation names a task or a campaign nothing knows, asks for
+                something this command line does not do, or is refused by the context, with the
+                reason as the message: a refusal is an answer to the person at the keyboard, not
+                a crash to be read in a traceback.
         """
-        match invocation.what:
-            case self.DEFINE_TASK:
-                task, corpus = self._known(invocation.task), self._named(invocation.corpus)
-                sides = adapters.corpus.describe(corpus)
-                return str(services.define_downstream_task(task.defined_over(corpus, sides)))
-            case self.DEFINE:
-                # The task is settled before the file is opened: an invocation that names none
-                # is refused without anything on disk being read.
-                over = self._task(invocation.task)
-                declared = CampaignFile.load(self._named(invocation.file))
-                return str(services.define_campaign(self._design(declared, over)))
-            case self.ADVANCE:
-                submitted = services.advance_campaign(
-                    AdvanceCampaignCommand(campaign=self._campaign(invocation.campaign))
-                )
-                return str(submitted)
-            case _:
-                raise SystemExit(f"this command line does not {invocation.what!r}")
+        try:
+            match invocation.what:
+                case self.DEFINE_TASK:
+                    task, corpus = self._known(invocation.task), self._named(invocation.corpus)
+                    sides = adapters.corpus.describe(corpus)
+                    return str(services.define_downstream_task(task.defined_over(corpus, sides)))
+                case self.DEFINE:
+                    # The task is settled before the file is opened: an invocation that names
+                    # none is refused without anything on disk being read.
+                    over = self._task(invocation.task)
+                    declared = CampaignFile.load(self._named(invocation.file))
+                    return str(services.define_campaign(self._design(declared, over)))
+                case self.ADVANCE:
+                    submitted = services.advance_campaign(
+                        AdvanceCampaignCommand(campaign=self._campaign(invocation.campaign))
+                    )
+                    return str(submitted)
+                case self.ANNOUNCE:
+                    announced = services.announce_campaign(
+                        AnnounceCampaignCommand(campaign=self._campaign(invocation.campaign))
+                    )
+                    return "\n".join(
+                        str(candidate.artifact.checksum)
+                        for candidate in announced.candidates
+                        if candidate.artifact is not None
+                    )
+                case _:
+                    raise SystemExit(f"this command line does not {invocation.what!r}")
+        except EvaluationError as refusal:
+            raise SystemExit(str(refusal)) from refusal
 
     @staticmethod
     def _design(declared: CampaignFile, task: TaskId) -> DefineCampaignCommand:
@@ -153,7 +175,7 @@ class CampaignCli:
             SystemExit: If none was named.
         """
         if text is None:
-            raise SystemExit("a campaign is advanced by identity: give --campaign")
+            raise SystemExit("a campaign is named by identity: give --campaign")
         return CampaignId.parse(text)
 
     @staticmethod
@@ -198,4 +220,9 @@ class CampaignCli:
             self.ADVANCE, help="submit every cell of a campaign that has not run"
         )
         advance.add_argument("--campaign", required=True, help="identifier of the campaign")
+
+        announce = what.add_parser(
+            self.ANNOUNCE, help="publish again what a closed campaign concluded"
+        )
+        announce.add_argument("--campaign", required=True, help="identifier of the campaign")
         return parser

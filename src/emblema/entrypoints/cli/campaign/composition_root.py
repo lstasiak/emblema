@@ -15,6 +15,7 @@ from emblema.evaluation.application.assemblers.campaign_completed_assembler impo
     CampaignCompletedAssembler,
 )
 from emblema.evaluation.application.use_cases.advance_campaign import AdvanceCampaign
+from emblema.evaluation.application.use_cases.announce_campaign import AnnounceCampaign
 from emblema.evaluation.application.use_cases.complete_campaign import CompleteCampaign
 from emblema.evaluation.application.use_cases.define_campaign import DefineCampaign
 from emblema.evaluation.application.use_cases.define_downstream_task import DefineDownstreamTask
@@ -70,6 +71,7 @@ class CompositionRoot:
         """
         process = CampaignProcess(settings, workspace=workspace, corpora=corpora)
         catalogue = self._candidates(schedule, lora, backbone, boosting)
+        outcomes = CampaignCompletedAssembler()
         self.adapters = Adapters(
             corpus=process.corpus,
             candidates=catalogue,
@@ -90,12 +92,11 @@ class CompositionRoot:
                 process.campaigns,
                 process.jobs,
                 CompleteCampaign(
-                    process.campaigns,
-                    CampaignCompletedAssembler(),
-                    process.clock,
-                    process.ids,
-                    process.events,
+                    process.campaigns, outcomes, process.clock, process.ids, process.events
                 ),
+            ),
+            announce_campaign=AnnounceCampaign(
+                process.campaigns, outcomes, process.ids, process.events
             ),
         )
 

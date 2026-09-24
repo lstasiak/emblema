@@ -1,4 +1,4 @@
-"""The three invocations a comparison is declared and handed out by.
+"""The invocations a comparison is declared, handed out and announced by.
 
 None of them runs a cell: a command line that did would be a second way of producing the same
 numbers, under whatever the machine at the keyboard happened to be configured with. What is
@@ -31,9 +31,11 @@ from emblema.evaluation.application.use_cases.advance_campaign import (
     RUN_CAMPAIGN_CELL,
     AdvanceCampaign,
 )
+from emblema.evaluation.application.use_cases.announce_campaign import AnnounceCampaign
 from emblema.evaluation.application.use_cases.complete_campaign import CompleteCampaign
 from emblema.evaluation.application.use_cases.define_campaign import DefineCampaign
 from emblema.evaluation.application.use_cases.define_downstream_task import DefineDownstreamTask
+from emblema.evaluation.contracts.events import CampaignCompleted
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.task.corpus_sides import CorpusSides
@@ -43,7 +45,15 @@ from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubs
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.adapters.queues.immediate_job_queue import ImmediateJobQueue
 from emblema.shared.jobs.job_argument import JobArgument
-from tests.evaluation.support import MANIFEST, OPENED_AT, candidate
+from tests.evaluation.support import (
+    CAMPAIGN,
+    MANIFEST,
+    OPENED_AT,
+    artifact,
+    campaign,
+    candidate,
+    closed_campaign,
+)
 
 CONTROL, TREES = CandidateRef("from_scratch"), CandidateRef("boosted_trees_per_channel")
 ENGINES = tuple(f"FD001/{engine}" for engine in range(1, 9))
@@ -86,9 +96,14 @@ class Process:
         )
         jobs = ImmediateJobQueue({RUN_CAMPAIGN_CELL: self.submitted.append})
         ids, clock = SequentialIdGenerator(), FixedClock(OPENED_AT)
+        self.announced: list[CampaignCompleted] = []
+        subscriptions = InMemoryEventSubscriber()
+        subscriptions.subscribe(CampaignCompleted, self.announced.append)
+        events = InMemoryEventPublisher(subscriptions)
         catalogue = InMemoryCandidateProvider(
             (candidate(CONTROL), candidate(TREES)), (), lambda _: ()
         )
+        outcomes = CampaignCompletedAssembler()
         self.adapters = Adapters(
             corpus=corpus,
             candidates=catalogue,
@@ -100,16 +115,9 @@ class Process:
             define_downstream_task=DefineDownstreamTask(tasks, corpus, ids),
             define_campaign=DefineCampaign(tasks, campaigns, catalogue, ids, clock),
             advance_campaign=AdvanceCampaign(
-                campaigns,
-                jobs,
-                CompleteCampaign(
-                    campaigns,
-                    CampaignCompletedAssembler(),
-                    clock,
-                    ids,
-                    InMemoryEventPublisher(InMemoryEventSubscriber()),
-                ),
+                campaigns, jobs, CompleteCampaign(campaigns, outcomes, clock, ids, events)
             ),
+            announce_campaign=AnnounceCampaign(campaigns, outcomes, ids, events),
         )
 
     def run(self, *argv: str) -> str:
@@ -177,6 +185,29 @@ def test_advancing_hands_over_every_cell_that_has_not_run(process: Process, tmp_
     assert len(process.submitted) == 8
 
 
+def test_announcing_a_closed_campaign_publishes_it_again_and_prints_what_it_kept(
+    process: Process,
+) -> None:
+    kept = artifact("contender")
+    process.adapters.campaigns.save(closed_campaign(kept), seen=0)
+
+    printed = process.run("announce", "--campaign", str(CAMPAIGN))
+
+    assert printed == str(kept.checksum)
+    assert [event.campaign for event in process.announced] == [CAMPAIGN]
+
+
+def test_announcing_a_campaign_still_running_is_refused_with_the_reason(
+    process: Process,
+) -> None:
+    process.adapters.campaigns.save(campaign(), seen=0)
+
+    with pytest.raises(SystemExit, match="has not finished"):
+        process.run("announce", "--campaign", str(CAMPAIGN))
+
+    assert process.announced == []
+
+
 def test_a_task_nothing_is_registered_under_is_refused_before_anything_is_stored(
     process: Process,
 ) -> None:
@@ -195,6 +226,7 @@ def test_a_task_nothing_is_registered_under_is_refused_before_anything_is_stored
     [
         (CampaignInvocation(what="define"), "give --task"),
         (CampaignInvocation(what="advance"), "give --campaign"),
+        (CampaignInvocation(what="announce"), "give --campaign"),
     ],
 )
 def test_an_invocation_missing_what_it_acts_on_is_refused(
@@ -209,7 +241,7 @@ def test_an_invocation_missing_what_it_acts_on_is_refused(
 def test_an_invocation_asking_for_something_else_is_refused_rather_than_advanced(
     process: Process,
 ) -> None:
-    # The parser admits three names, so this too is what happens when something other than the
+    # The parser admits four names, so this too is what happens when something other than the
     # parser builds an invocation. Answering it as the last branch would hand out a grid's cells
     # for a subcommand nobody wrote.
     with pytest.raises(SystemExit, match="does not 'publish'"):
