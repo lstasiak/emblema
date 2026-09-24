@@ -124,3 +124,30 @@ no overrides is checked to reach the bucket, the database and the broker its set
 The status therefore moves to `accepted`. The revision thresholds stay as they were: wiring
 duplicated between processes beyond a handful of lines, or a scope that hand-written wiring
 makes unobvious.
+
+## 2026-09-24 — the threshold fired, and what answered it
+
+The comparison grew a second kind of candidate, and with it a second worker: one process carries
+the machine-learning stack and adapts a backbone, the other carries none of it and fits
+candidates that start from no weights. A third root declares campaigns and runs no cell. That is
+five hand-written roots, three of them over the same registries, and it is the threshold this
+record named — wiring duplicated between processes beyond a handful of lines.
+
+What answered it is not a container. The two workers differ in exactly one thing, the provider
+they compete, and everything else they need — the store, the two registries, the queue, the
+clock, the identifiers and the drawing of labels every candidate is run over — is the same. So it
+is assembled once, by a class the roots hold rather than inherit, and each root is left stating
+the one thing it really is. A composition that inherits its dependencies stops reading as a
+composition, which is why it is held.
+
+The third root is the case a container would have handled worst. It needs what a candidate *is*
+and never what runs one, so it takes the describing half of the provider port and carries neither
+stack. On the platform this is developed on that is not a saving but the condition under which
+the process can exist at all: the training stack and the one the baselines are fitted with cannot
+share a process. A container resolving a provider by type would have built the running half with
+it, and the refusal would have arrived as a crash inside a library rather than as a process that
+declines to hold both.
+
+The lifetimes are still all process-scoped and the per-task scope still has not appeared. The
+thresholds stay as they were; what has changed is that the first of them fired once and was
+answered by extracting the shared process, not by delegating the wiring.

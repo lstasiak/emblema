@@ -54,12 +54,15 @@ class CompleteCampaign:
             CampaignNotFoundError: If the campaign is unknown.
             IncompleteCampaignError: If any cell of its grid has not run.
             CampaignClosedError: If it has already been closed.
+            CampaignChangedElsewhereError: If another process closed it first, which is what
+                keeps a grid from announcing its own conclusion twice.
             InvalidPairedUnitErrorsError: If a candidate and the control were scored on
                 different units.
         """
         at = self._clock.now()
-        campaign = self._campaigns.get(command.campaign).complete(at)
-        self._campaigns.save(campaign)
+        read = self._campaigns.get(command.campaign)
+        campaign = read.complete(at)
+        self._campaigns.save(campaign, seen=read.revision)
         completed = self._outcomes.assemble(
             campaign,
             campaign.verdict(),

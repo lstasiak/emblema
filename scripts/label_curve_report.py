@@ -30,6 +30,7 @@ from typing import NamedTuple, Self
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from emblema.entrypoints.cli.campaign.known_tasks import KnownTask, KnownTasks
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
@@ -46,16 +47,7 @@ from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.domain.transfer.unit_error import UnitError
 from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
 from scripts.reporting import dated_heading, table
-from scripts.transfer_grid import (
-    BUDGETS,
-    MODES,
-    PLAN_COLUMNS,
-    SEEDS,
-    KnownTask,
-    KnownTasks,
-    Stored,
-    budget_rank,
-)
+from scripts.transfer_grid import BUDGETS, MODES, PLAN_COLUMNS, SEEDS, Stored, budget_rank
 
 CURVE, COMPARISONS, BASELINES = "curve.csv", "comparisons.csv", "baselines.csv"
 CONTROL = TransferMode.FROM_SCRATCH

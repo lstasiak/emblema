@@ -6,6 +6,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
+from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
 from scripts.label_curve_figures import STEM, draw, label_heights, main, wording_of
 from scripts.label_curve_report import (
     Baseline,
@@ -14,7 +15,6 @@ from scripts.label_curve_report import (
     CurvePoint,
     write,
 )
-from scripts.transfer_grid import KnownTasks
 
 
 def point(mode: str, budget: str, seed: int, rmse: float) -> CurvePoint:

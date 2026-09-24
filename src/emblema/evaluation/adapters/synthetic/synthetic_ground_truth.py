@@ -38,7 +38,8 @@ class SyntheticGroundTruth:
         self._scheme = scheme
         self._channel = names.index(scheme.channel)
 
-    def truths_of(self, windows: Sequence[TaskWindow]) -> Mapping[TaskWindow, float]:
+    def truths_of(self, corpus: str, windows: Sequence[TaskWindow]) -> Mapping[TaskWindow, float]:
+        # This adapter is the truth of one generated corpus; the name is read above it.
         by_unit: dict[int, list[TaskWindow]] = defaultdict(list)
         for window in windows:
             by_unit[self._index_of(window.unit)].append(window)

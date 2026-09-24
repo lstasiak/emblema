@@ -7,6 +7,8 @@ environment with nothing of ours in it, so what this machine's file or another t
 have exported decides nothing.
 """
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -44,15 +46,15 @@ def worker(backbone: str) -> WorkerSettings:
 def test_a_backbone_is_read_from_the_form_the_registry_holds_it_in() -> None:
     checksum = Checksum.of_bytes(b"weights")
 
-    assert worker(f"durable/weights@sha256:{checksum.digest}").backbone_ref() == ArtifactRef(
-        key="durable/weights", checksum=checksum
-    )
+    read = worker(f"durable/weights@sha256:{checksum.digest}").require_backbone_ref()
+
+    assert read == ArtifactRef(key="durable/weights", checksum=checksum)
 
 
 @pytest.mark.parametrize("written", ["durable/weights", "durable/weights@sha256", "@sha256:abc"])
 def test_a_backbone_not_written_as_the_registry_holds_it_is_refused(written: str) -> None:
     with pytest.raises(ValueError, match="artifact reference"):
-        worker(written).backbone_ref()
+        worker(written).require_backbone_ref()
 
 
 ENVIRONMENT = {
@@ -89,8 +91,8 @@ def test_the_group_is_read_from_the_environment_a_worker_is_started_with(
 ) -> None:
     worker = exported(monkeypatch).require_worker()
 
-    assert worker.schedule.epochs == 30
-    assert worker.lora.targets == "qkv,attention.projection,feedforward"
+    assert worker.require_schedule().epochs == 30
+    assert worker.require_lora().targets == "qkv,attention.projection,feedforward"
 
 
 def test_a_process_that_is_told_nothing_about_a_worker_still_starts(
@@ -106,3 +108,23 @@ def test_a_worker_told_half_of_what_it_needs_is_refused(
     # declared, so it fails where it is started.
     with pytest.raises(ValidationError, match="schedule"):
         exported(monkeypatch, EMBLEMA_WORKER__SCHEDULE__EPOCHS=None)
+
+
+@pytest.mark.parametrize(
+    ("missing", "complaint"),
+    [
+        ("require_schedule", "no schedule"),
+        ("require_lora", "no low-rank updates"),
+        ("require_backbone_ref", "none to serve"),
+        ("require_boosting", "no boosting"),
+    ],
+)
+def test_a_worker_asked_for_what_it_was_not_configured_with_stops_as_it_is_assembled(
+    missing: str, complaint: str
+) -> None:
+    # Each process demands only what it competes with, and says so while it is being put
+    # together rather than at the first cell it is handed.
+    bare = WorkerSettings(workspace=Path("data/workspace"), corpora=Path("data/raw"))
+
+    with pytest.raises(ValueError, match=complaint):
+        getattr(bare, missing)()

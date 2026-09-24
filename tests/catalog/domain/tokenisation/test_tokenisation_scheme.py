@@ -143,7 +143,12 @@ def test_a_token_of_an_unfitted_channel_cannot_be_read_back() -> None:
 
 
 reals = st.floats(min_value=-1e3, max_value=1e3, allow_nan=False, allow_infinity=False)
-positions = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
+# On a grid, and one measurement per point of it. Two positions a float apart map to the same
+# instant once they are scaled by the window's length, and the round trip below reads the
+# measurements back sorted: which of the two came first would then be settled by a difference
+# far below the tolerance the reading is checked to, and the comparison would be of an order
+# nobody asserted. A thousandth of a window is still finer than any corpus records.
+positions = st.integers(min_value=0, max_value=1000).map(lambda point: point / 1000)
 # Either the channel never varied, or its spread is a spread of the values fitted on it; a spread
 # far below them cannot come from those values and normalising against it overflows.
 spreads = st.one_of(st.just(0.0), st.floats(min_value=1e-3, max_value=1e3, allow_nan=False))
@@ -154,7 +159,9 @@ spreads = st.one_of(st.just(0.0), st.floats(min_value=1e-3, max_value=1e3, allow
     std=spreads,
     start=reals,
     length=st.floats(min_value=0.1, max_value=1e3, allow_nan=False, allow_infinity=False),
-    measurements=st.lists(st.tuples(positions, reals), min_size=1, max_size=8),
+    measurements=st.lists(
+        st.tuples(positions, reals), min_size=1, max_size=8, unique_by=lambda pair: pair[0]
+    ),
 )
 def test_reading_a_window_back_returns_the_measurements_it_was_laid_from(
     mean: float,

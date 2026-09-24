@@ -1,5 +1,9 @@
 from dataclasses import dataclass
 
+from emblema.evaluation.application.use_cases.complete_campaign import (
+    CompleteCampaign,
+    CompleteCampaignCommand,
+)
 from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
@@ -34,24 +38,40 @@ class AdvanceCampaign:
     Submitting a cell twice is harmless: a worker that receives a cell already recorded reports
     what is stored instead of running it again. That is what lets this be called after a crash
     without first working out which messages survived.
+
+    A grid whose cells have all run but which was never closed is closed here. Recording a cell
+    and closing the grid are two writes, so a worker lost between them leaves a campaign that
+    has nothing left to submit and no cell left to run — which is to say nothing else would ever
+    close it. Closing it is what makes this the whole of recovering a campaign.
     """
 
-    def __init__(self, campaigns: EvaluationCampaignRepository, jobs: JobQueue) -> None:
+    def __init__(
+        self,
+        campaigns: EvaluationCampaignRepository,
+        jobs: JobQueue,
+        complete_campaign: CompleteCampaign,
+    ) -> None:
         self._campaigns = campaigns
         self._jobs = jobs
+        self._complete = complete_campaign
 
     def __call__(self, command: AdvanceCampaignCommand) -> int:
-        """Submit the campaign's pending cells; return how many were handed over.
+        """Submit the campaign's pending cells, or close it if none are; return how many.
 
         Raises:
             CampaignNotFoundError: If the campaign is unknown.
             JobQueueError: If the queue cannot be reached; cells already submitted stay
                 submitted, and calling again re-submits the rest.
+            CampaignChangedElsewhereError: If another process closed the grid first.
+            InvalidPairedUnitErrorsError: If a candidate and the control were scored on
+                different units, which a grid closed here reads its verdict through.
         """
         campaign = self._campaigns.get(command.campaign)
         pending = campaign.pending()
         for cell in pending:
             self._jobs.submit(self._job(campaign, cell))
+        if not pending and not campaign.is_finished:
+            self._complete(CompleteCampaignCommand(campaign=campaign.campaign_id))
         return len(pending)
 
     @staticmethod
@@ -59,7 +79,7 @@ class AdvanceCampaign:
         kind = campaign.design.get_candidate(cell.candidate).kind
         return QueuedJob(
             name=RUN_CAMPAIGN_CELL,
-            pool=WorkerPool.ML if kind.shares_the_compute_budget else WorkerPool.CPU,
+            pool=WorkerPool.ML if kind.needs_the_ml_stack else WorkerPool.GENERAL,
             arguments={
                 "campaign": str(campaign.campaign_id),
                 "candidate": str(cell.candidate),

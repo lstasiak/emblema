@@ -57,7 +57,14 @@ class InMemoryCandidateProvider:
         raise UnknownCandidateError(f"this provider supplies no candidate {candidate}")
 
     def evaluate(self, request: CandidateEvaluation) -> CellResult:
-        self.describe(request.cell.candidate)
+        """Answer one cell with the errors this provider was told to report.
+
+        Raises:
+            UnknownCandidateError: If this provider supplies no candidate of that name.
+            CandidateMismatchError: If the campaign recorded the candidate as anything other
+                than what this provider states for it.
+        """
+        request.declared.must_match(self.describe(request.cell.candidate))
         errors = self._errors(request.cell)
         return CellResult(
             cell=request.cell,

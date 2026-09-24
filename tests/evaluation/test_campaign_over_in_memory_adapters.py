@@ -41,7 +41,12 @@ from emblema.evaluation.contracts.candidate_standing import CandidateStanding
 from emblema.evaluation.contracts.events import CampaignCompleted
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
-from emblema.evaluation.domain.exceptions import UnknownCampaignCellError
+from emblema.evaluation.domain.campaign.cell_result import CellResult
+from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.exceptions import (
+    CampaignChangedElsewhereError,
+    UnknownCampaignCellError,
+)
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -60,6 +65,7 @@ from tests.evaluation.support import (
     OPENED_AT,
     RULES,
     candidate,
+    result,
     task,
     units,
 )
@@ -90,13 +96,12 @@ class Campaign:
         events = InMemoryEventPublisher(subscriptions)
         ids, clock = SequentialIdGenerator(), FixedClock(OPENED_AT)
         self.define = DefineCampaign(tasks, self.campaigns, self.candidates, ids, clock)
-        self.run_cell = RunCampaignCell(
-            self.campaigns,
-            self.candidates,
-            CompleteCampaign(self.campaigns, CampaignCompletedAssembler(), clock, ids, events),
+        self.complete = CompleteCampaign(
+            self.campaigns, CampaignCompletedAssembler(), clock, ids, events
         )
+        self.run_cell = RunCampaignCell(self.campaigns, self.candidates, self.complete)
         self.jobs = ImmediateJobQueue({RUN_CAMPAIGN_CELL: self._run})
-        self.advance = AdvanceCampaign(self.campaigns, self.jobs)
+        self.advance = AdvanceCampaign(self.campaigns, self.jobs, self.complete)
 
     def declared(self) -> CampaignId:
         return self.define(
@@ -235,3 +240,112 @@ def test_a_cell_outside_the_grid_is_refused_rather_than_recorded(running: Campai
         )
 
     assert running.campaigns.get(declared).results == ()
+
+
+class ACompetitor:
+    """The repository with another worker of the same grid interleaved into the first write.
+
+    A second process that read the same campaign, ran a cell of its own and recorded it while
+    this one was busy. Nothing here is a fake of the port: the campaigns are kept by the real
+    in-memory adapter, and what is simulated is only the moment the other worker got in.
+    """
+
+    def __init__(
+        self, campaigns: InMemoryEvaluationCampaignRepository, competing: CellResult
+    ) -> None:
+        self._campaigns = campaigns
+        self._competing = competing
+        self._interleaved = False
+
+    def get(self, campaign_id: CampaignId) -> EvaluationCampaign:
+        return self._campaigns.get(campaign_id)
+
+    def save(self, campaign: EvaluationCampaign, *, seen: int) -> None:
+        if not self._interleaved:
+            self._interleaved = True
+            stood = self._campaigns.get(campaign.campaign_id)
+            self._campaigns.save(stood.record(self._competing), seen=stood.revision)
+        self._campaigns.save(campaign, seen=seen)
+
+
+def test_a_cell_recorded_while_this_one_ran_is_not_written_over(running: Campaign) -> None:
+    campaign_id = running.declared()
+    mine, theirs = running.campaigns.get(campaign_id).design.cells()[:2]
+    competitor = ACompetitor(
+        running.campaigns,
+        result(theirs.candidate, theirs.budget, theirs.seed, ERRORS[theirs.candidate]),
+    )
+    run_cell = RunCampaignCell(competitor, running.candidates, running.complete)
+
+    run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=mine))
+
+    assert {stored.cell for stored in running.campaigns.get(campaign_id).results} == {mine, theirs}
+
+
+def test_the_worker_that_records_last_is_the_one_that_closes_the_grid(running: Campaign) -> None:
+    campaign_id = running.declared()
+    cells = running.campaigns.get(campaign_id).design.cells()
+    for cell in cells[:-2]:
+        running.run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=cell))
+    mine, theirs = cells[-2], cells[-1]
+    competitor = ACompetitor(
+        running.campaigns,
+        result(theirs.candidate, theirs.budget, theirs.seed, ERRORS[theirs.candidate]),
+    )
+    run_cell = RunCampaignCell(competitor, running.candidates, running.complete)
+
+    # This worker is overtaken on the last two cells, so the state it started from never shows a
+    # whole grid; the state it ends up writing does, and that is what has to close the campaign.
+    run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=mine))
+
+    assert running.campaigns.get(campaign_id).is_finished
+    assert len(running.published) == 1
+
+
+def test_a_grid_left_whole_but_open_is_closed_by_advancing_it(running: Campaign) -> None:
+    # Recording a cell and closing the grid are two writes, so a worker lost between them leaves
+    # a campaign with nothing to submit and no cell to run again — one nothing else would close.
+    campaign_id = running.declared()
+    stood = running.campaigns.get(campaign_id)
+    for cell in stood.design.cells():
+        recorded = stood.record(
+            result(cell.candidate, cell.budget, cell.seed, ERRORS[cell.candidate])
+        )
+        running.campaigns.save(recorded, seen=stood.revision)
+        stood = recorded
+
+    submitted = running.advance(AdvanceCampaignCommand(campaign=campaign_id))
+
+    assert submitted == 0
+    assert running.campaigns.get(campaign_id).is_finished
+    assert len(running.published) == 1
+
+
+class AlwaysOvertaken:
+    """A repository that is always one step ahead of whoever tries to write to it."""
+
+    def __init__(self, campaigns: InMemoryEvaluationCampaignRepository) -> None:
+        self._campaigns = campaigns
+
+    def get(self, campaign_id: CampaignId) -> EvaluationCampaign:
+        return self._campaigns.get(campaign_id)
+
+    def save(self, campaign: EvaluationCampaign, *, seen: int) -> None:
+        raise CampaignChangedElsewhereError("something got there first, and keeps getting there")
+
+
+def test_a_worker_that_keeps_losing_the_race_gives_up_rather_than_spinning(
+    running: Campaign,
+) -> None:
+    # A store that refuses every write is a failure, not a race, and a worker that treated the
+    # two the same would sit in the queue repeating an expensive cell for as long as it lasted.
+    campaign_id = running.declared()
+    cell = running.campaigns.get(campaign_id).design.cells()[0]
+    run_cell = RunCampaignCell(
+        AlwaysOvertaken(running.campaigns), running.candidates, running.complete
+    )
+
+    with pytest.raises(CampaignChangedElsewhereError, match="every one of"):
+        run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=cell))
+
+    assert running.campaigns.get(campaign_id).results == ()

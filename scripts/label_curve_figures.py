@@ -36,9 +36,10 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
+from emblema.entrypoints.cli.campaign.known_tasks import KnownTask, KnownTasks
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from scripts.label_curve_report import Curve, read
-from scripts.transfer_grid import MODES, KnownTask, KnownTasks, budget_rank
+from scripts.transfer_grid import MODES, budget_rank
 
 STEM = "label-efficiency-curve"
 CAPTION = "tier M, Kaggle T4, fp32 — preliminary; validation, not test"

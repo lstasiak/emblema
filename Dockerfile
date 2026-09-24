@@ -59,10 +59,12 @@ USER emblema
 WORKDIR /home/emblema
 
 # The common case, stated so that the image says what it is for; whoever starts a process names
-# the queue it serves. The two handshakes a worker performs with its neighbours run over a kind
-# of queue RabbitMQ 4 has withdrawn, and this system's workers have nothing to say to each other.
-CMD ["celery", "-A", "emblema.entrypoints.workers.celery_app", "worker", \
-     "--queues", "ml", "--pool=solo", "--without-mingle", "--without-gossip"]
+# the module and the queue it serves, because which of them this image can run is decided by the
+# extras it was built with. The two handshakes a worker performs with its neighbours run over a
+# kind of queue RabbitMQ 4 has withdrawn, and this system's workers have nothing to say to
+# each other.
+CMD ["celery", "-A", "emblema.entrypoints.workers.general.celery_app", "worker", \
+     "--queues", "general", "--pool=solo", "--without-mingle", "--without-gossip"]
 
 
 # The image the suite runs in. Everything installed — every extra and every development group —

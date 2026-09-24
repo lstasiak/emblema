@@ -132,6 +132,14 @@ VIOLATIONS = [
     ),
     Violation(
         contract_id="pure-core",
+        modules={
+            "evaluation/domain/__init__.py": "",
+            "evaluation/domain/baseline.py": "import xgboost\n",
+        },
+        evidence="emblema.evaluation.domain.baseline -> xgboost",
+    ),
+    Violation(
+        contract_id="pure-core",
         modules={"shared/ports/leak.py": "import pydantic\n"},
         evidence="emblema.shared.ports.leak -> pydantic",
     ),

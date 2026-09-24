@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Self
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, Text, Uuid
+from sqlalchemy import CheckConstraint, DateTime, Integer, Text, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -44,6 +44,9 @@ class EvaluationCampaignRecord(Base):
     purpose: Mapped[str] = mapped_column(Text)
     tier: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text)
+    # What the campaign's own revision counts, kept as a column so a writer can claim the
+    # state it read in one statement instead of reading it again and hoping.
+    version: Mapped[int] = mapped_column(Integer)
     design: Mapped[dict[str, object]] = mapped_column(JSONB)
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -65,6 +68,7 @@ class EvaluationCampaignRecord(Base):
             purpose=campaign.purpose.value,
             tier=str(campaign.tier),
             status=FINISHED if campaign.is_finished else RUNNING,
+            version=campaign.revision,
             design=DESIGNS.encode(campaign.design),
             opened_at=campaign.opened_at.value,
             completed_at=(None if campaign.completed_at is None else campaign.completed_at.value),

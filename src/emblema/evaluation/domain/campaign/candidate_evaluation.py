@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
 from emblema.evaluation.contracts.identifiers import TaskId
+from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
-from emblema.shared.kernel.artifacts import ArtifactRef
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -21,13 +21,13 @@ class CandidateEvaluation:
             or on the frozen one.
         retain: Whether the fitted candidate is to be kept as an artifact. True for the one cell
             per candidate the campaign designated before anything ran.
-        starts_from: The weights the campaign recorded this candidate as starting from, so a
-            provider serving other ones refuses the cell instead of quietly answering it with
-            the wrong backbone; ``None`` for a candidate that starts from none.
+        declared: The candidate as the campaign recorded it, carried whole rather than field
+            by field, so a process configured otherwise is refused the cell rather than
+            answering a point of the curve under something the grid never declared.
     """
 
     task: TaskId
     cell: CampaignCell
     purpose: RunPurpose
     retain: bool
-    starts_from: ArtifactRef | None
+    declared: CampaignCandidate

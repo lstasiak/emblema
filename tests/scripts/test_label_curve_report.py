@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
@@ -18,7 +19,7 @@ from scripts.label_curve_report import (
     sentence,
     write,
 )
-from scripts.transfer_grid import KnownTasks, Stored
+from scripts.transfer_grid import Stored
 from tests.evaluation.support import TASK, adaptation_schedule, plan, prediction
 
 UNITS = ("a", "b", "c", "d", "e")

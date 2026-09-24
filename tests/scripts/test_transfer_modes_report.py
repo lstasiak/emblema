@@ -6,10 +6,11 @@ import pytest
 
 pytest.importorskip("torch")
 
+from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
 from emblema.evaluation.adapters.synthetic.synthetic_ground_truth import SyntheticGroundTruth
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
-from scripts.transfer_grid import Cell, KnownTasks, Stored
+from scripts.transfer_grid import Cell, Stored
 from scripts.transfer_modes_report import cells_of, ground_truth_of, parse, plans_of, render
 from tests.scripts.test_transfer_grid import outcome
 

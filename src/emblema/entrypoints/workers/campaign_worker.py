@@ -1,60 +1,29 @@
 from collections.abc import Mapping
-from typing import Self
 
-from emblema.config.lora_settings import LoraSettings
-from emblema.config.schedule_settings import ScheduleSettings
-from emblema.config.settings import Settings
-from emblema.entrypoints.workers.composition_root import CompositionRoot
-from emblema.evaluation.application.use_cases.run_campaign_cell import RunCampaignCellCommand
+from emblema.evaluation.application.use_cases.run_campaign_cell import (
+    RunCampaignCell,
+    RunCampaignCellCommand,
+)
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
-from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
-from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.shared.jobs.job_argument import JobArgument
-from emblema.shared.ports.job_queue import JobQueue
 
 
 class CampaignWorker:
-    """What the worker process does with a job, apart from the queue that delivered it.
+    """What a worker process does with a job, apart from the queue that delivered it.
 
-    The composition root is built once and held, because the backbone it reads out of the store
-    is what makes building one expensive. Everything else here is deserialisation: the settings
-    and the job carry scalars, and this turns them back into the values a process and a use case
-    take. No decision is made here — a cell already recorded is recognised by the use case, not
-    by this.
+    The same for whichever pool the process serves: reading a message back into a command is
+    what an entry point is for, and which candidates answer it was settled when the process was
+    assembled. No decision is made here — a cell already recorded is recognised by the use case,
+    not by this.
+
+    It holds the one use case rather than the whole composition, so that what a job can reach is
+    what a job needs, and so that a test of reading a message back needs nothing built.
     """
 
-    def __init__(self, root: CompositionRoot) -> None:
-        self._root = root
-
-    @classmethod
-    def from_environment(  # pragma: no cover - environment
-        cls, jobs: JobQueue | None = None
-    ) -> Self:
-        """The worker the environment describes, submitting through ``jobs`` where one is given.
-
-        Args:
-            jobs: Where this process hands cells of its own; the configured broker unless given.
-
-        Raises:
-            ValueError: If the settings name no worker, store, database or broker, or the
-                backbone is not written as the registry holds it.
-        """
-        settings = Settings()
-        worker = settings.require_worker()
-        return cls(
-            CompositionRoot(
-                settings,
-                workspace=worker.workspace,
-                corpora=worker.corpora,
-                schedule=cls.schedule_of(worker.schedule),
-                lora=cls.lora_of(worker.lora),
-                backbone=worker.backbone_ref(),
-                device=worker.device,
-                jobs=jobs,
-            )
-        )
+    def __init__(self, run_campaign_cell: RunCampaignCell) -> None:
+        self._run = run_campaign_cell
 
     def run_campaign_cell(self, arguments: Mapping[str, JobArgument]) -> None:
         """Run the cell a job names.
@@ -65,7 +34,7 @@ class CampaignWorker:
             CampaignNotFoundError: If the campaign is unknown.
             UnknownCampaignCellError: If the cell is not one of the campaign's grid.
         """
-        self._root.services.run_campaign_cell(self.command_of(arguments))
+        self._run(self.command_of(arguments))
 
     @staticmethod
     def command_of(arguments: Mapping[str, JobArgument]) -> RunCampaignCellCommand:
@@ -95,38 +64,5 @@ class CampaignWorker:
                 candidate=CandidateRef(candidate),
                 budget=LabelBudget.parse(budget),
                 seed=seed,
-            ),
-        )
-
-    @staticmethod
-    def schedule_of(settings: ScheduleSettings) -> AdaptationSchedule:
-        """How every cell of this process's campaigns learns, as the environment declares it.
-
-        Raises:
-            InvalidAdaptationScheduleError: If what it declares is not a schedule that stands up.
-        """
-        return AdaptationSchedule(
-            epochs=settings.epochs,
-            min_steps=settings.min_steps,
-            batch_size=settings.batch_size,
-            learning_rate=settings.learning_rate,
-            weight_decay=settings.weight_decay,
-            warmup_fraction=settings.warmup_fraction,
-            final_lr_fraction=settings.final_lr_fraction,
-        )
-
-    @staticmethod
-    def lora_of(settings: LoraSettings) -> LoraSpec:
-        """The low-rank updates the arm of that name adds, as the environment declares them.
-
-        Raises:
-            InvalidLoraSpecError: If what it declares is not a specification that stands up.
-        """
-        return LoraSpec(
-            rank=settings.rank,
-            alpha=settings.alpha,
-            dropout=settings.dropout,
-            targets=tuple(
-                target.strip() for target in settings.targets.split(",") if target.strip()
             ),
         )

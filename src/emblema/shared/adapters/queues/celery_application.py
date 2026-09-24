@@ -22,7 +22,7 @@ def celery_application(broker_url: str, *, name: str = "emblema") -> Celery:
     app = Celery(name, broker=broker_url)
     app.conf.task_ignore_result = True
     app.conf.task_acks_late = True
-    app.conf.task_default_queue = str(WorkerPool.ML)
+    app.conf.task_default_queue = str(WorkerPool.GENERAL)
     app.conf.broker_transport_options = {"confirm_publish": True}
     # Celery's worker-to-worker mailbox declares transient non-exclusive queues, which RabbitMQ 4
     # refuses outright: a worker that opens one never finishes starting. Nothing here inspects or

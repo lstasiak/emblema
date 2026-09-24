@@ -1,6 +1,9 @@
 from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
-from emblema.evaluation.domain.exceptions import CampaignNotFoundError
+from emblema.evaluation.domain.exceptions import (
+    CampaignChangedElsewhereError,
+    CampaignNotFoundError,
+)
 
 
 class InMemoryEvaluationCampaignRepository:
@@ -15,5 +18,11 @@ class InMemoryEvaluationCampaignRepository:
         except KeyError as error:
             raise CampaignNotFoundError(f"no campaign stored under {campaign_id}") from error
 
-    def save(self, campaign: EvaluationCampaign) -> None:
+    def save(self, campaign: EvaluationCampaign, *, seen: int) -> None:
+        stored = self._campaigns.get(campaign.campaign_id)
+        if stored is not None and stored.revision != seen:
+            raise CampaignChangedElsewhereError(
+                f"campaign {campaign.campaign_id} was read at revision {seen} and stands at "
+                f"{stored.revision}"
+            )
         self._campaigns[campaign.campaign_id] = campaign

@@ -19,7 +19,7 @@ from emblema.shared.jobs.worker_pool import WorkerPool
 from emblema.shared.ports.exceptions import JobQueueError
 
 WORK = "tests.work"
-JOB = QueuedJob(name=WORK, pool=WorkerPool.CPU, arguments={"what": "a thing", "how_many": 2})
+JOB = QueuedJob(name=WORK, pool=WorkerPool.GENERAL, arguments={"what": "a thing", "how_many": 2})
 
 
 def test_a_submitted_job_reaches_the_handler_with_its_arguments() -> None:
@@ -58,7 +58,7 @@ def test_a_submission_that_returns_is_one_the_broker_took_responsibility_for() -
 def test_the_application_sends_to_the_pool_beside_the_accelerator_unless_a_job_says_otherwise() -> (
     None
 ):
-    assert celery_application("memory://").conf.task_default_queue == str(WorkerPool.ML)
+    assert celery_application("memory://").conf.task_default_queue == str(WorkerPool.GENERAL)
 
 
 def test_an_unreachable_broker_is_reported_rather_than_swallowed() -> None:

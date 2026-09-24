@@ -46,14 +46,15 @@ class DrawLabelBudget:
 
         Raises:
             TaskNotFoundError: If the task is unknown.
-            UnknownGroundTruthError: If the ground truth says nothing about a tuning window.
+            UnknownGroundTruthError: If nothing is known about the task's corpus, or about a
+                tuning window of it.
             UnlabelledWindowError: If a window reaches past the failure of its unit.
             InvalidLabelBudgetError: If the tuning side holds fewer windows than asked for.
             InvalidTargetBinsError: If it holds fewer windows than there are strata.
         """
         task = self._tasks.get(command.task)
         windows = self._corpus.windows_of(task.manifest, task.tuning_units)
-        pool = task.labelled(windows, self._truth.truths_of(windows))
+        pool = task.labelled(windows, self._truth.truths_of(task.corpus, windows))
         return LabelSample.drawn(
             task.task_id, pool, command.budget, task.stratification(), command.seed
         )

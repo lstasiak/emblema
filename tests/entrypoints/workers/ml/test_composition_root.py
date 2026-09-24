@@ -1,4 +1,4 @@
-"""The worker process assembled over adapters that touch nothing, and what it got.
+"""The worker that adapts a backbone, assembled over adapters that touch nothing.
 
 What a composition test can hold is the wiring: that the use cases share one registry, that a
 process given no overrides reaches the bucket, the database and the broker its settings name,
@@ -6,7 +6,6 @@ and that one left without either fails as it is assembled rather than when it is
 The work itself is exercised by the campaign cycle, which needs no process.
 """
 
-from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -14,8 +13,8 @@ import pytest
 from emblema.config.lora_settings import LoraSettings
 from emblema.config.schedule_settings import ScheduleSettings
 from emblema.entrypoints.workers.campaign_worker import CampaignWorker
-from emblema.entrypoints.workers.composition_root import CompositionRoot
 from emblema.entrypoints.workers.known_arms import KnownArms
+from emblema.entrypoints.workers.ml.composition_root import CompositionRoot
 from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
@@ -32,10 +31,8 @@ from emblema.evaluation.adapters.persistence.evaluation_campaign_repository impo
 from emblema.evaluation.application.use_cases.advance_campaign import AdvanceCampaignCommand
 from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplitCommand
 from emblema.evaluation.contracts.events import FrozenTestSplitOpened
-from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.exceptions import (
     FrozenTestSplitClosedError,
-    InvalidLabelBudgetError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
@@ -44,7 +41,6 @@ from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactSto
 from emblema.shared.adapters.queues.celery_job_queue import CeleryJobQueue
 from emblema.shared.adapters.queues.immediate_job_queue import ImmediateJobQueue
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
-from emblema.shared.jobs.job_argument import JobArgument
 from emblema.shared.ports.exceptions import JobQueueError
 from tests.entrypoints.test_restored_backbones import stored
 from tests.evaluation.support import (
@@ -79,7 +75,7 @@ def process(tmp_path: Path) -> tuple[CompositionRoot, InMemoryEvaluationCampaign
     tasks = InMemoryDownstreamTaskRepository()
     tasks.save(task())
     campaigns = InMemoryEvaluationCampaignRepository()
-    campaigns.save(campaign())
+    campaigns.save(campaign(), seen=0)
     root = CompositionRoot.over(
         store=InMemoryArtifactStore(),
         tasks=tasks,
@@ -153,68 +149,6 @@ def test_the_arms_are_the_four_modes_over_the_backbone_the_process_serves() -> N
     assert arms[2].lora == LORA
 
 
-def test_the_schedule_and_the_updates_are_the_ones_the_environment_declares() -> None:
-    assert CampaignWorker.schedule_of(DECLARED_SCHEDULE) == SCHEDULE
-    assert CampaignWorker.lora_of(DECLARED_LORA) == LORA
-
-
-def test_a_job_is_read_back_into_the_coordinates_of_a_cell() -> None:
-    command = CampaignWorker.command_of(
-        {
-            "campaign": CAMPAIGN_TEXT,
-            "candidate": "full_fine_tuning",
-            "budget": "200",
-            "seed": 3,
-        }
-    )
-
-    assert command.cell.candidate == CandidateRef("full_fine_tuning")
-    assert command.cell.budget == LabelBudget.of(200)
-    assert command.cell.seed == 3
-
-
-def test_a_job_at_the_largest_budget_names_every_label_the_tuning_side_holds() -> None:
-    command = CampaignWorker.command_of(
-        {
-            "campaign": CAMPAIGN_TEXT,
-            "candidate": "lora",
-            "budget": "all",
-            "seed": 1,
-        }
-    )
-
-    assert command.cell.budget == LabelBudget.everything()
-
-
-@pytest.mark.parametrize(
-    "arguments",
-    [
-        {"candidate": "lora", "budget": "50", "seed": 1},
-        {"campaign": CAMPAIGN_TEXT, "budget": "50", "seed": 1},
-        {"campaign": CAMPAIGN_TEXT, "candidate": "lora", "seed": 1},
-        {"campaign": CAMPAIGN_TEXT, "candidate": "lora", "budget": 50, "seed": 1},
-        {"campaign": CAMPAIGN_TEXT, "candidate": "lora", "budget": "50", "seed": "first"},
-    ],
-)
-def test_a_job_that_does_not_name_a_cell_is_refused(
-    arguments: Mapping[str, JobArgument],
-) -> None:
-    with pytest.raises(ValueError, match="a cell names"):
-        CampaignWorker.command_of(arguments)
-
-
-def test_a_job_naming_a_budget_that_is_not_one_is_refused() -> None:
-    with pytest.raises(InvalidLabelBudgetError):
-        CampaignWorker.command_of(
-            {
-                "campaign": CAMPAIGN_TEXT,
-                "candidate": "lora",
-                "budget": "most of them",
-                "seed": 1,
-            }
-        )
-
-
 def test_the_frozen_side_is_opened_through_the_publisher_the_process_holds(
     tmp_path: Path,
 ) -> None:
@@ -250,7 +184,7 @@ def test_a_job_the_worker_is_handed_runs_the_cell_it_names(tmp_path: Path) -> No
     root, campaigns = process(tmp_path)
     stated = campaign()
 
-    CampaignWorker(root).run_campaign_cell(
+    CampaignWorker(root.services.run_campaign_cell).run_campaign_cell(
         {
             "campaign": str(stated.campaign_id),
             "candidate": str(CONTROL),

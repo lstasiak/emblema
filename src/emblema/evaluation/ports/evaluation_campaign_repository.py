@@ -20,6 +20,20 @@ class EvaluationCampaignRepository(Protocol):
         """
         ...
 
-    def save(self, campaign: EvaluationCampaign) -> None:
-        """Store the campaign, replacing any earlier state of it."""
+    def save(self, campaign: EvaluationCampaign, *, seen: int) -> None:
+        """Store the campaign, provided nothing has changed it since revision ``seen``.
+
+        A grid is worked by more than one process, and each of them reads the whole campaign,
+        runs one cell and writes the whole campaign back. Writing over a state one never read
+        would drop the cells another process recorded in between, so what a caller may write
+        over is stated rather than assumed: the revision it read.
+
+        Args:
+            campaign: The campaign as the caller would now have it.
+            seen: The revision the caller read, which is the state it is entitled to replace.
+                A campaign nobody has stored yet is written whatever this says.
+
+        Raises:
+            CampaignChangedElsewhereError: If it has moved on since that revision.
+        """
         ...

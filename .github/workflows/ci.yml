@@ -91,27 +91,35 @@ jobs:
           } >> .env
       - name: Validate the compose file
         run: docker compose --profile workers --profile tests config --quiet
-      - name: Build the worker image
-        # The recipe every process of the application is deployed from. The test image shares its
-        # stages and differs only in what it installs, so it is left to the machine that runs the
-        # suite in it.
-        run: docker compose --profile workers build worker-ml
+      - name: Build the worker images
+        # The recipe every process of the application is deployed from, once per set of extras.
+        # The test image shares its stages and differs only in what it installs, so it is left to
+        # the machine that runs the suite in it.
+        run: docker compose --profile workers build worker-ml worker-general
       - name: Bring the stack up
         run: docker compose up -d --wait --wait-timeout 300
       - name: Smoke test
         run: bash scripts/smoke.sh
-      - name: The worker reports for work from inside the stack
-        # The failure this catches is a worker that starts, never finishes starting and consumes
-        # nothing — which is what a broker refusing a queue Celery declares looks like.
+      - name: Every worker reports for work from inside the stack
+        # Two failures this catches. One is a worker that starts, never finishes starting and
+        # consumes nothing, which is what a broker refusing a queue Celery declares looks like.
+        # The other is a worker that was not told what it serves: each assembles itself where it
+        # is started, so a template missing a group leaves the process it belongs to exited.
         run: |
-          docker compose --profile workers up -d worker-ml
+          docker compose --profile workers up -d worker-ml worker-general
           for _ in $(seq 1 45); do
-            if docker compose logs worker-ml --no-color | grep -q 'ready\.'; then
+            ready=0
+            for worker in worker-ml worker-general; do
+              if docker compose logs "$worker" --no-color | grep -q 'ready\.'; then
+                ready=$((ready + 1))
+              fi
+            done
+            if [ "$ready" -eq 2 ]; then
               exit 0
             fi
             sleep 2
           done
-          echo "the worker never reported ready" >&2
+          echo "a worker never reported ready" >&2
           exit 1
       - name: Service logs
         if: failure()

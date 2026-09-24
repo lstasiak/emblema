@@ -180,3 +180,27 @@ def test_a_budget_the_campaign_never_ran_is_refused_by_the_verdict() -> None:
 
 def test_a_campaign_that_has_kept_nothing_names_no_artifact() -> None:
     assert campaign().artifact_of(CONTROL) is None
+
+
+def test_a_campaign_nobody_has_run_stands_at_no_revision() -> None:
+    assert campaign().revision == 0
+
+
+def test_every_change_a_campaign_can_undergo_moves_its_revision_by_one() -> None:
+    # The two are the whole of what can change: who competes, over what and how the result is
+    # read are settled before anything runs. That is what lets the count of changes be counted
+    # off the state rather than carried in a field beside it.
+    first = campaign().design.cells()[0]
+
+    recorded = campaign().record(result(first.candidate, first.budget, first.seed, ERRORS))
+    whole = run_everything()
+    finished = whole.complete(OPENED_AT)
+
+    assert recorded.revision == campaign().revision + 1
+    assert finished.revision == whole.revision + 1
+
+
+def test_a_campaign_read_back_stands_where_it_stood() -> None:
+    whole = run_everything()
+
+    assert whole.revision == len(whole.design.cells())
