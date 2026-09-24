@@ -144,3 +144,18 @@ under it. A second `postgres` service for the tests, testcontainers and a transa
 around each test were considered and not adopted: the first costs a container and a port for the
 same isolation, the second was rejected with the local stack, and the third does not hold for
 tests that assemble a process with its own engine and commit through it.
+
+## 2026-09-24 — the fourth context with tables
+
+Serving persists its projection of what campaigns kept and the models promoted out of it
+(ADR-0037), in the same shape and as migration 0006, so every context's schema now has tables.
+Two things changed with it. The first rule the database holds across rows rather than within one
+arrived: that an artifact is served by at most one model not yet withdrawn is a partial unique
+index, which the adapter surfaces as the domain's error. Alembic's comparison of an index reads
+its columns and its uniqueness and not its predicate, so that predicate is held by the adapter's
+contract test and by nothing else. And the second thing every persistence model repeated after
+the naming convention — turning a timestamp the session's time zone answered in into the kernel's
+UTC value — moved to `shared/adapters/persistence/datetimes.py`, which refuses a value that came
+back without a time zone rather than guessing one. No unit of work spans a use case yet: the
+projection is written one artifact per transaction, and a delivery that fails between two of them
+is repaired by announcing the campaign again.
