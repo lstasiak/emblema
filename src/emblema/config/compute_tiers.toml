@@ -28,7 +28,7 @@ window = "default"
 
 # Held by the corpus-saturation measurement of 2026-09-17: the small shape already overfits each
 # classical corpus on its own at an evening's steps, so this shape is earned by the mix and a
-# larger one by nothing measured yet (ADR-0008, dated section).
+# larger one by nothing measured yet (ADR-0008, amendments).
 [[tiers]]
 name = "M"
 device = "T4, fp16"

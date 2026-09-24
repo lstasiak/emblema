@@ -1,159 +1,60 @@
 # ADR-0015: The composition root is written by hand
 
 - Status: accepted (settled by the third process, the campaign worker)
-- Date: 2026-09-12
+- Date: 2026-09-12; amended 2026-09-16, 2026-09-22, 2026-09-24
+- Full text before condensation: commit `5f14447`
 
 ## Context
 
-Publishing a corpus is the first process this system has: something with an entry point, a set of
-use cases and a set of adapters that have to be chosen and connected. Use cases take their
-dependencies through the constructor, so somewhere those constructors have to be called with real
-adapters. That place is the composition root, and where it is and who writes it is a decision.
-
-Two more processes are coming — a Celery worker for evaluation campaigns and an HTTP API — and they
-will share most of their wiring with this one. The argument for a container is exactly that: shared
-registrations, resolved per process. The argument against is that the question a reader asks of a
-composition root is *which adapter did this use case actually get*, and a container answers it
-indirectly.
+Use cases take dependencies through the constructor, so some place must call those constructors
+with real adapters: the composition root. More processes were coming (workers, API) and would share
+wiring — the argument for a DI container. The argument against: a reader asks *which adapter did
+this use case get*, and a container answers indirectly.
 
 ## Decision
 
-**Wiring is written out, in `entrypoints/<process>/composition_root.py`.** A class
-`CompositionRoot(settings, **overrides)` assembles the process in its constructor and exposes two
-frozen dataclasses: `Services`, the use cases the process can run, each already holding its
-dependencies, and `Adapters`, every port implementation those use cases were given. No container:
-not `dependency-injector`, not `svcs`, not `punq`.
-
-Every adapter is an override, defaulting to the one a real run gets, and the adapters chosen come
-back with the services. That is what lets a test assemble the same process over adapters that
-touch nothing and check the wiring itself — that the use cases share one repository, that
-artifacts land in the store the process was given, that a run without overrides gets the bucket
-the settings name — by reading public fields rather than a registration table or a private
-attribute.
-
-**A process that is a sequence of use cases gets a use case for the sequence.** Publishing is
-register, freeze, tokenise; that order is an application-layer fact (`PublishCorpus`), so the entry
-point parses arguments into one command and calls one callable. An entry point that sequenced use
-cases itself would hold logic that only a process test could reach.
-
-**The entry point is a class too.** `PublishCorpusCli.parse` turns arguments into a
-`PublishCorpusInvocation`, the command plus where the process reads and writes, and `run` hands it
-to a composition root; what the process can publish is a `KnownCorpora` registry rather than a
-module-level dictionary. The only module-level code is the `__main__` guard.
-
-Lifetimes are stated by the shape of the code rather than by configuration. This process builds
-everything once and exits; a process that needs a dependency per request or per task will say so
-with a context manager, in this file, where it can be read.
+- **Wiring is written out** in `entrypoints/<process>/composition_root.py`. A class
+  `CompositionRoot(settings, **overrides)` assembles the process in its constructor and exposes two
+  frozen dataclasses: `Services` (use cases with dependencies) and `Adapters` (every port
+  implementation used). No container (`dependency-injector`, `svcs`, `punq`).
+- **Every adapter is an override** defaulting to the real one, so a test assembles the process over
+  inert adapters and checks the wiring by public fields.
+- **A sequence of use cases is a use case** (`PublishCorpus`), so the entry point calls one callable.
+- **The entry point is a class**: `<Process>Cli.parse(argv)` gives an invocation; `run` builds the
+  root and calls one use case. Only the `__main__` guard is module-level.
+- **Lifetimes are stated by code shape**: process-scoped by default; per-request or per-task
+  scopes would be a context manager in the root.
 
 ## Consequences
 
-`CompositionRoot` for the publishing process is around forty lines and names every adapter it
-chooses. A reader who wants to know what the process is made of reads them, or reads the
-`Adapters` it exposes.
+- Each root names every adapter it chooses; `Adapters` shows what a process is made of.
+- The cost to watch is duplication between processes.
 
-The cost is duplication: when the worker arrives it will repeat the parts it shares with this one —
-building the artifact store from the settings, choosing the clock and the identifier source. That
-duplication is the thing to watch, not the line count.
+## Alternatives considered
 
-## Alternatives
-
-**A DI container** (`dependency-injector`, `svcs`, `punq`). Gains: one declaration of shared
-providers, scopes as a feature rather than as a convention. Costs: the wiring stops being readable
-as code, the test above becomes a test of registrations, and the library joins the dependencies of
-every process. At three processes and a few dozen constructor calls, the gain is small and the loss
-is the thing this repository optimises for.
-
-**Wiring inside each entry point.** No extra module, but then a process cannot be assembled without
-being run, and the composition test above is impossible.
-
-## Status
-
-`proposed`, not `accepted`. The claim this ADR makes is about *duplication between processes*, and
-there is one process. The defence of an ADR in this project is a reference implementation and a
-measurement, not a declaration — so this one is settled when the second process exists and the
-repetition between the two can be looked at rather than predicted. That is the evaluation
-harness, the next process to be assembled.
+- *A DI container*: one declaration of shared providers and scopes as a feature, but the wiring is
+  no longer readable as code, tests check registrations, and every process takes the dependency.
+- *Wiring inside each entry point*: a process cannot be assembled without being run.
 
 ## Revisit when
 
-- The second and third composition roots exist and repeat the same wiring, and the repetition is
-  something other than a handful of lines.
-- A process needs dependencies scoped per request or per task and doing it by hand starts to mean
-  bookkeeping the code does not make obvious.
+- Wiring duplicated between processes grows beyond a handful of lines.
+- A per-request or per-task scope becomes bookkeeping the code does not make obvious.
 
-## 2026-09-16 — the second process
+## Amendments
 
-The pretraining command line (ADR-0024) is the second process assembled by hand, in
-`entrypoints/cli/pretrain/composition_root.py` beside the publishing one, which moved to
-`entrypoints/cli/publish_corpus/`. What the two repeated before the repetition was removed: the
-S3 store connected from the settings and the engine created from them — fourteen lines — and the
-guard that refuses to build either without settings. Those became three functions in
-`entrypoints/cli/configured.py`, which both roots call. Nothing else is shared: the publishing root
-chooses a corpus reader and a block archive, the pretraining root chooses a runtime by whether it
-accepts a result and a tracker by whether it has a tracking URI, and neither has a use for the
-other's adapters. Both roots still build everything once and exit; no scope per request has been
-needed. The status stays `proposed`: the third process, the evaluation worker, is the one with
-per-task lifetimes, and the decision is taken there.
-
-## 2026-09-22 — the third process, and the decision
-
-The campaign worker is the third composition root and the first process that outlives a single
-command. It is what this ADR said it was waiting for, and what it showed is this.
-
-**The repetition between roots is still three function calls.** What the worker shares with the
-two command lines is the store built from the settings, the engine built from them, and the
-guard that refuses either without settings. Those moved from `entrypoints/cli/configured.py` up
-to `entrypoints/configured.py` when the third caller appeared, which is the threshold this ADR
-named. The seam that turns stored weights into an encoder moved the same way, to
-`entrypoints/restored_backbones.py`, for the same reason. Everything else the worker wires — the
-candidate provider, the two registries, the scheduler, the publisher and what subscribes to it —
-is its own, and a container would have registered each of them once to resolve each of them
-once.
-
-**The per-task scope this ADR expected did not appear.** The one dependency worth scoping per
-task is the backbone, and scoping it per task would read a backbone out of the store for every
-cell of a grid — eighty downloads to avoid holding one copy. So the worker is told which
-backbone it serves, holds it, and refuses a cell of a campaign that ran over other weights
-(ADR-0035). The lifetimes are all process-scoped and the class says so; a `@contextmanager` per
-task would have been bookkeeping around a decision that goes the other way.
-
-**The composition test reads public fields, as before.** The worker's test assembles the same
-process over adapters that touch nothing and checks what each use case got, and a process given
-no overrides is checked to reach the bucket, the database and the broker its settings name.
-
-The status therefore moves to `accepted`. The revision thresholds stay as they were: wiring
-duplicated between processes beyond a handful of lines, or a scope that hand-written wiring
-makes unobvious.
-
-## 2026-09-24 — the threshold fired, and what answered it
-
-The comparison grew a second kind of candidate, and with it a second worker: one process carries
-the machine-learning stack and adapts a backbone, the other carries none of it and fits
-candidates that start from no weights. A third root declares campaigns and runs no cell. That is
-five hand-written roots, three of them over the same registries, and it is the threshold this
-record named — wiring duplicated between processes beyond a handful of lines.
-
-What answered it is not a container. The two workers differ in exactly one thing, the provider
-they compete, and everything else they need — the store, the two registries, the queue, the
-clock, the identifiers and the drawing of labels every candidate is run over — is the same. So it
-is assembled once, by a class the roots hold rather than inherit, and each root is left stating
-the one thing it really is. A composition that inherits its dependencies stops reading as a
-composition, which is why it is held.
-
-The third root is the case a container would have handled worst. It needs what a candidate *is*
-and never what runs one, so it takes the describing half of the provider port and carries neither
-stack. On the platform this is developed on that is not a saving but the condition under which
-the process can exist at all: the training stack and the one the baselines are fitted with cannot
-share a process. A container resolving a provider by type would have built the running half with
-it, and the refusal would have arrived as a crash inside a library rather than as a process that
-declines to hold both.
-
-The lifetimes are still all process-scoped and the per-task scope still has not appeared. The
-thresholds stay as they were; what has changed is that the first of them fired once and was
-answered by extracting the shared process, not by delegating the wiring.
-
-A sixth root followed the same day: the command line that promotes and withdraws served models
-(ADR-0037). It shares nothing with the campaign processes but the helpers that connect a store
-and an engine from the settings, and it repeats once, in eight lines, the idiom of building two
-repositories over one engine wherever either was left to the root. That is inside the handful the
-threshold allows; a third repetition would be the moment to extract it.
+- **2026-09-16 — the second process** (pretraining CLI, ADR-0024). The shared part was fourteen
+  lines (store and engine from settings, the guard refusing either without settings), extracted to
+  helper functions. Status stayed `proposed`.
+- **2026-09-22 — the third process, and the decision.** The campaign worker shares the same three
+  helpers, now in `entrypoints/configured.py`; the seam from stored weights to an encoder moved to
+  `entrypoints/restored_backbones.py`. The expected per-task scope did not appear: scoping the
+  backbone per task would download it for every cell, so the worker holds one and refuses cells of
+  other weights (ADR-0035). Status → `accepted`.
+- **2026-09-24 — the threshold fired.** Two workers and a declaring CLI shared the store,
+  registries, queue, clock, identifiers and label drawing. That is assembled once by
+  `CampaignProcess`, which the roots hold rather than inherit; each root states only its candidate
+  provider. The declaring root takes only the describing half of the provider port and carries
+  neither ML stack — on macOS torch and XGBoost cannot share a process, so a container resolving a
+  provider by type would have crashed inside a library. The promotion CLI (ADR-0037) repeats one
+  eight-line idiom; a third repetition would be extracted.

@@ -2,7 +2,7 @@
 #
 # The saturation measurement found the small shape already at the objective's floor on this
 # corpus, and the backbones read from one corpus are held at it until a larger shape is shown to
-# earn something there (ADR-0008, dated section). The tier declares where and at what precision
+# earn something there (ADR-0008, amendments). The tier declares where and at what precision
 # the run is made; the shape is the small tier's, stated field by field. Everything else is the
 # file of the tier's own shape, to the step, so the pair differs in the shape alone.
 name = "backbone-cmapss-m-small"
