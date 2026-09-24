@@ -121,6 +121,16 @@ class EvaluationCampaign:
         """Whether the campaign has been closed and its verdict may be asked for."""
         return self.completed_at is not None
 
+    def completion(self) -> UtcDateTime:
+        """When the campaign was closed.
+
+        Raises:
+            CampaignNotCompletedError: If it has not been.
+        """
+        if self.completed_at is None:
+            raise CampaignNotCompletedError(f"campaign {self.campaign_id} has not finished")
+        return self.completed_at
+
     def pending(self) -> tuple[CampaignCell, ...]:
         """The cells still to run, in the grid's order — what resuming a campaign asks for."""
         recorded = {result.cell for result in self.results}
