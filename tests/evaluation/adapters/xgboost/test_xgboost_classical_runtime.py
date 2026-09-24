@@ -12,6 +12,7 @@ from uuid import UUID
 import numpy as np
 import pytest
 
+from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.xgboost.fitted_baseline import FittedBaseline
 from emblema.evaluation.adapters.xgboost.xgboost_classical_runtime import XgboostClassicalRuntime
@@ -24,6 +25,7 @@ from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
+from emblema.shared.kernel.artifacts import ArtifactRef
 from tests.evaluation.adapters.xgboost.support import WIDE_CHANNELS, publish_wide
 from tests.evaluation.support import TASK, boosting, labelled, recipe, task
 from tests.support.published import CHANNELS, publish
@@ -41,6 +43,18 @@ SCORED = (labelled("c", 2, 10.0, 8.0),)
 # Drawing rows and columns is where a fit has anything to draw at all; with everything offered
 # to every tree there is no randomness for a seed to steer.
 DRAWING = boosting(row_share=0.6, feature_share=0.6, rounds=12)
+
+
+class CountingBlocks(PublishedCorpusBlocks):
+    """The published corpora, keeping which manifests were fetched and decoded, and how often."""
+
+    def __init__(self, store: InMemoryArtifactStore, workspace: Path) -> None:
+        super().__init__(store, workspace)
+        self.decoded: list[ArtifactRef] = []
+
+    def manifest_of(self, ref: ArtifactRef) -> PublishedCorpusManifest:
+        self.decoded.append(ref)
+        return super().manifest_of(ref)
 
 
 class Published(NamedTuple):
@@ -154,3 +168,29 @@ def test_what_a_fit_keeps_answers_the_same_rows_the_fit_itself_did(published: Pu
     rows = ChannelAggregatedFeatures().of(blocks.block_of(manifest).at([2]))
     answered = kept.booster().inplace_predict(rows) * kept.target_scale
     assert float(answered[0]) == pytest.approx(outcome.predictions[0].predicted, rel=1e-6)
+
+
+def test_the_manifest_of_a_corpus_is_read_once_however_many_sides_are_fitted(
+    tmp_path: Path,
+) -> None:
+    # Every side of a fit is read through the same manifest, and over a real store each reading
+    # is a fetch of the same bytes and a checksum over them.
+    store = InMemoryArtifactStore()
+    blocks = CountingBlocks(store, tmp_path / "workspace")
+    defined = replace(
+        task(),
+        manifest=publish(store, tmp_path / "scratch").manifest,
+        labels=RemainingLifeScheme(CEILING),
+    )
+    wide = publish_wide(store, tmp_path / "wide", WIDE_TASK, 100.0)
+
+    XgboostClassicalRuntime(blocks).fit(
+        recipe(AGGREGATED, sources=(WIDE_TASK,)),
+        defined,
+        SAMPLE,
+        (FittingSource(task=wide.task, sample=wide.sample),),
+        SCORED,
+        retain=False,
+    )
+
+    assert blocks.decoded == [defined.manifest, wide.task.manifest]

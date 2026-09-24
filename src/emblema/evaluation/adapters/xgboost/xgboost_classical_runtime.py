@@ -1,10 +1,12 @@
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 import numpy as np
 import xgboost
 from numpy.typing import NDArray
 
+from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.features.channel_aggregated_features import (
     ChannelAggregatedFeatures,
@@ -25,8 +27,17 @@ from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
+from emblema.shared.adapters.windows.window_block import WindowBlock
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore
+
+
+@dataclass(frozen=True)
+class _ReadCorpus:
+    """One published corpus a fit reads: its manifest and its block, each fetched once."""
+
+    manifest: PublishedCorpusManifest
+    block: WindowBlock
 
 
 class XgboostClassicalRuntime:
@@ -49,16 +60,10 @@ class XgboostClassicalRuntime:
         *,
         store: ArtifactStore | None = None,
     ) -> None:
-        """Fit over the corpora ``blocks`` reads.
+        """Fit over the corpora ``blocks`` reads, keeping what it is asked to in ``store``.
 
-        How many threads a fit runs on is not settled here but by the recipe, because it is part
-        of what the recipe answers rather than a property of the machine that happened to pick
-        the cell up.
-
-        Args:
-            blocks: Where the published manifests and blocks are read from.
-            store: Where a candidate this runtime is asked to keep is put; a process that never
-                keeps one needs none.
+        No thread count here: the recipe carries it, since it is part of what a fit answers.
+        A process that never keeps a candidate needs no store.
         """
         self._blocks = blocks
         self._store = store
@@ -76,10 +81,11 @@ class XgboostClassicalRuntime:
         task.accept_sample(sample)
         if not scored:
             raise InvalidClassicalOutcomeError("there is no window to answer")
-        features = self._features(recipe.features, task)
-        rows, targets = self._fitted_from(features, task, sample, sources)
-        answered = self._rows_of(features, task, [labelled.window for labelled in scored])
+        read = self._read(task, sources)
+        features = self._features(recipe.features, read[task.manifest])
         started = time.perf_counter()
+        rows, targets = self._fitted_from(features, read, task, sample, sources)
+        answered = self._rows_of(features, read[task.manifest], [w.window for w in scored])
         scale = task.label_scheme().scale
         model = self._grown(recipe, rows, targets)
         predicted = model.predict(answered) * scale
@@ -94,15 +100,33 @@ class XgboostClassicalRuntime:
             artifact=self._kept(recipe, model, features, scale) if retain else None,
         )
 
-    def _features(self, scheme: FeatureScheme, task: DownstreamTask) -> WindowFeatures:
-        """How a window is read under ``scheme``, sized to the task's corpus where that matters."""
+    def _read(
+        self, task: DownstreamTask, sources: Sequence[FittingSource]
+    ) -> dict[ArtifactRef, _ReadCorpus]:
+        """Every corpus this fit reads, fetched and verified once and before anything is timed.
+
+        Once because the manifest of one corpus is what every side of a fit is read through, and
+        fetching it per side pays for the same bytes three times over a network. Before, because
+        the seconds a cell reports are what the method cost.
+        """
+        read: dict[ArtifactRef, _ReadCorpus] = {}
+        for fitted in (task, *(source.task for source in sources)):
+            if fitted.manifest not in read:
+                published = self._blocks.manifest_of(fitted.manifest)
+                read[fitted.manifest] = _ReadCorpus(published, self._blocks.block_of(published))
+        return read
+
+    @staticmethod
+    def _features(scheme: FeatureScheme, corpus: _ReadCorpus) -> WindowFeatures:
+        """How a window is read under ``scheme``, sized to the corpus where that matters."""
         if scheme is FeatureScheme.CHANNEL_AGGREGATED:
             return ChannelAggregatedFeatures()
-        return PerChannelFeatures(len(self._blocks.manifest_of(task.manifest).channels))
+        return PerChannelFeatures(len(corpus.manifest.channels))
 
     def _fitted_from(
         self,
         features: WindowFeatures,
+        read: Mapping[ArtifactRef, _ReadCorpus],
         task: DownstreamTask,
         sample: LabelSample,
         sources: Sequence[FittingSource],
@@ -113,20 +137,17 @@ class XgboostClassicalRuntime:
         for fitted, labels in drawn:
             scale = fitted.label_scheme().scale
             rows.append(
-                self._rows_of(features, fitted, [labelled.window for labelled in labels.windows])
+                self._rows_of(features, read[fitted.manifest], [w.window for w in labels.windows])
             )
-            targets.append(
-                np.array([labelled.target / scale for labelled in labels.windows], dtype=np.float64)
-            )
+            targets.append(np.array([w.target / scale for w in labels.windows], dtype=np.float64))
         return np.vstack(rows), np.concatenate(targets)
 
+    @staticmethod
     def _rows_of(
-        self, features: WindowFeatures, task: DownstreamTask, windows: Sequence[TaskWindow]
+        features: WindowFeatures, corpus: _ReadCorpus, windows: Sequence[TaskWindow]
     ) -> NDArray[np.float64]:
-        """The windows of one task, read out of its block and summarised."""
-        published = self._blocks.manifest_of(task.manifest)
-        block = self._blocks.block_of(published)
-        return features.of(block.at([window.position for window in windows]))
+        """The windows of one corpus, read out of its block and summarised."""
+        return features.of(corpus.block.at([window.position for window in windows]))
 
     def _grown(
         self,
