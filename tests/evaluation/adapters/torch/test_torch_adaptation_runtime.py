@@ -15,15 +15,18 @@ torch = pytest.importorskip("torch")
 
 from torch import Tensor, nn  # noqa: E402
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates  # noqa: E402
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import (  # noqa: E402
     PublishedCorpusBlocks,
 )
+from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph  # noqa: E402
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import (  # noqa: E402
     TorchAdaptationRuntime,
 )
+from emblema.evaluation.contracts.candidate_kind import CandidateKind  # noqa: E402
 from emblema.evaluation.domain.exceptions import (  # noqa: E402
     CandidateNotRetainableError,
     DivergedAdaptationError,
@@ -39,6 +42,7 @@ from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutc
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
+from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
 from tests.evaluation.support import (  # noqa: E402
     LORA,
     TASK,
@@ -89,28 +93,39 @@ def adapt(published: Published, stated: AdaptationPlan) -> AdaptationOutcome:
     return published.runtime.adapt(stated, published.task, SAMPLE, VALIDATION, retain=False)
 
 
-def test_a_run_asked_to_keep_what_it_fitted_stores_a_candidate_that_reads_back(
+@pytest.mark.filterwarnings("ignore:# The axis name:UserWarning")
+def test_a_run_asked_to_keep_what_it_fitted_stores_both_forms_under_one_manifest(
     tmp_path: Path,
 ) -> None:
-    # What a campaign keeps of its endpoint, and the one thing another context may promote: it
-    # has to come out of the store as a candidate, not as bytes nobody can rebuild.
+    # What a campaign keeps of its endpoint, and the one thing another context may promote: the
+    # state the run fitted, which reads back as a candidate, and the graph derived from it, which
+    # answers the validation window as the run did — named together by the manifest the outcome
+    # points at, so the campaign's one reference reaches both.
     store = InMemoryArtifactStore()
-    manifest = publish(store, tmp_path / "scratch").manifest
-    backbones = SmallBackbones(vocabulary_size=len(CHANNELS))
+    published = publish(store, tmp_path / "scratch")
+    blocks = PublishedCorpusBlocks(store, tmp_path / "workspace")
     runtime = TorchAdaptationRuntime(
-        backbones,
-        PublishedCorpusBlocks(store, tmp_path / "workspace"),
-        device="cpu",
-        store=store,
+        SmallBackbones(vocabulary_size=len(CHANNELS)), blocks, device="cpu", store=store
     )
-    defined = replace(task(), manifest=manifest, labels=RemainingLifeScheme(CEILING))
+    defined = replace(task(), manifest=published.manifest, labels=RemainingLifeScheme(CEILING))
 
     outcome = runtime.adapt(plan(), defined, SAMPLE, VALIDATION, retain=True)
 
     assert outcome.artifact is not None
-    kept = FittedCandidate.read(store.get(outcome.artifact))
-    assert kept.vocabulary_size == len(CHANNELS)
-    assert kept.target_scale == CEILING
+    kept = KeptCandidates(store).read(outcome.artifact)
+    assert kept.kind is CandidateKind.NEURAL
+    assert kept.corpus_manifest == published.manifest
+    fitted = FittedCandidate.read(store.get(kept.measured.artifact))
+    assert (fitted.vocabulary_size, fitted.target_scale) == (len(CHANNELS), CEILING)
+    graph = kept.find(InferenceGraph.FORMAT)
+    assert graph is not None
+    held = blocks.block_of(blocks.manifest_of(published.manifest)).at([2])
+    answered = InferenceGraph.read(store.get(graph.artifact)).predict(
+        TokenTensors.from_windows(held)
+    )
+    assert float(answered[0]) == pytest.approx(outcome.predictions[0].predicted, abs=1e-4)
+    assert graph.deviation is not None
+    assert graph.deviation <= 1e-4
 
 
 def test_a_runtime_with_nowhere_to_keep_a_candidate_refuses_to_keep_one(
