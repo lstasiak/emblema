@@ -11,17 +11,19 @@
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-> **Work in progress.** The project is under active development. This README will be completed once the implementation is finished.
-
-Emblema is a research platform for label-efficient representation learning on heterogeneous sensor streams. A single permutation-invariant, variable-channel transformer encoder is pretrained without labels on measurement corpora that differ in channel count and sampling regime, then transferred to new, small labelled tasks. The platform measures, with confidence intervals and strong classical baselines, whether and when that pretraining actually pays off, and serves the winning candidate through an API.
+Emblema is a research platform for label-efficient representation learning on heterogeneous
+sensor streams. One permutation-invariant, variable-channel transformer is pretrained without
+labels on corpora that differ in channel count and sampling regime. It is then adapted to small
+labelled tasks. The platform measures, with paired confidence intervals and tuned classical
+baselines, whether and when that pretraining pays off. It can serve whichever candidate a
+finished comparison measured.
 
 ## The name
 
-In a Roman mosaic the *emblema* is the central figurative panel: laid in a workshop from the
-finest tesserae, then carried to the site and set into a floor of coarser tiles. The pretrained
-core here is made once, over many corpora, and carried into new arrangements of sensors. A
-single measurement stays a *tessera*: a self-contained token of channel, time and value, and the
-model learns to see the whole from them.
+In a Roman mosaic the *emblema* is the central panel. It was laid in a workshop from the finest
+tesserae, then carried to the site and set into a floor of coarser tiles. The pretrained core
+here is made once, over many corpora, and carried into new arrangements of sensors. Each
+measurement is a *tessera*: a self-contained token of channel, time and value.
 
 ![A mosaic emblema with Pegasus inside a guilloche border, second century AD, Archaeological Museum of Córdoba](docs/images/emblema.jpg)
 
@@ -29,244 +31,189 @@ model learns to see the whole from them.
 [Carole Raddato](https://commons.wikimedia.org/wiki/File:Mosaic_emblema_with_Pegasus,_the_immortal_winged_horse_which_sprang_forth_from_the_neck_of_Medusa_when_she_was_beheaded_by_the_hero_Perseus,_2nd_century_AD,_Archaeological_Museum_of_C%C3%B3rdoba,_Spain_(24783223879).jpg),
 [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/), via Wikimedia Commons; scaled down.*
 
-## Results so far
+## How it works
 
-Everything below is preliminary and measured on the validation side; the frozen test side of every
-task is opened once, at the end. Each figure names the compute tier and the hardware it was made
-on.
+**The problem.** Industrial and scientific sensor data rarely looks like a neat table. A jet
+engine reports 21 sensors every cycle. An intensive-care patient has a heart rate every few
+minutes, a blood test twice a day, and some values never measured at all. A satellite sends
+telemetry in bursts with gaps between passes. Most time-series models expect a fixed set of
+channels sampled on a regular clock. So each new dataset is usually resampled onto a grid, filled
+in where values are missing, and given a model of its own trained from its own labels. Labels are
+the expensive part: someone has to record when each engine failed or how each patient's stay
+ended.
 
-### Label efficiency
+**The idea.** Train one model on many unlabelled sensor datasets first, then adapt it to a new
+task with only a few labels. This is what pretrained language models do for text. For it to work
+across datasets, the model must not care how many sensors a dataset has or how often they are
+read.
 
-The claim the programme tests is that the pretrained encoder lowers the number of labels a task
-needs. The first reading is the turbofan task under four transfer modes over four budgets of
-labelled windows and five seeds, judged by the rules registered before any of its numbers
-existed ([`docs/preregistration.md`](docs/preregistration.md)): the endpoint is full fine-tuning
-against training from scratch at 200 labelled windows, at least a tenth off the error with the
-whole paired interval over engines above zero and the reduction clearing a practical floor.
+**Measurements as a bag of tokens.** Each measurement becomes one token: which sensor, its value
+(scaled per sensor), and when it was taken within the window. A token also carries how long it
+has been since that sensor's previous reading. A window of data is simply the set of its tokens.
+Three sensors or thirty, read every second or twice a day, it is the same kind of input, with
+nothing interpolated and no invented values. Fixed facts, such as a patient's age, become tokens
+without a time.
 
-**Confirmed on the validation side.** On the registered configuration — the four C-MAPSS subsets
-read with a channel per sensor and operating condition, and a backbone of eight epochs over them
-— full fine-tuning takes 12.3 % off the error of training from scratch at 200 labelled windows
-(2.34 RMSE, interval [1.49, 3.30] over five seeds), above the tenth and the practical floor. The
-advantage is largest where labels are scarcest: every pretrained arm is 16 to 22 % below the
-control at 50 windows, drawn from 33 to 39 engines. Full fine-tuning keeps 9 % at 1,000. Once
-every label is used the pretrained arms only match the control, and the frozen probe is worse.
-Every pretrained arm beats the control under each of the five seeds at 50 and 200 windows. Full
-fine-tuning is the most variable arm: over the two seeds its peak was not chosen on, its lead at
-200 is 5 %, where the low-rank updates hold 16 %. The first grid, on a corpus that scaled every
-sensor across all four subsets at once, was not confirmed; the positive control, the reading per
-operating condition and the rule that moved the configuration are recorded in the note. Every
-number is validation; the frozen test side is opened once, by the evaluation harness
-([ADR-0030](docs/adr/0030-transfer-modes.md),
-[ADR-0032](docs/adr/0032-statistics-of-a-paired-comparison.md),
-[ADR-0034](docs/adr/0034-the-turbofan-corpus-read-per-operating-condition.md),
-[`docs/verification/label-efficiency-curve.md`](docs/verification/label-efficiency-curve.md)).
+![Sensor readings of an intensive-care stay and a turbofan engine, and the same windows as sets of tokens](docs/images/token-view.png)
+
+*Real data, tokenised by the code in this repository. Top: 48 hours of one intensive-care stay
+(PhysioNet 2012), where heart rate is read 189 times and glucose 5. Bottom: the last 50 cycles of
+one turbofan engine (NASA C-MAPSS), every sensor every cycle. On the right, the rows the model
+receives for each: the same kind of input, of any length, from any sensors.*
+
+**One encoder for any sensor set.** A transformer reads the whole set at once. Each sensor has a
+learned identity vector, so a sensor it has never seen gets a new vector learned from a little
+data, while everything else carries over. The order of the tokens does not matter.
+
+**Learning without labels.** During pretraining, parts of each window are hidden: whole sensors,
+stretches of one sensor's time, or single readings. The model must predict the hidden values from
+what remains. Each kind of gap is also filled by a simple method, such as straight-line
+interpolation or a linear regression on the other sensors. The model counts as having learnt
+something only where it beats that method.
+
+**Adapting to a task.** The pretrained encoder is then used four ways on a small labelled task:
+kept frozen with only a small output layer trained, lightly adjusted through a few extra weights
+(LoRA), fully fine-tuned, or trained from scratch as the control. Each is run at several label
+budgets, from 50 labelled windows to all of them.
+
+**Keeping the comparison honest.**
+
+- **Rules first.** The comparisons, the size of an improvement that counts, and what is reported
+  if the answer is no are written down and committed before the runs they judge
+  ([`docs/preregistration.md`](docs/preregistration.md)).
+- **Engines, not windows.** Intervals are computed over engines or patients, the units that are
+  independent, not over overlapping windows.
+- **Strong baselines.** Classical methods compete in the same grid: gradient-boosted trees on
+  window statistics, frequency features and MiniRocket. They are tuned by a declared procedure,
+  so "a few hundred trees would have done as well" can be checked rather than argued.
+- **A positive control.** A generated dataset with known shared structure checks that the
+  pipeline can find structure when it is there. This makes a negative result on real data
+  meaningful.
+
+## Status
+
+Preliminary, on validation data. Each task's test data is used once, at the end.
+
+On the first task, remaining useful life of turbofan engines (NASA C-MAPSS), pretraining helps
+where labels are scarce. With 200 labelled windows, fine-tuning the pretrained encoder lowers the
+error by 12 % against the same network trained from scratch, and by 16–22 % with 50 labelled
+windows. With every label available the advantage disappears.
+
+Tuned classical methods are still stronger on this task: gradient-boosted trees reach 13.9 cycles
+of error at 200 labels, against 16.1 for the best pretrained variant. The two numbers come from
+separate runs. A single paired comparison of all candidates is the next step.
+
+Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
 ![Validation RMSE of every transfer mode over the budget of labelled windows, mean over five seeds with the spread as a band, and the reduction against the control arm with its paired interval over engines and the practical floor; tier M, Colab A100, fp32; validation, not test](docs/verification/figures/label-efficiency-curve.png)
 
-*Tier M, Colab A100, fp32. Preliminary; validation, not test.*
+*Error of each way of using the pretrained encoder, by number of labelled windows, on C-MAPSS
+FD001. Top: validation error in cycles (lower is better). Bottom: the reduction against training
+from scratch, with its 95 % interval over engines. Classical baselines are not shown; at 200
+labels the best of them reaches 13.9. Colab A100, fp32; validation, not test.*
 
-### The first backbone over a mixture of corpora
+## Quickstart
 
-The first backbone over the mixture — C-MAPSS, SKAB, SMD and the satellite corpus under one
-vocabulary, the reference shape of 4.75 million encoder parameters, eight epochs on a Kaggle T4
-in half precision — keeps its seventh epoch. Every corpus is learnt under the mixture; SMD is the
-one whose held-out loss rises while the mean still falls, which is the first thing the next run
-of the mixture weighs ([ADR-0029](docs/adr/0029-pretraining-over-a-mixture-of-corpora.md),
-[`docs/verification/manual-handoff.md`](docs/verification/manual-handoff.md)).
-
-![Validation loss of each corpus relative to the channel-mean predictor over the eight epochs of the mixed run; tier M, Kaggle T4, fp16; validation, not test](docs/verification/figures/pretraining-curve-backbone-mixed-m.png)
-
-*Tier M, Kaggle T4, fp16. Validation, not test.*
-
-## Methodology
-
-The criteria that decide whether pretraining paid off — which comparison is primary, how large a
-difference has to be, what is reported when the answer is partial or negative — are registered in
-[docs/preregistration.md](docs/preregistration.md) before the runs they judge. Decisions about the
-system are recorded in [docs/adr](docs/adr); measurements that cannot run in CI are dated notes in
-[docs/verification](docs/verification).
-
-A pretrained backbone meets a task in one of four ways, and the curve compares them at each label
-budget: trained from scratch, frozen under a linear probe, fine-tuned through low-rank updates
-(LoRA), fine-tuned in full. LoRA is not there to save memory or time — on an encoder of five
-million parameters full fine-tuning is cheap — but as an ablation of regularisation: what happens
-when fifty labels may spend fewer degrees of freedom. Every mode answers through the same linear
-head, trains for a fixed number of epochs and is scored on the last, so no validation number
-decides when a run stops ([ADR-0030](docs/adr/0030-transfer-modes.md)).
-
-## Development
-
-Requires [uv](https://docs.astral.sh/uv/). One command builds the environment, a second runs the tests:
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+. The floor is the Python of the free
+GPU platforms.
 
 ```sh
 uv sync --all-extras
-uv run pytest
+uv run pytest                    # unit, domain and application tests
+uv run lint-imports              # architecture contracts
 ```
 
-Supported Python: 3.12 and newer. The floor is set by the free GPU platforms the training code runs on.
+### Local stack
 
-Architecture rules (framework-free core, inward-pointing layers, bounded contexts that share only published contracts) are [import-linter](https://import-linter.readthedocs.io/) contracts in `pyproject.toml`. `uv run lint-imports` checks them; CI enforces them alongside lint, types and coverage.
-
-### Local environment
-
-Postgres, an S3-compatible artifact store ([Garage](https://garagehq.deuxfleurs.fr/)), MLflow and a RabbitMQ broker run in Docker. One command brings the stack up, a second checks it, a third creates the application's tables, a fourth runs the adapter contracts against it:
+Postgres, Garage, MLflow and RabbitMQ run in Docker:
 
 ```sh
 cp env.example .env
 docker compose up -d --wait
 bash scripts/smoke.sh
 uv run alembic upgrade head
-uv run pytest -m integration
+uv run pytest -m integration     # adapter contracts against the stack
 ```
 
-The metadata database holds one schema per bounded context and one [Alembic](https://alembic.sqlalchemy.org/) migration tree for all of them (`migrations/`); `uv run alembic check` reports any table the model has and the migrations do not. The integration tests never write to the configured database: they create, migrate and empty one of their own, named after it with `_test` appended, so a registry with work in progress survives a test run.
-
-Background work — the cells of an evaluation campaign — passes through RabbitMQ, and the workers that consume it are images built from this repository. There are two, because a campaign compares a network against classical methods and the two need nothing of each other: `worker-ml` carries the training stack and adapts a backbone, `worker-general` carries none of it and fits the baselines, which is less than half the image. Each assembles itself where it is started, so one that was not told what it serves exits with the reason instead of reporting for work and failing every cell it takes. They are behind a profile, because a worker is told which backbone it serves and there is none until a pretraining run has been accepted:
-
-```sh
-docker compose --profile workers up -d worker-ml worker-general
-```
-
-The suite runs in an image too, against that stack: same interpreter, same wheels, same operating system as the processes it tests. This is the run that gates a merge.
+The integration tests use their own database, named after the configured one with `_test`
+appended. The merge gate is the same suite inside the image, on the interpreter, wheels and OS
+the processes run on:
 
 ```sh
 docker compose run --rm tests pytest -o addopts="-ra --strict-markers" --cov
 ```
 
-The tests gated on Apple-silicon MPS skip there, so the development machine runs the suite as well (`uv run pytest`). Each environment skips what it cannot do and nothing else: on macOS the fits of real gradient-boosted trees skip, because the XGBoost wheel for that platform carries no OpenMP runtime and takes the system one, which cannot share a process with the copy torch carries. They run there in a process of their own, and every one of them runs in the image.
+MPS-gated tests skip in the image, so the suite also runs on the development Mac. On macOS the
+XGBoost tests run in a process of their own, because its OpenMP runtime cannot share a process
+with torch's:
 
 ```sh
 uv run pytest tests/evaluation/adapters/xgboost \
               tests/evaluation/adapters/test_classical_runtime_contract.py
 ```
 
-The artifact store speaks S3 to Garage locally and to a Cloudflare R2 bucket that GPU platforms can reach. The same contract tests run against the remote bucket by configuration alone: `uv run --env-file .env.r2 pytest -m integration` (variables in `env.example`). `docker compose down -v` removes the stack and its data.
+`uv run --env-file .env.r2 pytest -m integration` runs the same contracts against the remote
+bucket. The variable names are in `env.example`.
 
-### Data
+### Workflow
 
-The raw corpora come from their sources of record into `data/raw/` (not tracked) and are priced before any tokeniser exists: units, windows and tokens are counted from the files, and the GPU-hour budget per compute tier is derived from `scripts/corpus_budget.toml` and the tier profiles in `src/emblema/config/compute_tiers.toml`. The satellite telemetry ships as pandas pickles, so reading it needs the `corpora` extra, which `--all-extras` installs.
-
-```sh
-uv run scripts/fetch_corpora.py            # about 12 GB; a re-run skips what is already there
-uv run scripts/corpus_facts.py             # counts, printed as TOML to paste into the budget file
-uv run scripts/corpus_budget_report.py     # the budget tables
-```
-
-A corpus is published once, as a block of token windows beside a manifest in the artifact store;
-the manifest's reference is what a training run is pointed at:
+**Data.** Download from the sources of record, count, and publish a corpus as a block of windows
+beside a manifest:
 
 ```sh
+uv run scripts/fetch_corpora.py
 uv run python -m emblema.entrypoints.cli.publish_corpus --corpus cmapss --window 50 --stride 5
 ```
 
-### Pretraining
-
-A run is made in three steps that may happen on two machines. The first registers the backbone
-and places an order in the artifact store; the second fulfils the order wherever there is a GPU,
-here or in a notebook that installed the package at the commit the order names; the third takes
-the result back, holds it to the order, records the run in MLflow and registers the weights.
+**Pretraining.** Order a run here, run it on any machine with a GPU, then accept the result
+against the order ([ADR-0024](docs/adr/0024-handing-a-run-to-another-machine.md)):
 
 ```sh
 uv run python -m emblema.entrypoints.cli.pretrain order \
-    --experiment experiments/control-a-s.toml --corpus <manifest key> <manifest checksum> --run first
-uv run python -m emblema.entrypoints.cli.pretrain run --order <order key> <order checksum>
-uv run python -m emblema.entrypoints.cli.pretrain accept \
-    --result <result key> <result checksum> --track http://127.0.0.1:5000
+    --experiment experiments/<file>.toml --corpus <manifest key> <checksum> --run <name>
+uv run python -m emblema.entrypoints.cli.pretrain run --order <key> <checksum>
+uv run python -m emblema.entrypoints.cli.pretrain accept --result <key> <checksum> \
+    --track http://127.0.0.1:5000
 ```
 
-Accepting records the replayed run against the MLflow server `--track` names, so the flag is
-required there. Every parameter of a run lives in its experiment file under `experiments/`; the
-shape of the model and the share of each corpus's training units a run reads come from the
-compute tier the file declares unless the file states its own. A file names the corpora a run
-reads in the order their vocabulary was chained through the publications, and the order takes
-one `--corpus` per name in that order. A run over several corpora batches and steps each corpus
-on its own and scores each held-out side apart; every run keeps the epoch whose mean relative
-validation over its corpora is lowest, which for a run over one corpus is its lowest validation
-loss. The commit the order and the result carry is read from the installed package or the
-working tree: an order is placed only from a committed tree unless `--commit` states the
-revision, a run on other code than ordered stops before it trains, and a result made with other
-code, over other data or under another configuration is refused.
+Every parameter of a run is in its experiment file under `experiments/`.
 
-### Evaluation campaigns
-
-A comparison is declared in full before any of it runs — who competes, over which budgets of
-labels, under which seeds, which arm is the control, which single comparison is the endpoint,
-and the rules a verdict is read by — and is then only the record of running it. The campaign
-finishes when every cell of its grid has run and not before, so a curve is never read from the
-cells that happened to finish.
-
-It is declared from a file that is committed first, because budgets, seeds and the rule for what
-counts as a difference passed as command-line arguments are a decision nobody can date. Four
-invocations, none of which runs a cell:
+**Evaluation.** A campaign is declared from a committed file under `campaigns/`. Its cells run
+either on the Celery workers or, where no broker is reachable, from an order in the artifact
+store:
 
 ```sh
-uv run python -m emblema.entrypoints.cli.campaign define-task \
-  --corpus <manifest key> <checksum> --task turbofan-fd001
-uv run python -m emblema.entrypoints.cli.campaign define \
-  --file campaigns/baselines-fd001.toml --task <task id>
-uv run python -m emblema.entrypoints.cli.campaign advance --campaign <campaign id>
-uv run python -m emblema.entrypoints.cli.campaign announce --campaign <campaign id>
+uv run python -m emblema.entrypoints.cli.campaign define-task --corpus <key> <checksum> --task turbofan-fd001
+uv run python -m emblema.entrypoints.cli.campaign define --file campaigns/baselines-fd001.toml --task <task id>
+
+# either through the queue
+docker compose --profile workers up -d worker-ml worker-general
+uv run python -m emblema.entrypoints.cli.campaign advance --campaign <id>
+
+# or through an order, run anywhere and accepted back
+uv run python -m emblema.entrypoints.cli.campaign order --campaign <id> --pool ml
+uv run python -m emblema.entrypoints.cli.campaign_run --order <key> <checksum>
+uv run python -m emblema.entrypoints.cli.campaign accept --result <key> <checksum>
 ```
 
-The first three each print the identifier the next one takes. The fourth publishes a closed
-campaign's conclusion again, for when the delivery made on closing failed, and prints the
-checksum of every artifact the campaign kept, which is what a promotion names. What competes
-is a network adapted from
-pretrained weights or a classical method fitted from the labels alone, and a campaign is made of
-either without knowing which: the second kind is what keeps the headline comparison from having
-"a summary of each window and a few hundred trees would have done as well" standing beside it
-unanswered. A grid made only of the classical ones runs with the context that trains backbones
-absent altogether.
+A finished selection campaign reports its chosen variants with
+`campaign select --campaign <id> --candidate <name>`. A closed campaign's announcement is
+repeated with `campaign announce --campaign <id>`, which prints the checksum of every kept
+artifact.
 
-Declaring a campaign asks each competitor what it is and never runs one, so the process that
-declares it carries neither the training stack nor the one the baselines are fitted with.
-
-The cells are handed to a queue and run by a worker, one at a time, because a process that has
-imported the training stack cannot safely fork. In the stack it computes on the processor, which
-is what a test or a toy model needs. Whoever has an accelerator runs the same entry point on the
-host against the same broker, and that is the only thing the host run is for:
-
-```sh
-uv run celery -A emblema.entrypoints.workers.ml.celery_app worker --queues ml --pool=solo \
-  --without-mingle --without-gossip
-```
-
-The two flags switch off the handshakes a worker performs with its neighbours: they run over a
-kind of queue RabbitMQ 4 has withdrawn, and this system's workers have nothing to say to each
-other anyway. Without them the worker never finishes starting. Work that runs for hours goes to
-neither: it goes to a free GPU platform through the artifact handoff described above.
-
-A worker reads from the environment (`EMBLEMA_WORKER__*` in `env.example`) what it needs for
-what it competes, and demands it where it is started rather than at the first cell: the one that
-adapts a backbone needs the backbone, the schedule and the low-rank updates, the one that fits
-baselines needs the knobs they fit by, and either exits with the reason if it was told nothing
-about them. Each candidate records what it was set to, so a stored campaign still says how its
-arms learnt and not only how long — and a process configured otherwise is refused the cell
-rather than allowed to answer it under settings the grid never declared. Submitting a campaign again hands over exactly the cells that have not run, so a broker
-that lost every message costs a resubmission rather than the grid. When the last cell is
-recorded the campaign closes, reads its verdict and publishes what another context can act on —
-each candidate, what it scored at each budget, the artifact of the one cell the design kept, and
-where it stands against the control.
-
-### Serving
-
-Nothing is served that a finished campaign did not measure. When a campaign closes, Serving hears
-its conclusion and records what it kept — each artifact by checksum, with its origin, its kind
-and what it scored — in a projection of its own, with no key into the campaign's tables: a
-promotion is checked against that projection, so the two contexts could sit in separate
-databases. Every kind of candidate is promotable on the same terms; if the trees won, the trees
-are served.
+**Serving.** Only an artifact a finished campaign kept can be promoted, by checksum
+([ADR-0037](docs/adr/0037-promoting-what-a-campaign-kept.md)):
 
 ```sh
 uv run python -m emblema.entrypoints.cli.serving promote --checksum <checksum>
 uv run python -m emblema.entrypoints.cli.serving withdraw --model <model id>
 ```
 
-The checksum is one `campaign announce` prints. Where several campaigns kept the same bytes,
-`--campaign <id>` says which to promote out of, and where one campaign kept them as two
-competitors, `--candidate <name>` says which. A promotion is refused if no finished campaign kept
-the artifact, if a model not yet withdrawn already serves it, or if its bytes are no longer in
-the store. Withdrawal is final: the model is kept as the record of what answered and when, and
-promoting the same artifact again makes a new one. Running a promoted artifact is the prediction
-endpoint's business and is not here yet.
+## Documentation
+
+| Where | What |
+| --- | --- |
+| [`docs/findings.md`](docs/findings.md) | Results, setup and limitations on one page |
+| [`docs/preregistration.md`](docs/preregistration.md) | Rules and configuration in force, with a register of every change |
+| [`docs/adr/`](docs/adr/README.md) | Architecture decision records |
+| [`docs/verification/`](docs/verification/README.md) | Dated measurement notes: the lab notebook |
