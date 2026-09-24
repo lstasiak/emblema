@@ -24,8 +24,12 @@ class GroundTruth(Protocol):
         candidate fitted across corpora draws labels from several of them in one run, and a unit
         key is only unique within the corpus it was cut from.
 
+        Which corpora a process can answer for is a fact about the process, so it is a register
+        of readers that refuses a corpus nobody put in it; a reader of one corpus, reached only
+        through such a register, answers whatever name it is passed.
+
         Raises:
             UnknownGroundTruthError: If the ground truth says nothing about one of the windows,
-                or nothing at all about that corpus.
+                or — asked of a register — nothing at all about that corpus.
         """
         ...
