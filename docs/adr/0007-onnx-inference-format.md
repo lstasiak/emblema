@@ -1,7 +1,8 @@
 # ADR-0007: ONNX as the inference format — one dynamic token axis, a pinned opset, attention that survives an empty window
 
 - Status: accepted
-- Date: 2026-09-10; amended 2026-09-13 (stand-in replaced by the real encoder)
+- Date: 2026-09-10; amended 2026-09-13 (stand-in replaced by the real encoder), 2026-09-24 (the
+  exporter exists)
 - Full text before condensation: commit `5f14447`
 
 ## Context
@@ -45,6 +46,16 @@ executed and compared against eager PyTorch.
 - 2026-09-13: the stand-in was retired; `tests/ml/onnx_export` exports the real encoder (ADR-0017).
   On it, at the published tier, ONNX Runtime beat eager on x86 (216 ms vs 312 ms, 4.76M
   parameters) while the small model kept the old ordering. The revision threshold below stands.
+- 2026-09-24: the exporter exists. `InferenceGraph` (`evaluation/adapters/onnx/`) exports not the
+  bare encoder but the candidate a campaign keeps — encoder, pooling and the task's head — with two
+  outputs, `pooled_embedding` and `prediction` in the task's unit; a session asked for one computes
+  only that. Every constraint above held under all four transfer modes, over a vocabulary the task
+  grew and with low-rank updates in place: opset 20, `batch` and `n_tokens` the only symbolic axes,
+  agreement with eager to 1.0e-06 on the state and 1.9e-05 on the answer over a ceiling of 125, a
+  fully padded window finite, opset 23 still failing at execution. The suite moved with the adapter
+  to `tests/evaluation/adapters/onnx`. The latency ordering is unchanged on x86 (tier M: 114 ms
+  through ONNX Runtime, 71.5 ms eager); the revision threshold stands. How the graph reaches Serving
+  and the check it passes before it is kept: ADR-0040.
 
 ## Alternatives considered
 
@@ -59,7 +70,7 @@ executed and compared against eager PyTorch.
   | 3.19M | M1, macOS | 25.0 ms | 13.0 ms | 13.6 ms |
 
   One window of 512 tokens; x86 absolutes vary threefold between runs, the ordering did not
-  (`tests/ml/onnx_export/report.py`, `docs/verification/onnx-export.md`). ONNX is chosen for
+  (`tests/evaluation/adapters/onnx/report.py`, `docs/verification/onnx-export.md`). ONNX is chosen for
   portability — an artifact free of the training stack and its Python version — and for quantised
   variants, not speed. **Revisit** on the target container with tuned session options and
   quantisation: if ONNX Runtime is still slower at equal accuracy, CPU serving switches to
