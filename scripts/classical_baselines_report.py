@@ -1,23 +1,22 @@
-"""The gridded and spectral baselines against their references, and what one cell of each costs.
+"""MiniRocket as implemented here against the reference implementation, aeon's.
 
-Three measurements, each written to CSV before anything is printed from it:
+Two measurements, each written to CSV before anything is printed from it:
 
 - ``agreement.csv``: this project's MiniRocket against aeon's where no draw differs — one
   channel and one fitted series, or many channels fitted under aeon's own random draws —
   feature by feature;
-- ``multivariate.csv``: both transforms under the same grid, scaling and ridge, fitted on a
-  budget of windows of a published corpus and scored on units held out, per seed. The target is
-  the share of its unit's run a window ends at, a remaining-life shape read off the block alone,
-  so the comparison needs no registry and no labels file;
-- ``cost.csv``: one cell of every classical method at the budgets a campaign spends, features
-  and fit and scoring together, on this machine.
+- ``multivariate.csv``: three fits under the same grid, scaling and ridge — aeon's, this
+  project's under its own draws, and this project's under aeon's draws — fitted on a budget of
+  windows of a published corpus and scored on units held out, per seed. The target is the share
+  of its unit's run a window ends at, a remaining-life shape read off the block alone, so the
+  comparison needs no registry and no labels file. The third fit tells a difference of
+  arithmetic from a difference of draws: equal errors under equal draws leave only the draws.
 
-aeon is not a dependency of the project, so the first two are run under it, and the third in a
-process of its own, because the XGBoost wheel for macOS takes the system's OpenMP runtime and
-cannot share a process with the one numba brings::
+What a cell of every classical method costs is read off the campaigns that ran them, which time
+every cell where it runs. aeon is not a dependency of the project, so the measurement is run
+under it::
 
     uv run --with aeon python scripts/classical_baselines_report.py --block <path> --part aeon
-    uv run python scripts/classical_baselines_report.py --block <path> --part cost
     uv run python scripts/classical_baselines_report.py --block <path> --part print
 """
 
@@ -34,14 +33,6 @@ from numpy.typing import NDArray
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from emblema.evaluation.adapters.features.channel_aggregated_features import (  # noqa: E402
-    ChannelAggregatedFeatures,
-)
-from emblema.evaluation.adapters.features.per_channel_features import (  # noqa: E402
-    PerChannelFeatures,
-)
-from emblema.evaluation.adapters.features.spectral_features import SpectralFeatures  # noqa: E402
-from emblema.evaluation.adapters.features.window_features import WindowFeatures  # noqa: E402
 from emblema.evaluation.adapters.grid.regular_grid import RegularGrid  # noqa: E402
 from emblema.evaluation.adapters.minirocket.minirocket_transform import (  # noqa: E402
     MiniRocketTransform,
@@ -55,10 +46,9 @@ FEATURES, GRID_STEPS, THREADS = 9996, 64, 4
 PENALTIES = (0.001, 0.00464, 0.0215, 0.1, 0.464, 2.15, 10.0, 46.4, 215.0, 1000.0)
 # Enough repeats that a gap between two implementations can be told from a lucky draw.
 SEEDS = tuple(range(1, 21))
+# This project's fit replaying aeon's random draws, which leaves only the arithmetic to differ.
+REPLAYED = "emblema under aeon's draws"
 MULTIVARIATE_BUDGETS = (200, 1000)
-COST_BUDGETS = (50, 200)
-# The validation side of the turbofan task holds this many windows.
-SCORED = 535
 HELD_OUT_SHARE = 0.3
 
 
@@ -66,14 +56,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--block", type=Path, required=True, help="a published corpus block")
     parser.add_argument("--out", type=Path, default=OUT)
-    parser.add_argument("--part", choices=("aeon", "cost", "print"), required=True)
+    parser.add_argument("--part", choices=("aeon", "print"), required=True)
     arguments = parser.parse_args()
     arguments.out.mkdir(parents=True, exist_ok=True)
     if arguments.part == "aeon":
         write(arguments.out / "agreement.csv", agreement())
         write(arguments.out / "multivariate.csv", multivariate(WindowBlock(arguments.block)))
-    elif arguments.part == "cost":
-        write(arguments.out / "cost.csv", cost(WindowBlock(arguments.block)))
     else:
         report(arguments.out, arguments.block)
 
@@ -172,13 +160,16 @@ def multivariate(block: WindowBlock) -> list[dict[str, str]]:
         for seed in SEEDS:
             drawn = sorted(np.random.default_rng(seed).choice(training, budget, replace=False))
             laid = grid.of(block.at(drawn))
-            for implementation in ("emblema", "aeon"):
+            for implementation in ("emblema", "aeon", REPLAYED):
                 started = time.perf_counter()
                 with threadpool_limits(limits=THREADS):
-                    if implementation == "emblema":
-                        transform = MiniRocketTransform.fitted(
-                            laid, FEATURES, np.random.default_rng(seed)
+                    if implementation != "aeon":
+                        draws = (
+                            np.random.default_rng(seed)
+                            if implementation == "emblema"
+                            else AeonDraws(seed)
                         )
+                        transform = MiniRocketTransform.fitted(laid, FEATURES, draws)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
                         fitted, scored = transform.of(laid), transform.of(tested)
                     else:
                         theirs = MiniRocket(n_kernels=FEATURES, random_state=seed).fit(laid)
@@ -199,52 +190,6 @@ def multivariate(block: WindowBlock) -> list[dict[str, str]]:
                     }
                 )
     return rows
-
-
-def cost(block: WindowBlock) -> list[dict[str, str]]:
-    import xgboost
-    from sklearn.linear_model import RidgeCV
-    from threadpoolctl import threadpool_limits
-
-    rng = np.random.default_rng(0)
-    channels = max(max(window.channel_ids) for window in block.at(range(0, len(block), 97)))
-    scored = block.at(sorted(rng.choice(len(block), SCORED, replace=False).tolist()))
-    readings: dict[str, WindowFeatures] = {
-        "boosted_trees_per_channel": PerChannelFeatures(channels),
-        "boosted_trees_spectral": SpectralFeatures(channels),
-        "boosted_trees_across_channels": ChannelAggregatedFeatures(),
-    }
-    rows = []
-    for budget in COST_BUDGETS:
-        fitted = block.at(sorted(rng.choice(len(block), budget, replace=False).tolist()))
-        target = rng.uniform(0.0, 1.0, budget)
-        for name, features in readings.items():
-            started = time.perf_counter()
-            model = xgboost.XGBRegressor(
-                n_estimators=300,
-                max_depth=6,
-                learning_rate=0.05,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                tree_method="hist",
-                n_jobs=THREADS,
-                random_state=1,
-            ).fit(features.of(fitted), target)
-            model.predict(features.of(scored))
-            rows.append(row(name, budget, time.perf_counter() - started))
-        started = time.perf_counter()
-        with threadpool_limits(limits=THREADS):
-            grid = RegularGrid(GRID_STEPS, channels)
-            laid = grid.of(fitted)
-            transform = MiniRocketTransform.fitted(laid, FEATURES, np.random.default_rng(1))
-            ridge = RidgeCV(alphas=PENALTIES).fit(transform.of(laid), target)
-            ridge.predict(transform.of(grid.of(scored)))
-        rows.append(row("minirocket", budget, time.perf_counter() - started))
-    return rows
-
-
-def row(method: str, budget: int, seconds: float) -> dict[str, str]:
-    return {"method": method, "budget": str(budget), "seconds": repr(seconds)}
 
 
 def write(path: Path, rows: Sequence[dict[str, str]]) -> None:
@@ -287,17 +232,11 @@ def report(out: Path, block: Path) -> None:
                 "aeon RMSE",
                 "paired gap",
                 "emblema lower in",
+                "under aeon's draws",
                 "emblema s",
                 "aeon s",
             ),
             (summary(measured, budget) for budget in MULTIVARIATE_BUDGETS),
-        )
-    )
-    print()
-    print(
-        table(
-            ("method", *(f"budget {budget}" for budget in COST_BUDGETS)),
-            cost_rows(read(out / "cost.csv")),
         )
     )
 
@@ -321,25 +260,10 @@ def summary(rows: Sequence[dict[str, str]], budget: int) -> tuple[str, ...]:
         f"{theirs.mean():.4f} ± {theirs.std(ddof=1):.4f}",
         f"{gap.mean():+.4f} ± {gap.std(ddof=1):.4f}",
         f"{int((gap < 0).sum())} of {len(gap)}",
+        f"{np.abs(of(REPLAYED, 'rmse') - theirs).max():.1e} apart at most",
         f"{of('emblema', 'seconds').mean():.1f}",
         f"{of('aeon', 'seconds').mean():.1f}",
     )
-
-
-def cost_rows(rows: Sequence[dict[str, str]]) -> list[tuple[str, ...]]:
-    methods = dict.fromkeys(r["method"] for r in rows)
-    return [
-        (
-            method,
-            *(
-                f"{float(r['seconds']):.2f} s"
-                for budget in COST_BUDGETS
-                for r in rows
-                if r["method"] == method and r["budget"] == str(budget)
-            ),
-        )
-        for method in methods
-    ]
 
 
 if __name__ == "__main__":
