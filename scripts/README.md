@@ -53,6 +53,8 @@ experiment — and the shape of a note: its CSV, its tables, its figures.
 | `classical_baselines_report.py` | measurement | [`classical-baselines.md`](../docs/verification/classical-baselines.md): MiniRocket against aeon's where no draw differs, and fitted on a published corpus three ways — aeon's, this project's under its own draws and under aeon's — under one grid and ridge; two CSV files, printed as tables in a second step. Run under `uv run --with aeon` | — |
 | `backbone_comparison_report.py` | measurement | [`label-efficiency-curve.md`](../docs/verification/label-efficiency-curve.md): the rule by which one backbone replaces another — one mode under both, paired on the same engines and windows over the seeds both hold, with its interval over engines | the evaluation harness, once a campaign compares candidates by the context that owns the statistics |
 | `transfer_grid_shards.sh` | tooling | the grid run as several shards at once, the seeds dealt over the accelerators and over several processes per accelerator, each shard stored and published on its own; portable bash, so it runs on the notebook platforms as it runs here | the evaluation harness, once a campaign schedules its own runs |
+| `token_view_report.py` | measurement | one window of an intensive-care stay and one of an engine tokenised as pretraining does, every token beside the reading it came from, as CSV | — |
+| `token_view_figures.py` | measurement | `docs/images/token-view.png`, the README's picture of the representation | — |
 | `reporting.py` | shared | the heading and table shape of every report | — |
 
 ## Known debt

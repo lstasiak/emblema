@@ -1,11 +1,17 @@
 # Architecture Decision Records
 
-One record per decision that shapes the system. The defence of a decision is a reference
-implementation and a measurement, not a preference: where two options are viable, both live in the
-repository and the record states the threshold at which the choice flips.
+One record per decision that shapes the system. A decision is defended by a reference
+implementation and a measurement, not a preference; where two options are viable, the record
+states the threshold at which the choice flips.
 
-Format: context, decision, consequences, alternatives considered. Status is one of
-`proposed`, `accepted`, `superseded by ADR-XXXX`.
+Format: Status, Date, Context, Decision, Consequences, and optionally Alternatives considered,
+Revisit when and Amendments. Status is `proposed`, `accepted` or `superseded by ADR-XXXX`. A
+record is at most 800 words and holds one decision. A changed decision is a new record that
+supersedes the old one; an amendment is a dated line for a change of status or a short addition.
+
+The records were condensed to this format on 2026-09-24 without changing any decision, number or
+status. The full text as first written is in commit `5f14447`, e.g.
+`git show 5f14447:docs/adr/0008-pretraining-corpora.md`.
 
 | ID | Title | Status |
 |----|-------|--------|
