@@ -33,7 +33,6 @@ class PerChannelFeatures:
 
     @property
     def width(self) -> int:
-        """How many columns a window becomes."""
         return self._channels * len(WindowStatistics.NAMES)
 
     def names(self) -> tuple[str, ...]:

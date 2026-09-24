@@ -29,7 +29,6 @@ class ChannelAggregatedFeatures:
 
     @property
     def width(self) -> int:
-        """How many columns a window becomes, whatever corpus it came from."""
         return len(WindowStatistics.NAMES) * len(self.ACROSS) + len(self.OF_WINDOW)
 
     def names(self) -> tuple[str, ...]:

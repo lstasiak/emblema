@@ -21,11 +21,9 @@ class CandidateEvaluation:
             or on the frozen one.
         retain: Whether the fitted candidate is to be kept as an artifact. True for the one cell
             per candidate the campaign designated before anything ran.
-        declared: The candidate as the campaign recorded it — what it starts from, the
-            arithmetic it was held to, and what it was set to. Carried whole rather than field
-            by field, because a process configured otherwise would answer a point of the curve
-            under something the grid never declared, and a check that named the fields would
-            have to be remembered again for every field anyone adds.
+        declared: The candidate as the campaign recorded it, carried whole rather than field
+            by field, so a process configured otherwise is refused the cell rather than
+            answering a point of the curve under something the grid never declared.
     """
 
     task: TaskId

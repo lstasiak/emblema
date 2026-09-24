@@ -4,18 +4,15 @@ One class per section rather than one flat table, because the sections are what 
 made of: who competes, at which budgets, and what a verdict will require of them. They are read
 together and never apart, so they live together here.
 
-A file rather than command-line flags, and that is the whole point of it. The budgets, the
-seeds and the rule for what counts as a difference were flags once, so every one of them could
-have been chosen after the numbers were visible. Declared in a file that is committed before a
-campaign runs, they are a registration; passed on a command line, they are a decision nobody
-can date.
+Pydantic rather than a dataclass because a file is parsed, not constructed: every key is
+checked, a key nobody reads is refused, and the sections are frozen once read.
 """
 
 import tomllib
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
@@ -114,7 +111,7 @@ class CampaignFile(_Section):
         bootstrap: How each interval is drawn.
     """
 
-    name: str = Field(description="What the campaign is called, for whoever reads the file.")
+    name: str
     purpose: RunPurpose = RunPurpose.TUNING
     tier: ComputeTier
     candidates: _Candidates

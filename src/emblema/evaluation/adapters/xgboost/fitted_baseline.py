@@ -62,7 +62,6 @@ class FittedBaseline:
         feature_names: tuple[str, ...],
         target_scale: float,
     ) -> Self:
-        """The candidate as the fit ended, with its trees written out."""
         return cls(
             parameters=recipe.parameters(),
             feature_names=feature_names,
@@ -71,7 +70,6 @@ class FittedBaseline:
         )
 
     def to_bytes(self) -> bytes:
-        """The candidate as the bytes the artifact store keeps."""
         buffer = io.BytesIO()
         joblib.dump(
             {

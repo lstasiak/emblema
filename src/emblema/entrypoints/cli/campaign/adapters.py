@@ -13,10 +13,9 @@ class Adapters:
 
     The corpus is here and not only behind a use case because naming a task's units needs the
     division of the corpus they are named in, and only the corpus can say what that is. The
-    register turns that division into the command; nothing is decided here.
-
-    The candidates are a catalogue and not a provider: this process asks what each competitor
-    is and never runs one, so it carries nothing that could.
+    register turns that division into the command; nothing is decided here. The candidates are
+    a catalogue and not a provider, because this process asks what each competitor is and never
+    runs one.
     """
 
     corpus: CorpusWindows

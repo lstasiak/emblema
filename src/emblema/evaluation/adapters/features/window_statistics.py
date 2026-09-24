@@ -72,7 +72,6 @@ class WindowStatistics:
     def _of_values(
         values: NDArray[np.float64], starts: NDArray[np.int64], counts: NDArray[np.int64]
     ) -> tuple[NDArray[np.float64], ...]:
-        """Mean, deviation, extremes and ends of each channel's readings."""
         mean = np.add.reduceat(values, starts) / counts
         variance = np.add.reduceat(values * values, starts) / counts - mean * mean
         return (

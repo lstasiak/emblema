@@ -67,26 +67,12 @@ class CompositionRoot:
     ) -> None:
         """Assemble the process.
 
-        Args:
-            settings: Values read from the environment; only the root and the adapters see them.
-            workspace: Directory corpus blocks are fetched to and mapped from.
-            corpora: Directory the raw corpora sit in, where a task's labels are read from.
-            schedule: How long every cell learns, in how large a step — the compute budget the
-                campaign's neural candidates are held to.
-            lora: The low-rank updates the arm of that name adds; needed unless a provider is
-                given instead.
-            backbone: Weights the pretrained arms of this process's campaigns start from;
-                needed unless a provider is given instead.
-            device: Where a cell computes; this machine's accelerator unless given.
-            store: Artifact store; the configured S3-compatible bucket unless given.
-            tasks: Registry of tasks; the configured metadata database unless given.
-            campaigns: Registry of campaigns; the same database unless given.
-            candidates: Who competes; the four arms over ``backbone`` unless given.
-            jobs: Where cells are submitted; the configured broker unless given.
-            subscriptions: Where handlers are registered; a fresh registry unless given.
-            events: Where use cases publish; synchronous over ``subscriptions`` unless given.
-            clock: Source of the current instant; the system clock unless given.
-            ids: Source of new identifiers; random UUIDs unless given.
+        What is this root's own is the ``schedule`` every cell learns under — the compute budget
+        the campaign's neural candidates are held to — the ``backbone`` the pretrained arms
+        start from, the ``lora`` updates the arm of that name adds, and the ``device`` a cell
+        computes on, this machine's accelerator unless given. Backbone and updates are needed
+        unless ``candidates`` is given instead of the four arms they build. Everything else is
+        what ``CampaignProcess`` takes and reaches it unchanged.
 
         Raises:
             ValueError: If an adapter is left to the root without settings to build it from, or

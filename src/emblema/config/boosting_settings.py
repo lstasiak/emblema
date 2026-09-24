@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class BoostingSettings(BaseModel):
@@ -17,9 +17,4 @@ class BoostingSettings(BaseModel):
     feature_share: float
     min_leaf_weight: float
     l2_penalty: float
-    threads: int = Field(
-        description=(
-            "Threads one fit may use. Part of what a fit answers, not a dial of convenience: "
-            "the histogram a tree grows from is summed in the order the work was split in."
-        )
-    )
+    threads: int

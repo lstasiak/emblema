@@ -38,11 +38,6 @@ class SqlAlchemyEvaluationCampaignRepository:
             return record.to_campaign()
 
     def save(self, campaign: EvaluationCampaign, *, seen: int) -> None:
-        """Store the campaign, provided nothing has changed it since revision ``seen``.
-
-        Raises:
-            CampaignChangedElsewhereError: If it has moved on since that revision.
-        """
         with Session(self._engine) as session, session.begin():
             stored = session.execute(
                 select(EvaluationCampaignRecord.version)

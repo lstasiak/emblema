@@ -53,11 +53,8 @@ class DefineCampaign:
     What each candidate is comes from the catalogue rather than from the caller: the compute
     budget a candidate is held to has to be the one it will actually spend, and a figure written
     down beside a candidate can disagree with what the candidate does. Asking here means the
-    disagreement is impossible rather than merely unlikely.
-
-    A catalogue and not a provider, because declaring a comparison never runs one: the process
-    that declares a campaign then carries no runtime, which on the platform this is developed
-    on is what lets it exist at all.
+    disagreement is impossible rather than merely unlikely. A catalogue and not a provider,
+    because declaring a comparison never runs one.
     """
 
     def __init__(

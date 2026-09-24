@@ -9,13 +9,9 @@ from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
 class RoutedCandidateCatalogue:
     """Every kind of competitor behind one catalogue, each name routed to whoever holds it.
 
-    What a campaign is designed against is one catalogue, because knowing which of them answers
-    a given name would make the design depend on what its candidates are made of. What it gets
-    instead is a map from name to holder, built where the process is assembled.
-
-    Routed by that map and never by trying one holder and catching its refusal: a holder that
-    refuses a name it does own would then be indistinguishable from one asked the wrong
-    question, and which answer a design got would depend on the order they were tried in.
+    The describing half of ``RoutedCandidateProvider``, for the process that declares a campaign
+    and runs nothing: the same map from name to holder, for the same reason it is a map and not
+    a chain of holders tried in turn.
     """
 
     def __init__(self, by_candidate: Mapping[CandidateRef, CandidateCatalogue]) -> None:

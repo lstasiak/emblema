@@ -12,13 +12,9 @@ class KnownGroundTruths:
     file published beside it, and a process that has neither can still run a campaign over a
     corpus whose answers it does have. A register rather than a table read from configuration,
     because a corpus named in an environment file could be pointed at the wrong reader and the
-    task would be answered instead of refused.
-
-    Where a corpus's files sit under the directory the process was given is part of the same
-    fact. Each publisher ships its own shape and the archives are unpacked as they come, so the
-    directory a reader binds to is nested differently for each of them; asking the process to be
-    told that directory would be asking an operator to know one corpus's packaging. The marker
-    below is what the turbofans are recognised by.
+    task would be answered instead of refused. Where each corpus's files sit under the directory
+    the process was given is part of the same fact, so a reader is bound to the directory its
+    marker file is found in rather than to one an operator would have to know.
 
     Only the turbofans are here. The other corpora are published without answers this context
     knows how to read, and a task defined over one of them is refused by name rather than

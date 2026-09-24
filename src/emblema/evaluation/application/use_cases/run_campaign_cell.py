@@ -67,8 +67,12 @@ class RunCampaignCell:
             CampaignNotFoundError: If the campaign is unknown.
             UnknownCampaignCellError: If the cell is not one of the campaign's grid.
             UnknownCandidateError: If the provider supplies no candidate of that name.
+            CandidateMismatchError: If the campaign recorded the candidate as something other
+                than what the provider supplies.
             FrozenTestSplitClosedError: If a run that is not the final one asked for the frozen
                 side.
+            CampaignChangedElsewhereError: If the campaign kept moving for as many attempts as
+                are allowed to record the result.
         """
         campaign = self._campaigns.get(command.campaign)
         recorded = self._recorded(campaign.results, command.cell)
