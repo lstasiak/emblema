@@ -17,8 +17,6 @@ from emblema.evaluation.contracts.identifiers import CampaignId, TaskId
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 
-DEFINE_TASK, DEFINE, ADVANCE = "define-task", "define", "advance"
-
 
 class CampaignCli:
     """Command line of a comparison: define the task, declare the campaign, hand out its cells.
@@ -49,6 +47,12 @@ class CampaignCli:
     else: whatever a library prints while a use case runs goes to standard error.
     """
 
+    # Attributes rather than module constants because a bare name in a match pattern captures
+    # whatever it is given instead of comparing against it; a dotted one compares.
+    DEFINE_TASK = "define-task"
+    DEFINE = "define"
+    ADVANCE = "advance"
+
     def parse(self, argv: Sequence[str] | None = None) -> CampaignInvocation:
         """What the arguments ask for, as far as it can be known without reading anything."""
         arguments = self._parser().parse_args(argv)
@@ -75,24 +79,27 @@ class CampaignCli:
         """Carry out the invocation and return what the process prints for it.
 
         Raises:
-            SystemExit: If the invocation names a task or a campaign nothing knows.
+            SystemExit: If the invocation names a task or a campaign nothing knows, or asks for
+                something this command line does not do.
         """
         match invocation.what:
-            case "define-task":
+            case self.DEFINE_TASK:
                 task, corpus = self._known(invocation.task), self._named(invocation.corpus)
                 sides = adapters.corpus.describe(corpus)
                 return str(services.define_downstream_task(task.defined_over(corpus, sides)))
-            case "define":
+            case self.DEFINE:
                 # The task is settled before the file is opened: an invocation that names none
                 # is refused without anything on disk being read.
                 over = self._task(invocation.task)
                 declared = CampaignFile.load(self._named(invocation.file))
                 return str(services.define_campaign(self._design(declared, over)))
-            case _:
+            case self.ADVANCE:
                 submitted = services.advance_campaign(
                     AdvanceCampaignCommand(campaign=self._campaign(invocation.campaign))
                 )
                 return str(submitted)
+            case _:
+                raise SystemExit(f"this command line does not {invocation.what!r}")
 
     @staticmethod
     def _design(declared: CampaignFile, task: TaskId) -> DefineCampaignCommand:
@@ -167,7 +174,9 @@ class CampaignCli:
         )
         what = parser.add_subparsers(dest="what", required=True)
 
-        task = what.add_parser(DEFINE_TASK, help="cut a labelled task out of a published corpus")
+        task = what.add_parser(
+            self.DEFINE_TASK, help="cut a labelled task out of a published corpus"
+        )
         task.add_argument(
             "--corpus",
             nargs=2,
@@ -181,10 +190,12 @@ class CampaignCli:
             help=f"which registered task to define: {', '.join(KnownTasks.names())}",
         )
 
-        define = what.add_parser(DEFINE, help="declare a campaign, with nothing run")
+        define = what.add_parser(self.DEFINE, help="declare a campaign, with nothing run")
         define.add_argument("--file", type=Path, required=True, help="the campaign's file")
         define.add_argument("--task", required=True, help="identifier of the task it is over")
 
-        advance = what.add_parser(ADVANCE, help="submit every cell of a campaign that has not run")
+        advance = what.add_parser(
+            self.ADVANCE, help="submit every cell of a campaign that has not run"
+        )
         advance.add_argument("--campaign", required=True, help="identifier of the campaign")
         return parser
