@@ -55,8 +55,8 @@
             </div>
         </aside>
         <h2>
-            <span class="text">7 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">7<span class="text"> run</span></button>
+            <span class="text">10 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">10<span class="text"> run</span></button>
             <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">0<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
             <button type="button" class="par run show_par button_toggle_par" value="par" data-shortcut="p" title="Toggle lines partially run">0<span class="text"> partial</span></button>
@@ -64,10 +64,10 @@
         <p class="text">
             <a id="prevFileLink" class="nav" href="z_7535236c36a7d3b1_known_tasks_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a id="nextFileLink" class="nav" href="z_ad02c4fa83c15888_adapters_py.html">&#xbb; next</a>
+            <a id="nextFileLink" class="nav" href="z_0c38b6896c2f2358_adapters_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-09-24 17:18 +0000
+            created at 2026-09-24 21:34 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -84,39 +84,48 @@
 <main id="source">
     <p class="run"><span class="n"><a id="t1" href="#t1">1</a></span><span class="t"><span class="key">from</span> <span class="nam">dataclasses</span> <span class="key">import</span> <span class="nam">dataclass</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2" href="#t2">2</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">advance_campaign</span> <span class="key">import</span> <span class="nam">AdvanceCampaign</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">announce_campaign</span> <span class="key">import</span> <span class="nam">AnnounceCampaign</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">define_campaign</span> <span class="key">import</span> <span class="nam">DefineCampaign</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">define_downstream_task</span> <span class="key">import</span> <span class="nam">DefineDownstreamTask</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="op">@</span><span class="nam">dataclass</span><span class="op">(</span><span class="nam">frozen</span><span class="op">=</span><span class="key">True</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t"><span class="key">class</span> <span class="nam">Services</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The use cases this command line can run: define a task, declare a campaign, submit it.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">accept_campaign_order_result</span> <span class="key">import</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t">    <span class="nam">AcceptCampaignOrderResult</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t"><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">advance_campaign</span> <span class="key">import</span> <span class="nam">AdvanceCampaign</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">announce_campaign</span> <span class="key">import</span> <span class="nam">AnnounceCampaign</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">define_campaign</span> <span class="key">import</span> <span class="nam">DefineCampaign</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">define_downstream_task</span> <span class="key">import</span> <span class="nam">DefineDownstreamTask</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">order_campaign_cells</span> <span class="key">import</span> <span class="nam">OrderCampaignCells</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t"><span class="key">from</span> <span class="nam">emblema</span><span class="op">.</span><span class="nam">evaluation</span><span class="op">.</span><span class="nam">application</span><span class="op">.</span><span class="nam">use_cases</span><span class="op">.</span><span class="nam">select_tuned_variants</span> <span class="key">import</span> <span class="nam">SelectTunedVariants</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t12" href="#t12">12</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t"><span class="str">    Announcing a closed campaign again is among them because delivering its conclusion is this</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t"><span class="str">    process&#x27;s business as much as a worker&#x27;s: whichever closed it published in process, and a</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t"><span class="str">    delivery that failed there is repaired by whoever holds the registry.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t"><span class="str">    Running a cell is not among them, and deliberately: a grid is worked by the processes that</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t"><span class="str">    consume the queues, so a command line that ran one would be a second way of producing the</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t"><span class="str">    same numbers, under whatever the machine at the keyboard happened to be configured with.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t20" href="#t20">20</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t"><span class="op">@</span><span class="nam">dataclass</span><span class="op">(</span><span class="nam">frozen</span><span class="op">=</span><span class="key">True</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t"><span class="key">class</span> <span class="nam">Services</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The use cases this command line can run: define, declare, submit, order out, accept back.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t"><span class="str">    Announcing a closed campaign again is among them because delivering its conclusion is this</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t"><span class="str">    process&#x27;s business as much as a worker&#x27;s: whichever closed it published in process, and a</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t20" href="#t20">20</a></span><span class="t"><span class="str">    delivery that failed there is repaired by whoever holds the registry.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t21" href="#t21">21</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t22" href="#t22">22</a></span><span class="t">    <span class="nam">define_downstream_task</span><span class="op">:</span> <span class="nam">DefineDownstreamTask</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t23" href="#t23">23</a></span><span class="t">    <span class="nam">define_campaign</span><span class="op">:</span> <span class="nam">DefineCampaign</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t24" href="#t24">24</a></span><span class="t">    <span class="nam">advance_campaign</span><span class="op">:</span> <span class="nam">AdvanceCampaign</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t25" href="#t25">25</a></span><span class="t">    <span class="nam">announce_campaign</span><span class="op">:</span> <span class="nam">AnnounceCampaign</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t22" href="#t22">22</a></span><span class="t"><span class="str">    Running a cell is not among them, and deliberately: a grid is worked by the processes that</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t23" href="#t23">23</a></span><span class="t"><span class="str">    consume the queues, or by the process that runs an order, and both answer through the same</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t24" href="#t24">24</a></span><span class="t"><span class="str">    candidates. A command line that ran one here would be a third way of producing the same</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t25" href="#t25">25</a></span><span class="t"><span class="str">    numbers, under whatever the machine at the keyboard happened to be configured with.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t26" href="#t26">26</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t27" href="#t27">27</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t28" href="#t28">28</a></span><span class="t">    <span class="nam">define_downstream_task</span><span class="op">:</span> <span class="nam">DefineDownstreamTask</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t29" href="#t29">29</a></span><span class="t">    <span class="nam">define_campaign</span><span class="op">:</span> <span class="nam">DefineCampaign</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t30" href="#t30">30</a></span><span class="t">    <span class="nam">advance_campaign</span><span class="op">:</span> <span class="nam">AdvanceCampaign</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t31" href="#t31">31</a></span><span class="t">    <span class="nam">announce_campaign</span><span class="op">:</span> <span class="nam">AnnounceCampaign</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t32" href="#t32">32</a></span><span class="t">    <span class="nam">order_campaign_cells</span><span class="op">:</span> <span class="nam">OrderCampaignCells</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t33" href="#t33">33</a></span><span class="t">    <span class="nam">accept_campaign_order_result</span><span class="op">:</span> <span class="nam">AcceptCampaignOrderResult</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t34" href="#t34">34</a></span><span class="t">    <span class="nam">select_tuned_variants</span><span class="op">:</span> <span class="nam">SelectTunedVariants</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
         <p>
             <a class="nav" href="z_7535236c36a7d3b1_known_tasks_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a class="nav" href="z_ad02c4fa83c15888_adapters_py.html">&#xbb; next</a>
+            <a class="nav" href="z_0c38b6896c2f2358_adapters_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-09-24 17:18 +0000
+            created at 2026-09-24 21:34 +0000
         </p>
     </div>
 </footer>
