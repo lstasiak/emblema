@@ -23,6 +23,7 @@ from emblema.evaluation.adapters.candidates.routed_candidate_catalogue import (
 )
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
+from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import UnknownCandidateError
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
@@ -35,15 +36,19 @@ ARMS = BackboneArmCatalogue(
     adaptation_schedule(),
 )
 BASELINES = ClassicalBaselineCatalogue(
-    (ClassicalArm(ref=TREES, features=FeatureScheme.PER_CHANNEL, sources=()),), boosting()
+    (
+        ClassicalArm(
+            ref=TREES,
+            method=BoostedTrees(features=FeatureScheme.PER_CHANNEL, boosting=boosting()),
+            sources=(),
+        ),
+    )
 )
+ROUTED = RoutedCandidateCatalogue({CONTENDER: ARMS, TREES: BASELINES})
 CATALOGUES: dict[str, Callable[[], tuple[CandidateCatalogue, CandidateRef]]] = {
     "arms": lambda: (ARMS, CONTENDER),
     "baselines": lambda: (BASELINES, TREES),
-    "routed": lambda: (
-        RoutedCandidateCatalogue({CONTENDER: ARMS, TREES: BASELINES}),
-        TREES,
-    ),
+    "routed": lambda: (ROUTED, TREES),
 }
 
 
@@ -110,3 +115,37 @@ def test_describing_every_candidate_a_campaign_may_name_loads_no_runtime() -> No
     )
 
     assert read.stdout.strip() == "[]"
+
+
+def test_a_variant_of_a_baseline_is_described_with_its_knob_turned_and_nothing_else() -> None:
+    base = BASELINES.describe(TREES)
+
+    variant = ROUTED.describe(CandidateRef("boosted_trees_per_channel@max_depth=5"))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    before = {p.name: p.value for p in base.method.parameters}
+    assert variant.ref == CandidateRef("boosted_trees_per_channel@max_depth=5")
+    assert stated["max_depth"] == "5"
+    assert {name for name in stated if stated[name] != before[name]} == {"max_depth"}
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "boosted_trees_per_channel@threads=8",
+        "boosted_trees_per_channel@max_depth=deep",
+        "boosted_trees_per_channel@max_depth=5,learning_rate=0.1",
+        "full_fine_tuning@learning_rate=0.1",
+        "boosted_trees_per_channel@max_depth=3",
+    ],
+    ids=[
+        "not a knob",
+        "not its type",
+        "out of order",
+        "a network has no knobs yet",
+        "the default under another name",
+    ],
+)
+def test_a_variant_no_holder_can_read_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError):
+        ROUTED.describe(CandidateRef(name))

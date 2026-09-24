@@ -13,6 +13,7 @@ from collections.abc import Mapping
 
 import pytest
 
+from emblema.evaluation.adapters.in_memory.campaign_handoff import InMemoryCampaignHandoff
 from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
@@ -22,6 +23,10 @@ from emblema.evaluation.adapters.in_memory.evaluation_campaign_repository import
 )
 from emblema.evaluation.application.assemblers.campaign_completed_assembler import (
     CampaignCompletedAssembler,
+)
+from emblema.evaluation.application.use_cases.accept_campaign_order_result import (
+    AcceptCampaignOrderResult,
+    AcceptCampaignOrderResultCommand,
 )
 from emblema.evaluation.application.use_cases.advance_campaign import (
     RUN_CAMPAIGN_CELL,
@@ -33,6 +38,15 @@ from emblema.evaluation.application.use_cases.define_campaign import (
     DefineCampaign,
     DefineCampaignCommand,
 )
+from emblema.evaluation.application.use_cases.fulfil_campaign_order import (
+    FulfilCampaignOrder,
+    FulfilCampaignOrderCommand,
+)
+from emblema.evaluation.application.use_cases.order_campaign_cells import (
+    OrderCampaignCells,
+    OrderCampaignCellsCommand,
+)
+from emblema.evaluation.application.use_cases.record_cell_result import RecordCellResult
 from emblema.evaluation.application.use_cases.run_campaign_cell import (
     RunCampaignCell,
     RunCampaignCellCommand,
@@ -40,13 +54,18 @@ from emblema.evaluation.application.use_cases.run_campaign_cell import (
 from emblema.evaluation.contracts.candidate_standing import CandidateStanding
 from emblema.evaluation.contracts.events import CampaignCompleted
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
+from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
+from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.domain.exceptions import (
     CampaignChangedElsewhereError,
+    CampaignOrderRejectedError,
+    InvalidCampaignOrderError,
     UnknownCampaignCellError,
 )
+from emblema.evaluation.domain.handoff.campaign_order_result import CampaignOrderResult
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -56,6 +75,8 @@ from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubs
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.adapters.queues.immediate_job_queue import ImmediateJobQueue
 from emblema.shared.jobs.job_argument import JobArgument
+from emblema.shared.jobs.worker_pool import WorkerPool
+from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.compute import ComputeTier
 from tests.evaluation.support import (
     BOOTSTRAP,
@@ -84,6 +105,7 @@ class Campaign:
         self.store = InMemoryArtifactStore()
         tasks = InMemoryDownstreamTaskRepository()
         tasks.save(task())
+        self.tasks = tasks
         self.campaigns = InMemoryEvaluationCampaignRepository()
         self.candidates = InMemoryCandidateProvider(
             (candidate(CONTROL), candidate(CONTENDER)),
@@ -99,7 +121,8 @@ class Campaign:
         self.complete = CompleteCampaign(
             self.campaigns, CampaignCompletedAssembler(), clock, ids, events
         )
-        self.run_cell = RunCampaignCell(self.campaigns, self.candidates, self.complete)
+        self.record = RecordCellResult(self.campaigns, self.complete)
+        self.run_cell = RunCampaignCell(self.campaigns, self.candidates, self.record)
         self.jobs = ImmediateJobQueue({RUN_CAMPAIGN_CELL: self._run})
         self.advance = AdvanceCampaign(self.campaigns, self.jobs, self.complete)
 
@@ -275,7 +298,9 @@ def test_a_cell_recorded_while_this_one_ran_is_not_written_over(running: Campaig
         running.campaigns,
         result(theirs.candidate, theirs.budget, theirs.seed, ERRORS[theirs.candidate]),
     )
-    run_cell = RunCampaignCell(competitor, running.candidates, running.complete)
+    run_cell = RunCampaignCell(
+        competitor, running.candidates, RecordCellResult(competitor, running.complete)
+    )
 
     run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=mine))
 
@@ -292,7 +317,9 @@ def test_the_worker_that_records_last_is_the_one_that_closes_the_grid(running: C
         running.campaigns,
         result(theirs.candidate, theirs.budget, theirs.seed, ERRORS[theirs.candidate]),
     )
-    run_cell = RunCampaignCell(competitor, running.candidates, running.complete)
+    run_cell = RunCampaignCell(
+        competitor, running.candidates, RecordCellResult(competitor, running.complete)
+    )
 
     # This worker is overtaken on the last two cells, so the state it started from never shows a
     # whole grid; the state it ends up writing does, and that is what has to close the campaign.
@@ -341,11 +368,170 @@ def test_a_worker_that_keeps_losing_the_race_gives_up_rather_than_spinning(
     # two the same would sit in the queue repeating an expensive cell for as long as it lasted.
     campaign_id = running.declared()
     cell = running.campaigns.get(campaign_id).design.cells()[0]
+    overtaken = AlwaysOvertaken(running.campaigns)
     run_cell = RunCampaignCell(
-        AlwaysOvertaken(running.campaigns), running.candidates, running.complete
+        overtaken, running.candidates, RecordCellResult(overtaken, running.complete)
     )
 
     with pytest.raises(CampaignChangedElsewhereError, match="every one of"):
         run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=cell))
 
     assert running.campaigns.get(campaign_id).results == ()
+
+
+class ElsewhereRun:
+    """What another machine holds to run an order: the same candidates, no registry of its own."""
+
+    def __init__(self, running: Campaign, handoff: InMemoryCampaignHandoff) -> None:
+        self.tasks = InMemoryDownstreamTaskRepository()
+        self.fulfil = FulfilCampaignOrder(handoff, self.tasks, running.candidates)
+
+
+def ordered(
+    running: Campaign, handoff: InMemoryCampaignHandoff, campaign_id: CampaignId
+) -> ArtifactRef:
+    order = OrderCampaignCells(running.campaigns, running.tasks, handoff)
+    return order(
+        OrderCampaignCellsCommand(campaign=campaign_id, pool=WorkerPool.ML, git_commit="abc123")
+    )
+
+
+def test_a_grid_run_through_an_order_is_the_grid_run_through_the_queue(running: Campaign) -> None:
+    queued = running.declared()
+    running.advance(AdvanceCampaignCommand(campaign=queued))
+    handoff = InMemoryCampaignHandoff()
+    through_order = running.declared()
+    elsewhere = ElsewhereRun(running, handoff)
+    accept = AcceptCampaignOrderResult(handoff, running.record)
+
+    reported = elsewhere.fulfil(
+        FulfilCampaignOrderCommand(
+            order=ordered(running, handoff, through_order), git_commit="abc123"
+        )
+    )
+    accepted = accept(AcceptCampaignOrderResultCommand(result=reported))
+
+    by_queue = running.campaigns.get(queued)
+    by_order = running.campaigns.get(through_order)
+    assert accepted == len(by_order.design.cells())
+    assert by_order.is_finished
+    assert {(r.cell, r.errors) for r in by_order.results} == {
+        (r.cell, r.errors) for r in by_queue.results
+    }
+    assert len(running.published) == 2
+
+
+def test_every_cell_is_reported_as_it_is_answered(running: Campaign) -> None:
+    campaign_id = running.declared()
+    handoff = InMemoryCampaignHandoff()
+    order = ordered(running, handoff, campaign_id)
+
+    ElsewhereRun(running, handoff).fulfil(
+        FulfilCampaignOrderCommand(order=order, git_commit="abc123")
+    )
+
+    answered = [len(handoff.read_result(ref).results) for ref in handoff.reported]
+    cells = len(running.campaigns.get(campaign_id).design.cells())
+    # One report per cell, then the whole once more, which names what the last one did.
+    assert answered == [*range(1, cells + 1), cells]
+    assert handoff.reported[-1] == handoff.reported[-2]
+
+
+def test_a_run_resumed_from_its_last_report_runs_only_the_cells_that_are_left(
+    running: Campaign,
+) -> None:
+    campaign_id = running.declared()
+    handoff = InMemoryCampaignHandoff()
+    order = ordered(running, handoff, campaign_id)
+    first = ElsewhereRun(running, handoff)
+    first.fulfil(FulfilCampaignOrderCommand(order=order, git_commit="abc123"))
+    interrupted = handoff.reported[1]
+    asked: list[CampaignCell] = []
+    counting = FulfilCampaignOrder(
+        handoff, InMemoryDownstreamTaskRepository(), Counting(running.candidates, asked)
+    )
+
+    resumed = counting(
+        FulfilCampaignOrderCommand(order=order, git_commit="abc123", resume=interrupted)
+    )
+
+    cells = running.campaigns.get(campaign_id).design.cells()
+    assert len(asked) == len(cells) - 2
+    assert handoff.read_result(resumed).cells == frozenset(cells)
+
+
+def test_an_order_is_refused_on_other_code_before_a_cell_runs(running: Campaign) -> None:
+    handoff = InMemoryCampaignHandoff()
+    order = ordered(running, handoff, running.declared())
+
+    with pytest.raises(CampaignOrderRejectedError, match="commit"):
+        ElsewhereRun(running, handoff).fulfil(
+            FulfilCampaignOrderCommand(order=order, git_commit="def456")
+        )
+
+    assert handoff.reported == []
+
+
+def test_an_order_of_a_pool_that_has_no_outstanding_cell_is_refused(running: Campaign) -> None:
+    order = OrderCampaignCells(running.campaigns, running.tasks, InMemoryCampaignHandoff())
+
+    with pytest.raises(InvalidCampaignOrderError, match="names no cell"):
+        order(
+            OrderCampaignCellsCommand(
+                campaign=running.declared(), pool=WorkerPool.GENERAL, git_commit="abc123"
+            )
+        )
+
+
+def test_a_result_accepted_twice_keeps_the_answers_that_stood_first(running: Campaign) -> None:
+    campaign_id = running.declared()
+    handoff = InMemoryCampaignHandoff()
+    reported = ElsewhereRun(running, handoff).fulfil(
+        FulfilCampaignOrderCommand(
+            order=ordered(running, handoff, campaign_id), git_commit="abc123"
+        )
+    )
+    accept = AcceptCampaignOrderResult(handoff, running.record)
+    accept(AcceptCampaignOrderResultCommand(result=reported))
+    once = running.campaigns.get(campaign_id)
+
+    accept(AcceptCampaignOrderResultCommand(result=reported))
+
+    assert running.campaigns.get(campaign_id) == once
+    assert len(running.published) == 1
+
+
+def test_a_result_answering_a_cell_its_order_never_held_is_refused_whole(
+    running: Campaign,
+) -> None:
+    campaign_id = running.declared()
+    handoff = InMemoryCampaignHandoff()
+    order = ordered(running, handoff, campaign_id)
+    stranger = result(CONTROL, LabelBudget.of(50), 99, ERRORS[CONTROL])
+    forged = handoff.report(
+        CampaignOrderResult(
+            order=order, campaign=campaign_id, git_commit="abc123", results=(stranger,)
+        )
+    )
+
+    with pytest.raises(CampaignOrderRejectedError, match="never held"):
+        AcceptCampaignOrderResult(handoff, running.record)(
+            AcceptCampaignOrderResultCommand(result=forged)
+        )
+
+    assert running.campaigns.get(campaign_id).results == ()
+
+
+class Counting:
+    """A provider that remembers which cells it was asked for, then asks the real one."""
+
+    def __init__(self, provider: InMemoryCandidateProvider, asked: list[CampaignCell]) -> None:
+        self._provider = provider
+        self._asked = asked
+
+    def describe(self, candidate: CandidateRef) -> CampaignCandidate:
+        return self._provider.describe(candidate)
+
+    def evaluate(self, request: CandidateEvaluation) -> CellResult:
+        self._asked.append(request.cell)
+        return self._provider.evaluate(request)

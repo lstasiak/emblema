@@ -6,6 +6,7 @@ import pytest
 from emblema.evaluation.adapters.features.channel_aggregated_features import (
     ChannelAggregatedFeatures,
 )
+from emblema.evaluation.adapters.features.window_spectrum import WindowSpectrum
 from emblema.evaluation.adapters.features.window_statistics import WindowStatistics
 from tests.evaluation.adapters.features.support import timed, window
 
@@ -19,14 +20,34 @@ def column(name: str, across: str) -> int:
     return WindowStatistics.NAMES.index(name) * len(FEATURES.ACROSS) + FEATURES.ACROSS.index(across)
 
 
+def spectral(name: str, across: str) -> int:
+    before = len(WindowStatistics.NAMES) * len(FEATURES.ACROSS)
+    return (
+        before
+        + WindowSpectrum.NAMES.index(name) * len(FEATURES.ACROSS)
+        + (FEATURES.ACROSS.index(across))
+    )
+
+
 def of_window(name: str) -> int:
-    return len(WindowStatistics.NAMES) * len(FEATURES.ACROSS) + FEATURES.OF_WINDOW.index(name)
+    return FEATURES.width - len(FEATURES.OF_WINDOW) + FEATURES.OF_WINDOW.index(name)
 
 
 def test_every_column_is_named_after_the_statistic_and_how_it_was_summarised() -> None:
     assert len(FEATURES.names()) == FEATURES.width
     assert FEATURES.names()[column("slope", "minimum")] == "minimum_slope"
+    assert FEATURES.names()[spectral("centroid", "maximum")] == "maximum_spectrum_centroid"
     assert FEATURES.names()[of_window("channels")] == "window_channels"
+
+
+def test_the_spectrum_is_summarised_over_the_channels_that_have_one() -> None:
+    fast = timed(1, [(float(np.sin(2 * np.pi * 10 * k / 64)), k / 64) for k in range(1, 65)])
+    slow = timed(2, [(float(np.sin(2 * np.pi * 2 * k / 64)), k / 64) for k in range(1, 65)])
+
+    rows = FEATURES.of([window(fast, slow, ONCE)])
+
+    assert rows[0, spectral("centroid", "minimum")] == pytest.approx(2.0, abs=0.5)
+    assert rows[0, spectral("centroid", "maximum")] == pytest.approx(10.0, abs=0.5)
 
 
 def test_the_width_is_the_same_whatever_the_corpus_it_read() -> None:

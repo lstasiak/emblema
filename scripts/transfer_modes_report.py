@@ -46,9 +46,9 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.config.settings import Settings
 from emblema.entrypoints.cli.campaign.known_tasks import KnownTask, KnownTasks
-from emblema.entrypoints.cli.pretrain.source_revision import SourceRevision
 from emblema.entrypoints.configured import configured_store
 from emblema.entrypoints.restored_backbones import RestoredBackbones
+from emblema.entrypoints.source_revision import SourceRevision
 from emblema.evaluation.adapters.blocks.block_corpus_windows import BlockCorpusWindows
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (

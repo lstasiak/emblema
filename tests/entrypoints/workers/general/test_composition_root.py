@@ -35,7 +35,7 @@ from emblema.shared.adapters.queues.celery_job_queue import CeleryJobQueue
 from emblema.shared.adapters.queues.immediate_job_queue import ImmediateJobQueue
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.ports.exceptions import JobQueueError
-from tests.evaluation.support import boosting, campaign, task
+from tests.evaluation.support import boosting, campaign, convolutions, task
 from tests.support.settings import unreachable_store
 
 DECLARED = BoostingSettings(
@@ -97,7 +97,7 @@ def test_a_process_bringing_neither_settings_nor_a_store_is_refused(tmp_path: Pa
 def test_a_process_left_to_build_baselines_without_the_knobs_to_fit_them_is_refused(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(ValueError, match="boosting"):
+    with pytest.raises(ValueError, match="classical knobs"):
         CompositionRoot(
             unreachable_store(),
             workspace=tmp_path,
@@ -109,7 +109,7 @@ def test_a_process_left_to_build_baselines_without_the_knobs_to_fit_them_is_refu
         )
 
 
-def test_left_to_build_its_own_candidates_the_process_serves_both_baselines(
+def test_left_to_build_its_own_candidates_the_process_serves_every_baseline(
     tmp_path: Path,
 ) -> None:
     root = CompositionRoot(
@@ -117,6 +117,7 @@ def test_left_to_build_its_own_candidates_the_process_serves_both_baselines(
         workspace=tmp_path,
         corpora=tmp_path,
         boosting=boosting(threads=2),
+        convolutions=convolutions(),
         store=InMemoryArtifactStore(),
         tasks=InMemoryDownstreamTaskRepository(),
         campaigns=InMemoryEvaluationCampaignRepository(),
@@ -130,6 +131,10 @@ def test_left_to_build_its_own_candidates_the_process_serves_both_baselines(
     stated = {parameter.name: parameter.value for parameter in described.method.parameters}
     assert stated["features"] == "channel_aggregated"
     assert stated["threads"] == "2"
+    rocket = root.adapters.candidates.describe(KnownBaselines.MINIROCKET).method.parameters
+    assert {parameter.name: parameter.value for parameter in rocket}["method"] == (
+        "random_convolutions"
+    )
 
 
 def test_assembling_this_process_imports_no_machine_learning_stack() -> None:

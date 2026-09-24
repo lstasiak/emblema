@@ -1,17 +1,17 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from emblema.evaluation.domain.classical.classical_outcome import ClassicalOutcome
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.fitting_source import FittingSource
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
-    InvalidClassicalOutcomeError,
+    InvalidScoredOutcomeError,
 )
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
+from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
-from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore
 
@@ -52,10 +52,10 @@ class InMemoryClassicalRuntime:
         scored: Sequence[LabelledWindow],
         *,
         retain: bool,
-    ) -> ClassicalOutcome:
+    ) -> ScoredOutcome:
         task.accept_sample(sample)
         if not scored:
-            raise InvalidClassicalOutcomeError("there is no window to answer")
+            raise InvalidScoredOutcomeError("there is no window to answer")
         self.fittings.append(
             Fitting(
                 recipe=recipe,
@@ -66,7 +66,7 @@ class InMemoryClassicalRuntime:
             )
         )
         mean = self._mean(task, sample, sources)
-        return ClassicalOutcome(
+        return ScoredOutcome(
             predictions=tuple(
                 WindowPrediction(window=labelled.window, target=labelled.target, predicted=mean)
                 for labelled in scored

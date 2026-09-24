@@ -1,11 +1,12 @@
-"""The invocations a comparison is declared, handed out and announced by.
+"""How a comparison is declared, handed out, announced, ordered out and accepted back.
 
-None of them runs a cell: a command line that did would be a second way of producing the same
+None of them runs a cell: a command line that did would be another way of producing the same
 numbers, under whatever the machine at the keyboard happened to be configured with. What is
 held here is that each invocation reaches its use case with what the arguments and the file say
 and nothing else, and that a name nothing knows is refused before anything is stored.
 """
 
+import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -16,6 +17,8 @@ from emblema.entrypoints.cli.campaign.campaign_cli import CampaignCli
 from emblema.entrypoints.cli.campaign.campaign_invocation import CampaignInvocation
 from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
 from emblema.entrypoints.cli.campaign.services import Services
+from emblema.entrypoints.source_revision import SourceRevision
+from emblema.evaluation.adapters.in_memory.campaign_handoff import InMemoryCampaignHandoff
 from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
 from emblema.evaluation.adapters.in_memory.corpus_windows import InMemoryCorpusWindows
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
@@ -27,6 +30,9 @@ from emblema.evaluation.adapters.in_memory.evaluation_campaign_repository import
 from emblema.evaluation.application.assemblers.campaign_completed_assembler import (
     CampaignCompletedAssembler,
 )
+from emblema.evaluation.application.use_cases.accept_campaign_order_result import (
+    AcceptCampaignOrderResult,
+)
 from emblema.evaluation.application.use_cases.advance_campaign import (
     RUN_CAMPAIGN_CELL,
     AdvanceCampaign,
@@ -35,9 +41,15 @@ from emblema.evaluation.application.use_cases.announce_campaign import AnnounceC
 from emblema.evaluation.application.use_cases.complete_campaign import CompleteCampaign
 from emblema.evaluation.application.use_cases.define_campaign import DefineCampaign
 from emblema.evaluation.application.use_cases.define_downstream_task import DefineDownstreamTask
+from emblema.evaluation.application.use_cases.order_campaign_cells import OrderCampaignCells
+from emblema.evaluation.application.use_cases.record_cell_result import RecordCellResult
+from emblema.evaluation.application.use_cases.select_tuned_variants import SelectTunedVariants
 from emblema.evaluation.contracts.events import CampaignCompleted
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
+from emblema.evaluation.domain.campaign.cell_result import CellResult
+from emblema.evaluation.domain.handoff.campaign_order_result import CampaignOrderResult
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.evaluation.domain.task.corpus_sides import CorpusSides
 from emblema.shared.adapters.in_memory.clock import FixedClock
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
@@ -45,14 +57,20 @@ from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubs
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.adapters.queues.immediate_job_queue import ImmediateJobQueue
 from emblema.shared.jobs.job_argument import JobArgument
+from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
 from tests.evaluation.support import (
     CAMPAIGN,
+    FINER,
     MANIFEST,
     OPENED_AT,
+    ROCKET,
+    SELECTED_BY,
     artifact,
     campaign,
     candidate,
     closed_campaign,
+    selection,
 )
 
 CONTROL, TREES = CandidateRef("from_scratch"), CandidateRef("boosted_trees_per_channel")
@@ -100,28 +118,42 @@ class Process:
         subscriptions = InMemoryEventSubscriber()
         subscriptions.subscribe(CampaignCompleted, self.announced.append)
         events = InMemoryEventPublisher(subscriptions)
+        self.handoff = InMemoryCampaignHandoff()
+        outcomes = CampaignCompletedAssembler()
+        complete = CompleteCampaign(campaigns, outcomes, clock, ids, events)
         catalogue = InMemoryCandidateProvider(
             (candidate(CONTROL), candidate(TREES)), (), lambda _: ()
         )
-        outcomes = CampaignCompletedAssembler()
         self.adapters = Adapters(
             corpus=corpus,
             candidates=catalogue,
             tasks=tasks,
             campaigns=campaigns,
             jobs=jobs,
+            handoff=self.handoff,
         )
         self.services = Services(
             define_downstream_task=DefineDownstreamTask(tasks, corpus, ids),
             define_campaign=DefineCampaign(tasks, campaigns, catalogue, ids, clock),
-            advance_campaign=AdvanceCampaign(
-                campaigns, jobs, CompleteCampaign(campaigns, outcomes, clock, ids, events)
-            ),
+            advance_campaign=AdvanceCampaign(campaigns, jobs, complete),
             announce_campaign=AnnounceCampaign(campaigns, outcomes, ids, events),
+            order_campaign_cells=OrderCampaignCells(campaigns, tasks, self.handoff),
+            accept_campaign_order_result=AcceptCampaignOrderResult(
+                self.handoff, RecordCellResult(campaigns, complete)
+            ),
+            select_tuned_variants=SelectTunedVariants(campaigns),
         )
 
     def run(self, *argv: str) -> str:
-        return CampaignCli().execute(CampaignCli().parse(argv), self.adapters, self.services)
+        cli = CampaignCli(Pinned())
+        return cli.execute(cli.parse(argv), self.adapters, self.services)
+
+
+class Pinned(SourceRevision):
+    """The revision a test says the code is at, whatever the tree around it holds."""
+
+    def current(self) -> str:
+        return "abc123"
 
 
 @pytest.fixture
@@ -250,3 +282,67 @@ def test_an_invocation_asking_for_something_else_is_refused_rather_than_advanced
         )
 
     assert process.submitted == []
+
+
+def declared(process: Process, tmp_path: Path) -> str:
+    path = tmp_path / "campaign.toml"
+    path.write_text(DECLARED, encoding="utf-8")
+    return process.run("define", "--file", str(path), "--task", defined(process))
+
+
+def test_an_order_carries_the_outstanding_cells_of_its_pool_at_the_code_this_tree_is_at(
+    process: Process, tmp_path: Path
+) -> None:
+    campaign_id = declared(process, tmp_path)
+
+    key, checksum = process.run("order", "--campaign", campaign_id, "--pool", "ml").split()
+
+    order = process.handoff.read_order(ArtifactRef(key, Checksum.parse(checksum)))
+    assert len(order.cells) == 8
+    assert order.git_commit == "abc123"
+    assert process.submitted == []
+
+
+def test_accepting_a_result_records_the_cells_it_answered(process: Process, tmp_path: Path) -> None:
+    campaign_id = CampaignId.parse(declared(process, tmp_path))
+    key, checksum = process.run("order", "--campaign", str(campaign_id), "--pool", "ml").split()
+    order = ArtifactRef(key, Checksum.parse(checksum))
+    first = process.handoff.read_order(order).cells[0]
+    reported = process.handoff.report(
+        CampaignOrderResult(
+            order=order,
+            campaign=campaign_id,
+            git_commit="abc123",
+            results=(
+                CellResult(
+                    cell=first,
+                    errors=(UnitError(unit=UnitKey("FD001/7"), squared_error=4.0, windows=2),),
+                    seconds=1.0,
+                    artifact=None,
+                ),
+            ),
+        )
+    )
+
+    printed = process.run("accept", "--result", reported.key, str(reported.checksum))
+
+    assert printed == "1"
+    assert [r.cell for r in process.adapters.campaigns.get(campaign_id).results] == [first]
+
+
+def test_an_order_names_a_pool_the_parser_knows() -> None:
+    with pytest.raises(SystemExit):
+        CampaignCli(Pinned()).parse(["order", "--campaign", "x", "--pool", "gpu"])
+
+
+def test_select_prints_each_choice_as_the_table_a_comparison_names_it_in(
+    process: Process,
+) -> None:
+    process.adapters.campaigns.save(selection(), seen=0)
+
+    printed = process.run("select", "--campaign", str(SELECTED_BY), "--candidate", str(ROCKET))
+
+    parsed = tomllib.loads(printed)["tuned"]
+    assert [entry["budget"] for entry in parsed] == ["50", "200"]
+    assert {entry["variant"] for entry in parsed} == {str(FINER)}
+    assert {entry["selected_by"] for entry in parsed} == {str(SELECTED_BY)}

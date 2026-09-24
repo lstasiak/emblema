@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 from math import isfinite, sqrt
+from typing import Self
 
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.exceptions import InvalidCellResultError
-from emblema.evaluation.domain.transfer.unit_error import UnitError
+from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
+from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.shared.kernel.artifacts import ArtifactRef
 
 
@@ -42,6 +44,13 @@ class CellResult:
             raise InvalidCellResultError(
                 f"seconds must be finite and not negative, got {self.seconds}"
             )
+
+    @classmethod
+    def of(cls, cell: CampaignCell, outcome: ScoredOutcome) -> Self:
+        """What ``outcome`` says about ``cell``, whichever kind of candidate produced it."""
+        return cls(
+            cell=cell, errors=outcome.by_unit(), seconds=outcome.seconds, artifact=outcome.artifact
+        )
 
     @property
     def rmse(self) -> float:

@@ -1,17 +1,16 @@
 from typing import Any
 
-from emblema.evaluation.contracts.candidate_kind import CandidateKind
-from emblema.evaluation.contracts.identifiers import CandidateRef
-from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
+from emblema.evaluation.adapters.documents.campaign_candidate_document import (
+    CampaignCandidateDocument,
+)
+from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
-from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
-from emblema.evaluation.domain.campaign.compute_budget import ComputeBudget
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
-from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
+from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 
 
 class CampaignDesignDocument:
@@ -23,33 +22,13 @@ class CampaignDesignDocument:
     queried — the results — are rows.
     """
 
+    def __init__(self) -> None:
+        self._candidates = CampaignCandidateDocument()
+
     def encode(self, design: CampaignDesign) -> dict[str, Any]:
         """The design as the document the column holds."""
         return {
-            "candidates": [
-                {
-                    "ref": str(candidate.ref),
-                    "kind": str(candidate.kind),
-                    "budget": None
-                    if candidate.budget is None
-                    else {
-                        "epochs": candidate.budget.epochs,
-                        "min_steps": candidate.budget.min_steps,
-                        "batch_size": candidate.budget.batch_size,
-                    },
-                    "method": {
-                        parameter.name: parameter.value for parameter in candidate.method.parameters
-                    },
-                    "starts_from": None
-                    if candidate.starts_from is None
-                    else {
-                        "key": candidate.starts_from.key,
-                        "algorithm": str(candidate.starts_from.checksum.algorithm),
-                        "digest": candidate.starts_from.checksum.digest,
-                    },
-                }
-                for candidate in design.candidates
-            ],
+            "candidates": [self._candidates.encode(c) for c in design.candidates],
             "control": str(design.control),
             "endpoint": str(design.endpoint),
             "budgets": [budget.text() for budget in design.budgets],
@@ -66,6 +45,19 @@ class CampaignDesignDocument:
                 "seed": design.bootstrap.seed,
                 "level": design.bootstrap.level,
             },
+            "inner_holdout": None
+            if design.inner_holdout is None
+            else {"one_in": design.inner_holdout.one_in},
+            "tuned": [
+                {
+                    "candidate": str(choice.candidate),
+                    "budget": choice.budget.text(),
+                    "variant": str(choice.variant),
+                    "selected_by": str(choice.selected_by),
+                }
+                for choice in design.tuned
+            ],
+            "variants": [self._candidates.encode(variant) for variant in design.variants],
         }
 
     def decode(self, document: dict[str, Any]) -> CampaignDesign:
@@ -77,7 +69,7 @@ class CampaignDesignDocument:
         """
         rules, bootstrap = document["rules"], document["bootstrap"]
         return CampaignDesign(
-            candidates=tuple(self._candidate(candidate) for candidate in document["candidates"]),
+            candidates=tuple(self._candidates.decode(c) for c in document["candidates"]),
             control=CandidateRef(document["control"]),
             endpoint=CandidateRef(document["endpoint"]),
             budgets=tuple(LabelBudget.parse(text) for text in document["budgets"]),
@@ -94,26 +86,18 @@ class CampaignDesignDocument:
                 seed=bootstrap["seed"],
                 level=bootstrap["level"],
             ),
-        )
-
-    @staticmethod
-    def _candidate(document: dict[str, Any]) -> CampaignCandidate:
-        budget, weights = document["budget"], document["starts_from"]
-        return CampaignCandidate(
-            ref=CandidateRef(document["ref"]),
-            kind=CandidateKind(document["kind"]),
-            method=CandidateMethod.of(**document["method"]),
-            budget=None
-            if budget is None
-            else ComputeBudget(
-                epochs=budget["epochs"],
-                min_steps=budget["min_steps"],
-                batch_size=budget["batch_size"],
+            # A design stored before selections existed holds neither key and tunes nothing.
+            inner_holdout=None
+            if document.get("inner_holdout") is None
+            else InnerHoldout(one_in=document["inner_holdout"]["one_in"]),
+            tuned=tuple(
+                TunedChoice(
+                    candidate=CandidateRef(choice["candidate"]),
+                    budget=LabelBudget.parse(choice["budget"]),
+                    variant=CandidateRef(choice["variant"]),
+                    selected_by=CampaignId.parse(choice["selected_by"]),
+                )
+                for choice in document.get("tuned", [])
             ),
-            starts_from=None
-            if weights is None
-            else ArtifactRef(
-                weights["key"],
-                Checksum(HashAlgorithm(weights["algorithm"]), weights["digest"]),
-            ),
+            variants=tuple(self._candidates.decode(v) for v in document.get("variants", [])),
         )

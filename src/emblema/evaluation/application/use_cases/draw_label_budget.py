@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
 from emblema.evaluation.contracts.identifiers import TaskId
+from emblema.evaluation.domain.exceptions import InvalidInnerHoldoutError
+from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.ports.corpus_windows import CorpusWindows
@@ -16,11 +18,14 @@ class DrawLabelBudgetCommand:
         task: Task to draw from; it carries the strata the draw is spread over.
         budget: How many labelled windows.
         seed: Seed the draw is made under; repeats give the same windows.
+        within: The tuning units the draw is confined to, where part of the side is held out
+            to score on; ``None`` for the whole tuning side.
     """
 
     task: TaskId
     budget: LabelBudget
     seed: int
+    within: frozenset[UnitKey] | None = None
 
 
 class DrawLabelBudget:
@@ -51,9 +56,15 @@ class DrawLabelBudget:
             UnlabelledWindowError: If a window reaches past the failure of its unit.
             InvalidLabelBudgetError: If the tuning side holds fewer windows than asked for.
             InvalidTargetBinsError: If it holds fewer windows than there are strata.
+            InvalidInnerHoldoutError: If the draw is confined to units outside the tuning side.
         """
         task = self._tasks.get(command.task)
-        windows = self._corpus.windows_of(task.manifest, task.tuning_units)
+        units = task.tuning_units if command.within is None else command.within
+        if not units <= task.tuning_units:
+            raise InvalidInnerHoldoutError(
+                f"a draw from task {task.task_id} is confined to units outside its tuning side"
+            )
+        windows = self._corpus.windows_of(task.manifest, units)
         pool = task.labelled(windows, self._truth.truths_of(task.corpus, windows))
         return LabelSample.drawn(
             task.task_id, pool, command.budget, task.stratification(), command.seed

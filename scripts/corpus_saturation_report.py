@@ -41,8 +41,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.config.settings import Settings
-from emblema.entrypoints.cli.pretrain.source_revision import SourceRevision
 from emblema.entrypoints.configured import configured_store
+from emblema.entrypoints.source_revision import SourceRevision
 from emblema.pretraining.adapters.blocks.block_training_corpus_reader import (
     BlockTrainingCorpusReader,
 )

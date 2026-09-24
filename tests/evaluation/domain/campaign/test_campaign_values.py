@@ -12,8 +12,9 @@ from emblema.evaluation.domain.exceptions import (
 )
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
-from emblema.evaluation.domain.transfer.unit_error import UnitError
-from tests.evaluation.support import CONTENDER, CONTROL, candidate, cell, result
+from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
+from emblema.evaluation.domain.scoring.unit_error import UnitError
+from tests.evaluation.support import CONTENDER, CONTROL, candidate, cell, prediction, result
 
 
 @pytest.mark.parametrize(("field", "value"), [("epochs", 0), ("batch_size", 0), ("min_steps", -1)])
@@ -67,6 +68,24 @@ def test_a_result_that_scores_a_unit_twice_is_refused() -> None:
 def test_a_time_taken_that_is_not_finite_and_not_negative_is_refused(seconds: float) -> None:
     with pytest.raises(InvalidCellResultError, match="seconds"):
         result(CONTENDER, LabelBudget.of(50), 1, (2.0,), seconds=seconds)
+
+
+def test_a_result_read_off_an_outcome_keeps_its_errors_per_unit_its_time_and_its_artifact() -> None:
+    outcome = ScoredOutcome(
+        predictions=(
+            prediction("b", 0, 4.0, 5.0),
+            prediction("a", 0, 10.0, 8.0),
+            prediction("a", 1, 10.0, 14.0),
+        ),
+        seconds=2.5,
+        artifact=None,
+    )
+
+    read = CellResult.of(cell(CONTENDER, LabelBudget.of(50), 1), outcome)
+
+    assert read.errors == outcome.by_unit()
+    assert read.seconds == 2.5
+    assert read.rmse == pytest.approx(outcome.rmse)
 
 
 def test_the_error_of_a_cell_is_the_root_mean_over_every_window_it_answered() -> None:

@@ -52,11 +52,7 @@ class BackboneCandidateProvider:
                 sample_seed=cell.seed,
                 purpose=request.purpose,
                 retain=request.retain,
+                holdout=request.holdout,
             )
         )
-        return CellResult(
-            cell=cell,
-            errors=outcome.by_unit(),
-            seconds=outcome.seconds,
-            artifact=outcome.artifact,
-        )
+        return CellResult.of(cell, outcome)

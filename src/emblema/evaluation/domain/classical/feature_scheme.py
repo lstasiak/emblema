@@ -16,12 +16,17 @@ class FeatureScheme(StrEnum):
     Attributes:
         PER_CHANNEL: One block of statistics per channel of the corpus, in vocabulary order.
             The strongest reading of a single corpus and the one that cannot leave it.
-        CHANNEL_AGGREGATED: The same statistics summarised across whichever channels the window
-            holds. Loses which channel said what, and in exchange fits over corpora whose
-            channel layouts have nothing in common.
+        SPECTRAL: One block per channel of how its power is spread over frequency, read off the
+            irregular instants themselves rather than off a grid they were resampled to. What
+            an engineer reaches for first on instrument data, and as bound to the layout as the
+            statistics are.
+        CHANNEL_AGGREGATED: The statistics and the spectrum summarised across whichever
+            channels the window holds. Loses which channel said what, and in exchange fits over
+            corpora whose channel layouts have nothing in common.
     """
 
     PER_CHANNEL = "per_channel"
+    SPECTRAL = "spectral"
     CHANNEL_AGGREGATED = "channel_aggregated"
 
     @property

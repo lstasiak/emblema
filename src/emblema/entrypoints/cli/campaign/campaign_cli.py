@@ -10,12 +10,22 @@ from emblema.entrypoints.cli.campaign.campaign_invocation import CampaignInvocat
 from emblema.entrypoints.cli.campaign.composition_root import CompositionRoot
 from emblema.entrypoints.cli.campaign.known_tasks import KnownTask, KnownTasks
 from emblema.entrypoints.cli.campaign.services import Services
+from emblema.entrypoints.source_revision import SourceRevision
 from emblema.evaluation.adapters.campaigns.campaign_file import CampaignFile
+from emblema.evaluation.application.use_cases.accept_campaign_order_result import (
+    AcceptCampaignOrderResultCommand,
+)
 from emblema.evaluation.application.use_cases.advance_campaign import AdvanceCampaignCommand
 from emblema.evaluation.application.use_cases.announce_campaign import AnnounceCampaignCommand
 from emblema.evaluation.application.use_cases.define_campaign import DefineCampaignCommand
-from emblema.evaluation.contracts.identifiers import CampaignId, TaskId
+from emblema.evaluation.application.use_cases.order_campaign_cells import OrderCampaignCellsCommand
+from emblema.evaluation.application.use_cases.select_tuned_variants import (
+    SelectTunedVariantsCommand,
+)
+from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
 from emblema.evaluation.domain.exceptions import EvaluationError
+from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
+from emblema.shared.jobs.worker_pool import WorkerPool
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 
@@ -46,6 +56,27 @@ class CampaignCli:
     publishes its conclusion again, for when the delivery made on closing failed, and prints
     the checksum of every artifact it kept — what a promotion names.
 
+    Where no queue reaches — a notebook on a GPU platform, or this machine's accelerator — the
+    outstanding cells of one pool go out as an order instead::
+
+        uv run python -m emblema.entrypoints.cli.campaign order --campaign <id> --pool ml
+
+    which prints the order's reference, to be run by ``emblema.entrypoints.cli.campaign_run``
+    at the commit it names. The reference that run prints comes back as::
+
+        uv run python -m emblema.entrypoints.cli.campaign accept --result <key> <checksum>
+
+    which records every cell it answered and prints how many.
+
+    A baseline's knobs are chosen by a campaign of its own, declared with ``purpose =
+    "selection"`` over variants such as ``minirocket@grid_resolution=2``; once it has finished::
+
+        uv run python -m emblema.entrypoints.cli.campaign select
+            --campaign <id> --candidate minirocket
+
+    prints the variant chosen at every budget as the tables a comparison's file names them in.
+    The comparison is refused if any of them is not what the selection, read again, chose.
+
     The design comes from the file and not from flags, which is the whole reason there is a
     file. Budgets, seeds and the rule for what counts as a difference passed on a command line
     are a decision nobody can date; written down and committed first, they are a registration.
@@ -60,6 +91,12 @@ class CampaignCli:
     DEFINE = "define"
     ADVANCE = "advance"
     ANNOUNCE = "announce"
+    ORDER = "order"
+    ACCEPT = "accept"
+    SELECT = "select"
+
+    def __init__(self, revision: SourceRevision | None = None) -> None:
+        self._revision = SourceRevision() if revision is None else revision
 
     def parse(self, argv: Sequence[str] | None = None) -> CampaignInvocation:
         """What the arguments ask for, as far as it can be known without reading anything."""
@@ -72,6 +109,11 @@ class CampaignCli:
             ),
             file=getattr(arguments, "file", None),
             campaign=getattr(arguments, "campaign", None),
+            pool=getattr(arguments, "pool", None),
+            candidate=getattr(arguments, "candidate", None),
+            result=(
+                None if getattr(arguments, "result", None) is None else self._ref(arguments.result)
+            ),
         )
 
     def run(self, argv: Sequence[str] | None = None) -> None:  # pragma: no cover - environment
@@ -118,10 +160,43 @@ class CampaignCli:
                         for candidate in announced.candidates
                         if candidate.artifact is not None
                     )
+                case self.ORDER:
+                    ordered = services.order_campaign_cells(
+                        OrderCampaignCellsCommand(
+                            campaign=self._campaign(invocation.campaign),
+                            pool=WorkerPool(self._named(invocation.pool)),
+                            git_commit=self._revision.current(),
+                        )
+                    )
+                    return f"{ordered.key} {ordered.checksum}"
+                case self.SELECT:
+                    chosen = services.select_tuned_variants(
+                        SelectTunedVariantsCommand(
+                            campaign=self._campaign(invocation.campaign),
+                            candidate=CandidateRef(self._named(invocation.candidate)),
+                        )
+                    )
+                    return "\n".join(self._tuned_entry(choice) for choice in chosen)
+                case self.ACCEPT:
+                    recorded = services.accept_campaign_order_result(
+                        AcceptCampaignOrderResultCommand(result=self._named(invocation.result))
+                    )
+                    return str(recorded)
                 case _:
                     raise SystemExit(f"this command line does not {invocation.what!r}")
         except EvaluationError as refusal:
             raise SystemExit(str(refusal)) from refusal
+
+    @staticmethod
+    def _tuned_entry(choice: TunedChoice) -> str:
+        """One choice, as the table a comparison's file names it in."""
+        return (
+            "[[tuned]]\n"
+            f'candidate = "{choice.candidate}"\n'
+            f'budget = "{choice.budget.text()}"\n'
+            f'variant = "{choice.variant}"\n'
+            f'selected_by = "{choice.selected_by}"\n'
+        )
 
     @staticmethod
     def _design(declared: CampaignFile, task: TaskId) -> DefineCampaignCommand:
@@ -138,6 +213,8 @@ class CampaignCli:
             seeds=declared.budgets.seeds,
             rules=declared.comparison_rules(),
             bootstrap=declared.paired_bootstrap(),
+            inner_holdout=declared.inner_holdout(),
+            tuned=declared.tuned_choices(),
         )
 
     @staticmethod
@@ -225,4 +302,30 @@ class CampaignCli:
             self.ANNOUNCE, help="publish again what a closed campaign concluded"
         )
         announce.add_argument("--campaign", required=True, help="identifier of the campaign")
+
+        order = what.add_parser(
+            self.ORDER, help="write a campaign's outstanding cells of one pool into an order"
+        )
+        order.add_argument("--campaign", required=True, help="identifier of the campaign")
+        order.add_argument(
+            "--pool",
+            required=True,
+            choices=[str(pool) for pool in WorkerPool],
+            help="which kind of process will run the cells",
+        )
+
+        select = what.add_parser(
+            self.SELECT, help="read which variant a finished selection chose, per budget"
+        )
+        select.add_argument("--campaign", required=True, help="identifier of the selection")
+        select.add_argument("--candidate", required=True, help="the candidate it tuned")
+
+        accept = what.add_parser(self.ACCEPT, help="record the cells a run of an order answered")
+        accept.add_argument(
+            "--result",
+            nargs=2,
+            metavar=("KEY", "CHECKSUM"),
+            required=True,
+            help="the result the run of the order printed",
+        )
         return parser

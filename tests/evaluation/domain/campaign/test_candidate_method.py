@@ -48,3 +48,25 @@ def test_a_parameter_named_twice_is_refused() -> None:
                 MethodParameter(name="learning_rate", value="0.01"),
             )
         )
+
+
+def test_a_method_departs_from_itself_not_at_all() -> None:
+    method = CandidateMethod.of(depth=6, rate=0.1, scheme="per_channel")
+
+    assert method.departure_from(method) == (0, 0.0)
+
+
+def test_doubling_and_halving_a_knob_depart_by_the_same_distance() -> None:
+    default = CandidateMethod.of(resolution=1.0)
+
+    doubled = CandidateMethod.of(resolution=2.0).departure_from(default)
+    halved = CandidateMethod.of(resolution=0.5).departure_from(default)
+
+    assert doubled[0] == halved[0] == 1
+    assert doubled[1] == pytest.approx(halved[1])
+
+
+def test_a_knob_that_is_not_a_positive_number_departs_by_one_when_it_differs() -> None:
+    default = CandidateMethod.of(scheme="per_channel", depth=6)
+
+    assert CandidateMethod.of(scheme="spectral", depth=6).departure_from(default) == (1, 1.0)

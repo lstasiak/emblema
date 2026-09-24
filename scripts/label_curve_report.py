@@ -35,6 +35,8 @@ from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.task_window import TaskWindow
+from emblema.evaluation.domain.scoring.unit_error import UnitError
+from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVerdict
 from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
@@ -44,8 +46,6 @@ from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitEr
 from emblema.evaluation.domain.statistics.practical_floor import PracticalFloor
 from emblema.evaluation.domain.transfer.remaining_life_metrics import RemainingLifeMetrics
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
-from emblema.evaluation.domain.transfer.unit_error import UnitError
-from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
 from scripts.reporting import dated_heading, table
 from scripts.transfer_grid import BUDGETS, MODES, PLAN_COLUMNS, SEEDS, Stored, budget_rank
 

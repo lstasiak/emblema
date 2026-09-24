@@ -1,5 +1,8 @@
 from emblema.config.worker_settings import WorkerSettings
 from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
+from emblema.evaluation.domain.classical.minirocket_spec import MiniRocketSpec
+from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
+from emblema.evaluation.domain.classical.ridge_spec import RidgeSpec
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 
@@ -70,4 +73,25 @@ class DeclaredWorker:
             min_leaf_weight=declared.min_leaf_weight,
             l2_penalty=declared.l2_penalty,
             threads=declared.threads,
+        )
+
+    def convolutions(self) -> RandomConvolutions:
+        """How the MiniRocket candidate of this process's campaigns reads and fits.
+
+        Raises:
+            ValueError: If nothing is configured, or a penalty is not a number.
+            InvalidMiniRocketSpecError: If the count of convolutions does not stand up.
+            InvalidRidgeSpecError: If the penalties or the threads do not stand up.
+        """
+        declared = self._settings.require_convolutions()
+        return RandomConvolutions(
+            convolutions=MiniRocketSpec(features=declared.features),
+            ridge=RidgeSpec(
+                penalties=tuple(
+                    float(penalty)
+                    for penalty in declared.ridge_penalties.split(",")
+                    if penalty.strip()
+                ),
+                threads=declared.threads,
+            ),
         )

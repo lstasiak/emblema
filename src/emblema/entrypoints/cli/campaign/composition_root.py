@@ -11,15 +11,25 @@ from emblema.entrypoints.workers.known_baselines import KnownBaselines
 from emblema.evaluation.adapters.candidates.routed_candidate_catalogue import (
     RoutedCandidateCatalogue,
 )
+from emblema.evaluation.adapters.handoff.artifact_store_campaign_handoff import (
+    ArtifactStoreCampaignHandoff,
+)
 from emblema.evaluation.application.assemblers.campaign_completed_assembler import (
     CampaignCompletedAssembler,
+)
+from emblema.evaluation.application.use_cases.accept_campaign_order_result import (
+    AcceptCampaignOrderResult,
 )
 from emblema.evaluation.application.use_cases.advance_campaign import AdvanceCampaign
 from emblema.evaluation.application.use_cases.announce_campaign import AnnounceCampaign
 from emblema.evaluation.application.use_cases.complete_campaign import CompleteCampaign
 from emblema.evaluation.application.use_cases.define_campaign import DefineCampaign
 from emblema.evaluation.application.use_cases.define_downstream_task import DefineDownstreamTask
+from emblema.evaluation.application.use_cases.order_campaign_cells import OrderCampaignCells
+from emblema.evaluation.application.use_cases.record_cell_result import RecordCellResult
+from emblema.evaluation.application.use_cases.select_tuned_variants import SelectTunedVariants
 from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
+from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
@@ -54,6 +64,7 @@ class CompositionRoot:
         lora: LoraSpec,
         backbone: ArtifactRef,
         boosting: GradientBoostingSpec,
+        convolutions: RandomConvolutions,
     ) -> None:
         """Assemble the process from what the campaign's candidates are set to.
 
@@ -64,13 +75,14 @@ class CompositionRoot:
             schedule: What the neural arms learn under, which the design records.
             lora: The low-rank updates the arm of that name adds.
             backbone: Weights the pretrained arms start from.
-            boosting: How hard the baselines fit, which the design records too.
+            boosting: How hard the trees fit, which the design records too.
+            convolutions: How the MiniRocket baseline reads and fits, recorded likewise.
 
         Raises:
             ValueError: If the settings name no store, database or broker.
         """
         process = CampaignProcess(settings, workspace=workspace, corpora=corpora)
-        catalogue = self._candidates(schedule, lora, backbone, boosting)
+        catalogue = self._candidates(schedule, lora, backbone, boosting, convolutions)
         outcomes = CampaignCompletedAssembler()
         self.adapters = Adapters(
             corpus=process.corpus,
@@ -78,6 +90,10 @@ class CompositionRoot:
             tasks=process.tasks,
             campaigns=process.campaigns,
             jobs=process.jobs,
+            handoff=ArtifactStoreCampaignHandoff(process.store),
+        )
+        complete = CompleteCampaign(
+            process.campaigns, outcomes, process.clock, process.ids, process.events
         )
         self.services = Services(
             define_downstream_task=DefineDownstreamTask(process.tasks, process.corpus, process.ids),
@@ -88,13 +104,14 @@ class CompositionRoot:
                 process.ids,
                 process.clock,
             ),
-            advance_campaign=AdvanceCampaign(
-                process.campaigns,
-                process.jobs,
-                CompleteCampaign(
-                    process.campaigns, outcomes, process.clock, process.ids, process.events
-                ),
+            advance_campaign=AdvanceCampaign(process.campaigns, process.jobs, complete),
+            order_campaign_cells=OrderCampaignCells(
+                process.campaigns, process.tasks, self.adapters.handoff
             ),
+            accept_campaign_order_result=AcceptCampaignOrderResult(
+                self.adapters.handoff, RecordCellResult(process.campaigns, complete)
+            ),
+            select_tuned_variants=SelectTunedVariants(process.campaigns),
             announce_campaign=AnnounceCampaign(
                 process.campaigns, outcomes, process.ids, process.events
             ),
@@ -119,6 +136,7 @@ class CompositionRoot:
             lora=declared.lora(),
             backbone=worker.require_backbone_ref(),
             boosting=declared.boosting(),
+            convolutions=declared.convolutions(),
         )
 
     @staticmethod
@@ -127,10 +145,11 @@ class CompositionRoot:
         lora: LoraSpec,
         backbone: ArtifactRef,
         boosting: GradientBoostingSpec,
+        convolutions: RandomConvolutions,
     ) -> CandidateCatalogue:
         """Every candidate a campaign may name, each routed to whoever holds it."""
         arms = KnownArms.catalogue(backbone, lora, schedule)
-        baselines = KnownBaselines.catalogue(boosting)
+        baselines = KnownBaselines.catalogue(boosting, convolutions)
         return RoutedCandidateCatalogue(
             {
                 **dict.fromkeys(KnownArms.refs(), arms),

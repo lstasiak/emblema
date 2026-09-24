@@ -6,9 +6,9 @@ import pytest
 
 from emblema.evaluation.domain.exceptions import InvalidPairedUnitBootstrapError
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
-from emblema.evaluation.domain.transfer.unit_error import UnitError
 
 UNITS = 18
 WINDOWS = 30

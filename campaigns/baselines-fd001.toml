@@ -15,7 +15,13 @@ tier = "S"
 [candidates]
 # The control learns the task from nothing pretrained, so a baseline that beats it has shown
 # that the task is answerable without representation learning at all.
-competing = ["from_scratch", "boosted_trees_per_channel", "boosted_trees_across_channels"]
+competing = [
+    "from_scratch",
+    "boosted_trees_per_channel",
+    "boosted_trees_spectral",
+    "boosted_trees_across_channels",
+    "minirocket",
+]
 control = "from_scratch"
 endpoint = "boosted_trees_per_channel"
 
@@ -34,3 +40,55 @@ secondary_family_size = 8
 resamples = 10000
 seed = 1
 level = 0.95
+
+# The variant each classical baseline runs at each budget, as the selection declared in
+# campaigns/selection-classical-fd001.toml chose it by its rule; the comparison is refused if any
+# of these is not what that selection, read again, chooses.
+[[tuned]]
+candidate = "boosted_trees_per_channel"
+budget = "50"
+variant = "boosted_trees_per_channel"
+selected_by = "3856e705-95c9-4a8b-bbf8-bc1fb0187f0b"
+
+[[tuned]]
+candidate = "boosted_trees_per_channel"
+budget = "200"
+variant = "boosted_trees_per_channel@max_depth=3"
+selected_by = "3856e705-95c9-4a8b-bbf8-bc1fb0187f0b"
+
+[[tuned]]
+candidate = "boosted_trees_spectral"
+budget = "50"
+variant = "boosted_trees_spectral@max_depth=3"
+selected_by = "3856e705-95c9-4a8b-bbf8-bc1fb0187f0b"
+
+[[tuned]]
+candidate = "boosted_trees_spectral"
+budget = "200"
+variant = "boosted_trees_spectral@max_depth=3"
+selected_by = "3856e705-95c9-4a8b-bbf8-bc1fb0187f0b"
+
+[[tuned]]
+candidate = "boosted_trees_across_channels"
+budget = "50"
+variant = "boosted_trees_across_channels@max_depth=3"
+selected_by = "3856e705-95c9-4a8b-bbf8-bc1fb0187f0b"
+
+[[tuned]]
+candidate = "boosted_trees_across_channels"
+budget = "200"
+variant = "boosted_trees_across_channels@max_depth=3"
+selected_by = "3856e705-95c9-4a8b-bbf8-bc1fb0187f0b"
+
+[[tuned]]
+candidate = "minirocket"
+budget = "50"
+variant = "minirocket"
+selected_by = "3856e705-95c9-4a8b-bbf8-bc1fb0187f0b"
+
+[[tuned]]
+candidate = "minirocket"
+budget = "200"
+variant = "minirocket"
+selected_by = "3856e705-95c9-4a8b-bbf8-bc1fb0187f0b"
+

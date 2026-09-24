@@ -51,6 +51,8 @@ class AnnounceCampaign:
         Raises:
             CampaignNotFoundError: If the campaign is unknown.
             CampaignNotCompletedError: If it has not been closed, so has nothing to announce.
+            SelectionHasNoVerdictError: If it is a selection, which concludes nothing and is
+                asked which variant it chose instead.
         """
         campaign = self._campaigns.get(command.campaign)
         closed_at = campaign.completion()

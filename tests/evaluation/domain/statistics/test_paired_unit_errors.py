@@ -2,8 +2,8 @@ import pytest
 
 from emblema.evaluation.domain.exceptions import InvalidPairedUnitErrorsError
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
-from emblema.evaluation.domain.transfer.unit_error import UnitError
 
 
 def error(unit: str, squared: float, windows: int = 2) -> UnitError:

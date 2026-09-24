@@ -1,11 +1,11 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from emblema.evaluation.domain.classical.classical_outcome import ClassicalOutcome
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.fitting_source import FittingSource
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 
 
@@ -33,7 +33,7 @@ class ClassicalRuntime(Protocol):
         scored: Sequence[LabelledWindow],
         *,
         retain: bool,
-    ) -> ClassicalOutcome:
+    ) -> ScoredOutcome:
         """Fit ``recipe`` on ``sample`` and ``sources``, then answer every window of ``scored``.
 
         The outcome predicts the scored windows in the order given, one each. With ``retain``
@@ -43,7 +43,7 @@ class ClassicalRuntime(Protocol):
             CandidateNotRetainableError: If ``retain`` was asked of a runtime with nowhere to
                 keep what it fits.
             ForeignLabelSampleError: If the sample was drawn from another task.
-            InvalidClassicalOutcomeError: If there is no window to answer.
+            InvalidScoredOutcomeError: If there is no window to answer.
             UnreadableTaskCorpusError: If a task's published corpus is not one this can read.
         """
         ...

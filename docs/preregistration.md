@@ -103,6 +103,23 @@ at the same seeds and budget, and the rule chooses again, at most twice per arm.
 swept the same way, so no arm is tuned more than another, and the peaks are swept on each task's
 own validation side rather than carried over from another task.
 
+**How a classical baseline is tuned.** A baseline runs as its method was published unless a
+selection declared before it runs chooses otherwise. The knobs a selection may turn, and the
+values it may turn them to, are named in a committed campaign file whose purpose is
+*selection*; the ridge penalty of the convolution baseline is not among them, since every fit
+already chooses it by leave-one-out error. A selection never reads the validation side: in each
+repeat the seed ranks the task's tuning units, one in five is held out, the budget is drawn from
+the rest and every variant is scored on the held-out units. A variant is chosen at each budget
+of the curve separately, by the rule of one standard error: every variant whose mean RMSE over
+the repeats is within one standard error of the best one's is as good, the standard error
+corrected for the overlap of the repeats as Nadeau and Bengio (2003) do for repeated random
+holdout — the variance scaled by 1/J + n_test/n_train rather than 1/J — and among those the one
+that departs least from the published setting is chosen: fewest knobs turned, then the smallest
+ratio on a log scale. A comparison runs the variants a finished selection chose and names that
+selection; one naming any other variant is not declared. Until the arms are tuned by the same
+protocol, the baselines are tuned at every budget and the arms at the endpoint's alone — an
+asymmetry in the baselines' favour, which can make the claim harder to confirm and never easier.
+
 **Where a comparison runs.** Every comparison is made within one budget, and every cell of one
 budget runs on one kind of accelerator; a budget begun on one and resumed on another is run again
 whole on the second. Between accelerators an arm has drifted by up to 0.7 RMSE in a seed, the
@@ -320,3 +337,4 @@ title" resolves to a row here and to the commit the row names, where the full te
 | 2026-09-22 | `7c543bc`, `fcdfe35` | configuration, measured | grid registered before it ran | *the grid under the floor on the four subsets read per operating condition, before it runs.* The grid at `fdf8053` on an A100, one accelerator per budget. Measured: +16.0 % at 50, +9.0 at 1,000, −5.1 at all; full fine-tuning at all not settled under two seeds. `label-efficiency-curve.md`, 2026-09-22, the last section. |
 | 2026-09-22 | `060394b` | diagnostic | before it runs; settles nothing | *the endpoint read again on seeds no sweep has seen, and whether a longer backbone helps this corpus, before either runs.* Seeds 6–10 at 200 under the peaks in force; the 16-epoch backbone (`sha256:8cd60452…`) against the one in force by the replacement arithmetic. Neither reading changes the configuration. Outcome: pending. |
 | 2026-09-22 | the commit that adds this row | editorial | after the readings above | The rules in force rewritten in place from the register as it stood at `060394b`; no criterion, threshold, configuration or reading changed, which a diff against that commit shows. Measurements, cost declarations and the full text of diagnostics stay in the commits the rows name and in the verification notes. |
+| 2026-09-24 | the commit that adds this row | criterion | before any selection runs | *how a classical baseline is tuned.* Baselines run as published unless a declared selection, scored on held-out tuning units and never on the validation side, chooses a variant per budget by the rule of one standard error with the Nadeau–Bengio correction, ties broken towards the published setting; a comparison runs only what a finished selection chose. Measured when it was written: nothing under this rule. |

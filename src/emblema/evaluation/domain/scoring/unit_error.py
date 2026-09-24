@@ -5,7 +5,7 @@ from typing import Self
 
 from emblema.evaluation.domain.exceptions import InvalidUnitErrorError
 from emblema.evaluation.domain.identifiers import UnitKey
-from emblema.evaluation.domain.transfer.window_prediction import WindowPrediction
+from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 
 
 @dataclass(frozen=True, kw_only=True)

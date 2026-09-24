@@ -1,0 +1,67 @@
+# Which setting each classical baseline runs at, chosen before any comparison it enters.
+#
+# What it is for: a baseline tuned by nobody is a baseline a reviewer can call too weak, and one
+# tuned by hand after seeing the comparison is no baseline at all. This file is the middle way the
+# preregistration names: the knobs and the values they may take, written down and committed
+# before anything runs, scored on units held out of the tuning side so that the validation side
+# stays clean for the comparison, and read by the rule of one standard error at every budget.
+#
+# Every default is the library's or the paper's own, so "untuned" means the method as published.
+# The trees are turned one way at a time around it: shallower and deeper — how much of an
+# interaction one tree may learn — and a smaller step with more trees, three times as many at a
+# third of the rate, which keeps how far the ensemble can move and changes only how finely it
+# gets there. The convolutions vary in how finely a window's time is laid on the grid: once per
+# cycle is the series as it was recorded and as the method was published, and the finer grids
+# give the kernels shorter dilations in cycles, which is what a first measurement suggested they
+# gain from. Halving and doubling steps, so every value is as far from the default as its
+# neighbour.
+
+name = "selection-classical-fd001"
+purpose = "selection"
+tier = "S"
+
+[selection]
+# One tuning engine in five held out in every repeat: sixteen of seventy-nine to score on.
+one_in = 5
+
+[candidates]
+competing = [
+    "boosted_trees_per_channel@max_depth=3",
+    "boosted_trees_per_channel",
+    "boosted_trees_per_channel@max_depth=9",
+    "boosted_trees_per_channel@learning_rate=0.1,rounds=300",
+    "boosted_trees_spectral@max_depth=3",
+    "boosted_trees_spectral",
+    "boosted_trees_spectral@max_depth=9",
+    "boosted_trees_spectral@learning_rate=0.1,rounds=300",
+    "boosted_trees_across_channels@max_depth=3",
+    "boosted_trees_across_channels",
+    "boosted_trees_across_channels@max_depth=9",
+    "boosted_trees_across_channels@learning_rate=0.1,rounds=300",
+    "minirocket@grid_resolution=0.5",
+    "minirocket",
+    "minirocket@grid_resolution=2",
+    "minirocket@grid_resolution=4",
+]
+# A selection answers which variant, not whether a candidate beats another; the control and the
+# endpoint are named because every campaign names them, and read nothing here.
+control = "minirocket"
+endpoint = "minirocket@grid_resolution=2"
+
+[budgets]
+# The budgets the comparisons run at, so a variant is chosen for every point it will stand at.
+labels = ["50", "200"]
+endpoint = "200"
+# Ten repeats: each divides the tuning engines afresh, and the rule reads its spread from them.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+minimum_relative_reduction = 0.1
+floor_share = 0.02
+alpha = 0.05
+secondary_family_size = 29
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

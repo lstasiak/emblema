@@ -41,4 +41,4 @@ def test_no_penalty_at_all_is_allowed() -> None:
 def test_the_threads_a_fit_runs_on_are_part_of_what_it_reports() -> None:
     # Two machines agree on what a recipe produced only if they agree on this, so it travels
     # with the recipe rather than with whichever worker picked the cell up.
-    assert recipe(boosting=boosting(threads=4)).parameters()["threads"] == 4
+    assert recipe(trees=boosting(threads=4)).parameters()["threads"] == 4

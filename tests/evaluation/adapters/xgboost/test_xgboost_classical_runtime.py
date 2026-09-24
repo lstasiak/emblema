@@ -6,7 +6,7 @@ needs two corpora of different channel layouts and the contract is about one tas
 
 from dataclasses import replace
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from uuid import UUID
 
 import numpy as np
@@ -17,17 +17,18 @@ from emblema.evaluation.adapters.blocks.published_corpus_blocks import Published
 from emblema.evaluation.adapters.xgboost.fitted_baseline import FittedBaseline
 from emblema.evaluation.adapters.xgboost.xgboost_classical_runtime import XgboostClassicalRuntime
 from emblema.evaluation.contracts.identifiers import TaskId
-from emblema.evaluation.domain.classical.classical_outcome import ClassicalOutcome
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.classical.fitting_source import FittingSource
+from emblema.evaluation.domain.exceptions import UnsupportedClassicalMethodError
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
+from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from tests.evaluation.adapters.xgboost.support import WIDE_CHANNELS, publish_wide
-from tests.evaluation.support import TASK, boosting, labelled, recipe, task
+from tests.evaluation.support import TASK, boosting, convolutions, labelled, recipe, task
 from tests.support.published import CHANNELS, publish
 
 AGGREGATED = FeatureScheme.CHANNEL_AGGREGATED
@@ -77,7 +78,7 @@ def published(tmp_path: Path) -> Published:
     return Published(runtime, defined, store, tmp_path)
 
 
-def fitted(published: Published, scheme: FeatureScheme, **overrides: object) -> ClassicalOutcome:
+def fitted(published: Published, scheme: FeatureScheme, **overrides: Any) -> ScoredOutcome:
     return published.runtime.fit(
         recipe(scheme, **overrides), published.task, SAMPLE, (), SCORED, retain=False
     )
@@ -87,15 +88,15 @@ def fitted(published: Published, scheme: FeatureScheme, **overrides: object) -> 
 def test_two_fits_of_one_recipe_answer_the_same_on_this_machine(
     published: Published, scheme: FeatureScheme
 ) -> None:
-    once = fitted(published, scheme, boosting=DRAWING)
-    again = fitted(published, scheme, boosting=DRAWING)
+    once = fitted(published, scheme, trees=DRAWING)
+    again = fitted(published, scheme, trees=DRAWING)
 
     assert [p.predicted for p in once.predictions] == [p.predicted for p in again.predictions]
 
 
 def test_the_seed_is_what_a_fit_draws_its_rows_and_columns_under(published: Published) -> None:
-    under_one = fitted(published, AGGREGATED, boosting=DRAWING, seed=1)
-    under_two = fitted(published, AGGREGATED, boosting=DRAWING, seed=2)
+    under_one = fitted(published, AGGREGATED, trees=DRAWING, seed=1)
+    under_two = fitted(published, AGGREGATED, trees=DRAWING, seed=2)
 
     assert under_one.predictions[0].predicted != under_two.predictions[0].predicted
 
@@ -194,3 +195,12 @@ def test_the_manifest_of_a_corpus_is_read_once_however_many_sides_are_fitted(
     )
 
     assert blocks.decoded == [defined.manifest, wide.task.manifest]
+
+
+def test_a_recipe_of_convolutions_is_refused_rather_than_grown_as_trees(
+    published: Published,
+) -> None:
+    with pytest.raises(UnsupportedClassicalMethodError, match="random_convolutions"):
+        published.runtime.fit(
+            recipe(method=convolutions()), published.task, SAMPLE, (), SCORED, retain=False
+        )

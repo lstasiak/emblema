@@ -26,7 +26,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.exceptions import UnknownCandidateError
 from emblema.shared.adapters.queues.celery_job_queue import CeleryJobQueue
-from tests.evaluation.support import LORA, WEIGHTS, adaptation_schedule, boosting
+from tests.evaluation.support import LORA, WEIGHTS, adaptation_schedule, boosting, convolutions
 from tests.support.settings import unreachable_store
 
 
@@ -39,6 +39,7 @@ def process(tmp_path: Path) -> CompositionRoot:
         lora=LORA,
         backbone=WEIGHTS,
         boosting=boosting(),
+        convolutions=convolutions(),
     )
 
 
@@ -60,6 +61,7 @@ def test_a_process_bringing_neither_settings_nor_a_store_is_refused(tmp_path: Pa
             lora=LORA,
             backbone=WEIGHTS,
             boosting=boosting(),
+            convolutions=convolutions(),
         )
 
 

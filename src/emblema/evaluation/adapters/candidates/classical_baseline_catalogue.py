@@ -1,12 +1,17 @@
 from collections.abc import Sequence
+from dataclasses import replace
 
 from emblema.evaluation.adapters.candidates.classical_arm import ClassicalArm
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
-from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
-from emblema.evaluation.domain.exceptions import UnknownCandidateError
+from emblema.evaluation.domain.exceptions import (
+    InvalidCandidateVariantError,
+    UnknownCandidateError,
+    UnknownKnobError,
+)
+from emblema.evaluation.domain.tuning.candidate_variant import CandidateVariant
 
 
 class ClassicalBaselineCatalogue:
@@ -18,9 +23,8 @@ class ClassicalBaselineCatalogue:
     readable because whoever fits one fits it by the knobs that were declared.
     """
 
-    def __init__(self, arms: Sequence[ClassicalArm], boosting: GradientBoostingSpec) -> None:
+    def __init__(self, arms: Sequence[ClassicalArm]) -> None:
         self._arms = tuple(arms)
-        self.boosting = boosting
 
     def describe(self, candidate: CandidateRef) -> CampaignCandidate:
         return CampaignCandidate(
@@ -32,20 +36,39 @@ class ClassicalBaselineCatalogue:
         )
 
     def arm_of(self, candidate: CandidateRef) -> ClassicalArm:
-        """The baseline the campaign calls ``candidate``.
+        """The baseline the campaign calls ``candidate``, its knobs turned as the name says.
+
+        A variant is read out of its name alone, so every process holding this catalogue reads
+        the same variant out of the same text.
 
         Raises:
-            UnknownCandidateError: If this catalogue holds no baseline of that name.
+            UnknownCandidateError: If this catalogue holds no baseline of that name, the name is
+                not a baseline and its knobs in name order, or a knob cannot be turned so.
         """
+        try:
+            variant = CandidateVariant.parse(candidate)
+        except InvalidCandidateVariantError as error:
+            raise UnknownCandidateError(f"{candidate} names no variant: {error}") from error
         for arm in self._arms:
-            if arm.ref == candidate:
-                return arm
-        raise UnknownCandidateError(f"this catalogue holds no baseline called {candidate}")
+            if arm.ref == variant.base:
+                return self._turned(arm, variant)
+        raise UnknownCandidateError(f"this catalogue holds no baseline called {variant.base}")
+
+    @staticmethod
+    def _turned(arm: ClassicalArm, variant: CandidateVariant) -> ClassicalArm:
+        method = arm.method
+        for knob, value in variant.knobs:
+            try:
+                method = method.tuned(knob, value)
+            except UnknownKnobError as error:
+                raise UnknownCandidateError(f"{variant.ref} names no variant: {error}") from error
+        if variant.knobs and method == arm.method:
+            # Two names for one model would let a selection weigh the default against itself.
+            raise UnknownCandidateError(f"{variant.ref} turns no knob away from {arm.ref}")
+        return replace(arm, ref=variant.ref, method=method)
 
     def _method(self, arm: ClassicalArm) -> CandidateMethod:
         """What the baseline was set to, beyond the seed each cell of the grid supplies itself."""
         return CandidateMethod.of(
-            features=arm.features,
-            sources=" ".join(str(source) for source in arm.sources),
-            **self.boosting.parameters(),
+            sources=" ".join(str(source) for source in arm.sources), **arm.method.parameters()
         )

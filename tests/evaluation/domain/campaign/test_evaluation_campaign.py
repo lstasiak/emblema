@@ -192,3 +192,22 @@ def test_a_campaign_read_back_stands_where_it_stood() -> None:
     whole = ran_campaign()
 
     assert whole.revision == len(whole.design.cells())
+
+
+def test_a_cell_asks_its_candidate_what_the_design_declared_under_the_campaigns_rules() -> None:
+    grid = campaign()
+    kept = next(cell for cell in grid.design.cells() if grid.design.retains(cell))
+
+    asked = grid.evaluation_of(kept)
+
+    assert asked.task == grid.task
+    assert asked.purpose == grid.purpose
+    assert asked.retain is True
+    assert asked.declared == grid.design.get_candidate(kept.candidate)
+
+
+def test_a_cell_outside_the_grid_cannot_be_asked_of_anyone() -> None:
+    with pytest.raises(UnknownCampaignCellError):
+        campaign().evaluation_of(
+            CampaignCell(candidate=CONTROL, budget=LabelBudget.of(50), seed=99)
+        )

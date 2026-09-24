@@ -1,18 +1,13 @@
 from dataclasses import dataclass
 
-from emblema.evaluation.application.use_cases.complete_campaign import (
-    CompleteCampaign,
-    CompleteCampaignCommand,
+from emblema.evaluation.application.use_cases.record_cell_result import (
+    RecordCellResult,
+    RecordCellResultCommand,
 )
 from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
-from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.cell_result import CellResult
-from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
-from emblema.evaluation.domain.exceptions import (
-    CampaignChangedElsewhereError,
-    UnknownCampaignCellError,
-)
+from emblema.evaluation.domain.exceptions import UnknownCampaignCellError
 from emblema.evaluation.ports.candidate_provider import CandidateProvider
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
 
@@ -31,7 +26,7 @@ class RunCampaignCellCommand:
 
 
 class RunCampaignCell:
-    """Runs one cell, records it against the campaign, and closes the campaign if it was the last.
+    """Runs one cell and records it against the campaign, which closes it if it was the last.
 
     A cell already recorded is returned rather than run again. That is what makes the work safe
     to hand to a queue: a broker that delivers a message twice, or a caller that resubmits a
@@ -39,26 +34,20 @@ class RunCampaignCell:
     more to the point, cannot produce a second answer for a point the campaign has already
     recorded one for.
 
-    Losing the race to record is not losing the work. Another process finishing a cell of the
-    same grid while this one was running its own is the ordinary case once a campaign is worked
-    by more than one worker, so the campaign is read again and the result put against the state
-    that now stands. What was expensive has already happened, and the cell is answered once.
+    Running is the candidate's and recording is ``RecordCellResult``'s; this is the two in one
+    process. A cell run on a machine that cannot reach the registry goes through the same two
+    halves with an order between them.
     """
-
-    # A retry is lost only to another process recording a cell, and a grid holds finitely many.
-    # The bound is here so that a store that keeps refusing surfaces as a failure rather than
-    # as a worker that spins.
-    ATTEMPTS = 8
 
     def __init__(
         self,
         campaigns: EvaluationCampaignRepository,
         candidates: CandidateProvider,
-        complete_campaign: CompleteCampaign,
+        record_cell_result: RecordCellResult,
     ) -> None:
         self._campaigns = campaigns
         self._candidates = candidates
-        self._complete = complete_campaign
+        self._record = record_cell_result
 
     def __call__(self, command: RunCampaignCellCommand) -> CellResult:
         """Run the cell unless it has run, record it, and close the campaign if it is now whole.
@@ -75,59 +64,12 @@ class RunCampaignCell:
                 are allowed to record the result.
         """
         campaign = self._campaigns.get(command.campaign)
-        recorded = self._recorded(campaign.results, command.cell)
+        recorded = RecordCellResult.recorded(campaign.results, command.cell)
         if recorded is not None:
             return recorded
         if command.cell not in campaign.pending():
             raise UnknownCampaignCellError(
                 f"{command.cell} is not a cell of campaign {command.campaign}"
             )
-        declared = campaign.design.get_candidate(command.cell.candidate)
-        result = self._candidates.evaluate(
-            CandidateEvaluation(
-                task=campaign.task,
-                cell=command.cell,
-                purpose=campaign.purpose,
-                retain=campaign.design.retains(command.cell),
-                declared=declared,
-            )
-        )
-        return self._record(campaign, command, result)
-
-    def _record(
-        self, campaign: EvaluationCampaign, command: RunCampaignCellCommand, result: CellResult
-    ) -> CellResult:
-        """Put ``result`` against the campaign, reading it again while others get there first.
-
-        Whoever records the cell that completes the grid is whoever reads a state the rest of
-        the grid is already in, which is why closing it is decided on the state that was
-        actually written and not on the one this process started from.
-
-        Raises:
-            CampaignChangedElsewhereError: If the campaign kept moving for as many attempts as
-                are allowed.
-        """
-        for _ in range(self.ATTEMPTS):
-            already = self._recorded(campaign.results, command.cell)
-            if already is not None:
-                return already
-            recorded = campaign.record(result)
-            try:
-                self._campaigns.save(recorded, seen=campaign.revision)
-            except CampaignChangedElsewhereError:
-                campaign = self._campaigns.get(command.campaign)
-                continue
-            if recorded.is_complete:
-                self._complete(CompleteCampaignCommand(campaign=recorded.campaign_id))
-            return result
-        raise CampaignChangedElsewhereError(
-            f"campaign {command.campaign} moved on under every one of {self.ATTEMPTS} attempts "
-            f"to record {command.cell}"
-        )
-
-    @staticmethod
-    def _recorded(results: tuple[CellResult, ...], cell: CampaignCell) -> CellResult | None:
-        for result in results:
-            if result.cell == cell:
-                return result
-        return None
+        result = self._candidates.evaluate(campaign.evaluation_of(command.cell))
+        return self._record(RecordCellResultCommand(campaign=command.campaign, result=result))

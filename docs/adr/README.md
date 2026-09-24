@@ -46,3 +46,4 @@ Format: context, decision, consequences, alternatives considered. Status is one 
 | [0035](0035-the-evaluation-campaign.md) | The evaluation campaign: a grid of candidates declared before it runs, a verdict only once it is whole, and one narrow message out of it | accepted |
 | [0036](0036-the-classical-candidate.md) | The classical candidate: a port of its own, features that outlive a channel layout, and a process that declares a comparison without being able to run it | accepted |
 | [0037](0037-promoting-what-a-campaign-kept.md) | Promoting what a campaign kept: a projection fed by the campaign's announcement, a served model per period of service, and a manual relay for a delivery that failed | accepted |
+| [0038](0038-the-tuned-baseline.md) | The tuned baseline: spectra without a grid, a grid in the corpus's time, knobs chosen by a declared selection | accepted |

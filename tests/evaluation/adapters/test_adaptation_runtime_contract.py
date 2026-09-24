@@ -18,7 +18,7 @@ from emblema.evaluation.adapters.in_memory.adaptation_runtime import InMemoryAda
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import (
     ForeignLabelSampleError,
-    InvalidAdaptationOutcomeError,
+    InvalidScoredOutcomeError,
 )
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
@@ -97,5 +97,5 @@ def test_a_sample_of_another_task_is_refused(adapted: Adapted) -> None:
 
 
 def test_a_run_with_nothing_to_score_is_refused(adapted: Adapted) -> None:
-    with pytest.raises(InvalidAdaptationOutcomeError):
+    with pytest.raises(InvalidScoredOutcomeError):
         adapted.runtime.adapt(plan(), adapted.task, SAMPLE, (), retain=False)
