@@ -27,6 +27,15 @@ from emblema.pretraining.adapters.persistence.backbone_record import BackboneRec
 from emblema.pretraining.adapters.persistence.backbone_repository import (
     SqlAlchemyBackboneRepository,
 )
+from emblema.serving.adapters.persistence.promotable_artifact_record import (
+    PromotableArtifactRecord,
+)
+
+# Imported so that the served model's table registers on the Serving metadata, as in
+# migrations/env.py.
+from emblema.serving.adapters.persistence.served_model_record import (  # noqa: F401
+    ServedModelRecord,
+)
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from tests.support.database import REPO_ROOT, clear_pretraining, migrated_engine
@@ -40,7 +49,12 @@ SECOND_MANIFEST = ArtifactRef("durable/second", Checksum.of_bytes(b"second manif
 
 @pytest.mark.parametrize(
     "metadata",
-    [CorpusRecord.metadata, BackboneRecord.metadata, EvaluationCampaignRecord.metadata],
+    [
+        CorpusRecord.metadata,
+        BackboneRecord.metadata,
+        EvaluationCampaignRecord.metadata,
+        PromotableArtifactRecord.metadata,
+    ],
     ids=lambda metadata: str(metadata.schema),
 )
 def test_the_migrations_produce_exactly_the_tables_the_model_describes(metadata: MetaData) -> None:

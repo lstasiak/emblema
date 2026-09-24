@@ -27,9 +27,9 @@ from emblema.evaluation.ports.evaluation_campaign_repository import (
 from tests.evaluation.support import (
     CAMPAIGN,
     CONTENDER,
-    OPENED_AT,
     artifact,
     campaign,
+    closed_campaign,
     result,
 )
 from tests.support.database import clear_evaluation, migrated_engine
@@ -83,12 +83,7 @@ def test_the_cells_that_ran_come_back_with_their_errors_and_what_they_kept(
 def test_a_finished_campaign_comes_back_finished(
     campaigns: EvaluationCampaignRepository,
 ) -> None:
-    whole = campaign()
-    for cell in whole.design.cells():
-        whole = whole.record(result(cell.candidate, cell.budget, cell.seed, ERRORS))
-    finished = whole.complete(OPENED_AT)
-
-    campaigns.save(finished, seen=0)
+    campaigns.save(closed_campaign(), seen=0)
 
     stored = campaigns.get(CAMPAIGN)
     assert stored.is_finished

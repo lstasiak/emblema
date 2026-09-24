@@ -25,6 +25,15 @@ from emblema.evaluation.adapters.persistence.evaluation_campaign_record import (
     EvaluationCampaignRecord,
 )
 from emblema.pretraining.adapters.persistence.backbone_record import BackboneRecord
+from emblema.serving.adapters.persistence.promotable_artifact_record import (
+    PromotableArtifactRecord,
+)
+
+# Imported so that emptying Serving empties the served models too, whichever records the test
+# that asks for it happened to import.
+from emblema.serving.adapters.persistence.served_model_record import (  # noqa: F401
+    ServedModelRecord,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEST_SUFFIX = "_test"
@@ -89,6 +98,11 @@ def clear_pretraining(engine: Engine) -> None:
 def clear_evaluation(engine: Engine) -> None:
     """Empty Evaluation's tables, so a test starts from a registry that holds nothing."""
     _truncate(engine, EvaluationCampaignRecord.metadata)
+
+
+def clear_serving(engine: Engine) -> None:
+    """Empty Serving's tables, so a test starts from a registry that holds nothing."""
+    _truncate(engine, PromotableArtifactRecord.metadata)
 
 
 def _create_if_missing(settings: DatabaseSettings) -> None:

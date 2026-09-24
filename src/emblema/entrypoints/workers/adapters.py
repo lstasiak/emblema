@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from emblema.evaluation.ports.candidate_provider import CandidateProvider
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
+from emblema.serving.ports.promotable_artifact_repository import PromotableArtifactRepository
 from emblema.shared.ports.artifact_store import ArtifactStore
 from emblema.shared.ports.clock import Clock
 from emblema.shared.ports.event_publisher import EventPublisher
@@ -22,6 +23,7 @@ class Adapters:
     store: ArtifactStore
     tasks: DownstreamTaskRepository
     campaigns: EvaluationCampaignRepository
+    promotables: PromotableArtifactRepository
     candidates: CandidateProvider
     jobs: JobQueue
     events: EventPublisher

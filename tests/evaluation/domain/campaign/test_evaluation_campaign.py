@@ -19,19 +19,11 @@ from tests.evaluation.support import (
     OPENED_AT,
     artifact,
     campaign,
+    ran_campaign,
     result,
 )
 
 ERRORS = (3.0, 4.0, 5.0)
-
-
-def run_everything(errors: dict[CandidateRef, tuple[float, ...]] | None = None):
-    """A campaign with every cell of its grid recorded, the contender erring less by default."""
-    scored = errors or {CONTROL: (6.0, 8.0, 10.0), CONTENDER: ERRORS}
-    whole = campaign()
-    for cell in whole.design.cells():
-        whole = whole.record(result(cell.candidate, cell.budget, cell.seed, scored[cell.candidate]))
-    return whole
 
 
 def test_a_fresh_campaign_has_its_whole_grid_pending() -> None:
@@ -70,7 +62,7 @@ def test_a_campaign_with_cells_left_to_run_refuses_to_finish() -> None:
 
 
 def test_a_campaign_that_has_finished_records_no_further_cell() -> None:
-    finished = run_everything().complete(OPENED_AT)
+    finished = ran_campaign().complete(OPENED_AT)
     first = finished.design.cells()[0]
 
     with pytest.raises(CampaignClosedError):
@@ -78,7 +70,7 @@ def test_a_campaign_that_has_finished_records_no_further_cell() -> None:
 
 
 def test_a_campaign_that_has_finished_does_not_finish_twice() -> None:
-    finished = run_everything().complete(OPENED_AT)
+    finished = ran_campaign().complete(OPENED_AT)
 
     with pytest.raises(CampaignClosedError):
         finished.complete(OPENED_AT)
@@ -86,7 +78,7 @@ def test_a_campaign_that_has_finished_does_not_finish_twice() -> None:
 
 def test_a_verdict_is_refused_until_the_campaign_has_finished() -> None:
     with pytest.raises(CampaignNotCompletedError):
-        run_everything().verdict()
+        ran_campaign().verdict()
 
 
 def test_a_campaign_built_finished_with_cells_missing_is_refused() -> None:
@@ -94,8 +86,17 @@ def test_a_campaign_built_finished_with_cells_missing_is_refused() -> None:
         replace(campaign(), completed_at=OPENED_AT)
 
 
+def test_a_closed_campaign_says_when_it_closed() -> None:
+    assert ran_campaign().complete(OPENED_AT).completion() == OPENED_AT
+
+
+def test_a_campaign_still_running_has_no_moment_of_closing() -> None:
+    with pytest.raises(CampaignNotCompletedError):
+        ran_campaign().completion()
+
+
 def test_the_verdict_reads_the_endpoint_apart_from_the_secondary_family() -> None:
-    verdict = run_everything().complete(OPENED_AT).verdict()
+    verdict = ran_campaign().complete(OPENED_AT).verdict()
 
     assert verdict.endpoint.candidate == CONTENDER
     assert verdict.endpoint.budget == LabelBudget.of(200)
@@ -103,7 +104,7 @@ def test_the_verdict_reads_the_endpoint_apart_from_the_secondary_family() -> Non
 
 
 def test_the_endpoint_is_confirmed_when_the_contender_errs_less_on_every_unit() -> None:
-    verdict = run_everything().complete(OPENED_AT).verdict()
+    verdict = ran_campaign().complete(OPENED_AT).verdict()
 
     assert verdict.endpoint.difference.reduction > 0.0
     assert verdict.endpoint.difference.interval.above_zero
@@ -111,7 +112,7 @@ def test_the_endpoint_is_confirmed_when_the_contender_errs_less_on_every_unit() 
 
 
 def test_a_contender_that_errs_as_the_control_does_is_not_told_apart() -> None:
-    same = run_everything({CONTROL: ERRORS, CONTENDER: ERRORS})
+    same = ran_campaign(errors={CONTROL: ERRORS, CONTENDER: ERRORS})
 
     verdict = same.complete(OPENED_AT).verdict()
 
@@ -120,7 +121,7 @@ def test_a_contender_that_errs_as_the_control_does_is_not_told_apart() -> None:
 
 
 def test_the_repeats_of_a_cell_are_pooled_rather_than_averaged() -> None:
-    whole = run_everything()
+    whole = ran_campaign()
 
     assert len(whole.results_of(CONTENDER, LabelBudget.of(200))) == 2
     assert whole.rmse_of(CONTENDER, LabelBudget.of(200)) == pytest.approx(
@@ -134,24 +135,11 @@ def test_a_candidate_with_nothing_run_has_no_score() -> None:
 
 
 def test_the_kept_artifact_is_the_one_from_the_cell_the_design_named() -> None:
-    whole = campaign()
-    for cell in whole.design.cells():
-        kept = "kept" if whole.design.retains(cell) else None
-        whole = whole.record(
-            result(
-                cell.candidate,
-                cell.budget,
-                cell.seed,
-                ERRORS,
-                artifact=None if kept is None else artifact(kept),
-            )
-        )
-
-    assert whole.artifact_of(CONTENDER) == artifact("kept")
+    assert ran_campaign(artifact("kept")).artifact_of(CONTENDER) == artifact("kept")
 
 
 def test_the_sentence_names_the_endpoint_its_budget_and_what_was_found() -> None:
-    sentence = run_everything().complete(OPENED_AT).verdict().sentence()
+    sentence = ran_campaign().complete(OPENED_AT).verdict().sentence()
 
     assert "200 labels" in sentence
     assert str(CONTENDER) in sentence
@@ -165,14 +153,14 @@ def test_a_cell_is_the_coordinates_and_reads_as_them() -> None:
 
 
 def test_a_pairing_the_campaign_never_compared_is_refused() -> None:
-    verdict = run_everything().complete(OPENED_AT).verdict()
+    verdict = ran_campaign().complete(OPENED_AT).verdict()
 
     with pytest.raises(UnknownCandidateError, match="no comparison of"):
         verdict.get_comparison(CandidateRef("absent"), LabelBudget.of(200))
 
 
 def test_a_budget_the_campaign_never_ran_is_refused_by_the_verdict() -> None:
-    verdict = run_everything().complete(OPENED_AT).verdict()
+    verdict = ran_campaign().complete(OPENED_AT).verdict()
 
     with pytest.raises(UnknownCandidateError, match="at a budget of all"):
         verdict.get_comparison(CONTENDER, LabelBudget.everything())
@@ -193,7 +181,7 @@ def test_every_change_a_campaign_can_undergo_moves_its_revision_by_one() -> None
     first = campaign().design.cells()[0]
 
     recorded = campaign().record(result(first.candidate, first.budget, first.seed, ERRORS))
-    whole = run_everything()
+    whole = ran_campaign()
     finished = whole.complete(OPENED_AT)
 
     assert recorded.revision == campaign().revision + 1
@@ -201,6 +189,6 @@ def test_every_change_a_campaign_can_undergo_moves_its_revision_by_one() -> None
 
 
 def test_a_campaign_read_back_stands_where_it_stood() -> None:
-    whole = run_everything()
+    whole = ran_campaign()
 
     assert whole.revision == len(whole.design.cells())

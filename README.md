@@ -197,7 +197,7 @@ finishes when every cell of its grid has run and not before, so a curve is never
 cells that happened to finish.
 
 It is declared from a file that is committed first, because budgets, seeds and the rule for what
-counts as a difference passed as command-line arguments are a decision nobody can date. Three
+counts as a difference passed as command-line arguments are a decision nobody can date. Four
 invocations, none of which runs a cell:
 
 ```sh
@@ -206,9 +206,13 @@ uv run python -m emblema.entrypoints.cli.campaign define-task \
 uv run python -m emblema.entrypoints.cli.campaign define \
   --file campaigns/baselines-fd001.toml --task <task id>
 uv run python -m emblema.entrypoints.cli.campaign advance --campaign <campaign id>
+uv run python -m emblema.entrypoints.cli.campaign announce --campaign <campaign id>
 ```
 
-Each prints the identifier the next one takes. What competes is a network adapted from
+The first three each print the identifier the next one takes. The fourth publishes a closed
+campaign's conclusion again, for when the delivery made on closing failed, and prints the
+checksum of every artifact the campaign kept, which is what a promotion names. What competes
+is a network adapted from
 pretrained weights or a classical method fitted from the labels alone, and a campaign is made of
 either without knowing which: the second kind is what keeps the headline comparison from having
 "a summary of each window and a few hundred trees would have done as well" standing beside it
@@ -244,3 +248,25 @@ that lost every message costs a resubmission rather than the grid. When the last
 recorded the campaign closes, reads its verdict and publishes what another context can act on —
 each candidate, what it scored at each budget, the artifact of the one cell the design kept, and
 where it stands against the control.
+
+### Serving
+
+Nothing is served that a finished campaign did not measure. When a campaign closes, Serving hears
+its conclusion and records what it kept — each artifact by checksum, with its origin, its kind
+and what it scored — in a projection of its own, with no key into the campaign's tables: a
+promotion is checked against that projection, so the two contexts could sit in separate
+databases. Every kind of candidate is promotable on the same terms; if the trees won, the trees
+are served.
+
+```sh
+uv run python -m emblema.entrypoints.cli.serving promote --checksum <checksum>
+uv run python -m emblema.entrypoints.cli.serving withdraw --model <model id>
+```
+
+The checksum is one `campaign announce` prints. Where several campaigns kept the same bytes,
+`--campaign <id>` says which to promote out of, and where one campaign kept them as two
+competitors, `--candidate <name>` says which. A promotion is refused if no finished campaign kept
+the artifact, if a model not yet withdrawn already serves it, or if its bytes are no longer in
+the store. Withdrawal is final: the model is kept as the record of what answered and when, and
+promoting the same artifact again makes a new one. Running a promoted artifact is the prediction
+endpoint's business and is not here yet.

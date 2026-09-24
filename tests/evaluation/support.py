@@ -4,7 +4,7 @@ The overrides are typed ``Any`` because each names a field of the value object i
 carries that field's type; the value object refuses anything else on the way in.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
@@ -232,3 +232,34 @@ def campaign(**overrides: Any) -> EvaluationCampaign:
 def artifact(name: str) -> ArtifactRef:
     """A reference to bytes named after what they stand for, for a test that keeps one."""
     return ArtifactRef(key=f"durable/{name}", checksum=Checksum.of_bytes(name.encode()))
+
+
+CLOSED_AT = UtcDateTime(datetime(2026, 1, 2, tzinfo=UTC))
+
+
+def ran_campaign(
+    kept: ArtifactRef | None = None,
+    *,
+    errors: Mapping[CandidateRef, Sequence[float]] | None = None,
+) -> EvaluationCampaign:
+    """A campaign whose grid ran whole, not yet closed, the contender erring less on every unit.
+
+    The contender's artifact is ``kept`` at the cell the design retains; the control keeps none,
+    as an arm that exists to be measured against. ``errors`` names each candidate's error per
+    unit where a test is about the figures rather than the grid.
+    """
+    scored = {CONTROL: (6.0, 8.0, 10.0), CONTENDER: (3.0, 4.0, 5.0)} if errors is None else errors
+    whole = campaign()
+    for cell in whole.design.cells():
+        retained = kept if cell.candidate == CONTENDER and whole.design.retains(cell) else None
+        whole = whole.record(
+            result(
+                cell.candidate, cell.budget, cell.seed, scored[cell.candidate], artifact=retained
+            )
+        )
+    return whole
+
+
+def closed_campaign(kept: ArtifactRef | None = None) -> EvaluationCampaign:
+    """The campaign of ``ran_campaign``, closed at ``CLOSED_AT``."""
+    return ran_campaign(kept).complete(CLOSED_AT)

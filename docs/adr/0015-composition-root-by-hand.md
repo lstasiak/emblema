@@ -151,3 +151,9 @@ declines to hold both.
 The lifetimes are still all process-scoped and the per-task scope still has not appeared. The
 thresholds stay as they were; what has changed is that the first of them fired once and was
 answered by extracting the shared process, not by delegating the wiring.
+
+A sixth root followed the same day: the command line that promotes and withdraws served models
+(ADR-0037). It shares nothing with the campaign processes but the helpers that connect a store
+and an engine from the settings, and it repeats once, in eight lines, the idiom of building two
+repositories over one engine wherever either was left to the root. That is inside the handful the
+threshold allows; a third repetition would be the moment to extract it.

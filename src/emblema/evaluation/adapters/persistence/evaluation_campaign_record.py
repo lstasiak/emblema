@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Self
 from uuid import UUID
 
@@ -14,8 +14,8 @@ from emblema.evaluation.adapters.persistence.orm import Base
 from emblema.evaluation.contracts.identifiers import CampaignId, TaskId
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
+from emblema.shared.adapters.persistence.datetimes import as_utc
 from emblema.shared.kernel.compute import ComputeTier
-from emblema.shared.kernel.timestamps import UtcDateTime
 
 RUNNING, FINISHED = "running", "finished"
 DESIGNS = CampaignDesignDocument()
@@ -86,12 +86,6 @@ class EvaluationCampaignRecord(Base):
             tier=ComputeTier(self.tier),
             design=DESIGNS.decode(dict(self.design)),
             results=tuple(record.to_result() for record in self.cells),
-            opened_at=self._utc(self.opened_at),
-            completed_at=None if self.completed_at is None else self._utc(self.completed_at),
+            opened_at=as_utc(self.opened_at),
+            completed_at=None if self.completed_at is None else as_utc(self.completed_at),
         )
-
-    @staticmethod
-    def _utc(at: datetime) -> UtcDateTime:
-        # The database answers in the session's time zone; the value object requires offset
-        # zero, so the boundary that produced the value normalises it.
-        return UtcDateTime(at.astimezone(UTC))
