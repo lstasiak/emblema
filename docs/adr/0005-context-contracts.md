@@ -134,3 +134,18 @@ So the provider is an ordinary adapter, `evaluation/adapters/candidates/`, and t
 unchanged: an ACL is named after the upstream context it defends against, and the first one will
 be the `CampaignCompleted` handler in Serving. A directory named after an upstream context that
 imports nothing of it promises a seam that is not there.
+
+## 2026-09-24 — the first anti-corruption layer, and what in-process delivery lost
+
+The first ACL is where this record placed it: `serving/adapters/acl/evaluation.py`, which
+subscribes to `CampaignCompleted` and turns each announcement into a command of Serving's own
+(ADR-0037). It imports Evaluation's contracts and nothing else from that context, and no other
+Serving module reads Evaluation's messages.
+
+It is also the first subscriber whose work can fail after the publisher has committed. The
+publisher closes and stores the campaign and only then publishes. A handler that fails leaves the
+campaign closed and the message undelivered, and closing cannot be repeated. The threshold above
+has not fired: the subscriber runs in the publishing process and may fail with it. What this adds
+is a manual form of the relay that an outbox would run automatically. `AnnounceCampaign` publishes
+a closed campaign's message again, rebuilt from the stored aggregate and dated when the campaign
+closed. The consumer is idempotent by what the message says, so a repeated announcement is safe.
