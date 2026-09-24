@@ -26,6 +26,14 @@ from emblema.evaluation.application.use_cases.run_campaign_cell import RunCampai
 from emblema.evaluation.ports.candidate_provider import CandidateProvider
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
+from emblema.serving.adapters.acl.evaluation import EvaluationAntiCorruptionLayer
+from emblema.serving.adapters.persistence.promotable_artifact_repository import (
+    SqlAlchemyPromotableArtifactRepository,
+)
+from emblema.serving.application.use_cases.record_promotable_artifacts import (
+    RecordPromotableArtifacts,
+)
+from emblema.serving.ports.promotable_artifact_repository import PromotableArtifactRepository
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
 from emblema.shared.adapters.queues.celery_application import celery_application
@@ -58,6 +66,11 @@ class CampaignProcess:
     the synchronous one: nothing yet has to outlive the transaction that publishes it, and an
     outbox is the answer on the day something does.
 
+    Serving's projection is fed here, in every process that can close a campaign, because a
+    campaign closes wherever its last cell happens to run. Its repository shares the engine of
+    the registries: another schema of the same database, and a second pool would reach the same
+    place.
+
     Attributes:
         store: Where artifacts are read and kept.
         tasks: Registry of downstream tasks.
@@ -65,6 +78,7 @@ class CampaignProcess:
         jobs: Where cells are submitted.
         events: Where use cases publish.
         subscriptions: Where handlers are registered.
+        promotables: What finished campaigns kept, as Serving projects it.
         clock: Source of the current instant.
         ids: Source of new identifiers.
         blocks: Published corpora, fetched and mapped — what a runtime reads windows through.
@@ -83,6 +97,7 @@ class CampaignProcess:
         store: ArtifactStore | None = None,
         tasks: DownstreamTaskRepository | None = None,
         campaigns: EvaluationCampaignRepository | None = None,
+        promotables: PromotableArtifactRepository | None = None,
         jobs: JobQueue | None = None,
         subscriptions: InMemoryEventSubscriber | None = None,
         events: EventPublisher | None = None,
@@ -98,6 +113,7 @@ class CampaignProcess:
             store: Artifact store; the configured S3-compatible bucket unless given.
             tasks: Registry of tasks; the configured metadata database unless given.
             campaigns: Registry of campaigns; the same database unless given.
+            promotables: Serving's projection of kept artifacts; the same database unless given.
             jobs: Where cells are submitted; the configured broker unless given.
             subscriptions: Where handlers are registered; a fresh registry unless given.
             events: Where use cases publish; synchronous over ``subscriptions`` unless given.
@@ -112,7 +128,12 @@ class CampaignProcess:
         self.events = InMemoryEventPublisher(self.subscriptions) if events is None else events
         self.clock = SystemClock() if clock is None else clock
         self.ids = Uuid4IdGenerator() if ids is None else ids
-        self.tasks, self.campaigns = self._registries(settings, tasks, campaigns)
+        self.tasks, self.campaigns, self.promotables = self._registries(
+            settings, tasks, campaigns, promotables
+        )
+        EvaluationAntiCorruptionLayer(RecordPromotableArtifacts(self.promotables)).subscribe(
+            self.subscriptions
+        )
         self.jobs = self._jobs(settings) if jobs is None else jobs
         self.open_test_split = OpenTestSplit(self.tasks, self.ids, self.clock, self.events)
         self.blocks = PublishedCorpusBlocks(self.store, workspace)
@@ -129,6 +150,7 @@ class CampaignProcess:
             store=self.store,
             tasks=self.tasks,
             campaigns=self.campaigns,
+            promotables=self.promotables,
             candidates=candidates,
             jobs=self.jobs,
             events=self.events,
@@ -162,21 +184,25 @@ class CampaignProcess:
         settings: Settings | None,
         tasks: DownstreamTaskRepository | None,
         campaigns: EvaluationCampaignRepository | None,
-    ) -> tuple[DownstreamTaskRepository, EvaluationCampaignRepository]:
-        """The two registries, on one engine wherever either was left to be built.
+        promotables: PromotableArtifactRepository | None,
+    ) -> tuple[
+        DownstreamTaskRepository, EvaluationCampaignRepository, PromotableArtifactRepository
+    ]:
+        """The three repositories, on one engine wherever any was left to be built.
 
-        One engine because they are two aggregates of one schema in one database, and a second
-        would open a second pool to the same place.
+        One engine because they are tables of one database, and a second would open a second
+        pool to the same place.
 
         Raises:
             ValueError: If one was left to be built without settings to build it from.
         """
-        if tasks is not None and campaigns is not None:
-            return tasks, campaigns
+        if tasks is not None and campaigns is not None and promotables is not None:
+            return tasks, campaigns, promotables
         engine = configured_engine(settings_for(settings, "the registries"))
         return (
             SqlAlchemyDownstreamTaskRepository(engine) if tasks is None else tasks,
             SqlAlchemyEvaluationCampaignRepository(engine) if campaigns is None else campaigns,
+            SqlAlchemyPromotableArtifactRepository(engine) if promotables is None else promotables,
         )
 
     @staticmethod

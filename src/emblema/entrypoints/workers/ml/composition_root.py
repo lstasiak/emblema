@@ -17,6 +17,10 @@ from emblema.evaluation.ports.candidate_provider import CandidateProvider
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
 from emblema.pretraining.adapters.training.devices import available_device
+from emblema.serving.adapters.in_memory.promotable_artifact_repository import (
+    InMemoryPromotableArtifactRepository,
+)
+from emblema.serving.ports.promotable_artifact_repository import PromotableArtifactRepository
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore
@@ -58,6 +62,7 @@ class CompositionRoot:
         store: ArtifactStore | None = None,
         tasks: DownstreamTaskRepository | None = None,
         campaigns: EvaluationCampaignRepository | None = None,
+        promotables: PromotableArtifactRepository | None = None,
         candidates: CandidateProvider | None = None,
         jobs: JobQueue | None = None,
         subscriptions: InMemoryEventSubscriber | None = None,
@@ -85,6 +90,7 @@ class CompositionRoot:
             store=store,
             tasks=tasks,
             campaigns=campaigns,
+            promotables=promotables,
             jobs=jobs,
             subscriptions=subscriptions,
             events=events,
@@ -126,6 +132,7 @@ class CompositionRoot:
         store: ArtifactStore,
         tasks: DownstreamTaskRepository,
         campaigns: EvaluationCampaignRepository,
+        promotables: PromotableArtifactRepository | None = None,
         candidates: CandidateProvider,
         jobs: JobQueue,
         workspace: Path,
@@ -148,6 +155,9 @@ class CompositionRoot:
             store=store,
             tasks=tasks,
             campaigns=campaigns,
+            promotables=(
+                InMemoryPromotableArtifactRepository() if promotables is None else promotables
+            ),
             candidates=candidates,
             jobs=jobs,
             subscriptions=subscriptions,
