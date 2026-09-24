@@ -7,7 +7,6 @@ from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.cell_result import CellResult
-from emblema.evaluation.domain.exceptions import CandidateMismatchError
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 
 
@@ -16,8 +15,8 @@ class BackboneCandidateProvider:
 
     What each arm is comes from the catalogue and not from here, so the description a campaign
     was designed against and the one a cell is checked against are the same text. Turning
-    pretrained weights back into an encoder is the process's business, behind the runtime this
-    is given, so nothing here names the context the weights came from.
+    pretrained weights back into an encoder is the runtime's business, so nothing here names
+    the context the weights came from.
     """
 
     def __init__(self, catalogue: BackboneArmCatalogue, run_adaptation: RunAdaptation) -> None:
@@ -37,12 +36,7 @@ class BackboneCandidateProvider:
                 another low-rank update.
         """
         cell = request.cell
-        declared = self._catalogue.describe(cell.candidate)
-        if request.declared != declared:
-            raise CandidateMismatchError(
-                f"the campaign recorded {cell.candidate} as something this process does not "
-                f"supply: {request.declared} against {declared}"
-            )
+        request.declared.must_match(self._catalogue.describe(cell.candidate))
         arm = self._catalogue.arm_of(cell.candidate)
         outcome = self._run(
             RunAdaptationCommand(

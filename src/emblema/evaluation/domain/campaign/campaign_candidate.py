@@ -1,10 +1,14 @@
 from dataclasses import dataclass
+from typing import Self
 
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.campaign.compute_budget import ComputeBudget
-from emblema.evaluation.domain.exceptions import InvalidCampaignCandidateError
+from emblema.evaluation.domain.exceptions import (
+    CandidateMismatchError,
+    InvalidCampaignCandidateError,
+)
 from emblema.shared.kernel.artifacts import ArtifactRef
 
 
@@ -40,6 +44,22 @@ class CampaignCandidate:
     budget: ComputeBudget | None
     method: CandidateMethod
     starts_from: ArtifactRef | None
+
+    def must_match(self, supplied: Self) -> None:
+        """Refuse a candidate supplied under anything other than what this one records.
+
+        Whole rather than field by field: a process set to something the grid never declared
+        would answer a point of the curve under it, and every field anyone adds would otherwise
+        have to be remembered here again.
+
+        Raises:
+            CandidateMismatchError: If the two differ in anything at all.
+        """
+        if self != supplied:
+            raise CandidateMismatchError(
+                f"the campaign recorded {self.ref} as something this process does not supply: "
+                f"{self} against {supplied}"
+            )
 
     def __post_init__(self) -> None:
         if (self.budget is None) == self.kind.shares_the_compute_budget:

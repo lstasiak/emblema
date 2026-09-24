@@ -10,16 +10,10 @@ from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandid
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
-from emblema.evaluation.domain.exceptions import CandidateMismatchError
 
 
 class ClassicalCandidateProvider:
     """Fits the baselines a catalogue names, in this process.
-
-    Nothing here reaches the context that trains backbones, and that is the point rather than an
-    accident of what it happens to need: a campaign made only of these runs end to end with the
-    Pretraining context absent, which is what makes the comparison between the two kinds a
-    comparison and not a report about one of them.
 
     What each baseline is comes from the catalogue and not from here, so the description a
     campaign was designed against and the one a cell is checked against are the same text.
@@ -39,18 +33,11 @@ class ClassicalCandidateProvider:
 
         Raises:
             UnknownCandidateError: If the catalogue holds no baseline of that name.
-            UnknownBackboneError: If the campaign recorded the baseline as starting from
-                pretrained weights, which nothing here could have used.
-            CandidateMethodMismatchError: If it recorded the baseline under other boosting knobs
-                than this process fits by.
+            CandidateMismatchError: If the campaign recorded the baseline as anything other
+                than what this process supplies — other features, sources or boosting knobs.
         """
         cell = request.cell
-        declared = self._catalogue.describe(cell.candidate)
-        if request.declared != declared:
-            raise CandidateMismatchError(
-                f"the campaign recorded {cell.candidate} as something this process does not "
-                f"supply: {request.declared} against {declared}"
-            )
+        request.declared.must_match(self._catalogue.describe(cell.candidate))
         arm = self._catalogue.arm_of(cell.candidate)
         outcome = self._run(
             RunClassicalFitCommand(
