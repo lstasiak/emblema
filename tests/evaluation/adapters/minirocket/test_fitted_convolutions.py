@@ -47,3 +47,41 @@ def test_what_was_kept_answers_exactly_as_what_was_fitted() -> None:
 def test_bytes_that_are_not_fitted_convolutions_are_refused() -> None:
     with pytest.raises(UnreadableFittedCandidateError):
         FittedConvolutions.read(b"not an archive")
+
+
+def test_the_grid_reads_the_channels_the_fitted_windows_hold_and_no_other() -> None:
+    # A vocabulary of five: the fitted windows hold channels 1 and 2, channel 1 at every step of
+    # the grid and channel 2 at a third of them, so only channel 2's mask says anything.
+    dense = [
+        window(
+            timed(1, [(float(np.sin(k)), (k + 0.5) / 16) for k in range(16)]),
+            timed(2, [(float(k), (k + 0.5) / 16) for k in range(0, 16, 3)]),
+        )
+        for _ in range(6)
+    ]
+
+    fitted = FittedConvolutions.fitted(
+        recipe(method=convolutions()),
+        convolutions(),
+        5,
+        16,
+        dense,
+        np.linspace(0.0, 1.0, 6),
+        1.0,
+    )
+
+    assert fitted.rows.tolist() == [0, 1, 5 + 1]
+
+
+def test_a_channel_no_fitted_window_held_is_not_read_when_answering() -> None:
+    fitted = FittedConvolutions.fitted(
+        recipe(method=convolutions()), convolutions(), 5, 16, WINDOWS, TARGETS, 10.0
+    )
+    times = np.sort(np.random.default_rng(9).uniform(0.0, 1.0, 50))
+    first = timed(1, [(float(np.sin(2 * np.pi * t)), float(t)) for t in times])
+    second = timed(2, [(float(t), float(t)) for t in times[::3]])
+
+    alone = fitted.predict([window(first, second)], threads=1)
+    beside = fitted.predict([window(first, second, timed(4, [(9.0, 0.5)]))], threads=1)
+
+    assert np.array_equal(alone, beside)
