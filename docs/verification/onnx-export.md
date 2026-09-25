@@ -3,19 +3,19 @@
 Purpose: confirm that an encoder with one dynamic axis — the token count — a padding mask, a channel
 embedding and a timeless-token flag exports to ONNX and runs in ONNX Runtime, before the architecture
 is frozen. The decision and the reasoning live in ADR-0007; this note records what was observed,
-where, and with which versions. The suite in `tests/ml/onnx_export` runs the same checks in CI on
-Linux x86_64; the legs below are the ones CI does not cover.
+where, and with which versions. The suite in `tests/evaluation/adapters/onnx` runs the same checks
+in CI on Linux x86_64; the legs below are the ones CI does not cover.
 
 Method on any machine, two commands:
 
 ```sh
 uv sync --all-extras
-uv run pytest tests/ml                    # the assertions
-uv run scripts/onnx_export_report.py      # the numbers, printed as a section for this file
+uv run pytest tests/evaluation/adapters/onnx           # the assertions
+uv run python -m tests.evaluation.adapters.onnx.report  # the numbers, as a section for this file
 ```
 
-The MPS leg is a test (`test_export_from_mps.py`), skipped where the accelerator is absent, so on
-Apple silicon `pytest tests/ml` covers it without any extra step.
+The MPS leg is a test (`test_inference_graph_from_mps.py`), skipped where the accelerator is
+absent, so on Apple silicon the suite covers it without any extra step.
 
 ## 2026-09-10 — Windows x86_64, development machine
 

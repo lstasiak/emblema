@@ -1,7 +1,7 @@
 # ADR-0037: Promoting what a campaign kept — a projection fed by the campaign's announcement, a served model per period of service, and a manual relay for a delivery that failed
 
 - Status: accepted
-- Date: 2026-09-24; amended 2026-09-24 (what a promotion names for a neural candidate)
+- Date: 2026-09-24; amended 2026-09-24 (what a promotion names for a kept candidate)
 - Full text before condensation: commit `5f14447`
 
 ## Context
@@ -61,7 +61,7 @@ campaign is closed, the message lost, and closing cannot be repeated.
 
 ## Amendments
 
-- **2026-09-24 — what a promotion names for a neural candidate.** From ADR-0040 the artifact a
+- **2026-09-24 — what a promotion names for a kept candidate.** From ADR-0040 the artifact a
   campaign announces for a kept competitor is the manifest of the forms the candidate is stored in,
   not the fitted state; the projection and the served model still copy one reference and its
   checksum, and the manifest's checksum pins every form beneath it. The kind says what a candidate

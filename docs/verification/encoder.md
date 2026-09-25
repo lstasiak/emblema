@@ -9,9 +9,9 @@ was observed, where, and with which versions.
 
 What must hold everywhere is a test, not a number here: permutation, indifference to padding,
 gradient flow, the exact parameter count (`tests/pretraining`), and the round trip through ONNX
-Runtime (`tests/ml/onnx_export`, now on the encoder itself). The verdict the report prints — whether
-the attention buffers of a window fit the published tier's device — is arithmetic, and is held to
-itself in `tests/scripts/test_encoder_budget_report.py`.
+Runtime (`tests/evaluation/adapters/onnx`, now on the fitted candidate). The verdict the report
+prints — whether the attention buffers of a window fit the published tier's device — is
+arithmetic, and is held to itself in `tests/scripts/test_encoder_budget_report.py`.
 
 Method on any machine, two commands:
 
