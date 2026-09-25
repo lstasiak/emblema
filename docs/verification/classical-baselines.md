@@ -167,3 +167,6 @@ back by its checksum: 21 channels × 50 steps, 1,789,441 weights, target scale 1
 - The network cells ran through a Celery worker on the host, not through an order. The broker
   closed the worker's connection once (missed heartbeats during a long cell); every result had
   been stored before, and the redelivered cells answered from the registry without running again.
+
+*2026-09-25:* the diagnostics conclusion 3 defers to are in
+[`head-and-representation.md`](head-and-representation.md).
