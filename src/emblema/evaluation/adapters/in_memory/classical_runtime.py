@@ -1,6 +1,10 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import ClassVar
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
+from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.fitting_source import FittingSource
 from emblema.evaluation.domain.exceptions import (
@@ -39,8 +43,10 @@ class InMemoryClassicalRuntime:
     tell a fit that ignored its sources from one that took them in.
     """
 
+    FORMAT: ClassVar[str] = "learnt-mean"
+
     def __init__(self, store: ArtifactStore | None = None) -> None:
-        self._store = store
+        self._kept_candidates = None if store is None else KeptCandidates(store)
         self.fittings: list[Fitting] = []
 
     def fit(
@@ -72,7 +78,7 @@ class InMemoryClassicalRuntime:
                 for labelled in scored
             ),
             seconds=0.0,
-            artifact=self._kept(mean) if retain else None,
+            artifact=self._kept(mean, task) if retain else None,
         )
 
     @staticmethod
@@ -93,14 +99,18 @@ class InMemoryClassicalRuntime:
         ]
         return sum(targets) / len(targets) * scale
 
-    def _kept(self, mean: float) -> ArtifactRef:
-        """The mean this runtime fitted, stored, so a retained cell names real bytes.
+    def _kept(self, mean: float, task: DownstreamTask) -> ArtifactRef:
+        """The mean this runtime fitted, under a manifest, so a retained cell names real bytes.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep it.
         """
-        if self._store is None:
+        if self._kept_candidates is None:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it fitted and was given no store"
             )
-        return self._store.put(repr(mean).encode())
+        return self._kept_candidates.keep(
+            CandidateKind.CLASSICAL,
+            corpus_manifest=task.manifest,
+            measured=RepresentationBytes(self.FORMAT, repr(mean).encode()),
+        )

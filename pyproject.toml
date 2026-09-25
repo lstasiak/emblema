@@ -202,7 +202,7 @@ warn_return_any = false
 [[tool.mypy.overrides]]
 # Third-party packages that ship no type information of their own.
 module = [
-    "onnxruntime", "onnxruntime.*", "pandas", "pandas.*",
+    "onnxruntime", "onnxruntime.*", "google.protobuf", "google.protobuf.*", "pandas", "pandas.*",
     "celery", "celery.*", "kombu", "kombu.*",
     "sklearn", "sklearn.*", "joblib", "joblib.*", "threadpoolctl", "scipy", "scipy.*",
     # The reference a report checks MiniRocket against; run under it, never installed.
@@ -221,6 +221,10 @@ markers = [
     "integration: needs external services (Docker, network); skipped by default, run in CI jobs that provide them",
     "ml: needs the 'ml' extra (torch, onnxruntime)",
 ]
+# The ONNX exporter reports that it dropped one of five identical axis names. It kept the name,
+# which the export suite asserts; the notice is about its own renaming pass, and it is raised
+# wherever a torch candidate is kept, not only where the export is under test.
+filterwarnings = ["ignore:# The axis name:UserWarning"]
 
 [tool.coverage.run]
 source = ["emblema"]

@@ -1,6 +1,6 @@
 import io
 from dataclasses import dataclass
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
 import torch
 
@@ -18,7 +18,9 @@ class FittedPatchModel:
 
     The weights alone would not be enough: a window has to be laid on the same grid and read
     over the same channels, the model built in the same shape, and the answer read back in the
-    task's unit. So the plan, the reading and the target's scale travel with the weights.
+    task's unit. So the plan, the reading and the target's scale travel with the weights. A
+    kept candidate's manifest names this form ``FORMAT``; it is the measured form and the only
+    one.
 
     Attributes:
         parameters: The plan the model was trained under, flattened to scalars; the shape is
@@ -27,6 +29,8 @@ class FittedPatchModel:
         target_scale: What the targets were divided by.
         weights: State of the whole model, on the host.
     """
+
+    FORMAT: ClassVar[str] = "torch-patch-state"
 
     parameters: dict[str, str | int | float]
     reading: GridReading

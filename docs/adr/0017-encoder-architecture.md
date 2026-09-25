@@ -1,7 +1,7 @@
 # ADR-0017: The encoder — full self-attention over a set of tokens, time at fixed frequencies, one learned vector per channel
 
 - Status: accepted
-- Date: 2026-09-13; amended 2026-09-18
+- Date: 2026-09-13; amended 2026-09-18, 2026-09-24
 - Full text before condensation: commit `5f14447`
 
 ## Context
@@ -75,6 +75,10 @@ position in its window is encoded. Target budget 5–30M parameters.
   process (`RestoredBackbones`); the encoder stays in Pretraining (ADR-0030).
   `MaskedMeanPooling` moved to `shared/adapters/tensors/`: export, task heads and inference pool the
   same way.
+- **2026-09-24 — the third consumer did not need the module.** Serving runs the inference graph a
+  fitted candidate is exported to (ADR-0040) and never holds the encoder as a torch module; the
+  export is made in Evaluation, which already holds it through `BackboneFactory`, so that seam
+  stays the only one.
 
 ## Sources
 

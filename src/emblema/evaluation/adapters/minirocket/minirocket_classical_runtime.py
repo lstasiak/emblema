@@ -3,9 +3,12 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
+from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.blocks.read_corpus import ReadCorpus
 from emblema.evaluation.adapters.minirocket.fitted_convolutions import FittedConvolutions
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.fitting_source import FittingSource
@@ -44,7 +47,7 @@ class MiniRocketClassicalRuntime:
     ) -> None:
         """Fit over the corpora ``blocks`` reads, keeping what it is asked to in ``store``."""
         self._blocks = blocks
-        self._store = store
+        self._kept_candidates = None if store is None else KeptCandidates(store)
 
     def fit(
         self,
@@ -91,7 +94,7 @@ class MiniRocketClassicalRuntime:
                 for labelled, answer in zip(scored, predicted.tolist(), strict=True)
             ),
             seconds=time.perf_counter() - started,
-            artifact=self._kept(fitted) if retain else None,
+            artifact=self._kept(fitted, task) if retain else None,
         )
 
     @staticmethod
@@ -124,14 +127,20 @@ class MiniRocketClassicalRuntime:
             )
         return steps
 
-    def _kept(self, fitted: FittedConvolutions) -> ArtifactRef:
-        """The candidate this fit produced, stored whole, so the campaign can name it.
+    def _kept(self, fitted: FittedConvolutions, task: DownstreamTask) -> ArtifactRef:
+        """The candidate this fit produced, stored whole under its manifest, for the campaign.
+
+        The convolutions are the measured form and the only one.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep it.
         """
-        if self._store is None:
+        if self._kept_candidates is None:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it fitted and was given no store"
             )
-        return self._store.put(fitted.to_bytes())
+        return self._kept_candidates.keep(
+            CandidateKind.CLASSICAL,
+            corpus_manifest=task.manifest,
+            measured=RepresentationBytes(FittedConvolutions.FORMAT, fitted.to_bytes()),
+        )

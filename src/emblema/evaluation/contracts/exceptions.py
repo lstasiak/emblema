@@ -17,3 +17,15 @@ class InvalidCandidateRefError(EvaluationContractError):
 
 class InvalidCandidateMetricError(EvaluationContractError):
     pass
+
+
+class InvalidKeptRepresentationError(EvaluationContractError):
+    pass
+
+
+class InvalidKeptCandidateManifestError(EvaluationContractError):
+    pass
+
+
+class MalformedKeptCandidateManifestError(EvaluationContractError):
+    pass

@@ -2,7 +2,7 @@ import io
 import pickle
 import zipfile
 from dataclasses import dataclass
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
 import torch
 
@@ -29,10 +29,12 @@ UNREADABLE_BYTES = (
 class FittedCandidate:
     """A candidate as one run left it: its weights, and what it takes to build it again.
 
-    This is what a campaign keeps when it keeps anything, and what another context would serve.
-    The weights alone would not be enough — the same numbers mean different things under a
-    different head, a different channel vocabulary or a different target scale — so the plan's
-    parameters travel with them, flattened to scalars because that is how they survive a store.
+    The measured form of what a campaign keeps: the state whose answers the campaign scored, and
+    the one the inference graph is derived from. The weights alone would not be enough — the same
+    numbers mean different things under a different head, a different channel vocabulary or a
+    different target scale — so the plan's parameters travel with them, flattened to scalars
+    because that is how they survive a store. A kept candidate's manifest names this form
+    ``FORMAT``.
 
     Attributes:
         parameters: The plan the candidate was made under, flattened to scalars.
@@ -41,6 +43,8 @@ class FittedCandidate:
             task's own unit.
         weights: State of the whole candidate, head included, on the host.
     """
+
+    FORMAT: ClassVar[str] = "torch-state"
 
     parameters: dict[str, str | int | float]
     vocabulary_size: int

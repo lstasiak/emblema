@@ -1,6 +1,10 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import ClassVar
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
+from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.exceptions import CandidateNotRetainableError
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
@@ -33,12 +37,15 @@ class InMemoryAdaptationRuntime:
     loss the mean leaves, in every epoch; its one trainable parameter is the mean.
 
     Given a store it can be asked to keep what it fitted, which for this runtime is the mean it
-    learnt: a campaign assembled over it then names artifacts that really exist and really hash
-    to what the message says, rather than references to nothing.
+    learnt, under a manifest as every runtime keeps a candidate: a campaign assembled over it
+    then names artifacts that really exist, really hash to what the message says and read as a
+    kept candidate, rather than references to nothing.
     """
 
+    FORMAT: ClassVar[str] = "learnt-mean"
+
     def __init__(self, store: ArtifactStore | None = None) -> None:
-        self._store = store
+        self._kept_candidates = None if store is None else KeptCandidates(store)
         self.adaptations: list[Adaptation] = []
 
     def adapt(
@@ -71,17 +78,21 @@ class InMemoryAdaptationRuntime:
                 for labelled in validation
             ),
             seconds=0.0,
-            artifact=self._kept(mean) if retain else None,
+            artifact=self._kept(mean, task) if retain else None,
         )
 
-    def _kept(self, mean: float) -> ArtifactRef:
-        """The mean this runtime learnt, stored, so a retained cell names real bytes.
+    def _kept(self, mean: float, task: DownstreamTask) -> ArtifactRef:
+        """The mean this runtime learnt, under a manifest, so a retained cell names real bytes.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep it.
         """
-        if self._store is None:
+        if self._kept_candidates is None:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it fitted and was given no store"
             )
-        return self._store.put(repr(mean).encode())
+        return self._kept_candidates.keep(
+            CandidateKind.NEURAL,
+            corpus_manifest=task.manifest,
+            measured=RepresentationBytes(self.FORMAT, repr(mean).encode()),
+        )

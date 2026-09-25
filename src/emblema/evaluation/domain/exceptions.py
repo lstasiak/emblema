@@ -287,3 +287,15 @@ class SelectionHasNoVerdictError(EvaluationError):
 
 class InvalidCampaignVerdictError(EvaluationError, ValueError):
     """A verdict compares the control against itself, or one pairing twice."""
+
+
+class UnexportableCandidateError(EvaluationError):
+    pass
+
+
+class UnreadableInferenceGraphError(EvaluationError):
+    pass
+
+
+class InferenceGraphDivergedError(EvaluationError):
+    pass

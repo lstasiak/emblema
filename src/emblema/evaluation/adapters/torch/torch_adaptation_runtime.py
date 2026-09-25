@@ -4,11 +4,15 @@ from collections.abc import Sequence
 import torch
 from torch import Tensor
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
+from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
+from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate
 from emblema.evaluation.adapters.torch.scheduled_training import Forward, ScheduledTraining
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
@@ -54,7 +58,7 @@ class TorchAdaptationRuntime:
         self._backbones = backbones
         self._blocks = blocks
         self._device = device
-        self._store = store
+        self._kept_candidates = None if store is None else KeptCandidates(store)
 
     def adapt(
         self,
@@ -108,7 +112,9 @@ class TorchAdaptationRuntime:
             ),
             seconds=time.perf_counter() - started,
             artifact=(
-                self._kept(plan, candidate, len(manifest.channels), scale) if retain else None
+                self._kept(plan, candidate, task, held, predicted, len(manifest.channels), scale)
+                if retain
+                else None
             ),
         )
 
@@ -116,22 +122,41 @@ class TorchAdaptationRuntime:
         self,
         plan: AdaptationPlan,
         candidate: AdaptedBackbone,
+        task: DownstreamTask,
+        held: Sequence[TokenWindow],
+        predicted: Tensor,
         vocabulary_size: int,
         target_scale: float,
     ) -> ArtifactRef:
-        """The candidate this run fitted, stored whole, so the campaign can name it.
+        """The candidate this run fitted, kept in both its forms, so the campaign can name it.
+
+        The fitted state is the measured form. The inference graph is derived from it here,
+        while the run still holds the candidate, and is checked against the answers the run just
+        gave on the same windows before anything is stored: a graph that would answer otherwise
+        than what the campaign scored is refused, not kept.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep it.
+            UnexportableCandidateError: If the candidate does not export.
+            InferenceGraphDivergedError: If the graph strays from the run's answers.
         """
-        if self._store is None:
+        if self._kept_candidates is None:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it fitted and was given no store"
             )
         fitted = FittedCandidate.of(
             plan, candidate, vocabulary_size=vocabulary_size, target_scale=target_scale
         )
-        return self._store.put(fitted.to_bytes())
+        graph = InferenceGraph.exported(candidate, target_scale=target_scale)
+        deviation = graph.deviation_from(
+            predicted.tolist(), held, target_scale=target_scale, batch_size=plan.schedule.batch_size
+        )
+        return self._kept_candidates.keep(
+            CandidateKind.NEURAL,
+            corpus_manifest=task.manifest,
+            measured=RepresentationBytes(FittedCandidate.FORMAT, fitted.to_bytes()),
+            derived=(RepresentationBytes(InferenceGraph.FORMAT, graph.to_bytes(), deviation),),
+        )
 
     def _over_windows(self, candidate: AdaptedBackbone, windows: Sequence[TokenWindow]) -> Forward:
         """The candidate run whole over the windows at the indices asked for."""

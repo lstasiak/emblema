@@ -2,7 +2,7 @@ import io
 import pickle
 import zipfile
 from dataclasses import dataclass
-from typing import Self
+from typing import ClassVar, Self
 
 import joblib
 import xgboost
@@ -38,7 +38,8 @@ class FittedBaseline:
 
     The model is kept in the format XGBoost writes for keeping models, not as a pickled
     estimator: the document that carries it is then plain data, and a release of the library
-    that no longer unpickles last year's object still loads last year's trees.
+    that no longer unpickles last year's object still loads last year's trees. A kept
+    candidate's manifest names this form ``FORMAT``; it is the measured form and the only one.
 
     Attributes:
         parameters: The recipe the candidate was fitted under, flattened to scalars.
@@ -47,6 +48,8 @@ class FittedBaseline:
             task's own unit.
         model: The fitted trees, as XGBoost's own portable encoding of them.
     """
+
+    FORMAT: ClassVar[str] = "xgboost-joblib"
 
     parameters: dict[str, str | int | float]
     feature_names: tuple[str, ...]

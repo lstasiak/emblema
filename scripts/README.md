@@ -11,9 +11,9 @@ Everything here is run by hand, outside the package. Each script is one of three
   the change that writes it.
 
 A script imports the package and other scripts, never the tests
-(`tests/architecture/test_scripts_import_no_tests.py`). The report of the ONNX export spike runs
-the suite's own harness, so it lives with that suite in `tests/ml/onnx_export/report.py` and is
-retired with it.
+(`tests/architecture/test_scripts_import_no_tests.py`). The report of the ONNX export needs the
+candidates the export suite builds, so it lives with that suite in
+`tests/evaluation/adapters/onnx/report.py`.
 
 Logic that a verdict depends on belongs in `src/emblema`, under the architecture rules, types and
 coverage, not here. That is why the rules that judge a masked-reconstruction run live in
