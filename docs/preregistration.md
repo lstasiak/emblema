@@ -103,22 +103,28 @@ at the same seeds and budget, and the rule chooses again, at most twice per arm.
 swept the same way, so no arm is tuned more than another, and the peaks are swept on each task's
 own validation side rather than carried over from another task.
 
-**How a classical baseline is tuned.** A baseline runs as its method was published unless a
-selection declared before it runs chooses otherwise. The knobs a selection may turn, and the
-values it may turn them to, are named in a committed campaign file whose purpose is
-*selection*; the ridge penalty of the convolution baseline is not among them, since every fit
-already chooses it by leave-one-out error. A selection never reads the validation side: in each
-repeat the seed ranks the task's tuning units, one in five is held out, the budget is drawn from
-the rest and every variant is scored on the held-out units. A variant is chosen at each budget
-of the curve separately, by the rule of one standard error: every variant whose mean RMSE over
-the repeats is within one standard error of the best one's is as good, the standard error
-corrected for the overlap of the repeats as Nadeau and Bengio (2003) do for repeated random
-holdout — the variance scaled by 1/J + n_test/n_train rather than 1/J — and among those the one
-that departs least from the published setting is chosen: fewest knobs turned, then the smallest
-ratio on a log scale. A comparison runs the variants a finished selection chose and names that
-selection; one naming any other variant is not declared. Until the arms are tuned by the same
-protocol, the baselines are tuned at every budget and the arms at the endpoint's alone — an
-asymmetry in the baselines' favour, which can make the claim harder to confirm and never easier.
+**How a candidate is tuned.** A candidate runs at its default unless a selection declared
+before it runs chooses otherwise. The default of a classical baseline is the setting its method
+was published with; the default of an arm or of the patch model is the schedule in force above,
+with the arm's registered peak. The knobs a selection may turn, and the values it may turn them
+to, are named in a committed campaign file whose purpose is *selection*. For a baseline they are
+the knobs of its method, the ridge penalty of the convolution baseline excepted, since every fit
+already chooses it by leave-one-out error. For a network they are the knobs of the schedule
+that leave the compute budget as it is — the peak rate, the weight decay, the share of the run
+the warm-up takes and the fraction of the peak the rate decays to — and never the epochs, the
+floor of steps or the batch, so a tuned network spends what its base spends. A selection never
+reads the validation side: in each repeat the seed ranks the task's tuning units, one in five is
+held out, the budget is drawn from the rest and every variant is scored on the held-out units. A
+variant is chosen at each budget of the curve separately, by the rule of one standard error:
+every variant whose mean RMSE over the repeats is within one standard error of the best one's is
+as good, the standard error corrected for the overlap of the repeats as Nadeau and Bengio (2003)
+do for repeated random holdout — the variance scaled by 1/J + n_test/n_train rather than 1/J —
+and among those the one that departs least from the default is chosen: fewest knobs turned, then
+the smallest ratio on a log scale. A comparison runs the variants a finished selection chose and
+names that selection; one naming any other variant is not declared. Every candidate of a
+comparison is tuned by this one protocol, or none is; a comparison that tuned its baselines per
+budget and its arms at the endpoint alone is read with that asymmetry stated, in the baselines'
+favour.
 
 **Where a comparison runs.** Every comparison is made within one budget, and every cell of one
 budget runs on one kind of accelerator; a budget begun on one and resumed on another is run again
@@ -190,7 +196,10 @@ whatever has run: a cell that has not run enters the correction with a p-value o
 partial grid is read more strictly than the whole one, never less, and the conclusion states when
 the grid is incomplete. A secondary cell's verdict follows the family's word, not its own
 interval. A secondary result does not confirm the claim on its own; it describes the shape of the
-curve around the endpoint that does.
+curve around the endpoint that does. The correction a campaign reads its family under is named in
+its committed file before it runs; the family of this claim is under Holm, and a campaign that
+names the step-up correction of Benjamini and Hochberg controls the share of false discoveries
+among its rejections rather than the chance of any, and says so wherever its cells appear.
 
 ## When a difference is too small to matter
 
@@ -227,6 +236,11 @@ a paired difference over 21 units, the half-width of a 95 % interval is about 0.
 deviations of the per-engine differences; under the Holm correction over eleven secondary
 comparisons it rises to roughly 0.8. Wide intervals are therefore a property of the experiment as
 designed, known now, and they will not be reinterpreted later as a finding about the method.
+Measured on synthetic data with a known answer (`docs/verification/verdict-statistics.md`), the
+percentile interval over 21 units covers a true reduction about 92 % of the time rather than 95,
+and its whole width lies above a true zero about 5 % of the time rather than 2.5: the endpoint's
+confirmation carries about twice its nominal one-sided error. The rule stands as registered; the
+shortfall is reported beside every reading made under it.
 
 ## The synthetic control
 
@@ -338,3 +352,4 @@ title" resolves to a row here and to the commit the row names, where the full te
 | 2026-09-22 | `060394b` | diagnostic | before it runs; settles nothing | *the endpoint read again on seeds no sweep has seen, and whether a longer backbone helps this corpus, before either runs.* Seeds 6–10 at 200 under the peaks in force; the 16-epoch backbone (`sha256:8cd60452…`) against the one in force by the replacement arithmetic. Neither reading changes the configuration. Outcome: pending. |
 | 2026-09-22 | the commit that adds this row | editorial | after the readings above | The rules in force rewritten in place from the register as it stood at `060394b`; no criterion, threshold, configuration or reading changed, which a diff against that commit shows. Measurements, cost declarations and the full text of diagnostics stay in the commits the rows name and in the verification notes. |
 | 2026-09-24 | the commit that adds this row | criterion | before any selection runs | *how a classical baseline is tuned.* Baselines run as published unless a declared selection, scored on held-out tuning units and never on the validation side, chooses a variant per budget by the rule of one standard error with the Nadeau–Bengio correction, ties broken towards the published setting; a comparison runs only what a finished selection chose. Measured when it was written: nothing under this rule. |
+| 2026-09-25 | the commit that adds this row | criterion, reading, measured | before any selection of a network runs; the harness had run no arm but the control | *how a candidate is tuned.* The selection protocol extends to the arms and the patch model: their knobs are the schedule's fields that leave the compute budget as it is, their default the schedule in force with the arm's registered peak, and every candidate of a comparison is tuned by the one protocol. Reading: a campaign names its family's correction in its file, Holm for this claim. Measured: the percentile interval's coverage on a known answer (`verdict-statistics.md`); the rule stands, the shortfall is reported. |
