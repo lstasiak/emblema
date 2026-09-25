@@ -43,24 +43,33 @@ class PairedUnitBootstrap:
 
     def compare(self, paired: PairedUnitErrors) -> PairedDifference:
         """The reduction the candidate makes over the control, with its interval and p-value."""
-        count = len(paired.control)
-        draws = random.Random(self.seed)
-        reductions = sorted(
-            paired.reduction_over(draws.choices(range(count), k=count))
-            for _ in range(self.resamples)
-        )
-        tail = (1.0 - self.level) / 2.0
+        reductions = self.reductions(paired)
         below = (1 + sum(1 for reduction in reductions if reduction <= 0.0)) / (self.resamples + 1)
         above = (1 + sum(1 for reduction in reductions if reduction >= 0.0)) / (self.resamples + 1)
         return PairedDifference(
             reduction=paired.reduction,
             relative_reduction=paired.relative_reduction,
-            interval=BootstrapInterval(
-                low=_quantile(reductions, tail),
-                high=_quantile(reductions, 1.0 - tail),
-                level=self.level,
-            ),
+            interval=self.interval_of(reductions),
             p_value=min(1.0, 2.0 * min(below, above)),
+        )
+
+    def reductions(self, paired: PairedUnitErrors) -> list[float]:
+        """The reduction in every resample of the units, in ascending order.
+
+        Exposed so that another procedure can set its own reductions beside these off one draw.
+        """
+        count = len(paired.control)
+        draws = random.Random(self.seed)
+        return sorted(
+            paired.reduction_over(draws.choices(range(count), k=count))
+            for _ in range(self.resamples)
+        )
+
+    def interval_of(self, ascending: Sequence[float]) -> BootstrapInterval:
+        """The percentile interval at this bootstrap's level over ``ascending`` reductions."""
+        tail = (1.0 - self.level) / 2.0
+        return BootstrapInterval(
+            low=_quantile(ascending, tail), high=_quantile(ascending, 1.0 - tail), level=self.level
         )
 
 
