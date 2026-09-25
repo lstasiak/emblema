@@ -93,7 +93,6 @@ def adapt(published: Published, stated: AdaptationPlan) -> AdaptationOutcome:
     return published.runtime.adapt(stated, published.task, SAMPLE, VALIDATION, retain=False)
 
 
-@pytest.mark.filterwarnings("ignore:# The axis name:UserWarning")
 def test_a_run_asked_to_keep_what_it_fitted_stores_both_forms_under_one_manifest(
     tmp_path: Path,
 ) -> None:

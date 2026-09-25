@@ -28,6 +28,7 @@ from emblema.config.compute_tiers import ComputeTiers
 from emblema.evaluation.adapters.onnx.inference_candidate import InferenceCandidate
 from emblema.evaluation.adapters.onnx.inference_graph import (
     INPUT_NAMES,
+    MAX_BATCH,
     MAX_TOKENS,
     OPSET_VERSION,
     OUTPUT_NAMES,
@@ -96,7 +97,7 @@ def export_at(candidate: AdaptedBackbone, opset: int) -> bytes:
     module = InferenceCandidate(candidate, target_scale=TARGET_SCALE)
     sample = random_batch(2, 137, seed=SEED, padding=5)
     axes = {
-        0: torch.export.Dim("batch", min=1, max=64),
+        0: torch.export.Dim("batch", min=1, max=MAX_BATCH),
         1: torch.export.Dim("n_tokens", min=1, max=MAX_TOKENS),
     }
     program = torch.onnx.export(

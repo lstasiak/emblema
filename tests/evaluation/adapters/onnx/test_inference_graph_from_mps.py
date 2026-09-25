@@ -19,7 +19,6 @@ from tests.support.token_tensors import random_batch
 pytestmark = [
     pytest.mark.ml,
     pytest.mark.skipif(not torch.backends.mps.is_available(), reason="needs Apple-silicon MPS"),
-    pytest.mark.filterwarnings("ignore:# The axis name:UserWarning"),
 ]
 
 # Looser than the host-to-graph comparison: MPS accumulates the same float32 arithmetic in a

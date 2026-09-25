@@ -43,12 +43,7 @@ from tests.support.token_tensors import (
     with_timestamps,
 )
 
-pytestmark = [
-    pytest.mark.ml,
-    # The exporter reports that it dropped one of five identical axis names. It kept the name,
-    # and a test below asserts that; the notice is about its own renaming pass.
-    pytest.mark.filterwarnings("ignore:# The axis name:UserWarning"),
-]
+pytestmark = pytest.mark.ml
 
 # float32 through a different set of kernels. The largest deviation observed on the pooled state
 # across every case below and both development machines is 3.6e-06, at the longest window, where
