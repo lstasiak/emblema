@@ -131,6 +131,7 @@ def test_a_process_bringing_neither_settings_nor_a_store_is_refused(tmp_path: Pa
 def test_a_process_left_to_build_candidates_without_what_they_are_built_over_is_refused(
     tmp_path: Path, left_out: str
 ) -> None:
+    # Any: three arguments of three types, and whichever two remain are spread into the call.
     given: dict[str, Any] = {"backbone": WEIGHTS, "lora": LORA, "patch": patch_spec()}
     del given[left_out]
     with pytest.raises(ValueError, match="needs its candidates given"):

@@ -15,10 +15,8 @@ class PatchModelCatalogue:
     A network, so it is held to the compute budget the adapted arms share, and it learns under
     their schedule: one schedule declared, one run under, and the budgets equal because they are
     derived from it the same way. The shape and the schedule it was set to travel with the
-    candidate, so a campaign stored a month ago still says what it compared.
-
-    It has no variants yet: a name that turns a knob is refused rather than read, because how
-    the knobs of a network are tuned is decided for every network at once and not here.
+    candidate, so a campaign stored a month ago still says what it compared. A name that turns a
+    knob is refused rather than read (ADR-0039).
     """
 
     def __init__(

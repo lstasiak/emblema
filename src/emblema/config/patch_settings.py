@@ -4,8 +4,9 @@ from pydantic import BaseModel
 class PatchSettings(BaseModel):
     """How the patch model reads a window and how large it is.
 
-    Nothing has a default, for the reason the boosting knobs have none. What each field means is
-    ``PatchModelSpec``'s to say, and it is that value object that judges what arrives here.
+    Nothing has a default: a shape nobody declared is a shape nobody can repeat. What each field
+    means is ``PatchModelSpec``'s to say, and it is that value object that judges what arrives
+    here.
     """
 
     patch_length: int

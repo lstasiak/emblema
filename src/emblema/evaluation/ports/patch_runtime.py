@@ -11,10 +11,8 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 class PatchRuntime(Protocol):
     """Trains a patch model from nothing on a task's labels, and scores it on the windows given.
 
-    Neither of the other two runtimes, because it is described by neither's values. It adapts
-    no backbone, so a transfer mode and named weights would be fields it ignores; and it is a
-    network held to the compute budget the adapted arms share, trained on the stack they are,
-    so the runtime that fits classical methods by their own procedure is the wrong home too.
+    A port of its own because the run is described by a plan of its own, with no backbone to
+    adapt and no classical procedure to fit by (ADR-0039).
 
     Nothing of a corpus crosses the port: the task names the manifest its windows sit behind,
     and laying them on a grid is the adapter's business. Weights never cross it either: a run
