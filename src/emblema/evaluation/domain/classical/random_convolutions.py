@@ -1,10 +1,10 @@
 from dataclasses import dataclass, replace
 from typing import ClassVar, Self
 
-from emblema.evaluation.domain.classical.knob import turned
 from emblema.evaluation.domain.classical.minirocket_spec import MiniRocketSpec
 from emblema.evaluation.domain.classical.ridge_spec import RidgeSpec
 from emblema.evaluation.domain.exceptions import UnknownKnobError
+from emblema.evaluation.domain.tuning.knob import turned
 
 
 @dataclass(frozen=True, kw_only=True)

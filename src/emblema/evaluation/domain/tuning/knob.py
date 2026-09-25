@@ -1,23 +1,25 @@
 """Turning one field of a specification to a value written as text, the way a variant names it.
 
-Every method with knobs turns them the same way — the value is read as the type the field
-already holds, and the specification then judges it — so the reading is stated once here
-rather than once per method. A value that does not read as that type, or that the
-specification refuses, is a knob the method cannot be turned to.
+Every specification with knobs turns them the same way — the value is read as the type the
+field already holds, and the specification then judges it — so the reading is stated once here
+rather than once per method. A value that does not read as that type, or that the specification
+refuses, is a knob the specification cannot be turned to.
 """
 
 from dataclasses import replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
-from emblema.evaluation.domain.classical.minirocket_spec import MiniRocketSpec
 from emblema.evaluation.domain.exceptions import EvaluationError, UnknownKnobError
 
+if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
 
-def turned[T: (GradientBoostingSpec, MiniRocketSpec)](
-    specification: T, field: str, value: str
-) -> T:
+
+def turned[T: DataclassInstance](specification: T, field: str, value: str) -> T:
     """``specification`` with ``field`` set to ``value``, read as the type the field holds.
+
+    Bound to any dataclass rather than to the specifications that have knobs, because naming
+    them here would make this package depend on each of theirs while they depend on it.
 
     Raises:
         UnknownKnobError: If the value does not read as that type, or the specification

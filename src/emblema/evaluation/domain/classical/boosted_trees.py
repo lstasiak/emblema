@@ -3,8 +3,8 @@ from typing import ClassVar, Self
 
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
-from emblema.evaluation.domain.classical.knob import turned
 from emblema.evaluation.domain.exceptions import UnknownKnobError
+from emblema.evaluation.domain.tuning.knob import turned
 
 
 @dataclass(frozen=True, kw_only=True)
