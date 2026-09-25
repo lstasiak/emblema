@@ -6,6 +6,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
+from emblema.evaluation.domain.classical.classical_method import ClassicalMethod
 from emblema.evaluation.domain.exceptions import (
     InvalidCandidateVariantError,
     UnknownCandidateError,
@@ -56,15 +57,10 @@ class ClassicalBaselineCatalogue:
 
     @staticmethod
     def _turned(arm: ClassicalArm, variant: CandidateVariant) -> ClassicalArm:
-        method = arm.method
-        for knob, value in variant.knobs:
-            try:
-                method = method.tuned(knob, value)
-            except UnknownKnobError as error:
-                raise UnknownCandidateError(f"{variant.ref} names no variant: {error}") from error
-        if variant.knobs and method == arm.method:
-            # Two names for one model would let a selection weigh the default against itself.
-            raise UnknownCandidateError(f"{variant.ref} turns no knob away from {arm.ref}")
+        try:
+            method = variant.applied_to(arm.method, _tuned)
+        except (UnknownKnobError, InvalidCandidateVariantError) as error:
+            raise UnknownCandidateError(f"{variant.ref} names no variant: {error}") from error
         return replace(arm, ref=variant.ref, method=method)
 
     def _method(self, arm: ClassicalArm) -> CandidateMethod:
@@ -72,3 +68,7 @@ class ClassicalBaselineCatalogue:
         return CandidateMethod.of(
             sources=" ".join(str(source) for source in arm.sources), **arm.method.parameters()
         )
+
+
+def _tuned(method: ClassicalMethod, knob: str, value: str) -> ClassicalMethod:
+    return method.tuned(knob, value)

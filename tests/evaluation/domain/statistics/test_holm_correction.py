@@ -1,6 +1,6 @@
 import pytest
 
-from emblema.evaluation.domain.exceptions import InvalidHolmCorrectionError
+from emblema.evaluation.domain.exceptions import InvalidFamilyCorrectionError
 from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 
 
@@ -39,18 +39,18 @@ def test_a_family_larger_than_what_ran_holds_the_measured_to_the_whole_familys_l
 
 
 def test_a_family_smaller_than_the_comparisons_given_is_refused() -> None:
-    with pytest.raises(InvalidHolmCorrectionError, match="a family of 2 cannot hold 3"):
+    with pytest.raises(InvalidFamilyCorrectionError, match="a family of 2 cannot hold 3"):
         HolmCorrection().rejected([0.1, 0.2, 0.3], family_size=2)
 
 
 def test_an_empty_family_or_a_p_value_out_of_range_is_refused() -> None:
-    with pytest.raises(InvalidHolmCorrectionError, match="at least one comparison"):
+    with pytest.raises(InvalidFamilyCorrectionError, match="at least one comparison"):
         HolmCorrection().rejected([])
-    with pytest.raises(InvalidHolmCorrectionError, match="p-value must lie in"):
+    with pytest.raises(InvalidFamilyCorrectionError, match="p-value must lie in"):
         HolmCorrection().rejected([0.5, 1.5])
 
 
 @pytest.mark.parametrize("alpha", [0.0, 1.0])
 def test_a_level_outside_the_open_unit_interval_is_refused(alpha: float) -> None:
-    with pytest.raises(InvalidHolmCorrectionError, match="alpha must lie in"):
+    with pytest.raises(InvalidFamilyCorrectionError, match="alpha must lie in"):
         HolmCorrection(alpha=alpha)

@@ -11,10 +11,11 @@ class KnownArms:
     """The four ways of using a backbone, each under the name a campaign competes it by.
 
     What each arm does with the weights is fixed — that is what the name means — while the
-    weights themselves and the strength of the low-rank update are a campaign's choice, so both
-    come in when the process is told what it serves. A register rather than a table read from
-    configuration, because the names are what a stored campaign refers to: an arm renamed in an
-    environment file would leave a finished grid naming candidates nothing supplies.
+    weights themselves, the strength of the low-rank update and the schedule are a campaign's
+    choice, so all three come in when the process is told what it serves. A register rather than
+    a table read from configuration, because the names are what a stored campaign refers to: an
+    arm renamed in an environment file would leave a finished grid naming candidates nothing
+    supplies.
     """
 
     FROM_SCRATCH = CandidateRef("from_scratch")
@@ -23,27 +24,46 @@ class KnownArms:
     FULL_FINE_TUNING = CandidateRef("full_fine_tuning")
 
     @classmethod
-    def over(cls, backbone: ArtifactRef, lora: LoraSpec) -> tuple[BackboneArm, ...]:
-        """Every arm, the three pretrained ones over ``backbone``, in reporting order."""
+    def over(
+        cls, backbone: ArtifactRef, lora: LoraSpec, schedule: AdaptationSchedule
+    ) -> tuple[BackboneArm, ...]:
+        """Every arm over ``backbone`` under ``schedule``, in reporting order.
+
+        The control arm draws its weights anew but has the backbone's shape, so it names the
+        backbone as its architecture and nothing as its weights.
+        """
         return (
             BackboneArm(
                 ref=cls.FROM_SCRATCH,
                 mode=TransferMode.FROM_SCRATCH,
+                architecture=backbone,
                 backbone=None,
                 lora=None,
+                schedule=schedule,
             ),
             BackboneArm(
                 ref=cls.FROZEN_PROBE,
                 mode=TransferMode.FROZEN_PROBE,
+                architecture=backbone,
                 backbone=backbone,
                 lora=None,
+                schedule=schedule,
             ),
-            BackboneArm(ref=cls.LORA, mode=TransferMode.LORA, backbone=backbone, lora=lora),
+            BackboneArm(
+                ref=cls.LORA,
+                mode=TransferMode.LORA,
+                architecture=backbone,
+                backbone=backbone,
+                lora=lora,
+                schedule=schedule,
+            ),
             BackboneArm(
                 ref=cls.FULL_FINE_TUNING,
                 mode=TransferMode.FULL_FINE_TUNING,
+                architecture=backbone,
                 backbone=backbone,
                 lora=None,
+                schedule=schedule,
             ),
         )
 
@@ -61,4 +81,4 @@ class KnownArms:
         What a campaign is declared against and what the process running it describes its cells
         by are then the same object, built the same way.
         """
-        return BackboneArmCatalogue(cls.over(backbone, lora), schedule)
+        return BackboneArmCatalogue(cls.over(backbone, lora, schedule))

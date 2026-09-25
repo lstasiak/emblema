@@ -1,7 +1,6 @@
 # ADR-0032: Statistics of a paired comparison — the engine is the unit resampled, repeats pool per engine, and the arithmetic a verdict rests on lives in the Evaluation domain
 
-- Status: proposed (the first curve is read through it; the harness's statistics work
-  finalises it)
+- Status: accepted (2026-09-25; proposed 2026-09-19, when the first curve was read through it)
 - Date: 2026-09-19
 - Full text before condensation: commit `5f14447`
 
@@ -57,7 +56,22 @@ report script before the harness exists.
 
 ## Revisit when
 
-- The harness's statistics work: two-level bootstrap, Benjamini–Hochberg, variance over seeds;
-  then this status is settled.
 - A task with one label per unit → the per-unit error is one squared error.
 - A metric that does not add over units → paired errors carry their own combination rule.
+- An endpoint sits near the boundary the percentile interval's shortfall moves → a
+  bias-corrected interval, registered before the run that reads it.
+
+## 2026-09-25 — settled by the harness's statistics work
+
+- The correction a family is read under is part of the rules and named in the campaign's file
+  before it runs: Holm, or Benjamini–Hochberg as a declared alternative that controls the share
+  of false discoveries rather than the chance of any. A campaign stored before this reads as Holm.
+- What each side scored is reported as its pooled error and the spread of that error over its
+  repeats, beside the interval and never inside it; the practical floor is read off the same
+  value.
+- A two-level bootstrap over repeats and units exists as an ablation of the method: it says what
+  share of the uncertainty the registered interval leaves out, and reads no verdict.
+- The verdict's sentence is the domain's: endpoint, size, interval, floor, the spread of both
+  sides, where along the curve the advantage holds, and which side it was read on.
+- The percentile interval was calibrated on a known answer (`docs/verification/verdict-statistics.md`):
+  at 21 units it covers about 92 % rather than 95 %. The rule stands; the shortfall is reported.

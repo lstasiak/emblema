@@ -211,10 +211,11 @@ def test_the_conclusion_names_the_endpoint_and_the_secondary_shape(shards: list[
     conclusion = sentence(curve)
 
     assert conclusion.startswith(
-        f"{INCOMPLETE}Confirmed on the registered endpoint: at 200 labelled windows"
+        f"{INCOMPLETE}Confirmed on the registered endpoint: at 200 labels full_fine_tuning "
+        "lowers the error of from_scratch by"
     )
-    assert "Holm correction and above the floor at each of them (50)." in conclusion
-    assert conclusion.endswith("Preliminary; validation, not test.")
+    assert "family's correction and above the floor at each of them (50)" in conclusion
+    assert conclusion.endswith("Validation side; preliminary.")
     rendered = render(curve, KnownTasks.default())
     assert "| 50 | 3 |" in rendered
     assert "validation, not test" in rendered
@@ -278,7 +279,7 @@ def test_the_conclusion_names_the_budget_of_every_label_in_words(tmp_path: Path)
 
     conclusion = sentence(curve_of([shard], KnownTasks.default()))
 
-    assert "above the floor at 50 and 1000, not at the full label set." in conclusion
+    assert "above the floor at 50 and 1000, not at the full label set" in conclusion
     assert "not at all" not in conclusion
 
 

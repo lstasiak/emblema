@@ -2,7 +2,7 @@ import pytest
 
 from emblema.evaluation.domain.exceptions import (
     InvalidComparisonRulesError,
-    InvalidHolmCorrectionError,
+    InvalidFamilyCorrectionError,
 )
 from emblema.evaluation.domain.statistics.bootstrap_interval import BootstrapInterval
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
@@ -14,7 +14,7 @@ from emblema.evaluation.domain.statistics.practical_floor import PracticalFloor
 RULES = ComparisonRules(
     minimum_relative_reduction=0.10,
     floor_share=0.03,
-    holm=HolmCorrection(alpha=0.05),
+    correction=HolmCorrection(alpha=0.05),
     secondary_family_size=11,
 )
 FLOOR = PracticalFloor(value=1.5)
@@ -79,7 +79,7 @@ def test_the_secondary_family_is_the_registered_one_whatever_ran() -> None:
     # Three cells ran; 0.01 would be rejected among three and is not among eleven.
     assert RULES.secondary_rejections([0.01, 0.2, 0.3]) == (False, False, False)
     assert RULES.secondary_rejections([0.004, 0.2, 0.3]) == (True, False, False)
-    with pytest.raises(InvalidHolmCorrectionError, match="a family of 11 cannot hold 12"):
+    with pytest.raises(InvalidFamilyCorrectionError, match="a family of 11 cannot hold 12"):
         RULES.secondary_rejections([0.01] * 12)
 
 
@@ -96,7 +96,7 @@ def test_rules_that_cannot_judge_are_refused(field: str, value: float, message: 
     stated = {
         "minimum_relative_reduction": 0.10,
         "floor_share": 0.03,
-        "holm": HolmCorrection(alpha=0.05),
+        "correction": HolmCorrection(alpha=0.05),
         "secondary_family_size": 11,
         field: value,
     }

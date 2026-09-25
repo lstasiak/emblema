@@ -2,7 +2,7 @@ from math import inf, nan
 
 import pytest
 
-from emblema.evaluation.domain.exceptions import InvalidAdaptationScheduleError
+from emblema.evaluation.domain.exceptions import InvalidAdaptationScheduleError, UnknownKnobError
 from tests.evaluation.support import adaptation_schedule
 
 
@@ -107,3 +107,31 @@ def test_a_run_of_one_step_keeps_that_step_to_decay_over() -> None:
 def test_a_sample_without_a_window_has_no_schedule() -> None:
     with pytest.raises(InvalidAdaptationScheduleError, match="hold a window"):
         adaptation_schedule().learning_rate_schedule(0)
+
+
+def test_a_knob_of_the_schedule_is_turned_and_the_budget_stays() -> None:
+    faster = adaptation_schedule().tuned("learning_rate", "0.003")
+
+    assert faster.learning_rate == 0.003
+    assert (faster.epochs, faster.min_steps, faster.batch_size) == (
+        adaptation_schedule().epochs,
+        adaptation_schedule().min_steps,
+        adaptation_schedule().batch_size,
+    )
+
+
+@pytest.mark.parametrize(
+    ("knob", "value", "complaint"),
+    [
+        ("epochs", "3", "no knob"),
+        ("batch_size", "8", "no knob"),
+        ("learning_rate", "fast", "takes a float"),
+        ("learning_rate", "0", "cannot be 0"),
+        ("warmup_fraction", "1.0", "cannot be 1.0"),
+    ],
+)
+def test_a_knob_that_would_change_the_budget_or_a_value_the_schedule_refuses_is_refused(
+    knob: str, value: str, complaint: str
+) -> None:
+    with pytest.raises(UnknownKnobError, match=complaint):
+        adaptation_schedule().tuned(knob, value)

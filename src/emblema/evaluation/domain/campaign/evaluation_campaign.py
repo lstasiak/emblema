@@ -21,6 +21,8 @@ from emblema.evaluation.domain.exceptions import (
     UnknownCandidateError,
 )
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVerdict
+from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
 from emblema.evaluation.domain.statistics.practical_floor import PracticalFloor
@@ -30,6 +32,29 @@ from emblema.evaluation.domain.tuning.one_standard_error_rule import OneStandard
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.compute import ComputeTier
 from emblema.shared.kernel.timestamps import UtcDateTime
+
+
+@dataclass(frozen=True, kw_only=True)
+class _Measured:
+    """A pairing measured and not yet judged: what a verdict is read from, rule by rule."""
+
+    candidate: CandidateRef
+    budget: LabelBudget
+    control_error: ErrorOverRepeats
+    candidate_error: ErrorOverRepeats
+    difference: PairedDifference
+    floor: PracticalFloor
+
+    def judged(self, verdict: ComparisonVerdict) -> CandidateComparison:
+        return CandidateComparison(
+            candidate=self.candidate,
+            budget=self.budget,
+            control_error=self.control_error,
+            candidate_error=self.candidate_error,
+            difference=self.difference,
+            floor=self.floor,
+            verdict=verdict,
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -258,9 +283,7 @@ class EvaluationCampaign:
                 f"campaign {self.campaign_id} has no verdict until it has finished"
             )
         rules = self.design.rules
-        endpoint_difference, endpoint_floor = self._measured(
-            self.design.endpoint, self.design.endpoint_budget
-        )
+        endpoint = self._measured(self.design.endpoint, self.design.endpoint_budget)
         pairings = tuple(
             (candidate.ref, budget)
             for candidate in self.design.contenders
@@ -268,26 +291,14 @@ class EvaluationCampaign:
             if not self.design.is_endpoint(candidate.ref, budget)
         )
         measured = tuple(self._measured(candidate, budget) for candidate, budget in pairings)
-        rejections = rules.secondary_rejections([difference.p_value for difference, _ in measured])
+        rejections = rules.secondary_rejections([cell.difference.p_value for cell in measured])
         return CampaignVerdict(
-            endpoint=CandidateComparison(
-                candidate=self.design.endpoint,
-                budget=self.design.endpoint_budget,
-                difference=endpoint_difference,
-                floor=endpoint_floor,
-                verdict=rules.endpoint_verdict(endpoint_difference, endpoint_floor),
-            ),
+            control=self.design.control,
+            read_on=self.purpose,
+            endpoint=endpoint.judged(rules.endpoint_verdict(endpoint.difference, endpoint.floor)),
             secondary=tuple(
-                CandidateComparison(
-                    candidate=candidate,
-                    budget=budget,
-                    difference=difference,
-                    floor=floor,
-                    verdict=rules.secondary_verdict(difference, floor, rejected=rejected),
-                )
-                for (candidate, budget), (difference, floor), rejected in zip(
-                    pairings, measured, rejections, strict=True
-                )
+                cell.judged(rules.secondary_verdict(cell.difference, cell.floor, rejected=rejected))
+                for cell, rejected in zip(measured, rejections, strict=True)
             ),
         )
 
@@ -330,16 +341,19 @@ class EvaluationCampaign:
                 return result.artifact
         return None
 
-    def _measured(
-        self, candidate: CandidateRef, budget: LabelBudget
-    ) -> tuple[PairedDifference, PracticalFloor]:
+    def _measured(self, candidate: CandidateRef, budget: LabelBudget) -> _Measured:
         """The candidate against the control at one budget, before a rule is applied to it."""
         control = self.results_of(self.design.control, budget)
         contender = self.results_of(candidate, budget)
         paired = PairedUnitErrors.pooled(
             [result.errors for result in control], [result.errors for result in contender]
         )
-        return (
-            self.design.bootstrap.compare(paired),
-            self.design.rules.floor_of(paired.rmse_control, [result.rmse for result in control]),
+        control_error = ErrorOverRepeats.of(paired.rmse_control, [r.rmse for r in control])
+        return _Measured(
+            candidate=candidate,
+            budget=budget,
+            control_error=control_error,
+            candidate_error=ErrorOverRepeats.of(paired.rmse_candidate, [r.rmse for r in contender]),
+            difference=self.design.bootstrap.compare(paired),
+            floor=self.design.rules.floor_of(control_error),
         )

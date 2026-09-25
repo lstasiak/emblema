@@ -4,7 +4,8 @@ from math import isfinite
 
 from emblema.evaluation.domain.exceptions import InvalidComparisonRulesError
 from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVerdict
-from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
+from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
+from emblema.evaluation.domain.statistics.family_correction import FamilyCorrection
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.practical_floor import PracticalFloor
 
@@ -23,7 +24,9 @@ class ComparisonRules:
     worse; not rejected indistinguishable. The family is the registered one whatever has run:
     a cell that has not run enters with a p-value of one, which is never rejected and holds the
     others to the levels the registration set, so a partial grid is read more strictly than the
-    whole one and never less.
+    whole one and never less. Which correction the family is read under is part of the rules,
+    named before the grid runs like everything else here: a family read under Holm and again
+    under a looser correction once the numbers are in would be choosing its own answer.
 
     Invariants: the minimum share lies in ``(0, 1)``; the floor's share is finite and not
     negative; the secondary family has at least one member.
@@ -31,13 +34,13 @@ class ComparisonRules:
     Attributes:
         minimum_relative_reduction: The share of the control's error the endpoint must take off.
         floor_share: The fixed part of the practical floor, as a share of the control's error.
-        holm: The correction the secondary family is tested under.
+        correction: The correction the secondary family is tested under.
         secondary_family_size: How many secondary cells the registration names.
     """
 
     minimum_relative_reduction: float
     floor_share: float
-    holm: HolmCorrection
+    correction: FamilyCorrection
     secondary_family_size: int
 
     def __post_init__(self) -> None:
@@ -55,11 +58,9 @@ class ComparisonRules:
                 f"the secondary family needs a member, got {self.secondary_family_size}"
             )
 
-    def floor_of(
-        self, control_rmse: float, control_rmse_over_repeats: Sequence[float]
-    ) -> PracticalFloor:
+    def floor_of(self, control: ErrorOverRepeats) -> PracticalFloor:
         """The practical floor at one budget, from the control's error and its repeats."""
-        return PracticalFloor.of(control_rmse, control_rmse_over_repeats, share=self.floor_share)
+        return PracticalFloor.of(control, share=self.floor_share)
 
     def endpoint_verdict(
         self, difference: PairedDifference, floor: PracticalFloor
@@ -87,10 +88,10 @@ class ComparisonRules:
         """Which of the secondary cells that ran are rejected, over the registered family.
 
         Raises:
-            InvalidHolmCorrectionError: If more cells ran than the family names, or a p-value
+            InvalidFamilyCorrectionError: If more cells ran than the family names, or a p-value
                 lies outside ``[0, 1]``.
         """
-        return self.holm.rejected(p_values, family_size=self.secondary_family_size)
+        return self.correction.rejected(p_values, family_size=self.secondary_family_size)
 
     @staticmethod
     def _against_the_floor(

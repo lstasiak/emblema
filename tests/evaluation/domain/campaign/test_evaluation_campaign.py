@@ -143,7 +143,8 @@ def test_the_sentence_names_the_endpoint_its_budget_and_what_was_found() -> None
 
     assert "200 labels" in sentence
     assert str(CONTENDER) in sentence
-    assert "confirmed" in sentence
+    assert sentence.startswith("Confirmed on the registered endpoint")
+    assert sentence.endswith("Validation side; preliminary.")
 
 
 def test_a_cell_is_the_coordinates_and_reads_as_them() -> None:

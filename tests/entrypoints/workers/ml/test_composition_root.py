@@ -149,7 +149,7 @@ def test_a_process_left_to_build_candidates_without_what_they_are_built_over_is_
 
 
 def test_the_arms_are_the_four_modes_over_the_backbone_the_process_serves() -> None:
-    arms = KnownArms.over(WEIGHTS, LORA)
+    arms = KnownArms.over(WEIGHTS, LORA, SCHEDULE)
 
     assert [str(arm.ref) for arm in arms] == [str(ref) for ref in KnownArms.refs()]
     assert arms[0].backbone is None

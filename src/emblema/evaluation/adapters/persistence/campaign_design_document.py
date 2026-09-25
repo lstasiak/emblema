@@ -3,11 +3,13 @@ from typing import Any
 from emblema.evaluation.adapters.documents.campaign_candidate_document import (
     CampaignCandidateDocument,
 )
+from emblema.evaluation.adapters.documents.family_correction_document import (
+    FamilyCorrectionDocument,
+)
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
-from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
@@ -24,6 +26,7 @@ class CampaignDesignDocument:
 
     def __init__(self) -> None:
         self._candidates = CampaignCandidateDocument()
+        self._corrections = FamilyCorrectionDocument()
 
     def encode(self, design: CampaignDesign) -> dict[str, Any]:
         """The design as the document the column holds."""
@@ -37,7 +40,7 @@ class CampaignDesignDocument:
             "rules": {
                 "minimum_relative_reduction": design.rules.minimum_relative_reduction,
                 "floor_share": design.rules.floor_share,
-                "alpha": design.rules.holm.alpha,
+                **self._corrections.encode(design.rules.correction),
                 "secondary_family_size": design.rules.secondary_family_size,
             },
             "bootstrap": {
@@ -78,7 +81,10 @@ class CampaignDesignDocument:
             rules=ComparisonRules(
                 minimum_relative_reduction=rules["minimum_relative_reduction"],
                 floor_share=rules["floor_share"],
-                holm=HolmCorrection(alpha=rules["alpha"]),
+                # A design stored before a correction could be named was read under Holm.
+                correction=self._corrections.decode(
+                    rules.get("correction", FamilyCorrectionDocument.DEFAULT), rules["alpha"]
+                ),
                 secondary_family_size=rules["secondary_family_size"],
             ),
             bootstrap=PairedUnitBootstrap(

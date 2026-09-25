@@ -9,6 +9,9 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.statistics.benjamini_hochberg_correction import (
+    BenjaminiHochbergCorrection,
+)
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 from tests.evaluation.support import (
     CONTENDER,
@@ -112,5 +115,23 @@ def test_a_design_stored_before_selections_existed_reads_back_tuning_nothing() -
     written = DOCUMENTS.encode(design())
     for key in ("inner_holdout", "tuned", "variants"):
         del written[key]
+
+    assert DOCUMENTS.decode(written) == design()
+
+
+def test_a_family_read_under_benjamini_hochberg_survives_the_round_trip() -> None:
+    stated = design(
+        rules=replace(design().rules, correction=BenjaminiHochbergCorrection(alpha=0.1))
+    )
+
+    read = DOCUMENTS.decode(DOCUMENTS.encode(stated))
+
+    assert read.rules == stated.rules
+    assert DOCUMENTS.encode(stated)["rules"]["correction"] == "benjamini_hochberg"
+
+
+def test_a_design_stored_before_a_correction_could_be_named_reads_back_under_holm() -> None:
+    written = DOCUMENTS.encode(design())
+    del written["rules"]["correction"]
 
     assert DOCUMENTS.decode(written) == design()

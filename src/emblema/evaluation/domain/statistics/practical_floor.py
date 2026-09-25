@@ -1,10 +1,9 @@
-from collections.abc import Sequence
 from dataclasses import dataclass
 from math import isfinite
-from statistics import stdev
 from typing import Self
 
 from emblema.evaluation.domain.exceptions import InvalidPracticalFloorError
+from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -32,27 +31,17 @@ class PracticalFloor:
             )
 
     @classmethod
-    def of(
-        cls, control_rmse: float, control_rmse_over_repeats: Sequence[float], *, share: float
-    ) -> Self:
-        """The floor over a control scoring ``control_rmse``, its repeats scoring each of theirs.
+    def of(cls, control: ErrorOverRepeats, *, share: float) -> Self:
+        """The floor over a control that scored ``control``, its repeats spreading as they did.
 
         A single repeat has no spread, so the fixed part alone stands.
 
         Raises:
-            InvalidPracticalFloorError: If the share or the error is not a finite, non-negative
-                number, or there is no repeat.
+            InvalidPracticalFloorError: If the share is not a finite, non-negative number.
         """
         if not isfinite(share) or share < 0.0:
             raise InvalidPracticalFloorError(f"share must be finite and not negative, got {share}")
-        if not isfinite(control_rmse) or control_rmse < 0.0:
-            raise InvalidPracticalFloorError(
-                f"control_rmse must be finite and not negative, got {control_rmse}"
-            )
-        if not control_rmse_over_repeats:
-            raise InvalidPracticalFloorError("a floor needs the control's repeats")
-        spread = stdev(control_rmse_over_repeats) if len(control_rmse_over_repeats) > 1 else 0.0
-        return cls(value=max(share * control_rmse, spread))
+        return cls(value=max(share * control.pooled, control.spread))
 
     def swallows(self, reduction: float) -> bool:
         """Whether ``reduction`` is too small to matter, whichever way it points."""

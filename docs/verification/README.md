@@ -48,4 +48,5 @@ kept as recorded.
 | [transfer-modes.md](transfer-modes.md) | Every transfer mode trains on the registered backbone and answers the task; the untuned control learnt only the mean. |
 | [synthetic-transfer.md](synthetic-transfer.md) | At a window spanning the factors' periods the coupled pair transfers (+0.094, floor 0.053); what transfers is mostly the signals' family. |
 | [label-efficiency-curve.md](label-efficiency-curve.md) | The endpoint is confirmed on the per-condition corpus: full fine-tuning 12.3 % below from scratch at 200 labels; no pretrained arm leads once every label is used. |
+| [verdict-statistics.md](verdict-statistics.md) | On a known answer the registered 95 % interval over 21 units covers about 92 % and excludes a true zero about 10 % of the time two-sided, 5 % above zero; the shortfall is reported, the rule stands. |
 | [classical-baselines.md](classical-baselines.md) | MiniRocket matches aeon; tuned trees per channel beat the network from scratch by 26 % at 200 labels and sit about 13 % below the best pretrained arm (not paired); a patch model from scratch ties the network from scratch at 200 and trails the trees by the same margin. |

@@ -44,7 +44,7 @@ class BackboneCandidateProvider:
                 plan=AdaptationPlan(
                     mode=arm.mode,
                     backbone=arm.backbone,
-                    schedule=self._catalogue.schedule,
+                    schedule=arm.schedule,
                     lora=arm.lora,
                     seed=cell.seed,
                 ),

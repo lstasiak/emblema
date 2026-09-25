@@ -12,7 +12,6 @@ from collections.abc import Callable
 
 import pytest
 
-from emblema.evaluation.adapters.candidates.backbone_arm import BackboneArm
 from emblema.evaluation.adapters.candidates.backbone_arm_catalogue import BackboneArmCatalogue
 from emblema.evaluation.adapters.candidates.classical_arm import ClassicalArm
 from emblema.evaluation.adapters.candidates.classical_baseline_catalogue import (
@@ -34,6 +33,7 @@ from tests.evaluation.support import (
     LORA,
     WEIGHTS,
     adaptation_schedule,
+    arm,
     boosting,
     design,
     patch_spec,
@@ -41,8 +41,7 @@ from tests.evaluation.support import (
 
 TREES = CandidateRef("boosted_trees_per_channel")
 ARMS = BackboneArmCatalogue(
-    (BackboneArm(ref=CONTENDER, mode=TransferMode.FULL_FINE_TUNING, backbone=WEIGHTS, lora=LORA),),
-    adaptation_schedule(),
+    (arm(CONTENDER, TransferMode.FULL_FINE_TUNING, backbone=WEIGHTS, lora=LORA),)
 )
 BASELINES = ClassicalBaselineCatalogue(
     (
@@ -136,9 +135,53 @@ def test_a_design_holds_the_arms_the_patch_model_and_a_baseline_side_by_side() -
     assert {c.ref for c in stated.candidates} == {CONTENDER, PATCHES, TREES}
 
 
-def test_a_variant_of_the_patch_model_is_refused_until_networks_are_tuned() -> None:
-    with pytest.raises(UnknownCandidateError, match="no variant"):
+def test_a_variant_of_the_patch_model_turns_the_schedule_and_keeps_the_shape_and_budget() -> None:
+    base = PATCHED.describe(PATCHES)
+
+    variant = PATCHED.describe(CandidateRef("patch_transformer@learning_rate=0.003"))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    before = {p.name: p.value for p in base.method.parameters}
+    assert {name for name in stated if stated[name] != before[name]} == {"learning_rate"}
+    assert variant.budget == base.budget
+    assert PATCHED.plan_of(variant.ref, seed=1).schedule.learning_rate == 0.003
+
+
+def test_a_knob_of_the_patch_models_shape_is_not_turned_by_a_name() -> None:
+    with pytest.raises(UnknownCandidateError, match="no knob"):
         PATCHED.describe(CandidateRef("patch_transformer@patch_length=8"))
+
+
+def test_a_variant_of_an_arm_is_the_arm_under_a_turned_schedule_on_the_same_budget() -> None:
+    base = ARMS.describe(CONTENDER)
+
+    variant = ARMS.describe(CandidateRef("full_fine_tuning@learning_rate=0.003,weight_decay=0.1"))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    before = {p.name: p.value for p in base.method.parameters}
+    assert {name for name in stated if stated[name] != before[name]} == {
+        "learning_rate",
+        "weight_decay",
+    }
+    assert (variant.budget, variant.starts_from, variant.kind) == (
+        base.budget,
+        base.starts_from,
+        base.kind,
+    )
+    turned = ARMS.arm_of(variant.ref)
+    assert (turned.schedule.learning_rate, turned.schedule.weight_decay) == (0.003, 0.1)
+    assert ARMS.arm_of(CONTENDER).schedule == adaptation_schedule()
+
+
+def test_the_arm_that_starts_from_nothing_names_the_model_it_is_shaped_like() -> None:
+    control = BackboneArmCatalogue(
+        (arm(CandidateRef("from_scratch"), TransferMode.FROM_SCRATCH, backbone=None, lora=None),)
+    ).describe(CandidateRef("from_scratch"))
+
+    stated = {p.name: p.value for p in control.method.parameters}
+    assert control.starts_from is None
+    assert stated["architecture_of"] == f"{WEIGHTS.key}@{WEIGHTS.checksum}"
+    assert "architecture_of" not in {p.name for p in ARMS.describe(CONTENDER).method.parameters}
 
 
 def test_each_name_reaches_the_holder_the_process_named_for_it() -> None:
@@ -185,15 +228,21 @@ def test_a_variant_of_a_baseline_is_described_with_its_knob_turned_and_nothing_e
         "boosted_trees_per_channel@threads=8",
         "boosted_trees_per_channel@max_depth=deep",
         "boosted_trees_per_channel@max_depth=5,learning_rate=0.1",
-        "full_fine_tuning@learning_rate=0.1",
+        "full_fine_tuning@epochs=3",
+        "full_fine_tuning@learning_rate=fast",
         "boosted_trees_per_channel@max_depth=3",
+        "full_fine_tuning@learning_rate=0.01",
+        "patch_transformer@learning_rate=0.01",
     ],
     ids=[
         "not a knob",
         "not its type",
         "out of order",
-        "a network has no knobs yet",
+        "a knob that would change the budget",
+        "not the schedule's type",
         "the default under another name",
+        "the arm's default under another name",
+        "the patch model's default under another name",
     ],
 )
 def test_a_variant_no_holder_can_read_is_refused(name: str) -> None:

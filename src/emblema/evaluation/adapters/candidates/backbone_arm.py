@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from emblema.evaluation.contracts.identifiers import CandidateRef
+from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -12,17 +13,24 @@ class BackboneArm:
 
     A way of using pretrained weights is a competitor in a campaign rather than a dimension
     beside the competitors (ADR-0035), so each one is named here and enters a grid on the terms
-    every other candidate enters it on.
+    every other candidate enters it on. The schedule is the arm's, because a variant of an arm
+    is the arm under a turned schedule and nothing else; the arms of one campaign still spend
+    one budget, which the design checks off the schedules rather than trusting.
 
     Attributes:
         ref: What the campaign calls this arm.
         mode: What the backbone's weights do while the task is learnt.
+        architecture: Artifact of the model whose shape the arm has, whether it starts from its
+            weights or draws them anew; what pins the control arm's size to the campaign.
         backbone: Artifact of the pretrained weights; ``None`` for the arm that starts from
             none.
         lora: The low-rank updates, where the mode adds them; ``None`` otherwise.
+        schedule: How long and how fast the arm learns the task.
     """
 
     ref: CandidateRef
     mode: TransferMode
+    architecture: ArtifactRef
     backbone: ArtifactRef | None
     lora: LoraSpec | None
+    schedule: AdaptationSchedule

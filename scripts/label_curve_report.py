@@ -31,19 +31,26 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.entrypoints.cli.campaign.known_tasks import KnownTask, KnownTasks
+from emblema.evaluation.contracts.identifiers import CandidateRef
+from emblema.evaluation.domain.campaign.campaign_verdict import CampaignVerdict
+from emblema.evaluation.domain.campaign.candidate_comparison import CandidateComparison
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
+from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
+from emblema.evaluation.domain.statistics.bootstrap_interval import BootstrapInterval
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVerdict
+from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
 from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
 from emblema.evaluation.domain.statistics.practical_floor import PracticalFloor
+from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.transfer.remaining_life_metrics import RemainingLifeMetrics
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from scripts.reporting import dated_heading, table
@@ -58,7 +65,7 @@ COMPARED_CELLS = (len(MODES) - 1) * len(BUDGETS)
 RULES = ComparisonRules(
     minimum_relative_reduction=0.10,
     floor_share=0.03,
-    holm=HolmCorrection(alpha=0.05),
+    correction=HolmCorrection(alpha=0.05),
     secondary_family_size=COMPARED_CELLS - 1,
 )
 RESAMPLES = 10_000
@@ -451,10 +458,14 @@ def comparisons_of(
                 control=[UnitError.per_unit(run) for run in control_runs],
                 candidate=[UnitError.per_unit(run) for run in candidate_runs],
             )
-            control_rmses = [rmse_of(run) for run in control_runs]
-            candidate_rmses = [rmse_of(run) for run in candidate_runs]
+            control_error = ErrorOverRepeats.of(
+                paired.rmse_control, [rmse_of(run) for run in control_runs]
+            )
+            candidate_error = ErrorOverRepeats.of(
+                paired.rmse_candidate, [rmse_of(run) for run in candidate_runs]
+            )
             difference = bootstrap.compare(paired)
-            floor = rules.floor_of(paired.rmse_control, control_rmses)
+            floor = rules.floor_of(control_error)
             primary = (TransferMode(mode), budget) == PRIMARY
             verdict = rules.endpoint_verdict(difference, floor) if primary else None
             found.append(
@@ -463,10 +474,10 @@ def comparisons_of(
                         mode=mode,
                         budget=budget,
                         seeds=len(seeds),
-                        control_rmse=paired.rmse_control,
-                        candidate_rmse=paired.rmse_candidate,
-                        control_sd=_spread(control_rmses),
-                        candidate_sd=_spread(candidate_rmses),
+                        control_rmse=control_error.pooled,
+                        candidate_rmse=candidate_error.pooled,
+                        control_sd=control_error.spread,
+                        candidate_sd=candidate_error.spread,
                         reduction=difference.reduction,
                         relative_reduction=difference.relative_reduction,
                         low=difference.interval.low,
@@ -574,7 +585,12 @@ def read(directory: Path) -> Curve:
 
 
 def sentence(curve: Curve) -> str:
-    """The one-sentence conclusion the registered rules allow, and no more."""
+    """The one-sentence conclusion the registered rules allow, and no more.
+
+    The sentence is the Evaluation context's; what is composed here is the verdict it is read
+    from, out of the stored rows, and the one thing a campaign never has to say: that the grid
+    is not whole.
+    """
     primary = next((row for row in curve.comparisons if row.primary), None)
     seeds = min((row.seeds for row in curve.comparisons), default=0)
     partial = ""
@@ -585,38 +601,35 @@ def sentence(curve: Curve) -> str:
         )
     if primary is None:
         return f"{partial}The registered endpoint was not measured."
-    where = f"at {primary.budget} labelled windows"
-    size = (
-        f"full fine-tuning lowers the validation RMSE by {primary.relative_reduction:+.0%} "
-        f"({primary.reduction:+.2f}, 95 % interval [{primary.low:+.2f}, {primary.high:+.2f}] "
-        f"over {primary.seeds} seeds)"
+    verdict = CampaignVerdict(
+        control=CandidateRef(str(CONTROL)),
+        read_on=RunPurpose.TUNING,
+        endpoint=_comparison_of(primary),
+        secondary=tuple(_comparison_of(row) for row in curve.comparisons if not row.primary),
     )
-    if primary.verdict == str(ComparisonVerdict.CONFIRMED):
-        opening = f"Confirmed on the registered endpoint: {where}, {size}"
-    else:
-        opening = f"Not confirmed on the registered endpoint ({primary.verdict}): {where}, {size}"
-    others = [row for row in curve.comparisons if row.mode == primary.mode and not row.primary]
-    held = [row.budget for row in others if row.verdict == str(ComparisonVerdict.DISTINGUISHABLE)]
-    lost = [row.budget for row in others if row.budget not in held]
-    shape = ""
-    if others:
-        if held and lost:
-            where_held = f"at {_spoken(held)}, not at {_spoken(lost)}"
-        elif held:
-            where_held = f"at each of them ({_spoken(held)})"
-        else:
-            where_held = f"at none of them ({_spoken(lost)})"
-        shape = (
-            f"; among the secondary budgets the advantage of full fine-tuning holds under the "
-            f"Holm correction and above the floor {where_held}"
-        )
-    return f"{partial}{opening}{shape}. Preliminary; validation, not test."
+    return f"{partial}{verdict.sentence()}"
 
 
-def _spoken(budgets: Sequence[str]) -> str:
-    # The budget of every label is named in words, because "not at all" reads as "never".
-    names = ["the full label set" if budget == "all" else budget for budget in budgets]
-    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+def _comparison_of(row: Comparison) -> CandidateComparison:
+    """The stored row as the context's comparison, its spread carried as it was stored."""
+    return CandidateComparison(
+        candidate=CandidateRef(row.mode),
+        budget=LabelBudget.parse(row.budget),
+        control_error=ErrorOverRepeats(
+            pooled=row.control_rmse, spread=row.control_sd, repeats=row.seeds
+        ),
+        candidate_error=ErrorOverRepeats(
+            pooled=row.candidate_rmse, spread=row.candidate_sd, repeats=row.seeds
+        ),
+        difference=PairedDifference(
+            reduction=row.reduction,
+            relative_reduction=row.relative_reduction,
+            interval=BootstrapInterval(low=row.low, high=row.high, level=0.95),
+            p_value=row.p_value,
+        ),
+        floor=PracticalFloor(value=row.floor),
+        verdict=ComparisonVerdict(row.verdict),
+    )
 
 
 def render(curve: Curve, task: KnownTask) -> str:

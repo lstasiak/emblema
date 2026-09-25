@@ -38,3 +38,26 @@ def test_a_variant_reads_back_to_the_name_it_was_read_from() -> None:
 def test_a_name_that_is_not_a_base_and_its_knobs_in_order_is_refused(text: str) -> None:
     with pytest.raises(InvalidCandidateVariantError):
         CandidateVariant.parse(CandidateRef(text))
+
+
+def test_a_variant_is_applied_knob_by_knob_to_whatever_turns_them() -> None:
+    turned = CandidateVariant.parse(CandidateRef("minirocket@a=1,b=2")).applied_to(
+        {"a": "0", "b": "0"}, lambda knobs, name, value: {**knobs, name: value}
+    )
+
+    assert turned == {"a": "1", "b": "2"}
+
+
+def test_a_base_applied_to_a_default_leaves_it_as_it_is() -> None:
+    default = {"a": "0"}
+
+    assert CandidateVariant.parse(ROCKET).applied_to(default, lambda k, n, v: {**k, n: v}) == (
+        default
+    )
+
+
+def test_a_variant_that_lands_on_the_default_is_refused() -> None:
+    with pytest.raises(InvalidCandidateVariantError, match="turns no knob away from"):
+        CandidateVariant.parse(CandidateRef("minirocket@a=0")).applied_to(
+            {"a": "0"}, lambda knobs, name, value: {**knobs, name: value}
+        )

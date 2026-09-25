@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from math import isfinite
+from typing import ClassVar, Self
 
-from emblema.evaluation.domain.exceptions import InvalidAdaptationScheduleError
+from emblema.evaluation.domain.exceptions import InvalidAdaptationScheduleError, UnknownKnobError
+from emblema.evaluation.domain.tuning.knob import turned
 from emblema.shared.kernel.learning_rate_schedule import LearningRateSchedule
 
 
@@ -48,6 +50,17 @@ class AdaptationSchedule:
     warmup_fraction: float
     final_lr_fraction: float
 
+    # What a selection may turn: the fields that say how a run learns and leave what it spends
+    # alone. The epochs, the floor of steps and the batch make the compute budget every network
+    # of a campaign is held to, and a variant with another budget than its base is not a variant
+    # of it.
+    KNOBS: ClassVar[tuple[str, ...]] = (
+        "learning_rate",
+        "weight_decay",
+        "warmup_fraction",
+        "final_lr_fraction",
+    )
+
     def __post_init__(self) -> None:
         for label, count in (("epochs", self.epochs), ("batch_size", self.batch_size)):
             if count < 1:
@@ -72,6 +85,16 @@ class AdaptationSchedule:
             raise InvalidAdaptationScheduleError(
                 f"final_lr_fraction must lie in [0, 1], got {self.final_lr_fraction}"
             )
+
+    def tuned(self, knob: str, value: str) -> Self:
+        """This schedule with ``knob`` turned to ``value``.
+
+        Raises:
+            UnknownKnobError: If the schedule has no such knob, or it cannot take that value.
+        """
+        if knob not in self.KNOBS:
+            raise UnknownKnobError(f"a schedule has no knob {knob!r}; it turns {self.KNOBS}")
+        return turned(self, knob, value)
 
     def steps_per_epoch(self, windows: int) -> int:
         """Optimiser steps an epoch over ``windows`` labelled windows takes.

@@ -12,8 +12,16 @@ from pydantic import ValidationError
 
 from emblema.evaluation.adapters.campaigns.campaign_file import CampaignFile
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
-from emblema.evaluation.domain.exceptions import InvalidLabelBudgetError, InvalidTunedChoiceError
+from emblema.evaluation.domain.exceptions import (
+    InvalidComparisonRulesError,
+    InvalidLabelBudgetError,
+    InvalidTunedChoiceError,
+)
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.statistics.benjamini_hochberg_correction import (
+    BenjaminiHochbergCorrection,
+)
+from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
@@ -76,8 +84,8 @@ def test_the_interval_a_campaign_states_nothing_about_is_the_registered_one(
 def test_the_rules_carry_the_error_rate_the_correction_is_applied_at(tmp_path: Path) -> None:
     stricter = written(DECLARED + "alpha = 0.01\n", tmp_path)
 
-    assert stricter.comparison_rules().holm.alpha == 0.01
-    assert written(DECLARED, tmp_path).comparison_rules().holm.alpha == 0.05
+    assert stricter.comparison_rules().correction.alpha == 0.01
+    assert written(DECLARED, tmp_path).comparison_rules().correction.alpha == 0.05
 
 
 def test_a_key_nobody_reads_is_refused(tmp_path: Path) -> None:
@@ -151,3 +159,20 @@ selected_by = "00000000-0000-0000-0000-000000000003"
 
     with pytest.raises(InvalidTunedChoiceError, match="not a variant"):
         declared.tuned_choices()
+
+
+def test_the_family_is_read_under_holm_unless_the_file_names_another_correction(
+    tmp_path: Path,
+) -> None:
+    assert isinstance(written(DECLARED, tmp_path).comparison_rules().correction, HolmCorrection)
+    declared = written(DECLARED + 'correction = "benjamini_hochberg"\nalpha = 0.1\n', tmp_path)
+
+    correction = declared.comparison_rules().correction
+
+    assert isinstance(correction, BenjaminiHochbergCorrection)
+    assert correction.alpha == 0.1
+
+
+def test_a_correction_nobody_knows_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(InvalidComparisonRulesError, match="no family correction is called"):
+        written(DECLARED + 'correction = "bonferroni"\n', tmp_path).comparison_rules()

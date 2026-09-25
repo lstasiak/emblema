@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import ClassVar, Self
 
@@ -65,6 +66,23 @@ class CandidateVariant:
                 raise InvalidCandidateVariantError(f"{pair!r} in {ref} is not knob=value")
             knobs.append((name, value))
         return cls(base=CandidateRef(base), knobs=tuple(knobs))
+
+    def applied_to[T](self, default: T, turn: Callable[[T, str, str], T]) -> T:
+        """``default`` with every knob of this variant turned by ``turn``, knob by knob.
+
+        A variant that turns knobs and lands on the default is refused: two names for one
+        candidate would let a selection weigh the default against itself.
+
+        Raises:
+            UnknownKnobError: If ``turn`` refuses a knob or its value.
+            InvalidCandidateVariantError: If the knobs turned leave the default as it was.
+        """
+        tuned = default
+        for name, value in self.knobs:
+            tuned = turn(tuned, name, value)
+        if self.knobs and tuned == default:
+            raise InvalidCandidateVariantError(f"{self.ref} turns no knob away from {self.base}")
+        return tuned
 
     @property
     def ref(self) -> CandidateRef:
