@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from emblema.evaluation.domain.exceptions import InvalidAdaptationPlanError
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
@@ -29,6 +30,8 @@ class AdaptationPlan:
         seed: Seed of everything the run draws: the head, fresh backbone weights, the low-rank
             updates, the order of windows. Apart from the seed of the draw and outside the
             schedule: another seed is a repeat of the same schedule over the same labels.
+        pooling: How the states of a window become the one state the head reads; the mean
+            over the window unless a variant turns it.
     """
 
     mode: TransferMode
@@ -36,6 +39,7 @@ class AdaptationPlan:
     schedule: AdaptationSchedule
     lora: LoraSpec | None
     seed: int
+    pooling: HeadPooling = field(default_factory=HeadPooling.mean)
 
     def __post_init__(self) -> None:
         if (self.backbone is None) == self.mode.starts_from_pretrained_weights:
@@ -76,6 +80,7 @@ class AdaptationPlan:
             "weight_decay": float(self.schedule.weight_decay),
             "warmup_fraction": float(self.schedule.warmup_fraction),
             "final_lr_fraction": float(self.schedule.final_lr_fraction),
+            **self.pooling.parameters(),
             "lora_rank": 0 if self.lora is None else self.lora.rank,
             "lora_alpha": 0.0 if self.lora is None else float(self.lora.alpha),
             "lora_dropout": 0.0 if self.lora is None else float(self.lora.dropout),

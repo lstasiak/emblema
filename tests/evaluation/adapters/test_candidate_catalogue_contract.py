@@ -26,6 +26,7 @@ from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import UnknownCandidateError
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
 from tests.evaluation.support import (
@@ -147,9 +148,20 @@ def test_a_variant_of_the_patch_model_turns_the_schedule_and_keeps_the_shape_and
     assert PATCHED.plan_of(variant.ref, seed=1).schedule.learning_rate == 0.003
 
 
-def test_a_knob_of_the_patch_models_shape_is_not_turned_by_a_name() -> None:
+def test_a_knob_of_the_patch_models_shape_is_turned_by_a_name_on_the_same_budget() -> None:
+    base = PATCHED.describe(PATCHES)
+
+    variant = PATCHED.describe(CandidateRef("patch_transformer@layers=2"))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    assert stated["layers"] == "2"
+    assert variant.budget == base.budget
+    assert PATCHED.plan_of(variant.ref, seed=1).spec.layers == 2
+
+
+def test_a_knob_no_part_of_the_patch_model_has_is_refused() -> None:
     with pytest.raises(UnknownCandidateError, match="no knob"):
-        PATCHED.describe(CandidateRef("patch_transformer@patch_length=8"))
+        PATCHED.describe(CandidateRef("patch_transformer@depth=8"))
 
 
 def test_a_variant_of_an_arm_is_the_arm_under_a_turned_schedule_on_the_same_budget() -> None:
@@ -247,4 +259,40 @@ def test_a_variant_of_a_baseline_is_described_with_its_knob_turned_and_nothing_e
 )
 def test_a_variant_no_holder_can_read_is_refused(name: str) -> None:
     with pytest.raises(UnknownCandidateError):
+        ROUTED.describe(CandidateRef(name))
+
+
+def test_a_variant_of_an_arm_turns_the_pooling_of_its_head_on_the_same_budget() -> None:
+    base = ARMS.describe(CONTENDER)
+
+    variant = ARMS.describe(CandidateRef("full_fine_tuning@pooling=tail,tail_share=0.2"))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    assert (stated["pooling"], stated["tail_share"]) == ("tail", "0.2")
+    assert variant.budget == base.budget
+    turned = ARMS.arm_of(variant.ref)
+    assert turned.pooling == HeadPooling(pooling=PoolingScheme.TAIL, tail_share=0.2)
+    assert turned.schedule == adaptation_schedule()
+
+
+def test_a_variant_of_the_patch_model_turns_the_pooling_of_its_head() -> None:
+    variant = PATCHED.describe(CandidateRef("patch_transformer@pooling=attention"))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    assert stated["pooling"] == "attention"
+    assert PATCHED.plan_of(variant.ref, seed=1).pooling == HeadPooling(
+        pooling=PoolingScheme.ATTENTION
+    )
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        # A share means nothing to the mean.
+        "full_fine_tuning@tail_share=0.2",
+        "patch_transformer@pooling=median",
+    ],
+)
+def test_a_pooling_no_head_can_take_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError, match="names no variant"):
         ROUTED.describe(CandidateRef(name))
