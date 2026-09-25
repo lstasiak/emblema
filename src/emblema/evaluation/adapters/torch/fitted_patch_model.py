@@ -1,0 +1,123 @@
+import io
+import pickle
+import zipfile
+from dataclasses import dataclass
+from typing import Any, Self
+
+import torch
+
+from emblema.evaluation.adapters.torch.grid_reading import GridReading
+from emblema.evaluation.adapters.torch.patch_transformer import PatchTransformer
+from emblema.evaluation.domain.exceptions import (
+    InvalidPatchModelSpecError,
+    UnreadableFittedCandidateError,
+)
+from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
+from emblema.evaluation.domain.patching.patch_plan import PatchPlan
+
+# What comes back from handing torch bytes it did not write, or a document missing what this
+# reads. The reasons differ and to a caller they are one thing: this artifact is not ours.
+UNREADABLE_BYTES = (
+    KeyError,
+    IndexError,
+    TypeError,
+    ValueError,
+    RuntimeError,
+    EOFError,
+    pickle.UnpicklingError,
+    zipfile.BadZipFile,
+    InvalidPatchModelSpecError,
+)
+
+
+@dataclass(frozen=True)
+class FittedPatchModel:
+    """A patch model as one run left it: its weights, and what it takes to answer again.
+
+    The weights alone would not be enough: a window has to be laid on the same grid and read
+    over the same channels, the model built in the same shape, and the answer read back in the
+    task's unit. So the plan, the reading and the target's scale travel with the weights.
+
+    Attributes:
+        parameters: The plan the model was trained under, flattened to scalars; the shape is
+            read back out of them.
+        reading: The grid a window is laid on and the channels read off it.
+        target_scale: What the targets were divided by.
+        weights: State of the whole model, on the host.
+    """
+
+    parameters: dict[str, str | int | float]
+    reading: GridReading
+    target_scale: float
+    weights: dict[str, Any]
+
+    @classmethod
+    def of(
+        cls, plan: PatchPlan, model: PatchTransformer, reading: GridReading, target_scale: float
+    ) -> Self:
+        """The model as it ended, its weights moved to the host before anything else is done."""
+        return cls(
+            parameters=plan.parameters(),
+            reading=reading,
+            target_scale=target_scale,
+            weights={key: value.detach().to("cpu") for key, value in model.state_dict().items()},
+        )
+
+    def build(self) -> PatchTransformer:
+        """The model these weights belong to, in evaluation mode on the host."""
+        stated = self.parameters
+        spec = PatchModelSpec(
+            patch_length=int(stated["patch_length"]),
+            stride=int(stated["stride"]),
+            width=int(stated["width"]),
+            heads=int(stated["heads"]),
+            layers=int(stated["layers"]),
+            feedforward_width=int(stated["feedforward_width"]),
+            dropout=float(stated["dropout"]),
+            grid_resolution=float(stated["grid_resolution"]),
+        )
+        model = PatchTransformer(
+            spec, channels=len(self.reading.held), steps=self.reading.steps, starting_at=0.0
+        )
+        model.load_state_dict(self.weights)
+        return model.eval()
+
+    def to_bytes(self) -> bytes:
+        """The model as the bytes the artifact store keeps."""
+        buffer = io.BytesIO()
+        torch.save(
+            {
+                "parameters": self.parameters,
+                "grid": [self.reading.steps, self.reading.channels],
+                "held": list(self.reading.held),
+                "target_scale": self.target_scale,
+                "weights": self.weights,
+            },
+            buffer,
+        )
+        return buffer.getvalue()
+
+    @classmethod
+    def read(cls, content: bytes) -> Self:
+        """The model those bytes hold, checked by building it.
+
+        Raises:
+            UnreadableFittedCandidateError: If the bytes are not a patch model of ours.
+        """
+        try:
+            stored = torch.load(io.BytesIO(content), map_location="cpu", weights_only=True)
+            steps, channels = stored["grid"]
+            read = cls(
+                parameters=stored["parameters"],
+                reading=GridReading(
+                    steps=int(steps), channels=int(channels), held=tuple(stored["held"])
+                ),
+                target_scale=float(stored["target_scale"]),
+                weights=stored["weights"],
+            )
+            read.build()
+            return read
+        except UNREADABLE_BYTES as error:
+            raise UnreadableFittedCandidateError(
+                f"not a patch model this can read: {error}"
+            ) from error

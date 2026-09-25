@@ -65,6 +65,10 @@ class InvalidRidgeSpecError(EvaluationError, ValueError):
     """A ridge fit names no penalty, a penalty that is not positive, or no thread."""
 
 
+class InvalidPatchModelSpecError(EvaluationError, ValueError):
+    """A patch model has no patch, a stride past its patch, or a width its heads cannot split."""
+
+
 class UnsupportedClassicalMethodError(EvaluationError):
     """A runtime was handed a classical method it has no means of fitting."""
 
