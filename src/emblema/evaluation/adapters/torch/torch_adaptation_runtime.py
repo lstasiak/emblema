@@ -33,9 +33,11 @@ from emblema.shared.ports.artifact_store import ArtifactStore
 class TorchAdaptationRuntime:
     """Teaches a candidate the task in this process, on whatever device it is given.
 
-    A frozen probe encodes the sample once and trains its head over the stored states; every
-    other mode runs the encoder in the loop. The seconds an outcome reports start once the block
-    is at hand, so the run that happens to fetch it is not timed against the rest.
+    A frozen probe under a pooling with no weights of its own encodes the sample once and
+    trains its head over the stored states; every other run has the encoder in the loop, the
+    frozen probe under a learnt pooling included, since its pooling reads the states per token.
+    The seconds an outcome reports start once the block is at hand, so the run that happens to
+    fetch it is not timed against the rest.
     """
 
     def __init__(
@@ -90,7 +92,7 @@ class TorchAdaptationRuntime:
         ).to(self._device)
         forward = (
             self._over_stored_states(candidate, tuning, plan.schedule.batch_size)
-            if plan.mode is TransferMode.FROZEN_PROBE
+            if plan.mode is TransferMode.FROZEN_PROBE and not plan.pooling.pooling.learns_weights
             else self._over_windows(candidate, tuning)
         )
         losses = ScheduledTraining(plan.schedule, plan.seed).losses(

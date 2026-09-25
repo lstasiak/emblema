@@ -30,6 +30,7 @@ from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate  # noqa: E402
 from emblema.evaluation.adapters.torch.fitted_patch_model import FittedPatchModel  # noqa: E402
 from emblema.evaluation.adapters.torch.grid_reading import GridReading  # noqa: E402
+from emblema.evaluation.adapters.torch.mean_pooling import MeanPooling  # noqa: E402
 from emblema.evaluation.adapters.torch.patch_transformer import PatchTransformer  # noqa: E402
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead  # noqa: E402
 from emblema.evaluation.adapters.xgboost.fitted_baseline import FittedBaseline  # noqa: E402
@@ -54,7 +55,7 @@ SCALE = 125.0
 def fitted_candidate() -> FittedCandidate:
     torch.manual_seed(1)
     encoder = SetEncoder.for_vocabulary(TINY, CHANNELS)
-    candidate = AdaptedBackbone(encoder, RegressionHead(TINY.width, starting_at=0.5))
+    candidate = AdaptedBackbone(encoder, MeanPooling(), RegressionHead(TINY.width, starting_at=0.5))
     return FittedCandidate.of(plan(), candidate, vocabulary_size=CHANNELS, target_scale=SCALE)
 
 
