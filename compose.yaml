@@ -132,8 +132,9 @@ services:
     # fresh clone brings up the stack without it: `docker compose --profile workers up -d`.
     #
     # One job at a time and no forking: a process that has imported the training stack cannot
-    # safely fork. Here it computes on the processor; whoever has an accelerator runs the same
-    # command on the host instead, which is the only thing the host run is for.
+    # safely fork. It computes on the processor. A cell on the host's accelerator goes through
+    # `campaign order` and `campaign_run`, never through a worker started on the host: a long
+    # cell starves the broker's heartbeats, and a run that is not an order checks no commit.
     profiles: ["workers"]
     build:
       context: .
