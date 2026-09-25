@@ -78,3 +78,106 @@ seconds each; the comparisons in pure Python.
         --weights durable/sha256/6283c210… sha256:6283c210… \
         --manifest durable/sha256/d63f8e1b… sha256:d63f8e1b…
     uv run scripts/head_and_representation_report.py data/report/head-and-representation
+
+## 2026-09-25 — M1 Pro, MPS, fp32: the head loses most of it; the task is not the last reading
+
+**Question.** As declared above: with the backbone frozen, how much of the gap to the trees is the
+pooling, how much the states, and how much the task's own shape? All numbers are **validation**,
+tier S for the fits, the backbone at tier M.
+
+**Conditions.** Commit `52db8a1` (the fix of a column constant up to rounding, made after the
+first fit of the ridge stopped on it, changes no number of the trees and only which columns a
+ridge reads). 2,568 tuning and 618 validation windows of 1,050 tokens; 21 channels read; both
+encoders embedded in 43 s each on MPS; 108 fits of at most 2.7 s on the CPU. The ridge dropped
+the statistics of the six sensors FD001 never moves, and reads 119 of the 1,260 hand columns.
+
+**Check.** The trees on the hand statistics repeat campaign `ee69d456…` to the hundredth in
+every seed (13.65 / 13.41 / 14.75 at 200; 18.25 / 19.71 / 16.78 at 50). The draws are the
+campaign's, and every row below is read.
+
+RMSE on the 21 validation engines, mean ± SD over 3 seeds. Inputs: `hand` = the trees' statistics
+per channel; `last` = their last value per channel; `mean`, `tail_k` = the frozen states pooled
+over the window or its last k %; `channel_mean`, `channel_last` = one pooled state per channel;
+`fresh_*` = the same over an encoder never trained.
+
+| probe | columns | 50 | 200 |
+| --- | --- | --- | --- |
+| hand/trees (reference) | 1260 | 18.25 ± 1.47 | 13.94 ± 0.71 |
+| hand/ridge | 119 | 19.67 ± 0.93 | 16.47 ± 1.01 |
+| last/ridge | 14 | 21.98 ± 0.67 | 21.56 ± 0.33 |
+| last/trees | 126 | 24.64 ± 1.64 | 22.61 ± 0.88 |
+| mean/ridge | 256 | 18.14 ± 0.86 | 16.57 ± 1.01 |
+| mean/trees | 256 | 25.14 ± 2.54 | 20.64 ± 0.63 |
+| tail_2/ridge | 256 | 18.64 ± 0.68 | 16.19 ± 0.37 |
+| tail_10/ridge | 256 | 17.40 ± 0.16 | 15.27 ± 0.33 |
+| tail_10/trees | 256 | 23.31 ± 1.94 | 17.98 ± 0.67 |
+| **tail_20/ridge** | 256 | **17.06 ± 0.14** | **14.73 ± 0.54** |
+| channel_mean/ridge | 5376 | 17.02 ± 1.06 | 14.76 ± 0.19 |
+| channel_mean/trees | 5376 | 25.14 ± 2.32 | 17.83 ± 0.85 |
+| channel_last/ridge | 5376 | 17.86 ± 0.20 | 15.97 ± 0.06 |
+| channel_last/trees | 5376 | 22.61 ± 1.34 | 17.91 ± 0.49 |
+| fresh_mean/ridge | 256 | 23.07 ± 1.00 | 17.89 ± 0.28 |
+| fresh_mean/trees | 256 | 26.99 ± 1.46 | 23.38 ± 0.22 |
+| fresh_channel_last/ridge | 5376 | 20.73 ± 0.13 | 18.44 ± 0.74 |
+| fresh_channel_last/trees | 5376 | 23.75 ± 1.08 | 20.77 ± 0.20 |
+
+The declared contrasts at 200, paired over engines with the three seeds pooled (10,000
+resamples); reduction of the rival's error, positive when the candidate is better.
+
+| prediction | candidate | rival | reduction | 95 % interval | p | declared | held |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P1 head | tail_10/ridge | mean/ridge | +8.0 % | [+0.60, +2.09] | 0.0006 | ≥ 5 %, above zero | **yes** |
+| P1 head | channel_mean/ridge | mean/ridge | +11.0 % | [+0.98, +2.66] | 0.0002 | ≥ 10 % | **yes** |
+| P1 head | channel_last/ridge | mean/ridge | +3.8 % | [−0.69, +2.02] | 0.37 | ≥ 10 % | no |
+| P2 representation | channel_last/trees | hand/trees | −28.4 % | [−5.65, −2.22] | 0.0004 | within 10 % | no |
+| P2 representation | mean/trees | hand/trees | −48.0 % | [−8.93, −4.35] | 0.0002 | more than 10 % behind | yes |
+| P2 representation | mean/trees | fresh_mean/trees | +11.7 % | [+0.97, +4.40] | 0.0024 | ≥ 10 % | **yes** |
+| P3 task | last/ridge | hand/trees | −54.5 % | [−10.98, −4.07] | 0.0002 | within 10 % | **no** |
+| P3 task | last/trees | hand/trees | −62.1 % | [−11.65, −5.61] | 0.0002 | within 5 % | **no** |
+
+Beside the declared rows: the two best poolings against the trees at 200 are not distinguishable
+from them (tail_20/ridge −5.6 %, [−2.02, +0.51], p 0.23; channel_mean/ridge −5.8 %,
+[−2.10, +0.50], p 0.22), while the mean pooling is (−18.9 %, [−4.25, −1.02]). At 50 both beat the
+trees' mean by 1.2 cycles, interval across zero. The pretrained states beat the untrained
+encoder's in every pairing, under both fitters, at both budgets (+11.7 % to +26 %).
+
+**Conclusions.**
+
+1. **The head is the largest identified loss.** With the backbone frozen and a linear head,
+   changing the pooling from the mean over the window to the mean over its last 20 % takes the
+   error at 200 labels from 16.57 to 14.73, and the gap to the tuned trees from 18.9 % and
+   distinguishable to 5.6 % and not. A per-channel mean does the same (14.76) at twenty times
+   the width; the tail keeps the channel layout out of the head and matches it.
+2. **The representation carries the task.** Read linearly per channel it lands within the
+   trees' interval, and every pooling of the pretrained states beats the untrained encoder's.
+   P2's per-channel clause failed under the trees and not under the ridge: boosted trees on
+   200 rows of dense states are a poor reader of them (channel_mean: 17.83 under trees against
+   14.76 under ridge), so that contrast measured the fitter as much as the states. The
+   declared reading of a P2 failure — revisit the pretext — is not taken; the linear reading
+   says the states are there.
+3. **The task is not a regression of the last reading.** The last values alone lose half the
+   trees' accuracy under either fitter (21.6 and 22.6 against 13.9). Remaining life at this
+   window is read from how the readings move and spread within it, which is why the mean over a
+   single cycle (`tail_2`, 16.19) is barely better than the mean over the whole window and
+   the mean over ten cycles is the best: recent, and averaged over enough cycles to lose the
+   sensor noise.
+4. **What follows.** The arms and the patch model get a pooling knob that keeps the layout out
+   of the head — the tail, and learnt attention, which can weight recency and noise on its own —
+   confirmed by a fine-tuning campaign against the trees before the curve is repeated; the
+   networks' hyperparameter search includes the pooling. A frozen backbone under a tail pooling
+   and a ridge is itself a candidate worth a cell: at 50 labels it is the best probe here.
+5. **Reproducibility.** The trees repeat the campaign bit for bit through this script's draws,
+   so the draws, the features and the knobs are the campaign's own.
+
+**Limitations.**
+
+- Frozen states and linear or tree heads only; nothing here says what fine-tuning does under a
+  different pooling. That is the confirmation campaign's question.
+- The per-channel ridges chose the largest penalty of the grid (10³) in five of six fits at
+  `channel_last`; a wider grid might read them a little better. The layout-free poolings sat in
+  the middle of the grid.
+- No family correction over the 46 comparisons, as declared; three seeds, tier S fits,
+  validation only. The percentile interval over 21 engines runs short of its level
+  ([`verdict-statistics.md`](verdict-statistics.md)).
+- The window here is 50 cycles at one reading per cycle; the best share of the tail is a fact
+  about this corpus and is a knob, not a constant.
