@@ -1,6 +1,8 @@
 from dataclasses import dataclass
+from typing import Self
 
 from emblema.evaluation.domain.exceptions import InvalidComputeBudgetError
+from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -33,6 +35,17 @@ class ComputeBudget:
                 raise InvalidComputeBudgetError(f"{label} must be positive, got {count}")
         if self.min_steps < 0:
             raise InvalidComputeBudgetError(f"min_steps must not be negative, got {self.min_steps}")
+
+    @classmethod
+    def of(cls, schedule: AdaptationSchedule) -> Self:
+        """The budget a network learning under ``schedule`` spends.
+
+        Stated once, so that two networks under one schedule hold equal budgets by construction
+        rather than because two copies of the same three fields happened to agree.
+        """
+        return cls(
+            epochs=schedule.epochs, min_steps=schedule.min_steps, batch_size=schedule.batch_size
+        )
 
     def __str__(self) -> str:
         return f"{self.epochs} epochs of {self.batch_size} windows, at least {self.min_steps} steps"
