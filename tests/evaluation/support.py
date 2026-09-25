@@ -34,6 +34,8 @@ from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.labels.task_window import TaskWindow
+from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
+from emblema.evaluation.domain.patching.patch_plan import PatchPlan
 from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
@@ -148,6 +150,25 @@ def convolutions(**overrides: Any) -> RandomConvolutions:
         ridge=RidgeSpec(penalties=(0.1, 1.0, 10.0), threads=1),
     )
     return replace(stated, **overrides)
+
+
+def patch_spec(**overrides: Any) -> PatchModelSpec:
+    """A patch model a few thousand weights large, over the ten steps of the test corpus."""
+    stated = PatchModelSpec(
+        patch_length=4,
+        stride=2,
+        width=8,
+        heads=2,
+        layers=1,
+        feedforward_width=16,
+        dropout=0.0,
+        grid_resolution=1.0,
+    )
+    return replace(stated, **overrides)
+
+
+def patch_plan(seed: int = 1, **overrides: Any) -> PatchPlan:
+    return PatchPlan(spec=patch_spec(**overrides), schedule=adaptation_schedule(), seed=seed)
 
 
 def recipe(

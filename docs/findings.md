@@ -57,6 +57,7 @@ tier S, M1 Pro ([note](verification/classical-baselines.md)):
 | Gradient-boosted trees, statistics aggregated across channels | 14.32 |
 | MiniRocket + ridge | 15.24 |
 | Best pretrained arm (LoRA, from the grid above) | 16.09 |
+| Patch model from scratch, PatchTST-style (paired campaign with the trees) | 18.40 |
 | Trees over Lomb–Scargle spectra | 18.47 |
 | Network from scratch (same campaign as the trees) | 18.86 |
 
@@ -64,8 +65,11 @@ The per-channel trees beat the network from scratch by 26.0 % (interval [+2.86, 
 confirmed). They are about 13 % below the best pretrained arm. That last comparison crosses two
 campaigns on the same 21 engines and is **not paired**. At 50 labels the trees across channels
 (16.59) and MiniRocket (16.81) also lead the best pretrained arm (18.24). An audit found no
-leakage. **On FD001 the pretrained encoder has not yet beaten a well-tuned classical
-method.**
+leakage. A second architecture trained from nothing, a patch model in the style of PatchTST
+([ADR-0039](adr/0039-the-patch-baseline.md)), ties the network from scratch at 200 labels
+(18.40 against 18.75 in the same campaign; interval [−1.22, +1.82]) and trails the trees by the
+same margin, so the gap is not specific to the set encoder. **On FD001 the pretrained encoder
+has not yet beaten a well-tuned classical method.**
 
 ### 3. The pipeline finds structure where it exists
 

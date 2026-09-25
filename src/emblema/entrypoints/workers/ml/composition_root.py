@@ -6,11 +6,21 @@ from emblema.entrypoints.restored_backbones import RestoredBackbones
 from emblema.entrypoints.workers.campaign_process import CampaignProcess
 from emblema.entrypoints.workers.declared_worker import DeclaredWorker
 from emblema.entrypoints.workers.known_arms import KnownArms
+from emblema.entrypoints.workers.known_patch_models import KnownPatchModels
 from emblema.evaluation.adapters.candidates.backbone_candidate_provider import (
     BackboneCandidateProvider,
 )
+from emblema.evaluation.adapters.candidates.patch_candidate_provider import (
+    PatchCandidateProvider,
+)
+from emblema.evaluation.adapters.candidates.routed_candidate_provider import (
+    RoutedCandidateProvider,
+)
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import TorchAdaptationRuntime
+from emblema.evaluation.adapters.torch.torch_patch_runtime import TorchPatchRuntime
 from emblema.evaluation.application.use_cases.run_adaptation import RunAdaptation
+from emblema.evaluation.application.use_cases.run_patch_training import RunPatchTraining
+from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.ports.candidate_provider import CandidateProvider
@@ -31,7 +41,11 @@ from emblema.shared.ports.job_queue import JobQueue
 
 
 class CompositionRoot:
-    """Assembles the worker that adapts a backbone: the campaign process plus the arms it serves.
+    """Assembles the worker that trains networks: the campaign process plus what it competes.
+
+    Two kinds of network come from here: the arms made out of a backbone, and a patch model
+    trained from nothing on a grid. They share the compute budget and the stack, which is why one
+    image runs both, and the process routes each name to whichever supplies it.
 
     The process is told which backbone it serves, holds it, and refuses a cell of a campaign
     that was run over other weights. Holding it is the reason this root exists apart from the
@@ -58,6 +72,7 @@ class CompositionRoot:
         schedule: AdaptationSchedule,
         lora: LoraSpec | None = None,
         backbone: ArtifactRef | None = None,
+        patch: PatchModelSpec | None = None,
         device: str | None = None,
         store: ArtifactStore | None = None,
         tasks: DownstreamTaskRepository | None = None,
@@ -74,14 +89,15 @@ class CompositionRoot:
 
         What is this root's own is the ``schedule`` every cell learns under — the compute budget
         the campaign's neural candidates are held to — the ``backbone`` the pretrained arms
-        start from, the ``lora`` updates the arm of that name adds, and the ``device`` a cell
-        computes on, this machine's accelerator unless given. Backbone and updates are needed
-        unless ``candidates`` is given instead of the four arms they build. Everything else is
-        what ``CampaignProcess`` takes and reaches it unchanged.
+        start from, the ``lora`` updates the arm of that name adds, the ``patch`` model's shape,
+        and the ``device`` a cell computes on, this machine's accelerator unless given. Backbone,
+        updates and shape are needed unless ``candidates`` is given instead of the networks they
+        build. Everything else is what ``CampaignProcess`` takes and reaches it unchanged.
 
         Raises:
             ValueError: If an adapter is left to the root without settings to build it from, or
-                the candidates are left to it without a backbone and updates to build them over.
+                the candidates are left to it without a backbone, updates and a shape to build
+                them over.
         """
         process = CampaignProcess(
             settings,
@@ -98,7 +114,7 @@ class CompositionRoot:
             ids=ids,
         )
         self.adapters, self.services = process.assemble(
-            self.arms_over(process, backbone, lora, schedule, device)
+            self.networks_over(process, backbone, lora, patch, schedule, device)
             if candidates is None
             else candidates
         )
@@ -109,7 +125,8 @@ class CompositionRoot:
 
         Raises:
             ValueError: If the settings name no worker, store, database or broker, or leave out
-                the backbone, schedule or low-rank updates this process cannot run without.
+                the backbone, schedule, low-rank updates or patch model this process cannot run
+                without.
         """
         settings = Settings()
         worker = settings.require_worker()
@@ -121,6 +138,7 @@ class CompositionRoot:
             schedule=declared.schedule(),
             lora=declared.lora(),
             backbone=worker.require_backbone_ref(),
+            patch=declared.patch(),
             device=worker.device,
             jobs=jobs,
         )
@@ -167,32 +185,51 @@ class CompositionRoot:
         )
 
     @staticmethod
-    def arms_over(
+    def networks_over(
         process: CampaignProcess,
         backbone: ArtifactRef | None,
         lora: LoraSpec | None,
+        patch: PatchModelSpec | None,
         schedule: AdaptationSchedule,
         device: str | None,
     ) -> CandidateProvider:
-        """The four ways of using a backbone, over the parts a campaign process holds.
+        """The four ways of using a backbone and the patch model, over what the process holds.
+
+        Both learn under one ``schedule`` on one ``device``, which is what holds them to the same
+        compute budget.
 
         Raises:
-            ValueError: If the process was left to build them without a backbone and updates.
+            ValueError: If the process was left to build them without a backbone, updates and a
+                shape for the patch model.
         """
-        if backbone is None or lora is None:
+        if backbone is None or lora is None or patch is None:
             raise ValueError(
-                "without a backbone and its low-rank updates the process needs its candidates "
-                "given, not built"
+                "without a backbone, its low-rank updates and a patch model's shape the process "
+                "needs its candidates given, not built"
             )
-        return BackboneCandidateProvider(
+        on = device or available_device()
+        arms = BackboneCandidateProvider(
             KnownArms.catalogue(backbone, lora, schedule),
             RunAdaptation(
                 process.draw_run_labels,
                 TorchAdaptationRuntime(
                     RestoredBackbones(process.store, backbone),
                     process.blocks,
-                    device=device or available_device(),
+                    device=on,
                     store=process.store,
                 ),
             ),
+        )
+        patched = PatchCandidateProvider(
+            KnownPatchModels.catalogue(patch, schedule),
+            RunPatchTraining(
+                process.draw_run_labels,
+                TorchPatchRuntime(process.blocks, device=on, store=process.store),
+            ),
+        )
+        return RoutedCandidateProvider(
+            {
+                **dict.fromkeys(KnownArms.refs(), arms),
+                **dict.fromkeys(KnownPatchModels.refs(), patched),
+            }
         )

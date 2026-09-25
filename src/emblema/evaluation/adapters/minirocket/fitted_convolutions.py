@@ -30,13 +30,10 @@ class FittedConvolutions:
     the grid, the scale of every feature, the linear map and the target's scale travel with the
     transform, and the object that answered the scored windows of a fit is the one that is kept.
 
-    The grid's rows are the ones the fitted windows give something to read. A corpus's vocabulary
-    can hold far more channels than one task's windows do — a sensor read per operating condition
-    is six channels, and a task over one condition holds one of them — and a convolution over a
-    channel nothing ever reported is a constant, so the value of a channel enters only if a fitted
-    window holds it, and its mask only if some fitted window misses a step of it. Chosen from the
-    inputs alone, never the labels, and kept with the candidate, so it answers every window over
-    the rows it was fitted on.
+    The grid's rows are the ones the fitted windows give something to read — a sensor read per
+    operating condition is six channels of the vocabulary, and a task over one condition holds
+    one of them — and they are kept with the candidate, so it answers every window over the rows
+    it was fitted on.
 
     Stored as named arrays in NumPy's own archive format, read back without unpickling anything,
     so the document outlives the release of every library that fitted it.
@@ -82,8 +79,9 @@ class FittedConvolutions:
         """
         steps = grid_steps
         with threadpool_limits(limits=method.ridge.threads):
-            whole = RegularGrid(steps, channels).of(windows)
-            rows = cls._rows_read(whole, channels)
+            grid = RegularGrid(steps, channels)
+            whole = grid.of(windows)
+            rows = grid.rows_read(whole)
             laid = whole[:, rows]
             transform = MiniRocketTransform.fitted(
                 laid, method.convolutions.features, np.random.default_rng(recipe.seed)
@@ -111,19 +109,6 @@ class FittedConvolutions:
             features = self.transform.of(laid)
             answers = (features / self.feature_scale) @ self.weights + self.intercept
         return np.asarray(answers * self.target_scale, dtype=np.float64)
-
-    @staticmethod
-    def _rows_read(laid: NDArray[np.float64], channels: int) -> NDArray[np.int64]:
-        """The rows of a grid the fitted windows give something to read, values then masks.
-
-        A channel's value is read if any fitted window observed it at a step; its mask only if
-        some fitted window missed one of its steps, since a mask that is one throughout says
-        nothing a convolution could use.
-        """
-        observed = laid[:, channels:, :]
-        held = np.flatnonzero(observed.max(axis=(0, 2)) > 0.0)
-        gappy = held[observed[:, held, :].min(axis=(0, 2)) < 1.0]
-        return np.concatenate((held, channels + gappy)).astype(np.int64)
 
     @staticmethod
     def _scale_of(features: NDArray[np.float64]) -> NDArray[np.float64]:

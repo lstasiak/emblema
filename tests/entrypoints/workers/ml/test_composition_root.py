@@ -7,6 +7,7 @@ The work itself is exercised by the campaign cycle, which needs no process.
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -14,6 +15,7 @@ from emblema.config.lora_settings import LoraSettings
 from emblema.config.schedule_settings import ScheduleSettings
 from emblema.entrypoints.workers.campaign_worker import CampaignWorker
 from emblema.entrypoints.workers.known_arms import KnownArms
+from emblema.entrypoints.workers.known_patch_models import KnownPatchModels
 from emblema.entrypoints.workers.ml.composition_root import CompositionRoot
 from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
@@ -51,6 +53,7 @@ from tests.evaluation.support import (
     adaptation_schedule,
     campaign,
     candidate,
+    patch_spec,
     task,
 )
 from tests.support.settings import unreachable_store
@@ -124,15 +127,20 @@ def test_a_process_bringing_neither_settings_nor_a_store_is_refused(tmp_path: Pa
         CompositionRoot(workspace=tmp_path, corpora=tmp_path, schedule=SCHEDULE)
 
 
-def test_a_process_left_to_build_candidates_without_a_backbone_is_refused(
-    tmp_path: Path,
+@pytest.mark.parametrize("left_out", ["backbone", "lora", "patch"])
+def test_a_process_left_to_build_candidates_without_what_they_are_built_over_is_refused(
+    tmp_path: Path, left_out: str
 ) -> None:
-    with pytest.raises(ValueError, match="backbone"):
+    # Any: three arguments of three types, and whichever two remain are spread into the call.
+    given: dict[str, Any] = {"backbone": WEIGHTS, "lora": LORA, "patch": patch_spec()}
+    del given[left_out]
+    with pytest.raises(ValueError, match="needs its candidates given"):
         CompositionRoot(
             unreachable_store(),
             workspace=tmp_path,
             corpora=tmp_path,
             schedule=SCHEDULE,
+            **given,
             store=InMemoryArtifactStore(),
             tasks=InMemoryDownstreamTaskRepository(),
             campaigns=InMemoryEvaluationCampaignRepository(),
@@ -212,6 +220,7 @@ def test_left_to_build_its_own_candidates_the_process_serves_the_backbone_it_was
         corpora=tmp_path,
         backbone=weights,
         lora=LORA,
+        patch=patch_spec(),
         schedule=SCHEDULE,
         store=store,
         tasks=InMemoryDownstreamTaskRepository(),
@@ -225,3 +234,7 @@ def test_left_to_build_its_own_candidates_the_process_serves_the_backbone_it_was
     stated = {parameter.name: parameter.value for parameter in described.method.parameters}
     assert stated["transfer_mode"] == "lora"
     assert stated["lora_rank"] == str(LORA.rank)
+    patched = root.adapters.candidates.describe(KnownPatchModels.PATCH_TRANSFORMER)
+    assert patched.starts_from is None
+    # One schedule for every network is what holds them to one compute budget.
+    assert patched.budget == described.budget

@@ -99,3 +99,71 @@ Against the control, paired over engines (bootstrap, 10,000 resamples):
   `afe5199`) and spanned all 126 channels, 105 of which FD001 never reports (fixed in `2032804`).
   MiniRocket then scored 17.08 / 18.29 and its selection chose a grid of × 2. Tree and network
   cells stand.
+
+## 2026-09-25 — M1 Pro, 32 GB: the patch model trained from scratch
+
+**Question.** Where does a patch model trained from nothing on the grid (in the style of
+PatchTST, [ADR-0039](../adr/0039-the-patch-baseline.md)) stand against the set encoder trained
+from nothing and against the tuned trees, paired on the same engines? All numbers are
+**validation**, tier S.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `f1050c6` |
+| Corpus, task | as in the section above: `cmapss` `sha256:d63f8e1b…`, FD001, 21 validation engines |
+| Campaign | `campaigns/patch-fd001.toml`, `add35a93…`; 50 and 200 labels × seeds 1–3; control = network from scratch, endpoint = patch model at 200 |
+| Schedule (both networks) | 30 epochs, at least 2,000 steps, batch 16, peak 1e-3 (the control's), warm-up 0.1, cosine to 1 %, no weight decay |
+| Network from scratch | the shape of the backbone in force (`sha256:6283c210…`, tier M): 4.78 M weights |
+| Patch model | patch 8, stride 4 (12 tokens per channel), width 192, 3 heads, 4 layers, feed-forward 768, dropout 0.2, one grid step per cycle; 21 channels read, 1.79 M weights; not tuned |
+| Trees | per channel, at the variants selection `3856e705…` chose; `worker-general` image at `f1050c6`, CPU, 4 threads |
+| Network cells | host MPS, fp32, run by a Celery worker started on the host at `f1050c6` (not by an order, so the commit was not checked by the run itself) |
+
+**RMSE**, mean ± SD over 3 seeds:
+
+| candidate | 50 | 200 | seconds per cell |
+| --- | --- | --- | --- |
+| trees per channel | **18.25 ± 1.47** | **13.94 ± 0.71** | 0.3–0.9 |
+| patch model from scratch | 21.10 ± 1.99 | 18.40 ± 1.01 | 82–96 |
+| network from scratch (control) | 22.62 ± 1.68 | 18.75 ± 0.28 | 808–1,032 |
+
+**Paired over engines** (bootstrap, 10,000 resamples; reduction of RMSE relative to the rival):
+
+| comparison | budget | reduction | 95 % interval | floor | verdict |
+| --- | --- | --- | --- | --- | --- |
+| **patch model vs network from scratch** | **200** | **+1.8 %** | **[−1.22, +1.82]** | 0.38 | **indistinguishable** |
+| patch model vs network from scratch | 50 | +6.6 % | [+0.29, +2.65] | 1.68 | distinguishable, practically nil |
+| trees vs network from scratch | 200 / 50 | +25.6 % / +19.3 % | [+2.74, +6.79] / [+1.01, +7.50] | | distinguishable |
+| patch model vs trees (outside the design) | 200 | −32.0 % | [−5.80, −3.01] | | trees better |
+| patch model vs trees (outside the design) | 50 | −15.7 % | [−5.90, +0.37] | | includes 0 |
+
+The last two rows pair the same cells by the same bootstrap; the design registered neither, so
+they carry no verdict of the campaign's rules.
+
+**Reproducibility.** The 126 per-engine errors of the trees equal those of campaign `ee69d456…`
+bit for bit. The network from scratch does not repeat on MPS: 18.75 here against 18.86 there at
+200, up to 6.7 RMSE apart on a single engine.
+
+**The kept model.** The patch model of the endpoint cell (200 labels, seed 1) was stored and read
+back by its checksum: 21 channels × 50 steps, 1,789,441 weights, target scale 125.
+
+### Conclusions
+
+1. Two different architectures trained from nothing, under one schedule, land at the same error
+   on this task at 200 labels (18.40 and 18.75, interval across zero); the patch model does it
+   with 37 % of the weights and a tenth of the time per cell.
+2. Both stay about a quarter to a third behind the tuned trees at 200 labels. The gap is not
+   specific to the set encoder.
+3. Both networks pool over the whole window before a linear head, and both run under the same
+   untuned schedule. The result is consistent with the head or the schedule limiting both, not
+   with an architectural cause; it does not show which (diagnostics in the next ticket).
+
+### Limitations
+
+- 3 seeds, tier S, validation only. The patch model is not tuned: it learns at the control's peak
+  rate with PatchTST's default dropout.
+- The two networks differ in size (1.79 M against 4.78 M weights).
+- The network cells ran through a Celery worker on the host, not through an order. The broker
+  closed the worker's connection once (missed heartbeats during a long cell); every result had
+  been stored before, and the redelivered cells answered from the registry without running again.

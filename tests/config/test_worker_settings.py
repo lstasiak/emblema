@@ -72,6 +72,14 @@ ENVIRONMENT = {
     "EMBLEMA_WORKER__LORA__ALPHA": "16.0",
     "EMBLEMA_WORKER__LORA__DROPOUT": "0.0",
     "EMBLEMA_WORKER__LORA__TARGETS": "qkv,attention.projection,feedforward",
+    "EMBLEMA_WORKER__PATCH__PATCH_LENGTH": "8",
+    "EMBLEMA_WORKER__PATCH__STRIDE": "4",
+    "EMBLEMA_WORKER__PATCH__WIDTH": "192",
+    "EMBLEMA_WORKER__PATCH__HEADS": "3",
+    "EMBLEMA_WORKER__PATCH__LAYERS": "4",
+    "EMBLEMA_WORKER__PATCH__FEEDFORWARD_WIDTH": "768",
+    "EMBLEMA_WORKER__PATCH__DROPOUT": "0.2",
+    "EMBLEMA_WORKER__PATCH__GRID_RESOLUTION": "1.0",
 }
 
 
@@ -93,6 +101,7 @@ def test_the_group_is_read_from_the_environment_a_worker_is_started_with(
 
     assert worker.require_schedule().epochs == 30
     assert worker.require_lora().targets == "qkv,attention.projection,feedforward"
+    assert worker.require_patch().width == 192
 
 
 def test_a_process_that_is_told_nothing_about_a_worker_still_starts(
@@ -117,6 +126,7 @@ def test_a_worker_told_half_of_what_it_needs_is_refused(
         ("require_lora", "no low-rank updates"),
         ("require_backbone_ref", "none to serve"),
         ("require_boosting", "no boosting"),
+        ("require_patch", "no shape"),
     ],
 )
 def test_a_worker_asked_for_what_it_was_not_configured_with_stops_as_it_is_assembled(

@@ -8,6 +8,7 @@ from emblema.entrypoints.workers.campaign_process import CampaignProcess
 from emblema.entrypoints.workers.declared_worker import DeclaredWorker
 from emblema.entrypoints.workers.known_arms import KnownArms
 from emblema.entrypoints.workers.known_baselines import KnownBaselines
+from emblema.entrypoints.workers.known_patch_models import KnownPatchModels
 from emblema.evaluation.adapters.candidates.routed_candidate_catalogue import (
     RoutedCandidateCatalogue,
 )
@@ -30,6 +31,7 @@ from emblema.evaluation.application.use_cases.record_cell_result import RecordCe
 from emblema.evaluation.application.use_cases.select_tuned_variants import SelectTunedVariants
 from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
 from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
+from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
@@ -65,6 +67,7 @@ class CompositionRoot:
         backbone: ArtifactRef,
         boosting: GradientBoostingSpec,
         convolutions: RandomConvolutions,
+        patch: PatchModelSpec,
     ) -> None:
         """Assemble the process from what the campaign's candidates are set to.
 
@@ -77,12 +80,13 @@ class CompositionRoot:
             backbone: Weights the pretrained arms start from.
             boosting: How hard the trees fit, which the design records too.
             convolutions: How the MiniRocket baseline reads and fits, recorded likewise.
+            patch: How the patch model reads a window and how large it is, recorded likewise.
 
         Raises:
             ValueError: If the settings name no store, database or broker.
         """
         process = CampaignProcess(settings, workspace=workspace, corpora=corpora)
-        catalogue = self._candidates(schedule, lora, backbone, boosting, convolutions)
+        catalogue = self._candidates(schedule, lora, backbone, boosting, convolutions, patch)
         outcomes = CampaignCompletedAssembler()
         self.adapters = Adapters(
             corpus=process.corpus,
@@ -137,6 +141,7 @@ class CompositionRoot:
             backbone=worker.require_backbone_ref(),
             boosting=declared.boosting(),
             convolutions=declared.convolutions(),
+            patch=declared.patch(),
         )
 
     @staticmethod
@@ -146,13 +151,16 @@ class CompositionRoot:
         backbone: ArtifactRef,
         boosting: GradientBoostingSpec,
         convolutions: RandomConvolutions,
+        patch: PatchModelSpec,
     ) -> CandidateCatalogue:
         """Every candidate a campaign may name, each routed to whoever holds it."""
         arms = KnownArms.catalogue(backbone, lora, schedule)
         baselines = KnownBaselines.catalogue(boosting, convolutions)
+        patched = KnownPatchModels.catalogue(patch, schedule)
         return RoutedCandidateCatalogue(
             {
                 **dict.fromkeys(KnownArms.refs(), arms),
                 **dict.fromkeys(KnownBaselines.refs(), baselines),
+                **dict.fromkeys(KnownPatchModels.refs(), patched),
             }
         )

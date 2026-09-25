@@ -15,6 +15,7 @@ import pytest
 from emblema.entrypoints.cli.campaign.composition_root import CompositionRoot
 from emblema.entrypoints.workers.known_arms import KnownArms
 from emblema.entrypoints.workers.known_baselines import KnownBaselines
+from emblema.entrypoints.workers.known_patch_models import KnownPatchModels
 from emblema.evaluation.adapters.blocks.block_corpus_windows import BlockCorpusWindows
 from emblema.evaluation.adapters.persistence.downstream_task_repository import (
     SqlAlchemyDownstreamTaskRepository,
@@ -26,7 +27,14 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.exceptions import UnknownCandidateError
 from emblema.shared.adapters.queues.celery_job_queue import CeleryJobQueue
-from tests.evaluation.support import LORA, WEIGHTS, adaptation_schedule, boosting, convolutions
+from tests.evaluation.support import (
+    LORA,
+    WEIGHTS,
+    adaptation_schedule,
+    boosting,
+    convolutions,
+    patch_spec,
+)
 from tests.support.settings import unreachable_store
 
 
@@ -40,6 +48,7 @@ def process(tmp_path: Path) -> CompositionRoot:
         backbone=WEIGHTS,
         boosting=boosting(),
         convolutions=convolutions(),
+        patch=patch_spec(),
     )
 
 
@@ -62,6 +71,7 @@ def test_a_process_bringing_neither_settings_nor_a_store_is_refused(tmp_path: Pa
             backbone=WEIGHTS,
             boosting=boosting(),
             convolutions=convolutions(),
+            patch=patch_spec(),
         )
 
 
@@ -72,6 +82,8 @@ def test_every_registered_candidate_is_reachable_and_nothing_else_is(tmp_path: P
         assert held.describe(ref).kind is CandidateKind.NEURAL
     for ref in KnownBaselines.refs():
         assert held.describe(ref).kind is CandidateKind.CLASSICAL
+    for ref in KnownPatchModels.refs():
+        assert held.describe(ref).kind is CandidateKind.NEURAL
     with pytest.raises(UnknownCandidateError):
         held.describe(CandidateRef("absent"))
 

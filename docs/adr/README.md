@@ -53,3 +53,4 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0036](0036-the-classical-candidate.md) | The classical candidate: a port of its own, features that outlive a channel layout, and a process that declares a comparison without being able to run it | accepted |
 | [0037](0037-promoting-what-a-campaign-kept.md) | Promoting what a campaign kept: a projection fed by the campaign's announcement, a served model per period of service, and a manual relay for a delivery that failed | accepted |
 | [0038](0038-the-tuned-baseline.md) | The tuned baseline: spectra without a grid, a grid in the corpus's time, knobs chosen by a declared selection | accepted |
+| [0039](0039-the-patch-baseline.md) | The patch baseline: a network from nothing on the grid, behind a port of its own, on the arms' budget | proposed |

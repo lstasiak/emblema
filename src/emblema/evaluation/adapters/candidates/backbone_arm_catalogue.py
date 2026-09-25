@@ -34,11 +34,7 @@ class BackboneArmCatalogue:
             ref=candidate,
             kind=CandidateKind.NEURAL,
             starts_from=arm.backbone,
-            budget=ComputeBudget(
-                epochs=self.schedule.epochs,
-                min_steps=self.schedule.min_steps,
-                batch_size=self.schedule.batch_size,
-            ),
+            budget=ComputeBudget.of(self.schedule),
             method=self._method(arm),
         )
 

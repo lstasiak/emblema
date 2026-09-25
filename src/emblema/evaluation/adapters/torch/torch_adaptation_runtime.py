@@ -1,18 +1,16 @@
-import math
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 
 import torch
 from torch import Tensor
-from torch.nn.functional import mse_loss
 
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate
+from emblema.evaluation.adapters.torch.scheduled_training import Forward, ScheduledTraining
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
-    DivergedAdaptationError,
     InvalidScoredOutcomeError,
 )
 from emblema.evaluation.domain.labels.label_sample import LabelSample
@@ -22,14 +20,10 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
-from emblema.shared.adapters.loaders.seeded_shuffle_sampler import SeededShuffleSampler
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
 from emblema.shared.ports.artifact_store import ArtifactStore
-
-# What the candidate is asked per batch: the indices of the windows to answer, in sample order.
-Forward = Callable[[Sequence[int]], Tensor]
 
 
 class TorchAdaptationRuntime:
@@ -95,7 +89,9 @@ class TorchAdaptationRuntime:
             if plan.mode is TransferMode.FROZEN_PROBE
             else self._over_windows(candidate, tuning)
         )
-        losses = self._train(candidate, forward, targets, plan)
+        losses = ScheduledTraining(plan.schedule, plan.seed).losses(
+            candidate, candidate.trainable_parameters(), forward, targets
+        )
         predicted = self._answers(candidate, held, plan.schedule.batch_size) * scale
         return AdaptationOutcome(
             plan=plan,
@@ -136,54 +132,6 @@ class TorchAdaptationRuntime:
             plan, candidate, vocabulary_size=vocabulary_size, target_scale=target_scale
         )
         return self._store.put(fitted.to_bytes())
-
-    def _train(
-        self,
-        candidate: AdaptedBackbone,
-        forward: Forward,
-        targets: Tensor,
-        plan: AdaptationPlan,
-    ) -> list[float]:
-        """The schedule's epochs over the sample, in the plan's seeded order; the mean loss of each.
-
-        The epochs are the schedule's over this sample: the stated ones, or more where the floor
-        of steps asks for them.
-
-        The rate follows the schedule's shape step by step, the frozen probe's included: its head
-        is trained by the same loop over stored states.
-
-        Raises:
-            DivergedAdaptationError: If a batch's loss stops being finite.
-        """
-        schedule = plan.schedule
-        optimiser = torch.optim.AdamW(
-            candidate.trainable_parameters(),
-            lr=schedule.learning_rate,
-            weight_decay=schedule.weight_decay,
-        )
-        rate = torch.optim.lr_scheduler.LambdaLR(
-            optimiser, schedule.learning_rate_schedule(len(targets)).factor
-        )
-        order = SeededShuffleSampler(len(targets), seed=plan.seed)
-        losses = []
-        candidate.train()
-        for epoch in range(schedule.epochs_over(len(targets))):
-            order.set_epoch(epoch)
-            positions = list(order)
-            total = 0.0
-            for start in range(0, len(positions), schedule.batch_size):
-                indices = positions[start : start + schedule.batch_size]
-                loss = mse_loss(forward(indices), targets[indices])
-                mean = float(loss.detach())
-                if not math.isfinite(mean):
-                    raise DivergedAdaptationError(f"the loss of a batch in epoch {epoch} is {mean}")
-                optimiser.zero_grad(set_to_none=True)
-                loss.backward()
-                optimiser.step()
-                rate.step()
-                total += mean * len(indices)
-            losses.append(total / len(positions))
-        return losses
 
     def _over_windows(self, candidate: AdaptedBackbone, windows: Sequence[TokenWindow]) -> Forward:
         """The candidate run whole over the windows at the indices asked for."""

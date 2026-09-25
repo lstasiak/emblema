@@ -14,7 +14,15 @@ from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
 from emblema.evaluation.domain.scoring.unit_error import UnitError
-from tests.evaluation.support import CONTENDER, CONTROL, candidate, cell, prediction, result
+from tests.evaluation.support import (
+    CONTENDER,
+    CONTROL,
+    adaptation_schedule,
+    candidate,
+    cell,
+    prediction,
+    result,
+)
 
 
 @pytest.mark.parametrize(("field", "value"), [("epochs", 0), ("batch_size", 0), ("min_steps", -1)])
@@ -29,6 +37,12 @@ def test_two_candidates_spend_one_budget_when_their_budgets_are_equal() -> None:
     assert ComputeBudget(epochs=2, min_steps=0, batch_size=2) == ComputeBudget(
         epochs=2, min_steps=0, batch_size=2
     )
+
+
+def test_a_budget_read_off_a_schedule_is_what_that_schedule_spends() -> None:
+    schedule = adaptation_schedule(epochs=3, min_steps=40, batch_size=8)
+
+    assert ComputeBudget.of(schedule) == ComputeBudget(epochs=3, min_steps=40, batch_size=8)
 
 
 def test_a_neural_candidate_without_a_compute_budget_is_refused() -> None:

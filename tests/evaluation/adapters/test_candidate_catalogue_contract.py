@@ -18,6 +18,7 @@ from emblema.evaluation.adapters.candidates.classical_arm import ClassicalArm
 from emblema.evaluation.adapters.candidates.classical_baseline_catalogue import (
     ClassicalBaselineCatalogue,
 )
+from emblema.evaluation.adapters.candidates.patch_model_catalogue import PatchModelCatalogue
 from emblema.evaluation.adapters.candidates.routed_candidate_catalogue import (
     RoutedCandidateCatalogue,
 )
@@ -28,7 +29,15 @@ from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import UnknownCandidateError
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
-from tests.evaluation.support import CONTENDER, LORA, WEIGHTS, adaptation_schedule, boosting
+from tests.evaluation.support import (
+    CONTENDER,
+    LORA,
+    WEIGHTS,
+    adaptation_schedule,
+    boosting,
+    design,
+    patch_spec,
+)
 
 TREES = CandidateRef("boosted_trees_per_channel")
 ARMS = BackboneArmCatalogue(
@@ -44,10 +53,13 @@ BASELINES = ClassicalBaselineCatalogue(
         ),
     )
 )
-ROUTED = RoutedCandidateCatalogue({CONTENDER: ARMS, TREES: BASELINES})
+PATCHES = CandidateRef("patch_transformer")
+PATCHED = PatchModelCatalogue(PATCHES, patch_spec(), adaptation_schedule())
+ROUTED = RoutedCandidateCatalogue({CONTENDER: ARMS, TREES: BASELINES, PATCHES: PATCHED})
 CATALOGUES: dict[str, Callable[[], tuple[CandidateCatalogue, CandidateRef]]] = {
     "arms": lambda: (ARMS, CONTENDER),
     "baselines": lambda: (BASELINES, TREES),
+    "patch model": lambda: (PATCHED, PATCHES),
     "routed": lambda: (ROUTED, TREES),
 }
 
@@ -89,6 +101,44 @@ def test_a_baseline_starts_from_nothing_and_shares_no_budget() -> None:
     assert described.kind is CandidateKind.CLASSICAL
     assert described.starts_from is None
     assert described.budget is None
+
+
+def test_a_patch_model_starts_from_nothing_and_shares_the_arms_budget() -> None:
+    described = PATCHED.describe(PATCHES)
+
+    assert described.kind is CandidateKind.NEURAL
+    assert described.starts_from is None
+    # Derived from one schedule, so it is the budget the arms declare and not a copy of it.
+    assert described.budget == ARMS.describe(CONTENDER).budget
+
+
+def test_a_patch_model_records_its_shape_and_the_schedule_it_learns_under() -> None:
+    stated = {p.name: p.value for p in PATCHED.describe(PATCHES).method.parameters}
+
+    assert stated["patch_length"] == str(patch_spec().patch_length)
+    assert stated["width"] == str(patch_spec().width)
+    assert stated["learning_rate"] == str(adaptation_schedule().learning_rate)
+
+
+def test_a_design_holds_the_arms_the_patch_model_and_a_baseline_side_by_side() -> None:
+    # Two networks and a fit of trees in one grid: the networks' budgets are equal because both
+    # are read off one schedule, and the baseline declares none.
+    stated = design(
+        candidates=(
+            ROUTED.describe(CONTENDER),
+            ROUTED.describe(PATCHES),
+            ROUTED.describe(TREES),
+        ),
+        control=CONTENDER,
+        endpoint=PATCHES,
+    )
+
+    assert {c.ref for c in stated.candidates} == {CONTENDER, PATCHES, TREES}
+
+
+def test_a_variant_of_the_patch_model_is_refused_until_networks_are_tuned() -> None:
+    with pytest.raises(UnknownCandidateError, match="no variant"):
+        PATCHED.describe(CandidateRef("patch_transformer@patch_length=8"))
 
 
 def test_each_name_reaches_the_holder_the_process_named_for_it() -> None:

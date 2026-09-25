@@ -101,6 +101,7 @@ class CompositionRoot:
                 schedule=declared.schedule(),
                 lora=declared.lora(),
                 backbone=worker.require_backbone_ref(),
+                patch=declared.patch(),
                 device=worker.device,
                 store=store,
                 tasks=tasks,

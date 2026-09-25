@@ -57,6 +57,21 @@ class RegularGrid:
             laid[index, self._channels :] = observed
         return laid
 
+    def rows_read(self, laid: NDArray[np.float64]) -> NDArray[np.int64]:
+        """The rows of ``laid`` its windows give something to read: values, then masks.
+
+        A corpus's vocabulary can hold far more channels than one task's windows do, and a row
+        nothing ever reported is a constant a method can learn nothing from. So a channel's
+        value is read if any of the windows observed it at a step, and its mask only if one of
+        them missed a step of it, since a mask that is one throughout says nothing either.
+        Chosen from the inputs alone, never the labels, so whoever fits on these rows can keep
+        them and answer every later window over the same ones.
+        """
+        observed = laid[:, self._channels :, :]
+        held = np.flatnonzero(observed.max(axis=(0, 2)) > 0.0)
+        gappy = held[observed[:, held, :].min(axis=(0, 2)) < 1.0]
+        return np.concatenate((held, self._channels + gappy)).astype(np.int64)
+
     def _laid(self, window: TokenWindow) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
         ids = np.asarray(window.channel_ids, dtype=np.int64) - 1
         if int(ids.max()) >= self._channels:

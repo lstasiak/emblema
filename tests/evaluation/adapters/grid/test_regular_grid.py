@@ -82,3 +82,19 @@ def test_a_channel_beyond_the_vocabulary_is_refused() -> None:
 def test_a_grid_of_no_step_or_no_channel_is_refused(steps: int, channels: int) -> None:
     with pytest.raises(ValueError, match="steps and channels"):
         RegularGrid(steps, channels)
+
+
+def test_rows_are_the_values_the_windows_observed_and_the_masks_that_ever_miss_a_step() -> None:
+    grid = RegularGrid(4, 3)
+    # Channel 1 is read at every step, channel 2 at one of them, channel 3 never.
+    full = timed(1, [(1.0, 0.1), (2.0, 0.3), (3.0, 0.6), (4.0, 0.9)])
+    laid = grid.of([window(full, timed(2, [(5.0, 0.4)]))])
+
+    assert grid.rows_read(laid).tolist() == [0, 1, 3 + 1]
+
+
+def test_a_channel_one_window_misses_a_step_of_keeps_its_mask() -> None:
+    grid = RegularGrid(2, 1)
+    laid = grid.of([window(timed(1, [(1.0, 0.1), (2.0, 0.6)])), window(timed(1, [(1.0, 0.1)]))])
+
+    assert grid.rows_read(laid).tolist() == [0, 1]

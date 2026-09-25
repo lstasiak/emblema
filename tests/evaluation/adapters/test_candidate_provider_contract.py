@@ -28,6 +28,10 @@ from emblema.evaluation.adapters.candidates.classical_baseline_catalogue import 
 from emblema.evaluation.adapters.candidates.classical_candidate_provider import (
     ClassicalCandidateProvider,
 )
+from emblema.evaluation.adapters.candidates.patch_candidate_provider import (
+    PatchCandidateProvider,
+)
+from emblema.evaluation.adapters.candidates.patch_model_catalogue import PatchModelCatalogue
 from emblema.evaluation.adapters.candidates.routed_candidate_provider import (
     RoutedCandidateProvider,
 )
@@ -39,11 +43,13 @@ from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
 from emblema.evaluation.adapters.in_memory.ground_truth import InMemoryGroundTruth
+from emblema.evaluation.adapters.in_memory.patch_runtime import InMemoryPatchRuntime
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget
 from emblema.evaluation.application.use_cases.draw_run_labels import DrawRunLabels
 from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit
 from emblema.evaluation.application.use_cases.run_adaptation import RunAdaptation
 from emblema.evaluation.application.use_cases.run_classical_fit import RunClassicalFit
+from emblema.evaluation.application.use_cases.run_patch_training import RunPatchTraining
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
@@ -76,6 +82,7 @@ from tests.evaluation.support import (
     boosting,
     candidate,
     cell,
+    patch_spec,
     sides,
     task,
     units,
@@ -90,6 +97,7 @@ FAILURES = {UnitKey("a"): 300.0, UnitKey("b"): 260.0, UnitKey("c"): 200.0}
 PUBLISHED = sides(training=units("a", "b"), validation=units("c"))
 LOW_RANK = CandidateRef("lora")
 TREES = CandidateRef("boosted_trees_per_channel")
+PATCHES = CandidateRef("patch_transformer")
 BUDGET = LabelBudget.of(2)
 # What a campaign is designed against and what a cell is checked against, built once: the two
 # have to be the same text or every cell of a mixed grid would be refused.
@@ -110,6 +118,8 @@ BASELINES = ClassicalBaselineCatalogue(
         ),
     )
 )
+
+PATCHED = PatchModelCatalogue(PATCHES, patch_spec(), adaptation_schedule())
 
 
 class Supplied(NamedTuple):
@@ -181,6 +191,16 @@ def classical_provider(store: InMemoryArtifactStore | None) -> Supplied:
     )
 
 
+def patch_provider(store: InMemoryArtifactStore | None) -> Supplied:
+    _, labels, _ = drawing()
+    return Supplied(
+        provider=PatchCandidateProvider(
+            PATCHED, RunPatchTraining(labels, InMemoryPatchRuntime(store))
+        ),
+        contender=PATCHES,
+    )
+
+
 def routed_provider(store: InMemoryArtifactStore | None) -> Supplied:
     """Both kinds behind one port; the contract asks it for the one it routes second."""
     return Supplied(
@@ -189,6 +209,7 @@ def routed_provider(store: InMemoryArtifactStore | None) -> Supplied:
                 CONTROL: backbone_provider(store).provider,
                 CONTENDER: backbone_provider(store).provider,
                 TREES: classical_provider(store).provider,
+                PATCHES: patch_provider(store).provider,
             }
         ),
         contender=TREES,
@@ -199,6 +220,7 @@ ADAPTERS: dict[str, Callable[[InMemoryArtifactStore | None], Supplied]] = {
     "stated": stated_provider,
     "backbone": backbone_provider,
     "classical": classical_provider,
+    "patch model": patch_provider,
     "routed": routed_provider,
 }
 
@@ -312,6 +334,29 @@ def test_the_classical_adapter_refuses_a_cell_the_campaign_recorded_as_starting_
 
     with pytest.raises(CandidateMismatchError):
         supplied.provider.evaluate(elsewhere)
+
+
+def test_the_patch_adapter_refuses_a_cell_the_campaign_recorded_under_another_shape() -> None:
+    supplied = patch_provider(None)
+    asked = request_of(supplied)
+    wider = PatchModelCatalogue(PATCHES, patch_spec(width=16), adaptation_schedule())
+    elsewhere = replace(asked, declared=wider.describe(PATCHES))
+
+    with pytest.raises(CandidateMismatchError):
+        supplied.provider.evaluate(elsewhere)
+
+
+def test_the_patch_adapter_trains_under_the_cells_seed_and_the_declared_shape() -> None:
+    _, labels, _ = drawing()
+    runtime = InMemoryPatchRuntime()
+    provider = PatchCandidateProvider(PATCHED, RunPatchTraining(labels, runtime))
+    asked = replace(request_of(Supplied(provider, PATCHES)), cell=cell(PATCHES, BUDGET, 4))
+
+    provider.evaluate(asked)
+
+    (trained,) = runtime.trainings
+    assert (trained.plan.seed, trained.plan.spec) == (4, patch_spec())
+    assert trained.plan.schedule == adaptation_schedule()
 
 
 def test_each_name_reaches_the_supplier_the_process_named_for_it() -> None:
