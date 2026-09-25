@@ -102,7 +102,11 @@ class KeptCandidateManifestJson:
 
 
 class _Fields:
-    """A JSON object read one field at a time; a failure names the field and what it had to be."""
+    """A JSON object read one field at a time; a failure names the field and what it had to be.
+
+    Stated again rather than shared with the catalog's codec: each contract raises its own
+    malformed-message error and imports nothing from another context.
+    """
 
     def __init__(self, document: _Document) -> None:
         self._document = document

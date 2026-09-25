@@ -27,10 +27,6 @@ class InferenceCandidate(nn.Module):
         # caller has to remember, and the exporter has nothing to warn about.
         self.eval()
 
-    @property
-    def width(self) -> int:
-        return self.candidate.head.linear.in_features
-
     def forward(
         self,
         features: Tensor,

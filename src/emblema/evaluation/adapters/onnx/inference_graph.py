@@ -65,6 +65,9 @@ class InferenceGraph:
     representation without the export saying so. The candidate is traced on the host, because
     the exporter refuses a model held on an accelerator.
 
+    A dataclass rather than a model: the protobuf is the serialisation and is validated when
+    it is loaded, so nothing here is parsed field by field.
+
     Attributes:
         proto: The graph as ONNX protobuf.
     """
@@ -77,7 +80,8 @@ class InferenceGraph:
     def exported(cls, candidate: AdaptedBackbone, *, target_scale: float) -> Self:
         """The graph of ``candidate``, answering in the unit ``target_scale`` multiplies back to.
 
-        Moves the candidate to the host, which is where a run that is over leaves it anyway.
+        Moves ``candidate`` to the host in place, because the exporter refuses a module held on
+        an accelerator; a caller that still needs it on the device moves it back.
 
         Raises:
             UnexportableCandidateError: If the exporter cannot trace the candidate.
