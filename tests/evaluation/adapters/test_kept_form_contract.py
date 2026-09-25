@@ -41,6 +41,7 @@ from emblema.shared.kernel.checksums import Checksum  # noqa: E402
 from tests.evaluation.adapters.features.support import timed, window  # noqa: E402
 from tests.evaluation.support import convolutions, patch_plan, plan, recipe  # noqa: E402
 from tests.support.experiments import CHANNELS, TINY  # noqa: E402
+from tests.support.openmp import skip_if_torch_shares_the_process  # noqa: E402
 
 pytestmark = pytest.mark.ml
 
@@ -58,6 +59,7 @@ def fitted_candidate() -> FittedCandidate:
 
 
 def fitted_baseline() -> FittedBaseline:
+    skip_if_torch_shares_the_process()
     features = ChannelAggregatedFeatures()
     rows = [[float(row + column) for column in range(features.width)] for row in range(6)]
     model = xgboost.XGBRegressor(n_estimators=4, max_depth=2, n_jobs=1, random_state=1)
