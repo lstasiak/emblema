@@ -2,7 +2,7 @@ import io
 import json
 import zipfile
 from dataclasses import dataclass
-from typing import Self
+from typing import ClassVar, Self
 
 import numpy as np
 from numpy.typing import NDArray
@@ -36,7 +36,8 @@ class FittedConvolutions:
     it was fitted on.
 
     Stored as named arrays in NumPy's own archive format, read back without unpickling anything,
-    so the document outlives the release of every library that fitted it.
+    so the document outlives the release of every library that fitted it. A kept candidate's
+    manifest names this form ``FORMAT``; it is the measured form and the only one.
 
     Attributes:
         parameters: The recipe the candidate was fitted under, flattened to scalars.
@@ -50,6 +51,8 @@ class FittedConvolutions:
         penalty: The penalty the fit chose.
         target_scale: What the targets were divided by, so an answer is read in the task's unit.
     """
+
+    FORMAT: ClassVar[str] = "minirocket-npz"
 
     parameters: dict[str, str | int | float]
     grid_steps: int

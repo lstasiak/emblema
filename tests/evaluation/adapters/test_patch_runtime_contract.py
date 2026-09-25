@@ -14,7 +14,9 @@ from uuid import UUID
 
 import pytest
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.in_memory.patch_runtime import InMemoryPatchRuntime
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
@@ -98,11 +100,14 @@ def test_a_runtime_with_nowhere_to_keep_a_model_refuses_to_keep_one(trained: Tra
 
 
 @pytest.mark.parametrize("kind", KINDS)
-def test_a_model_kept_is_stored_under_the_checksum_of_its_bytes(kind: str, tmp_path: Path) -> None:
+def test_a_model_kept_is_named_by_a_manifest_of_its_form(kind: str, tmp_path: Path) -> None:
     keeping = runtime(kind, tmp_path, keeping=True)
 
     outcome = keeping.runtime.train(patch_plan(), keeping.task, SAMPLE, SCORED, retain=True)
 
     assert outcome.artifact is not None
+    kept = KeptCandidates(keeping.store).read(outcome.artifact)
+    assert kept.kind is CandidateKind.NEURAL
+    assert kept.corpus_manifest == keeping.task.manifest
     # Reading back verifies the stored bytes against the checksum the reference carries.
-    assert keeping.store.get(outcome.artifact)
+    assert keeping.store.get(kept.measured.artifact)

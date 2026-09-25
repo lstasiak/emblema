@@ -8,6 +8,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates  # noqa: E402
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import (  # noqa: E402
     PublishedCorpusBlocks,
 )
@@ -15,6 +16,7 @@ from emblema.evaluation.adapters.torch.fitted_patch_model import FittedPatchMode
 from emblema.evaluation.adapters.torch.torch_patch_runtime import (  # noqa: E402
     TorchPatchRuntime,
 )
+from emblema.evaluation.contracts.candidate_kind import CandidateKind  # noqa: E402
 from emblema.evaluation.domain.exceptions import (  # noqa: E402
     DivergedAdaptationError,
     InvalidPatchModelSpecError,
@@ -107,7 +109,9 @@ def test_the_model_kept_answers_as_the_one_that_was_scored(published: Published)
     outcome = train(published, patch_plan(), retain=True)
 
     assert outcome.artifact is not None
-    kept = FittedPatchModel.read(published.store.get(outcome.artifact))
+    named = KeptCandidates(published.store).read(outcome.artifact)
+    assert named.kind is CandidateKind.NEURAL
+    kept = FittedPatchModel.read(published.store.get(named.measured.artifact))
     assert kept.target_scale == CEILING
     assert kept.reading.channels == len(CHANNELS)
     assert kept.parameters == patch_plan().parameters()

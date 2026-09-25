@@ -1,6 +1,10 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import ClassVar
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
+from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
@@ -33,8 +37,10 @@ class InMemoryPatchRuntime:
     keeps the mean it learnt, so a campaign assembled over it names artifacts that really exist.
     """
 
+    FORMAT: ClassVar[str] = "learnt-mean"
+
     def __init__(self, store: ArtifactStore | None = None) -> None:
-        self._store = store
+        self._kept_candidates = None if store is None else KeptCandidates(store)
         self.trainings: list[PatchTraining] = []
 
     def train(
@@ -59,17 +65,21 @@ class InMemoryPatchRuntime:
                 for labelled in scored
             ),
             seconds=0.0,
-            artifact=self._kept(mean) if retain else None,
+            artifact=self._kept(mean, task) if retain else None,
         )
 
-    def _kept(self, mean: float) -> ArtifactRef:
-        """The mean this runtime learnt, stored, so a retained cell names real bytes.
+    def _kept(self, mean: float, task: DownstreamTask) -> ArtifactRef:
+        """The mean this runtime learnt, under a manifest, so a retained cell names real bytes.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep it.
         """
-        if self._store is None:
+        if self._kept_candidates is None:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it trained and was given no store"
             )
-        return self._store.put(repr(mean).encode())
+        return self._kept_candidates.keep(
+            CandidateKind.NEURAL,
+            corpus_manifest=task.manifest,
+            measured=RepresentationBytes(self.FORMAT, repr(mean).encode()),
+        )

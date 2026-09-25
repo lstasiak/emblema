@@ -4,12 +4,15 @@ from collections.abc import Sequence
 import torch
 from torch import Tensor
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
+from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.blocks.read_corpus import ReadCorpus
 from emblema.evaluation.adapters.torch.fitted_patch_model import FittedPatchModel
 from emblema.evaluation.adapters.torch.grid_reading import GridReading
 from emblema.evaluation.adapters.torch.patch_transformer import PatchTransformer
 from emblema.evaluation.adapters.torch.scheduled_training import ScheduledTraining
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
@@ -42,7 +45,7 @@ class TorchPatchRuntime:
         """Train over the corpora ``blocks`` reads, keeping what it is asked to in ``store``."""
         self._blocks = blocks
         self._device = device
-        self._store = store
+        self._kept_candidates = None if store is None else KeptCandidates(store)
 
     def train(
         self,
@@ -91,7 +94,7 @@ class TorchPatchRuntime:
                 for labelled, answer in zip(scored, (answers * scale).tolist(), strict=True)
             ),
             seconds=time.perf_counter() - started,
-            artifact=self._kept(plan, model, reading, scale) if retain else None,
+            artifact=self._kept(plan, model, reading, task, scale) if retain else None,
         )
 
     def _answers(
@@ -117,17 +120,29 @@ class TorchPatchRuntime:
         return torch.cat(answers).to("cpu").to(torch.float64)
 
     def _kept(
-        self, plan: PatchPlan, model: PatchTransformer, reading: GridReading, target_scale: float
+        self,
+        plan: PatchPlan,
+        model: PatchTransformer,
+        reading: GridReading,
+        task: DownstreamTask,
+        target_scale: float,
     ) -> ArtifactRef:
-        """The model this run trained, stored whole, so the campaign can name it.
+        """The model this run trained, stored whole under its manifest, for the campaign.
+
+        The trained state is the measured form and, for now, the only one: the graph a patch
+        model would be served through reads a grid rather than a set of tokens, and which
+        context lays that grid is decided with the prediction endpoint.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep it.
         """
-        if self._store is None:
+        if self._kept_candidates is None:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it trained and was given no store"
             )
-        return self._store.put(
-            FittedPatchModel.of(plan, model, reading=reading, target_scale=target_scale).to_bytes()
+        fitted = FittedPatchModel.of(plan, model, reading=reading, target_scale=target_scale)
+        return self._kept_candidates.keep(
+            CandidateKind.NEURAL,
+            corpus_manifest=task.manifest,
+            measured=RepresentationBytes(FittedPatchModel.FORMAT, fitted.to_bytes()),
         )

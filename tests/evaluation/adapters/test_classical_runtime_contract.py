@@ -15,7 +15,9 @@ from uuid import UUID
 
 import pytest
 
+from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.in_memory.classical_runtime import InMemoryClassicalRuntime
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
@@ -158,13 +160,16 @@ def test_a_fit_with_nothing_to_score_is_refused(adapted: Adapted) -> None:
 
 
 @pytest.mark.parametrize("method", list(METHODS.values()), ids=list(METHODS))
-def test_a_fit_asked_to_keep_what_it_produced_names_bytes_that_exist(
+def test_a_fit_asked_to_keep_what_it_produced_names_a_manifest_of_its_form(
     keeping: Adapted, method: ClassicalRecipe
 ) -> None:
     outcome = keeping.runtime.fit(method, keeping.task, SAMPLE, (), SCORED, retain=True)
 
     assert outcome.artifact is not None
-    assert keeping.store.get(outcome.artifact)
+    kept = KeptCandidates(keeping.store).read(outcome.artifact)
+    assert kept.kind is CandidateKind.CLASSICAL
+    assert kept.corpus_manifest == keeping.task.manifest
+    assert keeping.store.get(kept.measured.artifact)
 
 
 @pytest.mark.parametrize("method", list(METHODS.values()), ids=list(METHODS))
