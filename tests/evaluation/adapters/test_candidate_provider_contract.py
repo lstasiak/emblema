@@ -16,7 +16,6 @@ from typing import NamedTuple
 
 import pytest
 
-from emblema.evaluation.adapters.candidates.backbone_arm import BackboneArm
 from emblema.evaluation.adapters.candidates.backbone_arm_catalogue import BackboneArmCatalogue
 from emblema.evaluation.adapters.candidates.backbone_candidate_provider import (
     BackboneCandidateProvider,
@@ -79,6 +78,7 @@ from tests.evaluation.support import (
     OPENED_AT,
     WEIGHTS,
     adaptation_schedule,
+    arm,
     boosting,
     candidate,
     cell,
@@ -103,11 +103,10 @@ BUDGET = LabelBudget.of(2)
 # have to be the same text or every cell of a mixed grid would be refused.
 ARMS = BackboneArmCatalogue(
     (
-        BackboneArm(ref=CONTROL, mode=TransferMode.FROM_SCRATCH, backbone=None, lora=None),
-        BackboneArm(ref=CONTENDER, mode=TransferMode.FULL_FINE_TUNING, backbone=WEIGHTS, lora=None),
-        BackboneArm(ref=LOW_RANK, mode=TransferMode.LORA, backbone=WEIGHTS, lora=LORA),
-    ),
-    adaptation_schedule(),
+        arm(CONTROL, TransferMode.FROM_SCRATCH, backbone=None, lora=None),
+        arm(CONTENDER, TransferMode.FULL_FINE_TUNING, backbone=WEIGHTS, lora=None),
+        arm(LOW_RANK, TransferMode.LORA, backbone=WEIGHTS, lora=LORA),
+    )
 )
 BASELINES = ClassicalBaselineCatalogue(
     (

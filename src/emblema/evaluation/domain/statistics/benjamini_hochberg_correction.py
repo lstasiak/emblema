@@ -6,24 +6,23 @@ from emblema.evaluation.domain.exceptions import InvalidFamilyCorrectionError
 
 
 @dataclass(frozen=True, kw_only=True)
-class HolmCorrection:
-    """Which of a family of comparisons is rejected at a level shared by the whole family.
+class BenjaminiHochbergCorrection:
+    """Which of a family of comparisons is rejected so that the false discoveries stay a share.
 
-    Step-down: the p-values are ranked, the smallest is held to the level over the family's
-    size, the next to the level over one fewer, and so on; the first that fails stops the
-    procedure and everything ranked after it stands. The family-wise error stays at the level
-    whatever the comparisons' dependence, which is what a family of cells on one validation side
-    needs.
+    The step-up procedure of Benjamini and Hochberg (1995). What it controls is the expected
+    share of false discoveries among the rejections, not the chance of any false discovery, so
+    it rejects more than Holm on the same family and promises less about each rejection; the
+    share holds under positive dependence, which cells of one validation side have.
 
     Invariants: the level lies strictly between zero and one.
 
     Attributes:
-        alpha: The level the family is tested at.
+        alpha: The share of false discoveries the family is held to.
     """
 
     alpha: float = 0.05
 
-    NAME: ClassVar[str] = "holm"
+    NAME: ClassVar[str] = "benjamini_hochberg"
 
     def __post_init__(self) -> None:
         if not 0.0 < self.alpha < 1.0:
@@ -35,9 +34,9 @@ class HolmCorrection:
         """Whether each comparison is rejected, in the order the p-values were given.
 
         A ``family_size`` larger than the p-values given names a family whose other members
-        have not been measured: each enters with a p-value of one, which is never rejected and
-        holds the measured ones to the levels the whole family sets, so an incomplete family is
-        read more strictly than the complete one and never less.
+        have not been measured: each enters with a p-value of one, which ranks last and is
+        never rejected, while the measured ones are held to their rank over the whole family,
+        so an incomplete family is read more strictly than the complete one and never less.
 
         Raises:
             InvalidFamilyCorrectionError: If the family is empty or smaller than the p-values
@@ -54,9 +53,11 @@ class HolmCorrection:
                 f"a family of {family} cannot hold {len(p_values)} comparisons"
             )
         ranked = sorted(range(len(p_values)), key=lambda index: p_values[index])
-        verdicts = [False] * len(p_values)
+        largest_holding = -1
         for rank, index in enumerate(ranked):
-            if p_values[index] > self.alpha / (family - rank):
-                break
-            verdicts[index] = True
+            if p_values[index] <= self.alpha * (rank + 1) / family:
+                largest_holding = rank
+        verdicts = [False] * len(p_values)
+        for rank in range(largest_holding + 1):
+            verdicts[ranked[rank]] = True
         return tuple(verdicts)

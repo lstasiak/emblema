@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVerdict
+from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.practical_floor import PracticalFloor
 
@@ -13,11 +14,15 @@ class CandidateComparison:
 
     The difference, the floor it was held to and the verdict travel together because none of
     them is readable alone: a reduction without its interval says nothing about whether it is
-    real, and a verdict without the floor it cleared says nothing about whether it matters.
+    real, and a verdict without the floor it cleared says nothing about whether it matters. The
+    two sides' errors travel with them so that the spread over repeats, which the interval
+    deliberately leaves out, is reported beside it rather than lost.
 
     Attributes:
         candidate: Which competitor was compared.
         budget: How many labelled windows both sides learnt from.
+        control_error: What the control scored, pooled over its repeats, and how they spread.
+        candidate_error: What the candidate scored, pooled over its repeats, and how they spread.
         difference: The reduction over the control, with its interval and p-value.
         floor: The smallest reduction that counts as a difference at this budget.
         verdict: What the campaign's rules made of the three.
@@ -25,6 +30,8 @@ class CandidateComparison:
 
     candidate: CandidateRef
     budget: LabelBudget
+    control_error: ErrorOverRepeats
+    candidate_error: ErrorOverRepeats
     difference: PairedDifference
     floor: PracticalFloor
     verdict: ComparisonVerdict

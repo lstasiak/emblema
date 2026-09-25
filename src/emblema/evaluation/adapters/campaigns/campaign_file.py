@@ -14,10 +14,12 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict
 
+from emblema.evaluation.adapters.documents.family_correction_document import (
+    FamilyCorrectionDocument,
+)
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
-from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
@@ -71,12 +73,15 @@ class _Rules(_Section):
             for the difference to be called one.
         floor_share: Share of the control's error below which a difference is not worth
             reporting whatever the interval says.
-        alpha: Family-wise error rate the Holm correction is applied at.
+        correction: Which correction the secondary family is read under, by name; Holm unless
+            the file says otherwise, since that is the correction the registration names.
+        alpha: The level the correction is applied at.
         secondary_family_size: How many comparisons the secondary family holds.
     """
 
     minimum_relative_reduction: float
     floor_share: float
+    correction: str = FamilyCorrectionDocument.DEFAULT
     alpha: float = 0.05
     secondary_family_size: int
 
@@ -193,13 +198,14 @@ class CampaignFile(_Section):
         """What a verdict requires.
 
         Raises:
-            InvalidComparisonRulesError: If what the file declares is not a rule that stands up.
-            InvalidHolmCorrectionError: If the error rate is not one.
+            InvalidComparisonRulesError: If what the file declares is not a rule that stands up,
+                or names a correction nobody knows.
+            InvalidFamilyCorrectionError: If the level is not one.
         """
         return ComparisonRules(
             minimum_relative_reduction=self.rules.minimum_relative_reduction,
             floor_share=self.rules.floor_share,
-            holm=HolmCorrection(alpha=self.rules.alpha),
+            correction=FamilyCorrectionDocument().decode(self.rules.correction, self.rules.alpha),
             secondary_family_size=self.rules.secondary_family_size,
         )
 

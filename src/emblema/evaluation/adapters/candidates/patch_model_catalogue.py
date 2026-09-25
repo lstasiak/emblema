@@ -3,10 +3,15 @@ from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.campaign.compute_budget import ComputeBudget
-from emblema.evaluation.domain.exceptions import UnknownCandidateError
+from emblema.evaluation.domain.exceptions import (
+    InvalidCandidateVariantError,
+    UnknownCandidateError,
+    UnknownKnobError,
+)
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.patching.patch_plan import PatchPlan
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
+from emblema.evaluation.domain.tuning.candidate_variant import CandidateVariant
 
 
 class PatchModelCatalogue:
@@ -14,9 +19,10 @@ class PatchModelCatalogue:
 
     A network, so it is held to the compute budget the adapted arms share, and it learns under
     their schedule: one schedule declared, one run under, and the budgets equal because they are
-    derived from it the same way. The shape and the schedule it was set to travel with the
-    candidate, so a campaign stored a month ago still says what it compared. A name that turns a
-    knob is refused rather than read (ADR-0039).
+    derived from it the same way. A variant of the model is the model under a turned schedule,
+    the same knobs the arms turn, so every network of a campaign is tuned by one protocol; the
+    knobs of its shape are not turned here (ADR-0039). The shape and the schedule it was set to
+    travel with the candidate, so a campaign stored a month ago still says what it compared.
     """
 
     def __init__(
@@ -27,18 +33,18 @@ class PatchModelCatalogue:
         self._schedule = schedule
 
     def describe(self, candidate: CandidateRef) -> CampaignCandidate:
-        self._must_hold(candidate)
+        schedule = self.schedule_of(candidate)
         return CampaignCandidate(
             ref=candidate,
             kind=CandidateKind.NEURAL,
             starts_from=None,
-            budget=ComputeBudget.of(self._schedule),
+            budget=ComputeBudget.of(schedule),
             method=CandidateMethod.of(
                 **self._spec.parameters(),
-                learning_rate=self._schedule.learning_rate,
-                weight_decay=self._schedule.weight_decay,
-                warmup_fraction=self._schedule.warmup_fraction,
-                final_lr_fraction=self._schedule.final_lr_fraction,
+                learning_rate=schedule.learning_rate,
+                weight_decay=schedule.weight_decay,
+                warmup_fraction=schedule.warmup_fraction,
+                final_lr_fraction=schedule.final_lr_fraction,
             ),
         )
 
@@ -48,12 +54,24 @@ class PatchModelCatalogue:
         Raises:
             UnknownCandidateError: If this catalogue holds no model of that name.
         """
-        self._must_hold(candidate)
-        return PatchPlan(spec=self._spec, schedule=self._schedule, seed=seed)
+        return PatchPlan(spec=self._spec, schedule=self.schedule_of(candidate), seed=seed)
 
-    def _must_hold(self, candidate: CandidateRef) -> None:
-        if candidate != self._ref:
+    def schedule_of(self, candidate: CandidateRef) -> AdaptationSchedule:
+        """The schedule the model the campaign calls ``candidate`` learns under.
+
+        Raises:
+            UnknownCandidateError: If this catalogue holds no model of that name, the name is not
+                the model and its knobs in name order, or a knob cannot be turned so.
+        """
+        try:
+            variant = CandidateVariant.parse(candidate)
+        except InvalidCandidateVariantError as error:
+            raise UnknownCandidateError(f"{candidate} names no variant: {error}") from error
+        if variant.base != self._ref:
             raise UnknownCandidateError(
-                f"this catalogue holds the patch model {self._ref} and no variant of it, "
-                f"not {candidate}"
+                f"this catalogue holds the patch model {self._ref}, not {variant.base}"
             )
+        try:
+            return variant.applied_to(self._schedule, AdaptationSchedule.tuned)
+        except (UnknownKnobError, InvalidCandidateVariantError) as error:
+            raise UnknownCandidateError(f"{candidate} names no variant: {error}") from error

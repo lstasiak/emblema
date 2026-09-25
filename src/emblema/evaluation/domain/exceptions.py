@@ -217,8 +217,20 @@ class InvalidPracticalFloorError(EvaluationError, ValueError):
     pass
 
 
-class InvalidHolmCorrectionError(EvaluationError, ValueError):
-    pass
+class InvalidFamilyCorrectionError(EvaluationError, ValueError):
+    """A family correction is set at no level, given no comparison, or a p-value out of range."""
+
+
+class InvalidErrorOverRepeatsError(EvaluationError, ValueError):
+    """An error over repeats has no repeat, or a figure that is not finite and non-negative."""
+
+
+class InvalidTwoLevelBootstrapError(EvaluationError, ValueError):
+    """A two-level bootstrap is given no repeat to resample, no resample, or no level."""
+
+
+class InvalidUncertaintyDecompositionError(EvaluationError, ValueError):
+    """A decomposition's intervals are stated at different levels, or a share is not one."""
 
 
 class InvalidRemainingLifeMetricsError(EvaluationError, ValueError):
@@ -271,3 +283,7 @@ class TunedChoiceMismatchError(EvaluationError):
 
 class SelectionHasNoVerdictError(EvaluationError):
     """A selection was asked for a verdict, which a choice among variants does not have."""
+
+
+class InvalidCampaignVerdictError(EvaluationError, ValueError):
+    """A verdict compares the control against itself, or one pairing twice."""

@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from emblema.evaluation.adapters.candidates.backbone_arm import BackboneArm
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
@@ -128,6 +129,26 @@ def adaptation_schedule(**overrides: Any) -> AdaptationSchedule:
     return replace(stated, **overrides)
 
 
+def arm(
+    ref: CandidateRef,
+    mode: TransferMode,
+    *,
+    backbone: ArtifactRef | None,
+    lora: LoraSpec | None,
+    **overrides: Any,
+) -> BackboneArm:
+    """An arm shaped like the test weights, under the test schedule."""
+    stated = BackboneArm(
+        ref=ref,
+        mode=mode,
+        architecture=WEIGHTS,
+        backbone=backbone,
+        lora=lora,
+        schedule=adaptation_schedule(),
+    )
+    return replace(stated, **overrides)
+
+
 def boosting(**overrides: Any) -> GradientBoostingSpec:
     """Few shallow trees on one thread: enough to fit something, fast enough for a domain test."""
     stated = GradientBoostingSpec(
@@ -210,7 +231,7 @@ BUDGETS = (LabelBudget.of(50), LabelBudget.of(200))
 RULES = ComparisonRules(
     minimum_relative_reduction=0.1,
     floor_share=0.02,
-    holm=HolmCorrection(alpha=0.05),
+    correction=HolmCorrection(alpha=0.05),
     secondary_family_size=8,
 )
 # Few resamples on purpose: a whole campaign is exercised here, and an interval read off ten
