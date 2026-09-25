@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from emblema.config.boosting_settings import BoostingSettings
 from emblema.config.convolution_settings import ConvolutionSettings
 from emblema.config.lora_settings import LoraSettings
+from emblema.config.patch_settings import PatchSettings
 from emblema.config.schedule_settings import ScheduleSettings
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
@@ -17,11 +18,12 @@ class WorkerSettings(BaseModel):
     told to the process rather than carried by each job. Only the device has a default, because
     hardware is the one thing an experiment does not declare.
 
-    What a worker needs depends on what it competes. The one that adapts a backbone has no use
-    for the classical knobs and the one that fits baselines has no use for a backbone, a
-    schedule or low-rank updates, so each of them is optional here and demanded by the process
-    that cannot run without it. Demanded as it is assembled, so a worker told to serve something
-    it was not configured for stops at startup rather than at the first cell it is handed.
+    What a worker needs depends on what it competes. The one that trains networks has no use for
+    the classical knobs and the one that fits baselines has no use for a backbone, a schedule,
+    low-rank updates or a patch model's shape, so each of them is optional here and demanded by
+    the process that cannot run without it. Demanded as it is assembled, so a worker told to
+    serve something it was not configured for stops at startup rather than at the first cell it
+    is handed.
     """
 
     workspace: Path = Field(description="Directory corpus blocks are fetched to and mapped from.")
@@ -33,6 +35,7 @@ class WorkerSettings(BaseModel):
     lora: LoraSettings | None = None
     boosting: BoostingSettings | None = None
     convolutions: ConvolutionSettings | None = None
+    patch: PatchSettings | None = None
     device: str | None = Field(
         default=None, description="Where a cell computes; the machine's accelerator unless given."
     )
@@ -76,6 +79,16 @@ class WorkerSettings(BaseModel):
         if self.convolutions is None:
             raise ValueError("this worker fits classical candidates and was given no convolutions")
         return self.convolutions
+
+    def require_patch(self) -> PatchSettings:
+        """How the patch model of this process's campaigns reads a window and how large it is.
+
+        Raises:
+            ValueError: If nothing is configured.
+        """
+        if self.patch is None:
+            raise ValueError("this worker trains the patch model and was given no shape for it")
+        return self.patch
 
     def require_backbone_ref(self) -> ArtifactRef:
         """The backbone as the registry holds it: a key and the checksum of its bytes.

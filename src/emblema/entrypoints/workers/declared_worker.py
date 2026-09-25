@@ -3,6 +3,7 @@ from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientB
 from emblema.evaluation.domain.classical.minirocket_spec import MiniRocketSpec
 from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
 from emblema.evaluation.domain.classical.ridge_spec import RidgeSpec
+from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 
@@ -94,4 +95,23 @@ class DeclaredWorker:
                 ),
                 threads=declared.threads,
             ),
+        )
+
+    def patch(self) -> PatchModelSpec:
+        """How the patch model of this process's campaigns reads a window and how large it is.
+
+        Raises:
+            ValueError: If nothing is configured.
+            InvalidPatchModelSpecError: If what is configured is not a shape that stands up.
+        """
+        declared = self._settings.require_patch()
+        return PatchModelSpec(
+            patch_length=declared.patch_length,
+            stride=declared.stride,
+            width=declared.width,
+            heads=declared.heads,
+            layers=declared.layers,
+            feedforward_width=declared.feedforward_width,
+            dropout=declared.dropout,
+            grid_resolution=declared.grid_resolution,
         )
