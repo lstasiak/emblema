@@ -213,3 +213,62 @@ reading is the one ADR-0007 recorded and defers to the target container with tun
 options. The arm64 leg, and the MPS leg the suite carries (`test_inference_graph_from_mps.py`,
 a candidate held on the accelerator exported once moved to the host), are recorded here when
 they run.
+
+## 2026-09-25 — macOS arm64 (M1 Pro) — the fitted candidate, and the graph a campaign keeps
+
+**Question.** Does the export of the fitted candidate hold on arm64 as it did on x86, and does a
+candidate fitted on the accelerator export within the threshold a runtime refuses a graph at?
+
+**Conditions.** Commit of this note, rebased on `main` after the verdict statistics. MacBook Pro
+M1 Pro, tier S for the campaign; suite candidates as on x86. Versions: Python 3.14.7, torch
+2.14.0, onnxruntime 1.29.0, onnx 1.22.0, onnxscript 0.7.2, numpy 2.5.3.
+
+    uv run pytest tests/evaluation/adapters/onnx
+    uv run python -m tests.evaluation.adapters.onnx.report
+
+| Check | Result |
+|-------|--------|
+| `from_scratch`: opset 20, tokens 41–4104, batch 1–3, padded and unpadded | pass, `1.1e-06` on the state, `7.6e-06` on the answer over a ceiling of 125; 297 KiB, 2.6 s; empty window finite |
+| `frozen_probe`: same | pass, `1.1e-06` / `7.6e-06`; 306 KiB, 1.2 s; finite |
+| `lora`: same | pass, `8.9e-07` / `1.9e-05`; 394 KiB, 1.6 s; finite |
+| `full_fine_tuning`: same | pass, `8.3e-07` / `3.8e-06`; 309 KiB, 1.2 s; finite |
+| opset 23 (fused `Attention` node present) | exports, loads, fails on execution — as on x86 |
+| a candidate held on MPS, moved to the host by the adapter | exports; `3.8e-06` against the accelerator's answer (suite: `test_inference_graph_from_mps.py`) |
+
+| Model | ONNX (opset 20) | TorchScript (traced) | eager |
+|---|---|---|---|
+| test candidate, 0.02M, full fine-tuning | 309 KiB; 2.5 ms | 146 KiB; 1.5 ms | 1.9 ms |
+| candidate at tier M, 4.78M, 256 wide, 6 blocks | 19 179 KiB; 23.4 ms | 18 813 KiB; 11.6 ms | 12.1 ms |
+
+Latency is one window of 512 tokens on the CPU. Exports take 1 to 3 s here against 4 to 11 s on
+x86.
+
+**A campaign kept every kind of candidate under a manifest.** One campaign over the turbofan task
+in force (`d63f8e1b…`), one budget of 50 labels, one seed, six candidates, the three networks run
+on MPS through an order and the three classical ones on the `general` worker in compose:
+
+| Candidate | Measured form | Other forms | Deviation of the graph |
+|---|---|---|---|
+| `from_scratch` | `torch-state`, 18.3 MiB | `onnx`, 18.8 MiB | 1.03e-04 |
+| `full_fine_tuning` | `torch-state`, 18.3 MiB | `onnx`, 18.8 MiB | 1.19e-04 |
+| `boosted_trees_per_channel` | `xgboost-joblib`, 108 KiB | — | — |
+| `boosted_trees_spectral` | `xgboost-joblib`, 117 KiB | — | — |
+| `minirocket` | `minirocket-npz`, 255 KiB | — | — |
+| `patch_transformer` | `torch-patch-state`, 6.8 MiB | — | — |
+
+Every manifest names the corpus manifest the candidate was fitted to and reads back through
+the store; the announcement carries the six manifest checksums.
+
+**Conclusions.**
+
+1. Every constraint of the x86 leg holds on arm64: opset 20, the two symbolic axes, deviations
+   of the same order on state and answer, the fully padded window finite, opset 23 still failing.
+2. A candidate fitted on MPS exports once moved to the host and its graph answers within
+   `1.2e-04` of the run's own answers in the task's unit, a thousandth of the refusal threshold
+   of `0.125` (ADR-0040). The accelerator's arithmetic is not what the threshold has to guard.
+3. On this machine ONNX Runtime is about twice as slow as eager at tier M, where x86 had it at
+   1.6×; the ordering ADR-0007 recorded stands, and the reading still defers to the target
+   container.
+
+**Limitations.** Latency on an M1 Pro is not the target container's; the campaign ran at tier S
+with one seed, which is enough to exercise every path and nothing more.

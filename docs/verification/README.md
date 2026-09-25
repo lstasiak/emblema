@@ -19,7 +19,7 @@ kept as recorded.
 | [architecture-rules.md](architecture-rules.md) | Every import-linter contract fails on an injected violation, and the coverage gate honours its threshold. |
 | [compose.md](compose.md) | The local stack comes up with one command on linux/arm64 and passes its smoke test and S3 contract against Garage. |
 | [remote-bucket.md](remote-bucket.md) | The S3 contract and lifecycle bootstrap pass against Cloudflare R2 by configuration alone. |
-| [onnx-export.md](onnx-export.md) | The set encoder exports to ONNX with one dynamic token axis at opset 20, and so does the fitted candidate under every transfer mode, answering in the task's unit within 1.9e-05 of eager; ONNX Runtime is slower than TorchScript on the stand-in. |
+| [onnx-export.md](onnx-export.md) | The set encoder exports to ONNX with one dynamic token axis at opset 20, and so does the fitted candidate under every transfer mode, answering in the task's unit within 1.9e-05 of eager; ONNX Runtime is slower than TorchScript on the stand-in.; on arm64 the graph of a candidate fitted on MPS answers within 1.2e-04 of the run, a thousandth of the refusal threshold. |
 | [published-corpus.md](published-corpus.md) | A published corpus round-trips through the remote bucket byte for byte, and its checksums repeat across machines. |
 | [loader-throughput.md](loader-throughput.md) | Batching costs a negligible share of a training step on MPS; windows as Python objects are too large to hold a corpus. |
 | [training-loop.md](training-loop.md) | A run resumed mid-epoch ends in the uninterrupted run's weights: bit for bit on the host, within repeat spread on MPS. |
