@@ -91,6 +91,9 @@ PENALTIES = (0.001, 0.00464, 0.0215, 0.1, 0.464, 2.15, 10.0, 46.4, 215.0, 1000.0
 LIBRARY_DEPTH = 6
 DEPTH_AT = {50: LIBRARY_DEPTH, 200: 3}
 THREADS = 4
+# A column whose spread is this small a share of its largest value is constant up to rounding:
+# a gap between readings on a regular corpus is one number written a thousand times.
+CONSTANT_TOLERANCE = 1e-9
 RESAMPLES = 10_000
 TASK = TaskId(UUID(int=0))
 
@@ -526,12 +529,14 @@ def ridge(
     """A linear map with an intercept, its penalty chosen by leave-one-out error.
 
     Scaled but not centred, as the convolution baseline's ridge is: the intercept absorbs the
-    means. A column a ridge cannot read — one that is missing in a fitted row, or one that never
-    varies — is dropped; a value missing in a scored row is filled with the fitted column's mean,
-    which is the value that moves the answer least.
+    means. A column a ridge cannot read — one that is missing in a fitted row, or one that does
+    not vary beyond the rounding of its own values — is dropped; a value missing in a scored row
+    is filled with the fitted column's mean, which is the value that moves the answer least.
     """
     kept = ~np.isnan(rows).any(axis=0)
-    kept &= np.nanstd(np.where(kept, rows, 0.0), axis=0) > 0.0
+    present = np.where(kept, rows, 0.0)
+    spread = present.std(axis=0)
+    kept &= spread > CONSTANT_TOLERANCE * np.maximum(np.abs(present).max(axis=0), 1.0)
     fitted = rows[:, kept]
     scale = fitted.std(axis=0)
     means = fitted.mean(axis=0)

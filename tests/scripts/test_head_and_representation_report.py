@@ -162,7 +162,8 @@ def test_a_ridge_drops_what_it_cannot_read_and_fills_a_missing_scored_value() ->
     draws = np.random.default_rng(1)
     rows = draws.normal(size=(20, 4))
     rows[:, 1] = np.nan
-    rows[:, 2] = 1.0
+    # Constant up to the rounding of its own values, as a regular corpus's gap between readings is.
+    rows[:, 2] = 1.0 + draws.choice([0.0, 2e-16], size=20)
     targets = 3.0 * rows[:, 0] - rows[:, 3]
     scored = draws.normal(size=(5, 4))
     scored[0, 3] = np.nan
