@@ -58,7 +58,6 @@ class TorchPatchRuntime:
             raise InvalidScoredOutcomeError("there is no window to answer")
         corpus = ReadCorpus.every(self._blocks, (task,))[task.manifest]
         steps = plan.spec.steps_over(corpus.manifest.window_length)
-        plan.spec.patches_over(steps)
         started = time.perf_counter()
         scale = task.label_scheme().scale
         fitted = list(corpus.windows([labelled.window for labelled in sample.windows]))
@@ -129,4 +128,6 @@ class TorchPatchRuntime:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it trained and was given no store"
             )
-        return self._store.put(FittedPatchModel.of(plan, model, reading, target_scale).to_bytes())
+        return self._store.put(
+            FittedPatchModel.of(plan, model, reading=reading, target_scale=target_scale).to_bytes()
+        )

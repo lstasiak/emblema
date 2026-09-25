@@ -1,33 +1,15 @@
 import io
-import pickle
-import zipfile
 from dataclasses import dataclass
 from typing import Any, Self
 
 import torch
 
+from emblema.evaluation.adapters.torch.fitted_candidate import UNREADABLE_BYTES
 from emblema.evaluation.adapters.torch.grid_reading import GridReading
 from emblema.evaluation.adapters.torch.patch_transformer import PatchTransformer
-from emblema.evaluation.domain.exceptions import (
-    InvalidPatchModelSpecError,
-    UnreadableFittedCandidateError,
-)
+from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.patching.patch_plan import PatchPlan
-
-# What comes back from handing torch bytes it did not write, or a document missing what this
-# reads. The reasons differ and to a caller they are one thing: this artifact is not ours.
-UNREADABLE_BYTES = (
-    KeyError,
-    IndexError,
-    TypeError,
-    ValueError,
-    RuntimeError,
-    EOFError,
-    pickle.UnpicklingError,
-    zipfile.BadZipFile,
-    InvalidPatchModelSpecError,
-)
 
 
 @dataclass(frozen=True)
@@ -53,7 +35,12 @@ class FittedPatchModel:
 
     @classmethod
     def of(
-        cls, plan: PatchPlan, model: PatchTransformer, reading: GridReading, target_scale: float
+        cls,
+        plan: PatchPlan,
+        model: PatchTransformer,
+        *,
+        reading: GridReading,
+        target_scale: float,
     ) -> Self:
         """The model as it ended, its weights moved to the host before anything else is done."""
         return cls(
@@ -100,6 +87,9 @@ class FittedPatchModel:
     @classmethod
     def read(cls, content: bytes) -> Self:
         """The model those bytes hold, checked by building it.
+
+        A shape that does not stand up is refused as a value error, which is one of the ways
+        bytes turn out not to be ours.
 
         Raises:
             UnreadableFittedCandidateError: If the bytes are not a patch model of ours.
