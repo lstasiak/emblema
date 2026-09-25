@@ -106,7 +106,11 @@ Two findings shaped that run:
   was registered before its run, but each was read on the same 21 validation engines. A
   configuration kept because it did better there scores optimistically there. The single test-set
   run is what removes that bias.
-- **21 engines** bound every interval on the turbofan task.
+- **21 engines** bound every interval on the turbofan task. On synthetic data with a known answer
+  the percentile interval over 21 units covers about 92 % rather than 95 %, and its whole width
+  lies above a true zero about 5 % of the time rather than 2.5 %
+  (`docs/verification/verdict-statistics.md`). The confirmed endpoint sits far from that
+  boundary; a result near it would need a bias-corrected interval, registered before the run.
 - **One supervised task so far.** Transfer across corpora (leave-one-corpus-out, zero-shot) is not
   yet measured.
 - **Unequal tuning.** Baselines were tuned at every budget; the network arms only at 200. This
