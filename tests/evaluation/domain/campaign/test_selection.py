@@ -6,8 +6,11 @@ from typing import Any
 import pytest
 
 from emblema.evaluation.contracts.identifiers import CandidateRef
+from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
+from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
+from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.domain.exceptions import (
     InvalidCampaignDesignError,
     InvalidInnerHoldoutError,
@@ -138,3 +141,64 @@ def test_a_pairing_tuned_at_a_budget_the_grid_lacks_is_refused() -> None:
 
     with pytest.raises(InvalidCampaignDesignError, match="budget the grid lacks"):
         tuned_design(tuned=(elsewhere,))
+
+
+TAIL = CandidateRef("minirocket@grid_resolution=2")
+SHORTER = CandidateRef("minirocket@grid_resolution=1")
+LONGER = CandidateRef("minirocket@grid_resolution=4")
+SMOOTHED = CandidateRef("minirocket@grid_resolution=2,smoothing=1")
+
+
+def turned(ref: CandidateRef, **knobs: float) -> CampaignCandidate:
+    """A classical variant whose method states every knob, turned or not, as a catalogue does."""
+    return replace(baseline(ref), method=CandidateMethod.of(method="random_convolutions", **knobs))
+
+
+def around_the_tail(**errors: tuple[float, ...]) -> EvaluationCampaign:
+    named = {
+        "tail": TAIL,
+        "shorter": SHORTER,
+        "longer": LONGER,
+        "smoothed": SMOOTHED,
+    }
+    return selection(
+        errors={named[key]: value for key, value in errors.items()},
+        candidates=(
+            turned(TAIL, grid_resolution=2.0, smoothing=0.0),
+            turned(SHORTER, grid_resolution=1.0, smoothing=0.0),
+            turned(LONGER, grid_resolution=4.0, smoothing=0.0),
+            turned(SMOOTHED, grid_resolution=2.0, smoothing=1.0),
+        ),
+    )
+
+
+def test_a_selection_around_a_variant_breaks_ties_towards_that_variant() -> None:
+    within_noise = around_the_tail(
+        tail=(10.0, 11.0, 9.0),
+        shorter=(9.9, 10.9, 8.9),
+        longer=(9.8, 10.8, 8.8),
+        smoothed=(9.7, 10.7, 8.7),
+    )
+
+    assert within_noise.selected(ROCKET, AT_200) == TAIL
+
+
+def test_a_selection_around_a_variant_still_chooses_what_is_clearly_better() -> None:
+    clear = around_the_tail(
+        tail=(10.0, 10.2, 9.8),
+        shorter=(11.0, 11.2, 10.8),
+        longer=(6.0, 6.1, 5.9),
+        smoothed=(10.1, 10.3, 9.9),
+    )
+
+    assert clear.selected(ROCKET, AT_200) == LONGER
+
+
+def test_a_selection_that_names_no_setting_its_knobs_turn_around_is_not_read() -> None:
+    two_turned = selection(
+        errors={SHORTER: (10.0, 11.0, 9.0), LONGER: (9.9, 10.9, 8.9)},
+        candidates=(turned(SHORTER, grid_resolution=1.0), turned(LONGER, grid_resolution=4.0)),
+    )
+
+    with pytest.raises(SelectionNotReadableError, match="turned around"):
+        two_turned.selected(ROCKET, AT_200)
