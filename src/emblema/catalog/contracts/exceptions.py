@@ -25,3 +25,11 @@ class InvalidPublishedCorpusManifestError(CatalogContractError):
 
 class MalformedManifestError(CatalogContractError):
     """Bytes that are not a manifest this codec reads, or a manifest that breaks its own rules."""
+
+
+class InvalidObservedWindowError(CatalogContractError):
+    """A window of readings that breaks its own rules before it reaches the tokeniser."""
+
+
+class UntokenisableWindowError(CatalogContractError):
+    """A reading names a channel the corpus does not know, has not fitted, or of the other kind."""
