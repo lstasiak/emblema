@@ -5,7 +5,7 @@ validation side**: the frozen test side of every task is opened once, at the end
 comparison were registered before the run they judge ([preregistration](preregistration.md)).
 The evidence for each line is in [`docs/verification/`](verification/README.md).
 
-Last updated 2026-09-24.
+Last updated 2026-09-26.
 
 ## The claim
 
@@ -100,6 +100,32 @@ Two findings shaped that run:
   The first grid failed its endpoint on that corpus
   ([ADR-0034](adr/0034-the-turbofan-corpus-read-per-operating-condition.md)).
 
+### 5. The head cost most of the gap, and the pretraining margin at 200 labels shrinks with it
+
+Every network above pooled a window's states by their mean before a linear head. Read on frozen
+states ([note](verification/head-and-representation.md)), the mean is the largest identified loss
+against the trees: a linear head over the last fifth of the window sits within the trees' interval
+(14.73 against 13.94), the same head over the whole window 19 % behind. The last reading alone is
+not the task (21.6): remaining life is read from the movement within the window. The pretrained
+states beat an untrained encoder's everywhere.
+
+Under training, in one paired campaign at 200 labels, tier S, three seeds:
+
+| pooling | from scratch | frozen probe | full fine-tuning |
+| --- | --- | --- | --- |
+| mean | 18.72 | 19.75 | 15.84 |
+| tail 20 % | **14.96** | 16.83 | 15.44 |
+| attention | 18.86 | 19.29 | 16.24 |
+
+- The network trained from nothing under the tail lands 7 % behind the trees, interval across
+  zero; under the mean it was 26 % behind.
+- **Under the tail, full fine-tuning against from scratch is −3.3 %, interval [−1.93, +0.79].**
+  Part of the 12.3 % in section 1 was the mean handicapping the control more than the pretrained
+  arm. Three seeds and one budget cannot tell a 5 % advantage from none; the repeat of the curve
+  under the tail is where this is settled.
+- Attention pooling from a zero query does not help under this schedule; the frozen probe's head,
+  trained by the arms' schedule, stays about three cycles above a ridge on the same states.
+
 ## Limitations
 
 - **Validation only.** Every configuration choice (window, normalisation, corpus, backbone, peaks)
@@ -118,11 +144,14 @@ Two findings shaped that run:
 - **Unequal tiers.** Baselines ran at tier S on an M1; the network grid at tier M on an A100. The
   network from scratch drifts by up to 1.1 RMSE per seed between identical MPS runs.
 - Full fine-tuning's margin varies widely with the draw of labels (2.1–17.3 % per seed).
+- **The head of section 1.** The curve was measured with every arm pooling by the mean, which
+  section 5 shows handicapped the control most. The confirmed endpoint stands as registered; its
+  reading as a pretraining advantage is provisional until the curve is repeated under the tail.
 
 ## Next
 
-1. Repeat the comparison as one paired campaign with the baselines, the network arms tuned by the
-   same selection protocol, and diagnostics declared before the run (head capacity,
-   representation quality, how easy the task is).
+1. Repeat the curve as one paired campaign with the baselines, every arm pooling by the tail, the
+   share and the rate chosen per arm and budget by the same selection protocol, five seeds, the
+   configuration registered before the run.
 2. Measure transfer across corpora and to unseen sensor layouts.
 3. Open the frozen test side once.

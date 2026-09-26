@@ -181,3 +181,86 @@ encoder's in every pairing, under both fitters, at both budgets (+11.7 % to +26 
   ([`verdict-statistics.md`](verdict-statistics.md)).
 - The window here is 50 cycles at one reading per cycle; the best share of the tail is a fact
   about this corpus and is a knob, not a constant.
+
+## 2026-09-26 — M1 Pro, MPS, fp32: the pooling under training, campaign `cb5ed115…`
+
+**Question.** Does the pooling the frozen diagnostics singled out hold once the networks are
+trained? The control arm, full fine-tuning and the frozen probe, each under the mean, under the
+tail of 20 % and under a learnt attention, paired on the same 21 engines with the tuned trees.
+Declared in `campaigns/pooling-fd001.toml` (commit `61ed17e`) before the run. All numbers are
+**validation**, tier S.
+
+**Conditions.** Code `61ed17e`; corpus, task, backbone and schedule as in the sections above
+(30 epochs, at least 2,000 steps, batch 16, peak 1e-3, warm-up 0.1, cosine to 1 %); 200 labels,
+seeds 1–3; the trees at the variant selection `3856e705…` chose. Network cells on the host's MPS
+through an order run by `campaign_run` (27 cells, 22:44 to 04:15), the trees through an order of
+the general pool on the host (seconds). Attention starts from a zero query, so a run under it
+starts where a run under the mean starts.
+
+RMSE on the 21 validation engines, mean ± SD over 3 seeds; the trees per channel 13.94 ± 0.71.
+
+| pooling | from scratch | frozen probe | full fine-tuning |
+| --- | --- | --- | --- |
+| mean | 18.72 ± 0.28 | 19.75 ± 0.23 | 15.84 ± 0.40 |
+| tail 20 % | **14.96 ± 0.49** | 16.83 ± 0.36 | 15.44 ± 0.73 |
+| attention | 18.86 ± 0.68 | 19.29 ± 0.23 | 16.24 ± 0.30 |
+
+Seconds per cell: 970–1,150 for the trained arms, 12 for the probe under the mean and the tail,
+370 under attention (the encoder runs in the loop).
+
+**The campaign's verdict**, by the registered rules: the endpoint is confirmed. Full fine-tuning
+under the tail lowers the control's error by 17.4 % (18.72 → 15.45, interval [+2.07, +4.55],
+floor 0.37); five of the eight secondary comparisons are distinguishable after Holm.
+
+**Paired contrasts** beyond the design, the three seeds pooled, 10,000 resamples; reduction of
+the rival's error, positive when the candidate is better. No family correction over these.
+
+| candidate | rival | reduction | 95 % interval | p |
+| --- | --- | --- | --- | --- |
+| from scratch, tail | from scratch, mean | +20.1 % | [+2.14, +5.33] | 0.0002 |
+| full fine-tuning, tail | full fine-tuning, mean | +2.5 % | [−0.18, +0.93] | 0.18 |
+| frozen probe, tail | frozen probe, mean | +14.8 % | [+1.79, +4.02] | 0.0002 |
+| from scratch, attention | from scratch, mean | −0.8 % | [−0.48, +0.23] | 0.40 |
+| full fine-tuning, attention | full fine-tuning, mean | −2.5 % | [−0.75, −0.03] | 0.03 |
+| frozen probe, attention | frozen probe, mean | +2.4 % | [+0.17, +0.77] | 0.0006 |
+| **full fine-tuning, tail** | **from scratch, tail** | **−3.3 %** | **[−1.93, +0.79]** | **0.48** |
+| full fine-tuning, mean | from scratch, tail | −5.9 % | [−2.37, +0.43] | 0.21 |
+| from scratch, tail | trees per channel | −7.2 % | [−2.38, +0.51] | 0.18 |
+| full fine-tuning, tail | trees per channel | −10.8 % | [−3.13, +0.04] | 0.06 |
+| full fine-tuning, mean | trees per channel | −13.6 % | [−3.34, −0.32] | 0.02 |
+
+**Reproducibility.** The control under the mean scores 18.72 against 18.86 in campaign
+`ee69d456…` and 18.75 in `add35a93…`, within the drift of MPS between identical runs. The trees
+repeat to the hundredth.
+
+**Conclusions.**
+
+1. **The tail holds under training, and most for the network trained from nothing.** From
+   scratch under the tail lands at 14.96, 20 % below the same network under the mean, with
+   every seed under the tail more than three cycles below every seed under the mean, and within
+   the trees' interval (−7.2 %, [−2.38, +0.51]). The frozen diagnostics predicted the size
+   of this move (16.57 → 14.73 under a ridge) by another method.
+2. **Full fine-tuning gains little from the tail** (+2.5 %, interval across zero). A reading
+   consistent with the numbers, not a measurement: an encoder trained on the task can route the
+   end of the window through its own attention and partly repair the mean; a fresh encoder under
+   2,000 steps cannot.
+3. **Under the tail the advantage of pretraining at 200 labels is not distinguishable from
+   zero here.** Full fine-tuning under the tail against from scratch under the tail: −3.3 %,
+   [−1.93, +0.79]. The curve measured +12.3 % for this pair under the mean, at tier M with five
+   seeds. This is the absence of evidence at three seeds and one budget, not evidence of absence:
+   the interval spans ±9 % and the percentile interval over 21 engines runs short of its level.
+   Part of the curve's margin was the mean pooling handicapping the control more than the
+   pretrained arm. The repeat of the curve, every arm under the tail, five seeds, four budgets,
+   registered before it runs, is where this is settled.
+4. **Attention from a zero query does not help under this schedule**: within the noise for the
+   control and the probe, 2.5 % worse for fine-tuning. The tail gives for free what the query
+   would have to learn in 2,000 steps.
+5. **The probe's head, trained by the schedule, is far from the ridge on the same states**: 19.75
+   against 16.57 under the mean, 16.83 against 14.73 under the tail. A linear head under AdamW at
+   the arms' rate does not reach the closed-form optimum in this budget, so the probe arm has
+   understated what the representation carries in every campaign so far.
+
+**Limitations.** Three seeds, one budget, tier S on MPS, validation only. Eleven contrasts beyond
+the design without a family correction. The confirmed endpoint of this campaign compares the
+tail-headed arm against the mean-headed control and says nothing about pretraining on its own;
+conclusion 3 is the comparison that does, and it is underpowered by design.
