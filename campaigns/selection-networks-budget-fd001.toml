@@ -1,0 +1,44 @@
+# The same arms under the tail with twice the floor of optimiser steps, on the same held-out
+# tuning engines as campaigns/selection-networks-fd001.toml.
+#
+# What it is for: at 200 labels the schedule's floor of 2,000 steps, not its 30 epochs, is what a
+# run spends, and no cell of the first curve had converged. A budget is not a knob a variant may
+# turn — every network of a campaign spends the same one — so the question whether the arms are
+# short of steps is asked by a second selection declared under a doubled floor, read beside the
+# first on the same repeats of the same division of the tuning side. The worker that declares
+# and runs it is told EMBLEMA_WORKER__SCHEDULE__MIN_STEPS=4000; every other setting stays.
+#
+# The probe under the tail rides along because a family of comparisons needs a member; it costs
+# seconds and its head, not its budget, is what limits it.
+
+name = "selection-networks-budget-fd001"
+purpose = "selection"
+tier = "M"
+
+[selection]
+one_in = 5
+
+[candidates]
+competing = [
+    "from_scratch@pooling=tail,tail_share=0.2",
+    "full_fine_tuning@pooling=tail,tail_share=0.2",
+    "frozen_probe@pooling=tail,tail_share=0.2",
+]
+control = "from_scratch@pooling=tail,tail_share=0.2"
+endpoint = "full_fine_tuning@pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+seeds = [1, 2, 3]
+
+[rules]
+minimum_relative_reduction = 0.1
+floor_share = 0.02
+alpha = 0.05
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

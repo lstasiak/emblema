@@ -35,6 +35,7 @@ from emblema.evaluation.adapters.onnx.inference_graph import (
     InferenceGraph,
 )
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
+from emblema.evaluation.adapters.torch.mean_pooling import MeanPooling
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
@@ -89,7 +90,9 @@ def tier_candidate(name: ComputeTier) -> AdaptedBackbone:
     torch.manual_seed(SEED)
     architecture = architecture_of(ComputeTiers.load().profile(name))
     encoder = SetEncoder.for_vocabulary(architecture, vocabulary_size())
-    return AdaptedBackbone(encoder, RegressionHead(architecture.width, starting_at=0.0)).eval()
+    return AdaptedBackbone(
+        encoder, MeanPooling(), RegressionHead(architecture.width, starting_at=0.0)
+    ).eval()
 
 
 def export_at(candidate: AdaptedBackbone, opset: int) -> bytes:

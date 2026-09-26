@@ -32,6 +32,10 @@ from emblema.evaluation.domain.exceptions import (  # noqa: E402
     DivergedAdaptationError,
     LoraTargetNotFoundError,
 )
+from emblema.evaluation.domain.heads.head_pooling import (  # noqa: E402
+    HeadPooling,
+    PoolingScheme,
+)
 from emblema.evaluation.domain.labels.label_budget import LabelBudget  # noqa: E402
 from emblema.evaluation.domain.labels.label_sample import LabelSample  # noqa: E402
 from emblema.evaluation.domain.labels.remaining_life_scheme import (  # noqa: E402
@@ -53,6 +57,7 @@ from tests.evaluation.support import (  # noqa: E402
     task,
 )
 from tests.support.backbones import PRETRAINED_SEED, SmallBackbones  # noqa: E402
+from tests.support.encoders import SMALL  # noqa: E402
 from tests.support.published import CHANNELS, publish  # noqa: E402
 
 pytestmark = pytest.mark.ml
@@ -283,3 +288,34 @@ def test_a_sample_under_the_floor_of_steps_is_learnt_for_more_epochs(published: 
     outcome = adapt(published, stated)
 
     assert len(outcome.training_losses) == 3
+
+
+def test_under_the_frozen_probe_a_learnt_pooling_trains_and_the_backbone_still_keeps_every_value(
+    published: Published,
+) -> None:
+    attention = plan(
+        TransferMode.FROZEN_PROBE, pooling=HeadPooling(pooling=PoolingScheme.ATTENTION)
+    )
+
+    outcome = adapt(published, attention)
+
+    (received,) = published.backbones.built
+    before = pretrained_weights()
+    assert all(torch.equal(received.state_dict()[name], before[name]) for name in before)
+    # The head and the query: the query moves off zero only if the probe ran it in the loop.
+    assert outcome.trainable_parameters == SMALL.width + 1 + SMALL.width
+
+
+def test_a_tail_and_an_attention_pooling_each_answer_the_task(published: Published) -> None:
+    tail = plan(
+        TransferMode.FULL_FINE_TUNING,
+        pooling=HeadPooling(pooling=PoolingScheme.TAIL, tail_share=0.5),
+    )
+    attention = plan(
+        TransferMode.FROM_SCRATCH, pooling=HeadPooling(pooling=PoolingScheme.ATTENTION)
+    )
+
+    for stated in (tail, attention):
+        outcome = adapt(published, stated)
+        assert len(outcome.predictions) == len(VALIDATION)
+        assert outcome.plan.parameters()["pooling"] == str(stated.pooling.pooling)

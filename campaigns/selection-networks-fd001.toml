@@ -1,0 +1,60 @@
+# Which setting the two trained arms run at under the tail, chosen before the curve is repeated.
+#
+# What it is for: the pooling campaign (campaigns/pooling-fd001.toml) left the network trained
+# from nothing a cycle behind the tuned trees and the pretrained arm level with it, both under a
+# tail of 20 % chosen off frozen states, one peak rate for every arm and no regularisation. Before
+# the curve is repeated under the tail, this asks on held-out tuning engines — never on the
+# validation side — which share of the window, which rate and whether a weight decay each arm
+# wants, so that the repeat runs the arms as well as the baselines were run, and the selection it
+# runs at four budgets starts from a settled default rather than from a guess.
+#
+# Every knob is turned one way at a time around the pooling campaign's setting: the tail shorter
+# and longer, the rate a third and three times, a weight decay where there was none. The frozen
+# probe is left out: its head under the schedule is far from the closed-form ridge on the same
+# states, and that is a question about the probe, not about these knobs.
+
+name = "selection-networks-fd001"
+purpose = "selection"
+tier = "M"
+
+[selection]
+# One tuning engine in five held out in every repeat: sixteen of seventy-nine to score on.
+one_in = 5
+
+[candidates]
+competing = [
+    "from_scratch@pooling=tail,tail_share=0.2",
+    "from_scratch@pooling=tail,tail_share=0.1",
+    "from_scratch@pooling=tail,tail_share=0.5",
+    "from_scratch@learning_rate=0.000333,pooling=tail,tail_share=0.2",
+    "from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2",
+    "from_scratch@pooling=tail,tail_share=0.2,weight_decay=0.01",
+    "full_fine_tuning@pooling=tail,tail_share=0.2",
+    "full_fine_tuning@pooling=tail,tail_share=0.1",
+    "full_fine_tuning@pooling=tail,tail_share=0.5",
+    "full_fine_tuning@learning_rate=0.000333,pooling=tail,tail_share=0.2",
+    "full_fine_tuning@learning_rate=0.003,pooling=tail,tail_share=0.2",
+    "full_fine_tuning@pooling=tail,tail_share=0.2,weight_decay=0.01",
+]
+# A selection answers which variant, not whether a candidate beats another; the control and the
+# endpoint are named because every campaign names them, and read nothing here.
+control = "from_scratch@pooling=tail,tail_share=0.2"
+endpoint = "full_fine_tuning@pooling=tail,tail_share=0.2"
+
+[budgets]
+# The budget the diagnostics were read at and the curve's endpoint stands at.
+labels = ["200"]
+endpoint = "200"
+# Three repeats: each divides the tuning engines afresh, and the rule reads its spread from them.
+seeds = [1, 2, 3]
+
+[rules]
+minimum_relative_reduction = 0.1
+floor_share = 0.02
+alpha = 0.05
+secondary_family_size = 10
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

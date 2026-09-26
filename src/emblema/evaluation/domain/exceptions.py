@@ -69,6 +69,10 @@ class InvalidPatchModelSpecError(EvaluationError, ValueError):
     """A patch model has no patch, a stride past its patch, or a width its heads cannot split."""
 
 
+class InvalidHeadPoolingError(EvaluationError, ValueError):
+    """A pooling keeps a share of the window it cannot, or a share where it means nothing."""
+
+
 class UnsupportedClassicalMethodError(EvaluationError):
     """A runtime was handed a classical method it has no means of fitting."""
 
