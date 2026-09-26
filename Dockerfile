@@ -27,18 +27,22 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Optional dependencies this image carries, as named in pyproject.toml.
+# Optional dependencies this image carries, as named in pyproject.toml, space-separated where a
+# process needs more than one: the API answers a network through its graph and a classical
+# candidate through the baselines' own libraries, so its image carries `api baselines`.
 ARG EXTRAS=ml
 
 # The lock alone first: a change to the source then re-installs the project and nothing else.
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-install-project --extra "${EXTRAS}"
+    set -eu; extras=""; for extra in ${EXTRAS}; do extras="${extras} --extra ${extra}"; done; \
+    uv sync --locked --no-dev --no-install-project ${extras}
 
 COPY README.md LICENSE ./
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-editable --extra "${EXTRAS}"
+    set -eu; extras=""; for extra in ${EXTRAS}; do extras="${extras} --extra ${extra}"; done; \
+    uv sync --locked --no-dev --no-editable ${extras}
 
 
 FROM python:${PYTHON_VERSION}-slim AS runtime
@@ -57,6 +61,11 @@ RUN useradd --system --create-home --uid 10001 emblema \
 
 USER emblema
 WORKDIR /home/emblema
+
+# The migration tree beside the processes, so the stack migrates its database from the image it
+# runs: the schema a process expects and the migrations that produce it come from one commit.
+COPY alembic.ini ./
+COPY migrations ./migrations
 
 # The common case, stated so that the image says what it is for; whoever starts a process names
 # the module and the queue it serves, because which of them this image can run is decided by the

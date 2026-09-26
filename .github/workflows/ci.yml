@@ -91,11 +91,11 @@ jobs:
           } >> .env
       - name: Validate the compose file
         run: docker compose --profile workers --profile tests config --quiet
-      - name: Build the worker images
+      - name: Build the application images
         # The recipe every process of the application is deployed from, once per set of extras.
         # The test image shares its stages and differs only in what it installs, so it is left to
         # the machine that runs the suite in it.
-        run: docker compose --profile workers build worker-ml worker-general
+        run: docker compose --profile workers build api worker-ml worker-general
       - name: Bring the stack up
         run: docker compose up -d --wait --wait-timeout 300
       - name: Smoke test

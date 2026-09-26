@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test of the local stack after `docker compose up -d --wait`: each service does the one
-# thing the platform needs from it. Stops at the first failure. Needs curl and docker compose.
+# thing the platform needs from it, and the API answers over them. Stops at the first failure.
+# Needs curl and docker compose.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -14,6 +15,7 @@ fi
 # Addressed by IPv4 literal, not `localhost`: compose publishes the port on 127.0.0.1 only, while
 # `localhost` reaches ::1 first. On macOS that socket belongs to AirPlay Receiver, which answers 403.
 MLFLOW_URL=${MLFLOW_URL:-http://127.0.0.1:${MLFLOW_PORT:-5000}}
+API_URL=${API_URL:-http://127.0.0.1:${EMBLEMA_API__PORT:?EMBLEMA_API__PORT is required (copy env.example to .env)}}
 BUCKET=${EMBLEMA_ARTIFACT_STORE__BUCKET:-emblema}
 PG_USER=${EMBLEMA_DATABASE__USER:?EMBLEMA_DATABASE__USER is required (copy env.example to .env)}
 PG_DB=${EMBLEMA_DATABASE__NAME:?EMBLEMA_DATABASE__NAME is required (copy env.example to .env)}
@@ -78,4 +80,16 @@ curl -fsS "${MLFLOW_URL}/api/2.0/mlflow/runs/get?run_id=${run}" \
 [[ $(curl -fsS "${MLFLOW_URL}/api/2.0/mlflow-artifacts/artifacts/${experiment}/${run}/artifacts/smoke.txt") == "smoke" ]] \
   || fail "artifact not readable back from run ${run}"
 
-echo "OK: postgres, broker, bucket and mlflow are ready"
+echo "api: alive, ready against the stack, described, and answering a list"
+[[ $(curl -fsS "${API_URL}/health") == '{"status":"ok"}' ]] || fail "the API does not report up"
+# Readiness reaches the database and the bucket from inside the network: a probe that passes
+# here says the process was told where they are, not only that it started.
+curl -fsS "${API_URL}/ready" | grep -q '"status":"ready"' || fail "the API is not ready: $(curl -sS "${API_URL}/ready")"
+curl -fsS "${API_URL}/openapi.json" | grep -q '/served-models/{served_model_id}/predictions' \
+  || fail "the schema does not describe the prediction route"
+curl -fsS "${API_URL}/served-models" | grep -q '"items":' || fail "the API does not list served models"
+# A refusal answers as a problem document, whatever was asked.
+[[ $(curl -sS -o /dev/null -w '%{content_type}' "${API_URL}/served-models/not-a-uuid") == "application/problem+json" ]] \
+  || fail "a refusal is not a problem document"
+
+echo "OK: postgres, broker, bucket, mlflow and the api are ready"
