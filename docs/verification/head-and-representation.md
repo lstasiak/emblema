@@ -264,3 +264,30 @@ repeat to the hundredth.
 the design without a family correction. The confirmed endpoint of this campaign compares the
 tail-headed arm against the mean-headed control and says nothing about pretraining on its own;
 conclusion 3 is the comparison that does, and it is underpowered by design.
+
+## 2026-09-26 — declared before the run: the pilot selection of the trained arms' knobs
+
+**Question.** Under the tail, the arm trained from nothing sits a cycle behind the trees and
+full fine-tuning level with it, both under one peak rate, no weight decay and a share of the
+window chosen off frozen states. How much of that is the knobs, and are the arms short of
+steps? Asked on held-out tuning engines, never on the validation side, so that the repeat of the
+curve starts from a settled default.
+
+**Design.** Two selection campaigns, declared in `campaigns/selection-networks-fd001.toml` and
+`campaigns/selection-networks-budget-fd001.toml` and registered in `docs/preregistration.md`
+(2026-09-26). The first turns one knob at a time around the pooling campaign's setting for the
+arm from nothing and for full fine-tuning: the tail's share (0.1, 0.2, 0.5), the peak rate (a
+third, once, three times 1e-3) and a weight decay (0, 0.01); 12 variants, 200 labels, three
+repeats of a division that holds 16 of the 79 tuning engines out, the one-standard-error rule with
+the Nadeau–Bengio correction as for the baselines. The second runs the two arms and the probe
+under the tail with the floor of steps doubled to 4,000, on the same repeats. Both through orders
+run on a rented accelerator and accepted back.
+
+**Predictions.** For the arm from nothing, a share above 0.2 and a rate below the peak are chosen;
+for full fine-tuning the setting in force survives the one-standard-error rule. The doubled
+budget lowers the arm from nothing by more than the practical floor and full fine-tuning by less.
+
+**Reading.** Whatever is chosen is the default the repeated curve runs the arms under, and its
+selection at four budgets searches around it. A budget effect above the floor for the arm from
+nothing means the curve's compute budget is revisited before the repeat, as a configuration
+change registered in its own right; below the floor the budget stands.
