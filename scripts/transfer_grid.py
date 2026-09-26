@@ -35,6 +35,8 @@ PLAN_COLUMNS = (
     "weight_decay",
     "warmup_fraction",
     "final_lr_fraction",
+    "pooling",
+    "tail_share",
     "lora_rank",
     "lora_alpha",
     "lora_dropout",

@@ -6,11 +6,13 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from emblema.evaluation.adapters.torch.attention_pooling import AttentionPooling  # noqa: E402
 from emblema.evaluation.adapters.torch.patch_transformer import PatchTransformer  # noqa: E402
 from emblema.evaluation.adapters.torch.scheduled_training import (  # noqa: E402
     ScheduledTraining,
 )
 from emblema.evaluation.domain.exceptions import InvalidPatchModelSpecError  # noqa: E402
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme  # noqa: E402
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec  # noqa: E402
 from tests.evaluation.support import adaptation_schedule, patch_spec  # noqa: E402
 
@@ -97,3 +99,43 @@ def test_a_small_batch_is_learnt_by_the_loop_every_network_here_learns_by() -> N
     )
 
     assert losses[-1] < losses[0] / 10
+
+
+@pytest.mark.parametrize(
+    "pooling",
+    [
+        HeadPooling(pooling=PoolingScheme.TAIL, tail_share=0.5),
+        HeadPooling(pooling=PoolingScheme.ATTENTION),
+    ],
+)
+def test_a_turned_pooling_reads_each_channels_patches_and_answers_one_number(
+    pooling: HeadPooling,
+) -> None:
+    turned = PatchTransformer(patch_spec(), channels=3, steps=10, starting_at=0.5, pooling=pooling)
+    values = torch.randn(4, 3, 10)
+
+    assert turned(values, torch.ones_like(values)).shape == (4,)
+    assert isinstance(turned.pooling, AttentionPooling) == pooling.pooling.learns_weights
+
+
+def test_a_patch_is_placed_in_the_window_by_the_step_it_starts_at() -> None:
+    # Patches of four every two steps over ten steps: starts at 0, 2, 4, 6 and 8, the last one
+    # reaching into the padded stride.
+    assert model().patch_times.tolist() == pytest.approx([0.0, 0.2, 0.4, 0.6, 0.8])
+
+
+def test_the_tail_of_a_row_is_the_last_patches_alone() -> None:
+    torch.manual_seed(2)
+    whole = PatchTransformer(patch_spec(), channels=1, steps=10, starting_at=0.0)
+    torch.manual_seed(2)
+    tail = PatchTransformer(
+        patch_spec(),
+        channels=1,
+        steps=10,
+        starting_at=0.0,
+        pooling=HeadPooling(pooling=PoolingScheme.TAIL, tail_share=0.3),
+    )
+    values = torch.randn(1, 1, 10)
+
+    with torch.no_grad():
+        assert whole(values, torch.ones_like(values)) != tail(values, torch.ones_like(values))

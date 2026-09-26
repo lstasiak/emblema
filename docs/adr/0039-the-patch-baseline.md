@@ -1,6 +1,6 @@
 # ADR-0039: The patch baseline — a network from nothing on the grid, behind a port of its own, on the arms' budget
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-25
 
 ## Context
@@ -68,3 +68,10 @@ budget it is held to, and how PatchTST's defaults fit a remaining-life task.
   backbone.
 - **Shape from `compute_tiers.toml`.** Rejected: the profile describes the set encoder, and a
   catalogue does not know a campaign's tier.
+
+## Amendments
+
+- **2026-09-25 — the knobs the decision left open.** The shape's fields are turned by name like
+  the schedule's knobs, and the pooling of each channel's patches is a knob shared with the arms
+  ([ADR-0041](0041-the-pooling-of-the-head-as-a-knob.md)). Neither touches the budget. Status
+  moves to accepted.

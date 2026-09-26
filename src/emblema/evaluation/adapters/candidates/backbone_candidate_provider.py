@@ -47,6 +47,7 @@ class BackboneCandidateProvider:
                     schedule=arm.schedule,
                     lora=arm.lora,
                     seed=cell.seed,
+                    pooling=arm.pooling,
                 ),
                 budget=cell.budget,
                 sample_seed=cell.seed,

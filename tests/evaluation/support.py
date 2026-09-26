@@ -350,21 +350,27 @@ def baseline(ref: CandidateRef, resolution: float = 1.0) -> CampaignCandidate:
     )
 
 
-def selection(errors: dict[CandidateRef, tuple[float, ...]] | None = None) -> EvaluationCampaign:
+def selection(
+    errors: dict[CandidateRef, tuple[float, ...]] | None = None,
+    candidates: Sequence[CampaignCandidate] = (),
+) -> EvaluationCampaign:
     """A finished selection between the default grid and a finer one, three repeats each.
 
-    Without ``errors`` the finer grid errs less by far more than the spread of the repeats.
+    Without ``errors`` the finer grid errs less by far more than the spread of the repeats;
+    ``candidates`` replaces the two grids with variants of a test's own, the first as control
+    and the last as endpoint, each with its errors under ``errors``.
     """
     stated = errors or {ROCKET: (10.0, 10.2, 9.8), FINER: (6.0, 6.1, 5.9)}
+    competing = tuple(candidates) or (baseline(ROCKET), baseline(FINER, 2.0))
     grid = EvaluationCampaign.designed(
         campaign_id=SELECTED_BY,
         task=TASK,
         purpose=RunPurpose.SELECTION,
         tier=ComputeTier.S,
         design=CampaignDesign(
-            candidates=(baseline(ROCKET), baseline(FINER, 2.0)),
-            control=ROCKET,
-            endpoint=FINER,
+            candidates=competing,
+            control=competing[0].ref,
+            endpoint=competing[-1].ref,
             budgets=BUDGETS,
             endpoint_budget=LabelBudget.of(200),
             seeds=(1, 2, 3),

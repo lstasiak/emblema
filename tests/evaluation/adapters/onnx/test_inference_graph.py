@@ -23,10 +23,12 @@ from emblema.evaluation.domain.exceptions import (
     UnexportableCandidateError,
     UnreadableInferenceGraphError,
 )
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.tokens import N_FEATURES
 from tests.evaluation.adapters.onnx.candidates import (
+    POOLINGS,
     TARGET_SCALE,
     Exported,
     adapted,
@@ -117,6 +119,17 @@ def test_under_every_mode_a_window_over_the_tasks_grown_channels_matches_pytorch
     assert_matches_eager(exported(mode), over_grown_channels(random_batch(2, 64, seed=9)))
 
 
+@pytest.mark.parametrize("pooling", POOLINGS, ids=[str(p.pooling) for p in POOLINGS])
+def test_under_every_pooling_both_outputs_match_pytorch_over_padded_windows(
+    pooling: HeadPooling,
+) -> None:
+    # The tail reads the times and attention the states; both have to survive the export with
+    # the padding weighted out, as the mean does.
+    assert_matches_eager(
+        exported(TransferMode.LORA, pooling), random_batch(3, 41, seed=41, padding=17)
+    )
+
+
 def test_outputs_match_pytorch_for_a_batch_of_partly_padded_windows(lora: Exported) -> None:
     assert_matches_eager(lora, random_batch(3, 41, seed=41, padding=17))
 
@@ -165,7 +178,7 @@ class Untraceable(AdaptedBackbone):
 
 def test_a_candidate_the_exporter_cannot_trace_is_refused_with_a_domain_error() -> None:
     source = adapted(TransferMode.FULL_FINE_TUNING)
-    candidate = Untraceable(source.encoder, source.head)
+    candidate = Untraceable(source.encoder, source.pooling, source.head)
 
     with pytest.raises(UnexportableCandidateError, match="does not export"):
         InferenceGraph.exported(candidate, target_scale=TARGET_SCALE)

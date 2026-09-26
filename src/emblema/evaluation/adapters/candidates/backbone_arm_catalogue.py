@@ -12,15 +12,14 @@ from emblema.evaluation.domain.exceptions import (
     UnknownCandidateError,
     UnknownKnobError,
 )
-from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.tuning.candidate_variant import CandidateVariant
 
 
 class BackboneArmCatalogue:
     """What the arms of one backbone are, without the means of running any of them.
 
-    Every arm is declared under its own schedule, and a variant of an arm is the arm with a
-    knob of that schedule turned, read out of its name alone, so the process that declares a
+    Every arm is declared under its own schedule and pooling, and a variant of an arm is the arm
+    with a knob of either turned, read out of its name alone, so the process that declares a
     campaign and the one that runs its cells read the same variant out of the same text. The
     knobs leave the compute budget alone, which is how the campaign's promise that its neural
     candidates spend the same budget survives tuning: a variant has its base's budget by
@@ -64,10 +63,10 @@ class BackboneArmCatalogue:
     @staticmethod
     def _turned(arm: BackboneArm, variant: CandidateVariant) -> BackboneArm:
         try:
-            schedule = variant.applied_to(arm.schedule, AdaptationSchedule.tuned)
+            turned = variant.applied_to(arm, BackboneArm.tuned)
         except (UnknownKnobError, InvalidCandidateVariantError) as error:
             raise UnknownCandidateError(f"{variant.ref} names no variant: {error}") from error
-        return replace(arm, ref=variant.ref, schedule=schedule)
+        return replace(turned, ref=variant.ref)
 
     @staticmethod
     def _method(arm: BackboneArm) -> CandidateMethod:
@@ -84,6 +83,7 @@ class BackboneArmCatalogue:
             "weight_decay": arm.schedule.weight_decay,
             "warmup_fraction": arm.schedule.warmup_fraction,
             "final_lr_fraction": arm.schedule.final_lr_fraction,
+            **arm.pooling.parameters(),
         }
         if arm.backbone is None:
             stated["architecture_of"] = f"{arm.architecture.key}@{arm.architecture.checksum}"

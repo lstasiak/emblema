@@ -1,0 +1,58 @@
+# The pooling of the head as a knob, confirmed under training, over the turbofans.
+#
+# What it is for: with the backbone frozen, a linear head over the mean of the last fifth of the
+# window sits within the tuned trees' interval, while the same head over the mean of the whole
+# window sits 19 % behind them (docs/verification/head-and-representation.md). That was read off
+# frozen states and ridge fits. This campaign asks the same question of the networks as they are
+# trained: the control arm, full fine-tuning and the frozen probe, each under the mean, under the
+# tail and under a learnt attention, paired on the same engines with the trees at the variant
+# their selection chose. The endpoint is the arm the curve's endpoint is made of, under the
+# pooling the diagnostics singled out.
+#
+# One budget, the one the diagnostics were read at. Committed before the campaign runs, for the
+# reason every campaign file is.
+
+name = "pooling-fd001"
+purpose = "tuning"
+tier = "S"
+
+[candidates]
+competing = [
+    "from_scratch",
+    "from_scratch@pooling=tail,tail_share=0.2",
+    "from_scratch@pooling=attention",
+    "frozen_probe",
+    "frozen_probe@pooling=tail,tail_share=0.2",
+    "frozen_probe@pooling=attention",
+    "full_fine_tuning",
+    "full_fine_tuning@pooling=tail,tail_share=0.2",
+    "full_fine_tuning@pooling=attention",
+    "boosted_trees_per_channel",
+]
+control = "from_scratch"
+endpoint = "full_fine_tuning@pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+seeds = [1, 2, 3]
+
+[rules]
+minimum_relative_reduction = 0.1
+floor_share = 0.02
+alpha = 0.05
+# Eight contenders beside the control and the endpoint, at one budget.
+secondary_family_size = 8
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
+
+# The variant the trees run at, as the selection declared in
+# campaigns/selection-classical-fd001.toml chose it by its rule.
+[[tuned]]
+candidate = "boosted_trees_per_channel"
+budget = "200"
+variant = "boosted_trees_per_channel@max_depth=3"
+selected_by = "3856e705-95c9-4a8b-bbf8-bc1fb0187f0b"

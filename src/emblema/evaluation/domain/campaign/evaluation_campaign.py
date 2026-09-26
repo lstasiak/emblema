@@ -1,8 +1,10 @@
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from math import sqrt
 from typing import Self
 
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
+from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
 from emblema.evaluation.domain.campaign.campaign_verdict import CampaignVerdict
@@ -200,12 +202,14 @@ class EvaluationCampaign:
         """The variant of ``candidate`` this selection chooses at ``budget``, by its rule.
 
         The variants are the candidates of the grid whose name is ``candidate`` with knobs
-        turned, the base included; each is read by its error in every repeat, and the rule of
-        one standard error chooses among them.
+        turned, the setting they are turned around included; each is read by its error in every
+        repeat, and the rule of one standard error chooses among them, ties broken towards that
+        setting.
 
         Raises:
-            SelectionNotReadableError: If this is not a finished selection, or it holds no
-                variant of that candidate at that budget besides the base.
+            SelectionNotReadableError: If this is not a finished selection, it holds fewer than
+                two variants of that candidate at that budget, or no one variant is the setting
+                the others are turned around.
         """
         holdout = self.design.inner_holdout
         if self.purpose is not RunPurpose.SELECTION or holdout is None or not self.is_finished:
@@ -217,13 +221,12 @@ class EvaluationCampaign:
             for named in self.design.candidates
             if CandidateVariant.parse(named.ref).base == candidate
         ]
-        defaults = [named for named in variants if named.ref == candidate]
-        if not defaults or len(variants) < 2 or budget not in self.design.budgets:
+        if len(variants) < 2 or budget not in self.design.budgets:
             raise SelectionNotReadableError(
                 f"campaign {self.campaign_id} holds no choice between {candidate} and a variant "
                 f"of it at {budget}"
             )
-        default = defaults[0].method
+        default = self._turned_around(candidate, variants).method
         return OneStandardErrorRule().choose(
             errors={
                 named.ref: [result.rmse for result in self.results_of(named.ref, budget)]
@@ -232,6 +235,35 @@ class EvaluationCampaign:
             closeness={named.ref: named.method.departure_from(default) for named in variants},
             test_to_train=holdout.test_to_train,
         )
+
+    def _turned_around(
+        self, candidate: CandidateRef, variants: Sequence[CampaignCandidate]
+    ) -> CampaignCandidate:
+        """The variant the others turn their knobs around, whose setting a tie is broken towards.
+
+        The candidate under its bare name when the selection holds it. A selection declared
+        around a setting that is itself a variant — the arms under the tail of the window —
+        holds no bare candidate; there it is the one variant the others depart from by the
+        fewest knobs in all, which under knobs turned one at a time is the setting they were
+        turned from.
+
+        Raises:
+            SelectionNotReadableError: If no one variant is turned around.
+        """
+        for named in variants:
+            if named.ref == candidate:
+                return named
+        knobs_away = {
+            named.ref: sum(other.method.departure_from(named.method)[0] for other in variants)
+            for named in variants
+        }
+        nearest, next_nearest = sorted(knobs_away.values())[:2]
+        if nearest == next_nearest:
+            raise SelectionNotReadableError(
+                f"campaign {self.campaign_id} does not say which variant of {candidate} its "
+                "knobs are turned around"
+            )
+        return next(named for named in variants if knobs_away[named.ref] == nearest)
 
     def record(self, result: CellResult) -> Self:
         """The campaign with one more cell run.

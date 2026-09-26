@@ -15,6 +15,7 @@ import torch
 
 from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from tests.evaluation.support import plan
@@ -26,11 +27,21 @@ VOCABULARY = VOCABULARY_SIZE + GROWN_CHANNELS
 TARGET_SCALE = 125.0
 
 
-def adapted(mode: TransferMode, *, seed: int = 1) -> AdaptedBackbone:
+POOLINGS = (
+    HeadPooling.mean(),
+    HeadPooling(pooling=PoolingScheme.TAIL, tail_share=0.2),
+    HeadPooling(pooling=PoolingScheme.ATTENTION),
+)
+
+
+def adapted(
+    mode: TransferMode, *, seed: int = 1, pooling: HeadPooling | None = None
+) -> AdaptedBackbone:
     """A candidate under ``mode`` as a short run might leave it, in evaluation mode on the host."""
     torch.manual_seed(seed)
+    stated = plan(mode) if pooling is None else plan(mode, pooling=pooling)
     candidate = AdaptedBackbone.under(
-        plan(mode), SmallBackbones(), vocabulary_size=VOCABULARY, starting_at=0.5
+        stated, SmallBackbones(), vocabulary_size=VOCABULARY, starting_at=0.5
     )
     with torch.no_grad():
         for parameter in candidate.trainable_parameters():
@@ -59,9 +70,9 @@ class Exported:
 
 
 @cache
-def exported(mode: TransferMode) -> Exported:
-    """Export once per mode and process: it takes seconds, and the result is deterministic."""
-    candidate = adapted(mode)
+def exported(mode: TransferMode, pooling: HeadPooling | None = None) -> Exported:
+    """Export once per mode, pooling and process: it takes seconds, and is deterministic."""
+    candidate = adapted(mode, pooling=pooling)
     return Exported(candidate, InferenceGraph.exported(candidate, target_scale=TARGET_SCALE))
 
 

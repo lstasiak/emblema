@@ -1,3 +1,6 @@
+from dataclasses import dataclass, replace
+from typing import Self
+
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
@@ -8,10 +11,32 @@ from emblema.evaluation.domain.exceptions import (
     UnknownCandidateError,
     UnknownKnobError,
 )
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.patching.patch_plan import PatchPlan
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.tuning.candidate_variant import CandidateVariant
+
+
+@dataclass(frozen=True, kw_only=True)
+class _PatchModel:
+    """What the patch model is set to: its shape, its schedule and its pooling, each turnable."""
+
+    spec: PatchModelSpec
+    schedule: AdaptationSchedule
+    pooling: HeadPooling
+
+    def tuned(self, knob: str, value: str) -> Self:
+        """This setting with ``knob`` turned, on whichever of the three has it.
+
+        Raises:
+            UnknownKnobError: If none of them has such a knob, or it cannot take that value.
+        """
+        if knob in HeadPooling.KNOBS:
+            return replace(self, pooling=self.pooling.tuned(knob, value))
+        if knob in PatchModelSpec.KNOBS:
+            return replace(self, spec=self.spec.tuned(knob, value))
+        return replace(self, schedule=self.schedule.tuned(knob, value))
 
 
 class PatchModelCatalogue:
@@ -20,31 +45,40 @@ class PatchModelCatalogue:
     A network, so it is held to the compute budget the adapted arms share, and it learns under
     their schedule: one schedule declared, one run under, and the budgets equal because they are
     derived from it the same way. A variant of the model is the model under a turned schedule,
-    the same knobs the arms turn, so every network of a campaign is tuned by one protocol; the
-    knobs of its shape are not turned here (ADR-0039). The shape and the schedule it was set to
-    travel with the candidate, so a campaign stored a month ago still says what it compared.
+    the same knobs the arms turn, under a turned pooling, or in a turned shape — none of which
+    touches the budget, which is the schedule's epochs, floor of steps and batch alone. The
+    shape, the schedule and the pooling it was set to travel with the candidate, so a campaign
+    stored a month ago still says what it compared.
     """
 
     def __init__(
-        self, ref: CandidateRef, spec: PatchModelSpec, schedule: AdaptationSchedule
+        self,
+        ref: CandidateRef,
+        spec: PatchModelSpec,
+        schedule: AdaptationSchedule,
+        pooling: HeadPooling | None = None,
     ) -> None:
         self._ref = ref
-        self._spec = spec
-        self._schedule = schedule
+        self._model = _PatchModel(
+            spec=spec,
+            schedule=schedule,
+            pooling=HeadPooling.mean() if pooling is None else pooling,
+        )
 
     def describe(self, candidate: CandidateRef) -> CampaignCandidate:
-        schedule = self.schedule_of(candidate)
+        model = self._model_of(candidate)
         return CampaignCandidate(
             ref=candidate,
             kind=CandidateKind.NEURAL,
             starts_from=None,
-            budget=ComputeBudget.of(schedule),
+            budget=ComputeBudget.of(model.schedule),
             method=CandidateMethod.of(
-                **self._spec.parameters(),
-                learning_rate=schedule.learning_rate,
-                weight_decay=schedule.weight_decay,
-                warmup_fraction=schedule.warmup_fraction,
-                final_lr_fraction=schedule.final_lr_fraction,
+                **model.spec.parameters(),
+                learning_rate=model.schedule.learning_rate,
+                weight_decay=model.schedule.weight_decay,
+                warmup_fraction=model.schedule.warmup_fraction,
+                final_lr_fraction=model.schedule.final_lr_fraction,
+                **model.pooling.parameters(),
             ),
         )
 
@@ -54,7 +88,8 @@ class PatchModelCatalogue:
         Raises:
             UnknownCandidateError: If this catalogue holds no model of that name.
         """
-        return PatchPlan(spec=self._spec, schedule=self.schedule_of(candidate), seed=seed)
+        model = self._model_of(candidate)
+        return PatchPlan(spec=model.spec, schedule=model.schedule, seed=seed, pooling=model.pooling)
 
     def schedule_of(self, candidate: CandidateRef) -> AdaptationSchedule:
         """The schedule the model the campaign calls ``candidate`` learns under.
@@ -63,6 +98,9 @@ class PatchModelCatalogue:
             UnknownCandidateError: If this catalogue holds no model of that name, the name is not
                 the model and its knobs in name order, or a knob cannot be turned so.
         """
+        return self._model_of(candidate).schedule
+
+    def _model_of(self, candidate: CandidateRef) -> _PatchModel:
         try:
             variant = CandidateVariant.parse(candidate)
         except InvalidCandidateVariantError as error:
@@ -72,6 +110,6 @@ class PatchModelCatalogue:
                 f"this catalogue holds the patch model {self._ref}, not {variant.base}"
             )
         try:
-            return variant.applied_to(self._schedule, AdaptationSchedule.tuned)
+            return variant.applied_to(self._model, _PatchModel.tuned)
         except (UnknownKnobError, InvalidCandidateVariantError) as error:
             raise UnknownCandidateError(f"{candidate} names no variant: {error}") from error

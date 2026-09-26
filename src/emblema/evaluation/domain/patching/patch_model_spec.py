@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from math import ceil, isfinite
+from typing import ClassVar, Self
 
-from emblema.evaluation.domain.exceptions import InvalidPatchModelSpecError
+from emblema.evaluation.domain.exceptions import InvalidPatchModelSpecError, UnknownKnobError
+from emblema.evaluation.domain.tuning.knob import turned
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -41,6 +43,19 @@ class PatchModelSpec:
     dropout: float
     grid_resolution: float
 
+    # Every field is a knob: none of them touches the compute budget, which is the schedule's,
+    # and a selection that may turn the rate but not the depth would be tuning half a network.
+    KNOBS: ClassVar[tuple[str, ...]] = (
+        "patch_length",
+        "stride",
+        "width",
+        "heads",
+        "layers",
+        "feedforward_width",
+        "dropout",
+        "grid_resolution",
+    )
+
     def __post_init__(self) -> None:
         for label, count in (
             ("patch_length", self.patch_length),
@@ -66,6 +81,16 @@ class PatchModelSpec:
             raise InvalidPatchModelSpecError(
                 f"grid_resolution must be positive and finite, got {self.grid_resolution}"
             )
+
+    def tuned(self, knob: str, value: str) -> Self:
+        """This shape with ``knob`` turned to ``value``.
+
+        Raises:
+            UnknownKnobError: If the shape has no such knob, or it cannot take that value.
+        """
+        if knob not in self.KNOBS:
+            raise UnknownKnobError(f"a patch model has no knob {knob!r}; it turns {self.KNOBS}")
+        return turned(self, knob, value)
 
     def steps_over(self, window_length: float) -> int:
         """How many steps a window of ``window_length`` units of time is laid on."""

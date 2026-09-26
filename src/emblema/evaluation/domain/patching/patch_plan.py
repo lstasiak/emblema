@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 
@@ -17,11 +18,14 @@ class PatchPlan:
         spec: How a window is read and how large the model is.
         schedule: How long the task is learnt, in how large a step, under what decay.
         seed: Seed of everything the run draws: the weights, dropout, the order of windows.
+        pooling: How each channel's patch states become the one state the head reads for it;
+            the mean over the patches unless a variant turns it.
     """
 
     spec: PatchModelSpec
     schedule: AdaptationSchedule
     seed: int
+    pooling: HeadPooling = field(default_factory=HeadPooling.mean)
 
     def parameters(self) -> dict[str, str | int | float]:
         """The plan flattened to scalars, in a fixed order, for whoever records a run.
@@ -39,4 +43,5 @@ class PatchPlan:
             "weight_decay": float(self.schedule.weight_decay),
             "warmup_fraction": float(self.schedule.warmup_fraction),
             "final_lr_fraction": float(self.schedule.final_lr_fraction),
+            **self.pooling.parameters(),
         }

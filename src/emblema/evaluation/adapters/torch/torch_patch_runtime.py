@@ -75,6 +75,7 @@ class TorchPatchRuntime:
             channels=len(reading.held),
             steps=steps,
             starting_at=sample.mean_target / scale,
+            pooling=plan.pooling,
         ).to(self._device)
         ScheduledTraining(plan.schedule, plan.seed).losses(
             model,

@@ -12,6 +12,7 @@ torch = pytest.importorskip("torch")
 
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate  # noqa: E402
+from emblema.evaluation.adapters.torch.mean_pooling import MeanPooling  # noqa: E402
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead  # noqa: E402
 from emblema.evaluation.domain.exceptions import (  # noqa: E402
     UnreadableFittedCandidateError,
@@ -29,7 +30,7 @@ SCALE = 125.0
 def candidate() -> AdaptedBackbone:
     torch.manual_seed(1)
     encoder = SetEncoder.for_vocabulary(TINY, CHANNELS)
-    return AdaptedBackbone(encoder, RegressionHead(TINY.width, starting_at=0.5))
+    return AdaptedBackbone(encoder, MeanPooling(), RegressionHead(TINY.width, starting_at=0.5))
 
 
 def fitted() -> FittedCandidate:

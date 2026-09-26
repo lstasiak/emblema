@@ -8,6 +8,7 @@ from emblema.evaluation.adapters.torch.fitted_candidate import UNREADABLE_BYTES
 from emblema.evaluation.adapters.torch.grid_reading import GridReading
 from emblema.evaluation.adapters.torch.patch_transformer import PatchTransformer
 from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.patching.patch_plan import PatchPlan
 
@@ -67,8 +68,17 @@ class FittedPatchModel:
             dropout=float(stated["dropout"]),
             grid_resolution=float(stated["grid_resolution"]),
         )
+        # A model kept before the head had a pooling knob pooled by the mean.
+        pooling = HeadPooling(
+            pooling=PoolingScheme(str(stated.get("pooling", PoolingScheme.MEAN))),
+            tail_share=float(stated.get("tail_share", 1.0)),
+        )
         model = PatchTransformer(
-            spec, channels=len(self.reading.held), steps=self.reading.steps, starting_at=0.0
+            spec,
+            channels=len(self.reading.held),
+            steps=self.reading.steps,
+            starting_at=0.0,
+            pooling=pooling,
         )
         model.load_state_dict(self.weights)
         return model.eval()
