@@ -9,17 +9,11 @@ from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.blocks.read_corpus import ReadCorpus
-from emblema.evaluation.adapters.features.channel_aggregated_features import (
-    ChannelAggregatedFeatures,
-)
-from emblema.evaluation.adapters.features.per_channel_features import PerChannelFeatures
-from emblema.evaluation.adapters.features.spectral_features import SpectralFeatures
-from emblema.evaluation.adapters.features.window_features import WindowFeatures
+from emblema.evaluation.adapters.features.window_features import WindowFeatures, features_for
 from emblema.evaluation.adapters.xgboost.fitted_baseline import FittedBaseline
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
-from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.classical.fitting_source import FittingSource
 from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
 from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
@@ -86,7 +80,7 @@ class XgboostClassicalRuntime:
             raise InvalidScoredOutcomeError("there is no window to answer")
         trees = self._trees_of(recipe)
         read = ReadCorpus.every(self._blocks, (task, *(source.task for source in sources)))
-        features = self._features(trees.features, read[task.manifest])
+        features = features_for(trees.features, read[task.manifest].channels)
         started = time.perf_counter()
         rows, targets = self._fitted_from(features, read, task, sample, sources)
         answered = features.of(read[task.manifest].windows([w.window for w in scored]))
@@ -118,17 +112,6 @@ class XgboostClassicalRuntime:
                 raise UnsupportedClassicalMethodError(
                     f"this runtime grows boosted trees and was handed {recipe.method}"
                 )
-
-    @staticmethod
-    def _features(scheme: FeatureScheme, corpus: ReadCorpus) -> WindowFeatures:
-        """How a window is read under ``scheme``, sized to the corpus where that matters."""
-        match scheme:
-            case FeatureScheme.PER_CHANNEL:
-                return PerChannelFeatures(corpus.channels)
-            case FeatureScheme.SPECTRAL:
-                return SpectralFeatures(corpus.channels)
-            case FeatureScheme.CHANNEL_AGGREGATED:
-                return ChannelAggregatedFeatures()
 
     def _fitted_from(
         self,

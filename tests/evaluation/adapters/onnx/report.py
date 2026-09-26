@@ -27,16 +27,15 @@ import torch
 from emblema.config.compute_tiers import ComputeTiers
 from emblema.evaluation.adapters.onnx.inference_candidate import InferenceCandidate
 from emblema.evaluation.adapters.onnx.inference_graph import (
-    INPUT_NAMES,
     MAX_BATCH,
     MAX_TOKENS,
     OPSET_VERSION,
-    OUTPUT_NAMES,
     InferenceGraph,
 )
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.mean_pooling import MeanPooling
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead
+from emblema.evaluation.contracts.inference_graph_signature import INPUT_NAMES, OUTPUT_NAMES
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of

@@ -12,6 +12,12 @@ from torch.export import Dim
 
 from emblema.evaluation.adapters.onnx.inference_candidate import InferenceCandidate
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
+from emblema.evaluation.contracts.inference_graph_signature import (
+    INPUT_NAMES,
+    OUTPUT_NAMES,
+    POOLED_EMBEDDING,
+    PREDICTION,
+)
 from emblema.evaluation.domain.exceptions import (
     InferenceGraphDivergedError,
     UnexportableCandidateError,
@@ -24,17 +30,6 @@ from emblema.shared.kernel.tokens import N_FEATURES, TokenWindow
 # emits the fused `Attention` operator instead, whose CPU kernel in ONNX Runtime 1.29 rejects a
 # mask broadcast over the query axis and fails at inference: the graph exports and cannot run.
 OPSET_VERSION = 20
-
-# The graph's inputs, named and ordered as the candidate is called. Spelled out rather than read
-# off the batch's fields for the reason `TokenTensors.args` is: this is the calling convention,
-# and the export pairs these names with the arguments by position.
-INPUT_NAMES = ("features", "channel_ids", "timestamps", "timeless", "padding_mask")
-
-# `embedding` is not available as a name: it collides with a value the channel embedding
-# contributes, and the runtime refuses a graph with a duplicate definition.
-POOLED_EMBEDDING = "pooled_embedding"
-PREDICTION = "prediction"
-OUTPUT_NAMES = (POOLED_EMBEDDING, PREDICTION)
 
 # Upper bounds declared for the symbolic axes. They constrain the exporter, not the runtime: a
 # session runs a longer window and returns correct numbers, so whatever limit a service enforces

@@ -1,10 +1,12 @@
-"""Interfaces live in the ports packages; the few outside them are named adapter seams.
+"""Interfaces live in the ports packages; the few outside them are named seams or host services.
 
 A port is what the application core asks of the outside, typed in the domain's words. An adapter
 may also need something it cannot import — a torch module another context owns — and say so with
 a ``Protocol`` of its own, typed in its technology and implemented by the process that composes
-it. Such a seam is not a port and must not pass for one, so every one is listed here: a new one
-is a decision, not a drift.
+it. Such a seam is not a port and must not pass for one. A context may also publish a service in
+its contracts — an open host service, an interface the provider defines and implements for a
+consumer that must not restate the provider's procedure — which is not a port of the consumer
+either. Every one of both kinds is listed here: a new one is a decision, not a drift.
 """
 
 import ast
@@ -14,6 +16,10 @@ PACKAGE = Path(__file__).resolve().parents[2] / "src" / "emblema"
 ADAPTER_SEAMS = {
     "emblema.evaluation.adapters.torch.backbone_factory.BackboneFactory",
     "emblema.shared.adapters.tensors.grown_parameters.GrownParameters",
+}
+OPEN_HOST_SERVICES = {
+    "emblema.catalog.contracts.window_tokeniser.WindowTokeniser",
+    "emblema.evaluation.contracts.kept_candidate_inference.KeptCandidateInference",
 }
 
 
@@ -48,12 +54,16 @@ def protocols_outside_ports() -> set[str]:
     return found
 
 
-def test_every_protocol_outside_the_ports_packages_is_a_named_adapter_seam() -> None:
-    assert protocols_outside_ports() == ADAPTER_SEAMS
+def test_every_protocol_outside_the_ports_packages_is_a_named_seam_or_host_service() -> None:
+    assert protocols_outside_ports() == ADAPTER_SEAMS | OPEN_HOST_SERVICES
 
 
 def test_a_named_seam_belongs_to_an_adapters_package() -> None:
     assert all(".adapters." in seam for seam in ADAPTER_SEAMS)
+
+
+def test_a_named_host_service_belongs_to_a_contracts_package() -> None:
+    assert all(".contracts." in service for service in OPEN_HOST_SERVICES)
 
 
 def test_a_protocol_is_recognised_in_either_spelling() -> None:
