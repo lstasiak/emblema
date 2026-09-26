@@ -13,7 +13,7 @@
 
 name = "selection-networks-budget-fd001"
 purpose = "selection"
-tier = "S"
+tier = "M"
 
 [selection]
 one_in = 5
