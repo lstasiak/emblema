@@ -125,6 +125,11 @@ Under training, in one paired campaign at 200 labels, tier S, three seeds:
   under the tail is where this is settled.
 - Attention pooling from a zero query does not help under this schedule; the frozen probe's head,
   trained by the arms' schedule, stays about three cycles above a ridge on the same states.
+- A pilot selection on held-out tuning engines (three repeats of 16, never the validation side)
+  finds the two arms want different rates: from nothing gains 8.0 % [+0.78, +1.71] at three times
+  the peak, full fine-tuning loses 38 % at it and keeps its setting; doubling the steps buys the
+  control 2.4 % [+0.04, +0.70]. At each arm's own setting the control leads full fine-tuning by
+  8.0 % [+0.47, +2.03] on those engines. One peak for every arm was the curve's second handicap.
 
 ## Limitations
 

@@ -291,3 +291,91 @@ budget lowers the arm from nothing by more than the practical floor and full fin
 selection at four budgets searches around it. A budget effect above the floor for the arm from
 nothing means the curve's compute budget is revisited before the repeat, as a configuration
 change registered in its own right; below the floor the budget stands.
+
+## 2026-09-26 — Kaggle T4 and Colab L4, fp32: the pilot selection of the trained arms' knobs
+
+**Question.** The one declared in the section above: which share of the tail, which rate and
+whether a weight decay each trained arm wants at 200 labels, and whether the arms are short of
+steps. Read on held-out tuning engines only; nothing here touches the validation side.
+
+**Conditions.** Code `588e56f`; campaigns `a887a115…` (`campaigns/selection-networks-fd001.toml`,
+36 cells) and `596c68bb…` (`campaigns/selection-networks-budget-fd001.toml`, 9 cells, declared and
+run under `EMBLEMA_WORKER__SCHEDULE__MIN_STEPS=4000`), tier M. Every repeat holds 16 of the 79
+tuning engines out (one in five, seeds 1–3); both campaigns divide them identically, checked cell
+by cell. Orders run by `campaign_run`: 13 cells of the knobs on a Colab L4 (about 4.7 min per
+trained cell), the rest and the whole budget campaign on a Kaggle T4 (about 12.5 min per trained
+cell at the 2,000-step floor, 25 min at 4,000, 12 s for the probe), accepted back into the local
+registry. RMSE on the held-out engines, mean ± SD over the three repeats; the reduction is the
+paired bootstrap over the 48 (repeat, engine) pairs against the arm's setting the knobs were turned
+around, 10,000 resamples, no family correction.
+
+**Knobs, one at a time around the tail of 20 %, peak 1e-3, no weight decay.**
+
+| knob | from scratch | reduction vs base | full fine-tuning | reduction vs base |
+| --- | --- | --- | --- | --- |
+| base (tail 0.2, rate 1e-3) | 15.89 ± 0.87 | — | 15.91 ± 0.63 | — |
+| tail 0.1 | 16.90 ± 0.10 | −6.3 % [−1.65, −0.35] | 15.61 ± 0.87 | +1.9 % [−0.23, +0.87] |
+| tail 0.5 | 15.07 ± 0.55 | +5.3 % [−0.11, +1.78] | 16.46 ± 0.60 | −3.4 % [−1.09, −0.01] |
+| rate 3.3e-4 | 17.47 ± 0.73 | −9.8 % [−2.14, −0.96] | 15.68 ± 0.42 | +1.5 % [−0.47, +0.97] |
+| rate 3e-3 | **14.64 ± 0.14** | **+8.0 % [+0.78, +1.71]** | 21.92 ± 1.22 | −37.8 % [−7.02, −4.98] |
+| weight decay 0.01 | 15.87 ± 0.57 | 0.0 % [−0.28, +0.30] | 16.09 ± 0.44 | −1.1 % [−0.68, +0.34] |
+
+**What the rule chose** (`campaign select`, one standard error with the Nadeau–Bengio correction,
+ties broken towards the setting the knobs were turned around): for the arm from nothing
+`from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2` — the only variant within one
+standard error of the best, so no tie was broken; for full fine-tuning its base — the best variant
+(tail 0.1) admits the base, the lower rate and the weight decay within its reach, and the base is
+nearest. Reading the rule needed a fix: the campaign took the setting a selection turns around to
+be the candidate under its bare name, which a selection declared around a variant does not hold;
+it is now the one variant the others depart from by the fewest knobs in all, fixed before this
+section was read. The choice is the same under either reading.
+
+**Budget: the floor of steps doubled to 4,000, on the same repeats.**
+
+| arm | 2,000 steps | 4,000 steps | reduction | 95 % interval |
+| --- | --- | --- | --- | --- |
+| from scratch | 15.89 ± 0.87 | 15.50 ± 0.93 | +2.4 % | [+0.04, +0.70] |
+| full fine-tuning | 15.91 ± 0.63 | 15.91 ± 1.20 | 0.0 % | [−0.49, +0.48] |
+| frozen probe | — | 16.05 ± 0.33 | — | — |
+
+The practical floor at this error is 0.32; the doubled budget lowers the arm from nothing by
+0.38, an interval reaching down to 0.04. The rate alone lowers it by 1.26 at the same 2,000
+steps, and the arm at 3e-3 and 2,000 steps beats the arm at 1e-3 and 4,000 steps by 5.7 %
+[+0.39, +1.36].
+
+**The arms against each other on the tuning engines.** At the shared setting they are equal
+(full fine-tuning against from scratch 0.0 %, [−0.85, +0.89]). At what the rule chose for each,
+the arm from nothing beats full fine-tuning by 8.0 % [+0.47, +2.03], p = 0.003, and beats full
+fine-tuning's best variant (tail 0.1) by 6.2 % [+0.05, +1.85].
+
+**Against the predictions.** A longer tail for the arm from nothing: the direction holds (0.5
+gains 5.3 %, interval touching zero) but the rule did not choose it, since the rate alone leaves
+nothing else within reach. A lower rate for it: refuted — it wants three times the peak. Full
+fine-tuning's setting surviving the rule: confirmed. The budget lowering the arm from nothing by
+more than the floor: at the floor, not above it with any confidence; full fine-tuning by less:
+confirmed, by nothing at all.
+
+**Conclusions.**
+
+- The arm trained from nothing was short of rate, not of steps: three times the peak buys 8 %,
+  twice the steps 2.4 %. Its chosen rate is the largest the grid held, so the repeat's selection
+  must reach further (1e-2).
+- The two arms want different rates. At 3e-3 full fine-tuning loses 38 %: the pretrained weights
+  are overwritten before the head has learnt. One peak for every arm, as the first curve ran,
+  handicapped the control and not the pretrained arm; with the mean pooling that is the second
+  handicap the curve's margin was read under.
+- Once each arm runs at its own setting, the control is 6–8 % ahead of the pretrained arm at 200
+  labels on the tuning engines, distinguishable at three repeats. The validation-side answer
+  belongs to the repeat of the curve; what this pilot says is that a margin for pretraining at
+  200 labels, if there is one, is not there to be found by tuning the pretrained arm's schedule.
+- Weight decay of 0.01 changes nothing for either arm. The control is hurt by a shorter tail and
+  helped by a longer one; full fine-tuning is indifferent to a shorter tail and hurt by a longer.
+- The declared reading said a budget effect above the floor revisits the curve's compute budget.
+  The effect sits at the floor, at twice the cost, and is a third of what the rate buys; the floor
+  of 2,000 steps is kept for the repeat, and a rate chosen per budget is where the steps' worth
+  is read next.
+
+**Limitations.** Three repeats of 16 engines; the intervals above are as wide as the effects
+they bracket for every knob but the rate. One budget, 200 labels; the repeat selects per budget.
+The rate's grid ended where the choice landed. The probe under the tail was run at 4,000 steps
+only, so it is not compared here.
