@@ -303,3 +303,7 @@ class UnreadableInferenceGraphError(EvaluationError):
 
 class InferenceGraphDivergedError(EvaluationError):
     pass
+
+
+class InvalidCampaignOverviewError(EvaluationError, ValueError):
+    """An overview of a campaign counts more cells than its grid holds, or too few to be done."""

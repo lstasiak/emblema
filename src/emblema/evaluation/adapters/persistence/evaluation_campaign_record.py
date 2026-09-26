@@ -12,6 +12,7 @@ from emblema.evaluation.adapters.persistence.campaign_design_document import (
 )
 from emblema.evaluation.adapters.persistence.orm import Base
 from emblema.evaluation.contracts.identifiers import CampaignId, TaskId
+from emblema.evaluation.domain.campaign.campaign_overview import CampaignOverview
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.shared.adapters.persistence.datetimes import as_utc
@@ -88,4 +89,17 @@ class EvaluationCampaignRecord(Base):
             results=tuple(record.to_result() for record in self.cells),
             opened_at=as_utc(self.opened_at),
             completed_at=None if self.completed_at is None else as_utc(self.completed_at),
+        )
+
+    def to_overview(self, cells_recorded: int) -> CampaignOverview:
+        """The campaign without its cells, which a list counts rather than reads."""
+        return CampaignOverview(
+            campaign_id=CampaignId(self.id),
+            task=TaskId(self.task_ref),
+            purpose=RunPurpose(self.purpose),
+            tier=ComputeTier(self.tier),
+            design=DESIGNS.decode(dict(self.design)),
+            opened_at=as_utc(self.opened_at),
+            completed_at=None if self.completed_at is None else as_utc(self.completed_at),
+            cells_recorded=cells_recorded,
         )

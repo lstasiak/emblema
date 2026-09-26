@@ -26,3 +26,7 @@ class InMemoryEvaluationCampaignRepository:
                 f"{stored.revision}"
             )
         self._campaigns[campaign.campaign_id] = campaign
+
+    def stored(self) -> tuple[EvaluationCampaign, ...]:
+        """Every campaign kept, in no particular order; what the in-memory listing reads."""
+        return tuple(self._campaigns.values())
