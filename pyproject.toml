@@ -286,20 +286,22 @@ ignore_imports = ["emblema.** -> emblema.*.contracts.**"]
 
 [[tool.importlinter.contracts]]
 id = "hexagonal-layers"
-name = "Inside a context dependencies point inwards: adapters -> application -> ports -> domain"
+name = "Inside a context dependencies point inwards: adapters | api -> application -> ports -> domain"
 type = "layers"
 containers = ["emblema.catalog", "emblema.pretraining", "emblema.evaluation", "emblema.serving"]
 # Parentheses mark a layer as optional: each context grows its layers with its first feature.
-layers = ["(adapters)", "(application)", "(ports)", "(domain)"]
+# `api` drives the application and `adapters` are driven by it: siblings that never import each
+# other, joined only by the composition root.
+layers = ["(adapters) | (api)", "(application)", "(ports)", "(domain)"]
 
 [[tool.importlinter.contracts]]
 id = "shared-layers"
-name = "Shared layers point inwards: adapters -> ports -> events -> jobs -> kernel"
+name = "Shared layers point inwards: adapters | api -> ports -> events -> jobs -> kernel"
 type = "layers"
 containers = ["emblema.shared"]
 # `events` and `jobs` are sibling type-only packages; the order between them says only that
 # neither may reach a port, which is what keeps the vocabulary framework-free.
-layers = ["(adapters)", "(ports)", "(events)", "(jobs)", "kernel"]
+layers = ["(adapters) | (api)", "(ports)", "(events)", "(jobs)", "kernel"]
 
 [[tool.importlinter.contracts]]
 id = "pure-core"
@@ -315,7 +317,8 @@ forbidden_modules = [
     "torch", "numpy", "pandas", "onnx", "onnxruntime", "onnxscript",
     "xgboost", "sklearn", "joblib",
     "sqlalchemy", "alembic",
-    "fastapi", "starlette", "pydantic", "pydantic_settings",
+    "fastapi", "starlette", "pydantic", "pydantic_settings", "uvicorn", "httpx",
+    "opentelemetry", "prometheus_client",
     "celery", "kombu", "amqp", "mlflow", "boto3", "botocore",
 ]
 
@@ -325,8 +328,10 @@ name = "Configuration is read by adapters and entrypoints only"
 type = "forbidden"
 source_modules = [
     "emblema.shared.kernel", "emblema.shared.ports", "emblema.shared.events",
-    "emblema.shared.jobs",
+    "emblema.shared.jobs", "emblema.shared.api",
     "emblema.*.domain", "emblema.*.ports", "emblema.*.application", "emblema.*.contracts",
+    # Named one by one: a wildcard would take the entrypoint of the same name.
+    "emblema.evaluation.api", "emblema.serving.api",
 ]
 forbidden_modules = ["emblema.config"]
 
