@@ -66,3 +66,8 @@ tree. The aggregate is an immutable value (ADR-0003).
   first cross-row rule is a partial unique index (at most one active served model per artifact);
   Alembic does not compare index predicates, so the adapter's contract test holds it. UTC
   normalisation moved to `shared/adapters/persistence/datetimes.py`, which refuses a naive value.
+- **2026-09-26** — the stack migrates itself: a one-shot `migrate` service runs
+  `alembic upgrade head` from the application image, and every process that reads the database
+  waits for it to complete, so `docker compose up` brings the schema to the commit it runs and
+  nobody migrates from a host. Alembic on the host remains for authoring migrations and for the
+  test job, which starts the database without building an image.
