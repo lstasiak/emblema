@@ -46,6 +46,7 @@ from emblema.evaluation.application.use_cases.run_adaptation import (  # noqa: E
     RunAdaptationCommand,
 )
 from emblema.evaluation.contracts.identifiers import TaskId  # noqa: E402
+from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties  # noqa: E402
 from emblema.evaluation.domain.identifiers import UnitKey  # noqa: E402
 from emblema.evaluation.domain.labels.label_budget import LabelBudget  # noqa: E402
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme  # noqa: E402
@@ -79,6 +80,7 @@ ENGINES = (UnitKey("FD001/39"), UnitKey("FD001/91"))
 HELD = FrozenTestSplit(units=frozenset({UnitKey("FD001/test/1")}), source="cmapss/test/FD001")
 CEILING = 40.0
 WEIGHTS = ArtifactRef(key="durable/small", checksum=Checksum.of_bytes(b"small"))
+PENALTIES = RidgePenalties((0.1, 1.0, 10.0))
 LORA = LoraSpec(
     rank=2, alpha=4.0, dropout=0.0, targets=("qkv", "attention.projection", "feedforward")
 )
@@ -164,6 +166,7 @@ def plan_of(mode: TransferMode) -> AdaptationPlan:
         ),
         lora=LORA if mode.adds_low_rank_updates else None,
         seed=1,
+        ridge=PENALTIES if mode.solves_the_head_in_closed_form else None,
     )
 
 
@@ -181,6 +184,9 @@ def test_each_mode_trains_over_the_labels_of_the_tuning_engine(
 ) -> None:
     outcome = adapted(runs, mode)
 
+    if mode.solves_the_head_in_closed_form:
+        assert outcome.training_losses == ()
+        return
     assert len(outcome.training_losses) == EPOCHS
     assert outcome.training_losses[-1] < outcome.training_losses[0]
 

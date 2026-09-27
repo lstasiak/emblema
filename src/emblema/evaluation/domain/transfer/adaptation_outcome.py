@@ -19,8 +19,9 @@ class AdaptationOutcome(ScoredOutcome):
 
     Everything a scored outcome holds, and what only a network has to say about its run.
 
-    Invariants: those of a scored outcome; one training loss per planned epoch, each finite and
-    not negative; at least one trainable parameter; the labels are at least one window from at
+    Invariants: those of a scored outcome; one training loss per planned epoch, or none under a
+    mode that solves its head and takes no step, each finite and not negative; at least one
+    trainable parameter; the labels are at least one window from at
     least one unit, no more units than windows, and as many windows as a counted budget asked
     for.
 
@@ -35,7 +36,8 @@ class AdaptationOutcome(ScoredOutcome):
             overlap, so a budget of windows carries less than its count suggests, and the curve
             says beside each budget how many units stood behind it.
         trainable_parameters: How many weights the run could change.
-        training_losses: Mean training loss per epoch, in the order trained.
+        training_losses: Mean training loss per epoch, in the order trained; empty for a run
+            that solved its head in closed form.
     """
 
     plan: AdaptationPlan
@@ -58,7 +60,11 @@ class AdaptationOutcome(ScoredOutcome):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        epochs = self.plan.schedule.epochs_over(self.labelled_windows)
+        epochs = (
+            0
+            if self.plan.mode.solves_the_head_in_closed_form
+            else self.plan.schedule.epochs_over(self.labelled_windows)
+        )
         if len(self.training_losses) != epochs:
             raise InvalidAdaptationOutcomeError(
                 f"{len(self.training_losses)} training losses reported for "

@@ -10,7 +10,7 @@ from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
 from emblema.evaluation.adapters.synthetic.synthetic_ground_truth import SyntheticGroundTruth
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
-from scripts.transfer_grid import Cell, Stored
+from scripts.transfer_grid import TRAINED, Cell, Stored
 from scripts.transfer_modes_report import cells_of, ground_truth_of, parse, plans_of, render
 from tests.scripts.test_transfer_grid import outcome
 
@@ -41,7 +41,7 @@ def test_every_mode_gets_a_plan_with_its_own_learning_rate_under_one_shape() -> 
         seed=4,
     )
 
-    assert set(plans) == set(TransferMode)
+    assert set(plans) == set(TRAINED)
     lora, frozen = plans[TransferMode.LORA], plans[TransferMode.FROZEN_PROBE]
     assert lora.schedule.learning_rate == 5e-3
     assert lora.lora is not None

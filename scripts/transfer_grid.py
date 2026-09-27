@@ -23,7 +23,8 @@ from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore
 
 RUNS, EPOCHS, PREDICTIONS = "runs.csv", "epochs.csv", "predictions.csv"
-# What a plan flattens to, in the order ``AdaptationPlan.parameters`` states it.
+# What a plan flattens to, in the order ``AdaptationPlan.parameters`` states it, less the
+# penalties of the probe solved in closed form, which the grid never runs.
 PLAN_COLUMNS = (
     "mode",
     "backbone",
@@ -61,7 +62,9 @@ RUN_COLUMNS = (
 CELL_COLUMNS = ("mode", "budget", "seed")
 BUDGETS = ("50", "200", "1000", "all")
 SEEDS = (1, 2, 3, 4, 5)
-MODES = tuple(str(mode) for mode in TransferMode)
+# The arms the grid trains under a schedule; the probe solved in closed form is the harness's.
+TRAINED = tuple(mode for mode in TransferMode if not mode.solves_the_head_in_closed_form)
+MODES = tuple(str(mode) for mode in TRAINED)
 
 
 def budget_of(text: str) -> LabelBudget:
@@ -131,7 +134,9 @@ class Stored:
             SystemExit: If the cell is stored under another plan or commit: a grid resumed
                 across configurations would mix cells that are not comparable.
         """
-        stated = {name: str(value) for name, value in plan.parameters().items()}
+        stated = {
+            name: str(value) for name, value in plan.parameters().items() if name in PLAN_COLUMNS
+        }
         for row in self.runs():
             if (row["mode"], row["budget"], row["sample_seed"]) != cell.key:
                 continue
@@ -202,7 +207,7 @@ class Stored:
             RUN_COLUMNS,
             [
                 {
-                    **outcome.plan.parameters(),
+                    **{k: v for k, v in outcome.plan.parameters().items() if k in PLAN_COLUMNS},
                     "task": task,
                     "budget": budget,
                     "windows": outcome.labelled_windows,

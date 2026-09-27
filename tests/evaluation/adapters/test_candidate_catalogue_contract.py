@@ -9,6 +9,7 @@ a process that only declares a campaign must carry neither stack the grid will b
 import subprocess
 import sys
 from collections.abc import Callable
+from dataclasses import replace
 
 import pytest
 
@@ -25,13 +26,14 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
-from emblema.evaluation.domain.exceptions import UnknownCandidateError
+from emblema.evaluation.domain.exceptions import InvalidBackboneArmError, UnknownCandidateError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
 from tests.evaluation.support import (
     CONTENDER,
     LORA,
+    PENALTIES,
     WEIGHTS,
     adaptation_schedule,
     arm,
@@ -183,6 +185,20 @@ def test_a_variant_of_an_arm_is_the_arm_under_a_turned_schedule_on_the_same_budg
     turned = ARMS.arm_of(variant.ref)
     assert (turned.schedule.learning_rate, turned.schedule.weight_decay) == (0.003, 0.1)
     assert ARMS.arm_of(CONTENDER).schedule == adaptation_schedule()
+
+
+def test_an_arm_names_penalties_exactly_where_its_head_is_solved_in_closed_form() -> None:
+    solved = arm(
+        CandidateRef("frozen_ridge"), TransferMode.FROZEN_RIDGE, backbone=WEIGHTS, lora=None
+    )
+    with pytest.raises(InvalidBackboneArmError, match="names no penalties"):
+        replace(solved, ridge=None)
+    with pytest.raises(InvalidBackboneArmError, match="trains its head and names penalties"):
+        replace(ARMS.arm_of(CONTENDER), ridge=PENALTIES)
+    described = BackboneArmCatalogue((solved,)).describe(solved.ref)
+    stated = {parameter.name: parameter.value for parameter in described.method.parameters}
+    assert stated["ridge_penalties"] == "0.1 1 10"
+    assert described.budget == ARMS.describe(CONTENDER).budget
 
 
 def test_the_arm_that_starts_from_nothing_names_the_model_it_is_shaped_like() -> None:

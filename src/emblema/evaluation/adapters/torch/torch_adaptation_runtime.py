@@ -11,6 +11,7 @@ from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate
+from emblema.evaluation.adapters.torch.ridge_solution import RidgeSolution
 from emblema.evaluation.adapters.torch.scheduled_training import Forward, ScheduledTraining
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.exceptions import (
@@ -34,8 +35,10 @@ class TorchAdaptationRuntime:
     """Teaches a candidate the task in this process, on whatever device it is given.
 
     A frozen probe under a pooling with no weights of its own encodes the sample once and
-    trains its head over the stored states; every other run has the encoder in the loop, the
-    frozen probe under a learnt pooling included, since its pooling reads the states per token.
+    trains its head over the stored states; the probe whose head is solved in closed form
+    encodes once too and writes the solution into the head, taking no step at all; every other
+    run has the encoder in the loop, the frozen probe under a learnt pooling included, since
+    its pooling reads the states per token.
     The seconds an outcome reports start once the block is at hand, so the run that happens to
     fetch it is not timed against the rest.
     """
@@ -90,14 +93,20 @@ class TorchAdaptationRuntime:
             vocabulary_size=len(manifest.channels),
             starting_at=sample.mean_target / scale,
         ).to(self._device)
-        forward = (
-            self._over_stored_states(candidate, tuning, plan.schedule.batch_size)
-            if plan.mode is TransferMode.FROZEN_PROBE and not plan.pooling.pooling.learns_weights
-            else self._over_windows(candidate, tuning)
-        )
-        losses = ScheduledTraining(plan.schedule, plan.seed).losses(
-            candidate, candidate.trainable_parameters(), forward, targets
-        )
+        if plan.ridge is not None:
+            states = self._embedded(candidate, tuning, plan.schedule.batch_size)
+            RidgeSolution.fitted(states, targets, plan.ridge).applied_to(candidate.head)
+            losses: list[float] = []
+        else:
+            forward = (
+                self._over_stored_states(candidate, tuning, plan.schedule.batch_size)
+                if plan.mode is TransferMode.FROZEN_PROBE
+                and not plan.pooling.pooling.learns_weights
+                else self._over_windows(candidate, tuning)
+            )
+            losses = ScheduledTraining(plan.schedule, plan.seed).losses(
+                candidate, candidate.trainable_parameters(), forward, targets
+            )
         predicted = self._answers(candidate, held, plan.schedule.batch_size) * scale
         return AdaptationOutcome(
             plan=plan,

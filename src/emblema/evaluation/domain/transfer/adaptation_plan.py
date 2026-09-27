@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 from emblema.evaluation.domain.exceptions import InvalidAdaptationPlanError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling
+from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
@@ -19,7 +20,9 @@ class AdaptationPlan:
     checksum as the registry holds it.
 
     Invariants: weights are named exactly when the mode starts from pretrained ones; low-rank
-    updates are specified exactly when the mode adds them.
+    updates are specified exactly when the mode adds them; penalties are named exactly when the
+    mode solves its head in closed form, and that mode pools under no learnt weights, since a
+    closed form has nothing to train them with.
 
     Attributes:
         mode: What the backbone's weights do while the task is learnt.
@@ -32,6 +35,8 @@ class AdaptationPlan:
             schedule: another seed is a repeat of the same schedule over the same labels.
         pooling: How the states of a window become the one state the head reads; the mean
             over the window unless a variant turns it.
+        ridge: The penalties a closed-form head chooses among, where the mode solves one;
+            ``None`` otherwise.
     """
 
     mode: TransferMode
@@ -40,6 +45,7 @@ class AdaptationPlan:
     lora: LoraSpec | None
     seed: int
     pooling: HeadPooling = field(default_factory=HeadPooling.mean)
+    ridge: RidgePenalties | None = None
 
     def __post_init__(self) -> None:
         if (self.backbone is None) == self.mode.starts_from_pretrained_weights:
@@ -59,6 +65,20 @@ class AdaptationPlan:
                     if self.lora is None
                     else "adds no low-rank updates and specifies some"
                 )
+            )
+        if (self.ridge is None) == self.mode.solves_the_head_in_closed_form:
+            raise InvalidAdaptationPlanError(
+                f"{self.mode} "
+                + (
+                    "solves its head in closed form and names no penalties"
+                    if self.ridge is None
+                    else "trains its head and names penalties"
+                )
+            )
+        if self.mode.solves_the_head_in_closed_form and self.pooling.pooling.learns_weights:
+            raise InvalidAdaptationPlanError(
+                f"{self.mode} solves its head in closed form and cannot learn a "
+                f"{self.pooling.pooling} pooling"
             )
 
     def parameters(self) -> dict[str, str | int | float]:
@@ -85,4 +105,5 @@ class AdaptationPlan:
             "lora_alpha": 0.0 if self.lora is None else float(self.lora.alpha),
             "lora_dropout": 0.0 if self.lora is None else float(self.lora.dropout),
             "lora_targets": "" if self.lora is None else " ".join(self.lora.targets),
+            "ridge_penalties": "" if self.ridge is None else str(self.ridge),
         }

@@ -48,6 +48,7 @@ class BackboneCandidateProvider:
                     lora=arm.lora,
                     seed=cell.seed,
                     pooling=arm.pooling,
+                    ridge=arm.ridge,
                 ),
                 budget=cell.budget,
                 sample_seed=cell.seed,

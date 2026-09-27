@@ -19,7 +19,7 @@ from scripts.label_curve_report import (
     sentence,
     write,
 )
-from scripts.transfer_grid import Stored
+from scripts.transfer_grid import TRAINED, Stored
 from tests.evaluation.support import TASK, adaptation_schedule, plan, prediction
 
 UNITS = ("a", "b", "c", "d", "e")
@@ -75,7 +75,7 @@ def shards(tmp_path: Path) -> list[Stored]:
     for seed in SEEDS:
         shard = Stored.open(tmp_path / f"shard-{seed}")
         for budget in BUDGETS:
-            for mode in TransferMode:
+            for mode in TRAINED:
                 shard.add(
                     outcome(mode, budget, seed, ERROR[mode]),
                     task="turbofan-fd001",
@@ -247,7 +247,7 @@ def test_the_whole_grid_is_read_without_the_incomplete_warning(tmp_path: Path) -
     shard = Stored.open(tmp_path / "shard")
     for seed in (1, 2, 3, 4, 5):
         for budget in ("50", "200", "1000", "all"):
-            for mode in TransferMode:
+            for mode in TRAINED:
                 shard.add(
                     outcome(mode, budget, seed, ERROR[mode]),
                     task="turbofan-fd001",
@@ -266,7 +266,7 @@ def test_the_conclusion_names_the_budget_of_every_label_in_words(tmp_path: Path)
     shard = Stored.open(tmp_path / "shard")
     for seed in (1, 2, 3, 4, 5):
         for budget in ("50", "200", "1000", "all"):
-            for mode in TransferMode:
+            for mode in TRAINED:
                 # Full fine-tuning draws level with the control once every label is used.
                 matched = (mode, budget) == (TransferMode.FULL_FINE_TUNING, "all")
                 error = ERROR[TransferMode.FROM_SCRATCH] if matched else ERROR[mode]

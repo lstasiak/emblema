@@ -4,11 +4,13 @@ from typing import Any
 import pytest
 
 from emblema.evaluation.domain.exceptions import (
+    InvalidAdaptationOutcomeError,
     InvalidScoredOutcomeError,
 )
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
+from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from tests.evaluation.support import TASK, adaptation_schedule, plan, prediction
 
 # Unit b first, so an order by unit is the method's and not the input's.
@@ -48,3 +50,11 @@ def test_the_outcome_counts_the_optimiser_steps_the_run_took() -> None:
     assert outcome().optimiser_steps == 2
     lifted = plan(schedule=adaptation_schedule(epochs=2, min_steps=3, batch_size=2))
     assert outcome(plan=lifted, training_losses=(0.5, 0.4, 0.3)).optimiser_steps == 3
+
+
+def test_a_head_solved_in_closed_form_reports_no_training_loss_and_no_step() -> None:
+    solved = outcome(plan=plan(TransferMode.FROZEN_RIDGE), training_losses=())
+
+    assert solved.optimiser_steps == 0
+    with pytest.raises(InvalidAdaptationOutcomeError, match="0 planned epochs"):
+        outcome(plan=plan(TransferMode.FROZEN_RIDGE), training_losses=(0.5,))

@@ -88,7 +88,7 @@ from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from scripts.raw_corpora import raw_root
 from scripts.reporting import dated_heading, machine, table
-from scripts.transfer_grid import BUDGETS, SEEDS, Cell, Stored, budget_of
+from scripts.transfer_grid import BUDGETS, SEEDS, TRAINED, Cell, Stored, budget_of
 
 # The peak rate of each mode, as fixed on the validation side before the grid
 # (docs/verification/label-efficiency-curve.md); the shape of the rate is fixed with them.
@@ -119,7 +119,7 @@ def parse(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--mode",
         action="append",
         type=TransferMode,
-        choices=list(TransferMode),
+        choices=list(TRAINED),
         help="a mode to run; every mode unless given",
     )
     parser.add_argument(
@@ -232,7 +232,7 @@ def plans_of(arguments: argparse.Namespace, seed: int) -> dict[TransferMode, Ada
         dropout=arguments.lora_dropout,
         targets=tuple(arguments.lora_targets),
     )
-    modes = arguments.mode or list(TransferMode)
+    modes = arguments.mode or list(TRAINED)
     return {
         mode: AdaptationPlan(
             mode=mode,

@@ -34,7 +34,8 @@ class InMemoryAdaptationRuntime:
     case built on it exercises the port's contract without a tensor: an answer per validation
     window in the order given, the identities that place the outcome on the curve, and a refusal
     of a sample from another task. The training loss it reports is the sample's variance, the
-    loss the mean leaves, in every epoch; its one trainable parameter is the mean.
+    loss the mean leaves, in every epoch, and none under a mode that takes no step; its one
+    trainable parameter is the mean.
 
     Given a store it can be asked to keep what it fitted, which for this runtime is the mean it
     learnt, under a manifest as every runtime keeps a candidate: a campaign assembled over it
@@ -72,7 +73,11 @@ class InMemoryAdaptationRuntime:
             labelled_windows=len(sample.windows),
             labelled_units=sample.unit_count,
             trainable_parameters=1,
-            training_losses=(variance,) * plan.schedule.epochs,
+            training_losses=(
+                ()
+                if plan.mode.solves_the_head_in_closed_form
+                else (variance,) * plan.schedule.epochs
+            ),
             predictions=tuple(
                 WindowPrediction(window=labelled.window, target=labelled.target, predicted=mean)
                 for labelled in validation

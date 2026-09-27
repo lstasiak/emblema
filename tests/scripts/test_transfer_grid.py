@@ -117,7 +117,8 @@ def test_a_held_out_share_freezes_the_same_third_however_the_units_are_named() -
 
 
 def test_a_plan_flattens_to_the_columns_a_run_is_stored_under() -> None:
-    assert tuple(plan().parameters()) == PLAN_COLUMNS
+    # The one column left out belongs to the probe solved in closed form, which the grid never runs.
+    assert tuple(plan().parameters()) == (*PLAN_COLUMNS, "ridge_penalties")
 
 
 def test_a_stored_cell_is_three_files_keyed_by_the_cell(tmp_path: Path) -> None:
