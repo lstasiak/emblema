@@ -1,5 +1,7 @@
 import pytest
 
+pytest.importorskip("fastapi")
+
 from emblema.shared.api.cursor_token import CursorToken
 from emblema.shared.api.page_request import PageRequest, PageRequests
 from emblema.shared.kernel.exceptions import InvalidCursorError
