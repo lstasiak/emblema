@@ -492,3 +492,80 @@ budget.
 curve's campaign file by the selection that chose it. A rate chosen at the edge of its grid at
 a budget is followed by one step beyond it at that budget before the curve runs, as the
 registered edge rule says.
+
+## 2026-09-27 — Colab A100 and G4, fp32: what each trained arm's selection chose per budget
+
+**Question.** The one declared above: which rate and which tail each trained arm runs at, at
+each budget of the repeated curve. Held-out tuning engines only.
+
+**Conditions.** Code `a0a8970c`; campaigns `7a842dba…` (`campaigns/selection-scratch-fd001.toml`,
+an A100, 2 min a cell at 2,000 steps and 4 min at every window), `199fb850…` and `83ecaced…`
+(`campaigns/selection-fine-tuning-fd001.toml` and `campaigns/selection-lora-fd001.toml`, two
+processes sharing one G4, 1:40–2 min a cell); 48 cells each, tier M, floor 2,000 steps, three
+repeats holding 16 of 79 tuning engines out. RMSE on the held-out engines, mean ± SD over the
+repeats; **bold** = chosen by the one-standard-error rule with the Nadeau–Bengio correction,
+ties towards the setting in force.
+
+**The arm from nothing**, around 3e-3 and the tail of 20 %.
+
+| budget | 1e-3 | 3e-3 (in force) | 1e-2 | 3e-3, tail 0.5 |
+| --- | --- | --- | --- | --- |
+| 50 | 16.95 ± 0.10 | **16.07 ± 0.35** | 30.14 ± 3.21 | 21.46 ± 2.59 |
+| 200 | 15.90 ± 0.73 | **14.69 ± 0.77** | 21.37 ± 1.77 | 14.28 ± 0.56 |
+| 1,000 | 13.41 ± 1.09 | 13.66 ± 1.07 | 20.61 ± 1.99 | **12.94 ± 0.50** |
+| all | 13.06 ± 0.44 | 13.25 ± 0.96 | 20.16 ± 0.84 | **12.52 ± 0.57** |
+
+**Full fine-tuning**, around 1e-3 and the tail of 20 %.
+
+| budget | 3.3e-4 | 1e-3 (in force) | 3e-3 | 1e-3, tail 0.1 |
+| --- | --- | --- | --- | --- |
+| 50 | **17.20 ± 0.62** | 18.24 ± 1.16 | 24.12 ± 0.35 | 17.70 ± 0.51 |
+| 200 | 15.61 ± 0.17 | 16.08 ± 0.40 | 21.10 ± 2.98 | **15.54 ± 0.63** |
+| 1,000 | 14.30 ± 1.05 | **13.79 ± 0.84** | 20.40 ± 1.56 | 13.82 ± 0.41 |
+| all | 13.56 ± 0.45 | **13.32 ± 0.85** | 19.50 ± 1.32 | 16.73 ± 4.46 |
+
+**The low-rank arm**, around 1e-4 and the tail of 20 %.
+
+| budget | 3.3e-5 | 1e-4 (in force) | 3e-4 | 1e-4, tail 0.5 |
+| --- | --- | --- | --- | --- |
+| 50 | **18.35 ± 0.39** | 19.09 ± 0.82 | 19.74 ± 1.34 | 19.45 ± 1.34 |
+| 200 | 16.60 ± 0.36 | **15.38 ± 0.67** | 16.82 ± 1.18 | 15.55 ± 0.55 |
+| 1,000 | 16.62 ± 0.24 | **14.25 ± 0.50** | 13.85 ± 1.43 | 14.54 ± 0.72 |
+| all | 14.64 ± 0.42 | **13.38 ± 1.25** | 13.29 ± 1.33 | 13.55 ± 1.31 |
+
+**Against the predictions.** The arm from nothing keeps 3e-3 at every budget: held, and 1e-2
+is no edge but a cliff, so no rate beyond it is asked for. Its longer tail at 50: refuted, the
+tail of 0.5 costs a third of the error there and is chosen at 1,000 and at all instead, where
+the labels reach further into the window. Full fine-tuning's smaller rate at 1,000 and at all:
+refuted, the setting in force survives there; its setting surviving at 50 and 200: refuted the
+other way, a third of the peak at 50 and the shorter tail at 200. The low-rank arm keeping its
+setting: held at three budgets, refuted at 50, where a third of the peak is chosen.
+
+**Conclusions.**
+
+- Three times the peak, 3e-3, is what the arm from nothing wants at every budget, and a decade
+  above it the arm does not learn. The tail's share is the knob that moves with the budget.
+- The pretrained arms want less rate where labels are fewest: at 50 both choose the smallest
+  rate their grids held, the edge of the grid, which the registered edge rule follows with one
+  rate beyond it before the curve runs (declared below).
+- At 1,000 and at all every arm keeps or nearly keeps its setting in force; the pretrained
+  arms' selections are within one standard error of several variants there.
+
+**Limitations.** Three repeats of 16 engines; every interval overlaps its neighbours at 1,000
+and above. The arm from nothing ran on an A100, the other two on a G4: a selection compares
+variants within one accelerator, and the curve's cells of a budget run on one kind.
+
+## 2026-09-27 — declared before the run: the two rates beyond the edge, at 50 labels
+
+**Question.** Full fine-tuning and the low-rank arm each chose the smallest rate of their grids
+at 50 labels. Does a rate half a decade lower do better still, by the same rule?
+
+**Design.** `campaigns/selection-fine-tuning-edge-fd001.toml` and
+`campaigns/selection-lora-edge-fd001.toml`: at 50 labels, the same three repeats of the same
+division, one knob at a time around the chosen setting — the rate a third of it (1e-4 and
+1e-5) and the other share of the tail. Read by the same rule; the choice replaces the one above
+at 50 labels and is what the curve runs the arm at there.
+
+**Predictions.** Neither arm gains from the lower rate by more than one standard error, so the
+chosen rates stand: 3.3e-4 for full fine-tuning, 3.3e-5 for the low-rank arm. If a lower rate is
+chosen again, the rule allows one more step, and no more.

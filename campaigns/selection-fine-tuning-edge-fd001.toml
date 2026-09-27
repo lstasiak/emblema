@@ -1,0 +1,39 @@
+# Full fine-tuning at 50 labels, one step beyond the edge its selection chose.
+#
+# What it is for: campaigns/selection-fine-tuning-fd001.toml chose a third of the registered
+# peak at 50 labels, the smallest rate its grid held. A rate chosen at an edge is followed by
+# one rate beyond it, half a decade away, at the same repeats and budget, and the rule chooses
+# again — the registered edge rule for peaks. One knob at a time around the chosen setting: the
+# rate a third of it, and the shorter tail the same selection chose at 200.
+
+name = "selection-fine-tuning-edge-fd001"
+purpose = "selection"
+tier = "M"
+
+[selection]
+one_in = 5
+
+[candidates]
+competing = [
+    "full_fine_tuning@learning_rate=0.000333,pooling=tail,tail_share=0.2",
+    "full_fine_tuning@learning_rate=0.0001,pooling=tail,tail_share=0.2",
+    "full_fine_tuning@learning_rate=0.000333,pooling=tail,tail_share=0.1",
+]
+control = "full_fine_tuning@learning_rate=0.000333,pooling=tail,tail_share=0.2"
+endpoint = "full_fine_tuning@learning_rate=0.0001,pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["50"]
+endpoint = "50"
+seeds = [1, 2, 3]
+
+[rules]
+minimum_relative_reduction = 0.1
+floor_share = 0.02
+alpha = 0.05
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
