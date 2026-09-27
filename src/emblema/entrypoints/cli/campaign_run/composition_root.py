@@ -18,6 +18,9 @@ from emblema.evaluation.application.use_cases.fulfil_campaign_order import Fulfi
 from emblema.evaluation.ports.campaign_handoff import CampaignHandoff
 from emblema.evaluation.ports.candidate_provider import CandidateProvider
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
+from emblema.serving.adapters.in_memory.promotable_artifact_repository import (
+    InMemoryPromotableArtifactRepository,
+)
 from emblema.shared.adapters.queues.immediate_job_queue import ImmediateJobQueue
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore
@@ -79,15 +82,18 @@ class CompositionRoot:
         tasks: DownstreamTaskRepository,
         *,
         needs_the_stack: bool,
-    ) -> CandidateProvider:  # pragma: no cover - environment
+    ) -> CandidateProvider:
         """The candidates of the pool the order is for, as that pool's worker assembles them.
 
         Each root is imported only when its pool is the one asked for: on some platforms the
-        stack of one cannot be loaded into a process that holds the other.
+        stack of one cannot be loaded into a process that holds the other. Every registry the
+        worker's process would keep in the database is kept in this process instead, so a run
+        of an order needs no database.
         """
         worker = settings.require_worker()
         declared = DeclaredWorker(worker)
         campaigns = InMemoryEvaluationCampaignRepository()
+        promotables = InMemoryPromotableArtifactRepository()
         jobs = ImmediateJobQueue({})
         if needs_the_stack:
             from emblema.entrypoints.workers.ml.composition_root import (
@@ -106,6 +112,7 @@ class CompositionRoot:
                 store=store,
                 tasks=tasks,
                 campaigns=campaigns,
+                promotables=promotables,
                 jobs=jobs,
             ).adapters.candidates
         from emblema.entrypoints.workers.general.composition_root import (
@@ -121,5 +128,6 @@ class CompositionRoot:
             store=store,
             tasks=tasks,
             campaigns=campaigns,
+            promotables=promotables,
             jobs=jobs,
         ).adapters.candidates
