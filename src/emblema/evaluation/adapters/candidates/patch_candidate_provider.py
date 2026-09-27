@@ -26,7 +26,7 @@ class PatchCandidateProvider:
         return self._catalogue.describe(candidate)
 
     def evaluate(self, request: CandidateEvaluation) -> CellResult:
-        """Run one cell of a campaign on this machine.
+        """Run one cell of a campaign on this machine, as the variant the cell was declared to run.
 
         Raises:
             UnknownCandidateError: If the catalogue holds no model of that name.
@@ -34,11 +34,12 @@ class PatchCandidateProvider:
                 what this process supplies — another shape, budget or schedule.
         """
         cell = request.cell
-        request.declared.must_match(self._catalogue.describe(cell.candidate))
+        runs = request.declared.ref
+        request.declared.must_match(self._catalogue.describe(runs))
         outcome = self._run(
             RunPatchTrainingCommand(
                 task=request.task,
-                plan=self._catalogue.plan_of(cell.candidate, cell.seed),
+                plan=self._catalogue.plan_of(runs, cell.seed),
                 budget=cell.budget,
                 sample_seed=cell.seed,
                 purpose=request.purpose,

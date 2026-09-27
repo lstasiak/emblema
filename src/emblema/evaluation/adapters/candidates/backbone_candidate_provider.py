@@ -27,7 +27,7 @@ class BackboneCandidateProvider:
         return self._catalogue.describe(candidate)
 
     def evaluate(self, request: CandidateEvaluation) -> CellResult:
-        """Run one cell of a campaign on this machine.
+        """Run one cell of a campaign on this machine, as the variant the cell was declared to run.
 
         Raises:
             UnknownCandidateError: If the catalogue holds no arm of that name.
@@ -36,8 +36,9 @@ class BackboneCandidateProvider:
                 another low-rank update.
         """
         cell = request.cell
-        request.declared.must_match(self._catalogue.describe(cell.candidate))
-        arm = self._catalogue.arm_of(cell.candidate)
+        runs = request.declared.ref
+        request.declared.must_match(self._catalogue.describe(runs))
+        arm = self._catalogue.arm_of(runs)
         outcome = self._run(
             RunAdaptationCommand(
                 task=request.task,

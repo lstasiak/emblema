@@ -64,6 +64,7 @@ from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
+from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 from emblema.evaluation.ports.candidate_provider import CandidateProvider
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.in_memory.clock import FixedClock
@@ -76,12 +77,14 @@ from tests.evaluation.support import (
     CONTROL,
     LORA,
     OPENED_AT,
+    SELECTED_BY,
     WEIGHTS,
     adaptation_schedule,
     arm,
     boosting,
     candidate,
     cell,
+    design,
     patch_spec,
     sides,
     task,
@@ -402,3 +405,55 @@ def test_a_cell_recorded_under_other_arithmetic_than_the_process_spends_is_refus
 
     with pytest.raises(CandidateMismatchError):
         supplied.provider.evaluate(elsewhere)
+
+
+TUNED_CONTENDER = CandidateRef("full_fine_tuning@learning_rate=0.5")
+
+
+def test_a_cell_declared_to_run_a_tuned_variant_runs_that_variant_under_the_cells_name() -> None:
+    # A comparison names the arm and a selection's choice per budget: the cell keeps the arm's
+    # name, and what the provider runs and checks is the variant the design declared for it.
+    _, labels, _ = drawing()
+    runtime = InMemoryAdaptationRuntime(None)
+    provider = BackboneCandidateProvider(ARMS, RunAdaptation(labels, runtime))
+    tuned = design(
+        candidates=(provider.describe(CONTROL), provider.describe(CONTENDER)),
+        budgets=(BUDGET,),
+        endpoint_budget=BUDGET,
+        tuned=(
+            TunedChoice(
+                candidate=CONTENDER, budget=BUDGET, variant=TUNED_CONTENDER, selected_by=SELECTED_BY
+            ),
+        ),
+        variants=(provider.describe(TUNED_CONTENDER),),
+    )
+    asked = replace(
+        request_of(Supplied(provider, CONTENDER)),
+        declared=tuned.declared_for(cell(CONTENDER, BUDGET, 1)),
+    )
+
+    answered = provider.evaluate(asked)
+
+    assert answered.cell.candidate == CONTENDER
+    assert runtime.adaptations[-1].plan.schedule.learning_rate == 0.5
+
+
+@pytest.mark.parametrize(
+    ("build", "variant"),
+    [
+        (backbone_provider, TUNED_CONTENDER),
+        (classical_provider, CandidateRef("boosted_trees_per_channel@max_depth=2")),
+        (patch_provider, CandidateRef("patch_transformer@learning_rate=0.5")),
+        (routed_provider, CandidateRef("boosted_trees_per_channel@max_depth=2")),
+    ],
+    ids=["backbone", "classical", "patch model", "routed"],
+)
+def test_every_adapter_runs_the_variant_a_cell_was_declared_to_run(
+    build: Callable[[InMemoryArtifactStore | None], Supplied], variant: CandidateRef
+) -> None:
+    supplied = build(None)
+    asked = replace(request_of(supplied), declared=supplied.provider.describe(variant))
+
+    answered = supplied.provider.evaluate(asked)
+
+    assert answered.cell.candidate == supplied.contender
