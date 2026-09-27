@@ -9,9 +9,11 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.benjamini_hochberg_correction import (
     BenjaminiHochbergCorrection,
 )
+from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 from tests.evaluation.support import (
     CONTENDER,
@@ -19,6 +21,7 @@ from tests.evaluation.support import (
     FINER,
     PROBE,
     ROCKET,
+    RULES,
     SELECTED_BY,
     baseline,
     candidate,
@@ -93,7 +96,7 @@ def test_the_registered_rules_and_the_bootstrap_survive_the_round_trip() -> None
 
 
 def test_a_selection_and_a_comparison_of_tuned_variants_survive_the_round_trip() -> None:
-    chosen = selection().design
+    chosen = selection().campaign.design
     tuned = replace(
         design(),
         candidates=(baseline(ROCKET), baseline(CandidateRef("other"))),
@@ -135,3 +138,27 @@ def test_a_design_stored_before_a_correction_could_be_named_reads_back_under_hol
     del written["rules"]["correction"]
 
     assert DOCUMENTS.decode(written) == design()
+
+
+def test_a_design_read_by_area_under_absolute_thresholds_comes_back_as_it_was_written() -> None:
+    rules = replace(
+        RULES, threshold=ThresholdKind.ABSOLUTE, minimum_reduction=0.02, floor_part=0.01
+    )
+    stated = design(measure=ErrorMeasure.AUROC_SHORTFALL, rules=rules)
+
+    written = DOCUMENTS.encode(stated)
+
+    assert written["rules"]["minimum_absolute_reduction"] == 0.02
+    assert "minimum_relative_reduction" not in written["rules"]
+    assert DOCUMENTS.decode(written) == stated
+
+
+def test_a_design_stored_before_measures_and_absolute_thresholds_reads_as_it_was_run() -> None:
+    written = DOCUMENTS.encode(design())
+    del written["measure"]
+
+    read = DOCUMENTS.decode(written)
+
+    assert read.measure is ErrorMeasure.RMSE
+    assert read.rules.threshold is ThresholdKind.RELATIVE
+    assert written["rules"]["minimum_relative_reduction"] == read.rules.minimum_reduction

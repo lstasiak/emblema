@@ -48,12 +48,13 @@ class ListCampaignRuns:
             InvalidCursorError: If the cursor is not one this issued.
             CampaignNotFoundError: If no campaign is stored under that identity.
         """
+        measure = self._listing.get_overview(query.campaign).design.measure
         results = self._listing.results(
             query.campaign, after=self._after(query.after), limit=query.limit + 1
         )
         shown = results[: query.limit]
         return Page(
-            items=tuple(CampaignRun.of(result) for result in shown),
+            items=tuple(CampaignRun.of(result, measure) for result in shown),
             next_cursor=self._cursor_of(shown[-1].cell) if len(results) > query.limit else None,
         )
 

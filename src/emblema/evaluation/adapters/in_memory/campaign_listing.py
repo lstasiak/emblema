@@ -26,10 +26,13 @@ class InMemoryCampaignListing:
             ordered = [overview for overview in ordered if self._key(overview.position) > start]
         return tuple(ordered[:limit])
 
+    def get_overview(self, campaign: CampaignId) -> CampaignOverview:
+        return CampaignOverview.of(self._repository.get(campaign))
+
     def results(
         self, campaign: CampaignId, *, after: CampaignCell | None, limit: int
     ) -> tuple[CellResult, ...]:
-        ordered = sorted(self._repository.get(campaign).results, key=self._cell_position)
+        ordered = sorted(self._repository.read(campaign).results, key=self._cell_position)
         if after is not None:
             start = self._key_of(after)
             ordered = [result for result in ordered if self._cell_position(result) > start]

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from emblema.evaluation.application.read_models.campaign_summary import CampaignSummary
 
@@ -22,6 +22,13 @@ class CampaignResource(BaseModel):
     candidates: list[str]
     budgets: list[str]
     seeds: list[int]
+    measure: str = Field(
+        description=(
+            "What every error of the campaign is: `rmse`, the root mean squared error in the "
+            "task's unit, or `auroc_shortfall`, one minus the area under the ROC curve. Lower "
+            "is better under either."
+        )
+    )
     cells_recorded: int
     cells_planned: int
 
@@ -41,6 +48,7 @@ class CampaignResource(BaseModel):
             candidates=[str(candidate) for candidate in summary.candidates],
             budgets=list(summary.budgets),
             seeds=list(summary.seeds),
+            measure=str(summary.measure),
             cells_recorded=summary.cells_recorded,
             cells_planned=summary.cells_planned,
         )

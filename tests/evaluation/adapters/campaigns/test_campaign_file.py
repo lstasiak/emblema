@@ -18,10 +18,12 @@ from emblema.evaluation.domain.exceptions import (
     InvalidTunedChoiceError,
 )
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.benjamini_hochberg_correction import (
     BenjaminiHochbergCorrection,
 )
 from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
+from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
@@ -176,3 +178,59 @@ def test_the_family_is_read_under_holm_unless_the_file_names_another_correction(
 def test_a_correction_nobody_knows_is_refused(tmp_path: Path) -> None:
     with pytest.raises(InvalidComparisonRulesError, match="no family correction is called"):
         written(DECLARED + 'correction = "bonferroni"\n', tmp_path).comparison_rules()
+
+
+ABSOLUTE = DECLARED.replace(
+    "minimum_relative_reduction = 0.1\nfloor_share = 0.02\n",
+    "minimum_absolute_reduction = 0.02\nabsolute_floor = 0.01\n",
+)
+
+
+def test_thresholds_stated_as_shares_are_read_as_shares_of_the_controls_error(
+    tmp_path: Path,
+) -> None:
+    rules = written(DECLARED, tmp_path).comparison_rules()
+
+    assert (rules.threshold, rules.minimum_reduction, rules.floor_part) == (
+        ThresholdKind.RELATIVE,
+        0.1,
+        0.02,
+    )
+
+
+def test_thresholds_stated_in_the_errors_unit_are_read_in_it(tmp_path: Path) -> None:
+    rules = written(ABSOLUTE, tmp_path).comparison_rules()
+
+    assert (rules.threshold, rules.minimum_reduction, rules.floor_part) == (
+        ThresholdKind.ABSOLUTE,
+        0.02,
+        0.01,
+    )
+
+
+@pytest.mark.parametrize(
+    "rules",
+    [
+        "minimum_relative_reduction = 0.1\nabsolute_floor = 0.01\n",
+        "minimum_relative_reduction = 0.1\nfloor_share = 0.02\nabsolute_floor = 0.01\n",
+        "minimum_absolute_reduction = 0.02\n",
+        "",
+    ],
+    ids=["mixed", "both", "half", "neither"],
+)
+def test_thresholds_stated_other_than_as_one_whole_pair_are_refused(
+    tmp_path: Path, rules: str
+) -> None:
+    stated = DECLARED.replace("minimum_relative_reduction = 0.1\nfloor_share = 0.02\n", rules)
+
+    with pytest.raises(ValidationError, match="both as shares"):
+        written(stated, tmp_path)
+
+
+def test_a_campaign_reads_by_the_measure_it_names_or_leaves_it_to_the_task(
+    tmp_path: Path,
+) -> None:
+    named = written('measure = "auroc_shortfall"\n' + ABSOLUTE, tmp_path)
+
+    assert named.measure is ErrorMeasure.AUROC_SHORTFALL
+    assert written(DECLARED, tmp_path).measure is None
