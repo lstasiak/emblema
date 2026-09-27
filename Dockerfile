@@ -38,7 +38,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     set -eu; extras=""; for extra in ${EXTRAS}; do extras="${extras} --extra ${extra}"; done; \
     uv sync --locked --no-dev --no-install-project ${extras}
 
-COPY README.md LICENSE ./
+COPY README.md LICENSE NOTICE ./
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     set -eu; extras=""; for extra in ${EXTRAS}; do extras="${extras} --extra ${extra}"; done; \
@@ -95,7 +95,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install --no-install-recommends --yes git
 
 WORKDIR /app
-COPY pyproject.toml uv.lock README.md LICENSE ./
+COPY pyproject.toml uv.lock README.md LICENSE NOTICE ./
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --all-extras --all-groups
