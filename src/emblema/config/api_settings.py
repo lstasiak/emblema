@@ -1,3 +1,5 @@
+import math
+
 from pydantic import BaseModel, Field
 
 
@@ -46,12 +48,32 @@ class ApiSettings(BaseModel):
     onnx_threads: int = Field(
         ge=1, description="Threads one graph call may use; the rest are other requests'."
     )
+    inference_budget_windows: int = Field(
+        ge=1,
+        description=(
+            "How many windows of the longest admitted length the networks run at once, across "
+            "every request. Batches are cut and admitted by their cost against it, so it bounds "
+            "the memory the graphs may hold whatever arrives; size it from what one such "
+            "window takes and what the process may hold."
+        ),
+    )
+    inference_wait_seconds: float = Field(
+        gt=0,
+        description=(
+            "How long a batch waits to be admitted before the request is refused as busy; "
+            "also what a refused client is told to wait before it tries again."
+        ),
+    )
     default_page_size: int = Field(ge=1)
     max_page_size: int = Field(ge=1)
     verdict_memo_capacity: int = Field(
         ge=1,
         description="Campaign verdicts one process keeps once read, the least recent forgotten.",
     )
+
+    def retry_after_seconds(self) -> int:
+        """Whole seconds a client refused as busy is told to wait, never less than one."""
+        return max(1, math.ceil(self.inference_wait_seconds))
 
     def origins(self) -> tuple[str, ...]:
         """The origins the browser may call from, one per entry, blanks dropped."""

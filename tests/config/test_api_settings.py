@@ -21,6 +21,8 @@ API = {
     "EMBLEMA_API__BATCH_SIZE": "16",
     "EMBLEMA_API__ONNX_PROVIDERS": " CoreMLExecutionProvider, CPUExecutionProvider ,",
     "EMBLEMA_API__ONNX_THREADS": "2",
+    "EMBLEMA_API__INFERENCE_BUDGET_WINDOWS": "2",
+    "EMBLEMA_API__INFERENCE_WAIT_SECONDS": "2.5",
     "EMBLEMA_API__DEFAULT_PAGE_SIZE": "20",
     "EMBLEMA_API__MAX_PAGE_SIZE": "100",
     "EMBLEMA_API__VERDICT_MEMO_CAPACITY": "64",
@@ -99,4 +101,38 @@ def test_a_count_of_nothing_is_refused_as_the_process_is_configured(
     only(monkeypatch, **STORE, **(API | {name: "0"}))
 
     with pytest.raises(ValidationError, match=name.removeprefix("EMBLEMA_API__").lower()):
+        Settings(_env_file=None)
+
+
+def test_a_client_refused_as_busy_is_told_to_wait_whole_seconds_and_never_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    only(monkeypatch, **STORE, **API)
+    assert Settings(_env_file=None).require_api().retry_after_seconds() == 3
+
+    only(monkeypatch, **STORE, **{**API, "EMBLEMA_API__INFERENCE_WAIT_SECONDS": "0.2"})
+    assert Settings(_env_file=None).require_api().retry_after_seconds() == 1
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [("INFERENCE_BUDGET_WINDOWS", "0"), ("INFERENCE_WAIT_SECONDS", "0")],
+)
+def test_the_inference_budget_admits_something_and_a_caller_waits_some_time(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    only(monkeypatch, **STORE, **{**API, f"EMBLEMA_API__{name}": value})
+
+    with pytest.raises(ValidationError, match=name.lower()):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("name", ["INFERENCE_BUDGET_WINDOWS", "INFERENCE_WAIT_SECONDS"])
+def test_what_the_networks_may_run_at_once_is_never_assumed(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    named = {key: value for key, value in API.items() if key != f"EMBLEMA_API__{name}"}
+    only(monkeypatch, **STORE, **named)
+
+    with pytest.raises(ValidationError, match=name.lower()):
         Settings(_env_file=None)
