@@ -1,7 +1,7 @@
 # ADR-0042: The prediction service — open host services, a runtime routed by the form kept, and each context's API inside the context
 
 - Status: proposed (accepted once a promoted candidate answers on arm64)
-- Date: 2026-09-25
+- Date: 2026-09-25; amended 2026-09-27 (the networks' concurrency is bounded by cost, ADR-0043)
 
 ## Context
 

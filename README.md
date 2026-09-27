@@ -226,7 +226,8 @@ curl -s -X POST http://127.0.0.1:8000/served-models/<model id>/predictions \
 ```
 
 `/embeddings` answers with the pooled representation of each window; a classical candidate has
-none. `/campaigns`, `/campaigns/<id>` and `/campaigns/<id>/runs` show what was compared: the
+none. What the networks run at once is bounded by cost ([ADR-0043](docs/adr/0043-the-networks-memory-is-bounded-by-cost.md)):
+a request that cannot be started in time is refused with `503` and a `Retry-After`. `/campaigns`, `/campaigns/<id>` and `/campaigns/<id>/runs` show what was compared: the
 design, every candidate's curve, the verdict with its intervals, and the grid a page at a time.
 Every refusal is a problem details document (RFC 9457).
 
