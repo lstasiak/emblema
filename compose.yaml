@@ -145,7 +145,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    env_file: .env
+    # Not required: the job that runs the test suite starts only the store and the database, and
+    # brings the whole project down after; a process started without the file refuses to start.
+    env_file:
+      - path: .env
+        required: false
     environment:
       <<: *in-network
     command: ["alembic", "upgrade", "head"]
@@ -166,7 +170,9 @@ services:
         condition: service_healthy
       garage:
         condition: service_healthy
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       <<: *in-network
       # Inside the container the process must answer on every interface, or the published port
