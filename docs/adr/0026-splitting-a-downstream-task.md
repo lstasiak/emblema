@@ -57,3 +57,6 @@ window.
   `UnitLifetimes.failure_times(units)` into `GroundTruth.truths_of(windows)`: one number per window,
   read by the task's label scheme. The turbofan adapter answers every window with the failure
   moment; nothing above moves (ADR-0033).
+- **2026-09-27** — a task over outcomes names an official test set that follows no range of keys
+  (PhysioNet 2012 set C, 4,000 stays), so the frozen side is read from the published listing
+  shipped with the task (ADR-0045).

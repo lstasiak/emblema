@@ -44,6 +44,15 @@ which artifacts a finished comparison measured.
 - A final campaign opens the frozen side once per cell; the promise is per campaign, and the record
   must be read that way.
 
+## Amendments
+
+- **2026-09-28 — the campaign records its cells, the results are read apart.** The aggregate
+  holds which cells have run; its invariants need nothing more. What the cells produced, thousands
+  of answers a cell once a task keeps them (ADR-0045), is read as a `CampaignReading` by the
+  verdict, the selection and the reports only, in three statements straight from the tables. A
+  cell is written once, with its result; ordering, running and recording a cell read one row and
+  the cells' keys.
+
 ## Revisit when
 
 - An unsupervised detection campaign (no budget axis) → a different shape.

@@ -65,3 +65,4 @@ leave-one-out error among a declared grid (ADR-0038).
 ## Amendments
 
 - **2026-09-27 — accepted after the repeated curve** (`label-efficiency-curve.md`): the closed-form probe ran at every budget for seconds a cell; it beat the trained probe only at every window (13.6 against 14.2), and at 50 and 200 the trained probe at its registered peak was a cycle better. The two probes stay: the difference between them is the reading the arm exists for.
+- **2026-09-27 — over outcomes the probe is calibrated**: the ridge's leave-one-out answers fit a logistic calibration folded into the head, so it answers probabilities and ranks as the ridge does (ADR-0045).

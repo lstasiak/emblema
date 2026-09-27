@@ -79,3 +79,4 @@ report script before the harness exists.
 ## Amendments
 
 - **2026-09-27 — the grid scripts retired.** `scripts/label_curve_report.py` and the scripts that stored the grid it read are gone; the evaluation campaign judges its own grid, and `scripts/campaign_report.py` writes that verdict down.
+- **2026-09-27 — extended to a ranking measure**: the error is a measure of the design, thresholds may be absolute, and the resampling runs in strata; a single stratum draws exactly as before (ADR-0046).
