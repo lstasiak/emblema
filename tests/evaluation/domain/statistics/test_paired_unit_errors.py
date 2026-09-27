@@ -20,9 +20,9 @@ def paired() -> PairedUnitErrors:
 def test_each_side_is_scored_by_adding_sums_and_counts_before_the_root() -> None:
     compared = paired()
 
-    assert compared.rmse_control == pytest.approx((50.0 / 4) ** 0.5)
-    assert compared.rmse_candidate == pytest.approx((10.0 / 4) ** 0.5)
-    assert compared.reduction == pytest.approx(compared.rmse_control - compared.rmse_candidate)
+    assert compared.error_control == pytest.approx((50.0 / 4) ** 0.5)
+    assert compared.error_candidate == pytest.approx((10.0 / 4) ** 0.5)
+    assert compared.reduction == pytest.approx(compared.error_control - compared.error_candidate)
     assert compared.relative_reduction == pytest.approx(1.0 - (10.0 / 50.0) ** 0.5)
     assert [str(unit) for unit in compared.units] == ["a", "b"]
 
@@ -82,5 +82,4 @@ def test_a_control_without_error_has_no_share_to_reduce() -> None:
     compared = PairedUnitErrors(control=(error("a", 0.0),), candidate=(error("a", 0.0),))
 
     assert compared.reduction == 0.0
-    with pytest.raises(InvalidPairedUnitErrorsError, match="no error to reduce"):
-        _ = compared.relative_reduction
+    assert compared.relative_reduction is None

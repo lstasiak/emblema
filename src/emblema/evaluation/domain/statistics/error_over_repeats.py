@@ -11,8 +11,9 @@ from emblema.evaluation.domain.exceptions import InvalidErrorOverRepeatsError
 class ErrorOverRepeats:
     """What one side of a comparison scored over its repeats: the pooled error and its spread.
 
-    The pooled error is the one the comparison is made on: every repeat's squared errors added
-    before the root. The spread is the standard deviation of the repeats' own errors, reported
+    The pooled error is the one the comparison is made on, pooled as the measure pools repeats:
+    every repeat's squared errors added before the root, or the repeats' shortfalls in area
+    averaged. The spread is the standard deviation of the repeats' own errors, reported
     beside the interval and never folded into it: a handful of repeats is not an interval, but it
     is a component of the uncertainty a reader should see.
 

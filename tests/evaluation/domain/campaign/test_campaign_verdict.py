@@ -1,5 +1,7 @@
 """The verdict as a sentence: the endpoint, the shape of the curve around it, and the side."""
 
+from dataclasses import replace
+
 import pytest
 
 from emblema.evaluation.contracts.identifiers import CandidateRef
@@ -10,6 +12,7 @@ from emblema.evaluation.domain.exceptions import (
     SelectionHasNoVerdictError,
 )
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.bootstrap_interval import BootstrapInterval
 from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVerdict
 from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
@@ -55,6 +58,7 @@ def verdict(
     read_on: RunPurpose = RunPurpose.TUNING,
 ) -> CampaignVerdict:
     return CampaignVerdict(
+        measure=ErrorMeasure.RMSE,
         control=CONTROL,
         read_on=read_on,
         endpoint=comparison(CONTENDER, AT_200, endpoint),
@@ -71,6 +75,25 @@ def test_a_confirmed_endpoint_opens_the_sentence_with_its_size_interval_floor_an
         "[1.49; 3.3], floor 0.57; over 5 and 5 repeats the sides spread 0.76 and 0.34)"
     )
     assert sentence.endswith(". Validation side; preliminary.")
+
+
+def test_a_control_without_error_is_read_without_a_share_of_it() -> None:
+    faultless = replace(
+        comparison(CONTENDER, AT_200, ComparisonVerdict.INDISTINGUISHABLE, reduction=0.0),
+        control_error=ErrorOverRepeats.of(0.0, [0.0]),
+        candidate_error=ErrorOverRepeats.of(0.0, [0.0]),
+        difference=PairedDifference(
+            reduction=0.0,
+            relative_reduction=None,
+            interval=BootstrapInterval(low=0.0, high=0.0, level=0.95),
+            p_value=1.0,
+        ),
+    )
+    sentence = replace(verdict(), endpoint=faultless).sentence()
+
+    assert "lowers the error of from_scratch by nothing: the control made no error (0 → 0," in (
+        sentence
+    )
 
 
 def test_an_endpoint_that_fell_short_says_so_and_of_what() -> None:
@@ -124,6 +147,7 @@ def test_a_verdict_read_on_the_test_side_is_final() -> None:
 
 def test_one_repeat_a_side_is_said_without_a_spread() -> None:
     lone = CampaignVerdict(
+        measure=ErrorMeasure.RMSE,
         control=CONTROL,
         read_on=RunPurpose.TUNING,
         endpoint=comparison(CONTENDER, AT_200, ComparisonVerdict.CONFIRMED, repeats=1),
@@ -141,6 +165,7 @@ def test_a_selection_has_no_verdict_to_state() -> None:
 def test_a_verdict_that_compares_the_control_with_itself_or_a_pairing_twice_is_refused() -> None:
     with pytest.raises(InvalidCampaignVerdictError, match="against itself"):
         CampaignVerdict(
+            measure=ErrorMeasure.RMSE,
             control=CONTENDER,
             read_on=RunPurpose.TUNING,
             endpoint=comparison(CONTENDER, AT_200, ComparisonVerdict.CONFIRMED),

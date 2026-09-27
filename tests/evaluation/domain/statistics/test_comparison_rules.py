@@ -1,3 +1,5 @@
+from math import inf
+
 import pytest
 
 from emblema.evaluation.domain.exceptions import (
@@ -10,10 +12,12 @@ from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVe
 from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.practical_floor import PracticalFloor
+from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
 
 RULES = ComparisonRules(
-    minimum_relative_reduction=0.10,
-    floor_share=0.03,
+    threshold=ThresholdKind.RELATIVE,
+    minimum_reduction=0.10,
+    floor_part=0.03,
     correction=HolmCorrection(alpha=0.05),
     secondary_family_size=11,
 )
@@ -84,18 +88,23 @@ def test_the_secondary_family_is_the_registered_one_whatever_ran() -> None:
 
 
 @pytest.mark.parametrize(
-    ("field", "value", "message"),
+    ("threshold", "field", "value", "message"),
     [
-        ("minimum_relative_reduction", 0.0, "minimum_relative_reduction must lie in"),
-        ("minimum_relative_reduction", 1.0, "minimum_relative_reduction must lie in"),
-        ("floor_share", -0.1, "floor_share must be finite"),
-        ("secondary_family_size", 0, "secondary family needs a member"),
+        (ThresholdKind.RELATIVE, "minimum_reduction", 0.0, "relative minimum_reduction of 0.0"),
+        (ThresholdKind.RELATIVE, "minimum_reduction", 1.0, "relative minimum_reduction of 1.0"),
+        (ThresholdKind.ABSOLUTE, "minimum_reduction", 0.0, "absolute minimum_reduction of 0.0"),
+        (ThresholdKind.ABSOLUTE, "minimum_reduction", inf, "absolute minimum_reduction of inf"),
+        (ThresholdKind.RELATIVE, "floor_part", -0.1, "floor_part must be finite"),
+        (ThresholdKind.RELATIVE, "secondary_family_size", 0, "secondary family needs a member"),
     ],
 )
-def test_rules_that_cannot_judge_are_refused(field: str, value: float, message: str) -> None:
+def test_rules_that_cannot_judge_are_refused(
+    threshold: ThresholdKind, field: str, value: float, message: str
+) -> None:
     stated = {
-        "minimum_relative_reduction": 0.10,
-        "floor_share": 0.03,
+        "threshold": threshold,
+        "minimum_reduction": 0.10,
+        "floor_part": 0.03,
         "correction": HolmCorrection(alpha=0.05),
         "secondary_family_size": 11,
         field: value,

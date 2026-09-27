@@ -8,6 +8,7 @@ from emblema.evaluation.domain.exceptions import (
     UnknownCandidateError,
 )
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
@@ -57,6 +58,8 @@ class CampaignDesign:
         tuned: Which variant a candidate runs at a budget, for each pairing a selection chose.
         variants: Every variant ``tuned`` names, as it was described when the design was
             written, so a cell is checked against the variant it runs rather than its base.
+        measure: What every run is read by: the comparison, the floor and a selection's rule
+            all take the error it states. Registered with the rest, before the grid runs.
     """
 
     candidates: tuple[CampaignCandidate, ...]
@@ -70,6 +73,7 @@ class CampaignDesign:
     inner_holdout: InnerHoldout | None = None
     tuned: tuple[TunedChoice, ...] = ()
     variants: tuple[CampaignCandidate, ...] = ()
+    measure: ErrorMeasure = ErrorMeasure.RMSE
 
     def __post_init__(self) -> None:
         self._check_candidates()
