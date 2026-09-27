@@ -27,3 +27,7 @@ class InMemoryServedModelRepository:
                 f"artifact {model.artifact.checksum} is already served"
             )
         self._models[model.served_model_id] = model
+
+    def stored(self) -> tuple[ServedModel, ...]:
+        """Every model kept, in no particular order; what the in-memory listing reads."""
+        return tuple(self._models.values())

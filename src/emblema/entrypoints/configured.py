@@ -27,16 +27,20 @@ def configured_store(settings: Settings) -> ArtifactStore:
     )
 
 
-def configured_engine(settings: Settings) -> Engine:
+def configured_engine(settings: Settings, *, pool_size: int | None = None) -> Engine:
     """An engine on the metadata database the settings name.
 
     The engine opens no connection until the first query, so assembling a process costs no
-    network.
+    network. A process answering on several threads names how many connections it pools;
+    every other process takes the driver's default.
 
     Raises:
         ValueError: If the settings name no database.
     """
-    return create_engine(settings.require_database().sqlalchemy_url())
+    url = settings.require_database().sqlalchemy_url()
+    if pool_size is None:
+        return create_engine(url)
+    return create_engine(url, pool_size=pool_size)
 
 
 def settings_for(settings: Settings | None, adapter: str) -> Settings:

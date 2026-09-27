@@ -2,7 +2,11 @@ from datetime import UTC, datetime
 
 import pytest
 
-from emblema.serving.domain.exceptions import InvalidServedModelError, ServedModelWithdrawnError
+from emblema.serving.domain.exceptions import (
+    InvalidServedModelError,
+    ServedModelNotServingError,
+    ServedModelWithdrawnError,
+)
 from emblema.serving.domain.served_model import ServedModel
 from emblema.serving.domain.served_model_state import ServedModelState
 from emblema.shared.kernel.timestamps import UtcDateTime
@@ -46,3 +50,12 @@ def test_a_withdrawn_model_is_not_withdrawn_again() -> None:
 def test_a_model_is_not_withdrawn_before_it_was_promoted() -> None:
     with pytest.raises(InvalidServedModelError, match="before it was promoted"):
         served().withdraw(FINISHED)
+
+
+def test_a_model_in_service_answers() -> None:
+    served().must_be_serving()
+
+
+def test_a_withdrawn_model_answers_nothing() -> None:
+    with pytest.raises(ServedModelNotServingError, match="withdrawn"):
+        served().withdraw(WITHDRAWN).must_be_serving()

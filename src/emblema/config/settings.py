@@ -3,9 +3,11 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from emblema.config.api_settings import ApiSettings
 from emblema.config.artifact_store_settings import ArtifactStoreSettings
 from emblema.config.broker_settings import BrokerSettings
 from emblema.config.database_settings import DatabaseSettings
+from emblema.config.telemetry_settings import TelemetrySettings
 from emblema.config.worker_settings import WorkerSettings
 from emblema.shared.kernel.compute import ComputeTier
 
@@ -61,6 +63,44 @@ class Settings(BaseSettings):
             "leaves it unset: only the one that runs cells is told these."
         ),
     )
+
+    api: ApiSettings | None = Field(
+        default=None,
+        description=(
+            "Where the HTTP process listens and how much one request may ask of it. Every "
+            "other process leaves it unset."
+        ),
+    )
+
+    telemetry: TelemetrySettings | None = Field(
+        default=None,
+        description=(
+            "Where a process reports what it does. A process that reports nothing — a command "
+            "run once from a shell — leaves it unset."
+        ),
+    )
+
+    def require_api(self) -> ApiSettings:
+        """What the HTTP process was told about where it listens and what it allows.
+
+        Raises:
+            ValueError: If nothing is configured; the process fails as it is assembled rather
+                than binding where nobody said.
+        """
+        if self.api is None:
+            raise ValueError("the process serves HTTP and EMBLEMA_API__* is not set")
+        return self.api
+
+    def require_telemetry(self) -> TelemetrySettings:
+        """How a process that reports itself was told to name itself and where to report.
+
+        Raises:
+            ValueError: If nothing is configured; the process fails as it is assembled rather
+                than reporting under a name nobody gave it.
+        """
+        if self.telemetry is None:
+            raise ValueError("the process reports itself and EMBLEMA_TELEMETRY__* is not set")
+        return self.telemetry
 
     def require_worker(self) -> WorkerSettings:
         """What a process that runs campaign cells was told to run them with.

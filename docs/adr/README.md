@@ -56,3 +56,5 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0039](0039-the-patch-baseline.md) | The patch baseline: a network from nothing on the grid, behind a port of its own, on the arms' budget | accepted |
 | [0040](0040-the-kept-candidate-in-more-than-one-form.md) | The kept candidate in more than one form: a manifest through the store, an inference graph derived while the run still holds the candidate, and attested against the run's own answers | accepted |
 | [0041](0041-the-pooling-of-the-head-as-a-knob.md) | The pooling of the head as a knob: free of the channel layout, turned by name on every network | accepted |
+| [0042](0042-the-prediction-service.md) | The prediction service: open host services, a runtime routed by the form kept, and each context's API inside the context | proposed |
+| [0043](0043-the-networks-memory-is-bounded-by-cost.md) | The networks' memory is bounded by cost: batches cut and admitted by token pairs | accepted |

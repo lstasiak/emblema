@@ -2,16 +2,23 @@ import io
 import pickle
 import zipfile
 from dataclasses import dataclass
-from typing import ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Self
 
 import joblib
-import xgboost
 
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
 
+if TYPE_CHECKING:
+    import xgboost
+
+# The library is imported where trees are loaded, not here: on macOS its OpenMP
+# runtime and torch's share symbols, and whichever loads first answers for both, so a process that
+# only names this class must not be the one that loads it first.
+
 # What comes back from handing joblib bytes it did not write, or a document missing what this
-# reads. The reasons differ and to a caller they are one thing: this artifact is not ours.
+# reads. The reasons differ and to a caller they are one thing: this artifact is not ours. The
+# library's own error is a ``ValueError``, so it is among them.
 UNREADABLE_BYTES = (
     KeyError,
     IndexError,
@@ -23,7 +30,6 @@ UNREADABLE_BYTES = (
     OSError,
     pickle.UnpicklingError,
     zipfile.BadZipFile,
-    xgboost.core.XGBoostError,
 )
 
 
@@ -60,7 +66,7 @@ class FittedBaseline:
     def of(
         cls,
         recipe: ClassicalRecipe,
-        fitted: xgboost.XGBRegressor,
+        fitted: "xgboost.XGBRegressor",
         *,
         feature_names: tuple[str, ...],
         target_scale: float,
@@ -105,12 +111,14 @@ class FittedBaseline:
                 f"not a fitted baseline this can read: {error}"
             ) from error
 
-    def booster(self) -> xgboost.Booster:
+    def booster(self) -> "xgboost.Booster":
         """The trees, loaded and ready to answer rows laid out as ``feature_names`` says.
 
         Raises:
             UnreadableFittedCandidateError: If the stored trees are not ones XGBoost reads.
         """
+        import xgboost
+
         loaded = xgboost.Booster()
         try:
             loaded.load_model(bytearray(self.model))

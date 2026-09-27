@@ -3,7 +3,11 @@ from typing import Self
 
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.serving.domain.artifact_origin import ArtifactOrigin
-from emblema.serving.domain.exceptions import InvalidServedModelError, ServedModelWithdrawnError
+from emblema.serving.domain.exceptions import (
+    InvalidServedModelError,
+    ServedModelNotServingError,
+    ServedModelWithdrawnError,
+)
 from emblema.serving.domain.identifiers import ServedModelId
 from emblema.serving.domain.promotable_artifact import PromotableArtifact
 from emblema.serving.domain.served_model_state import ServedModelState
@@ -75,6 +79,18 @@ class ServedModel:
         if self.withdrawn_at is None:
             return ServedModelState.SERVING
         return ServedModelState.WITHDRAWN
+
+    def must_be_serving(self) -> None:
+        """Refuse to answer for a model taken out of service.
+
+        Raises:
+            ServedModelNotServingError: If the model has been withdrawn.
+        """
+        if self.withdrawn_at is not None:
+            raise ServedModelNotServingError(
+                f"model {self.served_model_id} was withdrawn at "
+                f"{self.withdrawn_at.value.isoformat()} and answers nothing"
+            )
 
     def withdraw(self, at: UtcDateTime) -> Self:
         """The model taken out of service at ``at``.

@@ -1,5 +1,6 @@
 # The local stack: metadata database, S3-compatible artifact store, experiment tracking, the
-# broker background work passes through, and the application's own processes.
+# broker background work passes through, and the application's own processes: a one-shot
+# migration, the API, and the workers behind a profile.
 # `docker compose up -d --wait` brings it up; values come from `.env` (copy `env.example`).
 # Credentials are defined once, as the application reads them, and mapped here onto the services:
 # the artifact key onto Garage's default key, MLflow's S3 client and the bootstrap job; the
@@ -16,6 +17,16 @@ x-in-network: &in-network
   EMBLEMA_BROKER__HOST: rabbitmq
   EMBLEMA_BROKER__PORT: "5672"
   EMBLEMA_ARTIFACT_STORE__ENDPOINT_URL: http://garage:3900
+
+# The image the API runs, named so that the migration runs from the very same one: the schema a
+# process expects and the migrations that produce it come from one commit.
+x-api-image: &api-image
+  build:
+    context: .
+    target: runtime
+    args:
+      EXTRAS: api baselines
+  image: emblema-api
 
 services:
   postgres:
@@ -126,6 +137,65 @@ services:
       - ./scripts:/scripts:ro
     restart: "no"
 
+  migrate:
+    # One-shot job: brings the database to the schema this commit expects, from the image the
+    # processes run, before any of them starts. Every process that reads the database waits for
+    # it, so one `up` brings the stack up migrated and nobody migrates from a host.
+    <<: *api-image
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Not required: the job that runs the test suite starts only the store and the database, and
+    # brings the whole project down after; a process started without the file refuses to start.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *in-network
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    # The HTTP process: predictions and representations from whatever a finished campaign kept,
+    # and the campaigns themselves. Not behind a profile, because it is what a fresh clone talks
+    # to first, and it answers its probes with nothing promoted yet. No torch: a network is
+    # served through its graph; a classical candidate through the baselines' own libraries.
+    <<: *api-image
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *in-network
+      # Inside the container the process must answer on every interface, or the published port
+      # reaches nothing; the publication below keeps it on the host's loopback.
+      EMBLEMA_API__HOST: 0.0.0.0
+      EMBLEMA_API__PORT: "8000"
+      EMBLEMA_TELEMETRY__SERVICE_NAME: emblema-api
+    ports:
+      # Published like MLflow's port, with a default: a process told nothing of the API group
+      # still brings the stack up, and a group half named refuses to start.
+      - "127.0.0.1:${EMBLEMA_API__PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    # The memory the inference budget is sized against. Without a limit the container is bounded
+    # only by the machine, and a burst that outruns the budget takes the neighbours with it; with
+    # one, the kernel ends this process alone and it is started again.
+    mem_limit: 4g
+    restart: on-failure
+    command: ["python", "-m", "emblema.entrypoints.api"]
+
   worker-ml:
     # Consumes the cells that train or score a network. Behind a profile because a worker is told
     # which backbone it serves and there is none until a pretraining run has been accepted, so a
@@ -142,6 +212,8 @@ services:
       args:
         EXTRAS: ml
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       garage:
@@ -191,6 +263,8 @@ services:
       args:
         EXTRAS: baselines
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       garage:

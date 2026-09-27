@@ -11,13 +11,9 @@ import onnx
 import pytest
 from torch import Tensor
 
-from emblema.evaluation.adapters.onnx.inference_graph import (
-    INPUT_NAMES,
-    MAX_TOKENS,
-    OUTPUT_NAMES,
-    InferenceGraph,
-)
+from emblema.evaluation.adapters.onnx.inference_graph import MAX_TOKENS, InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
+from emblema.evaluation.contracts.inference_graph_signature import INPUT_NAMES, OUTPUT_NAMES
 from emblema.evaluation.domain.exceptions import (
     InferenceGraphDivergedError,
     UnexportableCandidateError,

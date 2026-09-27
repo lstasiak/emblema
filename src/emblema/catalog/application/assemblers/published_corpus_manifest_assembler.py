@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from emblema.catalog.contracts.published_channel import PublishedChannel
 from emblema.catalog.contracts.published_channel_statistics import PublishedChannelStatistics
 from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
@@ -62,18 +64,29 @@ class PublishedCorpusManifestAssembler:
                 token_count=message.token_count,
             ),
             window=WindowSpec(message.window_length, message.window_stride),
-            scheme=TokenisationScheme(
-                vocabulary=ChannelVocabulary(
-                    tuple(self._entry(channel) for channel in message.channels)
-                ),
-                statistics=tuple(self._statistics(channel) for channel in message.channels),
-            ),
+            scheme=self.restore_scheme(message.channels),
             split=UnitSplit(
                 training=frozenset(UnitKey(key) for key in message.training_units),
                 validation=frozenset(UnitKey(key) for key in message.validation_units),
             ),
             split_seed=message.split_seed,
             empty_units=tuple(UnitKey(key) for key in message.empty_units),
+        )
+
+    def restore_scheme(self, channels: Sequence[PublishedChannel]) -> TokenisationScheme:
+        """The scheme the published channels describe: the vocabulary and what was fitted for it.
+
+        On its own because a window tokenised for a served model is tokenised under the
+        channels of the corpus the model was fitted to, with no manifest around them.
+
+        Raises:
+            InvalidChannelVocabularyError: If a channel is declared twice for a corpus, or the
+                identifiers do not run from one in order.
+            InvalidChannelStatisticsError: If a channel's statistics are not statistics.
+        """
+        return TokenisationScheme(
+            vocabulary=ChannelVocabulary(tuple(self._entry(channel) for channel in channels)),
+            statistics=tuple(self._statistics(channel) for channel in channels),
         )
 
     @staticmethod

@@ -27,3 +27,11 @@ class InvalidTokenWindowError(ValueError):
 
 class InvalidLearningRateScheduleError(ValueError):
     pass
+
+
+class InvalidCursorError(ValueError):
+    pass
+
+
+class InvalidPageError(ValueError):
+    pass

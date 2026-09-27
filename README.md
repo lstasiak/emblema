@@ -125,15 +125,18 @@ uv run lint-imports              # architecture contracts
 
 ### Local stack
 
-Postgres, Garage, MLflow and RabbitMQ run in Docker:
+Postgres, Garage, MLflow, RabbitMQ and the API run in Docker:
 
 ```sh
 cp env.example .env
-docker compose up -d --wait
+docker compose up -d --wait      # builds the images and migrates the database
 bash scripts/smoke.sh
-uv run alembic upgrade head
 uv run pytest -m integration     # adapter contracts against the stack
 ```
+
+The API listens on `http://127.0.0.1:8000`; its schema is at `/openapi.json` and a browser
+reads it at `/docs`. Liveness, readiness and Prometheus metrics are `/health`, `/ready` and
+`/metrics`.
 
 The integration tests use their own database, named after the configured one with `_test`
 appended. The merge gate is the same suite inside the image, on the interpreter, wheels and OS
@@ -208,6 +211,25 @@ artifact.
 uv run python -m emblema.entrypoints.cli.serving promote --checksum <checksum>
 uv run python -m emblema.entrypoints.cli.serving withdraw --model <model id>
 ```
+
+A promoted model answers over HTTP with raw readings: the request states where the window
+starts, how long it is, and every reading inside it by channel name. Readings on channels the
+model does not know are ignored and named in the answer; a window without a reading the model
+takes is refused ([ADR-0042](docs/adr/0042-the-prediction-service.md)):
+
+```sh
+curl -s http://127.0.0.1:8000/served-models/<model id>          # what the model takes
+curl -s -X POST http://127.0.0.1:8000/served-models/<model id>/predictions \
+  -H 'Content-Type: application/json' \
+  -d '{"windows": [{"start": 1, "length": 50,
+                    "observations": [{"channel": "T24", "time": 1, "value": 641.8}]}]}'
+```
+
+`/embeddings` answers with the pooled representation of each window; a classical candidate has
+none. What the networks run at once is bounded by cost ([ADR-0043](docs/adr/0043-the-networks-memory-is-bounded-by-cost.md)):
+a request that cannot be started in time is refused with `503` and a `Retry-After`. `/campaigns`, `/campaigns/<id>` and `/campaigns/<id>/runs` show what was compared: the
+design, every candidate's curve, the verdict with its intervals, and the grid a page at a time.
+Every refusal is a problem details document (RFC 9457).
 
 ## Documentation
 

@@ -46,6 +46,15 @@ def loaded_modules_after_importing(module: str) -> list[str]:
             "emblema.evaluation.contracts.kept_candidate_manifest_json",
             "emblema.evaluation.contracts.kept_candidate_manifest",
         ),
+        (
+            "emblema.evaluation.contracts.kept_candidate_inference",
+            "emblema.evaluation.contracts.kept_representation",
+        ),
+        (
+            "emblema.evaluation.contracts.inference_graph_signature",
+            "emblema.evaluation.contracts.inference_graph_signature",
+        ),
+        ("emblema.catalog.contracts.window_tokeniser", "emblema.catalog.contracts.observed_window"),
     ],
 )
 def test_importing_the_published_language_loads_no_interior_of_any_context(
