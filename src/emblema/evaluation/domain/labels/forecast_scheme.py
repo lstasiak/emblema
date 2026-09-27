@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from math import isfinite
 
 from emblema.evaluation.domain.exceptions import InvalidLabelSchemeError
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,10 @@ class ForecastScheme:
             raise InvalidLabelSchemeError(
                 f"horizon must be finite and not negative: {self.horizon}"
             )
+
+    @property
+    def kind(self) -> TargetKind:
+        return TargetKind.CONTINUOUS
 
     @property
     def scale(self) -> float:

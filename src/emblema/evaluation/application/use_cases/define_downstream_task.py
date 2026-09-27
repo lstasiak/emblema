@@ -3,9 +3,8 @@ from dataclasses import dataclass
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import UnknownTaskUnitsError
 from emblema.evaluation.domain.identifiers import UnitKey
-from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
-from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
-from emblema.evaluation.domain.labels.target_bins import TargetBins
+from emblema.evaluation.domain.labels.label_scheme import LabelScheme
+from emblema.evaluation.domain.labels.stratification import Stratification
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
@@ -27,16 +26,16 @@ class DefineDownstreamTaskCommand:
         test: Units held for the final run, and where they come from.
         protocol: Which question the task asks.
         labels: How a window's target is read; ``None`` where the protocol spends no labels.
-        strata: How many groups of the target a budget is spread over; ``None`` where the
-            protocol spends no labels.
+        strata: How a budget is spread over the pool; ``None`` where the protocol spends no
+            labels.
     """
 
     manifest: ArtifactRef
     units: frozenset[UnitKey]
     test: FrozenTestSplit
     protocol: EvaluationProtocol
-    labels: RemainingLifeScheme | ForecastScheme | None
-    strata: TargetBins | None
+    labels: LabelScheme | None
+    strata: Stratification | None
 
 
 class DefineDownstreamTask:

@@ -82,6 +82,21 @@ def test_a_smaller_budget_is_carried_by_the_larger_one_at_the_same_seed() -> Non
     assert set(drawn(LabelBudget.of(3), seed=3)) <= set(drawn(LabelBudget.of(6), seed=3))
 
 
+@pytest.mark.parametrize(
+    ("budget", "seed", "positions"),
+    [
+        (7, 3, [4, 8, 28, 2, 18, 26, 30]),
+        (13, 11, [24, 28, 25, 29, 2, 6, 10, 14, 30, 3, 23, 27, 31]),
+    ],
+)
+def test_a_draw_repeats_the_windows_every_registered_campaign_was_run_on(
+    budget: int, seed: int, positions: list[int]
+) -> None:
+    # Pinned values, not derived ones: the labels behind every stored cell were drawn this way, so
+    # a change that moved them would silently compare new runs with old ones on other labels.
+    assert drawn(LabelBudget.of(budget), seed=seed, windows=pool(40)) == positions
+
+
 def test_a_budget_larger_than_the_pool_is_refused() -> None:
     with pytest.raises(InvalidLabelBudgetError, match="exceeds"):
         drawn(LabelBudget.of(13), seed=3)

@@ -1,19 +1,26 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Self
 
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import (
     ForeignLabelSampleError,
     FrozenTestSplitClosedError,
+    MismatchedStratificationError,
+    MixedTargetKindsError,
     ProtocolMismatchError,
     UnknownGroundTruthError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.class_strata import ClassStrata
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_sample import LabelSample
+from emblema.evaluation.domain.labels.label_scheme import LabelScheme
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.evaluation.domain.labels.outcome_scheme import OutcomeScheme
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
-from emblema.evaluation.domain.labels.target_bins import TargetBins
+from emblema.evaluation.domain.labels.stratification import Stratification
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
@@ -34,7 +41,9 @@ class DownstreamTask:
 
     Invariants: the label scheme and the stratification are present exactly when the protocol
     spends labels — a detection task has no target to read per window, and a supervised one
-    cannot draw a budget without knowing how to read one.
+    cannot draw a budget without knowing how to read one; a binary target is spread over its
+    outcomes and any other over ranks of the target, since bins of ranks cut through the middle
+    of an outcome and outcomes do not exist on a scale.
 
     Attributes:
         task_id: Identity of the task.
@@ -42,12 +51,10 @@ class DownstreamTask:
         manifest: Reference to the manifest the task was defined against.
         protocol: Which question the task asks, and so which quantity a campaign measures on it.
         split: Which units tune, which validate and which are held for the final run.
-        labels: How a window's target is read from what the ground truth says about it: the
-            moment its unit failed, or the exact reading it is asked to forecast. A closed set
-            of schemes, because which one a task uses decides what the ground truth has to say;
+        labels: How a window's target is read from what the ground truth says about it;
             ``None`` where the protocol spends no labels.
-        strata: How many groups of the target a budget is spread over; ``None`` where the
-            protocol spends no labels.
+        strata: How a budget is spread over the pool; ``None`` where the protocol spends no
+            labels.
     """
 
     task_id: TaskId
@@ -55,14 +62,20 @@ class DownstreamTask:
     manifest: ArtifactRef
     protocol: EvaluationProtocol
     split: TaskSplit
-    labels: RemainingLifeScheme | ForecastScheme | None
-    strata: TargetBins | None
+    labels: LabelScheme | None
+    strata: Stratification | None
 
     def __post_init__(self) -> None:
         for named, part in (("label scheme", self.labels), ("stratification", self.strata)):
             if (part is None) == self.protocol.spends_labels:
                 carries = "carries no" if part is None else "carries a"
                 raise ProtocolMismatchError(f"a task under {self.protocol} {carries} {named}")
+        if self.labels is not None and (self.labels.kind is TargetKind.BINARY) != isinstance(
+            self.strata, ClassStrata
+        ):
+            raise MismatchedStratificationError(
+                f"a {self.labels.kind} target cannot be spread by {type(self.strata).__name__}"
+            )
 
     @property
     def tuning_units(self) -> frozenset[UnitKey]:
@@ -74,7 +87,7 @@ class DownstreamTask:
         """Units every number reported before the final run is measured on."""
         return self.split.validation
 
-    def label_scheme(self) -> RemainingLifeScheme | ForecastScheme:
+    def label_scheme(self) -> LabelScheme:
         """How this task's targets are read.
 
         Raises:
@@ -84,8 +97,8 @@ class DownstreamTask:
             raise ProtocolMismatchError(f"a task under {self.protocol} reads no label per window")
         return self.labels
 
-    def stratification(self) -> TargetBins:
-        """How many groups of the target a budget of this task's labels is spread over.
+    def stratification(self) -> Stratification:
+        """How a budget of this task's labels is spread over its pool.
 
         Raises:
             ProtocolMismatchError: If the protocol spends no labels, so no budget is drawn.
@@ -109,7 +122,7 @@ class DownstreamTask:
 
     @staticmethod
     def _labelled(
-        scheme: RemainingLifeScheme | ForecastScheme,
+        scheme: LabelScheme,
         window: TaskWindow,
         truths: Mapping[TaskWindow, float],
     ) -> LabelledWindow:
@@ -122,6 +135,8 @@ class DownstreamTask:
                 target = scheme.target(failed_at=truths[window], ends_at=window.ends_at)
             case ForecastScheme():
                 target = scheme.target(exact=truths[window])
+            case OutcomeScheme():
+                target = scheme.target(recorded=truths[window])
         return LabelledWindow(window=window, target=target)
 
     def accept_campaign(self) -> None:
@@ -150,6 +165,23 @@ class DownstreamTask:
         if sample.task != self.task_id:
             raise ForeignLabelSampleError(
                 f"the sample was drawn from task {sample.task}, not {self.task_id}"
+            )
+
+    def accept_source(self, source: Self) -> None:
+        """Refuse to learn this task from another task's labels of a different kind.
+
+        A candidate fitted over several tasks pools their targets, each in its own scale; a
+        probability and a quantity share no scale, so pooling them fits neither.
+
+        Raises:
+            MixedTargetKindsError: If the source's target is of another kind than this task's.
+            ProtocolMismatchError: If either task spends no labels.
+        """
+        own, theirs = self.label_scheme().kind, source.label_scheme().kind
+        if own is not theirs:
+            raise MixedTargetKindsError(
+                f"task {self.task_id} has a {own} target and cannot learn from the {theirs} "
+                f"target of task {source.task_id}"
             )
 
     def open_test_split(self, purpose: RunPurpose) -> FrozenTestSplit:

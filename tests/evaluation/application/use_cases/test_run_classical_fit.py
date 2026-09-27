@@ -7,6 +7,7 @@ of the cell rather than under a dial of their own.
 
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -27,7 +28,7 @@ from emblema.evaluation.application.use_cases.run_classical_fit import (
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
-from emblema.evaluation.domain.exceptions import TaskNotFoundError
+from emblema.evaluation.domain.exceptions import MixedTargetKindsError, TaskNotFoundError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
@@ -41,7 +42,16 @@ from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPubli
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.kernel.timestamps import UtcDateTime
-from tests.evaluation.support import MANIFEST, TASK, recipe, sides, task, units
+from tests.evaluation.support import (
+    MANIFEST,
+    OUTCOME,
+    OUTCOMES,
+    TASK,
+    recipe,
+    sides,
+    task,
+    units,
+)
 
 NOW = UtcDateTime(datetime(2026, 1, 1, tzinfo=UTC))
 ELSEWHERE = TaskId(UUID(int=21))
@@ -62,9 +72,11 @@ FOUR = LabelBudget.of(4)
 ACROSS = recipe(FeatureScheme.CHANNEL_AGGREGATED)
 
 
-def elsewhere() -> DownstreamTask:
+def elsewhere(**overrides: Any) -> DownstreamTask:
     """A second task over the same corpus, tuned on units the target never touches."""
-    return replace(task(tuning=units("e", "f"), validation=units("c")), task_id=ELSEWHERE)
+    return replace(
+        task(tuning=units("e", "f"), validation=units("c"), **overrides), task_id=ELSEWHERE
+    )
 
 
 def run(
@@ -73,10 +85,11 @@ def run(
     purpose: RunPurpose = RunPurpose.TUNING,
     retain: bool = False,
     holdout: InnerHoldout | None = None,
+    source: DownstreamTask | None = None,
 ) -> ScoredOutcome:
     tasks = InMemoryDownstreamTaskRepository()
     tasks.save(task(test=FROZEN))
-    tasks.save(elsewhere())
+    tasks.save(elsewhere() if source is None else source)
     corpus = InMemoryCorpusWindows(PUBLISHED, ENDS, MANIFEST)
     lifetimes = InMemoryGroundTruth(FAILURES)
     budgets = DrawLabelBudget(tasks, corpus, lifetimes)
@@ -175,6 +188,14 @@ def test_a_fit_asked_to_keep_what_it_produced_names_an_artifact() -> None:
     outcome = run(made_of=recipe(), retain=True)
 
     assert outcome.artifact is not None
+
+
+def test_a_source_task_whose_target_is_of_another_kind_is_refused() -> None:
+    with pytest.raises(MixedTargetKindsError, match="binary target"):
+        run(
+            made_of=replace(ACROSS, sources=(ELSEWHERE,)),
+            source=elsewhere(labels=OUTCOME, strata=OUTCOMES),
+        )
 
 
 def test_a_source_task_nobody_stored_is_refused() -> None:

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from math import isfinite
 
 from emblema.evaluation.domain.exceptions import InvalidLabelSchemeError, UnlabelledWindowError
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,10 @@ class RemainingLifeScheme:
     def __post_init__(self) -> None:
         if not (isfinite(self.ceiling) and self.ceiling > 0):
             raise InvalidLabelSchemeError(f"ceiling must be positive and finite: {self.ceiling}")
+
+    @property
+    def kind(self) -> TargetKind:
+        return TargetKind.CONTINUOUS
 
     @property
     def scale(self) -> float:

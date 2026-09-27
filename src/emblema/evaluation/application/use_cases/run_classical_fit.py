@@ -13,6 +13,7 @@ from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.fitting_source import FittingSource
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
+from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.ports.classical_runtime import ClassicalRuntime
@@ -81,6 +82,7 @@ class RunClassicalFit:
             InvalidLabelBudgetError: If a tuning side holds fewer windows than asked for.
             CandidateNotRetainableError: If the run was to keep what it fitted and the runtime
                 has nowhere to keep it.
+            MixedTargetKindsError: If a task the recipe draws on has a target of another kind.
         """
         labels = self._labels(
             DrawRunLabelsCommand(
@@ -92,7 +94,7 @@ class RunClassicalFit:
             )
         )
         sources = tuple(
-            self._contribution(source, command.budget, command.sample_seed)
+            self._contribution(labels.task, source, command.budget, command.sample_seed)
             for source in command.recipe.sources
         )
         return self._runtime.fit(
@@ -104,9 +106,13 @@ class RunClassicalFit:
             retain=command.retain,
         )
 
-    def _contribution(self, task: TaskId, budget: LabelBudget, seed: int) -> FittingSource:
+    def _contribution(
+        self, learner: DownstreamTask, task: TaskId, budget: LabelBudget, seed: int
+    ) -> FittingSource:
         """One source task and the labels it lends, drawn from its own tuning side."""
+        source = self._tasks.get(task)
+        learner.accept_source(source)
         return FittingSource(
-            task=self._tasks.get(task),
+            task=source,
             sample=self._draw(DrawLabelBudgetCommand(task=task, budget=budget, seed=seed)),
         )

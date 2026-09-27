@@ -2,6 +2,7 @@ import pytest
 
 from emblema.evaluation.domain.exceptions import InvalidLabelSchemeError, UnlabelledWindowError
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 
 SCHEME = RemainingLifeScheme(125.0)
 
@@ -27,3 +28,7 @@ def test_a_window_reaching_past_the_failure_carries_no_label() -> None:
 def test_a_ceiling_that_is_not_a_positive_number_is_refused(ceiling: float) -> None:
     with pytest.raises(InvalidLabelSchemeError, match="ceiling"):
         RemainingLifeScheme(ceiling)
+
+
+def test_the_target_is_a_quantity() -> None:
+    assert SCHEME.kind is TargetKind.CONTINUOUS
