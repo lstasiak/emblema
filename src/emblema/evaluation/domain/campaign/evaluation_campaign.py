@@ -212,16 +212,8 @@ class EvaluationCampaign:
                 the others are turned around.
         """
         holdout = self.design.inner_holdout
-        if self.purpose is not RunPurpose.SELECTION or holdout is None or not self.is_finished:
-            raise SelectionNotReadableError(
-                f"campaign {self.campaign_id} is not a finished selection"
-            )
-        variants = [
-            named
-            for named in self.design.candidates
-            if CandidateVariant.parse(named.ref).base == candidate
-        ]
-        if len(variants) < 2 or budget not in self.design.budgets:
+        variants = self._variants_of(candidate)
+        if holdout is None or budget not in self.design.budgets:
             raise SelectionNotReadableError(
                 f"campaign {self.campaign_id} holds no choice between {candidate} and a variant "
                 f"of it at {budget}"
@@ -235,6 +227,43 @@ class EvaluationCampaign:
             closeness={named.ref: named.method.departure_from(default) for named in variants},
             test_to_train=holdout.test_to_train,
         )
+
+    def turned_around(self, candidate: CandidateRef) -> CampaignCandidate:
+        """The setting this selection turns the knobs of ``candidate`` around, as it ran it.
+
+        What a comparison tuned by this selection is held to beside the variant chosen: the
+        candidate it names is the one whose knobs were turned, and this is how the selection
+        described that candidate at its setting, a variant itself where the selection was
+        declared around one.
+
+        Raises:
+            SelectionNotReadableError: If this is not a finished selection, holds fewer than
+                two variants of that candidate, or no one variant is turned around.
+        """
+        return self._turned_around(candidate, self._variants_of(candidate))
+
+    def _variants_of(self, candidate: CandidateRef) -> list[CampaignCandidate]:
+        """The candidates of the grid that are ``candidate`` with knobs turned, its setting too.
+
+        Raises:
+            SelectionNotReadableError: If this is not a finished selection, or holds fewer than
+                two of them.
+        """
+        if self.purpose is not RunPurpose.SELECTION or not self.is_finished:
+            raise SelectionNotReadableError(
+                f"campaign {self.campaign_id} is not a finished selection"
+            )
+        variants = [
+            named
+            for named in self.design.candidates
+            if CandidateVariant.parse(named.ref).base == candidate
+        ]
+        if len(variants) < 2:
+            raise SelectionNotReadableError(
+                f"campaign {self.campaign_id} holds no choice between {candidate} and a variant "
+                "of it"
+            )
+        return variants
 
     def _turned_around(
         self, candidate: CandidateRef, variants: Sequence[CampaignCandidate]

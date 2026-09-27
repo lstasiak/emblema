@@ -26,6 +26,8 @@ from emblema.evaluation.application.use_cases.select_tuned_variants import (
 from emblema.evaluation.contracts.identifiers import CandidateRef, TaskId
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
+from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import (
     SelectionNotReadableError,
     TunedChoiceMismatchError,
@@ -44,6 +46,7 @@ from tests.evaluation.support import (
     ROCKET,
     RULES,
     SELECTED_BY,
+    boosting,
     convolutions,
     selection,
     task,
@@ -144,6 +147,86 @@ def test_a_selection_over_another_task_cannot_tune_this_comparison() -> None:
 
     with pytest.raises(TunedChoiceMismatchError, match="ran over task"):
         process.define(replace(process.declared(chose(FINER)), task=elsewhere.task_id))
+
+
+TREES = CandidateRef("boosted_trees_per_channel")
+SHALLOW = CandidateRef("boosted_trees_per_channel@max_depth=2")
+DEEP = CandidateRef("boosted_trees_per_channel@max_depth=6")
+SLOW = CandidateRef("boosted_trees_per_channel@learning_rate=0.1,max_depth=2")
+
+
+def trees_catalogue(**boosting_overrides: float) -> ClassicalBaselineCatalogue:
+    return ClassicalBaselineCatalogue(
+        (
+            ClassicalArm(
+                ref=TREES,
+                method=BoostedTrees(
+                    features=FeatureScheme.PER_CHANNEL, boosting=boosting(**boosting_overrides)
+                ),
+                sources=(),
+            ),
+            ClassicalArm(ref=OTHER, method=convolutions(), sources=()),
+        )
+    )
+
+
+def around_shallow_trees(catalogue: ClassicalBaselineCatalogue) -> EvaluationCampaign:
+    """A finished selection declared around the shallow trees, with no bare name in its grid."""
+    return selection(
+        errors={SHALLOW: (10.0, 10.2, 9.8), DEEP: (10.1, 10.3, 9.9), SLOW: (10.2, 10.4, 10.0)},
+        candidates=tuple(catalogue.describe(ref) for ref in (SHALLOW, DEEP, SLOW)),
+    )
+
+
+def test_a_comparison_tuned_by_a_selection_declared_around_a_variant_is_defined() -> None:
+    catalogue = trees_catalogue()
+    process = Process()
+    process.campaigns.save(around_shallow_trees(catalogue), seen=selection().revision)
+    define = DefineCampaign(
+        process.tasks, process.campaigns, catalogue, SequentialIdGenerator(), FixedClock(OPENED_AT)
+    )
+    command = replace(
+        process.declared(
+            TunedChoice(candidate=TREES, budget=AT_200, variant=SHALLOW, selected_by=SELECTED_BY)
+        ),
+        candidates=(OTHER, TREES),
+        endpoint=TREES,
+    )
+
+    declared = define(command)
+
+    grid = process.campaigns.get(declared)
+    assert (
+        grid.evaluation_of(CampaignCell(candidate=TREES, budget=AT_200, seed=1)).declared.ref
+        == SHALLOW
+    )
+    assert (
+        grid.evaluation_of(CampaignCell(candidate=TREES, budget=AT_50, seed=1)).declared.ref
+        == TREES
+    )
+
+
+def test_a_setting_the_selection_turned_around_under_another_configuration_is_refused() -> None:
+    process = Process()
+    process.campaigns.save(around_shallow_trees(trees_catalogue()), seen=selection().revision)
+    # The same names, described by a process whose trees take more rounds.
+    define = DefineCampaign(
+        process.tasks,
+        process.campaigns,
+        trees_catalogue(rounds=16),
+        SequentialIdGenerator(),
+        FixedClock(OPENED_AT),
+    )
+    command = replace(
+        process.declared(
+            TunedChoice(candidate=TREES, budget=AT_200, variant=SHALLOW, selected_by=SELECTED_BY)
+        ),
+        candidates=(OTHER, TREES),
+        endpoint=TREES,
+    )
+
+    with pytest.raises(TunedChoiceMismatchError, match="describes it as"):
+        define(command)
 
 
 def test_a_variant_the_selection_ran_under_another_configuration_is_refused() -> None:

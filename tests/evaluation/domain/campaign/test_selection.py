@@ -194,6 +194,21 @@ def test_a_selection_around_a_variant_still_chooses_what_is_clearly_better() -> 
     assert clear.selected(ROCKET, AT_200) == LONGER
 
 
+def test_a_selection_names_the_setting_its_knobs_turn_around() -> None:
+    assert selection().turned_around(ROCKET).ref == ROCKET
+    assert (
+        around_the_tail(
+            tail=(10.0, 11.0, 9.0),
+            shorter=(9.9, 10.9, 8.9),
+            longer=(9.8, 10.8, 8.8),
+            smoothed=(9.7, 10.7, 8.7),
+        )
+        .turned_around(ROCKET)
+        .ref
+        == TAIL
+    )
+
+
 def test_a_selection_that_names_no_setting_its_knobs_turn_around_is_not_read() -> None:
     two_turned = selection(
         errors={SHORTER: (10.0, 11.0, 9.0), LONGER: (9.9, 10.9, 8.9)},
@@ -202,3 +217,5 @@ def test_a_selection_that_names_no_setting_its_knobs_turn_around_is_not_read() -
 
     with pytest.raises(SelectionNotReadableError, match="turned around"):
         two_turned.selected(ROCKET, AT_200)
+    with pytest.raises(SelectionNotReadableError, match="turned around"):
+        two_turned.turned_around(ROCKET)
