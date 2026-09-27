@@ -1,6 +1,5 @@
 from collections.abc import Sequence
-
-import xgboost
+from typing import TYPE_CHECKING
 
 from emblema.evaluation.adapters.features.window_features import WindowFeatures, features_for
 from emblema.evaluation.adapters.minirocket.fitted_convolutions import FittedConvolutions
@@ -11,6 +10,9 @@ from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.tokens import TokenWindow
+
+if TYPE_CHECKING:
+    import xgboost
 
 # Every fit records the threads it ran on; a candidate kept before that was recorded answers on
 # one, which is also the only count that cannot contend with the process serving it.
