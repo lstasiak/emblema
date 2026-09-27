@@ -1,0 +1,43 @@
+# Which setting full fine-tuning runs at, at every budget of the repeated curve, chosen on
+# held-out tuning engines before the curve runs.
+#
+# What it is for: the pilot (campaigns/selection-networks-fd001.toml) left this arm at its
+# registered peak under the tail of 20 % at 200 labels: three times the peak overwrote the
+# pretrained weights before the head had learnt, a third of it and a shorter tail were within
+# noise. The repeat stands at four budgets, where more labels may bear a larger rate and fewer
+# a smaller one, so the same decade of rates and the shorter tail are turned again at each. One
+# knob at a time around the setting in force. One arm per campaign, so that one accelerator runs
+# it whole.
+
+name = "selection-fine-tuning-fd001"
+purpose = "selection"
+tier = "M"
+
+[selection]
+one_in = 5
+
+[candidates]
+competing = [
+    "full_fine_tuning@pooling=tail,tail_share=0.2",
+    "full_fine_tuning@learning_rate=0.000333,pooling=tail,tail_share=0.2",
+    "full_fine_tuning@learning_rate=0.003,pooling=tail,tail_share=0.2",
+    "full_fine_tuning@pooling=tail,tail_share=0.1",
+]
+control = "full_fine_tuning@pooling=tail,tail_share=0.2"
+endpoint = "full_fine_tuning@learning_rate=0.000333,pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["50", "200", "1000", "all"]
+endpoint = "200"
+seeds = [1, 2, 3]
+
+[rules]
+minimum_relative_reduction = 0.1
+floor_share = 0.02
+alpha = 0.05
+secondary_family_size = 15
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

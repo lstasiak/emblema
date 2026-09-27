@@ -2,7 +2,9 @@ from dataclasses import dataclass, field, replace
 from typing import Self
 
 from emblema.evaluation.contracts.identifiers import CandidateRef
+from emblema.evaluation.domain.exceptions import InvalidBackboneArmError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling
+from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
@@ -20,6 +22,9 @@ class BackboneArm:
     the arms of one campaign still spend one budget, which the design checks off the schedules
     rather than trusting.
 
+    Invariants: penalties are named exactly when the mode solves its head in closed form, so an
+    arm a campaign is declared against is one its plan can be made from.
+
     Attributes:
         ref: What the campaign calls this arm.
         mode: What the backbone's weights do while the task is learnt.
@@ -30,6 +35,8 @@ class BackboneArm:
         lora: The low-rank updates, where the mode adds them; ``None`` otherwise.
         schedule: How long and how fast the arm learns the task.
         pooling: How the states of a window become the one state the arm's head reads.
+        ridge: The penalties a head solved in closed form chooses among, where the mode
+            solves one; ``None`` otherwise.
     """
 
     ref: CandidateRef
@@ -39,6 +46,18 @@ class BackboneArm:
     lora: LoraSpec | None
     schedule: AdaptationSchedule
     pooling: HeadPooling = field(default_factory=HeadPooling.mean)
+    ridge: RidgePenalties | None = None
+
+    def __post_init__(self) -> None:
+        if (self.ridge is None) == self.mode.solves_the_head_in_closed_form:
+            raise InvalidBackboneArmError(
+                f"{self.ref} under {self.mode} "
+                + (
+                    "solves its head in closed form and names no penalties"
+                    if self.ridge is None
+                    else "trains its head and names penalties"
+                )
+            )
 
     def tuned(self, knob: str, value: str) -> Self:
         """This arm with ``knob`` turned to ``value``, on the pooling or on the schedule.

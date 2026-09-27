@@ -58,3 +58,4 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0041](0041-the-pooling-of-the-head-as-a-knob.md) | The pooling of the head as a knob: free of the channel layout, turned by name on every network | accepted |
 | [0042](0042-the-prediction-service.md) | The prediction service: open host services, a runtime routed by the form kept, and each context's API inside the context | proposed |
 | [0043](0043-the-networks-memory-is-bounded-by-cost.md) | The networks' memory is bounded by cost: batches cut and admitted by token pairs | accepted |
+| [0044](0044-the-probe-solved-in-closed-form.md) | The probe solved in closed form: a fifth arm whose head is a ridge over the pooled states, chosen leave-one-out, on the arms' budget | accepted |

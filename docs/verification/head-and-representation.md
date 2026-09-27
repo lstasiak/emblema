@@ -379,3 +379,207 @@ confirmed, by nothing at all.
 they bracket for every knob but the rate. One budget, 200 labels; the repeat selects per budget.
 The rate's grid ended where the choice landed. The probe under the tail was run at 4,000 steps
 only, so it is not compared here.
+
+## 2026-09-27 — declared before the run: the floor of steps at the rate the pilot chose
+
+**Question.** The pilot doubled the floor of steps at the old rate and found the arm from
+nothing gains 2.4 %, at the practical floor, while the rate alone gains 8 %. Whether the arm
+still wants more steps once it runs at 3e-3, and whether full fine-tuning wants any at 1e-3, is
+asked before the curve is repeated, since the floor every cell of the curve spends is settled
+here.
+
+**Design.** Two selection campaigns over the same three arms — the arm from nothing at the rate
+the pilot chose (`from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2`), full
+fine-tuning at its setting (`full_fine_tuning@pooling=tail,tail_share=0.2`) and the probe under
+the tail as the family's member — at 200 labels, the tuning engines divided as the pilot
+divided them (one in five held out, seeds 1–3), never on the validation side:
+`campaigns/selection-networks-floor-fd001.toml` under the floor in force, 2,000 steps, and
+`campaigns/selection-networks-floor-doubled-fd001.toml` under `EMBLEMA_WORKER__SCHEDULE__MIN_STEPS=4000`.
+Both on one kind of accelerator, an NVIDIA A100, and read cell by cell on the same repeats by
+`scripts/campaign_pairs_report.py`: the paired bootstrap over the 48 (repeat, engine) pairs,
+10,000 resamples, the practical floor as the larger of 2 % of the control's error and its spread
+over the repeats. The pilot's cells at 2,000 steps are not reused: they ran on a T4 and an L4,
+and between accelerators an arm drifts by as much as the effect looked for.
+
+**Predictions.** At 3e-3 the doubled floor lowers the arm from nothing by less than the practical
+floor, since the rate bought what the steps were buying; full fine-tuning is lowered by less than
+the floor, as it was in the pilot. The probe is unchanged.
+
+**Reading.** A reduction above the practical floor for either trained arm, with an interval
+above zero, makes 4,000 steps the floor of the repeated curve, registered as a configuration
+change before any of its selections run; otherwise the floor of 2,000 stands, with this as its
+evidence. Nothing here chooses a rate: the repeat's selections do that per budget.
+
+## 2026-09-27 — Colab A100, fp32: the floor of steps at the rate the pilot chose
+
+**Question.** The one declared above: at the rates the pilot chose, does either trained arm want
+twice the floor of steps? Read on held-out tuning engines only.
+
+**Conditions.** Code `d3c98928`; campaigns `fed1a76e…` (`campaigns/selection-networks-floor-fd001.toml`,
+2,000 steps) and `1995ccb3…` (`campaigns/selection-networks-floor-doubled-fd001.toml`, declared
+and run under `EMBLEMA_WORKER__SCHEDULE__MIN_STEPS=4000`), tier M, both on one NVIDIA A100
+through orders run by `campaign_run` and accepted back (a trained cell 2 min at 2,000 steps,
+4 min at 4,000; the probe 3–5 s). Every repeat holds 16 of the 79 tuning engines out (one in
+five, seeds 1–3), both campaigns dividing them identically. Read by
+`scripts/campaign_pairs_report.py`: RMSE on the held-out engines, mean ± SD over the three
+repeats; the reduction is the paired bootstrap over the 48 (repeat, engine) pairs, 10,000
+resamples; the practical floor is the larger of 2 % of the control's error and its spread. The
+probe ran at the worker's one rate, 1e-3, not at its registered 3e-2: it is the family's member
+here and settles nothing.
+
+| arm | 2,000 steps | 4,000 steps | reduction | 95 % interval | p | floor |
+| --- | --- | --- | --- | --- | --- | --- |
+| from scratch at 3e-3 | 14.50 ± 0.04 | 14.14 ± 0.41 | +2.6 % (0.37) | [−0.04, +0.78] | 0.076 | 0.29 |
+| full fine-tuning at 1e-3 | 15.92 ± 0.29 | 17.49 ± 3.35 | −10.7 % (−1.70) | [−2.81, −0.63] | 0.001 | 0.32 |
+| frozen probe at 1e-3 | 17.23 ± 0.48 | 16.05 ± 0.33 | +6.9 % (1.20) | [+0.85, +1.56] | < 0.001 | 0.48 |
+
+Full fine-tuning at 4,000 steps scored 15.75, 15.38 and 21.35 over the three repeats: one
+repeat left the pretrained weights behind, as the arm did under three times the rate in the
+pilot.
+
+**The arms against each other on the tuning engines.** At 2,000 steps the arm from nothing beats
+full fine-tuning by 9.7 % [+0.64, +2.16] and the probe by 19.0 % [+1.72, +3.73]; at 4,000 steps
+it beats full fine-tuning by 24.7 %.
+
+**Against the predictions.** The arm from nothing: the doubled floor lowers it by 0.37, above the
+floor of 0.29 as a point but with an interval reaching zero, as the pilot found at 1e-3 (0.38,
+[+0.04, +0.70]); the prediction of a gain below the floor held as a reading, not as a point.
+Full fine-tuning: not lowered at all but raised, by more than the floor; the prediction held in
+the direction that matters. The probe: refuted, it gains, but at a rate a thirtieth of its own.
+
+**Conclusions.**
+
+- The floor of 2,000 optimiser steps stands for the repeated curve: neither trained arm is
+  lowered by the doubled floor with an interval above zero, and full fine-tuning is hurt by it.
+  No configuration row is needed.
+- Twice the steps costs the pretrained arm what three times the rate cost it in the pilot: more
+  optimisation of the pretrained weights is what overwrites them. The curve's selection of a
+  rate per budget is where this is read next, and where 1,000 labels and more, which lengthen
+  every run past the floor, will show whether the arm survives them.
+- The trained probe wants more steps at 1e-3, which is not its rate; the curve runs it at its
+  registered peak, beside the probe solved in closed form (ADR-0044), which takes no step.
+
+**Limitations.** Three repeats of 16 engines, one budget, one accelerator. The rate of each arm
+is the pilot's choice at 200 labels; whether the floor binds at other budgets is not asked here,
+and at 1,000 labels and above the schedule's epochs exceed it anyway.
+
+## 2026-09-27 — declared before the run: the selection of each trained arm at every budget
+
+**Question.** Which rate and which tail each trained arm runs at, at each of the four budgets of
+the repeated curve, chosen on held-out tuning engines and never on the validation side.
+
+**Design.** Three selection campaigns, one per arm so that one accelerator runs each whole:
+`campaigns/selection-scratch-fd001.toml`, `campaigns/selection-fine-tuning-fd001.toml` and
+`campaigns/selection-lora-fd001.toml`, each four variants — the setting in force, the rate a
+third and three times it, and the other share of the tail — at 50, 200, 1,000 and every
+labelled window, three repeats holding 16 of the 79 tuning engines out, under the floor of
+2,000 steps the section above keeps. The arm from nothing turns around 3e-3 and the tail of
+20 % (rates 1e-3 and 1e-2, tail 0.5); full fine-tuning around 1e-3 (3.3e-4 and 3e-3, tail 0.1);
+the low-rank arm around its registered peak of 1e-4 under the tail (3.3e-5 and 3e-4, tail
+0.5). The one-standard-error rule with the Nadeau–Bengio correction chooses per budget, ties
+towards the setting in force. The arm from nothing on an A100, the other two on a Kaggle T4
+each; the curve's own cells run on one kind of accelerator per budget, so a variant chosen on
+one and run on another is a choice, not a comparison.
+
+**Predictions.** For the arm from nothing the chosen rate does not fall with the budget: 3e-3
+or 1e-2 at every budget, the tail of 0.5 chosen at 50 where the labels are fewest. For full
+fine-tuning the smaller rate, 3.3e-4, is chosen at 1,000 and at all, where the run is longest
+and the section above says more optimisation overwrites the pretrained weights; at 50 and 200
+the setting in force survives. For the low-rank arm the setting in force survives at every
+budget.
+
+**Reading.** Whatever is chosen is what the curve runs each arm at, per budget, named in the
+curve's campaign file by the selection that chose it. A rate chosen at the edge of its grid at
+a budget is followed by one step beyond it at that budget before the curve runs, as the
+registered edge rule says.
+
+## 2026-09-27 — Colab A100 and G4, fp32: what each trained arm's selection chose per budget
+
+**Question.** The one declared above: which rate and which tail each trained arm runs at, at
+each budget of the repeated curve. Held-out tuning engines only.
+
+**Conditions.** Code `a0a8970c`; campaigns `7a842dba…` (`campaigns/selection-scratch-fd001.toml`,
+an A100, 2 min a cell at 2,000 steps and 4 min at every window), `199fb850…` and `83ecaced…`
+(`campaigns/selection-fine-tuning-fd001.toml` and `campaigns/selection-lora-fd001.toml`, two
+processes sharing one G4, 1:40–2 min a cell); 48 cells each, tier M, floor 2,000 steps, three
+repeats holding 16 of 79 tuning engines out. RMSE on the held-out engines, mean ± SD over the
+repeats; **bold** = chosen by the one-standard-error rule with the Nadeau–Bengio correction,
+ties towards the setting in force.
+
+**The arm from nothing**, around 3e-3 and the tail of 20 %.
+
+| budget | 1e-3 | 3e-3 (in force) | 1e-2 | 3e-3, tail 0.5 |
+| --- | --- | --- | --- | --- |
+| 50 | 16.95 ± 0.10 | **16.07 ± 0.35** | 30.14 ± 3.21 | 21.46 ± 2.59 |
+| 200 | 15.90 ± 0.73 | **14.69 ± 0.77** | 21.37 ± 1.77 | 14.28 ± 0.56 |
+| 1,000 | 13.41 ± 1.09 | 13.66 ± 1.07 | 20.61 ± 1.99 | **12.94 ± 0.50** |
+| all | 13.06 ± 0.44 | 13.25 ± 0.96 | 20.16 ± 0.84 | **12.52 ± 0.57** |
+
+**Full fine-tuning**, around 1e-3 and the tail of 20 %.
+
+| budget | 3.3e-4 | 1e-3 (in force) | 3e-3 | 1e-3, tail 0.1 |
+| --- | --- | --- | --- | --- |
+| 50 | **17.20 ± 0.62** | 18.24 ± 1.16 | 24.12 ± 0.35 | 17.70 ± 0.51 |
+| 200 | 15.61 ± 0.17 | 16.08 ± 0.40 | 21.10 ± 2.98 | **15.54 ± 0.63** |
+| 1,000 | 14.30 ± 1.05 | **13.79 ± 0.84** | 20.40 ± 1.56 | 13.82 ± 0.41 |
+| all | 13.56 ± 0.45 | **13.32 ± 0.85** | 19.50 ± 1.32 | 16.73 ± 4.46 |
+
+**The low-rank arm**, around 1e-4 and the tail of 20 %.
+
+| budget | 3.3e-5 | 1e-4 (in force) | 3e-4 | 1e-4, tail 0.5 |
+| --- | --- | --- | --- | --- |
+| 50 | **18.35 ± 0.39** | 19.09 ± 0.82 | 19.74 ± 1.34 | 19.45 ± 1.34 |
+| 200 | 16.60 ± 0.36 | **15.38 ± 0.67** | 16.82 ± 1.18 | 15.55 ± 0.55 |
+| 1,000 | 16.62 ± 0.24 | **14.25 ± 0.50** | 13.85 ± 1.43 | 14.54 ± 0.72 |
+| all | 14.64 ± 0.42 | **13.38 ± 1.25** | 13.29 ± 1.33 | 13.55 ± 1.31 |
+
+**Against the predictions.** The arm from nothing keeps 3e-3 at every budget: held, and 1e-2
+is no edge but a cliff, so no rate beyond it is asked for. Its longer tail at 50: refuted, the
+tail of 0.5 costs a third of the error there and is chosen at 1,000 and at all instead, where
+the labels reach further into the window. Full fine-tuning's smaller rate at 1,000 and at all:
+refuted, the setting in force survives there; its setting surviving at 50 and 200: refuted the
+other way, a third of the peak at 50 and the shorter tail at 200. The low-rank arm keeping its
+setting: held at three budgets, refuted at 50, where a third of the peak is chosen.
+
+**Conclusions.**
+
+- Three times the peak, 3e-3, is what the arm from nothing wants at every budget, and a decade
+  above it the arm does not learn. The tail's share is the knob that moves with the budget.
+- The pretrained arms want less rate where labels are fewest: at 50 both choose the smallest
+  rate their grids held, the edge of the grid, which the registered edge rule follows with one
+  rate beyond it before the curve runs (declared below).
+- At 1,000 and at all every arm keeps or nearly keeps its setting in force; the pretrained
+  arms' selections are within one standard error of several variants there.
+
+**Limitations.** Three repeats of 16 engines; every interval overlaps its neighbours at 1,000
+and above. The arm from nothing ran on an A100, the other two on a G4: a selection compares
+variants within one accelerator, and the curve's cells of a budget run on one kind.
+
+## 2026-09-27 — declared before the run: the two rates beyond the edge, at 50 labels
+
+**Question.** Full fine-tuning and the low-rank arm each chose the smallest rate of their grids
+at 50 labels. Does a rate half a decade lower do better still, by the same rule?
+
+**Design.** `campaigns/selection-fine-tuning-edge-fd001.toml` and
+`campaigns/selection-lora-edge-fd001.toml`: at 50 labels, the same three repeats of the same
+division, one knob at a time around the chosen setting — the rate a third of it (1e-4 and
+1e-5) and the other share of the tail. Read by the same rule; the choice replaces the one above
+at 50 labels and is what the curve runs the arm at there.
+
+**Predictions.** Neither arm gains from the lower rate by more than one standard error, so the
+chosen rates stand: 3.3e-4 for full fine-tuning, 3.3e-5 for the low-rank arm. If a lower rate is
+chosen again, the rule allows one more step, and no more.
+
+## 2026-09-27 — Colab G4, fp32: the rates beyond the edge, at 50 labels
+
+**Conditions.** Code `98be0ab9`; campaigns `9be0af77…` and `f1b12cb1…`, nine cells each, two
+processes on one G4, the same three repeats of the same division as above.
+
+| arm | rate chosen above | a third of it | chosen, other tail |
+| --- | --- | --- | --- |
+| full fine-tuning | **3.3e-4: 17.33 ± 0.45** | 1e-4: 18.25 ± 1.71 | tail 0.1: 17.50 ± 0.16 |
+| low-rank | **3.3e-5: 18.35 ± 0.39** | 1e-5: 23.37 ± 2.18 | tail 0.5: 19.09 ± 0.38 |
+
+The prediction held: neither arm gains from the lower rate, the chosen rates stand and no
+further step is asked for. The low-rank arm's cell at 3.3e-5 reproduced the selection above to
+the second decimal on each repeat, as a run under one seed should.

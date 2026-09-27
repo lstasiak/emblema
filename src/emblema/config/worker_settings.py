@@ -6,6 +6,7 @@ from emblema.config.boosting_settings import BoostingSettings
 from emblema.config.convolution_settings import ConvolutionSettings
 from emblema.config.lora_settings import LoraSettings
 from emblema.config.patch_settings import PatchSettings
+from emblema.config.probe_settings import ProbeSettings
 from emblema.config.schedule_settings import ScheduleSettings
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
@@ -36,6 +37,7 @@ class WorkerSettings(BaseModel):
     boosting: BoostingSettings | None = None
     convolutions: ConvolutionSettings | None = None
     patch: PatchSettings | None = None
+    probe: ProbeSettings | None = None
     device: str | None = Field(
         default=None, description="Where a cell computes; the machine's accelerator unless given."
     )
@@ -79,6 +81,16 @@ class WorkerSettings(BaseModel):
         if self.convolutions is None:
             raise ValueError("this worker fits classical candidates and was given no convolutions")
         return self.convolutions
+
+    def require_probe(self) -> ProbeSettings:
+        """What the probe solved in closed form chooses its penalty among.
+
+        Raises:
+            ValueError: If nothing is configured.
+        """
+        if self.probe is None:
+            raise ValueError("this worker solves a probe in closed form and was given no penalties")
+        return self.probe
 
     def require_patch(self) -> PatchSettings:
         """How the patch model of this process's campaigns reads a window and how large it is.

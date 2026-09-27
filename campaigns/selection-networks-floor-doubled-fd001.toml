@@ -1,0 +1,40 @@
+# The same three arms as campaigns/selection-networks-floor-fd001.toml under twice the floor of
+# optimiser steps, on the same held-out tuning engines and the same kind of accelerator.
+#
+# What it is for: a budget is not a knob a variant may turn — every network of a campaign
+# spends the same one — so whether the arms want more steps at the rates they now run at is
+# asked by a second campaign declared under a doubled floor and read beside the first, cell by
+# cell on the same repeats. The worker that declares and runs it is told
+# EMBLEMA_WORKER__SCHEDULE__MIN_STEPS=4000; every other setting stays.
+
+name = "selection-networks-floor-doubled-fd001"
+purpose = "selection"
+tier = "M"
+
+[selection]
+one_in = 5
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2",
+    "full_fine_tuning@pooling=tail,tail_share=0.2",
+    "frozen_probe@pooling=tail,tail_share=0.2",
+]
+control = "from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2"
+endpoint = "full_fine_tuning@pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+seeds = [1, 2, 3]
+
+[rules]
+minimum_relative_reduction = 0.1
+floor_share = 0.02
+alpha = 0.05
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

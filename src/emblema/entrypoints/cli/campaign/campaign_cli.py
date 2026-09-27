@@ -24,6 +24,7 @@ from emblema.evaluation.application.use_cases.select_tuned_variants import (
 )
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
 from emblema.evaluation.domain.exceptions import EvaluationError
+from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 from emblema.shared.jobs.worker_pool import WorkerPool
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -110,6 +111,7 @@ class CampaignCli:
             file=getattr(arguments, "file", None),
             campaign=getattr(arguments, "campaign", None),
             pool=getattr(arguments, "pool", None),
+            budget=getattr(arguments, "budget", None),
             candidate=getattr(arguments, "candidate", None),
             result=(
                 None if getattr(arguments, "result", None) is None else self._ref(arguments.result)
@@ -165,7 +167,12 @@ class CampaignCli:
                         OrderCampaignCellsCommand(
                             campaign=self._campaign(invocation.campaign),
                             pool=WorkerPool(self._named(invocation.pool)),
-                            git_commit=self._revision.current(),
+                            git_commit=self._committed(),
+                            budget=(
+                                None
+                                if invocation.budget is None
+                                else LabelBudget.parse(invocation.budget)
+                            ),
                         )
                     )
                     return f"{ordered.key} {ordered.checksum}"
@@ -186,6 +193,21 @@ class CampaignCli:
                     raise SystemExit(f"this command line does not {invocation.what!r}")
         except EvaluationError as refusal:
             raise SystemExit(str(refusal)) from refusal
+
+    def _committed(self) -> str:
+        """The revision an order names: the tree's commit, refused while the tree is dirty.
+
+        A machine elsewhere installs the commit an order names and refuses anything else, so
+        an order placed from a tree with uncommitted changes would name a revision nobody can
+        run; it is refused here, before anything is written.
+
+        Raises:
+            SystemExit: If the tree has uncommitted changes, or its revision is unknown.
+        """
+        try:
+            return self._revision.committed()
+        except RuntimeError as error:
+            raise SystemExit(str(error)) from None
 
     @staticmethod
     def _tuned_entry(choice: TunedChoice) -> str:
@@ -312,6 +334,10 @@ class CampaignCli:
             required=True,
             choices=[str(pool) for pool in WorkerPool],
             help="which kind of process will run the cells",
+        )
+        order.add_argument(
+            "--budget",
+            help="one budget of the grid to hand out alone; every budget unless given",
         )
 
         select = what.add_parser(

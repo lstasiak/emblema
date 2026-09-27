@@ -23,6 +23,7 @@ from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph  # n
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
+from emblema.evaluation.adapters.torch.ridge_solution import RidgeSolution  # noqa: E402
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import (  # noqa: E402
     TorchAdaptationRuntime,
 )
@@ -49,6 +50,7 @@ from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactSto
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
 from tests.evaluation.support import (  # noqa: E402
     LORA,
+    PENALTIES,
     TASK,
     WEIGHTS,
     adaptation_schedule,
@@ -319,3 +321,46 @@ def test_a_tail_and_an_attention_pooling_each_answer_the_task(published: Publish
         outcome = adapt(published, stated)
         assert len(outcome.predictions) == len(VALIDATION)
         assert outcome.plan.parameters()["pooling"] == str(stated.pooling.pooling)
+
+
+def test_under_the_closed_form_probe_the_backbone_keeps_every_value_and_no_step_is_taken(
+    published: Published,
+) -> None:
+    outcome = adapt(published, plan(TransferMode.FROZEN_RIDGE))
+
+    (received,) = published.backbones.built
+    before = pretrained_weights()
+    assert all(torch.equal(received.state_dict()[name], before[name]) for name in before)
+    assert outcome.training_losses == ()
+    assert outcome.optimiser_steps == 0
+    assert outcome.trainable_parameters == SMALL.width + 1
+    assert len(outcome.predictions) == len(VALIDATION)
+    assert outcome.plan.parameters()["ridge_penalties"] == "0.1 1 10"
+
+
+def test_the_closed_form_probe_answers_what_its_solution_says_over_the_pooled_states(
+    published: Published,
+) -> None:
+    stated = plan(
+        TransferMode.FROZEN_RIDGE,
+        pooling=HeadPooling(pooling=PoolingScheme.TAIL, tail_share=0.5),
+    )
+
+    outcome = adapt(published, stated)
+
+    (received,) = published.backbones.built
+    candidate = AdaptedBackbone.under(
+        stated, published.backbones, vocabulary_size=len(CHANNELS), starting_at=0.0
+    )
+    candidate.encoder.load_state_dict(received.state_dict())
+    manifest = published.runtime._blocks.manifest_of(published.task.manifest)
+    block = published.runtime._blocks.block_of(manifest)
+    tuning = block.at([labelled.window.position for labelled in SAMPLE.windows])
+    held = block.at([labelled.window.position for labelled in VALIDATION])
+    candidate.eval()
+    with torch.no_grad():
+        states = candidate.embed(TokenTensors.from_windows(list(tuning)))
+        targets = torch.tensor([w.target / CEILING for w in SAMPLE.windows])
+        RidgeSolution.fitted(states, targets, stated.ridge or PENALTIES).applied_to(candidate.head)
+        answered = candidate(TokenTensors.from_windows(list(held))).double() * CEILING
+    assert [p.predicted for p in outcome.predictions] == pytest.approx(answered.tolist(), rel=1e-4)

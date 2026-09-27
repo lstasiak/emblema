@@ -49,6 +49,7 @@ from tests.evaluation.support import (
     CONTENDER,
     CONTROL,
     LORA,
+    PENALTIES,
     WEIGHTS,
     adaptation_schedule,
     campaign,
@@ -148,13 +149,15 @@ def test_a_process_left_to_build_candidates_without_what_they_are_built_over_is_
         )
 
 
-def test_the_arms_are_the_four_modes_over_the_backbone_the_process_serves() -> None:
-    arms = KnownArms.over(WEIGHTS, LORA, SCHEDULE)
+def test_the_arms_are_the_five_modes_over_the_backbone_the_process_serves() -> None:
+    arms = KnownArms.over(WEIGHTS, LORA, SCHEDULE, PENALTIES)
 
     assert [str(arm.ref) for arm in arms] == [str(ref) for ref in KnownArms.refs()]
     assert arms[0].backbone is None
     assert all(arm.backbone == WEIGHTS for arm in arms[1:])
-    assert arms[2].lora == LORA
+    assert arms[2].ridge == PENALTIES
+    assert arms[3].lora == LORA
+    assert [arm.ridge for arm in arms if arm.ref != KnownArms.FROZEN_RIDGE] == [None] * 4
 
 
 def test_the_frozen_side_is_opened_through_the_publisher_the_process_holds(
@@ -221,6 +224,7 @@ def test_left_to_build_its_own_candidates_the_process_serves_the_backbone_it_was
         backbone=weights,
         lora=LORA,
         patch=patch_spec(),
+        ridge=PENALTIES,
         schedule=SCHEDULE,
         store=store,
         tasks=InMemoryDownstreamTaskRepository(),

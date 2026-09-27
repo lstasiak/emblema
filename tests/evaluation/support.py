@@ -28,6 +28,7 @@ from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientB
 from emblema.evaluation.domain.classical.minirocket_spec import MiniRocketSpec
 from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
 from emblema.evaluation.domain.classical.ridge_spec import RidgeSpec
+from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
@@ -116,6 +117,9 @@ def prediction(unit: str, position: int, target: float, predicted: float) -> Win
     )
 
 
+PENALTIES = RidgePenalties((0.1, 1.0, 10.0))
+
+
 def adaptation_schedule(**overrides: Any) -> AdaptationSchedule:
     stated = AdaptationSchedule(
         epochs=2,
@@ -145,6 +149,7 @@ def arm(
         backbone=backbone,
         lora=lora,
         schedule=adaptation_schedule(),
+        ridge=PENALTIES if mode.solves_the_head_in_closed_form else None,
     )
     return replace(stated, **overrides)
 
@@ -220,6 +225,7 @@ def plan(mode: TransferMode = TransferMode.FULL_FINE_TUNING, **overrides: Any) -
         schedule=adaptation_schedule(),
         lora=LORA if mode.adds_low_rank_updates else None,
         seed=1,
+        ridge=PENALTIES if mode.solves_the_head_in_closed_form else None,
     )
     return replace(stated, **overrides)
 

@@ -13,12 +13,14 @@ from emblema.config.boosting_settings import BoostingSettings
 from emblema.config.convolution_settings import ConvolutionSettings
 from emblema.config.lora_settings import LoraSettings
 from emblema.config.patch_settings import PatchSettings
+from emblema.config.probe_settings import ProbeSettings
 from emblema.config.schedule_settings import ScheduleSettings
 from emblema.config.worker_settings import WorkerSettings
 from emblema.entrypoints.workers.declared_worker import DeclaredWorker
 from emblema.evaluation.domain.exceptions import InvalidPatchModelSpecError
 from tests.evaluation.support import (
     LORA,
+    PENALTIES,
     adaptation_schedule,
     boosting,
     convolutions,
@@ -51,6 +53,7 @@ DECLARED = WorkerSettings(
         threads=1,
     ),
     convolutions=ConvolutionSettings(features=84, ridge_penalties="0.1, 1, 10", threads=1),
+    probe=ProbeSettings(ridge_penalties="0.1, 1, 10"),
     patch=PatchSettings(
         patch_length=4,
         stride=2,
@@ -100,6 +103,10 @@ def test_a_penalty_that_is_not_a_number_is_refused() -> None:
         DeclaredWorker(garbled).convolutions()
 
 
+def test_the_probes_penalties_are_the_ones_the_environment_declares() -> None:
+    assert DeclaredWorker(DECLARED).probe() == PENALTIES
+
+
 def test_the_patch_model_is_the_one_the_environment_declares() -> None:
     assert DeclaredWorker(DECLARED).patch() == patch_spec()
 
@@ -113,7 +120,9 @@ def test_a_patch_model_shape_that_does_not_stand_up_is_refused() -> None:
         DeclaredWorker(uneven).patch()
 
 
-@pytest.mark.parametrize("missing", ["schedule", "lora", "boosting", "convolutions", "patch"])
+@pytest.mark.parametrize(
+    "missing", ["schedule", "lora", "boosting", "convolutions", "patch", "probe"]
+)
 def test_a_value_the_worker_was_not_given_is_refused_where_it_is_asked_for(missing: str) -> None:
     with pytest.raises(ValueError, match="this worker"):
         getattr(DeclaredWorker(BARE), missing)()

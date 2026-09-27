@@ -3,6 +3,7 @@ from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientB
 from emblema.evaluation.domain.classical.minirocket_spec import MiniRocketSpec
 from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
 from emblema.evaluation.domain.classical.ridge_spec import RidgeSpec
+from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
@@ -88,14 +89,23 @@ class DeclaredWorker:
         return RandomConvolutions(
             convolutions=MiniRocketSpec(features=declared.features),
             ridge=RidgeSpec(
-                penalties=tuple(
-                    float(penalty)
-                    for penalty in declared.ridge_penalties.split(",")
-                    if penalty.strip()
-                ),
-                threads=declared.threads,
+                penalties=self._penalties(declared.ridge_penalties), threads=declared.threads
             ),
         )
+
+    def probe(self) -> RidgePenalties:
+        """What the probe solved in closed form chooses its penalty among.
+
+        Raises:
+            ValueError: If nothing is configured, or a penalty is not a number.
+            InvalidRidgePenaltiesError: If the penalties do not stand up.
+        """
+        return RidgePenalties(self._penalties(self._settings.require_probe().ridge_penalties))
+
+    @staticmethod
+    def _penalties(text: str) -> tuple[float, ...]:
+        """The penalties out of the one string an environment can carry."""
+        return tuple(float(penalty) for penalty in text.split(",") if penalty.strip())
 
     def patch(self) -> PatchModelSpec:
         """How the patch model of this process's campaigns reads a window and how large it is.

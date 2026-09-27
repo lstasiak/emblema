@@ -170,3 +170,48 @@ back by its checksum: 21 channels × 50 steps, 1,789,441 weights, target scale 1
 
 *2026-09-25:* the diagnostics conclusion 3 defers to are in
 [`head-and-representation.md`](head-and-representation.md).
+
+## 2026-09-27 — M1 Pro, 32 GB: the selection of knobs at 1,000 labels and at every label
+
+**Question.** The selection of 2026-09-24 chose a variant per baseline at 50 and 200 labels. The
+repeated curve also stands at 1,000 labelled windows and at all of them, and a variant chosen
+where labels are scarce need not be the one for where they are not. Which variant does the same
+rule choose there?
+
+**Conditions.** Code `d3c98928`; campaign `2b81fda7…` (`campaigns/selection-classical-large-fd001.toml`):
+the grid of 2026-09-24 — the trees shallower and deeper and at a third of the rate with three
+times the rounds, MiniRocket on grids of half, twice and four times the corpus's step — at 1,000
+labels and at all, ten repeats each holding 16 of the 79 tuning engines out, one-standard-error
+rule with the Nadeau–Bengio correction, ties towards the setting published. Run natively on the
+CPU through an order (`campaign_run`, 320 cells, 15 min; trees 1–4 s a cell, MiniRocket 6–24 s),
+accepted back into the registry, read with `campaign select`. RMSE on the held-out engines, mean
+± SD over the ten repeats; **bold** = chosen.
+
+| candidate | default | depth 3 | depth 9 | rate 0.1 × 300 |
+| --- | --- | --- | --- | --- |
+| trees per channel, 1,000 | 13.29 ± 0.81 | 13.37 ± 0.84 | 13.87 ± 1.02 | **12.79 ± 0.82** |
+| trees per channel, all | 12.68 ± 0.87 | 12.91 ± 0.89 | 13.04 ± 0.84 | **12.12 ± 0.83** |
+| spectrum, 1,000 | 17.60 ± 1.00 | 17.01 ± 0.94 | 18.28 ± 0.97 | **16.41 ± 0.68** |
+| spectrum, all | 16.59 ± 0.99 | 16.61 ± 1.27 | 17.64 ± 0.83 | **15.68 ± 0.94** |
+| across channels, 1,000 | 13.62 ± 0.97 | **13.31 ± 0.78** | 14.03 ± 0.90 | 13.06 ± 0.86 |
+| across channels, all | 13.08 ± 0.81 | **12.90 ± 0.66** | 13.39 ± 0.69 | 12.63 ± 0.68 |
+
+| MiniRocket grid | × 0.5 | × 1 (default) | × 2 | × 4 |
+| --- | --- | --- | --- | --- |
+| 1,000 | 17.88 ± 1.06 | **16.52 ± 1.16** | 17.22 ± 1.17 | 16.78 ± 1.05 |
+| all | 18.66 ± 1.11 | **16.66 ± 1.03** | 17.80 ± 1.21 | 17.56 ± 0.98 |
+
+**Conclusions.**
+
+- With labels plentiful the trees want a finer ensemble, not a shallower one: the per-channel
+  and spectral trees move from depth 3 at 200 to a third of the rate with three times the rounds
+  at 1,000 and at all. Across channels the finer ensemble is best at both budgets too, but depth
+  3 lies within one standard error and turns one knob to its two, so the rule keeps depth 3.
+- MiniRocket keeps the grid of the corpus's own step at every budget; the finer grids never help
+  and the coarser one costs a cycle or more.
+- The baselines are now tuned at every budget of the repeated curve by the one protocol the
+  arms are tuned by.
+
+**Limitations.** Ten repeats of 16 engines; the intervals of the trees' variants overlap at every
+budget and the rule reads them as ties broken towards the default. Nothing here touches the
+validation side.

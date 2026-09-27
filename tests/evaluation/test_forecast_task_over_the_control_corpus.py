@@ -62,7 +62,12 @@ from emblema.shared.adapters.synthetic.sensor_signal import SensorSignal  # noqa
 from emblema.shared.adapters.system.clock import SystemClock  # noqa: E402
 from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator  # noqa: E402
 from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
-from tests.evaluation.support import LORA, WEIGHTS, adaptation_schedule  # noqa: E402
+from tests.evaluation.support import (  # noqa: E402
+    LORA,
+    PENALTIES,
+    WEIGHTS,
+    adaptation_schedule,
+)
 from tests.support.backbones import SmallBackbones  # noqa: E402
 from tests.support.control_corpus import command, process  # noqa: E402
 from tests.support.synthetic import miniature  # noqa: E402
@@ -151,6 +156,7 @@ def plan_of(mode: TransferMode) -> AdaptationPlan:
         schedule=adaptation_schedule(epochs=2, batch_size=4, learning_rate=1e-2),
         lora=LORA if mode.adds_low_rank_updates else None,
         seed=1,
+        ridge=PENALTIES if mode.solves_the_head_in_closed_form else None,
     )
 
 

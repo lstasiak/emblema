@@ -20,6 +20,7 @@ from emblema.evaluation.adapters.torch.torch_adaptation_runtime import TorchAdap
 from emblema.evaluation.adapters.torch.torch_patch_runtime import TorchPatchRuntime
 from emblema.evaluation.application.use_cases.run_adaptation import RunAdaptation
 from emblema.evaluation.application.use_cases.run_patch_training import RunPatchTraining
+from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
@@ -73,6 +74,7 @@ class CompositionRoot:
         lora: LoraSpec | None = None,
         backbone: ArtifactRef | None = None,
         patch: PatchModelSpec | None = None,
+        ridge: RidgePenalties | None = None,
         device: str | None = None,
         store: ArtifactStore | None = None,
         tasks: DownstreamTaskRepository | None = None,
@@ -90,8 +92,9 @@ class CompositionRoot:
         What is this root's own is the ``schedule`` every cell learns under — the compute budget
         the campaign's neural candidates are held to — the ``backbone`` the pretrained arms
         start from, the ``lora`` updates the arm of that name adds, the ``patch`` model's shape,
-        and the ``device`` a cell computes on, this machine's accelerator unless given. Backbone,
-        updates and shape are needed unless ``candidates`` is given instead of the networks they
+        the ``ridge`` penalties the closed-form probe chooses among, and the ``device`` a cell
+        computes on, this machine's accelerator unless given. Backbone, updates, shape and
+        penalties are needed unless ``candidates`` is given instead of the networks they
         build. Everything else is what ``CampaignProcess`` takes and reaches it unchanged.
 
         Raises:
@@ -114,7 +117,7 @@ class CompositionRoot:
             ids=ids,
         )
         self.adapters, self.services = process.assemble(
-            self.networks_over(process, backbone, lora, patch, schedule, device)
+            self.networks_over(process, backbone, lora, patch, ridge, schedule, device)
             if candidates is None
             else candidates
         )
@@ -139,6 +142,7 @@ class CompositionRoot:
             lora=declared.lora(),
             backbone=worker.require_backbone_ref(),
             patch=declared.patch(),
+            ridge=declared.probe(),
             device=worker.device,
             jobs=jobs,
         )
@@ -190,10 +194,11 @@ class CompositionRoot:
         backbone: ArtifactRef | None,
         lora: LoraSpec | None,
         patch: PatchModelSpec | None,
+        ridge: RidgePenalties | None,
         schedule: AdaptationSchedule,
         device: str | None,
     ) -> CandidateProvider:
-        """The four ways of using a backbone and the patch model, over what the process holds.
+        """The five ways of using a backbone and the patch model, over what the process holds.
 
         Both learn under one ``schedule`` on one ``device``, which is what holds them to the same
         compute budget.
@@ -202,14 +207,14 @@ class CompositionRoot:
             ValueError: If the process was left to build them without a backbone, updates and a
                 shape for the patch model.
         """
-        if backbone is None or lora is None or patch is None:
+        if backbone is None or lora is None or patch is None or ridge is None:
             raise ValueError(
-                "without a backbone, its low-rank updates and a patch model's shape the process "
-                "needs its candidates given, not built"
+                "without a backbone, its low-rank updates, a patch model's shape and the probe's "
+                "penalties the process needs its candidates given, not built"
             )
         on = device or available_device()
         arms = BackboneCandidateProvider(
-            KnownArms.catalogue(backbone, lora, schedule),
+            KnownArms.catalogue(backbone, lora, schedule, ridge),
             RunAdaptation(
                 process.draw_run_labels,
                 TorchAdaptationRuntime(

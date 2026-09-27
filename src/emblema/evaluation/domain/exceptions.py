@@ -46,7 +46,7 @@ class InvalidAdaptationScheduleError(EvaluationError, ValueError):
 
 
 class InvalidAdaptationPlanError(EvaluationError, ValueError):
-    """A plan names weights a mode does not start from, or low-rank updates a mode does not add."""
+    """A plan names weights, low-rank updates, penalties or a pooling its mode cannot take."""
 
 
 class InvalidGradientBoostingSpecError(EvaluationError, ValueError):
@@ -59,6 +59,10 @@ class InvalidClassicalRecipeError(EvaluationError, ValueError):
 
 class InvalidMiniRocketSpecError(EvaluationError, ValueError):
     """A set of random convolutions is too small to fill every kernel of the family."""
+
+
+class InvalidRidgePenaltiesError(EvaluationError, ValueError):
+    """A ridge fit names no penalty, a penalty that is not positive, or penalties out of order."""
 
 
 class InvalidRidgeSpecError(EvaluationError, ValueError):
@@ -95,6 +99,14 @@ class InvalidAdaptationOutcomeError(InvalidScoredOutcomeError):
 
 class DivergedAdaptationError(EvaluationError):
     """A candidate's training loss stopped being finite, before a step was taken on it."""
+
+
+class InvalidBackboneArmError(EvaluationError, ValueError):
+    """An arm names penalties its mode does not solve a head with, or none where it does."""
+
+
+class UnsolvableHeadError(EvaluationError):
+    """A head solved in closed form was given too few windows to choose its penalty on."""
 
 
 class FrozenTestSplitClosedError(EvaluationError):

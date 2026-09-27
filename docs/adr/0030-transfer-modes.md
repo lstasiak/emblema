@@ -1,7 +1,7 @@
 # ADR-0030: Transfer modes — four arms of one procedure, low-rank updates as a cap on degrees of freedom, and the encoder reached through a seam the process wires
 
 - Status: accepted
-- Date: 2026-09-18; amended 2026-09-19, 2026-09-20 (twice)
+- Date: 2026-09-18; amended 2026-09-19, 2026-09-20 (twice), 2026-09-27
 - Full text before condensation: commit `5f14447`
 
 ## Context
@@ -76,6 +76,8 @@ labelled windows).
 - **2026-09-20 — a floor of steps and the head's start**, registered before any run: a run takes its
   epochs or enough whole epochs to reach a step floor, whichever is more; the head's bias starts at
   the sample's label mean.
+- **2026-09-27 — a fifth mode, `FROZEN_RIDGE`**: the probe's head solved in closed form over the
+  same pooled states, beside the trained probe (ADR-0044).
 
 ## Sources
 

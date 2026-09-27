@@ -14,6 +14,11 @@ class TransferMode(StrEnum):
             arm: what the labels teach on their own.
         FROZEN_PROBE: The pretrained weights held fixed and a linear head trained over the pooled
             states. What the representation carries as it stands.
+        FROZEN_RIDGE: The pretrained weights held fixed and the linear head solved in closed
+            form over the pooled states, its penalty chosen by leave-one-out error. What the
+            representation carries, read without an optimiser between it and the answer: the
+            head trained under the schedule sits several cycles behind this one on the same
+            states.
         LORA: The pretrained weights held fixed, low-rank updates trained beside chosen linear
             layers together with the head. At this model size not an economy of memory or time
             but a cap on the degrees of freedom a small budget may spend.
@@ -22,6 +27,7 @@ class TransferMode(StrEnum):
 
     FROM_SCRATCH = "from_scratch"
     FROZEN_PROBE = "frozen_probe"
+    FROZEN_RIDGE = "frozen_ridge"
     LORA = "lora"
     FULL_FINE_TUNING = "full_fine_tuning"
 
@@ -36,3 +42,8 @@ class TransferMode(StrEnum):
     @property
     def adds_low_rank_updates(self) -> bool:
         return self is TransferMode.LORA
+
+    @property
+    def solves_the_head_in_closed_form(self) -> bool:
+        """Whether the head is solved rather than trained, so the run takes no optimiser step."""
+        return self is TransferMode.FROZEN_RIDGE

@@ -4,26 +4,29 @@ from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 
 
 @pytest.mark.parametrize(
-    ("mode", "pretrained", "trains_backbone", "low_rank"),
+    ("mode", "pretrained", "trains_backbone", "low_rank", "closed_form"),
     [
-        (TransferMode.FROM_SCRATCH, False, True, False),
-        (TransferMode.FROZEN_PROBE, True, False, False),
-        (TransferMode.LORA, True, False, True),
-        (TransferMode.FULL_FINE_TUNING, True, True, False),
+        (TransferMode.FROM_SCRATCH, False, True, False, False),
+        (TransferMode.FROZEN_PROBE, True, False, False, False),
+        (TransferMode.FROZEN_RIDGE, True, False, False, True),
+        (TransferMode.LORA, True, False, True, False),
+        (TransferMode.FULL_FINE_TUNING, True, True, False, False),
     ],
 )
 def test_each_mode_says_where_it_starts_and_what_it_trains(
-    mode: TransferMode, pretrained: bool, trains_backbone: bool, low_rank: bool
+    mode: TransferMode, pretrained: bool, trains_backbone: bool, low_rank: bool, closed_form: bool
 ) -> None:
     assert mode.starts_from_pretrained_weights is pretrained
     assert mode.trains_backbone_weights is trains_backbone
     assert mode.adds_low_rank_updates is low_rank
+    assert mode.solves_the_head_in_closed_form is closed_form
 
 
-def test_the_axis_holds_the_control_arm_and_the_three_transfer_modes() -> None:
+def test_the_axis_holds_the_control_arm_and_the_four_transfer_modes() -> None:
     assert [str(mode) for mode in TransferMode] == [
         "from_scratch",
         "frozen_probe",
+        "frozen_ridge",
         "lora",
         "full_fine_tuning",
     ]

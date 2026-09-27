@@ -1,8 +1,6 @@
-from collections.abc import Mapping
 from dataclasses import dataclass
 
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
-from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.domain.exceptions import TunedChoiceMismatchError
@@ -110,7 +108,7 @@ class DefineCampaign:
             )
         }
         for choice in command.tuned:
-            self._check(choice, task.task_id, described)
+            self._check(choice, task.task_id)
         campaign = EvaluationCampaign.designed(
             campaign_id=self._ids.generate(CampaignId),
             task=task.task_id,
@@ -137,17 +135,14 @@ class DefineCampaign:
         self._campaigns.save(campaign, seen=campaign.revision)
         return campaign.campaign_id
 
-    def _check(
-        self,
-        choice: TunedChoice,
-        task: TaskId,
-        described: Mapping[CandidateRef, CampaignCandidate],
-    ) -> None:
+    def _check(self, choice: TunedChoice, task: TaskId) -> None:
         """Refuse a choice its selection, read again by its rule, did not make.
 
-        A name is not enough: the variant and the candidate it varies must be described here
-        exactly as the selection described them when it ran, or a change of configuration in
-        between would run another model under the name the selection chose.
+        A name is not enough: the variant, and the setting the selection turned the candidate's
+        knobs around, must be described here exactly as the selection described them when it
+        ran, or a change of configuration in between would run another model under the name
+        the selection chose. The setting is the candidate under its bare name where the
+        selection holds it, and the variant it was declared around otherwise.
 
         Raises:
             CampaignNotFoundError: If the selection is not stored.
@@ -166,10 +161,13 @@ class DefineCampaign:
                 f"selection {choice.selected_by} chose {chosen} for {choice.candidate} at "
                 f"{choice.budget}, not {choice.variant}"
             )
-        for ref in (choice.candidate, choice.variant):
-            ran = selection.design.get_candidate(ref)
-            if ran != described[ref]:
+        for ran in (
+            selection.turned_around(choice.candidate),
+            selection.design.get_candidate(choice.variant),
+        ):
+            described = self._candidates.describe(ran.ref)
+            if ran != described:
                 raise TunedChoiceMismatchError(
-                    f"selection {choice.selected_by} ran {ref} as {ran}, and this process "
-                    f"describes it as {described[ref]}"
+                    f"selection {choice.selected_by} ran {ran.ref} as {ran}, and this process "
+                    f"describes it as {described}"
                 )

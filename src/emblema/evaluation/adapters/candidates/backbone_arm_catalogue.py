@@ -87,6 +87,8 @@ class BackboneArmCatalogue:
         }
         if arm.backbone is None:
             stated["architecture_of"] = f"{arm.architecture.key}@{arm.architecture.checksum}"
+        if arm.ridge is not None:
+            stated["ridge_penalties"] = str(arm.ridge)
         if arm.lora is not None:
             stated["lora_rank"] = arm.lora.rank
             stated["lora_alpha"] = arm.lora.alpha

@@ -34,13 +34,11 @@ measurement is a *tessera*: a self-contained token of channel, time and value.
 ## How it works
 
 **The problem.** Industrial and scientific sensor data rarely looks like a neat table. A jet
-engine reports 21 sensors every cycle. An intensive-care patient has a heart rate every few
-minutes, a blood test twice a day, and some values never measured at all. A satellite sends
-telemetry in bursts with gaps between passes. Most time-series models expect a fixed set of
-channels sampled on a regular clock. So each new dataset is usually resampled onto a grid, filled
-in where values are missing, and given a model of its own trained from its own labels. Labels are
-the expensive part: someone has to record when each engine failed or how each patient's stay
-ended.
+engine reports 21 sensors every cycle; an intensive-care patient has a heart rate every few
+minutes, a blood test twice a day and some values never measured; a satellite sends telemetry in
+bursts between passes. Most time-series models expect a fixed set of channels on a regular
+clock, so each new dataset is resampled, filled in and given a model of its own, trained from
+its own labels. Labels are the expensive part.
 
 **The idea.** Train one model on many unlabelled sensor datasets first, then adapt it to a new
 task with only a few labels. This is what pretrained language models do for text. For it to work
@@ -48,11 +46,10 @@ across datasets, the model must not care how many sensors a dataset has or how o
 read.
 
 **Measurements as a bag of tokens.** Each measurement becomes one token: which sensor, its value
-(scaled per sensor), and when it was taken within the window. A token also carries how long it
-has been since that sensor's previous reading. A window of data is simply the set of its tokens.
-Three sensors or thirty, read every second or twice a day, it is the same kind of input, with
-nothing interpolated and no invented values. Fixed facts, such as a patient's age, become tokens
-without a time.
+scaled per sensor, when it was taken within the window, and how long since that sensor's
+previous reading. A window is the set of its tokens. Three sensors or thirty, read every second
+or twice a day, it is the same kind of input, with nothing interpolated. Fixed facts, such as a
+patient's age, become tokens without a time.
 
 ![Sensor readings of an intensive-care stay and a turbofan engine, and the same windows as sets of tokens](docs/images/token-view.png)
 
@@ -61,61 +58,58 @@ without a time.
 one turbofan engine (NASA C-MAPSS), every sensor every cycle. On the right, the rows the model
 receives for each: the same kind of input, of any length, from any sensors.*
 
-**One encoder for any sensor set.** A transformer reads the whole set at once. Each sensor has a
-learned identity vector, so a sensor it has never seen gets a new vector learned from a little
-data, while everything else carries over. The order of the tokens does not matter.
+**One encoder for any sensor set.** A transformer reads the whole set at once, in any order.
+Each sensor has a learned identity vector, so a sensor it has never seen gets a new vector
+learned from a little data while everything else carries over.
 
 **Learning without labels.** During pretraining, parts of each window are hidden: whole sensors,
-stretches of one sensor's time, or single readings. The model must predict the hidden values from
-what remains. Each kind of gap is also filled by a simple method, such as straight-line
-interpolation or a linear regression on the other sensors. The model counts as having learnt
-something only where it beats that method.
+stretches of one sensor's time, or single readings. The model predicts the hidden values from
+what remains, and counts as having learnt something only where it beats a simple method for the
+same gap, such as interpolation or a regression on the other sensors.
 
-**Adapting to a task.** The pretrained encoder is then used four ways on a small labelled task:
-kept frozen with only a small output layer trained, lightly adjusted through a few extra weights
-(LoRA), fully fine-tuned, or trained from scratch as the control. Each is run at several label
-budgets, from 50 labelled windows to all of them.
+**Adapting to a task.** The pretrained encoder is then used five ways on a small labelled task:
+frozen with a small output layer trained, frozen with that layer solved in closed form, lightly
+adjusted through a few extra weights (LoRA), fully fine-tuned, or trained from scratch as the
+control. Each runs at several label budgets, from 50 labelled windows to all of them, tuned per
+budget by the same declared procedure as the classical baselines.
 
 **Keeping the comparison honest.**
 
-- **Rules first.** The comparisons, the size of an improvement that counts, and what is reported
-  if the answer is no are written down and committed before the runs they judge
+- **Rules first.** The comparisons, the size of an improvement that counts and what is reported
+  if the answer is no are committed before the runs they judge
   ([`docs/preregistration.md`](docs/preregistration.md)).
-- **Engines, not windows.** Intervals are computed over engines or patients, the units that are
-  independent, not over overlapping windows.
-- **Strong baselines.** Classical methods compete in the same grid: gradient-boosted trees on
-  window statistics, frequency features and MiniRocket. They are tuned by a declared procedure,
-  so "a few hundred trees would have done as well" can be checked rather than argued.
+- **Engines, not windows.** Intervals are computed over engines or patients, the independent
+  units, not over overlapping windows.
+- **Strong baselines.** Gradient-boosted trees on window statistics, frequency features and
+  MiniRocket compete in the same grid, tuned by the same declared procedure as the networks.
 - **A positive control.** A generated dataset with known shared structure checks that the
-  pipeline can find structure when it is there. This makes a negative result on real data
-  meaningful.
+  pipeline finds structure when it is there, so a negative result on real data means something.
 
 ## Status
 
 Preliminary, on validation data. Each task's test data is used once, at the end.
 
-On the first task, remaining useful life of turbofan engines (NASA C-MAPSS), pretraining helps
-where labels are scarce. With 200 labelled windows, fine-tuning the pretrained encoder lowers the
-error by 12 % against the same network trained from scratch, and by 16–22 % with 50 labelled
-windows. With every label available the advantage disappears.
-
-Tuned classical methods are still stronger on this task: gradient-boosted trees reach 13.9 cycles
-of error at 200 labels, against 16.1 for the best pretrained variant. The two numbers come from
-separate runs. A single paired comparison of all candidates is the next step.
+On the first task, remaining useful life of turbofan engines (NASA C-MAPSS), pretraining does
+not help. A first curve found the fine-tuned encoder 12 % better than the same network trained
+from scratch at 200 labelled windows; diagnostics showed the control had been handicapped by
+its head and its learning rate. Repeated with every arm tuned per budget by one declared
+procedure, in one paired campaign with the classical baselines, the network trained from
+scratch is the best candidate at every budget: 10 % better than the fine-tuned encoder at 200
+labels, level with the tuned gradient-boosted trees. Transfer across corpora, where a fresh
+encoder has nothing to learn from, is the next question.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
-![Validation RMSE of every transfer mode over the budget of labelled windows, mean over five seeds with the spread as a band, and the reduction against the control arm with its paired interval over engines and the practical floor; tier M, Colab A100, fp32; validation, not test](docs/verification/figures/label-efficiency-curve.png)
+![Validation RMSE of the five network arms and of the classical baselines over the budget of labelled windows, mean over five seeds, and the reduction of each pretrained arm against the control with its paired interval over engines and the practical floor; tier M, Colab G4 and A100, fp32; validation, not test](docs/verification/figures/label-efficiency-curve.png)
 
-*Error of each way of using the pretrained encoder, by number of labelled windows, on C-MAPSS
-FD001. Top: validation error in cycles (lower is better). Bottom: the reduction against training
-from scratch, with its 95 % interval over engines. Classical baselines are not shown; at 200
-labels the best of them reaches 13.9. Colab A100, fp32; validation, not test.*
+*Error by number of labelled windows on C-MAPSS FD001, one paired campaign. Top: the five ways
+of using the encoder (lower is better). Middle: the classical baselines beside the network
+trained from scratch. Bottom: each pretrained arm's reduction against training from scratch
+with its 95 % interval over engines; the grey band is the practical floor. Validation, not test.*
 
 ## Quickstart
 
-Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+. The floor is the Python of the free
-GPU platforms.
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+, the Python of the free GPU platforms.
 
 ```sh
 uv sync --all-extras
@@ -134,29 +128,21 @@ bash scripts/smoke.sh
 uv run pytest -m integration     # adapter contracts against the stack
 ```
 
-The API listens on `http://127.0.0.1:8000`; its schema is at `/openapi.json` and a browser
-reads it at `/docs`. Liveness, readiness and Prometheus metrics are `/health`, `/ready` and
-`/metrics`.
+The API listens on `http://127.0.0.1:8000` (`/docs`, `/openapi.json`, `/health`, `/ready`,
+`/metrics`).
 
-The integration tests use their own database, named after the configured one with `_test`
-appended. The merge gate is the same suite inside the image, on the interpreter, wheels and OS
-the processes run on:
+The integration tests use their own database, the configured name with `_test` appended. The
+merge gate is the same suite inside the image, on the interpreter, wheels and OS the processes
+run on:
 
 ```sh
 docker compose run --rm tests pytest -o addopts="-ra --strict-markers" --cov
 ```
 
-MPS-gated tests skip in the image, so the suite also runs on the development Mac. On macOS the
-XGBoost tests run in a process of their own, because its OpenMP runtime cannot share a process
-with torch's:
-
-```sh
-uv run pytest tests/evaluation/adapters/xgboost \
-              tests/evaluation/adapters/test_classical_runtime_contract.py
-```
-
-`uv run --env-file .env.r2 pytest -m integration` runs the same contracts against the remote
-bucket. The variable names are in `env.example`.
+On macOS the XGBoost tests run in a process of their own, since its OpenMP runtime cannot share
+one with torch's: `uv run pytest tests/evaluation/adapters/xgboost
+tests/evaluation/adapters/test_classical_runtime_contract.py`. With `--env-file .env.r2` the
+integration tests run against the remote bucket; the variable names are in `env.example`.
 
 ### Workflow
 
@@ -168,8 +154,9 @@ uv run scripts/fetch_corpora.py
 uv run python -m emblema.entrypoints.cli.publish_corpus --corpus cmapss --window 50 --stride 5
 ```
 
-**Pretraining.** Order a run here, run it on any machine with a GPU, then accept the result
-against the order ([ADR-0024](docs/adr/0024-handing-a-run-to-another-machine.md)):
+**Pretraining.** Order a run here, run it on any machine with a GPU, accept the result against
+the order ([ADR-0024](docs/adr/0024-handing-a-run-to-another-machine.md)); every parameter is in
+the experiment file:
 
 ```sh
 uv run python -m emblema.entrypoints.cli.pretrain order \
@@ -179,11 +166,8 @@ uv run python -m emblema.entrypoints.cli.pretrain accept --result <key> <checksu
     --track http://127.0.0.1:5000
 ```
 
-Every parameter of a run is in its experiment file under `experiments/`.
-
-**Evaluation.** A campaign is declared from a committed file under `campaigns/`. Its cells run
-either on the Celery workers or, where no broker is reachable, from an order in the artifact
-store:
+**Evaluation.** A campaign is declared from a committed file under `campaigns/`; its cells run on
+the Celery workers or, where no broker reaches, from an order in the artifact store:
 
 ```sh
 uv run python -m emblema.entrypoints.cli.campaign define-task --corpus <key> <checksum> --task turbofan-fd001
@@ -194,15 +178,13 @@ docker compose --profile workers up -d worker-ml worker-general
 uv run python -m emblema.entrypoints.cli.campaign advance --campaign <id>
 
 # or through an order, run anywhere and accepted back
-uv run python -m emblema.entrypoints.cli.campaign order --campaign <id> --pool ml
+uv run python -m emblema.entrypoints.cli.campaign order --campaign <id> --pool ml [--budget 200]
 uv run python -m emblema.entrypoints.cli.campaign_run --order <key> <checksum>
 uv run python -m emblema.entrypoints.cli.campaign accept --result <key> <checksum>
 ```
 
-A finished selection campaign reports its chosen variants with
-`campaign select --campaign <id> --candidate <name>`. A closed campaign's announcement is
-repeated with `campaign announce --campaign <id>`, which prints the checksum of every kept
-artifact.
+`campaign select` prints what a finished selection chose per budget; `campaign announce`
+repeats a closed campaign's announcement with the checksum of every kept artifact.
 
 **Serving.** Only an artifact a finished campaign kept can be promoted, by checksum
 ([ADR-0037](docs/adr/0037-promoting-what-a-campaign-kept.md)):
@@ -212,24 +194,22 @@ uv run python -m emblema.entrypoints.cli.serving promote --checksum <checksum>
 uv run python -m emblema.entrypoints.cli.serving withdraw --model <model id>
 ```
 
-A promoted model answers over HTTP with raw readings: the request states where the window
-starts, how long it is, and every reading inside it by channel name. Readings on channels the
-model does not know are ignored and named in the answer; a window without a reading the model
-takes is refused ([ADR-0042](docs/adr/0042-the-prediction-service.md)):
+A promoted model answers over HTTP with raw readings by channel name: unknown channels are
+ignored and named in the answer, a window without a reading the model takes is refused
+([ADR-0042](docs/adr/0042-the-prediction-service.md)):
 
 ```sh
-curl -s http://127.0.0.1:8000/served-models/<model id>          # what the model takes
 curl -s -X POST http://127.0.0.1:8000/served-models/<model id>/predictions \
   -H 'Content-Type: application/json' \
   -d '{"windows": [{"start": 1, "length": 50,
                     "observations": [{"channel": "T24", "time": 1, "value": 641.8}]}]}'
 ```
 
-`/embeddings` answers with the pooled representation of each window; a classical candidate has
-none. What the networks run at once is bounded by cost ([ADR-0043](docs/adr/0043-the-networks-memory-is-bounded-by-cost.md)):
-a request that cannot be started in time is refused with `503` and a `Retry-After`. `/campaigns`, `/campaigns/<id>` and `/campaigns/<id>/runs` show what was compared: the
-design, every candidate's curve, the verdict with its intervals, and the grid a page at a time.
-Every refusal is a problem details document (RFC 9457).
+`/embeddings` returns each window's pooled representation. What the networks run at once is
+bounded by cost ([ADR-0043](docs/adr/0043-the-networks-memory-is-bounded-by-cost.md)): a
+request that cannot start in time gets `503` with a `Retry-After`. `/campaigns` and its pages
+show each comparison's design, curves, verdict and grid. Every refusal is a problem details
+document (RFC 9457).
 
 ## Documentation
 

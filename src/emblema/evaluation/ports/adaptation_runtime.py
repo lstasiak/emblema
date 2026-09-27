@@ -42,5 +42,7 @@ class AdaptationRuntime(Protocol):
             LoraTargetNotFoundError: If the plan's low-rank updates name a layer the backbone
                 does not have.
             InvalidScoredOutcomeError: If there is no validation window to answer.
+            UnsolvableHeadError: If the plan solves its head in closed form over fewer than
+                two labelled windows.
         """
         ...

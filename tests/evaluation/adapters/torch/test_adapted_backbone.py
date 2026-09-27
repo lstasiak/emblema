@@ -35,6 +35,7 @@ def candidate(mode: TransferMode) -> tuple[AdaptedBackbone, SmallBackbones]:
     [
         (TransferMode.FROM_SCRATCH, ENCODER + HEAD),
         (TransferMode.FROZEN_PROBE, HEAD),
+        (TransferMode.FROZEN_RIDGE, HEAD),
         (TransferMode.LORA, LORA_UPDATES + HEAD),
         (TransferMode.FULL_FINE_TUNING, ENCODER + HEAD),
     ],
@@ -46,7 +47,13 @@ def test_each_mode_leaves_exactly_its_weights_free(mode: TransferMode, trainable
 
 
 @pytest.mark.parametrize(
-    "mode", [TransferMode.FROZEN_PROBE, TransferMode.LORA, TransferMode.FULL_FINE_TUNING]
+    "mode",
+    [
+        TransferMode.FROZEN_PROBE,
+        TransferMode.FROZEN_RIDGE,
+        TransferMode.LORA,
+        TransferMode.FULL_FINE_TUNING,
+    ],
 )
 def test_a_transfer_mode_asks_for_the_plans_weights(mode: TransferMode) -> None:
     _, backbones = candidate(mode)
