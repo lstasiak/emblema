@@ -192,6 +192,7 @@ allowed-confusables = ["×"]
 "scripts/head_and_representation_report.py" = ["E402"]
 "scripts/campaign_pairs_report.py" = ["E402"]
 "scripts/campaign_report.py" = ["E402"]
+"scripts/campaign_curve_figures.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
