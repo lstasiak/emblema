@@ -190,6 +190,7 @@ allowed-confusables = ["×"]
 "scripts/bootstrap_calibration_report.py" = ["E402"]
 "scripts/frozen_representations.py" = ["E402"]
 "scripts/head_and_representation_report.py" = ["E402"]
+"scripts/campaign_pairs_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
