@@ -26,7 +26,7 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.ports.adaptation_runtime import AdaptationRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
-from tests.evaluation.support import TASK, labelled, plan, task
+from tests.evaluation.support import OUTCOME, OUTCOMES, TASK, labelled, plan, task
 
 SAMPLE = LabelSample(
     task=TASK,
@@ -99,3 +99,21 @@ def test_a_sample_of_another_task_is_refused(adapted: Adapted) -> None:
 def test_a_run_with_nothing_to_score_is_refused(adapted: Adapted) -> None:
     with pytest.raises(InvalidScoredOutcomeError):
         adapted.runtime.adapt(plan(), adapted.task, SAMPLE, (), retain=False)
+
+
+OUTCOMES_SAMPLE = replace(
+    SAMPLE, windows=(labelled("a", 0, 10.0, 1.0), labelled("b", 3, 10.0, 0.0))
+)
+OUTCOMES_VALIDATION = (labelled("c", 2, 10.0, 1.0), labelled("c", 1, 15.0, 0.0))
+
+
+@pytest.mark.parametrize("mode", list(TransferMode))
+def test_a_binary_task_is_answered_with_probabilities(adapted: Adapted, mode: TransferMode) -> None:
+    binary = replace(adapted.task, labels=OUTCOME, strata=OUTCOMES)
+
+    outcome = adapted.runtime.adapt(
+        plan(mode), binary, OUTCOMES_SAMPLE, OUTCOMES_VALIDATION, retain=False
+    )
+
+    assert all(0.0 < p.predicted < 1.0 for p in outcome.predictions)
+    assert [p.target for p in outcome.predictions] == [1.0, 0.0]

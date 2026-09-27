@@ -15,7 +15,9 @@ import torch
 
 from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
+from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from tests.evaluation.support import plan
@@ -73,7 +75,10 @@ class Exported:
 def exported(mode: TransferMode, pooling: HeadPooling | None = None) -> Exported:
     """Export once per mode, pooling and process: it takes seconds, and is deterministic."""
     candidate = adapted(mode, pooling=pooling)
-    return Exported(candidate, InferenceGraph.exported(candidate, target_scale=TARGET_SCALE))
+    return Exported(
+        candidate,
+        InferenceGraph.exported(candidate, link=TargetLink(TargetKind.CONTINUOUS, TARGET_SCALE)),
+    )
 
 
 def over_grown_channels(batch: TokenTensors) -> TokenTensors:

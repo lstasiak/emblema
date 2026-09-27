@@ -33,8 +33,10 @@ from emblema.evaluation.adapters.torch.grid_reading import GridReading  # noqa: 
 from emblema.evaluation.adapters.torch.mean_pooling import MeanPooling  # noqa: E402
 from emblema.evaluation.adapters.torch.patch_transformer import PatchTransformer  # noqa: E402
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead  # noqa: E402
+from emblema.evaluation.adapters.torch.target_link import TargetLink  # noqa: E402
 from emblema.evaluation.adapters.xgboost.fitted_baseline import FittedBaseline  # noqa: E402
 from emblema.evaluation.contracts.candidate_kind import CandidateKind  # noqa: E402
+from emblema.evaluation.domain.labels.target_kind import TargetKind  # noqa: E402
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
 from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
@@ -50,13 +52,14 @@ type Fitted = FittedCandidate | FittedBaseline | FittedConvolutions | FittedPatc
 
 CORPUS = ArtifactRef(key="durable/corpus", checksum=Checksum.of_bytes(b"corpus"))
 SCALE = 125.0
+LINK = TargetLink(TargetKind.CONTINUOUS, SCALE)
 
 
 def fitted_candidate() -> FittedCandidate:
     torch.manual_seed(1)
     encoder = SetEncoder.for_vocabulary(TINY, CHANNELS)
     candidate = AdaptedBackbone(encoder, MeanPooling(), RegressionHead(TINY.width, starting_at=0.5))
-    return FittedCandidate.of(plan(), candidate, vocabulary_size=CHANNELS, target_scale=SCALE)
+    return FittedCandidate.of(plan(), candidate, vocabulary_size=CHANNELS, link=LINK)
 
 
 def fitted_baseline() -> FittedBaseline:
@@ -79,7 +82,14 @@ def fitted_convolutions() -> FittedConvolutions:
     ]
     targets = np.array((1.0, 2.0, 3.0) * 2) / 10.0
     return FittedConvolutions.fitted(
-        recipe(method=convolutions()), convolutions(), 2, 16, windows, targets, SCALE
+        recipe(method=convolutions()),
+        convolutions(),
+        2,
+        16,
+        windows,
+        targets,
+        SCALE,
+        TargetKind.CONTINUOUS,
     )
 
 
@@ -89,22 +99,39 @@ def fitted_patch_model() -> FittedPatchModel:
     model = PatchTransformer(
         patch_plan().spec, channels=len(reading.held), steps=reading.steps, starting_at=0.0
     )
-    return FittedPatchModel.of(patch_plan(), model, reading=reading, target_scale=SCALE)
+    return FittedPatchModel.of(patch_plan(), model, reading=reading, link=LINK)
 
 
 class Kept(NamedTuple):
-    """A codec of a measured form, a way to make one, and the kind of candidate it belongs to."""
+    """A codec of a measured form, a way to make one, the kind of candidate it belongs to, and
+    what an answer of the form is read back through."""
 
     codec: type[Fitted]
     make: Callable[[], Fitted]
     kind: CandidateKind
+    reading: Callable[[Fitted], object]
+
+
+def _link(fitted: Fitted) -> object:
+    assert isinstance(fitted, FittedCandidate | FittedPatchModel)
+    return fitted.link
+
+
+def _scale(fitted: Fitted) -> object:
+    assert isinstance(fitted, FittedBaseline)
+    return fitted.target_scale
+
+
+def _scale_and_calibration(fitted: Fitted) -> object:
+    assert isinstance(fitted, FittedConvolutions)
+    return (fitted.target_scale, fitted.calibration)
 
 
 KEPT = (
-    Kept(FittedCandidate, fitted_candidate, CandidateKind.NEURAL),
-    Kept(FittedBaseline, fitted_baseline, CandidateKind.CLASSICAL),
-    Kept(FittedConvolutions, fitted_convolutions, CandidateKind.CLASSICAL),
-    Kept(FittedPatchModel, fitted_patch_model, CandidateKind.NEURAL),
+    Kept(FittedCandidate, fitted_candidate, CandidateKind.NEURAL, _link),
+    Kept(FittedBaseline, fitted_baseline, CandidateKind.CLASSICAL, _scale),
+    Kept(FittedConvolutions, fitted_convolutions, CandidateKind.CLASSICAL, _scale_and_calibration),
+    Kept(FittedPatchModel, fitted_patch_model, CandidateKind.NEURAL, _link),
 )
 CODECS = (*(kept.codec for kept in KEPT), InferenceGraph)
 
@@ -130,4 +157,4 @@ def test_a_form_kept_under_its_format_reads_back_through_the_manifest(kept: Kept
     form = KeptCandidates(store).read(manifest).find(kept.codec.FORMAT)
     assert form is not None
     read = kept.codec.read(store.get(form.artifact))
-    assert (read.parameters, read.target_scale) == (fitted.parameters, fitted.target_scale)
+    assert (read.parameters, kept.reading(read)) == (fitted.parameters, kept.reading(fitted))

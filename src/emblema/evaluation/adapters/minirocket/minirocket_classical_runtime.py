@@ -72,7 +72,8 @@ class MiniRocketClassicalRuntime:
         corpus = ReadCorpus.every(self._blocks, (task,))[task.manifest]
         steps = self._steps_of(method, corpus)
         started = time.perf_counter()
-        scale = task.label_scheme().scale
+        scheme = task.label_scheme()
+        scale = scheme.scale
         fitted = FittedConvolutions.fitted(
             recipe,
             method,
@@ -81,6 +82,7 @@ class MiniRocketClassicalRuntime:
             list(corpus.windows([labelled.window for labelled in sample.windows])),
             np.array([labelled.target / scale for labelled in sample.windows]),
             scale,
+            scheme.kind,
         )
         predicted = fitted.predict(
             list(corpus.windows([labelled.window for labelled in scored])),

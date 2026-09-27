@@ -35,7 +35,9 @@ from emblema.evaluation.adapters.onnx.inference_graph import (
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.mean_pooling import MeanPooling
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead
+from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.contracts.inference_graph_signature import INPUT_NAMES, OUTPUT_NAMES
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
@@ -96,7 +98,7 @@ def tier_candidate(name: ComputeTier) -> AdaptedBackbone:
 
 def export_at(candidate: AdaptedBackbone, opset: int) -> bytes:
     """The graph at another opset, for the paths the adapter deliberately does not take."""
-    module = InferenceCandidate(candidate, target_scale=TARGET_SCALE)
+    module = InferenceCandidate(candidate, link=TargetLink(TargetKind.CONTINUOUS, TARGET_SCALE))
     sample = random_batch(2, 137, seed=SEED, padding=5)
     axes = {
         0: torch.export.Dim("batch", min=1, max=MAX_BATCH),
@@ -186,7 +188,9 @@ def report_export_paths(rows: list[str]) -> None:
             with torch.no_grad():
                 on_accelerator = (candidate(batch.to("mps")) * TARGET_SCALE).cpu().numpy()
             try:
-                graph_of_moved = InferenceGraph.exported(candidate, target_scale=TARGET_SCALE)
+                graph_of_moved = InferenceGraph.exported(
+                    candidate, link=TargetLink(TargetKind.CONTINUOUS, TARGET_SCALE)
+                )
             except Exception as error:
                 moved = summarise(error)
             else:
@@ -197,14 +201,16 @@ def report_export_paths(rows: list[str]) -> None:
 
 
 def report_alternatives(rows: list[str], label: str, candidate: AdaptedBackbone) -> None:
-    module = InferenceCandidate(candidate, target_scale=TARGET_SCALE)
+    module = InferenceCandidate(candidate, link=TargetLink(TargetKind.CONTINUOUS, TARGET_SCALE))
     parameters = sum(tensor.numel() for tensor in candidate.parameters())
     sample = random_batch(2, 137, seed=SEED, padding=5)
     batch = random_batch(1, LATENCY_TOKENS, seed=LATENCY_TOKENS)
 
     with quiet():
         started = time.perf_counter()
-        graph = InferenceGraph.exported(candidate, target_scale=TARGET_SCALE)
+        graph = InferenceGraph.exported(
+            candidate, link=TargetLink(TargetKind.CONTINUOUS, TARGET_SCALE)
+        )
         export_seconds = time.perf_counter() - started
 
         traced = torch.jit.trace(module, sample.args, strict=False)

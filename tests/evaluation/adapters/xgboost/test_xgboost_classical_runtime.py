@@ -30,7 +30,16 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from tests.evaluation.adapters.xgboost.support import WIDE_CHANNELS, publish_wide
-from tests.evaluation.support import TASK, boosting, convolutions, labelled, recipe, task
+from tests.evaluation.support import (
+    OUTCOME,
+    OUTCOMES,
+    TASK,
+    boosting,
+    convolutions,
+    labelled,
+    recipe,
+    task,
+)
 from tests.support.published import CHANNELS, publish
 
 AGGREGATED = FeatureScheme.CHANNEL_AGGREGATED
@@ -173,6 +182,38 @@ def test_what_a_fit_keeps_answers_the_same_rows_the_fit_itself_did(published: Pu
     blocks = PublishedCorpusBlocks(published.store, published.workspace / "read")
     manifest = blocks.manifest_of(published.task.manifest)
     rows = ChannelAggregatedFeatures().of(blocks.block_of(manifest).at([2]))
+    answered = kept.booster().inplace_predict(rows) * kept.target_scale
+    assert float(answered[0]) == pytest.approx(outcome.predictions[0].predicted, rel=1e-6)
+
+
+def test_trees_of_a_binary_task_answer_probabilities_and_keep_them(published: Published) -> None:
+    # The kept trees compute the probability from their own objective, so another context that
+    # reads them answers what the run scored without knowing the task was binary.
+    from emblema.evaluation.adapters.features.channel_aggregated_features import (
+        ChannelAggregatedFeatures,
+    )
+
+    binary = replace(published.task, labels=OUTCOME, strata=OUTCOMES)
+    outcomes = replace(
+        SAMPLE,
+        windows=tuple(
+            replace(labelled_window, target=target)
+            for labelled_window, target in zip(SAMPLE.windows, (1.0, 1.0, 0.0), strict=True)
+        ),
+    )
+
+    outcome = published.runtime.fit(
+        recipe(AGGREGATED), binary, outcomes, (), (labelled("c", 2, 10.0, 0.0),), retain=True
+    )
+
+    assert 0.0 < outcome.predictions[0].predicted < 1.0
+    assert outcome.artifact is not None
+    candidate = KeptCandidates(published.store).read(outcome.artifact)
+    kept = FittedBaseline.read(published.store.get(candidate.measured.artifact))
+    blocks = PublishedCorpusBlocks(published.store, published.workspace / "read")
+    rows = ChannelAggregatedFeatures().of(
+        blocks.block_of(blocks.manifest_of(binary.manifest)).at([2])
+    )
     answered = kept.booster().inplace_predict(rows) * kept.target_scale
     assert float(answered[0]) == pytest.approx(outcome.predictions[0].predicted, rel=1e-6)
 

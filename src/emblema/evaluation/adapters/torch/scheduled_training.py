@@ -3,7 +3,6 @@ from collections.abc import Callable, Iterable, Sequence
 
 import torch
 from torch import Tensor, nn
-from torch.nn.functional import mse_loss
 
 from emblema.evaluation.domain.exceptions import DivergedAdaptationError
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
@@ -11,6 +10,8 @@ from emblema.shared.adapters.loaders.seeded_shuffle_sampler import SeededShuffle
 
 # What the model is asked per batch: the indices of the windows to answer, in sample order.
 Forward = Callable[[Sequence[int]], Tensor]
+# What a batch's answers are held to against what they were taught.
+Loss = Callable[[Tensor, Tensor], Tensor]
 
 
 class ScheduledTraining:
@@ -20,7 +21,7 @@ class ScheduledTraining:
     only shared if they spend it the same way: the same optimiser, the same shape of rate, the
     same seeded order of windows and the same refusal of a loss that stops being finite. What a
     candidate is made of reaches the loop as the parameters it may change and a function that
-    answers a batch.
+    answers a batch; what the task's target is reaches it as the loss the answers descend.
     """
 
     def __init__(self, schedule: AdaptationSchedule, seed: int) -> None:
@@ -33,6 +34,8 @@ class ScheduledTraining:
         trainable: Iterable[nn.Parameter],
         forward: Forward,
         targets: Tensor,
+        *,
+        loss: Loss,
     ) -> list[float]:
         """The schedule's epochs over the targets, in the seeded order; the mean loss of each.
 
@@ -58,12 +61,12 @@ class ScheduledTraining:
             total = 0.0
             for start in range(0, len(positions), schedule.batch_size):
                 indices = positions[start : start + schedule.batch_size]
-                loss = mse_loss(forward(indices), targets[indices])
-                mean = float(loss.detach())
+                batch_loss = loss(forward(indices), targets[indices])
+                mean = float(batch_loss.detach())
                 if not math.isfinite(mean):
                     raise DivergedAdaptationError(f"the loss of a batch in epoch {epoch} is {mean}")
                 optimiser.zero_grad(set_to_none=True)
-                loss.backward()
+                batch_loss.backward()
                 optimiser.step()
                 rate.step()
                 total += mean * len(indices)

@@ -26,7 +26,9 @@ class InferenceRuntime(Protocol):
         ...
 
     def predict(self, artifact: ArtifactRef, windows: Sequence[TokenWindow]) -> tuple[float, ...]:
-        """The candidate's answer for every window, in the task's unit, in the order given.
+        """The candidate's answer for every window, in the order given.
+
+        An answer is in the task's unit, or the probability of the positive outcome.
 
         Raises:
             ArtifactUnavailableError: If the artifact, or the form run, is not in the store.

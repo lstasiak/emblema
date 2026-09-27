@@ -3,6 +3,7 @@ import pytest
 
 from emblema.evaluation.adapters.minirocket.fitted_convolutions import FittedConvolutions
 from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.shared.kernel.tokens import TokenWindow
 from tests.evaluation.adapters.features.support import timed, window
 from tests.evaluation.support import convolutions, recipe
@@ -24,7 +25,14 @@ TARGETS = np.array((1.0, 2.0, 3.0, 4.0, 5.0, 6.0) * 3) / 10.0
 
 def fit() -> FittedConvolutions:
     return FittedConvolutions.fitted(
-        recipe(method=convolutions()), convolutions(), 2, 16, WINDOWS, TARGETS, 10.0
+        recipe(method=convolutions()),
+        convolutions(),
+        2,
+        16,
+        WINDOWS,
+        TARGETS,
+        10.0,
+        TargetKind.CONTINUOUS,
     )
 
 
@@ -68,6 +76,7 @@ def test_the_grid_reads_the_channels_the_fitted_windows_hold_and_no_other() -> N
         dense,
         np.linspace(0.0, 1.0, 6),
         1.0,
+        TargetKind.CONTINUOUS,
     )
 
     assert fitted.rows.tolist() == [0, 1, 5 + 1]
@@ -75,7 +84,14 @@ def test_the_grid_reads_the_channels_the_fitted_windows_hold_and_no_other() -> N
 
 def test_a_channel_no_fitted_window_held_is_not_read_when_answering() -> None:
     fitted = FittedConvolutions.fitted(
-        recipe(method=convolutions()), convolutions(), 5, 16, WINDOWS, TARGETS, 10.0
+        recipe(method=convolutions()),
+        convolutions(),
+        5,
+        16,
+        WINDOWS,
+        TARGETS,
+        10.0,
+        TargetKind.CONTINUOUS,
     )
     times = np.sort(np.random.default_rng(9).uniform(0.0, 1.0, 50))
     first = timed(1, [(float(np.sin(2 * np.pi * t)), float(t)) for t in times])
@@ -85,3 +101,66 @@ def test_a_channel_no_fitted_window_held_is_not_read_when_answering() -> None:
     beside = fitted.predict([window(first, second, timed(4, [(9.0, 0.5)]))], threads=1)
 
     assert np.array_equal(alone, beside)
+
+
+OUTCOMES = np.array((0.0, 0.0, 0.0, 1.0, 1.0, 1.0) * 3)
+
+
+def fit_outcomes() -> FittedConvolutions:
+    return FittedConvolutions.fitted(
+        recipe(method=convolutions()),
+        convolutions(),
+        2,
+        16,
+        WINDOWS,
+        OUTCOMES,
+        1.0,
+        TargetKind.BINARY,
+    )
+
+
+def test_a_binary_task_is_answered_with_probabilities_that_rank_as_the_linear_map_does() -> None:
+    fitted = fit_outcomes()
+
+    answered = fitted.predict(WINDOWS, threads=1)
+    uncalibrated = FittedConvolutions(**{**vars(fitted), "calibration": None}).predict(
+        WINDOWS, threads=1
+    )
+
+    assert fitted.calibration is not None
+    assert np.all((answered > 0.0) & (answered < 1.0))
+    assert np.array_equal(
+        np.argsort(answered, kind="stable"), np.argsort(uncalibrated, kind="stable")
+    )
+
+
+def test_what_was_kept_of_a_binary_task_answers_exactly_as_what_was_fitted() -> None:
+    fitted = fit_outcomes()
+
+    read = FittedConvolutions.read(fitted.to_bytes())
+
+    assert read.calibration == fitted.calibration
+    assert np.array_equal(read.predict(WINDOWS, threads=1), fitted.predict(WINDOWS, threads=1))
+
+
+def test_a_named_scoring_chooses_the_penalty_the_default_does_and_keeps_the_left_out_answers() -> (
+    None
+):
+    # The binary fit names a scoring only to keep the leave-one-out answers; it must not move
+    # the penalty, and what it keeps must be the answers, not their squared errors.
+    from sklearn.linear_model import RidgeCV
+
+    rows = RNG.normal(size=(30, 5))
+    targets = (rows[:, 0] + 0.3 * RNG.normal(size=30) > 0.0).astype(np.float64)
+    penalties = (0.1, 1.0, 10.0)
+
+    default = RidgeCV(alphas=penalties).fit(rows, targets)
+    named = RidgeCV(alphas=penalties, scoring="neg_mean_squared_error", store_cv_results=True).fit(
+        rows, targets
+    )
+    chosen = penalties.index(float(named.alpha_))
+    left_out = named.cv_results_[:, chosen]
+    first = RidgeCV(alphas=[penalties[chosen]]).fit(rows[1:], targets[1:])
+
+    assert named.alpha_ == default.alpha_
+    assert left_out[0] == pytest.approx(float(first.predict(rows[:1])[0]))

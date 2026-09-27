@@ -17,6 +17,7 @@ from emblema.evaluation.adapters.xgboost.fitted_baseline import FittedBaseline  
 from emblema.evaluation.contracts.exceptions import InvalidKeptRepresentationError  # noqa: E402
 from emblema.evaluation.contracts.kept_representation import KeptRepresentation  # noqa: E402
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme  # noqa: E402
+from emblema.evaluation.domain.labels.target_kind import TargetKind  # noqa: E402
 from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
 from emblema.shared.kernel.checksums import Checksum  # noqa: E402
 from tests.evaluation.adapters.features.support import timed, window  # noqa: E402
@@ -51,7 +52,14 @@ def fitted_convolutions() -> FittedConvolutions:
     ]
     targets = np.array((1.0, 2.0, 3.0) * 2) / 10.0
     return FittedConvolutions.fitted(
-        recipe(method=convolutions()), convolutions(), 2, 16, windows, targets, SCALE
+        recipe(method=convolutions()),
+        convolutions(),
+        2,
+        16,
+        windows,
+        targets,
+        SCALE,
+        TargetKind.CONTINUOUS,
     )
 
 

@@ -110,7 +110,7 @@ class OnnxGraphInference:
     def predict(
         self, form: KeptRepresentation, content: bytes, windows: Sequence[TokenWindow]
     ) -> tuple[float, ...]:
-        """The graph's answer for every window, in the task's unit, in the order given."""
+        """The graph's answer for every window, in the order given, as the graph computes it."""
         answered = self._run(form, content, PREDICTION, windows)
         return tuple(float(answer) for answer in answered.tolist())
 

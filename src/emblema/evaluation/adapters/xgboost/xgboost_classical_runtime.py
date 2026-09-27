@@ -24,6 +24,7 @@ from emblema.evaluation.domain.exceptions import (
 )
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
@@ -84,9 +85,9 @@ class XgboostClassicalRuntime:
         started = time.perf_counter()
         rows, targets = self._fitted_from(features, read, task, sample, sources)
         answered = features.of(read[task.manifest].windows([w.window for w in scored]))
-        scale = task.label_scheme().scale
-        model = self._grown(trees.boosting, recipe.seed, rows, targets)
-        predicted = model.predict(answered) * scale
+        scheme = task.label_scheme()
+        model = self._grown(trees.boosting, recipe.seed, rows, targets, scheme.kind)
+        predicted = self._answers(model, answered, scheme.kind, scheme.scale)
         return ScoredOutcome(
             predictions=tuple(
                 WindowPrediction(
@@ -95,7 +96,7 @@ class XgboostClassicalRuntime:
                 for labelled, answer in zip(scored, predicted.tolist(), strict=True)
             ),
             seconds=time.perf_counter() - started,
-            artifact=self._kept(recipe, model, features, task, scale) if retain else None,
+            artifact=self._kept(recipe, model, features, task, scheme.scale) if retain else None,
         )
 
     @staticmethod
@@ -138,27 +139,49 @@ class XgboostClassicalRuntime:
         seed: int,
         rows: NDArray[np.float64],
         targets: NDArray[np.float64],
-    ) -> xgboost.XGBRegressor:
-        model = xgboost.XGBRegressor(
-            n_estimators=boosting.rounds,
-            max_depth=boosting.max_depth,
-            learning_rate=boosting.learning_rate,
-            subsample=boosting.row_share,
-            colsample_bytree=boosting.feature_share,
-            min_child_weight=boosting.min_leaf_weight,
-            reg_lambda=boosting.l2_penalty,
-            objective="reg:squarederror",
-            tree_method="hist",
-            random_state=seed,
-            n_jobs=boosting.threads,
-        )
-        model.fit(rows, targets)
-        return model
+        kind: TargetKind,
+    ) -> xgboost.XGBModel:
+        """Trees grown to the target's kind: squared error, or an outcome's log-likelihood.
+
+        No class is weighted, so the probabilities an outcome's trees answer stay on the outcomes.
+        """
+        stated = {
+            "n_estimators": boosting.rounds,
+            "max_depth": boosting.max_depth,
+            "learning_rate": boosting.learning_rate,
+            "subsample": boosting.row_share,
+            "colsample_bytree": boosting.feature_share,
+            "min_child_weight": boosting.min_leaf_weight,
+            "reg_lambda": boosting.l2_penalty,
+            "tree_method": "hist",
+            "random_state": seed,
+            "n_jobs": boosting.threads,
+        }
+        match kind:
+            case TargetKind.CONTINUOUS:
+                regressor = xgboost.XGBRegressor(objective="reg:squarederror", **stated)
+                regressor.fit(rows, targets)
+                return regressor
+            case TargetKind.BINARY:
+                classifier = xgboost.XGBClassifier(objective="binary:logistic", **stated)
+                classifier.fit(rows, targets.astype(np.int64))
+                return classifier
+
+    @staticmethod
+    def _answers(
+        model: xgboost.XGBModel, rows: NDArray[np.float64], kind: TargetKind, scale: float
+    ) -> NDArray[np.float64]:
+        """The trees' answers in the task's terms: a quantity in its unit, or a probability."""
+        match kind:
+            case TargetKind.CONTINUOUS:
+                return np.asarray(model.predict(rows), dtype=np.float64) * scale
+            case TargetKind.BINARY:
+                return np.asarray(model.predict_proba(rows)[:, 1], dtype=np.float64)
 
     def _kept(
         self,
         recipe: ClassicalRecipe,
-        model: xgboost.XGBRegressor,
+        model: xgboost.XGBModel,
         features: WindowFeatures,
         task: DownstreamTask,
         target_scale: float,

@@ -3,15 +3,16 @@ from torch import Tensor, nn
 
 
 class RegressionHead(nn.Module):
-    """One number per window out of its pooled state: the head of a remaining-life task.
+    """One number per window out of its pooled state: the head every network answers through.
 
     Linear, because the question a probe asks is what the representation carries as it stands,
     and every other mode answers through the same head so that the modes differ in the backbone
-    alone. The number is in units of the task's label ceiling, which whoever scores it undoes;
-    a target of a few hundred cycles would otherwise dominate the first steps of every run. The
-    bias starts where a predictor that knows nothing should, at the mean of the labels the run
-    holds: the default draw puts the first answers anywhere in the range and a run of a few
-    hundred steps spends a share of them walking the bias back.
+    alone. What the number means is the task's link: a quantity in units of the label scale,
+    which whoever scores it undoes — a target of a few hundred cycles would otherwise dominate
+    the first steps of every run — or the log-odds of an outcome. The bias starts where a
+    predictor that knows nothing should, which the link states from the labels the run holds:
+    the default draw puts the first answers anywhere in the range and a run of a few hundred
+    steps spends a share of them walking the bias back.
     """
 
     def __init__(self, width: int, *, starting_at: float) -> None:
@@ -19,7 +20,7 @@ class RegressionHead(nn.Module):
 
         Args:
             width: Size of the pooled state.
-            starting_at: The bias before training, in units of the label ceiling.
+            starting_at: The bias before training, in the link's units.
         """
         super().__init__()
         self.linear = nn.Linear(width, 1)

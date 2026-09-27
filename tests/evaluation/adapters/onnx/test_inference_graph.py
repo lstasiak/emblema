@@ -13,6 +13,7 @@ from torch import Tensor
 
 from emblema.evaluation.adapters.onnx.inference_graph import MAX_TOKENS, InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
+from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.contracts.inference_graph_signature import INPUT_NAMES, OUTPUT_NAMES
 from emblema.evaluation.domain.exceptions import (
     InferenceGraphDivergedError,
@@ -20,6 +21,7 @@ from emblema.evaluation.domain.exceptions import (
     UnreadableInferenceGraphError,
 )
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.tokens import N_FEATURES
@@ -177,7 +179,7 @@ def test_a_candidate_the_exporter_cannot_trace_is_refused_with_a_domain_error() 
     candidate = Untraceable(source.encoder, source.pooling, source.head)
 
     with pytest.raises(UnexportableCandidateError, match="does not export"):
-        InferenceGraph.exported(candidate, target_scale=TARGET_SCALE)
+        InferenceGraph.exported(candidate, link=TargetLink(TargetKind.CONTINUOUS, TARGET_SCALE))
 
 
 def test_a_graph_comes_back_from_its_bytes_as_it_went_in(lora: Exported) -> None:

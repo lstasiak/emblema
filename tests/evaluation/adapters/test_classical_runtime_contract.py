@@ -33,7 +33,7 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.ports.classical_runtime import ClassicalRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.ports.artifact_store import ArtifactStore
-from tests.evaluation.support import TASK, convolutions, labelled, recipe, task
+from tests.evaluation.support import OUTCOME, OUTCOMES, TASK, convolutions, labelled, recipe, task
 from tests.support.openmp import skip_if_torch_shares_the_process
 
 OTHER_TASK = TaskId(UUID(int=11))
@@ -130,6 +130,26 @@ def test_a_fit_answers_with_finite_numbers(adapted: Adapted, method: ClassicalRe
     outcome = adapted.runtime.fit(method, adapted.task, SAMPLE, (), SCORED, retain=False)
 
     assert outcome.rmse >= 0.0
+
+
+@pytest.mark.parametrize("method", list(METHODS.values()), ids=list(METHODS))
+def test_a_binary_task_is_answered_with_probabilities(
+    adapted: Adapted, method: ClassicalRecipe
+) -> None:
+    binary = replace(adapted.task, labels=OUTCOME, strata=OUTCOMES)
+    outcomes = replace(
+        SAMPLE,
+        windows=tuple(
+            replace(labelled_window, target=target)
+            for labelled_window, target in zip(SAMPLE.windows, (1.0, 1.0, 0.0), strict=True)
+        ),
+    )
+
+    outcome = adapted.runtime.fit(
+        method, binary, outcomes, (), (labelled("c", 2, 10.0, 0.0),), retain=False
+    )
+
+    assert 0.0 < outcome.predictions[0].predicted < 1.0
 
 
 def test_the_labels_of_a_source_task_change_what_the_fit_answers(adapted: Adapted) -> None:

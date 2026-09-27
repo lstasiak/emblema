@@ -24,6 +24,7 @@ from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
 from emblema.evaluation.adapters.torch.ridge_solution import RidgeSolution  # noqa: E402
+from emblema.evaluation.adapters.torch.target_link import TargetLink  # noqa: E402
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import (  # noqa: E402
     TorchAdaptationRuntime,
 )
@@ -42,6 +43,7 @@ from emblema.evaluation.domain.labels.label_sample import LabelSample  # noqa: E
 from emblema.evaluation.domain.labels.remaining_life_scheme import (  # noqa: E402
     RemainingLifeScheme,
 )
+from emblema.evaluation.domain.labels.target_kind import TargetKind  # noqa: E402
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
@@ -50,6 +52,8 @@ from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactSto
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
 from tests.evaluation.support import (  # noqa: E402
     LORA,
+    OUTCOME,
+    OUTCOMES,
     PENALTIES,
     TASK,
     WEIGHTS,
@@ -122,7 +126,10 @@ def test_a_run_asked_to_keep_what_it_fitted_stores_both_forms_under_one_manifest
     assert kept.kind is CandidateKind.NEURAL
     assert kept.corpus_manifest == published.manifest
     fitted = FittedCandidate.read(store.get(kept.measured.artifact))
-    assert (fitted.vocabulary_size, fitted.target_scale) == (len(CHANNELS), CEILING)
+    assert (fitted.vocabulary_size, fitted.link) == (
+        len(CHANNELS),
+        TargetLink(TargetKind.CONTINUOUS, CEILING),
+    )
     graph = kept.find(InferenceGraph.FORMAT)
     assert graph is not None
     held = blocks.block_of(blocks.manifest_of(published.manifest)).at([2])
@@ -132,6 +139,46 @@ def test_a_run_asked_to_keep_what_it_fitted_stores_both_forms_under_one_manifest
     assert float(answered[0]) == pytest.approx(outcome.predictions[0].predicted, abs=1e-4)
     assert graph.deviation is not None
     assert graph.deviation <= 1e-4
+
+
+@pytest.mark.parametrize("mode", [TransferMode.FULL_FINE_TUNING, TransferMode.FROZEN_RIDGE])
+def test_a_kept_candidate_of_a_binary_task_answers_probabilities_through_its_graph(
+    tmp_path: Path, mode: TransferMode
+) -> None:
+    # The sigmoid belongs to the graph, not to whoever serves it: the graph answers the same
+    # probability the run scored, and the measured form records the link it was read through.
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "scratch")
+    blocks = PublishedCorpusBlocks(store, tmp_path / "workspace")
+    runtime = TorchAdaptationRuntime(
+        SmallBackbones(vocabulary_size=len(CHANNELS)), blocks, device="cpu", store=store
+    )
+    defined = replace(task(), manifest=published.manifest, labels=OUTCOME, strata=OUTCOMES)
+    outcomes = replace(
+        SAMPLE,
+        windows=(
+            labelled("a", 0, 10.0, 1.0),
+            labelled("a", 1, 15.0, 1.0),
+            labelled("b", 3, 10.0, 0.0),
+        ),
+    )
+
+    outcome = runtime.adapt(
+        plan(mode), defined, outcomes, (labelled("c", 2, 10.0, 0.0),), retain=True
+    )
+
+    assert outcome.artifact is not None
+    kept = KeptCandidates(store).read(outcome.artifact)
+    fitted = FittedCandidate.read(store.get(kept.measured.artifact))
+    assert fitted.link == TargetLink(TargetKind.BINARY, 1.0)
+    graph = kept.find(InferenceGraph.FORMAT)
+    assert graph is not None
+    held = blocks.block_of(blocks.manifest_of(published.manifest)).at([2])
+    answered = float(
+        InferenceGraph.read(store.get(graph.artifact)).predict(TokenTensors.from_windows(held))[0]
+    )
+    assert 0.0 < answered < 1.0
+    assert answered == pytest.approx(outcome.predictions[0].predicted, abs=1e-4)
 
 
 def test_a_runtime_with_nowhere_to_keep_a_candidate_refuses_to_keep_one(

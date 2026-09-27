@@ -12,7 +12,8 @@ class PredictedWindow:
     and a client would otherwise read the failure as a missing value.
 
     Attributes:
-        prediction: The candidate's answer, in the task's unit.
+        prediction: The candidate's answer: in the task's unit, or the probability of the
+            positive outcome for a task over outcomes.
         channels_used: The channels the answer was computed over, sorted.
         channels_ignored: Channels the request had readings on that the model does not know.
         warnings: Every way the answer is less than what was asked, in words.

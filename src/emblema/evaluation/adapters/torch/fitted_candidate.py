@@ -7,7 +7,9 @@ from typing import Any, ClassVar, Self
 import torch
 
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
+from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 
 # What comes back from handing torch bytes it did not write. The reasons differ and to a caller
@@ -32,15 +34,15 @@ class FittedCandidate:
     The measured form of what a campaign keeps: the state whose answers the campaign scored, and
     the one the inference graph is derived from. The weights alone would not be enough — the same
     numbers mean different things under a different head, a different channel vocabulary or a
-    different target scale — so the plan's parameters travel with them, flattened to scalars
+    different link to the target — so the plan's parameters travel with them, flattened to scalars
     because that is how they survive a store. A kept candidate's manifest names this form
     ``FORMAT``.
 
     Attributes:
         parameters: The plan the candidate was made under, flattened to scalars.
         vocabulary_size: How many channels the corpus it was fitted on has.
-        target_scale: What the targets were divided by, so an answer can be read back in the
-            task's own unit.
+        link: How the head's output reaches the task's answer; a candidate kept before the
+            link was recorded answered a quantity in its scale.
         weights: State of the whole candidate, head included, on the host.
     """
 
@@ -48,7 +50,7 @@ class FittedCandidate:
 
     parameters: dict[str, str | int | float]
     vocabulary_size: int
-    target_scale: float
+    link: TargetLink
     weights: dict[str, Any]
 
     @classmethod
@@ -58,7 +60,7 @@ class FittedCandidate:
         candidate: AdaptedBackbone,
         *,
         vocabulary_size: int,
-        target_scale: float,
+        link: TargetLink,
     ) -> Self:
         """The candidate as it ended, with its weights copied to the host.
 
@@ -68,7 +70,7 @@ class FittedCandidate:
         return cls(
             parameters=plan.parameters(),
             vocabulary_size=vocabulary_size,
-            target_scale=target_scale,
+            link=link,
             weights={
                 key: value.detach().to("cpu") for key, value in candidate.state_dict().items()
             },
@@ -81,7 +83,8 @@ class FittedCandidate:
             {
                 "parameters": self.parameters,
                 "vocabulary_size": self.vocabulary_size,
-                "target_scale": self.target_scale,
+                "target_kind": str(self.link.kind),
+                "target_scale": self.link.scale,
                 "weights": self.weights,
             },
             buffer,
@@ -100,7 +103,9 @@ class FittedCandidate:
             return cls(
                 parameters=stored["parameters"],
                 vocabulary_size=stored["vocabulary_size"],
-                target_scale=stored["target_scale"],
+                link=TargetLink.named(
+                    stored.get("target_kind", TargetKind.CONTINUOUS), stored["target_scale"]
+                ),
                 weights=stored["weights"],
             )
         except UNREADABLE_BYTES as error:

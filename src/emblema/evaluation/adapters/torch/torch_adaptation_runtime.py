@@ -13,6 +13,7 @@ from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate
 from emblema.evaluation.adapters.torch.ridge_solution import RidgeSolution
 from emblema.evaluation.adapters.torch.scheduled_training import Forward, ScheduledTraining
+from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
@@ -82,20 +83,22 @@ class TorchAdaptationRuntime:
         tuning = block.at([labelled.window.position for labelled in sample.windows])
         held = block.at([labelled.window.position for labelled in validation])
         started = time.perf_counter()
-        scale = task.label_scheme().scale
+        link = TargetLink.of(task.label_scheme())
         targets = torch.tensor(
-            [labelled.target / scale for labelled in sample.windows], dtype=torch.float32
+            [link.learnt(labelled.target) for labelled in sample.windows], dtype=torch.float32
         ).to(self._device)
         torch.manual_seed(plan.seed)
         candidate = AdaptedBackbone.under(
             plan,
             self._backbones,
             vocabulary_size=len(manifest.channels),
-            starting_at=sample.mean_target / scale,
+            starting_at=link.starting_at(sample.mean_target),
         ).to(self._device)
         if plan.ridge is not None:
             states = self._embedded(candidate, tuning, plan.schedule.batch_size)
-            RidgeSolution.fitted(states, targets, plan.ridge).applied_to(candidate.head)
+            RidgeSolution.fitted(states, targets, plan.ridge).linked(link, targets).applied_to(
+                candidate.head
+            )
             losses: list[float] = []
         else:
             forward = (
@@ -105,9 +108,9 @@ class TorchAdaptationRuntime:
                 else self._over_windows(candidate, tuning)
             )
             losses = ScheduledTraining(plan.schedule, plan.seed).losses(
-                candidate, candidate.trainable_parameters(), forward, targets
+                candidate, candidate.trainable_parameters(), forward, targets, loss=link.loss
             )
-        predicted = self._answers(candidate, held, plan.schedule.batch_size) * scale
+        predicted = link.answered(self._answers(candidate, held, plan.schedule.batch_size))
         return AdaptationOutcome(
             plan=plan,
             task=task.task_id,
@@ -123,7 +126,7 @@ class TorchAdaptationRuntime:
             ),
             seconds=time.perf_counter() - started,
             artifact=(
-                self._kept(plan, candidate, task, held, predicted, len(manifest.channels), scale)
+                self._kept(plan, candidate, task, held, predicted, len(manifest.channels), link)
                 if retain
                 else None
             ),
@@ -137,7 +140,7 @@ class TorchAdaptationRuntime:
         held: Sequence[TokenWindow],
         predicted: Tensor,
         vocabulary_size: int,
-        target_scale: float,
+        link: TargetLink,
     ) -> ArtifactRef:
         """The candidate this run fitted, kept in both its forms, so the campaign can name it.
 
@@ -155,12 +158,10 @@ class TorchAdaptationRuntime:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it fitted and was given no store"
             )
-        fitted = FittedCandidate.of(
-            plan, candidate, vocabulary_size=vocabulary_size, target_scale=target_scale
-        )
-        graph = InferenceGraph.exported(candidate, target_scale=target_scale)
+        fitted = FittedCandidate.of(plan, candidate, vocabulary_size=vocabulary_size, link=link)
+        graph = InferenceGraph.exported(candidate, link=link)
         deviation = graph.deviation_from(
-            predicted.tolist(), held, target_scale=target_scale, batch_size=plan.schedule.batch_size
+            predicted.tolist(), held, target_scale=link.scale, batch_size=plan.schedule.batch_size
         )
         return self._kept_candidates.keep(
             CandidateKind.NEURAL,
