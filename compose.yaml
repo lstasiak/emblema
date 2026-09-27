@@ -175,7 +175,9 @@ services:
       EMBLEMA_API__PORT: "8000"
       EMBLEMA_TELEMETRY__SERVICE_NAME: emblema-api
     ports:
-      - "127.0.0.1:${EMBLEMA_API__PORT:?EMBLEMA_API__PORT is required (copy env.example to .env)}:8000"
+      # Published like MLflow's port, with a default: a process told nothing of the API group
+      # still brings the stack up, and a group half named refuses to start.
+      - "127.0.0.1:${EMBLEMA_API__PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 5s

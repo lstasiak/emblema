@@ -15,7 +15,7 @@ fi
 # Addressed by IPv4 literal, not `localhost`: compose publishes the port on 127.0.0.1 only, while
 # `localhost` reaches ::1 first. On macOS that socket belongs to AirPlay Receiver, which answers 403.
 MLFLOW_URL=${MLFLOW_URL:-http://127.0.0.1:${MLFLOW_PORT:-5000}}
-API_URL=${API_URL:-http://127.0.0.1:${EMBLEMA_API__PORT:?EMBLEMA_API__PORT is required (copy env.example to .env)}}
+API_URL=${API_URL:-http://127.0.0.1:${EMBLEMA_API__PORT:-8000}}
 BUCKET=${EMBLEMA_ARTIFACT_STORE__BUCKET:-emblema}
 PG_USER=${EMBLEMA_DATABASE__USER:?EMBLEMA_DATABASE__USER is required (copy env.example to .env)}
 PG_DB=${EMBLEMA_DATABASE__NAME:?EMBLEMA_DATABASE__NAME is required (copy env.example to .env)}
