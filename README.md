@@ -71,10 +71,11 @@ what remains. Each kind of gap is also filled by a simple method, such as straig
 interpolation or a linear regression on the other sensors. The model counts as having learnt
 something only where it beats that method.
 
-**Adapting to a task.** The pretrained encoder is then used four ways on a small labelled task:
-kept frozen with only a small output layer trained, lightly adjusted through a few extra weights
-(LoRA), fully fine-tuned, or trained from scratch as the control. Each is run at several label
-budgets, from 50 labelled windows to all of them.
+**Adapting to a task.** The pretrained encoder is then used five ways on a small labelled task:
+frozen with a small output layer trained, frozen with that layer solved in closed form, lightly
+adjusted through a few extra weights (LoRA), fully fine-tuned, or trained from scratch as the
+control. Each runs at several label budgets, from 50 labelled windows to all of them, tuned per
+budget by the same declared procedure as the classical baselines.
 
 **Keeping the comparison honest.**
 
@@ -94,23 +95,24 @@ budgets, from 50 labelled windows to all of them.
 
 Preliminary, on validation data. Each task's test data is used once, at the end.
 
-On the first task, remaining useful life of turbofan engines (NASA C-MAPSS), pretraining helps
-where labels are scarce. With 200 labelled windows, fine-tuning the pretrained encoder lowers the
-error by 12 % against the same network trained from scratch, and by 16–22 % with 50 labelled
-windows. With every label available the advantage disappears.
-
-Tuned classical methods are still stronger on this task: gradient-boosted trees reach 13.9 cycles
-of error at 200 labels, against 16.1 for the best pretrained variant. The two numbers come from
-separate runs. A single paired comparison of all candidates is the next step.
+On the first task, remaining useful life of turbofan engines (NASA C-MAPSS), pretraining does
+not help. A first curve found the fine-tuned encoder 12 % better than the same network trained
+from scratch at 200 labelled windows; diagnostics showed that reading had handicapped the
+control, which pooled the window by its mean at a rate swept for another arm. Repeated with
+every network pooling the end of the window and every arm tuned per budget by one declared
+procedure, in one paired campaign with the classical baselines, the network trained from
+scratch is the best candidate at every budget: 10 % better than the fine-tuned encoder at 200
+labels, level with the tuned gradient-boosted trees. Transfer across corpora, where a fresh
+encoder has nothing to learn from, is the next question.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
-![Validation RMSE of every transfer mode over the budget of labelled windows, mean over five seeds with the spread as a band, and the reduction against the control arm with its paired interval over engines and the practical floor; tier M, Colab A100, fp32; validation, not test](docs/verification/figures/label-efficiency-curve.png)
+![Validation RMSE of the five network arms and of the classical baselines over the budget of labelled windows, mean over five seeds, and the reduction of each pretrained arm against the control with its paired interval over engines and the practical floor; tier M, Colab G4 and A100, fp32; validation, not test](docs/verification/figures/label-efficiency-curve.png)
 
-*Error of each way of using the pretrained encoder, by number of labelled windows, on C-MAPSS
-FD001. Top: validation error in cycles (lower is better). Bottom: the reduction against training
-from scratch, with its 95 % interval over engines. Classical baselines are not shown; at 200
-labels the best of them reaches 13.9. Colab A100, fp32; validation, not test.*
+*Error by number of labelled windows on C-MAPSS FD001, one paired campaign. Top: the five ways
+of using the encoder (lower is better). Middle: the classical baselines beside the network
+trained from scratch. Bottom: each pretrained arm's reduction against training from scratch
+with its 95 % interval over engines; the grey band is the practical floor. Validation, not test.*
 
 ## Quickstart
 

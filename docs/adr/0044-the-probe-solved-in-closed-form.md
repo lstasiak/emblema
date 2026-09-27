@@ -1,7 +1,7 @@
 # ADR-0044: The probe solved in closed form — a fifth arm whose head is a ridge over the pooled states, chosen leave-one-out, on the arms' budget
 
-- Status: proposed
-- Date: 2026-09-27
+- Status: accepted
+- Date: 2026-09-27; amended 2026-09-27
 
 ## Context
 
@@ -61,3 +61,7 @@ leave-one-out error among a declared grid (ADR-0038).
 - **Reusing the convolution baseline's grid.** Binds at its upper edge over thousands of columns;
   the probe's columns are the encoder's width and want a grid of their own.
 - **Dropping the trained probe.** Loses the reading of how much the schedule costs a linear head.
+
+## Amendments
+
+- **2026-09-27 — accepted after the repeated curve** (`label-efficiency-curve.md`): the closed-form probe ran at every budget for seconds a cell; it beat the trained probe only at every window (13.6 against 14.2), and at 50 and 200 the trained probe at its registered peak was a cycle better. The two probes stay: the difference between them is the reading the arm exists for.
