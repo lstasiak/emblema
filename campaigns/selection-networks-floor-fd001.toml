@@ -1,0 +1,45 @@
+# The two trained arms at the setting the pilot chose for each, under the floor of steps in
+# force, on the held-out tuning engines of campaigns/selection-networks-fd001.toml.
+#
+# What it is for: the pilot found the arm trained from nothing short of rate rather than of
+# steps — three times the peak bought 8 %, twice the floor 2.4 % at the old rate — and left the
+# floor of 2,000 steps standing. Whether the steps are still worth anything at the rate the arm
+# now runs at is asked before the curve is repeated, by this campaign beside its twin under a
+# doubled floor (campaigns/selection-networks-floor-doubled-fd001.toml): the same three arms,
+# the same repeats of the same division of the tuning side, on the same kind of accelerator,
+# since between accelerators an arm drifts by as much as the effect looked for. The pilot's
+# cells at 2,000 steps are not reused for that reason.
+#
+# The probe under the tail rides along as the family's member; it costs seconds.
+
+name = "selection-networks-floor-fd001"
+purpose = "selection"
+tier = "M"
+
+[selection]
+one_in = 5
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2",
+    "full_fine_tuning@pooling=tail,tail_share=0.2",
+    "frozen_probe@pooling=tail,tail_share=0.2",
+]
+control = "from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2"
+endpoint = "full_fine_tuning@pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+seeds = [1, 2, 3]
+
+[rules]
+minimum_relative_reduction = 0.1
+floor_share = 0.02
+alpha = 0.05
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
