@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "Label-efficient representation learning on heterogeneous sensor streams: a variable-channel, permutation-invariant encoder pretrained without labels, measured honestly."
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
-authors = [{ name = "Lukasz Stasiak" }]
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Łukasz Stasiak" }]
 # Lower bound = Python of the free GPU platforms the package is installed on (Kaggle and Colab
 # ship 3.12). Local development uses 3.14 (see .python-version); code must stay 3.12-compatible.
 requires-python = ">=3.12"
