@@ -379,3 +379,33 @@ confirmed, by nothing at all.
 they bracket for every knob but the rate. One budget, 200 labels; the repeat selects per budget.
 The rate's grid ended where the choice landed. The probe under the tail was run at 4,000 steps
 only, so it is not compared here.
+
+## 2026-09-27 — declared before the run: the floor of steps at the rate the pilot chose
+
+**Question.** The pilot doubled the floor of steps at the old rate and found the arm from
+nothing gains 2.4 %, at the practical floor, while the rate alone gains 8 %. Whether the arm
+still wants more steps once it runs at 3e-3, and whether full fine-tuning wants any at 1e-3, is
+asked before the curve is repeated, since the floor every cell of the curve spends is settled
+here.
+
+**Design.** Two selection campaigns over the same three arms — the arm from nothing at the rate
+the pilot chose (`from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2`), full
+fine-tuning at its setting (`full_fine_tuning@pooling=tail,tail_share=0.2`) and the probe under
+the tail as the family's member — at 200 labels, the tuning engines divided as the pilot
+divided them (one in five held out, seeds 1–3), never on the validation side:
+`campaigns/selection-networks-floor-fd001.toml` under the floor in force, 2,000 steps, and
+`campaigns/selection-networks-floor-doubled-fd001.toml` under `EMBLEMA_WORKER__SCHEDULE__MIN_STEPS=4000`.
+Both on one kind of accelerator, an NVIDIA A100, and read cell by cell on the same repeats by
+`scripts/campaign_pairs_report.py`: the paired bootstrap over the 48 (repeat, engine) pairs,
+10,000 resamples, the practical floor as the larger of 2 % of the control's error and its spread
+over the repeats. The pilot's cells at 2,000 steps are not reused: they ran on a T4 and an L4,
+and between accelerators an arm drifts by as much as the effect looked for.
+
+**Predictions.** At 3e-3 the doubled floor lowers the arm from nothing by less than the practical
+floor, since the rate bought what the steps were buying; full fine-tuning is lowered by less than
+the floor, as it was in the pilot. The probe is unchanged.
+
+**Reading.** A reduction above the practical floor for either trained arm, with an interval
+above zero, makes 4,000 steps the floor of the repeated curve, registered as a configuration
+change before any of its selections run; otherwise the floor of 2,000 stands, with this as its
+evidence. Nothing here chooses a rate: the repeat's selections do that per budget.
