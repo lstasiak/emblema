@@ -1,7 +1,7 @@
 # ADR-0032: Statistics of a paired comparison — the engine is the unit resampled, repeats pool per engine, and the arithmetic a verdict rests on lives in the Evaluation domain
 
 - Status: accepted (2026-09-25; proposed 2026-09-19, when the first curve was read through it)
-- Date: 2026-09-19
+- Date: 2026-09-19; amended 2026-09-27
 - Full text before condensation: commit `5f14447`
 
 ## Context
@@ -75,3 +75,7 @@ report script before the harness exists.
   sides, where along the curve the advantage holds, and which side it was read on.
 - The percentile interval was calibrated on a known answer (`docs/verification/verdict-statistics.md`):
   at 21 units it covers about 92 % rather than 95 %. The rule stands; the shortfall is reported.
+
+## Amendments
+
+- **2026-09-27 — the grid scripts retired.** `scripts/label_curve_report.py` and the scripts that stored the grid it read are gone; the evaluation campaign judges its own grid, and `scripts/campaign_report.py` writes that verdict down.

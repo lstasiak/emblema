@@ -6,7 +6,16 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from scripts.campaign_curve_figures import ARMS, STEM, Report, base_of, draw, main, read
+from scripts.campaign_curve_figures import (
+    ARMS,
+    STEM,
+    Report,
+    base_of,
+    draw,
+    label_heights,
+    main,
+    read,
+)
 from scripts.campaign_report import (
     CELL_COLUMNS,
     CELLS,
@@ -141,3 +150,13 @@ def test_a_campaign_without_baselines_is_drawn_on_two_panels(tmp_path: Path) -> 
 def test_a_report_without_a_cell_is_refused(tmp_path: Path) -> None:
     with pytest.raises(SystemExit, match="no cell"):
         draw(Report(cells=(), comparisons=()), tmp_path / "empty.png")
+
+
+def test_labels_of_lines_that_end_close_together_are_set_apart_in_order() -> None:
+    heights = label_heights([12.9, 15.7, 12.8, 12.3], gap=1.0)
+
+    assert heights == pytest.approx([14.3, 15.7, 13.3, 12.3])
+
+
+def test_labels_of_lines_that_end_apart_stay_at_their_ends() -> None:
+    assert label_heights([30.0, 10.0, 20.0], gap=1.0) == [30.0, 10.0, 20.0]

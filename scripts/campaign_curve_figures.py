@@ -10,6 +10,7 @@ whichever candidates a campaign holds, so two figures read alike.
 
 import argparse
 import csv
+import math
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -31,7 +32,6 @@ from matplotlib.axes import Axes
 from matplotlib.lines import Line2D
 
 from scripts.campaign_report import CELLS, COMPARISONS, CellRow, ComparisonRow
-from scripts.label_curve_figures import label_heights
 
 STEM = "label-efficiency-curve"
 CAPTION = "tier M — preliminary; validation, not test"
@@ -222,11 +222,16 @@ def draw(report: Report, path: Path, *, caption: str = CAPTION) -> Path:
             )
     lower.axhline(0.0, color=INK_SOFT, linewidth=1)
     if lower.get_legend_handles_labels()[0]:
-        lower.legend(fontsize=8, loc="lower left")
+        # The legend sits in a band above the data, so it covers no interval.
+        bottom, top = lower.get_ylim()
+        lower.set_ylim(bottom, top + 0.45 * (top - bottom))
+        lower.legend(fontsize=8, loc="upper center", ncol=3, frameon=False)
     lower.set_ylabel("RMSE reduction vs from scratch\n(95 % interval over engines)")
     lower.set_xscale("log")
     lower.set_xticks(positions)
-    lower.set_xticklabels(budgets, fontsize=8)
+    lower.set_xticklabels(
+        [f"{b}\n({_windows(report, b):,})" if b == "all" else b for b in budgets], fontsize=8
+    )
     lower.minorticks_off()
     lower.set_xlabel("labelled windows in the budget")
     lower.grid(True, alpha=0.25)
@@ -237,7 +242,7 @@ def draw(report: Report, path: Path, *, caption: str = CAPTION) -> Path:
     figure.suptitle(f"Label efficiency on the turbofan task — {caption}", fontsize=10)
     figure.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(path, dpi=120)
+    figure.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(figure)
     return path
 
@@ -336,6 +341,20 @@ def _label_ends(panel: Axes, ends: Sequence[tuple[str, float, float]]) -> None:
             va="center",
             annotation_clip=False,
         )
+
+
+def label_heights(ends: Sequence[float], gap: float) -> list[float]:
+    """Where each line's label sits: at the line's end, or raised clear of the label below it.
+
+    Lines of a curve often end within a few tenths of each other, and labels written at their
+    ends would print over one another.
+    """
+    heights = list(ends)
+    below = -math.inf
+    for index in sorted(range(len(ends)), key=lambda each: ends[each]):
+        heights[index] = max(ends[index], below + gap)
+        below = heights[index]
+    return heights
 
 
 def main(argv: Sequence[str] | None = None) -> None:

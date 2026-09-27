@@ -69,6 +69,8 @@ per cell early.
 python scripts/transfer_modes_report.py --fetch <key> <checksum> --out shard-0
 ```
 
+The scripts of the method above were retired on 2026-09-27, after the harness repeated the curve; they stay in the history at the commits the sections below cite. From the section of 2026-09-27 the curve is a campaign, read by `scripts/campaign_report.py` and drawn by `scripts/campaign_curve_figures.py`.
+
 ## 2026-09-19 — Darwin arm64 (MacBook Pro M1 Pro, MPS, fp32): the schedule of every arm
 
 Tree of the ticket branch on top of `6f5e9c3` (the code of the sweep is what the branch's
