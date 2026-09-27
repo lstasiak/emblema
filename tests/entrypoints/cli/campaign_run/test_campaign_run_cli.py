@@ -16,6 +16,7 @@ from emblema.config.boosting_settings import BoostingSettings
 from emblema.config.convolution_settings import ConvolutionSettings
 from emblema.config.lora_settings import LoraSettings
 from emblema.config.patch_settings import PatchSettings
+from emblema.config.probe_settings import ProbeSettings
 from emblema.config.schedule_settings import ScheduleSettings
 from emblema.config.settings import Settings
 from emblema.config.worker_settings import WorkerSettings
@@ -172,6 +173,7 @@ def ml_pool() -> tuple[Settings, InMemoryArtifactStore]:
             final_lr_fraction=0.01,
         ),
         lora=LoraSettings(rank=2, alpha=4.0, dropout=0.0, targets="qkv"),
+        probe=ProbeSettings(ridge_penalties="0.1,1,10"),
         patch=PatchSettings(
             patch_length=8,
             stride=4,

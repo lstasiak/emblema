@@ -31,6 +31,7 @@ from emblema.evaluation.application.use_cases.record_cell_result import RecordCe
 from emblema.evaluation.application.use_cases.select_tuned_variants import SelectTunedVariants
 from emblema.evaluation.domain.classical.gradient_boosting_spec import GradientBoostingSpec
 from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
+from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
@@ -68,6 +69,7 @@ class CompositionRoot:
         boosting: GradientBoostingSpec,
         convolutions: RandomConvolutions,
         patch: PatchModelSpec,
+        ridge: RidgePenalties,
     ) -> None:
         """Assemble the process from what the campaign's candidates are set to.
 
@@ -81,12 +83,13 @@ class CompositionRoot:
             boosting: How hard the trees fit, which the design records too.
             convolutions: How the MiniRocket baseline reads and fits, recorded likewise.
             patch: How the patch model reads a window and how large it is, recorded likewise.
+            ridge: What the probe solved in closed form chooses its penalty among.
 
         Raises:
             ValueError: If the settings name no store, database or broker.
         """
         process = CampaignProcess(settings, workspace=workspace, corpora=corpora)
-        catalogue = self._candidates(schedule, lora, backbone, boosting, convolutions, patch)
+        catalogue = self._candidates(schedule, lora, backbone, boosting, convolutions, patch, ridge)
         outcomes = CampaignCompletedAssembler()
         self.adapters = Adapters(
             corpus=process.corpus,
@@ -142,6 +145,7 @@ class CompositionRoot:
             boosting=declared.boosting(),
             convolutions=declared.convolutions(),
             patch=declared.patch(),
+            ridge=declared.probe(),
         )
 
     @staticmethod
@@ -152,9 +156,10 @@ class CompositionRoot:
         boosting: GradientBoostingSpec,
         convolutions: RandomConvolutions,
         patch: PatchModelSpec,
+        ridge: RidgePenalties,
     ) -> CandidateCatalogue:
         """Every candidate a campaign may name, each routed to whoever holds it."""
-        arms = KnownArms.catalogue(backbone, lora, schedule)
+        arms = KnownArms.catalogue(backbone, lora, schedule, ridge)
         baselines = KnownBaselines.catalogue(boosting, convolutions)
         patched = KnownPatchModels.catalogue(patch, schedule)
         return RoutedCandidateCatalogue(

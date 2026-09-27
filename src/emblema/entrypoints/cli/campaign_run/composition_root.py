@@ -108,6 +108,7 @@ class CompositionRoot:
                 lora=declared.lora(),
                 backbone=worker.require_backbone_ref(),
                 patch=declared.patch(),
+                ridge=declared.probe(),
                 device=worker.device,
                 store=store,
                 tasks=tasks,

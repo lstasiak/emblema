@@ -29,6 +29,7 @@ from emblema.evaluation.domain.exceptions import UnknownCandidateError
 from emblema.shared.adapters.queues.celery_job_queue import CeleryJobQueue
 from tests.evaluation.support import (
     LORA,
+    PENALTIES,
     WEIGHTS,
     adaptation_schedule,
     boosting,
@@ -49,6 +50,7 @@ def process(tmp_path: Path) -> CompositionRoot:
         boosting=boosting(),
         convolutions=convolutions(),
         patch=patch_spec(),
+        ridge=PENALTIES,
     )
 
 
@@ -72,6 +74,7 @@ def test_a_process_bringing_neither_settings_nor_a_store_is_refused(tmp_path: Pa
             boosting=boosting(),
             convolutions=convolutions(),
             patch=patch_spec(),
+            ridge=PENALTIES,
         )
 
 
