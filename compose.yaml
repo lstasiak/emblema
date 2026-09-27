@@ -160,6 +160,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      bootstrap:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       garage:
@@ -179,6 +181,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+    # The memory the inference budget is sized against. Without a limit the container is bounded
+    # only by the machine, and a burst that outruns the budget takes the neighbours with it; with
+    # one, the kernel ends this process alone and it is started again.
+    mem_limit: 4g
+    restart: on-failure
     command: ["python", "-m", "emblema.entrypoints.api"]
 
   worker-ml:
