@@ -1032,3 +1032,124 @@ every network at 50 and 200 and the margin closes at all. Full fine-tuning at 20
 claim's, whichever way it falls, and the secondary cells describe the shape. The difference
 from the first curve is written into `label-efficiency-curve.md` beside it, and
 `docs/findings.md` is rewritten from this reading.
+
+## 2026-09-27 — Colab G4 and A100, fp32: the curve repeated by the harness
+
+**Question.** The one declared above: with every network under the tail of the window and every
+trained arm at the rate and tail its selection chose per budget, does full fine-tuning lower the
+validation error of the arm from nothing by a tenth at 200 labels?
+
+**Conditions.** Code `1e9a2dec`; campaign `44d81711…` (`campaigns/curve-fd001.toml`), tier M,
+200 cells: ten candidates at 50, 200, 1,000 and all 2,568 labelled windows under seeds 1–5,
+paired on the 21 validation engines, read by the campaign's own verdict
+(`scripts/campaign_report.py`, drawn by `scripts/campaign_curve_figures.py`). The networks' cells
+ran through orders cut per budget, each budget on one kind of accelerator: 1,000 and all on a
+Colab G4 (two processes on one card; a trained cell 2 min at 2,000 steps, 4.5 min at every
+window), 50 and 200 on a Colab A100 (two processes; 3.5–4 min a cell); the classical cells on
+this machine's processor. The probe under the schedule 12–21 s a cell, solved in closed form
+2–4 s, the patch model 23–43 s. Every seed draws its own labels, so the trees and the closed-form
+probe at every window are deterministic and spread 0.00 over the seeds. The floor is the larger
+of 2 % of the control's error and its spread over seeds; the family is Holm over 35 secondary
+comparisons.
+
+**50 labelled windows**, RMSE mean ± SD over five seeds.
+
+| candidate | RMSE | reduction vs control | 95 % interval | verdict |
+| --- | --- | --- | --- | --- |
+| from scratch | 16.34 ± 0.69 | control |  |  |
+| frozen probe (schedule) | 16.93 ± 0.95 | -3.7% | [-1.59, +0.33] | indistinguishable |
+| frozen probe (closed form) | 17.41 ± 0.61 | -6.5% | [-1.78, -0.38] | worse |
+| LoRA | 20.19 ± 2.22 | -24.0% | [-5.37, -2.39] | worse |
+| full fine-tuning | 17.61 ± 1.29 | -7.9% | [-2.13, -0.49] | worse |
+| trees per channel | 19.35 ± 1.84 | -18.8% | [-4.92, -1.11] | worse |
+| trees over the spectrum | 22.22 ± 1.53 | -36.1% | [-8.26, -3.30] | worse |
+| trees across channels | 16.59 ± 1.53 | -1.8% | [-2.07, +1.43] | indistinguishable |
+| MiniRocket | 17.17 ± 0.75 | -5.0% | [-2.22, +0.65] | indistinguishable |
+| patch model | 22.13 ± 2.02 | -35.7% | [-7.51, -4.45] | worse |
+
+**200 labelled windows**, RMSE mean ± SD over five seeds.
+
+| candidate | RMSE | reduction vs control | 95 % interval | verdict |
+| --- | --- | --- | --- | --- |
+| from scratch | 14.29 ± 0.50 | control |  |  |
+| frozen probe (schedule) | 14.66 ± 0.56 | -2.6% | [-1.02, +0.28] | indistinguishable |
+| frozen probe (closed form) | 15.12 ± 0.80 | -5.9% | [-1.56, -0.15] | indistinguishable |
+| LoRA | 14.96 ± 0.44 | -4.7% | [-1.83, +0.50] | indistinguishable |
+| full fine-tuning | 15.77 ± 1.26 | -10.5% | [-2.56, -0.54] | worse (endpoint) |
+| trees per channel | 14.08 ± 0.69 | +1.5% | [-1.08, +1.34] | indistinguishable |
+| trees over the spectrum | 18.16 ± 0.58 | -27.1% | [-5.57, -2.36] | worse |
+| trees across channels | 14.24 ± 0.66 | +0.3% | [-1.08, +1.20] | indistinguishable |
+| MiniRocket | 15.30 ± 0.16 | -7.0% | [-1.81, -0.13] | indistinguishable |
+| patch model | 17.67 ± 0.76 | -23.7% | [-4.12, -2.75] | worse |
+
+**1000 labelled windows**, RMSE mean ± SD over five seeds.
+
+| candidate | RMSE | reduction vs control | 95 % interval | verdict |
+| --- | --- | --- | --- | --- |
+| from scratch | 12.77 ± 0.25 | control |  |  |
+| frozen probe (schedule) | 14.53 ± 0.19 | -13.7% | [-2.62, -0.91] | worse |
+| frozen probe (closed form) | 14.29 ± 0.36 | -11.9% | [-2.40, -0.68] | worse |
+| LoRA | 13.97 ± 0.45 | -9.4% | [-2.34, -0.09] | indistinguishable |
+| full fine-tuning | 13.40 ± 0.49 | -5.0% | [-1.34, +0.04] | indistinguishable |
+| trees per channel | 12.04 ± 0.33 | +5.7% | [-0.23, +1.71] | indistinguishable |
+| trees over the spectrum | 15.56 ± 0.57 | -21.9% | [-4.41, -1.25] | worse |
+| trees across channels | 13.09 ± 0.46 | -2.5% | [-1.27, +0.74] | indistinguishable |
+| MiniRocket | 15.40 ± 0.90 | -20.7% | [-3.75, -1.51] | worse |
+| patch model | 13.91 ± 0.22 | -8.9% | [-2.32, +0.02] | indistinguishable |
+
+**all labelled windows**, RMSE mean ± SD over five seeds.
+
+| candidate | RMSE | reduction vs control | 95 % interval | verdict |
+| --- | --- | --- | --- | --- |
+| from scratch | 11.47 ± 0.29 | control |  |  |
+| frozen probe (schedule) | 14.18 ± 0.42 | -23.7% | [-3.72, -1.71] | worse |
+| frozen probe (closed form) | 13.61 ± 0.00 | -18.7% | [-3.14, -1.20] | worse |
+| LoRA | 12.76 ± 0.21 | -11.3% | [-2.36, -0.24] | indistinguishable |
+| full fine-tuning | 12.71 ± 1.65 | -11.6% | [-2.29, -0.42] | indistinguishable |
+| trees per channel | 11.76 ± 0.00 | -2.6% | [-1.49, +0.95] | indistinguishable |
+| trees over the spectrum | 14.69 ± 0.00 | -28.1% | [-4.72, -1.79] | worse |
+| trees across channels | 13.32 ± 0.00 | -16.2% | [-3.30, -0.32] | indistinguishable |
+| MiniRocket | 15.42 ± 0.73 | -34.6% | [-5.63, -2.35] | worse |
+
+**The verdict.** Not confirmed on the registered endpoint, and the wrong way: at 200 labels full
+fine-tuning is 10.5 % above the arm from nothing (14.29 → 15.77, a reduction of −1.51 with
+interval [−2.56, −0.54], floor 0.50). No secondary comparison is distinguishable under the
+family's correction: nothing beats the control at any budget, and nothing but the trees per
+channel and across channels stays within reach of it.
+
+**Against the predictions.** The endpoint not confirmed, the reduction at 200 negative: held. The
+pretrained arms leading at 50 labels: refuted, the control leads there too, and the low-rank arm
+at its selected rate is 24 % behind. The closed-form probe beating the trained probe at every
+budget: refuted; at 50 and 200 the trained probe at its registered peak is a cycle better, at
+every window the closed form is 0.6 better, and neither is within reach of the control beyond 200.
+The trees per channel beating every network at 50 and 200: refuted; they tie the control at 200
+and 1,000 and trail it at 50 and at every window. Full fine-tuning near 15 at 200 and the control
+near 14.5: held, 15.8 and 14.3.
+
+**Conclusions.**
+
+- On FD001, once the control pools by the tail and runs at a rate chosen per budget, pretraining
+  on the turbofan corpus buys nothing at any budget of labels. The 12.3 % of 2026-09-22 was the
+  control's handicap — the mean over the window and one peak for every arm — not the
+  representation's worth.
+- The arm from nothing is now the best candidate on this task at every budget, ahead of the
+  tuned trees by 1.5 % at 200 (n.s.) and 2.6 % at every window (n.s.), and ahead of the patch
+  model by 24 % at 200. The first curve's control was 19.0 at 200 labels; this one is 14.3.
+- The pretrained arms are not worse for want of tuning: each ran at the setting its own selection
+  chose at that budget, and the selections say the pretrained weights are hurt by more
+  optimisation, not helped by it.
+- The probe, however its head is fitted, says the pretrained states carry the task to within
+  about a cycle of the control at 200 labels and no further: what the encoder learnt from the
+  pretext is close to what a fresh encoder learns from 200 windows.
+
+**Limitations.** Validation side, 21 engines, one task and one pretraining corpus; the test side
+is opened once at the end. The budgets ran on two kinds of accelerator, one kind per budget as
+registered, and the selections on a third for the arm from nothing, so a variant chosen on one
+card ran on another. The patch model ran as published, under the mean. Five seeds; the
+pretrained arms' spread is largest at 50 (the low-rank arm 2.2) and at every window (full
+fine-tuning 1.65, one seed at 15.6).
+
+**Against the first curve** (2026-09-22, four arms under the mean, one peak per arm, tier M,
+A100): the control moved from 23.5 / 19.0 / 15.2 / 12.3 to 16.3 / 14.3 / 12.8 / 11.5 over the four
+budgets; full fine-tuning from 19.7 / 16.6 / 13.9 / 12.9 to 17.6 / 15.8 / 13.4 / 12.7. What
+changed the reading was the control, and what changed the control was its head and its rate.
