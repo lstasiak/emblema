@@ -997,3 +997,38 @@ What the run says:
   unread for that arm.
 - **Cost**: 726–769 s a run of an arm that steps the encoder or an update beside it, 8 s a run of
   the probe; the thirty cells took about 2.1 hours over the two devices, as declared.
+
+## 2026-09-27 — declared before the run: the curve repeated by the harness
+
+**Question.** The registered one: at 200 labelled windows, does full fine-tuning lower the
+validation error of the arm trained from nothing by a tenth, with the whole interval above zero
+and the reduction above the practical floor? Asked now with every handicap the diagnostics
+found taken off the control: the tail instead of the mean, and a rate and tail chosen per
+budget for every trained arm by one protocol.
+
+**Design.** `campaigns/curve-fd001.toml`, tier M: ten candidates over 50, 200, 1,000 and every
+labelled window, five seeds, paired on the 21 validation engines. The arm from nothing
+(control), full fine-tuning (endpoint) and the low-rank arm at the variants their selections
+chose per budget (`7a842dba…`, `199fb850…` with `9be0af77…` at 50, `83ecaced…` with
+`f1b12cb1…` at 50); the probe under the schedule at its registered peak of 3e-2 and the
+probe solved in closed form (ADR-0044), both under the tail of 20 %; the three families of
+trees and MiniRocket at the variants `3856e705…` chose at 50 and 200 and `2b81fda7…` at 1,000
+and all; the patch model as published, since no selection turned its pooling. Holm over the
+family of thirty-five secondary comparisons, the floor the larger of 2 % of the control's error
+and its spread over seeds. Every cell of one budget runs on one kind of accelerator: the
+networks' cells through orders cut per budget, the classical cells on this machine's
+processor. Read by `scripts/campaign_report.py` and drawn by `scripts/campaign_curve_figures.py`.
+
+**Predictions.** On the tuning engines the arm from nothing at its chosen setting beat full
+fine-tuning by 8–10 % at 200 labels in the pilot and in the floor reading, so the endpoint is
+not confirmed: the reduction at 200 is negative or indistinguishable from zero. The pretrained
+arms lead at 50 labels, where the first curve found their largest margin, and the lead is gone
+by 1,000. The probe solved in closed form beats the probe under the schedule at every budget by
+two cycles or more, and sits within the trees' interval at 200. The trees per channel beat
+every network at 50 and 200 and the margin closes at all. Full fine-tuning at 200 lands near
+15 RMSE, the control near 14.5.
+
+**Reading.** The verdict is the campaign's, by the rules registered; the endpoint's word is the
+claim's, whichever way it falls, and the secondary cells describe the shape. The difference
+from the first curve is written into `label-efficiency-curve.md` beside it, and
+`docs/findings.md` is rewritten from this reading.

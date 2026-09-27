@@ -569,3 +569,17 @@ at 50 labels and is what the curve runs the arm at there.
 **Predictions.** Neither arm gains from the lower rate by more than one standard error, so the
 chosen rates stand: 3.3e-4 for full fine-tuning, 3.3e-5 for the low-rank arm. If a lower rate is
 chosen again, the rule allows one more step, and no more.
+
+## 2026-09-27 — Colab G4, fp32: the rates beyond the edge, at 50 labels
+
+**Conditions.** Code `98be0ab9`; campaigns `9be0af77…` and `f1b12cb1…`, nine cells each, two
+processes on one G4, the same three repeats of the same division as above.
+
+| arm | rate chosen above | a third of it | chosen, other tail |
+| --- | --- | --- | --- |
+| full fine-tuning | **3.3e-4: 17.33 ± 0.45** | 1e-4: 18.25 ± 1.71 | tail 0.1: 17.50 ± 0.16 |
+| low-rank | **3.3e-5: 18.35 ± 0.39** | 1e-5: 23.37 ± 2.18 | tail 0.5: 19.09 ± 0.38 |
+
+The prediction held: neither arm gains from the lower rate, the chosen rates stand and no
+further step is asked for. The low-rank arm's cell at 3.3e-5 reproduced the selection above to
+the second decimal on each repeat, as a run under one seed should.
