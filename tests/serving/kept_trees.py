@@ -22,6 +22,7 @@ from emblema.shared.kernel.tokens import TokenWindow
 from emblema.shared.ports.artifact_store import ArtifactStore
 from tests.evaluation.adapters.features.support import timed, window
 from tests.evaluation.support import recipe
+from tests.support.openmp import skip_if_torch_shares_the_process
 from tests.support.published import manifest_of
 
 SCALE = 125.0
@@ -40,6 +41,7 @@ def trees_windows(count: int) -> list[TokenWindow]:
 
 
 def fitted_trees(scheme: FeatureScheme = FeatureScheme.CHANNEL_AGGREGATED) -> FittedBaseline:
+    skip_if_torch_shares_the_process()
     features = ChannelAggregatedFeatures()
     rows = features.of(trees_windows(6))
     model = xgboost.XGBRegressor(n_estimators=4, max_depth=2, n_jobs=1, random_state=1)
