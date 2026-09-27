@@ -33,6 +33,7 @@ from emblema.evaluation.ports.campaign_listing import CampaignListing
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
 from emblema.evaluation.ports.verdict_memo import VerdictMemo
 from emblema.serving.adapters.onnx.onnx_graph_inference import OnnxGraphInference
+from emblema.serving.adapters.onnx.weighted_semaphore import WeightedSemaphore
 from emblema.serving.adapters.persistence.served_model_listing import SqlAlchemyServedModelListing
 from emblema.serving.adapters.persistence.served_model_repository import (
     SqlAlchemyServedModelRepository,
@@ -45,6 +46,7 @@ from emblema.serving.application.use_cases.embed_windows import EmbedWindows
 from emblema.serving.application.use_cases.list_served_models import ListServedModels
 from emblema.serving.application.use_cases.predict_windows import PredictWindows
 from emblema.serving.application.use_cases.view_served_model import ViewServedModel
+from emblema.serving.domain.inference_budget import InferenceBudget
 from emblema.serving.domain.inference_limits import InferenceLimits
 from emblema.serving.ports.inference_runtime import InferenceRuntime
 from emblema.serving.ports.served_model_listing import ServedModelListing
@@ -116,7 +118,9 @@ class CompositionRoot:
         """
         chosen_store = configured_store(settings_for(settings, "store")) if store is None else store
         engine = self._engine(settings, served, served_listing, campaigns, campaign_listing)
-        chosen_runtime = self._runtime(settings, chosen_store) if runtime is None else runtime
+        chosen_runtime = (
+            self._runtime(settings, chosen_store, telemetry) if runtime is None else runtime
+        )
         chosen_tokeniser = PublishedWindowTokeniser() if tokeniser is None else tokeniser
         if telemetry is not None:
             chosen_runtime = InstrumentedInferenceRuntime(chosen_runtime, telemetry)
@@ -161,12 +165,31 @@ class CompositionRoot:
         return settings_for(settings, "the service's limits").require_api()
 
     @classmethod
-    def _runtime(cls, settings: Settings | None, store: ArtifactStore) -> InferenceRuntime:
+    def _runtime(
+        cls, settings: Settings | None, store: ArtifactStore, telemetry: Telemetry | None
+    ) -> InferenceRuntime:
+        """The runtime over the store, its graphs held to one budget for the whole process.
+
+        The budget is counted in the tokens a window may hold, so it follows the limit a window
+        is admitted under and cannot allow a batch the limit admits to be too costly to run.
+        """
         api = cls._api(settings)
+        budget = InferenceBudget(
+            windows=api.inference_budget_windows, longest=api.max_tokens_per_window
+        )
+        gate = WeightedSemaphore(budget.capacity, wait_seconds=api.inference_wait_seconds)
+        if telemetry is not None:
+            telemetry.observe_budget(
+                capacity=budget.capacity, in_use=lambda: gate.in_use, waiting=lambda: gate.waiting
+            )
         return FormatRoutedInferenceRuntime(
             store,
             graphs=OnnxGraphInference(
-                batch_size=api.batch_size, providers=api.providers(), threads=api.onnx_threads
+                batch_size=api.batch_size,
+                providers=api.providers(),
+                threads=api.onnx_threads,
+                budget=budget,
+                gate=gate,
             ),
             classical=KeptClassicalInference(),
         )

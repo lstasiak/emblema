@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 
 from fastapi import FastAPI
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
@@ -8,7 +9,7 @@ from opentelemetry.instrumentation.botocore import BotocoreInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.metrics import Counter, Histogram
+from opentelemetry.metrics import CallbackOptions, Counter, Histogram, Observation
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import MetricReader, PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
@@ -62,9 +63,42 @@ class Telemetry:
         self.windows_answered: Counter = meter.create_counter(
             "emblema_windows_answered", description="Windows a served model answered."
         )
+        self.inference_refused: Counter = meter.create_counter(
+            "emblema_inference_refused",
+            description="Requests refused because the networks were running all the budget allows.",
+        )
         self.channels_ignored: Counter = meter.create_counter(
             "emblema_channels_ignored",
             description="Readings dropped because the model did not know their channel.",
+        )
+
+    def observe_budget(
+        self, *, capacity: int, in_use: Callable[[], int], waiting: Callable[[], int]
+    ) -> None:
+        """Report how much of the inference budget is held and how many batches wait for it.
+
+        Observed when scraped rather than recorded as it changes, so the report costs nothing
+        to the batches themselves.
+        """
+        meter = self._meters.get_meter(INSTRUMENTATION)
+
+        def reading(read: Callable[[], int]) -> Callable[[CallbackOptions], list[Observation]]:
+            return lambda _: [Observation(read())]
+
+        meter.create_observable_gauge(
+            "emblema_inference_budget_capacity",
+            callbacks=[reading(lambda: capacity)],
+            description="Token pairs the networks may run at once.",
+        )
+        meter.create_observable_gauge(
+            "emblema_inference_budget_in_use",
+            callbacks=[reading(in_use)],
+            description="Token pairs the networks are running now.",
+        )
+        meter.create_observable_gauge(
+            "emblema_inference_batches_waiting",
+            callbacks=[reading(waiting)],
+            description="Batches waiting to be admitted to the networks.",
         )
 
     def instrument(self, app: FastAPI) -> None:

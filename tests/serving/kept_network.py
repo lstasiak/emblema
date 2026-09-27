@@ -13,6 +13,9 @@ from emblema.evaluation.adapters.artifacts.representation_bytes import Represent
 from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
+from emblema.serving.adapters.onnx.onnx_graph_inference import OnnxGraphInference
+from emblema.serving.adapters.onnx.weighted_semaphore import WeightedSemaphore
+from emblema.serving.domain.inference_budget import InferenceBudget
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.tokens import TokenWindow
@@ -24,6 +27,24 @@ from tests.support.published import manifest_of
 GRAPH_CORPUS = "graph-corpus"
 # What every graph in these tests runs on: the processor, the one provider every build ships.
 CPU = ("CPUExecutionProvider",)
+
+# Windows the network cases build hold far fewer tokens than this, so the budget never decides
+# what a case is about unless the case is about the budget.
+BUDGET = InferenceBudget(windows=2, longest=64)
+
+
+def gate(wait_seconds: float = 5.0) -> WeightedSemaphore:
+    """A semaphore holding exactly what ``BUDGET`` allows."""
+    return WeightedSemaphore(BUDGET.capacity, wait_seconds=wait_seconds)
+
+
+def graph_reader(batch_size: int = 4) -> OnnxGraphInference:
+    """The graph runtime on one processor thread, under ``BUDGET``."""
+    return OnnxGraphInference(
+        batch_size=batch_size, providers=CPU, threads=1, budget=BUDGET, gate=gate()
+    )
+
+
 FITTED_STATE = "torch-state"
 BLOCK = ArtifactRef(key="durable/graph-block", checksum=Checksum.of_bytes(b"graph block"))
 

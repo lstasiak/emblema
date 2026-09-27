@@ -32,6 +32,10 @@ class InferenceRuntime(Protocol):
             ArtifactUnavailableError: If the artifact, or the form run, is not in the store.
             UnreadableServedArtifactError: If it is not a kept candidate this runtime reads.
             UnservableArtifactError: If the candidate is kept in no form this runtime runs.
+            WindowBeyondBudgetError: If a window costs more to run than the runtime lets a
+                batch cost.
+            InferenceBusyError: If the runtime is running all it may and could not admit the
+                request in time.
         """
         ...
 
@@ -45,5 +49,9 @@ class InferenceRuntime(Protocol):
             UnreadableServedArtifactError: If it is not a kept candidate this runtime reads.
             UnservableArtifactError: If the candidate is kept in no form this runtime runs.
             EmbeddingUnavailableError: If the candidate has no representation to hand out.
+            WindowBeyondBudgetError: If a window costs more to run than the runtime lets a
+                batch cost.
+            InferenceBusyError: If the runtime is running all it may and could not admit the
+                request in time.
         """
         ...

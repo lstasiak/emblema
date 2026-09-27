@@ -30,7 +30,9 @@ from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
 from emblema.shared.kernel.checksums import Checksum  # noqa: E402
 from emblema.shared.kernel.retention import Retention  # noqa: E402
 from tests.serving.kept_network import (  # noqa: E402
+    BUDGET,
     CPU,
+    gate,
     graph_channels,
     keep_network,
     network,
@@ -65,7 +67,11 @@ def runtime(
 ) -> FormatRoutedInferenceRuntime:
     return FormatRoutedInferenceRuntime(
         store,
-        graphs=OnnxGraphInference(batch_size=4, providers=CPU, threads=1) if graphs else None,
+        graphs=OnnxGraphInference(
+            batch_size=4, providers=CPU, threads=1, budget=BUDGET, gate=gate()
+        )
+        if graphs
+        else None,
         classical=KeptClassicalInference() if classical else None,
     )
 

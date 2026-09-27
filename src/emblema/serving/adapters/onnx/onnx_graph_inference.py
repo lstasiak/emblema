@@ -12,7 +12,9 @@ from emblema.evaluation.contracts.inference_graph_signature import (
     PREDICTION,
 )
 from emblema.evaluation.contracts.kept_representation import KeptRepresentation
+from emblema.serving.adapters.onnx.weighted_semaphore import WeightedSemaphore
 from emblema.serving.domain.exceptions import UnreadableServedArtifactError
+from emblema.serving.domain.inference_budget import InferenceBudget
 from emblema.shared.adapters.arrays.token_batch import TokenBatch
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.tokens import TokenWindow
@@ -58,23 +60,52 @@ class OnnxGraphInference:
     windows, padded to the longest of each, on the execution providers the process was told to
     use, and on at most ``threads`` threads per call: a service answers several requests at
     once, and a session left to take every core contends with the others.
+
+    What a batch holds in memory grows with the square of its longest window, so batches are cut
+    by the budget's cost and not only by count, and each holds its cost in the semaphore while it
+    runs: however many requests arrive, the batches running at once never cost more than the
+    budget, and a request that cannot be admitted in time is refused instead of taking the
+    process down. What a run allocated is given back after it: the runtime would otherwise keep
+    it in an arena of the session's own, one per graph served, past any budget.
     """
 
     FORMAT: ClassVar[str] = "onnx"
 
-    def __init__(self, *, batch_size: int, providers: Sequence[str], threads: int) -> None:
+    def __init__(
+        self,
+        *,
+        batch_size: int,
+        providers: Sequence[str],
+        threads: int,
+        budget: InferenceBudget,
+        gate: WeightedSemaphore,
+    ) -> None:
         if batch_size < 1:
             raise ValueError(f"a batch holds at least one window, got {batch_size}")
         if not providers:
             raise ValueError("a graph runs on at least one execution provider")
         if threads < 1:
             raise ValueError(f"a graph runs on at least one thread, got {threads}")
+        if gate.capacity != budget.capacity:
+            raise ValueError(
+                f"the semaphore holds {gate.capacity} where the budget allows {budget.capacity}"
+            )
         self._batch_size = batch_size
+        self._budget = budget
+        self._gate = gate
         self._providers = list(providers)
         self._options = ort.SessionOptions()
         self._options.intra_op_num_threads = threads
         self._options.inter_op_num_threads = 1
+        self._run_options = ort.RunOptions()
+        # The processor's arena is the one every provider here allocates from.
+        self._run_options.add_run_config_entry("memory.enable_memory_arena_shrinkage", "cpu:0")
         self._sessions: dict[Checksum, ort.InferenceSession] = {}
+
+    @property
+    def run_options(self) -> ort.RunOptions:
+        """What every run is told, beyond its feeds."""
+        return self._run_options
 
     def predict(
         self, form: KeptRepresentation, content: bytes, windows: Sequence[TokenWindow]
@@ -98,13 +129,19 @@ class OnnxGraphInference:
         windows: Sequence[TokenWindow],
     ) -> np.ndarray[Any, Any]:
         session = self._session_of(form, content)
-        answered = [
-            np.asarray(
-                session.run([output], self._feeds(windows[start : start + self._batch_size]))[0]
-            )
-            for start in range(0, len(windows), self._batch_size)
-        ]
-        return np.concatenate(answered)
+        lengths = [len(window.channel_ids) for window in windows]
+        answers: dict[int, np.ndarray[Any, Any]] = {}
+        # One deadline for the request: its batches wait for the gate in turn, and together
+        # they wait as long as one caller may, not that long each.
+        until = self._gate.deadline()
+        for batch in self._budget.plan(lengths, max_windows=self._batch_size):
+            feeds = self._feeds([windows[position] for position in batch])
+            cost = self._budget.cost(len(batch), lengths[batch[0]])
+            with self._gate.reserve(cost, until=until):
+                answered = np.asarray(session.run([output], feeds, self._run_options)[0])
+            for row, position in enumerate(batch):
+                answers[position] = answered[row]
+        return np.stack([answers[position] for position in range(len(windows))])
 
     def _session_of(self, form: KeptRepresentation, content: bytes) -> ort.InferenceSession:
         checksum = form.artifact.checksum

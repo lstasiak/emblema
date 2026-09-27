@@ -2,6 +2,7 @@ import time
 from collections.abc import Sequence
 
 from emblema.entrypoints.api.telemetry.telemetry import Telemetry
+from emblema.serving.domain.exceptions import InferenceBusyError
 from emblema.serving.domain.model_input import ModelInput
 from emblema.serving.ports.inference_runtime import InferenceRuntime
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -30,7 +31,11 @@ class InstrumentedInferenceRuntime:
             attributes={"artifact.key": artifact.key, "windows": len(windows)},
         ):
             started = time.perf_counter()
-            answers = self._runtime.predict(artifact, windows)
+            try:
+                answers = self._runtime.predict(artifact, windows)
+            except InferenceBusyError:
+                self._telemetry.inference_refused.add(1, {"answer": "prediction"})
+                raise
             self._timed(started, "prediction")
             return answers
 
@@ -42,7 +47,11 @@ class InstrumentedInferenceRuntime:
             attributes={"artifact.key": artifact.key, "windows": len(windows)},
         ):
             started = time.perf_counter()
-            embeddings = self._runtime.embed(artifact, windows)
+            try:
+                embeddings = self._runtime.embed(artifact, windows)
+            except InferenceBusyError:
+                self._telemetry.inference_refused.add(1, {"answer": "embedding"})
+                raise
             self._timed(started, "embedding")
             return embeddings
 

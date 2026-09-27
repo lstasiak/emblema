@@ -73,13 +73,22 @@ def format_routed() -> Case:
     from emblema.serving.adapters.routing.format_routed_inference_runtime import (
         FormatRoutedInferenceRuntime,
     )
-    from tests.serving.kept_network import CPU, GRAPH_CORPUS, keep_network, network_windows
+    from tests.serving.kept_network import (
+        BUDGET,
+        CPU,
+        GRAPH_CORPUS,
+        gate,
+        keep_network,
+        network_windows,
+    )
     from tests.serving.kept_trees import keep_trees, trees_windows
 
     store = InMemoryArtifactStore()
     runtime = FormatRoutedInferenceRuntime(
         store,
-        graphs=OnnxGraphInference(batch_size=4, providers=CPU, threads=1),
+        graphs=OnnxGraphInference(
+            batch_size=4, providers=CPU, threads=1, budget=BUDGET, gate=gate()
+        ),
         classical=KeptClassicalInference(),
     )
     return Case(
