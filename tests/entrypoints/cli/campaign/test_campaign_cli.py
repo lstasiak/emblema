@@ -344,6 +344,27 @@ def test_an_order_cut_to_a_budget_carries_that_budget_alone(
     assert {cell.budget.text() for cell in order.cells} == {"50"}
 
 
+class Dirty(SourceRevision):
+    """A tree with changes no commit holds."""
+
+    def current(self) -> str:
+        return "abc123-dirty"
+
+
+def test_an_order_is_refused_from_a_tree_with_uncommitted_changes(
+    process: Process, tmp_path: Path
+) -> None:
+    campaign_id = declared(process, tmp_path)
+    cli = CampaignCli(Dirty())
+
+    with pytest.raises(SystemExit, match="uncommitted changes"):
+        cli.execute(
+            cli.parse(["order", "--campaign", campaign_id, "--pool", "ml"]),
+            process.adapters,
+            process.services,
+        )
+
+
 def test_an_order_names_a_pool_the_parser_knows() -> None:
     with pytest.raises(SystemExit):
         CampaignCli(Pinned()).parse(["order", "--campaign", "x", "--pool", "gpu"])

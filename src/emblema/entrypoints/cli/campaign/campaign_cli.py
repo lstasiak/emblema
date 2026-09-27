@@ -167,7 +167,7 @@ class CampaignCli:
                         OrderCampaignCellsCommand(
                             campaign=self._campaign(invocation.campaign),
                             pool=WorkerPool(self._named(invocation.pool)),
-                            git_commit=self._revision.current(),
+                            git_commit=self._committed(),
                             budget=(
                                 None
                                 if invocation.budget is None
@@ -193,6 +193,21 @@ class CampaignCli:
                     raise SystemExit(f"this command line does not {invocation.what!r}")
         except EvaluationError as refusal:
             raise SystemExit(str(refusal)) from refusal
+
+    def _committed(self) -> str:
+        """The revision an order names: the tree's commit, refused while the tree is dirty.
+
+        A machine elsewhere installs the commit an order names and refuses anything else, so
+        an order placed from a tree with uncommitted changes would name a revision nobody can
+        run; it is refused here, before anything is written.
+
+        Raises:
+            SystemExit: If the tree has uncommitted changes, or its revision is unknown.
+        """
+        try:
+            return self._revision.committed()
+        except RuntimeError as error:
+            raise SystemExit(str(error)) from None
 
     @staticmethod
     def _tuned_entry(choice: TunedChoice) -> str:
