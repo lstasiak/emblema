@@ -472,6 +472,33 @@ def test_an_order_is_refused_on_other_code_before_a_cell_runs(running: Campaign)
     assert handoff.reported == []
 
 
+def test_an_order_cut_to_one_budget_carries_that_budgets_outstanding_cells_alone(
+    running: Campaign,
+) -> None:
+    campaign_id = running.declared()
+    handoff = InMemoryCampaignHandoff()
+    order = OrderCampaignCells(running.campaigns, running.tasks, handoff)
+
+    placed = order(
+        OrderCampaignCellsCommand(
+            campaign=campaign_id, pool=WorkerPool.ML, git_commit="abc123", budget=BUDGETS[0]
+        )
+    )
+
+    cells = handoff.read_order(placed).cells
+    assert {cell.budget for cell in cells} == {BUDGETS[0]}
+    assert len(cells) == len(running.campaigns.get(campaign_id).pending()) // len(BUDGETS)
+    with pytest.raises(InvalidCampaignOrderError, match="names no cell"):
+        order(
+            OrderCampaignCellsCommand(
+                campaign=campaign_id,
+                pool=WorkerPool.ML,
+                git_commit="abc123",
+                budget=LabelBudget.of(7),
+            )
+        )
+
+
 def test_an_order_of_a_pool_that_has_no_outstanding_cell_is_refused(running: Campaign) -> None:
     order = OrderCampaignCells(running.campaigns, running.tasks, InMemoryCampaignHandoff())
 

@@ -330,6 +330,20 @@ def test_accepting_a_result_records_the_cells_it_answered(process: Process, tmp_
     assert [r.cell for r in process.adapters.campaigns.get(campaign_id).results] == [first]
 
 
+def test_an_order_cut_to_a_budget_carries_that_budget_alone(
+    process: Process, tmp_path: Path
+) -> None:
+    campaign_id = declared(process, tmp_path)
+
+    key, checksum = process.run(
+        "order", "--campaign", campaign_id, "--pool", "ml", "--budget", "50"
+    ).split()
+
+    order = process.handoff.read_order(ArtifactRef(key, Checksum.parse(checksum)))
+    assert len(order.cells) == 4
+    assert {cell.budget.text() for cell in order.cells} == {"50"}
+
+
 def test_an_order_names_a_pool_the_parser_knows() -> None:
     with pytest.raises(SystemExit):
         CampaignCli(Pinned()).parse(["order", "--campaign", "x", "--pool", "gpu"])

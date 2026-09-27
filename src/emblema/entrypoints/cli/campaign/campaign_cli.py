@@ -24,6 +24,7 @@ from emblema.evaluation.application.use_cases.select_tuned_variants import (
 )
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
 from emblema.evaluation.domain.exceptions import EvaluationError
+from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 from emblema.shared.jobs.worker_pool import WorkerPool
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -110,6 +111,7 @@ class CampaignCli:
             file=getattr(arguments, "file", None),
             campaign=getattr(arguments, "campaign", None),
             pool=getattr(arguments, "pool", None),
+            budget=getattr(arguments, "budget", None),
             candidate=getattr(arguments, "candidate", None),
             result=(
                 None if getattr(arguments, "result", None) is None else self._ref(arguments.result)
@@ -166,6 +168,11 @@ class CampaignCli:
                             campaign=self._campaign(invocation.campaign),
                             pool=WorkerPool(self._named(invocation.pool)),
                             git_commit=self._revision.current(),
+                            budget=(
+                                None
+                                if invocation.budget is None
+                                else LabelBudget.parse(invocation.budget)
+                            ),
                         )
                     )
                     return f"{ordered.key} {ordered.checksum}"
@@ -312,6 +319,10 @@ class CampaignCli:
             required=True,
             choices=[str(pool) for pool in WorkerPool],
             help="which kind of process will run the cells",
+        )
+        order.add_argument(
+            "--budget",
+            help="one budget of the grid to hand out alone; every budget unless given",
         )
 
         select = what.add_parser(

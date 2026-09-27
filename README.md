@@ -194,7 +194,7 @@ docker compose --profile workers up -d worker-ml worker-general
 uv run python -m emblema.entrypoints.cli.campaign advance --campaign <id>
 
 # or through an order, run anywhere and accepted back
-uv run python -m emblema.entrypoints.cli.campaign order --campaign <id> --pool ml
+uv run python -m emblema.entrypoints.cli.campaign order --campaign <id> --pool ml [--budget 200]
 uv run python -m emblema.entrypoints.cli.campaign_run --order <key> <checksum>
 uv run python -m emblema.entrypoints.cli.campaign accept --result <key> <checksum>
 ```

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.handoff.campaign_order import CampaignOrder
+from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.ports.campaign_handoff import CampaignHandoff
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
@@ -17,11 +18,14 @@ class OrderCampaignCellsCommand:
         campaign: The campaign whose cells are ordered.
         pool: Which kind of process will run them; only the cells that kind can run go out.
         git_commit: Revision of the code the cells are to be run with.
+        budget: One budget of the grid to hand out alone, where every cell of a budget is to
+            run on one kind of accelerator; every budget unless given.
     """
 
     campaign: CampaignId
     pool: WorkerPool
     git_commit: str
+    budget: LabelBudget | None = None
 
 
 class OrderCampaignCells:
@@ -31,7 +35,8 @@ class OrderCampaignCells:
     cells go out as the same requests a worker would put to its candidates, built by the
     campaign itself, so a cell answered through an order and one answered from the queue are
     the same question. Only cells without a result go out: ordering again after a result was
-    accepted hands out what is still missing and nothing twice.
+    accepted hands out what is still missing and nothing twice. An order may be cut to one
+    budget, so that a grid spread over accelerators keeps every cell of a budget on one kind.
     """
 
     def __init__(
@@ -50,8 +55,8 @@ class OrderCampaignCells:
         Raises:
             CampaignNotFoundError: If the campaign is unknown.
             TaskNotFoundError: If the campaign's task is unknown.
-            InvalidCampaignOrderError: If no outstanding cell belongs to that pool, or the
-                commit is blank.
+            InvalidCampaignOrderError: If no outstanding cell belongs to that pool and budget,
+                or the commit is blank.
         """
         campaign = self._campaigns.get(command.campaign)
         needs_the_stack = command.pool is WorkerPool.ML
@@ -64,6 +69,7 @@ class OrderCampaignCells:
                     for cell in campaign.pending()
                     if campaign.design.get_candidate(cell.candidate).kind.needs_the_ml_stack
                     == needs_the_stack
+                    and (command.budget is None or cell.budget == command.budget)
                 ),
                 git_commit=command.git_commit,
             )
