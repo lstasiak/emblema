@@ -18,6 +18,13 @@ PhysioNet/Computing in Cardiology Challenge 2012", Computing in Cardiology 39:24
 data is published under the Open Data Commons Attribution License v1.0, which permits a
 redistributed derivative with attribution.
 
+`Outcomes-a.txt` and `Outcomes-b.txt` are the header and rows of the challenge's outcome files
+(`Outcomes-a.txt`, SHA-256 `2613ea60ccda29f87571a7d6b09ad130858a8ccd66325bd073365925026883c2`;
+`Outcomes-b.txt`, `1305f29734da374a809483229a99f33a9230aa8d4fa74b1a2d6ad788136423d5`) for the four
+stays above, and for `132551`, a stay of set A that died in hospital: every stay of the sample
+survived, and the truth of a binary task is only tested against both outcomes. The reader does
+not read these files; the ground truth of the in-hospital death task does.
+
 This is test data for the corpus reader. Keep the files byte-exact: the reader's checksum is
 computed over the raw bytes.
 
@@ -27,4 +34,9 @@ Regenerate from the unpacked archives:
 for stay in set-a/132539 set-a/132548 set-a/140501 set-b/149509; do
   cp "data/raw/physionet2012/$stay.txt" "tests/data/physionet2012/$stay.txt"
 done
+raw=data/raw/physionet2012
+{ head -1 "$raw/Outcomes-a.txt"; grep -E '^(132539|132548|132551|140501),' "$raw/Outcomes-a.txt"; } \
+  > tests/data/physionet2012/Outcomes-a.txt
+{ head -1 "$raw/Outcomes-b.txt"; grep -E '^149509,' "$raw/Outcomes-b.txt"; } \
+  > tests/data/physionet2012/Outcomes-b.txt
 ```

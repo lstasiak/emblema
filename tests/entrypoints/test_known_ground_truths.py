@@ -54,3 +54,18 @@ def test_a_corpus_nobody_fetched_resolves_to_where_it_would_have_been(tmp_path: 
     # A worker serving campaigns over another corpus has no business stopping because this one
     # is absent: what fails is reading a named file, not assembling the process.
     assert KnownGroundTruths.turbofans_under(tmp_path) == tmp_path / "cmapss"
+
+
+def test_the_stays_are_answered_with_the_outcome_the_task_asks_from_the_files_beside_them(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "physionet2012"
+    root.mkdir()
+    (root / "Outcomes-a.txt").write_text(
+        "RecordID,In-hospital_death,Survival\n132551,1,5\n", encoding="utf-8"
+    )
+    stay = TaskWindow(unit=UnitKey("set-a/132551"), position=0, ends_at=48.0)
+
+    truths = KnownGroundTruths.under(tmp_path)
+
+    assert truths.truths_of(KnownGroundTruths.PHYSIONET, [stay]) == {stay: 1.0}

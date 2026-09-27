@@ -9,13 +9,20 @@ pointing at nothing.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from importlib.resources import files
+from typing import Self
 
+from emblema.entrypoints.known_ground_truths import KnownGroundTruths
 from emblema.evaluation.application.use_cases.define_downstream_task import (
     DefineDownstreamTaskCommand,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.class_strata import ClassStrata
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
+from emblema.evaluation.domain.labels.label_scheme import LabelScheme
+from emblema.evaluation.domain.labels.outcome_scheme import OutcomeScheme
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
+from emblema.evaluation.domain.labels.stratification import Stratification
 from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.task.corpus_sides import CorpusSides
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
@@ -35,6 +42,16 @@ class NamedTestUnits:
 
     source: str
     units: tuple[str, ...]
+
+    @classmethod
+    def listed(cls, source: str, listing: str) -> Self:
+        """The units named one per line in ``listing``, a file shipped beside this module.
+
+        For an official test set whose keys follow no range: the listing is the set as it was
+        published, so the frozen side cannot drift from it however the corpus is read.
+        """
+        text = files(__package__).joinpath(listing).read_text(encoding="utf-8")
+        return cls(source=source, units=tuple(line for line in text.splitlines() if line))
 
     def frozen_split(self, held_out: frozenset[UnitKey]) -> FrozenTestSplit:
         """The named units, whatever the corpus holds out: an official test set is not cut."""
@@ -79,18 +96,19 @@ class KnownTask:
         name: What the task is called in the reports.
         corpus: Name the corpus was published under.
         unit_prefix: What the keys of the task's units start with, inside that corpus.
-        labels: How a window's target is read: the remaining life under a ceiling, or the exact
-            reading of a sensor a fixed time past the window.
-        strata: How many groups of the target a budget is spread over.
-        units_called: What the task's units are called in prose, engines or units.
+        labels: How a window's target is read: the remaining life under a ceiling, the exact
+            reading of a sensor a fixed time past the window, or the outcome a unit recorded.
+        strata: How a budget is spread over the pool: bins of the target's rank, or the two
+            outcomes in proportion.
+        units_called: What the task's units are called in prose, engines, units or stays.
         test: How the frozen test side is made.
     """
 
     name: str
     corpus: str
     unit_prefix: str
-    labels: RemainingLifeScheme | ForecastScheme
-    strata: int
+    labels: LabelScheme
+    strata: Stratification
     units_called: str
     test: NamedTestUnits | HeldOutShare
 
@@ -120,7 +138,7 @@ class KnownTask:
             test=test,
             protocol=EvaluationProtocol.LABEL_BUDGET,
             labels=self.labels,
-            strata=TargetBins(self.strata),
+            strata=self.strata,
         )
 
     @property
@@ -134,6 +152,8 @@ class KnownTask:
                     f"the exact reading of {self.labels.channel} "
                     f"{self.labels.horizon:g} time units past the window"
                 )
+            case OutcomeScheme():
+                return f"the outcome {self.labels.outcome} each unit recorded"
 
 
 class KnownTasks:
@@ -144,7 +164,7 @@ class KnownTasks:
         corpus="cmapss",
         unit_prefix="FD001/",
         labels=RemainingLifeScheme(125.0),
-        strata=4,
+        strata=TargetBins(4),
         units_called="engines",
         test=NamedTestUnits(
             source="cmapss/test/FD001",
@@ -158,7 +178,7 @@ class KnownTasks:
         corpus="control-b",
         unit_prefix="control-b/",
         labels=ForecastScheme("s01", 12.0),
-        strata=4,
+        strata=TargetBins(4),
         units_called="units",
         test=HeldOutShare(source="control-b/held-out", one_in=3, seed=1),
     )
@@ -167,7 +187,7 @@ class KnownTasks:
         corpus="null-b",
         unit_prefix="null-b/",
         labels=ForecastScheme("s01", 12.0),
-        strata=4,
+        strata=TargetBins(4),
         units_called="units",
         test=HeldOutShare(source="null-b/held-out", one_in=3, seed=1),
     )
@@ -178,7 +198,7 @@ class KnownTasks:
         corpus="control-b-wide",
         unit_prefix="control-b-wide/",
         labels=ForecastScheme("s01", 12.0),
-        strata=4,
+        strata=TargetBins(4),
         units_called="units",
         test=HeldOutShare(source="control-b-wide/held-out", one_in=3, seed=1),
     )
@@ -187,7 +207,7 @@ class KnownTasks:
         corpus="null-b-wide",
         unit_prefix="null-b-wide/",
         labels=ForecastScheme("s01", 12.0),
-        strata=4,
+        strata=TargetBins(4),
         units_called="units",
         test=HeldOutShare(source="null-b-wide/held-out", one_in=3, seed=1),
     )
@@ -197,9 +217,21 @@ class KnownTasks:
         corpus="control-b-shared",
         unit_prefix="control-b-shared/",
         labels=ForecastScheme("s01", 12.0),
-        strata=4,
+        strata=TargetBins(4),
         units_called="units",
         test=HeldOutShare(source="control-b-shared/held-out", one_in=3, seed=1),
+    )
+
+    # Death in hospital after an intensive-care stay, the challenge's own question, read over
+    # the first 48 hours of the stay; set C is the challenge's test set, named as published.
+    PHYSIONET_IN_HOSPITAL_DEATH = KnownTask(
+        name="physionet2012-in-hospital-death",
+        corpus=KnownGroundTruths.PHYSIONET,
+        unit_prefix="set-",
+        labels=KnownGroundTruths.IN_HOSPITAL_DEATH,
+        strata=ClassStrata(),
+        units_called="stays",
+        test=NamedTestUnits.listed("physionet2012/set-c", "physionet2012_set_c.txt"),
     )
 
     @classmethod
@@ -215,6 +247,7 @@ class KnownTasks:
             cls.CONTROL_B_WIDE_FORECAST,
             cls.NULL_B_WIDE_FORECAST,
             cls.CONTROL_B_SHARED_FORECAST,
+            cls.PHYSIONET_IN_HOSPITAL_DEATH,
         )
 
     @classmethod

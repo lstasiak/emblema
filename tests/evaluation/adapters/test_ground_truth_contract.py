@@ -3,7 +3,8 @@
 The turbofan sample in the repository holds engines 39 and 91 of the first subset, recorded for
 128 and 135 cycles. The corpus times a unit from cycle one to one past its last, so those engines
 fail at 129 and 136 — the numbers a window's end is compared against. The generated corpus is
-asked about the first sensor of its first two units.
+asked about the first sensor of its first two units. The intensive-care sample records one death
+in hospital, stay 132551 of set A, and survivals for the others.
 """
 
 from collections.abc import Mapping
@@ -14,6 +15,9 @@ import pytest
 from emblema.evaluation.adapters.in_memory.ground_truth import InMemoryGroundTruth
 from emblema.evaluation.adapters.readers.cmapss_ground_truth import CmapssGroundTruth
 from emblema.evaluation.adapters.readers.corpus_ground_truths import CorpusGroundTruths
+from emblema.evaluation.adapters.readers.physionet2012_ground_truth import (
+    Physionet2012GroundTruth,
+)
 from emblema.evaluation.adapters.synthetic.synthetic_ground_truth import SyntheticGroundTruth
 from emblema.evaluation.domain.exceptions import (
     UnknownGroundTruthError,
@@ -21,6 +25,7 @@ from emblema.evaluation.domain.exceptions import (
 )
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
+from emblema.evaluation.domain.labels.outcome_scheme import OutcomeScheme
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.ports.ground_truth import GroundTruth
 from emblema.shared.adapters.synthetic.layouts import CONTROL_B
@@ -37,6 +42,12 @@ SYNTHETIC_WINDOWS = (
     window(f"{LAYOUT.name}/0", 0, 40.0),
     window(f"{LAYOUT.name}/0", 1, 52.0),
     window(f"{LAYOUT.name}/1", 2, 40.0),
+)
+DEATH = OutcomeScheme("In-hospital_death")
+STAYS = (
+    window("set-a/132551", 0, 48.0),
+    window("set-a/132539", 1, 48.0),
+    window("set-b/149509", 2, 48.0),
 )
 
 
@@ -56,12 +67,15 @@ class Case:
         return self.truth.truths_of(self.corpus, windows)
 
 
-@pytest.fixture(params=["in memory", "C-MAPSS", "synthetic", "by corpus"])
+@pytest.fixture(params=["in memory", "C-MAPSS", "synthetic", "by corpus", "PhysioNet"])
 def case(request: pytest.FixtureRequest) -> Case:
     if request.param == "in memory":
         return Case(InMemoryGroundTruth(FAILURES), WINDOWS, window("FD001/999", 3, 10.0))
     if request.param == "C-MAPSS":
         return Case(CmapssGroundTruth(sample("cmapss")), WINDOWS, window("FD001/999", 3, 10.0))
+    if request.param == "PhysioNet":
+        stays = Physionet2012GroundTruth(sample("physionet2012"), DEATH)
+        return Case(stays, STAYS, window("set-a/999999", 3, 48.0), "physionet2012")
     if request.param == "by corpus":
         registered = CorpusGroundTruths({"cmapss": CmapssGroundTruth(sample("cmapss"))})
         return Case(registered, WINDOWS, window("FD001/999", 3, 10.0))
@@ -147,3 +161,50 @@ def test_a_corpus_nobody_registered_is_refused_rather_than_answered_by_whichever
 
     with pytest.raises(UnknownGroundTruthError, match="knows no ground truth of corpus 'skab'"):
         registered.truths_of("skab", WINDOWS)
+
+
+def test_every_window_of_a_stay_is_answered_with_the_outcome_the_stay_recorded() -> None:
+    later = window("set-a/132551", 4, 96.0)
+
+    answered = Physionet2012GroundTruth(sample("physionet2012"), DEATH).truths_of(
+        "physionet2012", (*STAYS, later)
+    )
+
+    assert answered == {STAYS[0]: 1.0, STAYS[1]: 0.0, STAYS[2]: 0.0, later: 1.0}
+
+
+@pytest.mark.parametrize("name", ["132551", "a/132551", "set-a/"])
+def test_a_unit_not_named_by_set_and_record_is_refused(name: str) -> None:
+    with pytest.raises(UnknownGroundTruthError, match="named"):
+        Physionet2012GroundTruth(sample("physionet2012"), DEATH).truths_of(
+            "physionet2012", [window(name, 0, 48.0)]
+        )
+
+
+def test_a_set_whose_outcomes_are_not_there_says_so(tmp_path: Path) -> None:
+    with pytest.raises(UnreadableGroundTruthError, match="cannot read"):
+        Physionet2012GroundTruth(tmp_path, DEATH).truths_of(
+            "physionet2012", [window("set-c/152871", 0, 48.0)]
+        )
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ("", "is empty"),
+        ("RecordID,SOFA\n1,3\n", "no column In-hospital_death"),
+        ("RecordID,In-hospital_death\n1,0,7\n", "3 fields"),
+        ("RecordID,In-hospital_death\n1,0\n1,1\n", "not a new number"),
+        ("RecordID,In-hospital_death\nx,0\n", "not a new number"),
+        ("RecordID,In-hospital_death\n1,dead\n", "records 'dead'"),
+    ],
+)
+def test_an_outcome_file_that_is_not_one_is_refused(
+    tmp_path: Path, content: str, message: str
+) -> None:
+    (tmp_path / "Outcomes-a.txt").write_text(content, encoding="utf-8")
+
+    with pytest.raises(UnreadableGroundTruthError, match=message):
+        Physionet2012GroundTruth(tmp_path, DEATH).truths_of(
+            "physionet2012", [window("set-a/1", 0, 48.0)]
+        )
