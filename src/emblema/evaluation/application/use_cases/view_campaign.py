@@ -6,8 +6,8 @@ from emblema.evaluation.application.read_models.candidate_curve import Candidate
 from emblema.evaluation.application.read_models.verdict_view import VerdictView
 from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.campaign.campaign_overview import CampaignOverview
+from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.campaign.campaign_verdict import CampaignVerdict
-from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
 from emblema.evaluation.ports.verdict_memo import VerdictMemo
 
@@ -42,22 +42,24 @@ class ViewCampaign:
         Raises:
             CampaignNotFoundError: If no campaign is stored under that identity.
         """
-        campaign = self._campaigns.get(query.campaign)
-        verdict = self._verdict_of(campaign)
+        reading = self._campaigns.read(query.campaign)
+        campaign = reading.campaign
+        verdict = self._verdict_of(reading)
         return CampaignView(
             summary=CampaignSummary.of(CampaignOverview.of(campaign)),
             curves=tuple(
-                CandidateCurve.of(campaign, candidate) for candidate in campaign.design.candidates
+                CandidateCurve.of(reading, candidate) for candidate in campaign.design.candidates
             ),
             verdict=None if verdict is None else VerdictView.of(verdict),
         )
 
-    def _verdict_of(self, campaign: EvaluationCampaign) -> CampaignVerdict | None:
+    def _verdict_of(self, reading: CampaignReading) -> CampaignVerdict | None:
+        campaign = reading.campaign
         if not campaign.is_finished or campaign.selects:
             return None
         kept = self._verdicts.recall(campaign.campaign_id, campaign.revision)
         if kept is not None:
             return kept
-        verdict = campaign.verdict()
+        verdict = reading.verdict()
         self._verdicts.keep(campaign.campaign_id, campaign.revision, verdict)
         return verdict

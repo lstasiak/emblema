@@ -64,9 +64,8 @@ class RunCampaignCell:
                 are allowed to record the result.
         """
         campaign = self._campaigns.get(command.campaign)
-        recorded = RecordCellResult.recorded(campaign.results, command.cell)
-        if recorded is not None:
-            return recorded
+        if command.cell in campaign.recorded:
+            return self._campaigns.get_result(command.campaign, command.cell)
         if command.cell not in campaign.pending():
             raise UnknownCampaignCellError(
                 f"{command.cell} is not a cell of campaign {command.campaign}"

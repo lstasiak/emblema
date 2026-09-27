@@ -35,7 +35,7 @@ from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPubli
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.events.domain_event import EventId
-from tests.evaluation.support import CAMPAIGN, CLOSED_AT, CONTENDER, CONTROL, TASK, closed_campaign
+from tests.evaluation.support import CAMPAIGN, CLOSED_AT, CONTENDER, CONTROL, TASK, closed_reading
 from tests.serving.support import FITTED, PROMOTED
 
 
@@ -64,7 +64,7 @@ class Heard:
         self.events = InMemoryEventPublisher(subscriptions)
 
     def announced(self) -> CampaignCompleted:
-        campaign = closed_campaign(self.kept)
+        campaign = closed_reading(self.kept)
         event = CampaignCompletedAssembler().assemble(
             campaign,
             campaign.verdict(),

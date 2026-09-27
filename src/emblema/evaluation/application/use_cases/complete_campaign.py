@@ -67,17 +67,17 @@ class CompleteCampaign:
                 different units.
         """
         at = self._clock.now()
-        read = self._campaigns.get(command.campaign)
-        campaign = read.complete(at)
-        if campaign.selects:
-            self._campaigns.save(campaign, seen=read.revision)
+        read = self._campaigns.read(command.campaign)
+        closed = read.complete(at)
+        if closed.campaign.selects:
+            self._campaigns.save(closed.campaign, seen=read.campaign.revision)
             return None
         completed = self._outcomes.assemble(
-            campaign,
-            campaign.verdict(),
+            closed,
+            closed.verdict(),
             event_id=self._ids.generate(EventId),
             occurred_at=at,
         )
-        self._campaigns.save(campaign, seen=read.revision)
+        self._campaigns.save(closed.campaign, seen=read.campaign.revision)
         self._events.publish(completed)
         return completed

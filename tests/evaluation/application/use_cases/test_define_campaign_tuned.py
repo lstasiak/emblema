@@ -25,7 +25,7 @@ from emblema.evaluation.application.use_cases.select_tuned_variants import (
 )
 from emblema.evaluation.contracts.identifiers import CandidateRef, TaskId
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
-from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import (
@@ -48,7 +48,9 @@ from tests.evaluation.support import (
     SELECTED_BY,
     boosting,
     convolutions,
+    reopened,
     selection,
+    store,
     task,
 )
 
@@ -57,7 +59,8 @@ AT_50, AT_200 = BUDGETS
 
 
 class Process:
-    def __init__(self) -> None:
+    def __init__(self, stored: CampaignReading | None = None) -> None:
+        """The context over in-memory adapters, ``stored`` being the selection it holds."""
         self.tasks = InMemoryDownstreamTaskRepository()
         self.tasks.save(task())
         self.campaigns = InMemoryEvaluationCampaignRepository()
@@ -67,7 +70,7 @@ class Process:
                 ClassicalArm(ref=OTHER, method=convolutions(), sources=()),
             )
         )
-        self.campaigns.save(described_by(catalogue), seen=0)
+        store(self.campaigns, described_by(catalogue) if stored is None else stored)
         self.define = DefineCampaign(
             self.tasks, self.campaigns, catalogue, SequentialIdGenerator(), FixedClock(OPENED_AT)
         )
@@ -90,13 +93,17 @@ class Process:
         )
 
 
-def described_by(catalogue: ClassicalBaselineCatalogue) -> EvaluationCampaign:
+def described_by(catalogue: ClassicalBaselineCatalogue) -> CampaignReading:
     """The finished selection, its candidates described as ``catalogue`` describes them."""
     chosen = selection()
     return replace(
         chosen,
-        design=replace(
-            chosen.design, candidates=(catalogue.describe(ROCKET), catalogue.describe(FINER))
+        campaign=replace(
+            chosen.campaign,
+            design=replace(
+                chosen.campaign.design,
+                candidates=(catalogue.describe(ROCKET), catalogue.describe(FINER)),
+            ),
         ),
     )
 
@@ -133,8 +140,7 @@ def test_a_comparison_naming_a_variant_its_selection_did_not_choose_is_refused()
 
 
 def test_a_comparison_naming_an_unfinished_selection_is_refused() -> None:
-    process = Process()
-    process.campaigns.save(replace(selection(), completed_at=None), seen=selection().revision)
+    process = Process(reopened(selection()))
 
     with pytest.raises(SelectionNotReadableError):
         process.define(process.declared(chose(FINER)))
@@ -170,7 +176,7 @@ def trees_catalogue(**boosting_overrides: float) -> ClassicalBaselineCatalogue:
     )
 
 
-def around_shallow_trees(catalogue: ClassicalBaselineCatalogue) -> EvaluationCampaign:
+def around_shallow_trees(catalogue: ClassicalBaselineCatalogue) -> CampaignReading:
     """A finished selection declared around the shallow trees, with no bare name in its grid."""
     return selection(
         errors={SHALLOW: (10.0, 10.2, 9.8), DEEP: (10.1, 10.3, 9.9), SLOW: (10.2, 10.4, 10.0)},
@@ -180,8 +186,7 @@ def around_shallow_trees(catalogue: ClassicalBaselineCatalogue) -> EvaluationCam
 
 def test_a_comparison_tuned_by_a_selection_declared_around_a_variant_is_defined() -> None:
     catalogue = trees_catalogue()
-    process = Process()
-    process.campaigns.save(around_shallow_trees(catalogue), seen=selection().revision)
+    process = Process(around_shallow_trees(catalogue))
     define = DefineCampaign(
         process.tasks, process.campaigns, catalogue, SequentialIdGenerator(), FixedClock(OPENED_AT)
     )
@@ -207,8 +212,7 @@ def test_a_comparison_tuned_by_a_selection_declared_around_a_variant_is_defined(
 
 
 def test_a_setting_the_selection_turned_around_under_another_configuration_is_refused() -> None:
-    process = Process()
-    process.campaigns.save(around_shallow_trees(trees_catalogue()), seen=selection().revision)
+    process = Process(around_shallow_trees(trees_catalogue()))
     # The same names, described by a process whose trees take more rounds.
     define = DefineCampaign(
         process.tasks,
@@ -232,7 +236,6 @@ def test_a_setting_the_selection_turned_around_under_another_configuration_is_re
 def test_a_variant_the_selection_ran_under_another_configuration_is_refused() -> None:
     # The same names, another model: the selection ran the grids over fewer features than this
     # process would, so what it chose is not what the comparison would run.
-    process = Process()
     elsewhere = ClassicalBaselineCatalogue(
         (
             ClassicalArm(
@@ -240,7 +243,7 @@ def test_a_variant_the_selection_ran_under_another_configuration_is_refused() ->
             ),
         )
     )
-    process.campaigns.save(described_by(elsewhere), seen=selection().revision)
+    process = Process(described_by(elsewhere))
 
     with pytest.raises(TunedChoiceMismatchError, match="describes it as"):
         process.define(process.declared(chose(FINER)))

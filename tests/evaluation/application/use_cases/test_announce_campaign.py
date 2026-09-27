@@ -17,7 +17,7 @@ from emblema.evaluation.application.use_cases.complete_campaign import (
     CompleteCampaignCommand,
 )
 from emblema.evaluation.contracts.events import CampaignCompleted
-from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.exceptions import (
     CampaignNotCompletedError,
     CampaignNotFoundError,
@@ -32,19 +32,20 @@ from tests.evaluation.support import (
     CLOSED_AT,
     SELECTED_BY,
     artifact,
-    campaign,
-    ran_campaign,
+    ran_reading,
+    reading,
     selection,
+    store,
 )
 
 KEPT = artifact("contender")
 
 
 class Announcing:
-    def __init__(self, stored: EvaluationCampaign | None) -> None:
+    def __init__(self, stored: CampaignReading | None) -> None:
         self.campaigns = InMemoryEvaluationCampaignRepository()
         if stored is not None:
-            self.campaigns.save(stored, seen=0)
+            store(self.campaigns, stored)
         subscriptions = InMemoryEventSubscriber()
         self.published: list[CampaignCompleted] = []
         subscriptions.subscribe(CampaignCompleted, self.published.append)
@@ -58,7 +59,7 @@ class Announcing:
 def test_a_closed_campaign_is_announced_as_closing_announced_it() -> None:
     # Closed through the use case that publishes on closing, so the comparison is with what a
     # subscriber received the first time and not with a message built by hand.
-    announcing = Announcing(ran_campaign(KEPT))
+    announcing = Announcing(ran_reading(KEPT))
     closed = CompleteCampaign(
         announcing.campaigns,
         CampaignCompletedAssembler(),
@@ -75,7 +76,7 @@ def test_a_closed_campaign_is_announced_as_closing_announced_it() -> None:
 
 
 def test_a_campaign_still_running_has_nothing_to_announce() -> None:
-    announcing = Announcing(campaign())
+    announcing = Announcing(reading())
 
     with pytest.raises(CampaignNotCompletedError):
         announcing.announce(AnnounceCampaignCommand(campaign=CAMPAIGN))

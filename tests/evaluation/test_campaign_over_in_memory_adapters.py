@@ -14,7 +14,10 @@ from collections.abc import Mapping
 import pytest
 
 from emblema.evaluation.adapters.in_memory.campaign_handoff import InMemoryCampaignHandoff
-from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
+from emblema.evaluation.adapters.in_memory.candidate_provider import (
+    InMemoryCandidateProvider,
+    StatedErrors,
+)
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
@@ -56,6 +59,7 @@ from emblema.evaluation.contracts.events import CampaignCompleted
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
+from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
@@ -110,7 +114,7 @@ class Campaign:
         self.candidates = InMemoryCandidateProvider(
             (candidate(CONTROL), candidate(CONTENDER)),
             UNITS,
-            lambda cell: ERRORS[cell.candidate],
+            StatedErrors(lambda cell: ERRORS[cell.candidate]),
             self.store,
         )
         subscriptions = InMemoryEventSubscriber()
@@ -218,7 +222,7 @@ def test_a_cell_delivered_twice_is_answered_from_what_was_recorded(running: Camp
     again = running.run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=first))
 
     assert again == once
-    assert len(running.campaigns.get(campaign_id).results) == 1
+    assert len(running.campaigns.read(campaign_id).results) == 1
 
 
 def test_the_whole_cycle_costs_less_than_a_second(running: Campaign) -> None:
@@ -262,7 +266,7 @@ def test_a_cell_outside_the_grid_is_refused_rather_than_recorded(running: Campai
             )
         )
 
-    assert running.campaigns.get(declared).results == ()
+    assert running.campaigns.read(declared).results == ()
 
 
 class ACompetitor:
@@ -283,12 +287,23 @@ class ACompetitor:
     def get(self, campaign_id: CampaignId) -> EvaluationCampaign:
         return self._campaigns.get(campaign_id)
 
+    def read(self, campaign_id: CampaignId) -> CampaignReading:
+        return self._campaigns.read(campaign_id)
+
+    def get_result(self, campaign_id: CampaignId, cell: CampaignCell) -> CellResult:
+        return self._campaigns.get_result(campaign_id, cell)
+
     def save(self, campaign: EvaluationCampaign, *, seen: int) -> None:
+        self._campaigns.save(campaign, seen=seen)
+
+    def record(self, campaign: EvaluationCampaign, result: CellResult, *, seen: int) -> None:
         if not self._interleaved:
             self._interleaved = True
             stood = self._campaigns.get(campaign.campaign_id)
-            self._campaigns.save(stood.record(self._competing), seen=stood.revision)
-        self._campaigns.save(campaign, seen=seen)
+            self._campaigns.record(
+                stood.record(self._competing.cell), self._competing, seen=stood.revision
+            )
+        self._campaigns.record(campaign, result, seen=seen)
 
 
 def test_a_cell_recorded_while_this_one_ran_is_not_written_over(running: Campaign) -> None:
@@ -304,7 +319,7 @@ def test_a_cell_recorded_while_this_one_ran_is_not_written_over(running: Campaig
 
     run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=mine))
 
-    assert {stored.cell for stored in running.campaigns.get(campaign_id).results} == {mine, theirs}
+    assert {stored.cell for stored in running.campaigns.read(campaign_id).results} == {mine, theirs}
 
 
 def test_the_worker_that_records_last_is_the_one_that_closes_the_grid(running: Campaign) -> None:
@@ -335,10 +350,9 @@ def test_a_grid_left_whole_but_open_is_closed_by_advancing_it(running: Campaign)
     campaign_id = running.declared()
     stood = running.campaigns.get(campaign_id)
     for cell in stood.design.cells():
-        recorded = stood.record(
-            result(cell.candidate, cell.budget, cell.seed, ERRORS[cell.candidate])
-        )
-        running.campaigns.save(recorded, seen=stood.revision)
+        produced = result(cell.candidate, cell.budget, cell.seed, ERRORS[cell.candidate])
+        recorded = stood.record(produced.cell)
+        running.campaigns.record(recorded, produced, seen=stood.revision)
         stood = recorded
 
     submitted = running.advance(AdvanceCampaignCommand(campaign=campaign_id))
@@ -357,7 +371,16 @@ class AlwaysOvertaken:
     def get(self, campaign_id: CampaignId) -> EvaluationCampaign:
         return self._campaigns.get(campaign_id)
 
+    def read(self, campaign_id: CampaignId) -> CampaignReading:
+        return self._campaigns.read(campaign_id)
+
+    def get_result(self, campaign_id: CampaignId, cell: CampaignCell) -> CellResult:
+        return self._campaigns.get_result(campaign_id, cell)
+
     def save(self, campaign: EvaluationCampaign, *, seen: int) -> None:
+        raise CampaignChangedElsewhereError("something got there first, and keeps getting there")
+
+    def record(self, campaign: EvaluationCampaign, result: CellResult, *, seen: int) -> None:
         raise CampaignChangedElsewhereError("something got there first, and keeps getting there")
 
 
@@ -376,7 +399,7 @@ def test_a_worker_that_keeps_losing_the_race_gives_up_rather_than_spinning(
     with pytest.raises(CampaignChangedElsewhereError, match="every one of"):
         run_cell(RunCampaignCellCommand(campaign=campaign_id, cell=cell))
 
-    assert running.campaigns.get(campaign_id).results == ()
+    assert running.campaigns.read(campaign_id).results == ()
 
 
 class ElsewhereRun:
@@ -411,10 +434,10 @@ def test_a_grid_run_through_an_order_is_the_grid_run_through_the_queue(running: 
     )
     accepted = accept(AcceptCampaignOrderResultCommand(result=reported))
 
-    by_queue = running.campaigns.get(queued)
-    by_order = running.campaigns.get(through_order)
-    assert accepted == len(by_order.design.cells())
-    assert by_order.is_finished
+    by_queue = running.campaigns.read(queued)
+    by_order = running.campaigns.read(through_order)
+    assert accepted == len(by_order.campaign.design.cells())
+    assert by_order.campaign.is_finished
     assert {(r.cell, r.errors) for r in by_order.results} == {
         (r.cell, r.errors) for r in by_queue.results
     }
@@ -546,7 +569,7 @@ def test_a_result_answering_a_cell_its_order_never_held_is_refused_whole(
             AcceptCampaignOrderResultCommand(result=forged)
         )
 
-    assert running.campaigns.get(campaign_id).results == ()
+    assert running.campaigns.read(campaign_id).results == ()
 
 
 class Counting:

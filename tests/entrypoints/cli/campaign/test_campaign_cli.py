@@ -19,7 +19,10 @@ from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
 from emblema.entrypoints.cli.campaign.services import Services
 from emblema.entrypoints.source_revision import SourceRevision
 from emblema.evaluation.adapters.in_memory.campaign_handoff import InMemoryCampaignHandoff
-from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
+from emblema.evaluation.adapters.in_memory.candidate_provider import (
+    InMemoryCandidateProvider,
+    StatedErrors,
+)
 from emblema.evaluation.adapters.in_memory.corpus_windows import InMemoryCorpusWindows
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
@@ -69,8 +72,9 @@ from tests.evaluation.support import (
     artifact,
     campaign,
     candidate,
-    closed_campaign,
+    closed_reading,
     selection,
+    store,
 )
 
 CONTROL, TREES = CandidateRef("from_scratch"), CandidateRef("boosted_trees_per_channel")
@@ -122,7 +126,7 @@ class Process:
         outcomes = CampaignCompletedAssembler()
         complete = CompleteCampaign(campaigns, outcomes, clock, ids, events)
         catalogue = InMemoryCandidateProvider(
-            (candidate(CONTROL), candidate(TREES)), (), lambda _: ()
+            (candidate(CONTROL), candidate(TREES)), (), StatedErrors(lambda _: ())
         )
         self.adapters = Adapters(
             corpus=corpus,
@@ -221,7 +225,7 @@ def test_announcing_a_closed_campaign_publishes_it_again_and_prints_what_it_kept
     process: Process,
 ) -> None:
     kept = artifact("contender")
-    process.adapters.campaigns.save(closed_campaign(kept), seen=0)
+    store(process.adapters.campaigns, closed_reading(kept))
 
     printed = process.run("announce", "--campaign", str(CAMPAIGN))
 
@@ -327,7 +331,7 @@ def test_accepting_a_result_records_the_cells_it_answered(process: Process, tmp_
     printed = process.run("accept", "--result", reported.key, str(reported.checksum))
 
     assert printed == "1"
-    assert [r.cell for r in process.adapters.campaigns.get(campaign_id).results] == [first]
+    assert [r.cell for r in process.adapters.campaigns.read(campaign_id).results] == [first]
 
 
 def test_an_order_cut_to_a_budget_carries_that_budget_alone(
@@ -373,7 +377,7 @@ def test_an_order_names_a_pool_the_parser_knows() -> None:
 def test_select_prints_each_choice_as_the_table_a_comparison_names_it_in(
     process: Process,
 ) -> None:
-    process.adapters.campaigns.save(selection(), seen=0)
+    store(process.adapters.campaigns, selection())
 
     printed = process.run("select", "--campaign", str(SELECTED_BY), "--candidate", str(ROCKET))
 

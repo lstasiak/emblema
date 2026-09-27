@@ -5,15 +5,15 @@ import pytest
 from emblema.evaluation.domain.campaign.campaign_overview import CampaignOverview
 from emblema.evaluation.domain.campaign.campaign_position import CampaignPosition
 from emblema.evaluation.domain.exceptions import InvalidCampaignOverviewError
-from tests.evaluation.support import CAMPAIGN, CLOSED_AT, OPENED_AT, campaign, closed_campaign
+from tests.evaluation.support import CAMPAIGN, CLOSED_AT, OPENED_AT, campaign, closed_reading
 
 
 def test_an_overview_counts_the_cells_a_campaign_ran_and_says_where_it_stands() -> None:
-    closed = closed_campaign()
+    closed = closed_reading()
 
-    overview = CampaignOverview.of(closed)
+    overview = CampaignOverview.of(closed.campaign)
 
-    assert overview.cells_recorded == len(closed.results) == len(closed.design.cells())
+    assert overview.cells_recorded == len(closed.results) == len(closed.campaign.design.cells())
     assert overview.is_finished
     assert overview.position == CampaignPosition(opened_at=OPENED_AT, campaign_id=CAMPAIGN)
 

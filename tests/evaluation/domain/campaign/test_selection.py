@@ -8,9 +8,9 @@ import pytest
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
+from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.campaign.candidate_evaluation import CandidateEvaluation
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
-from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.domain.exceptions import (
     InvalidCampaignDesignError,
     InvalidInnerHoldoutError,
@@ -29,6 +29,7 @@ from tests.evaluation.support import (
     campaign,
     cell,
     design,
+    reading,
     selection,
 )
 
@@ -47,7 +48,9 @@ def test_a_selection_whose_variant_is_within_noise_keeps_the_default() -> None:
 
 
 def test_a_selection_is_not_read_before_it_has_finished() -> None:
-    unfinished = replace(selection(), completed_at=None, results=())
+    unfinished = CampaignReading(
+        campaign=replace(selection().campaign, completed_at=None, recorded=()), results=()
+    )
 
     with pytest.raises(SelectionNotReadableError, match="finished selection"):
         unfinished.selected(ROCKET, AT_200)
@@ -55,7 +58,7 @@ def test_a_selection_is_not_read_before_it_has_finished() -> None:
 
 def test_a_comparison_is_not_read_as_a_selection() -> None:
     with pytest.raises(SelectionNotReadableError):
-        campaign().selected(ROCKET, AT_200)
+        reading().selected(ROCKET, AT_200)
 
 
 def test_a_selection_holding_no_variant_of_the_candidate_chooses_nothing() -> None:
@@ -65,20 +68,22 @@ def test_a_selection_holding_no_variant_of_the_candidate_chooses_nothing() -> No
 
 def test_a_selection_campaign_divides_the_tuning_side_and_no_other_does() -> None:
     with pytest.raises(InvalidCampaignDesignError, match="selection"):
-        replace(selection(), design=replace(selection().design, inner_holdout=None))
+        replace(
+            selection().campaign, design=replace(selection().campaign.design, inner_holdout=None)
+        )
     with pytest.raises(InvalidCampaignDesignError, match="selection"):
         replace(campaign(), design=replace(design(), inner_holdout=InnerHoldout(one_in=5)))
 
 
 def test_a_selection_cell_is_asked_of_its_candidate_with_the_division_of_the_tuning_side() -> None:
-    asked = selection().evaluation_of(cell(FINER, AT_200, 2))
+    asked = selection().campaign.evaluation_of(cell(FINER, AT_200, 2))
 
     assert asked.holdout == InnerHoldout(one_in=5)
     assert asked.purpose is RunPurpose.SELECTION
 
 
 def test_a_run_and_its_division_must_go_together() -> None:
-    asked = selection().evaluation_of(cell(FINER, AT_200, 2))
+    asked = selection().campaign.evaluation_of(cell(FINER, AT_200, 2))
 
     with pytest.raises(InvalidInnerHoldoutError, match="no division"):
         replace(asked, holdout=None)
@@ -154,7 +159,7 @@ def turned(ref: CandidateRef, **knobs: float) -> CampaignCandidate:
     return replace(baseline(ref), method=CandidateMethod.of(method="random_convolutions", **knobs))
 
 
-def around_the_tail(**errors: tuple[float, ...]) -> EvaluationCampaign:
+def around_the_tail(**errors: tuple[float, ...]) -> CampaignReading:
     named = {
         "tail": TAIL,
         "shorter": SHORTER,
@@ -195,7 +200,7 @@ def test_a_selection_around_a_variant_still_chooses_what_is_clearly_better() -> 
 
 
 def test_a_selection_names_the_setting_its_knobs_turn_around() -> None:
-    assert selection().turned_around(ROCKET).ref == ROCKET
+    assert selection().campaign.turned_around(ROCKET).ref == ROCKET
     assert (
         around_the_tail(
             tail=(10.0, 11.0, 9.0),
@@ -203,7 +208,7 @@ def test_a_selection_names_the_setting_its_knobs_turn_around() -> None:
             longer=(9.8, 10.8, 8.8),
             smoothed=(9.7, 10.7, 8.7),
         )
-        .turned_around(ROCKET)
+        .campaign.turned_around(ROCKET)
         .ref
         == TAIL
     )
@@ -218,4 +223,4 @@ def test_a_selection_that_names_no_setting_its_knobs_turn_around_is_not_read() -
     with pytest.raises(SelectionNotReadableError, match="turned around"):
         two_turned.selected(ROCKET, AT_200)
     with pytest.raises(SelectionNotReadableError, match="turned around"):
-        two_turned.turned_around(ROCKET)
+        two_turned.campaign.turned_around(ROCKET)

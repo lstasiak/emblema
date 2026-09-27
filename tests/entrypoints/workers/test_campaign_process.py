@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from emblema.entrypoints.workers.campaign_process import CampaignProcess
-from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
+from emblema.evaluation.adapters.in_memory.candidate_provider import (
+    InMemoryCandidateProvider,
+    StatedErrors,
+)
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
@@ -17,14 +20,14 @@ from emblema.serving.adapters.persistence.promotable_artifact_repository import 
 )
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.queues.immediate_job_queue import ImmediateJobQueue
-from tests.evaluation.support import CAMPAIGN, CONTENDER, artifact, ran_campaign
+from tests.evaluation.support import CAMPAIGN, CONTENDER, artifact, ran_reading, store
 from tests.support.settings import unreachable_store
 
 
 def test_a_campaign_closed_in_this_process_is_heard_by_serving(tmp_path: Path) -> None:
     campaigns = InMemoryEvaluationCampaignRepository()
     kept = artifact("contender")
-    campaigns.save(ran_campaign(kept), seen=0)
+    store(campaigns, ran_reading(kept))
     process = CampaignProcess(
         workspace=tmp_path,
         corpora=tmp_path,
@@ -34,7 +37,9 @@ def test_a_campaign_closed_in_this_process_is_heard_by_serving(tmp_path: Path) -
         promotables=InMemoryPromotableArtifactRepository(),
         jobs=ImmediateJobQueue({}),
     )
-    adapters, services = process.assemble(InMemoryCandidateProvider((), (), lambda _: ()))
+    adapters, services = process.assemble(
+        InMemoryCandidateProvider((), (), StatedErrors(lambda _: ()))
+    )
 
     services.complete_campaign(CompleteCampaignCommand(campaign=CAMPAIGN))
 

@@ -16,7 +16,10 @@ import pytest
 from emblema.config.boosting_settings import BoostingSettings
 from emblema.entrypoints.workers.general.composition_root import CompositionRoot
 from emblema.entrypoints.workers.known_baselines import KnownBaselines
-from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
+from emblema.evaluation.adapters.in_memory.candidate_provider import (
+    InMemoryCandidateProvider,
+    StatedErrors,
+)
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
@@ -59,7 +62,7 @@ def process(tmp_path: Path) -> tuple[CompositionRoot, InMemoryEvaluationCampaign
         store=InMemoryArtifactStore(),
         tasks=tasks,
         campaigns=campaigns,
-        candidates=InMemoryCandidateProvider((), (), lambda _: ()),
+        candidates=InMemoryCandidateProvider((), (), StatedErrors(lambda _: ())),
         jobs=ImmediateJobQueue({}),
         workspace=tmp_path,
         corpora=tmp_path,
@@ -80,7 +83,7 @@ def test_without_overrides_the_process_runs_on_what_the_settings_name(tmp_path: 
         unreachable_store(),
         workspace=tmp_path,
         corpora=tmp_path,
-        candidates=InMemoryCandidateProvider((), (), lambda _: ()),
+        candidates=InMemoryCandidateProvider((), (), StatedErrors(lambda _: ())),
     )
 
     assert isinstance(root.adapters.store, S3ArtifactStore)
