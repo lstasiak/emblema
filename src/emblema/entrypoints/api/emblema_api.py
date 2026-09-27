@@ -56,7 +56,10 @@ class EmblemaApi:
         pages = PageRequests(
             default_size=settings.default_page_size, max_size=settings.max_page_size
         )
-        ProblemDetails((*ServingRefusals.STATUSES, *EvaluationRefusals.STATUSES)).register(self.app)
+        ProblemDetails(
+            (*ServingRefusals.STATUSES, *EvaluationRefusals.STATUSES),
+            retry_after_seconds=settings.retry_after_seconds(),
+        ).register(self.app)
         self.app.include_router(HealthRoutes(readiness, telemetry).router)
         self.app.include_router(
             ServedModelRoutes(

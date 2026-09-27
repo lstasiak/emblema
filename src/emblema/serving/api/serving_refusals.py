@@ -5,6 +5,7 @@ from emblema.catalog.contracts.exceptions import CatalogContractError
 from emblema.serving.domain.exceptions import (
     ArtifactUnavailableError,
     EmbeddingUnavailableError,
+    InferenceBusyError,
     NonFiniteAnswerError,
     ServedModelNotFoundError,
     ServedModelNotServingError,
@@ -33,6 +34,7 @@ class ServingRefusals:
         (ServedModelNotServingError, HTTPStatus.CONFLICT),
         (EmbeddingUnavailableError, HTTPStatus.CONFLICT),
         (UnservableArtifactError, HTTPStatus.CONFLICT),
+        (InferenceBusyError, HTTPStatus.SERVICE_UNAVAILABLE),
         (ArtifactUnavailableError, HTTPStatus.INTERNAL_SERVER_ERROR),
         (UnreadableServedArtifactError, HTTPStatus.INTERNAL_SERVER_ERROR),
         (NonFiniteAnswerError, HTTPStatus.INTERNAL_SERVER_ERROR),

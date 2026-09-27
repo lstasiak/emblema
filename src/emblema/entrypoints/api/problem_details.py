@@ -32,14 +32,18 @@ class ProblemDetails:
 
     Each context states what it refuses and with which status; this registers those beside the
     kernel's and the framework's, and a failure nobody named answers in the same shape, so there
-    is one error format and not two. A client error carries its reason. A server error carries
-    none: the reason is logged with the trace the request ran under, and the body names that
-    trace, so whoever reads the log can find it and whoever calls the service learns nothing
-    about its insides.
+    is one error format and not two. A client error carries its reason, and so does a refusal
+    because the service is busy: that one is not a failure, it says when to come back. A server
+    error carries none: the reason is logged with the trace the request ran under, and the body
+    names that trace, so whoever reads the log can find it and whoever calls the service learns
+    nothing about its insides.
     """
 
-    def __init__(self, refusals: Sequence[tuple[type[Exception], HTTPStatus]]) -> None:
+    def __init__(
+        self, refusals: Sequence[tuple[type[Exception], HTTPStatus]], *, retry_after_seconds: int
+    ) -> None:
         self._refusals = (*_KERNEL, *refusals)
+        self._retry_after = retry_after_seconds
 
     def register(self, app: FastAPI) -> None:
         app.add_exception_handler(RequestValidationError, self._validation)
@@ -49,17 +53,30 @@ class ProblemDetails:
         app.add_exception_handler(Exception, self._refused(HTTPStatus.INTERNAL_SERVER_ERROR))
 
     @staticmethod
-    def problem(request: Request, status: HTTPStatus, detail: str) -> JSONResponse:
+    def problem(
+        request: Request,
+        status: HTTPStatus,
+        detail: str,
+        headers: dict[str, str] | None = None,
+    ) -> JSONResponse:
         """The problem document for ``status``, about the request's path."""
         body = Problem(
             title=status.phrase, status=status.value, detail=detail, instance=request.url.path
         )
         return JSONResponse(
-            status_code=status.value, content=body.model_dump(), media_type=MEDIA_TYPE
+            status_code=status.value,
+            content=body.model_dump(),
+            media_type=MEDIA_TYPE,
+            headers=headers,
         )
 
     def _refused(self, status: HTTPStatus) -> Callable[[Request, Exception], Response]:
         def handler(request: Request, error: Exception) -> Response:
+            if status == HTTPStatus.SERVICE_UNAVAILABLE:
+                logger.warning("%s %s refused: %s", request.method, request.url.path, error)
+                return self.problem(
+                    request, status, str(error), {"Retry-After": str(self._retry_after)}
+                )
             if status < HTTPStatus.INTERNAL_SERVER_ERROR:
                 return self.problem(request, status, str(error))
             logger.error("%s %s failed", request.method, request.url.path, exc_info=error)

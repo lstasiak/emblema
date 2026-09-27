@@ -30,6 +30,7 @@ from emblema.serving.adapters.in_memory.served_model_listing import InMemoryServ
 from emblema.serving.adapters.in_memory.served_model_repository import (
     InMemoryServedModelRepository,
 )
+from emblema.serving.domain.exceptions import InferenceBusyError
 from emblema.serving.domain.identifiers import ServedModelId
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -51,6 +52,18 @@ class _Failing(InMemoryInferenceRuntime):
 
     def predict(self, artifact: ArtifactRef, windows: Sequence[TokenWindow]) -> tuple[float, ...]:
         raise RuntimeError("the session could not run: /srv/secret/graph.onnx")
+
+
+class _Busy(InMemoryInferenceRuntime):
+    """A runtime whose networks are running all the budget allows."""
+
+    def predict(self, artifact: ArtifactRef, windows: Sequence[TokenWindow]) -> tuple[float, ...]:
+        raise InferenceBusyError("the networks are running as much as they may")
+
+    def embed(
+        self, artifact: ArtifactRef, windows: Sequence[TokenWindow]
+    ) -> tuple[tuple[float, ...], ...]:
+        raise InferenceBusyError("the networks are running as much as they may")
 
 
 @contextmanager
@@ -367,3 +380,23 @@ def test_a_body_sent_without_its_length_is_refused(api: TestClient) -> None:
 
     assert answered.status_code == 411
     assert answered.headers["content-type"] == MEDIA_TYPE
+
+
+@pytest.mark.parametrize("route", ["predictions", "embeddings"])
+def test_a_service_running_all_it_may_asks_the_caller_to_come_back(route: str) -> None:
+    with client(runtime=_Busy({KEPT.checksum: stated()})) as api:
+        answered = api.post(f"/served-models/{MODEL}/{route}", json=request_body())
+
+        assert answered.status_code == 503
+        assert answered.headers["content-type"] == MEDIA_TYPE
+        assert answered.headers["retry-after"] == str(API.retry_after_seconds())
+        assert "running as much as they may" in answered.json()["detail"]
+
+
+def test_a_refusal_because_the_service_is_busy_is_counted_apart_from_a_failure() -> None:
+    with client(telemetry=True, runtime=_Busy({KEPT.checksum: stated()})) as api:
+        api.post(f"/served-models/{MODEL}/predictions", json=request_body())
+
+        exposition = api.get("/metrics").text
+
+        assert 'emblema_inference_refused_total{answer="prediction"' in exposition
