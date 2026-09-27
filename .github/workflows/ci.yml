@@ -164,6 +164,8 @@ jobs:
       EMBLEMA_ARTIFACT_STORE__REGION: garage
       EMBLEMA_ARTIFACT_STORE__BUCKET: emblema
       EMBLEMA_ARTIFACT_STORE__KEY_PREFIX: test
+      # Not read by the tests: compose interpolates the whole file, and the API publishes its port.
+      EMBLEMA_API__PORT: "8000"
     steps:
       - uses: actions/checkout@v4
 
