@@ -77,6 +77,12 @@ def read(directory: Path) -> Report:
     if not (directory / CELLS).is_file():
         raise SystemExit(f"{directory} holds no {CELLS}; nothing to draw")
     with (directory / CELLS).open(newline="") as handle:
+        if "rmse" not in (csv.DictReader(handle).fieldnames or ()):
+            raise SystemExit(
+                f"{directory} reports a campaign read by area under the ROC curve; this draws "
+                "the curve of an error in the task's unit"
+            )
+    with (directory / CELLS).open(newline="") as handle:
         cells = tuple(
             CellRow(
                 candidate=row["candidate"],
@@ -85,7 +91,8 @@ def read(directory: Path) -> Report:
                 windows=int(row["windows"]),
                 seed=int(row["seed"]),
                 units=int(row["units"]),
-                rmse=float(row["rmse"]),
+                score=float(row["rmse"]),
+                brier=None,
                 seconds=float(row["seconds"]),
             )
             for row in csv.DictReader(handle)
@@ -97,12 +104,14 @@ def read(directory: Path) -> Report:
                 budget=row["budget"],
                 windows=int(row["windows"]),
                 repeats=int(row["repeats"]),
-                control_rmse=float(row["control_rmse"]),
+                control_score=float(row["control_rmse"]),
                 control_sd=float(row["control_sd"]),
-                candidate_rmse=float(row["candidate_rmse"]),
+                candidate_score=float(row["candidate_rmse"]),
                 candidate_sd=float(row["candidate_sd"]),
                 reduction=float(row["reduction"]),
-                relative_reduction=float(row["relative_reduction"]),
+                relative_reduction=(
+                    None if row["relative_reduction"] == "" else float(row["relative_reduction"])
+                ),
                 low=float(row["low"]),
                 high=float(row["high"]),
                 p_value=float(row["p_value"]),
@@ -310,7 +319,7 @@ def _line(
 ) -> tuple[list[int], list[float], list[float]] | None:
     """The mean and spread of a candidate's error at every budget it has cells at."""
     rows = {
-        budget: [c.rmse for c in report.cells if c.candidate == candidate and c.budget == budget]
+        budget: [c.score for c in report.cells if c.candidate == candidate and c.budget == budget]
         for budget in budgets
     }
     held = [budget for budget in budgets if rows[budget]]
