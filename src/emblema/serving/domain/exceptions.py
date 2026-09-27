@@ -91,3 +91,15 @@ class EmbeddingUnavailableError(ServingError):
 
 class NonFiniteAnswerError(ServingError):
     """A served model answered a window with a value that is not a finite number."""
+
+
+class InvalidInferenceBudgetError(ServingError, ValueError):
+    """A budget for running windows at once is not a positive count of windows and tokens."""
+
+
+class WindowBeyondBudgetError(ServingError):
+    """A window costs more to run than the budget lets any one batch cost."""
+
+
+class InferenceBusyError(ServingError):
+    """The service is running as much as its budget allows and could not admit more in time."""
