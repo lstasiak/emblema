@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Emblema"
+abstract: >-
+  A research platform for label-efficient representation learning on heterogeneous sensor
+  streams. One permutation-invariant, variable-channel transformer is pretrained without labels
+  on corpora that differ in channel count and sampling regime, then adapted to small labelled
+  tasks, and compared with tuned classical baselines under paired confidence intervals.
+authors:
+  - family-names: "Stasiak"
+    given-names: "Łukasz"
+repository-code: "https://github.com/lstasiak/emblema"
+license: Apache-2.0
+keywords:
+  - self-supervised learning
+  - foundation model
+  - time series
+  - irregular sampling
+  - label efficiency
+  - transfer learning
