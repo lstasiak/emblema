@@ -121,6 +121,10 @@ class InvalidPairedUnitRankingsError(EvaluationError, ValueError):
     """Two candidates' rankings do not pair: other units, other windows or other outcomes."""
 
 
+class InvalidKnownRankingError(EvaluationError, ValueError):
+    """A known ranking asks for one level of answers, or for levels under a spread of repeats."""
+
+
 class InvalidUnitErrorError(EvaluationError, ValueError):
     """A unit's error covers no window or is not a finite, non-negative sum."""
 
