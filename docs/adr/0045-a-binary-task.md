@@ -27,16 +27,14 @@ the label ceiling and strata cut by rank of the target were built in.
 - **No class weighting.** The area under the ROC curve does not depend on prevalence, and
   weighting the loss would move the probabilities off the outcomes that the Brier score reads.
 - **Budgets over outcomes are drawn in proportion.** `ClassStrata` takes one window at a time
-  from whichever outcome lies furthest below its share of the pool, in integers, members ranked
-  by the seed. Every prefix holds each outcome within one window of its share, so budgets stay
-  nested; a draw that holds one outcome only is refused. Equal shares per outcome were rejected:
-  a candidate taught at even odds answers the probabilities of a population that does not exist.
-- **Heads solved in closed form are calibrated.** The ridge probe and MiniRocket keep their
-  ridge on zero-one targets (its leave-one-out error is the leave-one-out Brier score) and add a
-  logistic calibration (Platt) fitted on the leave-one-out answers of the chosen penalty. The
-  calibration is monotone, so the ranking is the ridge's. Platt's smoothed targets keep the fit
-  finite when the scores separate the outcomes. Gradient-boosted trees grow under
-  `binary:logistic`; the stored trees answer the probability themselves.
+  from whichever outcome lies furthest below its share, members ranked by the seed. Every
+  prefix holds each outcome within one window of its share, so budgets stay nested; a draw of
+  one outcome is refused. Equal shares were rejected: a candidate taught at even odds answers
+  the probabilities of a population that does not exist.
+- **Heads fitted to their optimum take the same link.** Over outcomes the ridge probe and
+  MiniRocket fit an L2-penalised logistic regression on the same scaled columns and penalty
+  grid, the penalty chosen by the mean log-loss of five folds in the sample's proportion of
+  outcomes (`OutcomeFolds`). Gradient-boosted trees grow under `binary:logistic`.
 - **A cell keeps its answers.** Beside the squared error per unit, every new cell keeps each
   window's target and answer (`campaign_window_prediction`, handoff documents alike), because a
   ranking measure does not split into sums per unit. Cells recorded earlier keep none and are
@@ -49,8 +47,10 @@ the label ceiling and strata cut by rank of the target were built in.
 - The first binary task is `physionet2012-in-hospital-death`: stays of sets A and B, whose
   outcomes are read from the challenge's `Outcomes-a.txt` and `Outcomes-b.txt`; set C is the
   frozen side, named from the published listing.
-- Every kept form records its link or calibration; forms kept before this read as a quantity in
-  its scale.
+- Every kept form records its link; forms kept before this read as a quantity in its scale.
+- Over outcomes `frozen_ridge` is ridge-penalised logistic regression, fitted by Newton's
+  method, one fit per penalty and fold. Both heads refuse fewer than two windows of either
+  outcome; at one stay in seven, a budget below about fifteen.
 - Squared error per unit remains the stored error for every task; for an outcome it is the
   Brier score of the unit.
 
@@ -62,3 +62,10 @@ the label ceiling and strata cut by rank of the target were built in.
 - **Refusing the closed-form heads on outcomes.** Would drop the probe that reads the
   representation without an optimiser, and MiniRocket, whose reference form is a ridge
   classifier.
+- **Least squares with a Platt calibration fitted afterwards.** On leave-one-out answers it
+  reversed the ranking: under a strong penalty a left-out answer is near the mean of the other
+  labels, lower for a positive, so the slope came out negative (probe at 0.43 AUROC in a smoke
+  run; 14 of 20 synthetic draws of 50 windows). On stratified folds it came out flat when the
+  evidence was weak, costing 0.02–0.03 AUROC at 50 labels, a decision threshold's size. In
+  sample it was overconfident: over thousands of features its Brier score was worse than the
+  prevalence's.
