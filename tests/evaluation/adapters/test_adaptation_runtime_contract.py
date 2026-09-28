@@ -101,8 +101,16 @@ def test_a_run_with_nothing_to_score_is_refused(adapted: Adapted) -> None:
         adapted.runtime.adapt(plan(), adapted.task, SAMPLE, (), retain=False)
 
 
+# Two of each outcome, the fewest a head fitted to its optimum can choose a penalty over by folds.
 OUTCOMES_SAMPLE = replace(
-    SAMPLE, windows=(labelled("a", 0, 10.0, 1.0), labelled("b", 3, 10.0, 0.0))
+    SAMPLE,
+    windows=(
+        labelled("a", 0, 10.0, 1.0),
+        labelled("a", 1, 15.0, 1.0),
+        labelled("b", 2, 10.0, 0.0),
+        labelled("b", 3, 10.0, 0.0),
+    ),
+    budget=LabelBudget.of(4),
 )
 OUTCOMES_VALIDATION = (labelled("c", 2, 10.0, 1.0), labelled("c", 1, 15.0, 0.0))
 

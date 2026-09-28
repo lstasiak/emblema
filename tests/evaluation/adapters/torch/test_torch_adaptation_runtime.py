@@ -154,13 +154,16 @@ def test_a_kept_candidate_of_a_binary_task_answers_probabilities_through_its_gra
         SmallBackbones(vocabulary_size=len(CHANNELS)), blocks, device="cpu", store=store
     )
     defined = replace(task(), manifest=published.manifest, labels=OUTCOME, strata=OUTCOMES)
+    # Two of each outcome, the fewest the probe's folds can choose a penalty over.
     outcomes = replace(
         SAMPLE,
         windows=(
             labelled("a", 0, 10.0, 1.0),
             labelled("a", 1, 15.0, 1.0),
+            labelled("b", 2, 10.0, 0.0),
             labelled("b", 3, 10.0, 0.0),
         ),
+        budget=LabelBudget.of(4),
     )
 
     outcome = runtime.adapt(

@@ -11,6 +11,7 @@ from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate
+from emblema.evaluation.adapters.torch.logistic_solution import LogisticSolution
 from emblema.evaluation.adapters.torch.ridge_solution import RidgeSolution
 from emblema.evaluation.adapters.torch.scheduled_training import Forward, ScheduledTraining
 from emblema.evaluation.adapters.torch.target_link import TargetLink
@@ -19,8 +20,10 @@ from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
 )
+from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
@@ -36,8 +39,9 @@ class TorchAdaptationRuntime:
     """Teaches a candidate the task in this process, on whatever device it is given.
 
     A frozen probe under a pooling with no weights of its own encodes the sample once and
-    trains its head over the stored states; the probe whose head is solved in closed form
-    encodes once too and writes the solution into the head, taking no step at all; every other
+    trains its head over the stored states; the probe whose head is solved to its optimum —
+    ridge for a quantity, penalised logistic regression for an outcome — encodes once too and
+    writes the solution into the head, taking no step at all; every other
     run has the encoder in the loop, the frozen probe under a learnt pooling included, since
     its pooling reads the states per token.
     The seconds an outcome reports start once the block is at hand, so the run that happens to
@@ -96,9 +100,7 @@ class TorchAdaptationRuntime:
         ).to(self._device)
         if plan.ridge is not None:
             states = self._embedded(candidate, tuning, plan.schedule.batch_size)
-            RidgeSolution.fitted(states, targets, plan.ridge).linked(link, targets).applied_to(
-                candidate.head
-            )
+            self._solved(link, states, targets, plan.ridge).applied_to(candidate.head)
             losses: list[float] = []
         else:
             forward = (
@@ -193,6 +195,22 @@ class TorchAdaptationRuntime:
                 for start in range(0, len(windows), batch_size)
             ]
         return torch.cat(states)
+
+    @staticmethod
+    def _solved(
+        link: TargetLink, states: Tensor, taught: Tensor, penalties: RidgePenalties
+    ) -> RidgeSolution | LogisticSolution:
+        """The head solved to the optimum of the loss ``link`` teaches a network by.
+
+        Raises:
+            UnsolvableHeadError: If the head cannot be solved over these windows.
+            UnfoldableOutcomesError: If the outcomes leave no folds to choose a penalty on.
+        """
+        match link.kind:
+            case TargetKind.CONTINUOUS:
+                return RidgeSolution.fitted(states, taught, penalties)
+            case TargetKind.BINARY:
+                return LogisticSolution.fitted(states, taught, penalties)
 
     def _answers(
         self, candidate: AdaptedBackbone, windows: Sequence[TokenWindow], batch_size: int

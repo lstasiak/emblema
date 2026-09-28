@@ -122,15 +122,15 @@ def _scale(fitted: Fitted) -> object:
     return fitted.target_scale
 
 
-def _scale_and_calibration(fitted: Fitted) -> object:
+def _scale_and_kind(fitted: Fitted) -> object:
     assert isinstance(fitted, FittedConvolutions)
-    return (fitted.target_scale, fitted.calibration)
+    return (fitted.target_scale, fitted.kind)
 
 
 KEPT = (
     Kept(FittedCandidate, fitted_candidate, CandidateKind.NEURAL, _link),
     Kept(FittedBaseline, fitted_baseline, CandidateKind.CLASSICAL, _scale),
-    Kept(FittedConvolutions, fitted_convolutions, CandidateKind.CLASSICAL, _scale_and_calibration),
+    Kept(FittedConvolutions, fitted_convolutions, CandidateKind.CLASSICAL, _scale_and_kind),
     Kept(FittedPatchModel, fitted_patch_model, CandidateKind.NEURAL, _link),
 )
 CODECS = (*(kept.codec for kept in KEPT), InferenceGraph)

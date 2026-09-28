@@ -1,8 +1,12 @@
+import io
+
 import numpy as np
 import pytest
 
+from emblema.evaluation.adapters.grid.regular_grid import RegularGrid
 from emblema.evaluation.adapters.minirocket.fitted_convolutions import FittedConvolutions
 from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
+from emblema.evaluation.domain.heads.outcome_folds import OutcomeFolds
 from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.shared.kernel.tokens import TokenWindow
 from tests.evaluation.adapters.features.support import timed, window
@@ -119,19 +123,21 @@ def fit_outcomes() -> FittedConvolutions:
     )
 
 
-def test_a_binary_task_is_answered_with_probabilities_that_rank_as_the_linear_map_does() -> None:
+def features_of(fitted: FittedConvolutions) -> np.ndarray:
+    laid = RegularGrid(fitted.grid_steps, fitted.channels).of(WINDOWS)[:, fitted.rows]
+    return np.asarray(fitted.transform.of(laid) / fitted.feature_scale)
+
+
+def test_a_binary_task_is_answered_with_the_probabilities_of_its_log_odds() -> None:
     fitted = fit_outcomes()
 
     answered = fitted.predict(WINDOWS, threads=1)
-    uncalibrated = FittedConvolutions(**{**vars(fitted), "calibration": None}).predict(
-        WINDOWS, threads=1
-    )
 
-    assert fitted.calibration is not None
+    log_odds = features_of(fitted) @ fitted.weights + fitted.intercept
+    assert fitted.kind is TargetKind.BINARY
     assert np.all((answered > 0.0) & (answered < 1.0))
-    assert np.array_equal(
-        np.argsort(answered, kind="stable"), np.argsort(uncalibrated, kind="stable")
-    )
+    assert np.allclose(answered, 1.0 / (1.0 + np.exp(-log_odds)))
+    assert answered[OUTCOMES == 1.0].mean() > answered[OUTCOMES == 0.0].mean()
 
 
 def test_what_was_kept_of_a_binary_task_answers_exactly_as_what_was_fitted() -> None:
@@ -139,28 +145,65 @@ def test_what_was_kept_of_a_binary_task_answers_exactly_as_what_was_fitted() -> 
 
     read = FittedConvolutions.read(fitted.to_bytes())
 
-    assert read.calibration == fitted.calibration
+    assert read.kind is TargetKind.BINARY
     assert np.array_equal(read.predict(WINDOWS, threads=1), fitted.predict(WINDOWS, threads=1))
 
 
-def test_a_named_scoring_chooses_the_penalty_the_default_does_and_keeps_the_left_out_answers() -> (
-    None
-):
-    # The binary fit names a scoring only to keep the leave-one-out answers; it must not move
-    # the penalty, and what it keeps must be the answers, not their squared errors.
-    from sklearn.linear_model import RidgeCV
+def test_a_candidate_kept_before_outcomes_were_answered_reads_as_a_quantity() -> None:
+    fitted = fit()
+    with np.load(io.BytesIO(fitted.to_bytes()), allow_pickle=False) as stored:
+        arrays = {name: stored[name] for name in stored.files if name != "kind"}
+    buffer = io.BytesIO()
+    np.savez(buffer, allow_pickle=False, **arrays)
 
-    rows = RNG.normal(size=(30, 5))
-    targets = (rows[:, 0] + 0.3 * RNG.normal(size=30) > 0.0).astype(np.float64)
-    penalties = (0.1, 1.0, 10.0)
+    read = FittedConvolutions.read(buffer.getvalue())
 
-    default = RidgeCV(alphas=penalties).fit(rows, targets)
-    named = RidgeCV(alphas=penalties, scoring="neg_mean_squared_error", store_cv_results=True).fit(
-        rows, targets
+    assert read.kind is TargetKind.CONTINUOUS
+    assert np.array_equal(read.predict(WINDOWS, threads=1), fitted.predict(WINDOWS, threads=1))
+
+
+def test_the_penalty_of_a_binary_task_gives_the_folds_the_smallest_log_loss() -> None:
+    from sklearn.linear_model import LogisticRegression
+
+    fitted = fit_outcomes()
+    features = features_of(fitted)
+    folds = OutcomeFolds.of(OUTCOMES.tolist())
+    losses = []
+    for penalty in convolutions().ridge.penalties:
+        per_fold = []
+        for fold in range(folds.count):
+            kept, held = list(folds.kept(fold)), list(folds.held_out(fold))
+            model = LogisticRegression(
+                C=1.0 / penalty, solver="newton-cholesky", tol=1e-12, max_iter=1000
+            ).fit(features[kept], OUTCOMES[kept])
+            probability = model.predict_proba(features[held])[:, 1]
+            truth = OUTCOMES[held]
+            per_fold.append(
+                -np.mean(truth * np.log(probability) + (1.0 - truth) * np.log(1.0 - probability))
+            )
+        losses.append(np.mean(per_fold))
+
+    assert fitted.penalty == convolutions().ridge.penalties[int(np.argmin(losses))]
+
+
+def test_outcomes_the_waves_barely_tell_apart_are_still_ranked_by_the_map() -> None:
+    # Outcomes that follow no wave: a least-squares map calibrated on answers left out one at a
+    # time reversed its ranking here; the likelihood's own map answers every window apart, and at
+    # its optimum its answers lean towards the outcomes it was fitted on, never against them.
+    outcomes = np.zeros(len(WINDOWS))
+    outcomes[[0, 2, 11, 13]] = 1.0
+    fitted = FittedConvolutions.fitted(
+        recipe(method=convolutions()),
+        convolutions(),
+        2,
+        16,
+        WINDOWS,
+        outcomes,
+        1.0,
+        TargetKind.BINARY,
     )
-    chosen = penalties.index(float(named.alpha_))
-    left_out = named.cv_results_[:, chosen]
-    first = RidgeCV(alphas=[penalties[chosen]]).fit(rows[1:], targets[1:])
 
-    assert named.alpha_ == default.alpha_
-    assert left_out[0] == pytest.approx(float(first.predict(rows[:1])[0]))
+    answered = fitted.predict(WINDOWS, threads=1)
+
+    assert np.unique(answered).size == len(np.unique(features_of(fitted), axis=0))
+    assert answered[outcomes == 1.0].mean() > answered[outcomes == 0.0].mean()

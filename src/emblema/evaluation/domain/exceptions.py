@@ -81,12 +81,12 @@ class InvalidRidgeSpecError(EvaluationError, ValueError):
     """A ridge fit names no penalty, a penalty that is not positive, or no thread."""
 
 
-class InvalidLogisticCalibrationError(EvaluationError, ValueError):
-    """A calibration's slope or intercept is not finite."""
+class InvalidOutcomeFoldsError(EvaluationError, ValueError):
+    """Folds are not numbered from zero, or one of them holds no window."""
 
 
-class UncalibratableScoresError(EvaluationError):
-    """Scores cannot be calibrated: mismatched, one outcome only, or the fit did not converge."""
+class UnfoldableOutcomesError(EvaluationError):
+    """Outcomes cannot be split into folds whose heads each see both of them."""
 
 
 class InvalidPatchModelSpecError(EvaluationError, ValueError):

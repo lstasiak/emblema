@@ -1,20 +1,22 @@
 import io
 import json
+import warnings
 import zipfile
 from dataclasses import dataclass
 from typing import Any, ClassVar, Self
 
 import numpy as np
 from numpy.typing import NDArray
-from sklearn.linear_model import RidgeCV
+from sklearn.exceptions import ConvergenceWarning
+from sklearn.linear_model import LogisticRegressionCV, RidgeCV
 from threadpoolctl import threadpool_limits
 
 from emblema.evaluation.adapters.grid.regular_grid import RegularGrid
 from emblema.evaluation.adapters.minirocket.minirocket_transform import MiniRocketTransform
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
-from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
-from emblema.evaluation.domain.heads.logistic_calibration import LogisticCalibration
+from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError, UnsolvableHeadError
+from emblema.evaluation.domain.heads.outcome_folds import OutcomeFolds
 from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.shared.kernel.tokens import TokenWindow
 
@@ -37,9 +39,10 @@ class FittedConvolutions:
     one of them — and they are kept with the candidate, so it answers every window over the rows
     it was fitted on.
 
-    Over outcomes the linear map ranks them as the reference classifier's does, and a logistic
-    calibration fitted on the leave-one-out answers of the chosen penalty turns its score into
-    a probability; the calibration's presence is what marks a candidate of a binary task.
+    Over outcomes the linear map is a logistic regression over the same scaled features, its L2
+    penalty chosen among the same strengths by the log-loss of ``OutcomeFolds``: its answer is
+    the log-odds, read as a probability with nothing fitted afterwards that could reorder or
+    flatten it. The kind of target is kept with the map, since it says how an answer is read.
 
     Stored as named arrays in NumPy's own archive format, read back without unpickling anything,
     so the document outlives the release of every library that fitted it. A kept candidate's
@@ -56,8 +59,7 @@ class FittedConvolutions:
         intercept: What the map adds.
         penalty: The penalty the fit chose.
         target_scale: What the targets were divided by, so an answer is read in the task's unit.
-        calibration: How the map's score becomes the probability of the positive outcome, for a
-            candidate of a binary task; ``None`` for one that answers a quantity.
+        kind: What the map answers: a quantity in units of the scale, or an outcome's log-odds.
     """
 
     FORMAT: ClassVar[str] = "minirocket-npz"
@@ -72,7 +74,11 @@ class FittedConvolutions:
     intercept: float
     penalty: float
     target_scale: float
-    calibration: LogisticCalibration | None
+    kind: TargetKind
+
+    # Enough for the quasi-Newton solver to reach its tolerance at the weakest penalty over ten
+    # thousand features; a fit that needs more is refused rather than read half-way.
+    _ITERATIONS: ClassVar[int] = 5000
 
     @classmethod
     def fitted(
@@ -89,11 +95,12 @@ class FittedConvolutions:
         """Fit ``method`` on ``windows`` answering ``targets``, each already divided by the scale.
 
         Every draw is seeded by the recipe and the linear algebra runs on the threads it names.
-        The penalty is chosen by leave-one-out squared error for either kind of target; over
-        outcomes the leave-one-out answers are kept to calibrate the chosen map on.
+        A quantity's penalty is chosen by leave-one-out squared error, an outcome's by the
+        log-loss of the folds.
 
         Raises:
-            UncalibratableScoresError: If the outcomes cannot be calibrated.
+            UnfoldableOutcomesError: If the outcomes leave no folds to choose a penalty on.
+            UnsolvableHeadError: If the logistic regression does not converge.
         """
         steps = grid_steps
         with threadpool_limits(limits=method.ridge.threads):
@@ -106,21 +113,14 @@ class FittedConvolutions:
             )
             features = transform.of(laid)
             scale = cls._scale_of(features)
-            calibration = None
             match kind:
                 case TargetKind.CONTINUOUS:
                     ridge = RidgeCV(alphas=method.ridge.penalties).fit(features / scale, targets)
+                    weights, intercept = np.asarray(ridge.coef_), float(ridge.intercept_)
+                    penalty = float(ridge.alpha_)
                 case TargetKind.BINARY:
-                    # Named rather than left to the default, because only a named scoring keeps
-                    # the leave-one-out answers; it chooses the same penalty the default does.
-                    ridge = RidgeCV(
-                        alphas=method.ridge.penalties,
-                        scoring="neg_mean_squared_error",
-                        store_cv_results=True,
-                    ).fit(features / scale, targets)
-                    chosen = list(method.ridge.penalties).index(float(ridge.alpha_))
-                    calibration = LogisticCalibration.fitted(
-                        ridge.cv_results_[:, chosen].tolist(), targets.tolist()
+                    weights, intercept, penalty = cls._logistic(
+                        features / scale, targets, method.ridge.penalties
                     )
         return cls(
             parameters=recipe.parameters(),
@@ -129,11 +129,11 @@ class FittedConvolutions:
             rows=rows,
             transform=transform,
             feature_scale=scale,
-            weights=np.asarray(ridge.coef_, dtype=np.float64),
-            intercept=float(ridge.intercept_),
-            penalty=float(ridge.alpha_),
+            weights=np.asarray(weights, dtype=np.float64),
+            intercept=intercept,
+            penalty=penalty,
             target_scale=target_scale,
-            calibration=calibration,
+            kind=kind,
         )
 
     def predict(self, windows: list[TokenWindow], *, threads: int) -> NDArray[np.float64]:
@@ -142,11 +142,53 @@ class FittedConvolutions:
             laid = RegularGrid(self.grid_steps, self.channels).of(windows)[:, self.rows]
             features = self.transform.of(laid)
             answers = (features / self.feature_scale) @ self.weights + self.intercept
-        if self.calibration is None:
-            return np.asarray(answers * self.target_scale, dtype=np.float64)
-        log_odds = self.calibration.slope * answers + self.calibration.intercept
-        # The logistic function written through a log-sum, so no log-odds overflows it.
-        return np.asarray(np.exp(-np.logaddexp(0.0, -log_odds)), dtype=np.float64)
+        match self.kind:
+            case TargetKind.CONTINUOUS:
+                return np.asarray(answers * self.target_scale, dtype=np.float64)
+            case TargetKind.BINARY:
+                # The logistic function written through a log-sum, so no log-odds overflows it.
+                return np.asarray(np.exp(-np.logaddexp(0.0, -answers)), dtype=np.float64)
+
+    @classmethod
+    def _logistic(
+        cls,
+        scaled: NDArray[np.float64],
+        outcomes: NDArray[np.float64],
+        penalties: tuple[float, ...],
+    ) -> tuple[NDArray[np.float64], float, float]:
+        """The weights, intercept and penalty of the logistic regression chosen over the folds.
+
+        The library's inverse strength is the reciprocal of the penalty, given in descending
+        order so that the first best, which it keeps, is the smaller penalty on a tie.
+
+        Raises:
+            UnfoldableOutcomesError: If the outcomes leave no folds to choose a penalty on.
+            UnsolvableHeadError: If a fit does not converge.
+        """
+        folds = OutcomeFolds.of(outcomes.tolist())
+        splits = [
+            (list(folds.kept(fold)), list(folds.held_out(fold))) for fold in range(folds.count)
+        ]
+        # The only report that covers the fit on every window as well as those on the folds.
+        with warnings.catch_warnings(record=True) as raised:
+            warnings.simplefilter("always", ConvergenceWarning)
+            fit = LogisticRegressionCV(
+                Cs=[1.0 / penalty for penalty in penalties],
+                l1_ratios=(0.0,),
+                cv=splits,
+                scoring="neg_log_loss",
+                max_iter=cls._ITERATIONS,
+                use_legacy_attributes=False,
+            ).fit(scaled, outcomes)
+        if any(issubclass(warning.category, ConvergenceWarning) for warning in raised):
+            raise UnsolvableHeadError(
+                f"the logistic regression did not converge in {cls._ITERATIONS} iterations"
+            )
+        return (
+            np.asarray(fit.coef_[0], dtype=np.float64),
+            float(fit.intercept_[0]),
+            1.0 / float(fit.C_),
+        )
 
     @staticmethod
     def _scale_of(features: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -170,9 +212,8 @@ class FittedConvolutions:
             "feature_scale": self.feature_scale,
             "weights": self.weights,
             "scalars": np.array([self.intercept, self.penalty, self.target_scale]),
+            "kind": np.array(self.kind.value),
         }
-        if self.calibration is not None:
-            arrays["calibration"] = np.array([self.calibration.slope, self.calibration.intercept])
         buffer = io.BytesIO()
         np.savez(buffer, allow_pickle=False, **arrays)
         return buffer.getvalue()
@@ -188,14 +229,12 @@ class FittedConvolutions:
             with np.load(io.BytesIO(content), allow_pickle=False) as stored:
                 steps, channels, length = (int(value) for value in stored["grid"])
                 intercept, penalty, target_scale = (float(value) for value in stored["scalars"])
-                # A candidate kept before outcomes were answered holds no calibration.
-                calibration = (
-                    None
-                    if "calibration" not in stored.files
-                    else LogisticCalibration(
-                        slope=float(stored["calibration"][0]),
-                        intercept=float(stored["calibration"][1]),
-                    )
+                # A candidate kept before outcomes were answered names no kind: it answers a
+                # quantity.
+                kind = (
+                    TargetKind(str(stored["kind"]))
+                    if "kind" in stored.files
+                    else TargetKind.CONTINUOUS
                 )
                 return cls(
                     parameters=json.loads(str(stored["parameters"])),
@@ -215,7 +254,7 @@ class FittedConvolutions:
                     intercept=intercept,
                     penalty=penalty,
                     target_scale=target_scale,
-                    calibration=calibration,
+                    kind=kind,
                 )
         except UNREADABLE_BYTES as error:
             raise UnreadableFittedCandidateError(

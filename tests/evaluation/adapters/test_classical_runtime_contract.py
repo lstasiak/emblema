@@ -137,12 +137,17 @@ def test_a_binary_task_is_answered_with_probabilities(
     adapted: Adapted, method: ClassicalRecipe
 ) -> None:
     binary = replace(adapted.task, labels=OUTCOME, strata=OUTCOMES)
+    # Two of each outcome, the fewest a map fitted to its optimum can choose a penalty over by
+    # folds.
     outcomes = replace(
         SAMPLE,
-        windows=tuple(
-            replace(labelled_window, target=target)
-            for labelled_window, target in zip(SAMPLE.windows, (1.0, 1.0, 0.0), strict=True)
+        windows=(
+            labelled("a", 0, 10.0, 1.0),
+            labelled("a", 1, 15.0, 1.0),
+            labelled("b", 2, 10.0, 0.0),
+            labelled("b", 3, 10.0, 0.0),
         ),
+        budget=LabelBudget.of(4),
     )
 
     outcome = adapted.runtime.fit(
