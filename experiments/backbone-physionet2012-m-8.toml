@@ -1,18 +1,19 @@
 # The intensive-care backbone at the published tier: the tier's own shape over the stays of
-# set A alone, one rung of the ladder the doubling rule reads (8, 16, 32 and 64 epochs), the
-# first doubling that lowers the best epoch's held-out loss by less than five per cent naming
-# the backbone.
+# set A alone. This file is one rung of a ladder of 8, 16, 32 and 64 epochs; the backbone is the
+# rung at the end of the first doubling that lowers the best epoch's held-out loss by less than
+# five per cent.
 #
-# Eight epochs are the run's exposure inside the mixture of five corpora: the mixture passes over
-# set A eight times, 125 optimiser steps each, so this rung is the same stays seen as often, alone.
+# Eight epochs give the stays the exposure they have inside the mixture of five corpora: that run
+# passes over set A eight times, 125 optimiser steps each, so this rung sees the same stays as
+# often, alone.
 #
-# Everything but the epochs and the checkpoints is the mixed backbone's (backbone-mixed-m.toml
-# with the intensive-care corpus added), so that the one backbone differs from the other in the
-# corpora it read and in nothing else it was taught under: micro-batches of sixteen, two to a
-# step of thirty-two, the loss bounded at one standard deviation, the same masks, and a schedule
-# of the same shape. The shape is stated in epochs, so it is not the same in steps: a quarter
-# of an epoch of warm-up is 31 steps here and over a thousand in the mixture, and the decay
-# spans this run rather than the mixture's.
+# Everything but the epochs and the checkpoints is the five-corpus backbone's
+# (backbone-mixed5-m.toml), so that the two backbones differ in the corpora they read and in
+# nothing else they were taught under: micro-batches of sixteen, two to a step of thirty-two, the
+# loss bounded at one standard deviation, the same masks, and a schedule of the same shape. The
+# shape is stated in epochs, so it is not the same in steps: a quarter of an epoch of warm-up is
+# 31 steps here and over a thousand in the mixture, and the decay spans this run rather than the
+# mixture's.
 name = "backbone-physionet2012-m-8"
 tier = "M"
 corpora = ["physionet2012"]
