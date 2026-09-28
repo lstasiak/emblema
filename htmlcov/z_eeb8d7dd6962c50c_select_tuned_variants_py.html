@@ -67,7 +67,7 @@
             <a id="nextFileLink" class="nav" href="z_eeb8d7dd6962c50c_view_campaign_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-09-27 17:17 +0000
+            created at 2026-09-28 16:46 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -121,15 +121,15 @@
     <p class="pln"><span class="n"><a id="t37" href="#t37">37</a></span><span class="t"><span class="str">            SelectionNotReadableError: If it is not a finished selection, or holds no choice</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t38" href="#t38">38</a></span><span class="t"><span class="str">                for the candidate.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t39" href="#t39">39</a></span><span class="t"><span class="str">        &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t40" href="#t40">40</a></span><span class="t">        <span class="nam">selection</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_campaigns</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="nam">command</span><span class="op">.</span><span class="nam">campaign</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t40" href="#t40">40</a></span><span class="t">        <span class="nam">selection</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_campaigns</span><span class="op">.</span><span class="nam">read</span><span class="op">(</span><span class="nam">command</span><span class="op">.</span><span class="nam">campaign</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t41" href="#t41">41</a></span><span class="t">        <span class="key">return</span> <span class="nam">tuple</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t42" href="#t42">42</a></span><span class="t">            <span class="nam">TunedChoice</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t43" href="#t43">43</a></span><span class="t">                <span class="nam">candidate</span><span class="op">=</span><span class="nam">command</span><span class="op">.</span><span class="nam">candidate</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t44" href="#t44">44</a></span><span class="t">                <span class="nam">budget</span><span class="op">=</span><span class="nam">budget</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t45" href="#t45">45</a></span><span class="t">                <span class="nam">variant</span><span class="op">=</span><span class="nam">selection</span><span class="op">.</span><span class="nam">selected</span><span class="op">(</span><span class="nam">command</span><span class="op">.</span><span class="nam">candidate</span><span class="op">,</span> <span class="nam">budget</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t46" href="#t46">46</a></span><span class="t">                <span class="nam">selected_by</span><span class="op">=</span><span class="nam">selection</span><span class="op">.</span><span class="nam">campaign_id</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t46" href="#t46">46</a></span><span class="t">                <span class="nam">selected_by</span><span class="op">=</span><span class="nam">selection</span><span class="op">.</span><span class="nam">campaign</span><span class="op">.</span><span class="nam">campaign_id</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t47" href="#t47">47</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t48" href="#t48">48</a></span><span class="t">            <span class="key">for</span> <span class="nam">budget</span> <span class="key">in</span> <span class="nam">selection</span><span class="op">.</span><span class="nam">design</span><span class="op">.</span><span class="nam">budgets</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t48" href="#t48">48</a></span><span class="t">            <span class="key">for</span> <span class="nam">budget</span> <span class="key">in</span> <span class="nam">selection</span><span class="op">.</span><span class="nam">campaign</span><span class="op">.</span><span class="nam">design</span><span class="op">.</span><span class="nam">budgets</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t49" href="#t49">49</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
@@ -140,7 +140,7 @@
             <a class="nav" href="z_eeb8d7dd6962c50c_view_campaign_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-09-27 17:17 +0000
+            created at 2026-09-28 16:46 +0000
         </p>
     </div>
 </footer>

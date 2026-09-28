@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/emblema/evaluation/adapters/persistence/campaign_unit_error_record.py: 100%</title>
+    <title>Coverage for src/emblema/evaluation/adapters/persistence/campaign_unit_error_record.py: 96%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_15cffcd0.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src<span class="sep">/</span>emblema<span class="sep">/</span>evaluation<span class="sep">/</span>adapters<span class="sep">/</span>persistence<span class="sep">/</span>campaign_unit_error_record.py</b>:
-            <span class="pc_cov">100%</span>
+            <span class="pc_cov">96%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,19 +55,19 @@
             </div>
         </aside>
         <h2>
-            <span class="text">24 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">24<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">0<span class="text"> missing</span></button>
+            <span class="text">27 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">26<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">1<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
             <button type="button" class="par run show_par button_toggle_par" value="par" data-shortcut="p" title="Toggle lines partially run">0<span class="text"> partial</span></button>
         </h2>
         <p class="text">
             <a id="prevFileLink" class="nav" href="z_f7857339d47422b3_campaign_listing_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a id="nextFileLink" class="nav" href="z_f7857339d47422b3_downstream_task_record_py.html">&#xbb; next</a>
+            <a id="nextFileLink" class="nav" href="z_f7857339d47422b3_campaign_window_prediction_record_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-09-27 17:17 +0000
+            created at 2026-09-28 16:46 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -139,19 +139,22 @@
     <p class="run run2"><span class="n"><a id="t55" href="#t55">55</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t56" href="#t56">56</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t57" href="#t57">57</a></span><span class="t">    <span class="key">def</span> <span class="nam">to_error</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">UnitError</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t58" href="#t58">58</a></span><span class="t">        <span class="key">return</span> <span class="nam">UnitError</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t59" href="#t59">59</a></span><span class="t">            <span class="nam">unit</span><span class="op">=</span><span class="nam">UnitKey</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">unit</span><span class="op">)</span><span class="op">,</span> <span class="nam">squared_error</span><span class="op">=</span><span class="nam">self</span><span class="op">.</span><span class="nam">squared_error</span><span class="op">,</span> <span class="nam">windows</span><span class="op">=</span><span class="nam">self</span><span class="op">.</span><span class="nam">windows</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t60" href="#t60">60</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t58" href="#t58">58</a></span><span class="t">        <span class="key">return</span> <span class="nam">self</span><span class="op">.</span><span class="nam">error_of</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">unit</span><span class="op">,</span> <span class="nam">self</span><span class="op">.</span><span class="nam">squared_error</span><span class="op">,</span> <span class="nam">self</span><span class="op">.</span><span class="nam">windows</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t59" href="#t59">59</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t60" href="#t60">60</a></span><span class="t">    <span class="op">@</span><span class="nam">staticmethod</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t61" href="#t61">61</a></span><span class="t">    <span class="key">def</span> <span class="nam">error_of</span><span class="op">(</span><span class="nam">unit</span><span class="op">:</span> <span class="nam">str</span><span class="op">,</span> <span class="nam">squared_error</span><span class="op">:</span> <span class="nam">float</span><span class="op">,</span> <span class="nam">windows</span><span class="op">:</span> <span class="nam">int</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">UnitError</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t62" href="#t62">62</a></span><span class="t">        <span class="str">&quot;&quot;&quot;The error a row&#x27;s columns hold, for a row read without the mapped instance.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t63" href="#t63">63</a></span><span class="t">        <span class="key">return</span> <span class="nam">UnitError</span><span class="op">(</span><span class="nam">unit</span><span class="op">=</span><span class="nam">UnitKey</span><span class="op">(</span><span class="nam">unit</span><span class="op">)</span><span class="op">,</span> <span class="nam">squared_error</span><span class="op">=</span><span class="nam">squared_error</span><span class="op">,</span> <span class="nam">windows</span><span class="op">=</span><span class="nam">windows</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
         <p>
             <a class="nav" href="z_f7857339d47422b3_campaign_listing_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a class="nav" href="z_f7857339d47422b3_downstream_task_record_py.html">&#xbb; next</a>
+            <a class="nav" href="z_f7857339d47422b3_campaign_window_prediction_record_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-09-27 17:17 +0000
+            created at 2026-09-28 16:46 +0000
         </p>
     </div>
 </footer>
