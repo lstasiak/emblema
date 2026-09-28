@@ -1,5 +1,6 @@
 """Cells of two campaigns set side by side, paired as their purpose says; nothing is trained."""
 
+import csv
 from dataclasses import replace
 from pathlib import Path
 from uuid import UUID
@@ -17,19 +18,27 @@ from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUni
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from scripts.campaign_pairs_report import (
+    CELL_COLUMNS,
     CELLS,
     COMPARISONS,
+    PREDICTIONS,
+    Answers,
+    Comparison,
     Side,
     export,
+    export_predictions,
     main,
     pair,
     read_cells,
+    read_predictions,
     render,
     write_cells,
+    write_predictions,
 )
 from tests.evaluation.support import (
     CONTENDER,
     CONTROL,
+    answered,
     candidate,
     design,
     reading,
@@ -117,6 +126,7 @@ def test_a_selection_pairs_every_repeat_and_unit_on_its_own() -> None:
         side(DOUBLED, CONTROL),
         bootstrap=BOOTSTRAP,
         floor_share=0.02,
+        floor_area=0.01,
     )
     assert read.pairing == "repeat-unit"
     assert (read.repeats, read.units) == (3, 9)
@@ -138,6 +148,7 @@ def test_a_comparison_pools_its_repeats_per_unit_before_pairing() -> None:
         side(DOUBLED, CONTENDER),
         bootstrap=BOOTSTRAP,
         floor_share=0.02,
+        floor_area=0.01,
     )
     assert read.pairing == "unit-pooled"
     assert (read.repeats, read.units) == (3, 3)
@@ -152,6 +163,7 @@ def test_a_pair_within_one_campaign_reads_a_contender_against_its_control() -> N
         side(FLOOR, CONTENDER),
         bootstrap=BOOTSTRAP,
         floor_share=0.02,
+        floor_area=0.01,
     )
     assert read.difference.relative_reduction == pytest.approx(0.5)
 
@@ -170,6 +182,7 @@ def test_sides_of_different_purposes_or_seeds_or_none_at_all_are_refused() -> No
             side(DOUBLED, CONTROL),
             bootstrap=BOOTSTRAP,
             floor_share=0.02,
+            floor_area=0.01,
         )
     with pytest.raises(ValueError, match="no cell of"):
         pair(
@@ -178,6 +191,7 @@ def test_sides_of_different_purposes_or_seeds_or_none_at_all_are_refused() -> No
             Side(str(FLOOR), "lora", "200"),
             bootstrap=BOOTSTRAP,
             floor_share=0.02,
+            floor_area=0.01,
         )
     short = [
         row
@@ -191,6 +205,7 @@ def test_sides_of_different_purposes_or_seeds_or_none_at_all_are_refused() -> No
             side(FLOOR, CONTENDER),
             bootstrap=BOOTSTRAP,
             floor_share=0.02,
+            floor_area=0.01,
         )
 
 
@@ -236,6 +251,7 @@ def test_render_names_the_pairing_and_the_floor() -> None:
         side(FLOOR, CONTENDER),
         bootstrap=BOOTSTRAP,
         floor_share=0.02,
+        floor_area=0.01,
     )
     rendered = render([read])
     assert "unit-pooled, 3 repeats, 3 pairs" in rendered
@@ -247,8 +263,200 @@ def test_main_refuses_a_command_line_that_asks_for_nothing(tmp_path: Path) -> No
         main(["--out", str(tmp_path)])
 
 
-def test_a_campaign_read_by_area_is_refused_by_name() -> None:
-    by_area = reading(design=replace(design(), measure=ErrorMeasure.AUROC_SHORTFALL))
+BY_AREA = CampaignId(UUID(int=60))
+BY_AREA_TOO = CampaignId(UUID(int=80))
+# Stays s0 and s2 died. The control ranks one dead stay below two survivors, an area of 6/8.
+CONTROL_ANSWERS = (0.6, 0.4, 0.3, 0.5, 0.2, 0.1)
+# Every dead stay above every survivor: an area of one.
+PERFECT_ANSWERS = (0.9, 0.2, 0.8, 0.3, 0.1, 0.05)
 
-    with pytest.raises(SystemExit, match="auroc_shortfall"):
-        export([by_area])
+
+def by_area(
+    campaign_id: CampaignId,
+    contender: tuple[float, ...],
+    purpose: RunPurpose = RunPurpose.TUNING,
+) -> CampaignReading:
+    """A campaign read by area whose grid ran whole on the same six stays under every seed."""
+    grid = reading(
+        campaign_id=campaign_id,
+        purpose=purpose,
+        design=replace(
+            design(
+                budgets=(BUDGET,),
+                seeds=(1, 2, 3),
+                inner_holdout=InnerHoldout(one_in=5) if purpose is RunPurpose.SELECTION else None,
+            ),
+            measure=ErrorMeasure.AUROC_SHORTFALL,
+        ),
+    )
+    for cell in grid.campaign.design.cells():
+        answers = CONTROL_ANSWERS if cell.candidate == CONTROL else contender
+        # Each seed moves every answer alike, which leaves each repeat's ranking as it is.
+        grid = grid.record(
+            answered(
+                cell.candidate, cell.budget, cell.seed, [a * (1 + cell.seed / 100) for a in answers]
+            )
+        )
+    return grid
+
+
+def paired_by_area(rows_of: list[CampaignReading], control: Side, contender: Side) -> Comparison:
+    return pair(
+        export(rows_of),
+        control,
+        contender,
+        bootstrap=BOOTSTRAP,
+        floor_share=0.02,
+        floor_area=0.01,
+        answers=Answers(export_predictions(rows_of)),
+    )
+
+
+def test_a_comparison_by_area_pools_the_areas_of_its_repeats_and_states_its_floor_in_area() -> None:
+    read = paired_by_area(
+        [by_area(BY_AREA, PERFECT_ANSWERS)], side(BY_AREA, CONTROL), side(BY_AREA, CONTENDER)
+    )
+
+    assert read.measure is ErrorMeasure.AUROC_SHORTFALL
+    assert read.pairing == "area-pooled"
+    assert (read.repeats, read.units) == (3, 6)
+    assert read.control_error.pooled == pytest.approx(0.25)
+    assert read.control_error.spread == 0.0
+    assert read.candidate_error.pooled == 0.0
+    assert read.difference.reduction == pytest.approx(0.25)
+    assert read.difference.relative_reduction == pytest.approx(1.0)
+    assert read.floor.value == pytest.approx(0.01)
+
+
+def test_two_campaigns_read_by_area_pair_on_the_stays_both_answered() -> None:
+    first, second = by_area(BY_AREA, CONTROL_ANSWERS), by_area(BY_AREA_TOO, PERFECT_ANSWERS)
+
+    read = paired_by_area([first, second], side(BY_AREA, CONTENDER), side(BY_AREA_TOO, CONTENDER))
+
+    assert read.difference.reduction == pytest.approx(0.25)
+    assert read.row()[-1] == "auroc_shortfall"
+
+
+def test_the_answers_of_a_campaign_read_by_area_are_written_and_read_back(tmp_path: Path) -> None:
+    answers = export_predictions([by_area(BY_AREA, PERFECT_ANSWERS), comparison(FLOOR, 0.0)])
+
+    assert len(answers) == 2 * 3 * 6
+    assert {row.campaign for row in answers} == {str(BY_AREA)}
+    write_predictions(tmp_path / PREDICTIONS, answers)
+    assert read_predictions(tmp_path / PREDICTIONS) == answers
+    assert read_predictions(tmp_path / "absent.csv") == []
+
+
+def test_a_file_of_cells_written_before_the_measure_column_reads_as_errors(tmp_path: Path) -> None:
+    rows = export([comparison(FLOOR, shift=0.0)])
+    write_cells(tmp_path / CELLS, rows)
+    with (tmp_path / CELLS).open(newline="") as handle:
+        written = list(csv.DictReader(handle))
+    older = [column for column in CELL_COLUMNS if column != "measure"]
+    with (tmp_path / CELLS).open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=older, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(written)
+
+    assert read_cells(tmp_path / CELLS) == rows
+
+
+def test_an_export_of_errors_alone_leaves_no_answers_of_an_earlier_export_behind(
+    tmp_path: Path,
+) -> None:
+    registry = InMemoryEvaluationCampaignRepository()
+    store(registry, by_area(BY_AREA, PERFECT_ANSWERS))
+    store(registry, comparison(FLOOR, shift=0.0))
+    main(["--out", str(tmp_path), "--campaign", str(BY_AREA)], registry=registry)
+    main(["--out", str(tmp_path), "--campaign", str(FLOOR)], registry=registry)
+
+    assert read_predictions(tmp_path / PREDICTIONS) == []
+
+
+def test_a_selection_read_by_area_is_refused_as_a_pair() -> None:
+    selected = by_area(BY_AREA, PERFECT_ANSWERS, purpose=RunPurpose.SELECTION)
+
+    with pytest.raises(ValueError, match="only comparisons pair by area"):
+        paired_by_area([selected], side(BY_AREA, CONTROL), side(BY_AREA, CONTENDER))
+
+
+def test_sides_read_by_different_measures_are_refused() -> None:
+    with pytest.raises(ValueError, match="different measures"):
+        paired_by_area(
+            [comparison(FLOOR, 0.0), by_area(BY_AREA, PERFECT_ANSWERS)],
+            side(FLOOR, CONTROL),
+            side(BY_AREA, CONTROL),
+        )
+
+
+def test_a_side_whose_answers_were_not_exported_is_refused() -> None:
+    grid = by_area(BY_AREA, PERFECT_ANSWERS)
+
+    with pytest.raises(ValueError, match="no answer of"):
+        pair(
+            export([grid]),
+            side(BY_AREA, CONTROL),
+            side(BY_AREA, CONTENDER),
+            bootstrap=BOOTSTRAP,
+            floor_share=0.02,
+            floor_area=0.01,
+        )
+
+
+def test_render_names_the_measure_and_refuses_to_mix_two() -> None:
+    area = paired_by_area(
+        [by_area(BY_AREA, PERFECT_ANSWERS)], side(BY_AREA, CONTROL), side(BY_AREA, CONTENDER)
+    )
+    errors = pair(
+        export([comparison(FLOOR, 0.0)]),
+        side(FLOOR, CONTROL),
+        side(FLOOR, CONTENDER),
+        bootstrap=BOOTSTRAP,
+        floor_share=0.02,
+        floor_area=0.01,
+    )
+
+    assert "| control | 1 - AUROC | candidate | 1 - AUROC |" in render([area])
+    assert "area-pooled, 3 repeats, 6 pairs" in render([area])
+    with pytest.raises(ValueError, match="one table holds one measure"):
+        render([area, errors])
+
+
+def test_main_exports_the_answers_of_campaigns_read_by_area_and_pairs_them(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    registry = InMemoryEvaluationCampaignRepository()
+    store(registry, by_area(BY_AREA, CONTROL_ANSWERS))
+    store(registry, by_area(BY_AREA_TOO, PERFECT_ANSWERS))
+    main(
+        [
+            "--out",
+            str(tmp_path),
+            "--campaign",
+            str(BY_AREA),
+            "--campaign",
+            str(BY_AREA_TOO),
+            "--pair",
+            *side(BY_AREA, CONTENDER),
+            *side(BY_AREA_TOO, CONTENDER),
+            "--resamples",
+            "200",
+            "--floor-area",
+            "0.02",
+        ],
+        registry=registry,
+    )
+
+    printed = capsys.readouterr().out
+    assert "72 answers of the campaigns read by area" in printed
+    assert "| control | 1 - AUROC |" in printed
+    header = (tmp_path / COMPARISONS).read_text().splitlines()[0].split(",")
+    assert header[8:12] == [
+        "error_control",
+        "spread_control",
+        "error_candidate",
+        "spread_candidate",
+    ]
+    written = (tmp_path / COMPARISONS).read_text().splitlines()[1].split(",")
+    assert written[-1] == "auroc_shortfall"
+    assert float(written[-2]) == pytest.approx(0.02)
