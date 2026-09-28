@@ -81,3 +81,86 @@ over 400 datasets from nominal — the percentile interval stays registered for 
 the bias-corrected interval is implemented and registered before the grid. The rows under a spread of repeats change no rule by themselves: they are what
 the least gain and the fixed part of the floor are chosen against in the registration before the
 grid, since the floor, not the interval, is what stands between a seed's luck and a confirmation.
+
+## 2026-09-28 — the interval over stays measured
+
+Under the declaration above, at `6693c552`, on the MacBook Pro M1 Pro, eight processes, 68 minutes.
+
+| Control's area | Repeats | Spread of a repeat's area | Coverage of the true gain | Zero excluded (two-sided) | Whole interval above zero |
+| --- | --- | --- | --- | --- | --- |
+| 0.70 | 1 | 0 | 96.0 % | 4.5 % | 2.2 % |
+| 0.70 | 5 | 0 | 95.5 % | 4.5 % | 2.0 % |
+| 0.70 | 5 | 0.01 | 79.8 % | 20.2 % | 9.5 % |
+| 0.70 | 5 | 0.03 | 41.2 % | 58.8 % | 27.5 % |
+| 0.85 | 1 | 0 | 96.5 % | 3.2 % | 1.2 % |
+| 0.85 | 5 | 0 | 96.8 % | 3.2 % | 1.2 % |
+| 0.85 | 5 | 0.01 | 70.2 % | 28.0 % | 13.5 % |
+| 0.85 | 5 | 0.03 | 31.0 % | 69.0 % | 33.2 % |
+
+Nominal: 95 %, 5 %, 2.5 %; a rate's standard error over 400 datasets is about a point at 5 %.
+
+**Conclusions.**
+
+1. The first prediction held. Without a spread of repeats every setting covers 95.5–96.8 % and
+   lies wholly above a true zero at most 2.2 % of the time. By the reading declared beforehand
+   the percentile interval stays registered for the task; no bias-corrected interval is needed.
+2. The second prediction failed at the higher level: a spread of 0.01 lowers coverage to 79.8 %
+   at an area of 0.70, inside the band, but to 70.2 % at 0.85, below it. The higher the area, the
+   narrower the interval over stays, so the same seed-to-seed spread is a larger share of the
+   difference's variance.
+3. The third prediction held: under a spread of 0.03 the interval covers a third of the time and
+   excludes a true zero in most datasets.
+4. Whether the seeds or the stays limit a comparison depends on how far the seeds spread, which
+   is not known for this task yet. Here the difference's standard deviation over stays alone is
+   about 0.004–0.006, so seeds dominate once a side's area strays by more than about 0.007–0.009
+   between seeds; at 0.01 a true zero already lies wholly above zero four to five times as often
+   as the level says. What stands between a seed's luck and a finding is the practical floor,
+   which every comparison, the family's included, must clear: the larger of its fixed part and
+   the control's spread over seeds.
+
+**Limitations.** The level held under the generator's defaults only: binormal answers that never
+tie, half their variance shared by the stay, areas of 0.70 and 0.85; the section below asks what
+happens away from them. The spread is drawn independently per side, the worst case: both sides of a
+repeat learn from one draw of labels, so part of a seed's luck is shared and cancels in the
+difference. How far seeds spread on this task is unknown until the grid runs, and the floor
+reads the control's spread only; a contender that spreads more than the control is exposed beyond
+it. The fixed part of the floor is therefore chosen, in the registration before the grid, against
+the rows above rather than against the interval's width. The seconds a comparison took were measured beside seven other
+processes; on one process a comparison under the registered 10,000 resamples and five repeats
+takes about 51 s.
+
+## 2026-09-28 — declared before the run: the level beyond the generator's defaults, and why a seed's spread costs what it does
+
+**Question.** The level held under the generator's defaults only; a tree at fifty labels answers
+in a handful of values, two networks from one backbone agree more than half, and a model at fifty
+labels may rank barely above chance. Does the level hold away from those defaults? Beside it, the
+explanation of the conclusions above — that coverage under a spread is what a normal interval
+over stays keeps against the stays and the seeds together — is reproduced from committed code.
+
+**Conditions.** Commit of this section; the machine and generator above. The decomposition: at
+each spread of the registered suite and its level, the standard deviation over 300 datasets with
+no true difference of the point difference, with the spread and without it, seeded apart from the
+calibration; the coverage predicted is that of a normal 95 % interval as wide as the stays alone
+make it. The robustness suite: five repeats, no spread, one assumption moved at a time — an area
+of 0.60; the stay's share of an answer's variance at 0.2 and at 0.9; answers cut into 20 and into
+5 equally likely levels at the population's quantiles, the true gain then the difference of the
+areas those levels can reach, known exactly. A gain of 0.02 before the cut, or none; 200 datasets
+for each rate, a 1,000-resample interval per dataset.
+
+    uv run scripts/ranking_calibration_report.py --out data/report/verdict-statistics/ranking --decompose --datasets 300 --workers 8
+    uv run scripts/ranking_calibration_report.py --out data/report/verdict-statistics/robustness --suite robustness --datasets 200 --workers 8
+
+**Prediction.** Every setting of the robustness suite covers the true gain at least 92 % of the
+time and lies wholly above a true zero at most 4.5 % of the time — two standard errors of a rate
+over 200 datasets from nominal. Ties, counted half in the area and resampled with their stays, do
+not move the interval off its level.
+
+**Not a prediction.** The decomposition was first computed by a throwaway script on the same
+seeds while the conclusions above were written, and it agreed with them: predicted coverage 79.9,
+40.6, 71.5 and 31.9 % against 79.8, 41.2, 70.2 and 31.0 % measured. It is run again here from
+committed code so the note cites what can be reproduced; it is a check made after the result.
+
+**Reading, declared beforehand.** If the prediction holds, the percentile interval stays
+registered for every kind of candidate the grid runs. If a setting fails it, the assumption it
+moved is named, and the interval for the comparisons it describes is revisited before the grid
+rather than after.
