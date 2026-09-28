@@ -1,0 +1,43 @@
+# The intensive-care backbone at the published tier: the tier's own shape over the stays of
+# set A alone, one rung of the ladder the doubling rule reads (8, 16, 32 and 64 epochs), the
+# first doubling that lowers the best epoch's held-out loss by less than five per cent naming
+# the backbone.
+#
+# Thirty-two epochs, 4,000 steps.
+#
+# Everything but the epochs and the checkpoints is the mixed backbone's (backbone-mixed-m.toml
+# with the intensive-care corpus added), so that the one backbone differs from the other in the
+# corpora it read and in nothing else it was taught under: micro-batches of sixteen, two to a
+# step of thirty-two, the loss bounded at one standard deviation, the same masks, and a schedule
+# of the same shape. The shape is stated in epochs, so it is not the same in steps: a quarter
+# of an epoch of warm-up is 31 steps here and over a thousand in the mixture, and the decay
+# spans this run rather than the mixture's.
+name = "backbone-physionet2012-m-32"
+tier = "M"
+corpora = ["physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 32
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+# A state every 500 steps: a few minutes of the platform between them.
+[checkpoint]
+every_steps = 500

@@ -1,0 +1,42 @@
+# The mixed backbone over five corpora at the published tier: the four-corpus backbone
+# (backbone-mixed-m.toml) with the intensive-care stays of set A added, and nothing else changed —
+# the same four published corpora, shape, objective, masks and budget. Against that backbone it
+# differs by one corpus, so a task on the intensive-care stays reads it as a backbone that saw
+# them unlabelled, and the four-corpus one as a backbone that never saw them.
+#
+# Every optimiser step is taken over micro-batches of one corpus and the steps are interleaved,
+# so a corpus weighs its share of the steps: about 42 % the satellite corpus, 40 % SMD, 14 %
+# C-MAPSS, 3 % SKAB and 3 % the stays (125 steps an epoch of about 4,600). The loss is bounded at
+# one standard deviation for the reason the four-corpus file gives; the stays' channels have
+# heavy tails too, where the bound matters more.
+name = "backbone-mixed5-m"
+tier = "M"
+corpora = ["cmapss", "skab", "smd", "esa_ad", "physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+# The four-corpus backbone's budget: eight passes over every window, the epoch kept the one whose
+# mean relative validation over the corpora is lowest; sixteen windows a micro-batch, two to a
+# step, because the longest window of the mix, 1,900 tokens of SMD, sets the memory.
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000
