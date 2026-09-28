@@ -78,9 +78,10 @@ resampling seed 1.
 **Reading, declared beforehand.** If, without a spread of repeats, every setting covers at least
 93 % and lies wholly above a true zero at most 3.5 % of the time — two standard errors of a rate
 over 400 datasets from nominal — the percentile interval stays registered for the task. Otherwise
-the bias-corrected interval is implemented and registered before the grid. The rows under a spread of repeats change no rule by themselves: they are what
-the least gain and the fixed part of the floor are chosen against in the registration before the
-grid, since the floor, not the interval, is what stands between a seed's luck and a confirmation.
+the bias-corrected interval is implemented and registered before the grid. The rows under a
+spread of repeats change no rule by themselves: they are what the least gain and the fixed part
+of the floor are chosen against in the registration before the grid, since the floor, not the
+interval, is what stands between a seed's luck and a confirmation.
 
 ## 2026-09-28 — the interval over stays measured
 
@@ -120,14 +121,14 @@ Nominal: 95 %, 5 %, 2.5 %; a rate's standard error over 400 datasets is about a 
 
 **Limitations.** The level held under the generator's defaults only: binormal answers that never
 tie, half their variance shared by the stay, areas of 0.70 and 0.85; the section below asks what
-happens away from them. The spread is drawn independently per side, the worst case: both sides of a
-repeat learn from one draw of labels, so part of a seed's luck is shared and cancels in the
+happens away from them. The spread is drawn independently per side, the worst case: both sides
+of a repeat learn from one draw of labels, so part of a seed's luck is shared and cancels in the
 difference. How far seeds spread on this task is unknown until the grid runs, and the floor
-reads the control's spread only; a contender that spreads more than the control is exposed beyond
-it. The fixed part of the floor is therefore chosen, in the registration before the grid, against
-the rows above rather than against the interval's width. The seconds a comparison took were measured beside seven other
-processes; on one process a comparison under the registered 10,000 resamples and five repeats
-takes about 51 s.
+reads the control's spread only; a contender that spreads more than the control is exposed
+beyond it. The fixed part of the floor is therefore chosen, in the registration before the grid,
+against the rows above rather than against the interval's width. The seconds a comparison took
+were measured beside seven other processes; on one process a comparison under the registered
+10,000 resamples and five repeats takes about 51 s.
 
 ## 2026-09-28 — declared before the run: the level beyond the generator's defaults, and why a seed's spread costs what it does
 
