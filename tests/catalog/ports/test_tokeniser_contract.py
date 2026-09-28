@@ -10,7 +10,7 @@ from collections.abc import Callable, Iterable, Sequence
 from itertools import chain
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
@@ -273,6 +273,24 @@ def test_channels_observed_at_one_instant_may_arrive_in_any_order(tokeniser: Tok
     )
 
 
+def test_instants_closer_than_the_window_resolves_are_placed_in_canonical_order(
+    tokeniser: Tokeniser,
+) -> None:
+    # Two instants apart by the smallest step a float takes meet at one position once scaled to
+    # the window, where the later one's channel sorts first.
+    corpus_unit = unit("u", 0.0, 2.0)
+    observations = (Observation("c1", 0.0, 0.0), Observation("c0", 5e-324, 0.0))
+    scheme = identity_scheme(IRREGULAR_SCHEMA)
+    window = WindowSpec(length=2.0, stride=1.0)
+
+    placed = list(tokeniser.tokenise(CORPUS, corpus_unit, observations, scheme, window))
+
+    assert [item.window for item in placed] == expected_windows(
+        corpus_unit, observations, scheme, window
+    )
+    assert placed[0].window.times[:2] == (0.0, 0.0)
+
+
 def test_a_regular_grid_gives_the_closed_form_window_count_and_token_count(
     tokeniser: Tokeniser,
 ) -> None:
@@ -495,6 +513,13 @@ IRREGULAR_SCHEMA = ChannelSchema(
 
 @settings(max_examples=60, deadline=None)
 @given(case=irregular_units())
+@example(
+    case=(
+        unit("u", 0.0, 2.0),
+        (Observation("c1", 0.0, 0.0), Observation("c0", 5e-324, 0.0)),
+        WindowSpec(length=2.0, stride=1.0),
+    )
+)
 def test_irregular_units_match_the_brute_force_definition(
     case: tuple[CorpusUnit, tuple[Observation, ...], WindowSpec],
 ) -> None:

@@ -138,11 +138,13 @@ class SlidingWindowTokeniser:
         gaps = [0.0] * len(statics)
         timeless = [True] * len(statics)
         previous: dict[int, float] = {}
-        repeated = False
+        tied = False
+        last_position = -math.inf
         for time, channel_id, value in sorted(buffer):
             position = (time - extent.start) / extent.length
+            tied = tied or position == last_position
+            last_position = position
             last = previous.get(channel_id)
-            repeated = repeated or last == position
             channel_ids.append(channel_id)
             values.append(value)
             times.append(position)
@@ -150,10 +152,12 @@ class SlidingWindowTokeniser:
             gaps.append(position if last is None else position - last)
             timeless.append(False)
             previous[channel_id] = position
-        if repeated:
-            # A channel observed twice at one instant yields tokens equal in all but gap, and the
-            # one with the smaller gap sorts first; the buffer, sorted before any gap was known,
-            # put it second.
+        if tied:
+            # The buffer is in the order of the stream's own times, and two tokens at one position
+            # need not be in canonical order there: a channel observed twice at one instant yields
+            # tokens equal in all but gap, the smaller gap sorting first, which the buffer knew
+            # nothing of; and two instants closer than the window's resolution meet at one
+            # position once scaled to it, where channels sort by identifier, not by instant.
             order = sorted(
                 range(len(channel_ids)),
                 key=lambda i: canonical_key(
