@@ -164,3 +164,48 @@ committed code so the note cites what can be reproduced; it is a check made afte
 registered for every kind of candidate the grid runs. If a setting fails it, the assumption it
 moved is named, and the interval for the comparisons it describes is revisited before the grid
 rather than after.
+
+## 2026-09-28 — the level beyond the generator's defaults measured
+
+Under the declaration above, at `e6c68914`, on the MacBook Pro M1 Pro, eight processes: the
+decomposition in about a minute, the robustness suite in 21 minutes.
+
+The decomposition, reproduced from committed code on the seeds the throwaway script used, gives
+the numbers quoted in the declaration to the last digit:
+
+| Control's area | Spread of a repeat's area | SD over stays | SD over seeds (expected) | Coverage predicted | Coverage measured |
+| --- | --- | --- | --- | --- | --- |
+| 0.70 | 0.01 | 0.0055 | 0.0064 (0.0063) | 79.9 % | 79.8 % |
+| 0.70 | 0.03 | 0.0055 | 0.0194 (0.0190) | 40.6 % | 41.2 % |
+| 0.85 | 0.01 | 0.0042 | 0.0064 (0.0063) | 71.5 % | 70.2 % |
+| 0.85 | 0.03 | 0.0042 | 0.0194 (0.0190) | 31.9 % | 31.0 % |
+
+The robustness suite, five repeats, no spread, 200 datasets per rate:
+
+| Control's area | Shared | Levels | True gain | Coverage of the true gain | Zero excluded (two-sided) | Whole interval above zero |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.60 | 0.5 | — | 0.0200 | 95.0 % | 4.5 % | 1.5 % |
+| 0.80 | 0.2 | — | 0.0200 | 96.5 % | 4.0 % | 1.5 % |
+| 0.80 | 0.9 | — | 0.0200 | 95.0 % | 5.5 % | 2.0 % |
+| 0.80 | 0.5 | 20 | 0.0199 | 96.5 % | 4.0 % | 1.0 % |
+| 0.80 | 0.5 | 5 | 0.0185 | 96.0 % | 4.5 % | 2.0 % |
+
+Nominal: 95 %, 5 %, 2.5 %; a rate's standard error over 200 datasets is about 1.5 points.
+
+**Conclusions.**
+
+1. The prediction held: every setting covers 95.0–96.5 % and lies wholly above a true zero at
+   most 2.0 % of the time. By the reading declared beforehand the percentile interval stays
+   registered for every kind of candidate the grid runs — a model near chance, two sides that
+   share little or almost all of their answers, and answers in as few as five values.
+2. Ties cost area, not calibration: answers in five levels reach 0.0185 of a stated gain of
+   0.02, and the interval covers that gain as it covers an untied one.
+3. The coverage lost under a spread of repeats is accounted for, to within 1.3 points, by the
+   variance over stays and the variance over seeds added; nothing else in the procedure is
+   needed to explain it.
+
+**Limitations.** Every setting is still binormal within an outcome, with one window per stay as
+the task has; heavier tails or several windows per unit are not covered. The robustness suite
+moved one assumption at a time and at one level of area; it did not combine a low area with ties.
+How far the grid's seeds actually spread is the open quantity, read from the selections on the
+tuning side before the numbers of the protocol are registered.
