@@ -244,3 +244,62 @@ is: the list in force followed by every longer step up to one beyond the stronge
 registered as configuration before any selection on the task runs. If no fit does, the list in
 force stands. The weak end of the list stays whatever it costs; dropping it would be a separate
 decision on a measured cost.
+
+## 2026-09-28 — MiniRocket's penalty over outcomes measured
+
+Under the declaration above, at `63b99be5`, on the MacBook Pro M1 Pro: the choices in 33 minutes
+on eight threads of linear algebra, the fits over every stay taking 465 to 671 s each.
+
+| Budget | Seed | Stays | Deaths | Penalty chosen | At or past 1,000 |
+| --- | --- | --- | --- | --- | --- |
+| 50 | 1 | 50 | 7 | 215 | no |
+| 50 | 2 | 50 | 7 | 464,000 | yes |
+| 50 | 3 | 50 | 7 | 464,000 | yes |
+| 200 | 1–3 | 200 | 28 | 4,640 | yes |
+| 1,000 | 1–3 | 1,000 | 139 | 4,640 | yes |
+| every stay | 1–3 | 3,997 | 554 | 4,640 | yes |
+
+**Not a prediction: the choices checked.** While reading the table above, the fit was compared
+with the kept candidate of a smoke campaign on the same draw (50 stays, seed 1) and found
+identical to the bit — penalty, rows of the grid, scale of every feature, every weight — and the
+folds' log-loss was traced by a throwaway script on six draws. The trace was then committed as a
+mode of the same script and run at `19f7752c` on 2026-09-29, four threads, 34 minutes: every strength fitted
+independently of the candidate's own cross-validation on the same five folds, at the solver's
+tolerance and at 1e-8.
+
+    M=cef44de241af45ebb9f99da55679445a72632ada9f8b982dc9651e8554e51a78
+    uv run scripts/convolution_penalty_report.py --manifest durable/sha256/$M sha256:$M \
+        --out data/report/t42c/curves --curves
+
+| Budget | Seed | Chosen by the fit | Folds' best, tolerance 1e-4 | Folds' best, tolerance 1e-8 | Prevalence alone |
+| --- | --- | --- | --- | --- | --- |
+| 50 | 1 | 215 | 215 (0.2780) | 215 (0.2783) | 0.4107 |
+| 50 | 2 | 464,000 | 464,000 (0.4107) | 464,000 (0.4107) | 0.4107 |
+| 50 | 3 | 464,000 | 464,000 (0.4109) | 464,000 (0.4109) | 0.4107 |
+| 200 | 1 | 4,640 | 4,640 (0.3718) | 4,640 (0.3719) | 0.4053 |
+| 200 | 2 | 4,640 | 4,640 (0.3739) | 4,640 (0.3741) | 0.4053 |
+| 200 | 3 | 4,640 | 4,640 (0.3715) | 4,640 (0.3714) | 0.4053 |
+| 1,000 | 1 | 4,640 | 4,640 (0.3506) | 4,640 (0.3506) | 0.4032 |
+| 1,000 | 2 | 4,640 | 4,640 (0.3503) | 4,640 (0.3503) | 0.4032 |
+| 1,000 | 3 | 4,640 | 4,640 (0.3430) | 4,640 (0.3430) | 0.4032 |
+
+**Conclusions.**
+
+1. The first part of the prediction held: at 200, 1,000 and every stay all nine fits chose 4,640,
+   past the strongest penalty in force. At 200 and 1,000 the choice is an interior minimum of the
+   folds' log-loss, well below the prevalence alone, and the same under both tolerances.
+2. The second part failed: at 50 stays two seeds of three chose the strongest step of the longer
+   grid. With seven deaths the folds find nothing that predicts better than the prevalence: the
+   log-loss falls towards the prevalence's as the penalty grows and never goes below it. The
+   choice is the limit of an infinite penalty, and a longer grid would not change it.
+3. The cost was as predicted: about ten minutes a fit over every stay.
+4. By the reading declared beforehand, the convolution baseline on outcomes gets a list of its
+   own: the published grid followed by 4,640, 21,500, 100,000, 464,000 and 2,150,000, one step
+   beyond the strongest chosen. The regression task keeps the published grid.
+
+**Limitations.** A selection draws its budget from four fifths of the tuning side, so its largest
+budget is about 3,200 stays, not 3,997; the choice was the same at 200, 1,000 and 3,997, and is
+expected to be the same there. The choices ran on eight threads, where a campaign runs on four,
+and a fit's answer depends on the order its sums were split in; the same fits repeated on four
+threads for the trace chose the same strength on every draw it covers. The curve over every
+stay was not traced, for its cost.
