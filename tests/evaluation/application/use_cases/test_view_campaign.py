@@ -10,7 +10,7 @@ from emblema.evaluation.application.read_models.campaign_summary import Campaign
 from emblema.evaluation.application.use_cases.view_campaign import ViewCampaign, ViewCampaignQuery
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.campaign.campaign_overview import CampaignOverview
-from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.exceptions import CampaignNotFoundError
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.ports.verdict_memo import VerdictMemo
@@ -20,26 +20,28 @@ from tests.evaluation.support import (
     CONTENDER,
     CONTROL,
     SELECTED_BY,
-    closed_campaign,
-    ran_campaign,
+    closed_reading,
+    ran_reading,
+    reading,
     selection,
+    store,
 )
 
 
-def view(*stored: EvaluationCampaign, memo: VerdictMemo | None = None) -> ViewCampaign:
+def view(*stored: CampaignReading, memo: VerdictMemo | None = None) -> ViewCampaign:
     memo = InMemoryVerdictMemo(capacity=4) if memo is None else memo
     repository = InMemoryEvaluationCampaignRepository()
-    for campaign in stored:
-        repository.save(campaign, seen=0)
+    for read in stored:
+        store(repository, read)
     return ViewCampaign(repository, memo)
 
 
 def test_a_finished_comparison_is_shown_with_its_curves_and_its_verdict() -> None:
-    closed = closed_campaign()
+    closed = closed_reading()
 
     shown = view(closed)(ViewCampaignQuery(campaign=CAMPAIGN))
 
-    assert shown.summary == CampaignSummary.of(CampaignOverview.of(closed))
+    assert shown.summary == CampaignSummary.of(CampaignOverview.of(closed.campaign))
     assert shown.summary.finished
     assert shown.summary.cells_recorded == shown.summary.cells_planned == 8
     assert [(c.candidate, c.kind) for c in shown.curves] == [
@@ -49,8 +51,8 @@ def test_a_finished_comparison_is_shown_with_its_curves_and_its_verdict() -> Non
     control, contender = shown.curves
     assert [p.budget for p in control.points] == ["50", "200"]
     assert [p.repeats for p in control.points] == [2, 2]
-    assert control.points[0].error == pytest.approx(closed.rmse_of(CONTROL, BUDGETS[0]))
-    assert contender.points[1].error == pytest.approx(closed.rmse_of(CONTENDER, BUDGETS[1]))
+    assert control.points[0].error == pytest.approx(closed.error_of(CONTROL, BUDGETS[0]))
+    assert contender.points[1].error == pytest.approx(closed.error_of(CONTENDER, BUDGETS[1]))
     assert shown.verdict is not None
     assert shown.verdict.sentence == closed.verdict().sentence()
     assert shown.verdict.control == CONTROL
@@ -62,8 +64,9 @@ def test_a_finished_comparison_is_shown_with_its_curves_and_its_verdict() -> Non
 
 
 def test_a_running_campaign_shows_its_curves_so_far_and_no_verdict() -> None:
-    running = ran_campaign()
-    partial = replace(running, results=running.results[:3])
+    partial = reading()
+    for produced in ran_reading().results[:3]:
+        partial = partial.record(produced)
 
     shown = view(partial)(ViewCampaignQuery(campaign=CAMPAIGN))
 
@@ -84,7 +87,7 @@ def test_a_selection_shows_no_verdict_because_it_concludes_nothing() -> None:
 
 
 def test_the_verdict_of_a_closed_campaign_is_kept_under_its_revision_once_read() -> None:
-    closed = closed_campaign()
+    closed = closed_reading()
     memo = InMemoryVerdictMemo(capacity=4)
     use_case = view(closed, memo=memo)
 
@@ -92,15 +95,15 @@ def test_the_verdict_of_a_closed_campaign_is_kept_under_its_revision_once_read()
     second = use_case(ViewCampaignQuery(campaign=CAMPAIGN))
 
     assert first.verdict == second.verdict
-    assert memo.recall(CAMPAIGN, closed.revision) == closed.verdict()
+    assert memo.recall(CAMPAIGN, closed.campaign.revision) == closed.verdict()
 
 
 def test_a_verdict_kept_is_answered_without_reading_it_again() -> None:
-    closed = closed_campaign()
+    closed = closed_reading()
     memo = InMemoryVerdictMemo(capacity=4)
     # Told apart from what reading it again would give: the real verdict has one secondary.
     kept = replace(closed.verdict(), secondary=())
-    memo.keep(CAMPAIGN, closed.revision, kept)
+    memo.keep(CAMPAIGN, closed.campaign.revision, kept)
 
     shown = view(closed, memo=memo)(ViewCampaignQuery(campaign=CAMPAIGN))
 

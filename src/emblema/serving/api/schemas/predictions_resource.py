@@ -10,7 +10,12 @@ from emblema.serving.application.read_models.predictions import Predictions
 class PredictedWindowResource(BaseModel):
     """The answer for one window, beside what it stands on and what was left out."""
 
-    prediction: float = Field(description="The candidate's answer, in the task's unit.")
+    prediction: float = Field(
+        description=(
+            "The candidate's answer: in the task's unit, or the probability of the positive "
+            "outcome for a task over outcomes."
+        )
+    )
     channels_used: list[str]
     channels_ignored: list[str] = Field(
         description="Channels the request read that the model does not know; ignored, not refused."

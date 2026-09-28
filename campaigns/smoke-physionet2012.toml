@@ -1,0 +1,43 @@
+# Every kind of candidate once over the intensive-care task, to carry a binary campaign end to
+# end: drawn in proportion to the outcomes, answered as probabilities, recorded window by window,
+# read by one minus the area under the ROC curve and closed with a verdict.
+#
+# What it is for: the harness, not the question. The backbone is a two-epoch one at the small
+# tier, there is one seed, and the thresholds are placeholders in the unit of the area; the task's
+# budgets, endpoint and thresholds are registered before its grid, and nothing read here is cited.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "smoke-physionet2012"
+purpose = "tuning"
+tier = "S"
+measure = "auroc_shortfall"
+
+[candidates]
+competing = [
+    "from_scratch",
+    "frozen_ridge",
+    "full_fine_tuning",
+    "boosted_trees_per_channel",
+    "minirocket",
+    "patch_transformer",
+]
+control = "from_scratch"
+endpoint = "full_fine_tuning"
+
+[budgets]
+labels = ["50", "all"]
+endpoint = "50"
+seeds = [1]
+
+[rules]
+minimum_absolute_reduction = 0.02
+absolute_floor = 0.01
+alpha = 0.05
+# Five contenders at two budgets, less the endpoint itself.
+secondary_family_size = 9
+
+[bootstrap]
+resamples = 1000
+seed = 1
+level = 0.95

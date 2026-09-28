@@ -12,6 +12,7 @@ from emblema.evaluation.adapters.torch.fitted_patch_model import FittedPatchMode
 from emblema.evaluation.adapters.torch.grid_reading import GridReading
 from emblema.evaluation.adapters.torch.patch_transformer import PatchTransformer
 from emblema.evaluation.adapters.torch.scheduled_training import ScheduledTraining
+from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
@@ -62,19 +63,19 @@ class TorchPatchRuntime:
         corpus = ReadCorpus.every(self._blocks, (task,))[task.manifest]
         steps = plan.spec.steps_over(corpus.manifest.window_length)
         started = time.perf_counter()
-        scale = task.label_scheme().scale
+        link = TargetLink.of(task.label_scheme())
         fitted = list(corpus.windows([labelled.window for labelled in sample.windows]))
         reading = GridReading.over(fitted, steps=steps, channels=corpus.channels)
         values, observed = (tensor.to(self._device) for tensor in reading.tensors(fitted))
         targets = torch.tensor(
-            [labelled.target / scale for labelled in sample.windows], dtype=torch.float32
+            [link.learnt(labelled.target) for labelled in sample.windows], dtype=torch.float32
         ).to(self._device)
         torch.manual_seed(plan.seed)
         model = PatchTransformer(
             plan.spec,
             channels=len(reading.held),
             steps=steps,
-            starting_at=sample.mean_target / scale,
+            starting_at=link.starting_at(sample.mean_target),
             pooling=plan.pooling,
         ).to(self._device)
         ScheduledTraining(plan.schedule, plan.seed).losses(
@@ -82,6 +83,7 @@ class TorchPatchRuntime:
             model.parameters(),
             lambda indices: model(values[indices], observed[indices]),
             targets,
+            loss=link.loss,
         )
         answers = self._answers(
             model,
@@ -92,10 +94,10 @@ class TorchPatchRuntime:
         return ScoredOutcome(
             predictions=tuple(
                 WindowPrediction(window=labelled.window, target=labelled.target, predicted=answer)
-                for labelled, answer in zip(scored, (answers * scale).tolist(), strict=True)
+                for labelled, answer in zip(scored, link.answered(answers).tolist(), strict=True)
             ),
             seconds=time.perf_counter() - started,
-            artifact=self._kept(plan, model, reading, task, scale) if retain else None,
+            artifact=self._kept(plan, model, reading, task, link) if retain else None,
         )
 
     def _answers(
@@ -126,7 +128,7 @@ class TorchPatchRuntime:
         model: PatchTransformer,
         reading: GridReading,
         task: DownstreamTask,
-        target_scale: float,
+        link: TargetLink,
     ) -> ArtifactRef:
         """The model this run trained, stored whole under its manifest, for the campaign.
 
@@ -141,7 +143,7 @@ class TorchPatchRuntime:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it trained and was given no store"
             )
-        fitted = FittedPatchModel.of(plan, model, reading=reading, target_scale=target_scale)
+        fitted = FittedPatchModel.of(plan, model, reading=reading, link=link)
         return self._kept_candidates.keep(
             CandidateKind.NEURAL,
             corpus_manifest=task.manifest,

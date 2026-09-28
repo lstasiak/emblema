@@ -10,10 +10,10 @@ import pytest
 
 from emblema.evaluation.adapters.in_memory.verdict_memo import InMemoryVerdictMemo
 from emblema.evaluation.contracts.identifiers import CampaignId
-from tests.evaluation.support import CAMPAIGN, closed_campaign
+from tests.evaluation.support import CAMPAIGN, closed_reading
 
 OTHER = CampaignId(UUID(int=77))
-VERDICT = closed_campaign().verdict()
+VERDICT = closed_reading().verdict()
 
 
 def test_a_kept_verdict_is_recalled_under_its_campaign_and_revision() -> None:

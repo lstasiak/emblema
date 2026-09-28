@@ -19,7 +19,8 @@ class RidgeSolution:
     the residuals divided by one minus the leverage, so the choice costs no refit. The penalty
     with the smallest mean squared leave-one-out error wins, the smaller one on a tie. Solved
     on the host in double precision, since the states come off an accelerator that may have
-    none, and moved there before they are widened.
+    none, and moved there before they are widened. The head of a quantity; an outcome's is
+    ``LogisticSolution``.
 
     Attributes:
         weights: The linear map over the states as they were given, one weight per column.

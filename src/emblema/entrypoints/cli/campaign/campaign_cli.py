@@ -237,6 +237,7 @@ class CampaignCli:
             bootstrap=declared.paired_bootstrap(),
             inner_holdout=declared.inner_holdout(),
             tuned=declared.tuned_choices(),
+            measure=declared.measure,
         )
 
     @staticmethod

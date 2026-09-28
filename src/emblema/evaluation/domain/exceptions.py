@@ -21,6 +21,18 @@ class InvalidLabelSchemeError(EvaluationError, ValueError):
     """A label scheme's ceiling is not positive and finite."""
 
 
+class InvalidOutcomeError(EvaluationError, ValueError):
+    """A recorded outcome is neither zero nor one."""
+
+
+class SingleClassSampleError(EvaluationError, ValueError):
+    """A sample of labels for a binary task holds one outcome only, so nothing tells them apart."""
+
+
+class MixedTargetKindsError(EvaluationError):
+    """A candidate was asked to learn from tasks whose labels are of different kinds."""
+
+
 class UnlabelledWindowError(EvaluationError, ValueError):
     """A window ends at or after the moment its unit failed, so it carries no remaining life."""
 
@@ -69,6 +81,14 @@ class InvalidRidgeSpecError(EvaluationError, ValueError):
     """A ridge fit names no penalty, a penalty that is not positive, or no thread."""
 
 
+class InvalidOutcomeFoldsError(EvaluationError, ValueError):
+    """Folds are not numbered from zero, or one of them holds no window."""
+
+
+class UnfoldableOutcomesError(EvaluationError):
+    """Outcomes cannot be split into folds whose heads each see both of them."""
+
+
 class InvalidPatchModelSpecError(EvaluationError, ValueError):
     """A patch model has no patch, a stride past its patch, or a width its heads cannot split."""
 
@@ -87,6 +107,18 @@ class InvalidScoredOutcomeError(EvaluationError, ValueError):
 
 class InvalidWindowPredictionError(EvaluationError, ValueError):
     """A prediction or its target is not a finite number."""
+
+
+class MismatchedErrorMeasureError(EvaluationError, ValueError):
+    """A campaign reads its task's targets by a measure that does not apply to their kind."""
+
+
+class InvalidWindowRankingError(EvaluationError, ValueError):
+    """A ranking of answers holds no window, a target that is not an outcome, or one outcome."""
+
+
+class InvalidPairedUnitRankingsError(EvaluationError, ValueError):
+    """Two candidates' rankings do not pair: other units, other windows or other outcomes."""
 
 
 class InvalidUnitErrorError(EvaluationError, ValueError):
@@ -115,6 +147,10 @@ class FrozenTestSplitClosedError(EvaluationError):
 
 class ProtocolMismatchError(EvaluationError):
     """A task carries a label scheme its protocol has no use for, or lacks one it needs."""
+
+
+class MismatchedStratificationError(EvaluationError, ValueError):
+    """A task's stratification does not suit the kind of its target."""
 
 
 class ForeignLabelSampleError(EvaluationError):
@@ -179,6 +215,10 @@ class InvalidCampaignDesignError(EvaluationError, ValueError):
 
 class InvalidCellResultError(EvaluationError, ValueError):
     """A cell's result scores no unit, or reports a time that is not finite and not negative."""
+
+
+class PredictionsNotKeptError(EvaluationError):
+    """A cell recorded without its answers was asked for a measure read from them."""
 
 
 class UnknownCandidateError(EvaluationError):

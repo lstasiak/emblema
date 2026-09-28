@@ -54,11 +54,11 @@ class AnnounceCampaign:
             SelectionHasNoVerdictError: If it is a selection, which concludes nothing and is
                 asked which variant it chose instead.
         """
-        campaign = self._campaigns.get(command.campaign)
-        closed_at = campaign.completion()
+        reading = self._campaigns.read(command.campaign)
+        closed_at = reading.campaign.completion()
         announced = self._outcomes.assemble(
-            campaign,
-            campaign.verdict(),
+            reading,
+            reading.verdict(),
             event_id=self._ids.generate(EventId),
             occurred_at=closed_at,
         )

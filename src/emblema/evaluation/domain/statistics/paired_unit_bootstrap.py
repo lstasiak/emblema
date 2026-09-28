@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from emblema.evaluation.domain.exceptions import InvalidPairedUnitBootstrapError
 from emblema.evaluation.domain.statistics.bootstrap_interval import BootstrapInterval
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
-from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
+from emblema.evaluation.domain.statistics.paired_units import PairedUnits
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -14,7 +14,10 @@ class PairedUnitBootstrap:
 
     Windows of one unit are not independent — they overlap, and a unit is one realisation of
     the process — so the unit is the level resampled, with replacement, the same units on both
-    sides of every resample. The interval is the percentile one over the resampled reductions;
+    sides of every resample. Where the pairing splits its units into strata, each stratum is
+    resampled on its own and keeps its size, so a resample of a binary task holds both outcomes
+    in the proportion the side has; a pairing of one stratum is drawn exactly as a draw over all
+    units. The interval is the percentile one over the resampled reductions;
     the p-value is two-sided, twice the smaller share of resamples on either side of zero, which
     is the test the percentile interval inverts; the share counts the observed reduction as one
     more resample on its side, so no p-value is zero and the smallest one says how many
@@ -41,7 +44,7 @@ class PairedUnitBootstrap:
         if not 0.0 < self.level < 1.0:
             raise InvalidPairedUnitBootstrapError(f"level must lie in (0, 1), got {self.level}")
 
-    def compare(self, paired: PairedUnitErrors) -> PairedDifference:
+    def compare(self, paired: PairedUnits) -> PairedDifference:
         """The reduction the candidate makes over the control, with its interval and p-value."""
         reductions = self.reductions(paired)
         below = (1 + sum(1 for reduction in reductions if reduction <= 0.0)) / (self.resamples + 1)
@@ -53,15 +56,17 @@ class PairedUnitBootstrap:
             p_value=min(1.0, 2.0 * min(below, above)),
         )
 
-    def reductions(self, paired: PairedUnitErrors) -> list[float]:
+    def reductions(self, paired: PairedUnits) -> list[float]:
         """The reduction in every resample of the units, in ascending order.
 
         Exposed so that another procedure can set its own reductions beside these off one draw.
         """
-        count = len(paired.control)
+        strata = paired.strata
         draws = random.Random(self.seed)
         return sorted(
-            paired.reduction_over(draws.choices(range(count), k=count))
+            paired.reduction_over(
+                [pick for stratum in strata for pick in draws.choices(stratum, k=len(stratum))]
+            )
             for _ in range(self.resamples)
         )
 

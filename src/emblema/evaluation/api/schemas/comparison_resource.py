@@ -1,6 +1,6 @@
 from typing import Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from emblema.evaluation.application.read_models.comparison_view import ComparisonView
 
@@ -17,7 +17,9 @@ class ComparisonResource(BaseModel):
     candidate_spread: float
     candidate_repeats: int
     reduction: float
-    relative_reduction: float
+    relative_reduction: float | None = Field(
+        description="The reduction as a share of the control's error; null where it made none."
+    )
     interval_low: float
     interval_high: float
     interval_level: float

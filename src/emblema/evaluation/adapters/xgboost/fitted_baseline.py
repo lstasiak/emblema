@@ -39,8 +39,10 @@ class FittedBaseline:
 
     The trees alone would not be enough. A row means what the feature scheme says it means, and
     an answer is in units of the target the fit was scaled to, so the scheme's column names and
-    that scale travel with the model. Together they are what another context needs in order to
-    put a window in and get an answer out without being told anything else.
+    that scale travel with the model. Trees grown to an outcome answer its probability, which the
+    stored trees compute from their own objective, at a scale of one. Together these are what
+    another context needs in order to put a window in and get an answer out without being told
+    anything else.
 
     The model is kept in the format XGBoost writes for keeping models, not as a pickled
     estimator: the document that carries it is then plain data, and a release of the library
@@ -66,7 +68,7 @@ class FittedBaseline:
     def of(
         cls,
         recipe: ClassicalRecipe,
-        fitted: "xgboost.XGBRegressor",
+        fitted: "xgboost.XGBModel",
         *,
         feature_names: tuple[str, ...],
         target_scale: float,

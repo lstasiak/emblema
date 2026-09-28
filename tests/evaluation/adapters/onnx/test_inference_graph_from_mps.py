@@ -12,6 +12,8 @@ import pytest
 import torch
 
 from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
+from emblema.evaluation.adapters.torch.target_link import TargetLink
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from tests.evaluation.adapters.onnx.candidates import TARGET_SCALE, adapted
 from tests.support.token_tensors import random_batch
@@ -33,7 +35,7 @@ def test_a_candidate_that_ran_on_mps_exports_once_moved_back_to_the_host() -> No
     with torch.no_grad():
         on_accelerator = candidate(batch.to("mps")) * TARGET_SCALE
 
-    graph = InferenceGraph.exported(candidate, target_scale=TARGET_SCALE)
+    graph = InferenceGraph.exported(candidate, link=TargetLink(TargetKind.CONTINUOUS, TARGET_SCALE))
 
     np.testing.assert_allclose(
         graph.predict(batch), on_accelerator.cpu().numpy(), rtol=RTOL, atol=ATOL * TARGET_SCALE

@@ -5,6 +5,7 @@ from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
 from emblema.evaluation.domain.exceptions import TunedChoiceMismatchError
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
@@ -39,6 +40,8 @@ class DefineCampaignCommand:
             variants; ``None`` for one that compares.
         tuned: Which variant a candidate runs at a budget, each naming the selection that
             chose it.
+        measure: What every run is read by; ``None`` for the one the kind of the task's target
+            is read by.
     """
 
     task: TaskId
@@ -54,6 +57,7 @@ class DefineCampaignCommand:
     bootstrap: PairedUnitBootstrap
     inner_holdout: InnerHoldout | None = None
     tuned: tuple[TunedChoice, ...] = ()
+    measure: ErrorMeasure | None = None
 
 
 class DefineCampaign:
@@ -97,10 +101,15 @@ class DefineCampaign:
             CampaignNotFoundError: If a tuned choice names a selection that is not stored.
             SelectionNotReadableError: If that selection has not finished or holds no choice
                 for the pairing.
-            TunedChoiceMismatchError: If it chose another variant, or ran over another task.
+            TunedChoiceMismatchError: If it chose another variant, ran over another task, or
+                chose by another measure.
+            MismatchedErrorMeasureError: If the measure named does not read the task's target.
         """
         task = self._tasks.get(command.task)
         task.accept_campaign()
+        kind = task.label_scheme().kind
+        measure = ErrorMeasure.of(kind) if command.measure is None else command.measure
+        measure.accept(kind)
         described = {
             ref: self._candidates.describe(ref)
             for ref in dict.fromkeys(
@@ -108,7 +117,7 @@ class DefineCampaign:
             )
         }
         for choice in command.tuned:
-            self._check(choice, task.task_id)
+            self._check(choice, task.task_id, measure)
         campaign = EvaluationCampaign.designed(
             campaign_id=self._ids.generate(CampaignId),
             task=task.task_id,
@@ -129,13 +138,14 @@ class DefineCampaign:
                     described[ref]
                     for ref in dict.fromkeys(choice.variant for choice in command.tuned)
                 ),
+                measure=measure,
             ),
             opened_at=self._clock.now(),
         )
         self._campaigns.save(campaign, seen=campaign.revision)
         return campaign.campaign_id
 
-    def _check(self, choice: TunedChoice, task: TaskId) -> None:
+    def _check(self, choice: TunedChoice, task: TaskId, measure: ErrorMeasure) -> None:
         """Refuse a choice its selection, read again by its rule, did not make.
 
         A name is not enough: the variant, and the setting the selection turned the candidate's
@@ -147,13 +157,21 @@ class DefineCampaign:
         Raises:
             CampaignNotFoundError: If the selection is not stored.
             SelectionNotReadableError: If it cannot choose for that pairing.
-            TunedChoiceMismatchError: If it chose otherwise, selected over another task, or
-                described the variant or its base otherwise than this process does.
+            TunedChoiceMismatchError: If it chose otherwise, selected over another task or by
+                another measure, or described the variant or its base otherwise than this
+                process does.
         """
-        selection = self._campaigns.get(choice.selected_by)
-        if selection.task != task:
+        selection = self._campaigns.read(choice.selected_by)
+        design = selection.campaign.design
+        if selection.campaign.task != task:
             raise TunedChoiceMismatchError(
-                f"selection {choice.selected_by} ran over task {selection.task}, not {task}"
+                f"selection {choice.selected_by} ran over task {selection.campaign.task}, "
+                f"not {task}"
+            )
+        if design.measure is not measure:
+            raise TunedChoiceMismatchError(
+                f"selection {choice.selected_by} chose by {design.measure}, and this campaign "
+                f"reads by {measure}"
             )
         chosen = selection.selected(choice.candidate, choice.budget)
         if chosen != choice.variant:
@@ -162,8 +180,8 @@ class DefineCampaign:
                 f"{choice.budget}, not {choice.variant}"
             )
         for ran in (
-            selection.turned_around(choice.candidate),
-            selection.design.get_candidate(choice.variant),
+            selection.campaign.turned_around(choice.candidate),
+            design.get_candidate(choice.variant),
         ):
             described = self._candidates.describe(ran.ref)
             if ran != described:

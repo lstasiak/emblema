@@ -2,6 +2,10 @@ from pathlib import Path
 
 from emblema.evaluation.adapters.readers.cmapss_ground_truth import CmapssGroundTruth
 from emblema.evaluation.adapters.readers.corpus_ground_truths import CorpusGroundTruths
+from emblema.evaluation.adapters.readers.physionet2012_ground_truth import (
+    Physionet2012GroundTruth,
+)
+from emblema.evaluation.domain.labels.outcome_scheme import OutcomeScheme
 
 
 class KnownGroundTruths:
@@ -16,18 +20,30 @@ class KnownGroundTruths:
     the process was given is part of the same fact, so a reader is bound to the directory its
     marker file is found in rather than to one an operator would have to know.
 
-    Only the turbofans are here. The other corpora are published without answers this context
-    knows how to read, and a task defined over one of them is refused by name rather than
-    answered by whichever reader happened to be registered first.
+    The turbofans and the intensive-care stays are here. The other corpora are published without
+    answers this context knows how to read, and a task defined over one of them is refused by
+    name rather than answered by whichever reader happened to be registered first. The stays
+    answer one outcome, named here once for the reader and for the task that asks it.
     """
 
     CMAPSS = "cmapss"
     TURBOFAN_MARKER = "train_FD001.txt"
+    PHYSIONET = "physionet2012"
+    OUTCOMES_MARKER = "Outcomes-a.txt"
+    IN_HOSPITAL_DEATH = OutcomeScheme("In-hospital_death")
 
     @classmethod
     def under(cls, corpora: Path) -> CorpusGroundTruths:
         """Every corpus this process can answer for, reading from the raw corpora in ``corpora``."""
-        return CorpusGroundTruths({cls.CMAPSS: CmapssGroundTruth(cls.turbofans_under(corpora))})
+        return CorpusGroundTruths(
+            {
+                cls.CMAPSS: CmapssGroundTruth(cls.turbofans_under(corpora)),
+                cls.PHYSIONET: Physionet2012GroundTruth(
+                    cls._found_under(corpora, cls.PHYSIONET, cls.OUTCOMES_MARKER),
+                    cls.IN_HOSPITAL_DEATH,
+                ),
+            }
+        )
 
     @classmethod
     def turbofans_under(cls, corpora: Path) -> Path:
@@ -37,6 +53,11 @@ class KnownGroundTruths:
         the reading of a named file rather than the assembling of the process: a worker serving
         campaigns over another corpus has no business stopping because this one is absent.
         """
-        root = corpora / cls.CMAPSS
-        found = sorted(root.rglob(cls.TURBOFAN_MARKER)) if root.is_dir() else []
+        return cls._found_under(corpora, cls.CMAPSS, cls.TURBOFAN_MARKER)
+
+    @staticmethod
+    def _found_under(corpora: Path, corpus: str, marker: str) -> Path:
+        """The directory under ``corpora/corpus`` holding ``marker``, or where it would be."""
+        root = corpora / corpus
+        found = sorted(root.rglob(marker)) if root.is_dir() else []
         return found[0].parent if found else root

@@ -38,14 +38,16 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.evaluation.contracts.identifiers import CampaignId
-from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
 from emblema.evaluation.domain.statistics.practical_floor import PracticalFloor
+from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
 from scripts.reporting import table
@@ -126,6 +128,7 @@ class Comparison:
     floor: PracticalFloor
 
     def row(self) -> tuple[str, ...]:
+        share = self.difference.relative_reduction
         return (
             self.control.campaign,
             self.control.candidate,
@@ -140,7 +143,7 @@ class Comparison:
             repr(self.candidate_error.pooled),
             repr(self.candidate_error.spread),
             repr(self.difference.reduction),
-            repr(self.difference.relative_reduction),
+            "" if share is None else repr(share),
             repr(self.difference.interval.low),
             repr(self.difference.interval.high),
             repr(self.difference.p_value),
@@ -148,13 +151,26 @@ class Comparison:
         )
 
 
-def export(campaigns: Iterable[EvaluationCampaign]) -> list[CellRow]:
-    """Every unit of every recorded cell of ``campaigns``, in the order they were recorded."""
+def export(readings: Iterable[CampaignReading]) -> list[CellRow]:
+    """Every unit of every recorded cell of ``readings``, in the order they were recorded.
+
+    Raises:
+        SystemExit: If a campaign is read by the area under the ROC curve, which does not split
+            into the errors per unit this pairs.
+    """
+    readings = list(readings)
+    for reading in readings:
+        design = reading.campaign.design
+        if design.measure is not ErrorMeasure.RMSE:
+            raise SystemExit(
+                f"campaign {reading.campaign.campaign_id} is read by {design.measure}; this "
+                "pairs errors per unit, which a ranking does not split into"
+            )
     return [
         CellRow(
-            campaign=str(campaign.campaign_id),
-            purpose=campaign.purpose.value,
-            tier=str(campaign.tier),
+            campaign=str(reading.campaign.campaign_id),
+            purpose=reading.campaign.purpose.value,
+            tier=str(reading.campaign.tier),
             candidate=str(result.cell.candidate),
             budget=result.cell.budget.text(),
             seed=result.cell.seed,
@@ -163,8 +179,8 @@ def export(campaigns: Iterable[EvaluationCampaign]) -> list[CellRow]:
             windows=error.windows,
             seconds=result.seconds,
         )
-        for campaign in campaigns
-        for result in campaign.results
+        for reading in readings
+        for result in reading.results
         for error in result.errors
     ]
 
@@ -230,9 +246,9 @@ def pair(
     else:
         pairing = "unit-pooled"
         paired = PairedUnitErrors.pooled(control_repeats, candidate_repeats)
-    control_error = ErrorOverRepeats.of(paired.rmse_control, [_rmse(r) for r in control_repeats])
+    control_error = ErrorOverRepeats.of(paired.error_control, [_rmse(r) for r in control_repeats])
     candidate_error = ErrorOverRepeats.of(
-        paired.rmse_candidate, [_rmse(r) for r in candidate_repeats]
+        paired.error_candidate, [_rmse(r) for r in candidate_repeats]
     )
     return Comparison(
         control=control,
@@ -243,7 +259,7 @@ def pair(
         control_error=control_error,
         candidate_error=candidate_error,
         difference=bootstrap.compare(paired),
-        floor=PracticalFloor.of(control_error, share=floor_share),
+        floor=PracticalFloor.of(control_error, part=floor_share, threshold=ThresholdKind.RELATIVE),
     )
 
 
@@ -290,6 +306,13 @@ def write_comparisons(path: Path, comparisons: Sequence[Comparison]) -> None:
             writer.writerow(comparison.row())
 
 
+def share_of(difference: PairedDifference) -> str:
+    """The relative reduction as a table shows it; a control without error has no share."""
+    if difference.relative_reduction is None:
+        return "no share: control without error"
+    return f"{difference.relative_reduction:+.1%}"
+
+
 def render(comparisons: Sequence[Comparison]) -> str:
     """The table a note pastes: each side's error over its repeats, the difference, the floor."""
     rows = [
@@ -298,8 +321,7 @@ def render(comparisons: Sequence[Comparison]) -> str:
             str(comparison.control_error),
             str(comparison.candidate),
             str(comparison.candidate_error),
-            f"{comparison.difference.reduction:+.3f} "
-            f"({comparison.difference.relative_reduction:+.1%})",
+            f"{comparison.difference.reduction:+.3f} ({share_of(comparison.difference)})",
             str(comparison.difference.interval),
             f"{comparison.difference.p_value:.3f}",
             f"{comparison.floor.value:.3f}",
@@ -367,7 +389,7 @@ def main(
     out.mkdir(parents=True, exist_ok=True)
     if arguments.campaign:
         campaigns = _registry() if registry is None else registry
-        rows = export(campaigns.get(CampaignId.parse(each)) for each in arguments.campaign)
+        rows = export(campaigns.read(CampaignId.parse(each)) for each in arguments.campaign)
         write_cells(out / CELLS, rows)
         print(f"{len(rows)} unit errors of {len(arguments.campaign)} campaigns in {out / CELLS}")
     if arguments.pair:

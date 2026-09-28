@@ -5,17 +5,21 @@ from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.scoring.unit_error import UnitError
+from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
 
 
 class CellResultDocument:
-    """Reads what a cell produced to a document and back, error per unit included.
+    """Reads what a cell produced to a document and back, errors per unit and answers included.
 
     The errors travel as the sums they are, not as a figure derived from them, because they are
     what a paired comparison resamples; a JSON number reads back as the float that was written,
-    so a cell run elsewhere is recorded exactly as it was measured.
+    so a cell run elsewhere is recorded exactly as it was measured. The answers travel beside
+    them, since a measure read from how they rank cannot be rebuilt from the sums; a document
+    written before answers were kept carries none and reads back without them.
     """
 
     def encode(self, result: CellResult) -> dict[str, Any]:
@@ -24,6 +28,16 @@ class CellResultDocument:
             "errors": [
                 {"unit": str(e.unit), "squared_error": e.squared_error, "windows": e.windows}
                 for e in result.errors
+            ],
+            "predictions": [
+                {
+                    "unit": str(p.window.unit),
+                    "position": p.window.position,
+                    "ends_at": p.window.ends_at,
+                    "target": p.target,
+                    "predicted": p.predicted,
+                }
+                for p in result.predictions
             ],
             "seconds": result.seconds,
             "artifact": None
@@ -58,6 +72,18 @@ class CellResultDocument:
             if artifact is None
             else ArtifactRef(
                 artifact["key"], Checksum(HashAlgorithm(artifact["algorithm"]), artifact["digest"])
+            ),
+            predictions=tuple(
+                WindowPrediction(
+                    window=TaskWindow(
+                        unit=UnitKey(row["unit"]),
+                        position=row["position"],
+                        ends_at=float(row["ends_at"]),
+                    ),
+                    target=float(row["target"]),
+                    predicted=float(row["predicted"]),
+                )
+                for row in document.get("predictions", [])
             ),
         )
 

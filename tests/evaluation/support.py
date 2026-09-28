@@ -16,6 +16,7 @@ from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, T
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
+from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.campaign.compute_budget import ComputeBudget
@@ -30,10 +31,14 @@ from emblema.evaluation.domain.classical.random_convolutions import RandomConvol
 from emblema.evaluation.domain.classical.ridge_spec import RidgeSpec
 from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.class_strata import ClassStrata
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.labels.label_scheme import LabelScheme
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.evaluation.domain.labels.outcome_scheme import OutcomeScheme
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
+from emblema.evaluation.domain.labels.stratification import Stratification
 from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
@@ -43,6 +48,7 @@ from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
+from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
 from emblema.evaluation.domain.task.corpus_sides import CorpusSides
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
@@ -54,6 +60,7 @@ from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
+from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.compute import ComputeTier
@@ -66,6 +73,8 @@ CAMPAIGN = CampaignId(UUID(int=2))
 OPENED_AT = UtcDateTime(datetime(2026, 1, 1, tzinfo=UTC))
 SCHEME = RemainingLifeScheme(125.0)
 FORECAST = ForecastScheme("s01", 12.0)
+OUTCOME = OutcomeScheme("In-hospital_death")
+OUTCOMES = ClassStrata()
 STRATA = TargetBins(4)
 TEST_SIDE = FrozenTestSplit(units=frozenset({UnitKey("held/1")}), source="turbofans/test")
 WEIGHTS = ArtifactRef(key="durable/weights", checksum=Checksum.of_bytes(b"weights"))
@@ -92,9 +101,9 @@ def task(
     tuning: frozenset[UnitKey] = units("a", "b"),
     validation: frozenset[UnitKey] = units("c"),
     test: FrozenTestSplit = TEST_SIDE,
-    labels: RemainingLifeScheme | ForecastScheme | None = SCHEME,
+    labels: LabelScheme | None = SCHEME,
     protocol: EvaluationProtocol = EvaluationProtocol.LABEL_BUDGET,
-    strata: TargetBins | None = STRATA,
+    strata: Stratification | None = STRATA,
 ) -> DownstreamTask:
     return DownstreamTask(
         task_id=TASK,
@@ -235,8 +244,9 @@ CONTENDER = CandidateRef("full_fine_tuning")
 PROBE = CandidateRef("frozen_probe")
 BUDGETS = (LabelBudget.of(50), LabelBudget.of(200))
 RULES = ComparisonRules(
-    minimum_relative_reduction=0.1,
-    floor_share=0.02,
+    threshold=ThresholdKind.RELATIVE,
+    minimum_reduction=0.1,
+    floor_part=0.02,
     correction=HolmCorrection(alpha=0.05),
     secondary_family_size=8,
 )
@@ -292,6 +302,31 @@ def result(
     return replace(stated, **overrides)
 
 
+OUTCOMES_OF_STAYS = (1.0, 0.0, 1.0, 0.0, 0.0, 0.0)
+
+
+def answered(
+    ref: CandidateRef,
+    budget: LabelBudget,
+    seed: int,
+    answers: Sequence[float],
+    outcomes: Sequence[float] = OUTCOMES_OF_STAYS,
+) -> CellResult:
+    """A cell of a binary task that answered ``answers`` for stays with ``outcomes``, one window
+    each, its errors the squared errors of those answers."""
+    predictions = tuple(
+        prediction(f"s{index}", 0, outcome, answer)
+        for index, (outcome, answer) in enumerate(zip(outcomes, answers, strict=True))
+    )
+    return CellResult(
+        cell=cell(ref, budget, seed),
+        errors=UnitError.per_unit(predictions),
+        seconds=0.0,
+        artifact=None,
+        predictions=predictions,
+    )
+
+
 def campaign(**overrides: Any) -> EvaluationCampaign:
     stated = EvaluationCampaign.designed(
         campaign_id=CAMPAIGN,
@@ -312,11 +347,16 @@ def artifact(name: str) -> ArtifactRef:
 CLOSED_AT = UtcDateTime(datetime(2026, 1, 2, tzinfo=UTC))
 
 
-def ran_campaign(
+def reading(**overrides: Any) -> CampaignReading:
+    """The campaign of ``campaign``, read with nothing run yet."""
+    return CampaignReading(campaign=campaign(**overrides), results=())
+
+
+def ran_reading(
     kept: ArtifactRef | None = None,
     *,
     errors: Mapping[CandidateRef, Sequence[float]] | None = None,
-) -> EvaluationCampaign:
+) -> CampaignReading:
     """A campaign whose grid ran whole, not yet closed, the contender erring less on every unit.
 
     The contender's artifact is ``kept`` at the cell the design retains; the control keeps none,
@@ -324,9 +364,10 @@ def ran_campaign(
     unit where a test is about the figures rather than the grid.
     """
     scored = {CONTROL: (6.0, 8.0, 10.0), CONTENDER: (3.0, 4.0, 5.0)} if errors is None else errors
-    whole = campaign()
-    for cell in whole.design.cells():
-        retained = kept if cell.candidate == CONTENDER and whole.design.retains(cell) else None
+    whole = reading()
+    for cell in whole.campaign.design.cells():
+        design = whole.campaign.design
+        retained = kept if cell.candidate == CONTENDER and design.retains(cell) else None
         whole = whole.record(
             result(
                 cell.candidate, cell.budget, cell.seed, scored[cell.candidate], artifact=retained
@@ -335,9 +376,31 @@ def ran_campaign(
     return whole
 
 
-def closed_campaign(kept: ArtifactRef | None = None) -> EvaluationCampaign:
-    """The campaign of ``ran_campaign``, closed at ``CLOSED_AT``."""
-    return ran_campaign(kept).complete(CLOSED_AT)
+def closed_reading(kept: ArtifactRef | None = None) -> CampaignReading:
+    """The campaign of ``ran_reading``, closed at ``CLOSED_AT``."""
+    return ran_reading(kept).complete(CLOSED_AT)
+
+
+def reopened(read: CampaignReading) -> CampaignReading:
+    """The reading with its campaign not yet closed, every cell still recorded."""
+    return replace(read, campaign=replace(read.campaign, completed_at=None))
+
+
+def store(campaigns: EvaluationCampaignRepository, read: CampaignReading) -> None:
+    """Put a reading built in memory into a repository as the processes would have written it.
+
+    The campaign is stored as designed, each result recorded in turn, and the campaign closed
+    last where the reading is closed.
+    """
+    designed = replace(read.campaign, recorded=(), completed_at=None)
+    campaigns.save(designed, seen=0)
+    stood = designed
+    for each in read.results:
+        recorded = stood.record(each.cell)
+        campaigns.record(recorded, each, seen=stood.revision)
+        stood = recorded
+    if read.campaign.is_finished:
+        campaigns.save(read.campaign, seen=stood.revision)
 
 
 ROCKET = CandidateRef("minirocket")
@@ -359,7 +422,7 @@ def baseline(ref: CandidateRef, resolution: float = 1.0) -> CampaignCandidate:
 def selection(
     errors: dict[CandidateRef, tuple[float, ...]] | None = None,
     candidates: Sequence[CampaignCandidate] = (),
-) -> EvaluationCampaign:
+) -> CampaignReading:
     """A finished selection between the default grid and a finer one, three repeats each.
 
     Without ``errors`` the finer grid errs less by far more than the spread of the repeats;
@@ -368,7 +431,7 @@ def selection(
     """
     stated = errors or {ROCKET: (10.0, 10.2, 9.8), FINER: (6.0, 6.1, 5.9)}
     competing = tuple(candidates) or (baseline(ROCKET), baseline(FINER, 2.0))
-    grid = EvaluationCampaign.designed(
+    designed = EvaluationCampaign.designed(
         campaign_id=SELECTED_BY,
         task=TASK,
         purpose=RunPurpose.SELECTION,
@@ -386,7 +449,8 @@ def selection(
         ),
         opened_at=OPENED_AT,
     )
-    for run in grid.design.cells():
+    grid = CampaignReading(campaign=designed, results=())
+    for run in designed.design.cells():
         error = stated[run.candidate][run.seed - 1]
         grid = grid.record(result(run.candidate, run.budget, run.seed, (error,)))
     return grid.complete(OPENED_AT)

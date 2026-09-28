@@ -48,7 +48,8 @@ def report() -> Report:
             windows=windows,
             seed=seed,
             units=21,
-            rmse=error - (3.0 if budget == "all" else 0.0) + 0.3 * seed,
+            score=error - (3.0 if budget == "all" else 0.0) + 0.3 * seed,
+            brier=None,
             seconds=1.0,
         )
         for budget, windows in BUDGETS.items()
@@ -62,9 +63,9 @@ def report() -> Report:
             budget=budget,
             windows=windows,
             repeats=2,
-            control_rmse=20.0,
+            control_score=20.0,
             control_sd=0.2,
-            candidate_rmse=error,
+            candidate_score=error,
             candidate_sd=0.2,
             reduction=20.0 - error,
             relative_reduction=(20.0 - error) / 20.0,
@@ -84,7 +85,7 @@ def report() -> Report:
 
 def write(stored: Report, directory: Path) -> Path:
     directory.mkdir(parents=True)
-    write_rows(directory / CELLS, CELL_COLUMNS, [tuple(r) for r in stored.cells])
+    write_rows(directory / CELLS, CELL_COLUMNS, [r.written() for r in stored.cells])
     write_rows(directory / COMPARISONS, COMPARISON_COLUMNS, [tuple(r) for r in stored.comparisons])
     return directory
 
@@ -160,3 +161,10 @@ def test_labels_of_lines_that_end_close_together_are_set_apart_in_order() -> Non
 
 def test_labels_of_lines_that_end_apart_stay_at_their_ends() -> None:
     assert label_heights([30.0, 10.0, 20.0], gap=1.0) == [30.0, 10.0, 20.0]
+
+
+def test_a_report_read_by_area_is_refused_by_name(tmp_path: Path) -> None:
+    (tmp_path / CELLS).write_text("candidate,kind,budget,windows,seed,units,auroc,brier,seconds\n")
+
+    with pytest.raises(SystemExit, match="area under the ROC curve"):
+        read(tmp_path)

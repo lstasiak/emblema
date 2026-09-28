@@ -19,7 +19,8 @@ class ComparisonView:
         candidate_spread: How the candidate's repeats spread.
         candidate_repeats: How many repeats the candidate ran.
         reduction: How much lower the candidate's error is than the control's.
-        relative_reduction: The reduction as a share of the control's error.
+        relative_reduction: The reduction as a share of the control's error; ``None`` where the
+            control made no error.
         interval_low: Lower end of the interval the reduction lies in.
         interval_high: Upper end of that interval.
         interval_level: The confidence the interval is stated at, as a share.
@@ -37,7 +38,7 @@ class ComparisonView:
     candidate_spread: float
     candidate_repeats: int
     reduction: float
-    relative_reduction: float
+    relative_reduction: float | None
     interval_low: float
     interval_high: float
     interval_level: float

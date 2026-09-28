@@ -6,7 +6,7 @@ from typing import Self
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
-from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
 
@@ -17,7 +17,8 @@ class CurvePoint:
 
     Attributes:
         budget: How many labelled windows the candidate learnt from, as text.
-        error: The error pooled over every repeat; ``None`` while no repeat has run.
+        error: The error under the campaign's measure, pooled over every repeat; ``None`` while
+            no repeat has run.
         spread: The standard deviation of the error over the repeats; zero for one.
         repeats: How many repeats have run.
     """
@@ -28,12 +29,13 @@ class CurvePoint:
     repeats: int
 
     @classmethod
-    def of(cls, campaign: EvaluationCampaign, candidate: CandidateRef, budget: LabelBudget) -> Self:
-        results = campaign.results_of(candidate, budget)
+    def of(cls, reading: CampaignReading, candidate: CandidateRef, budget: LabelBudget) -> Self:
+        results = reading.results_of(candidate, budget)
         if not results:
             return cls(budget=budget.text(), error=None, spread=0.0, repeats=0)
         error = ErrorOverRepeats.of(
-            campaign.rmse_of(candidate, budget), [result.rmse for result in results]
+            reading.error_of(candidate, budget),
+            [result.error_under(reading.campaign.design.measure) for result in results],
         )
         return cls(
             budget=budget.text(), error=error.pooled, spread=error.spread, repeats=error.repeats
@@ -55,11 +57,12 @@ class CandidateCurve:
     points: tuple[CurvePoint, ...]
 
     @classmethod
-    def of(cls, campaign: EvaluationCampaign, candidate: CampaignCandidate) -> Self:
+    def of(cls, reading: CampaignReading, candidate: CampaignCandidate) -> Self:
         return cls(
             candidate=candidate.ref,
             kind=candidate.kind,
             points=tuple(
-                CurvePoint.of(campaign, candidate.ref, budget) for budget in campaign.design.budgets
+                CurvePoint.of(reading, candidate.ref, budget)
+                for budget in reading.campaign.design.budgets
             ),
         )

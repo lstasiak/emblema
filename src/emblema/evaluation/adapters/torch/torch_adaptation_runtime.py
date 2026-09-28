@@ -11,15 +11,19 @@ from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate
+from emblema.evaluation.adapters.torch.logistic_solution import LogisticSolution
 from emblema.evaluation.adapters.torch.ridge_solution import RidgeSolution
 from emblema.evaluation.adapters.torch.scheduled_training import Forward, ScheduledTraining
+from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
 )
+from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
@@ -35,8 +39,9 @@ class TorchAdaptationRuntime:
     """Teaches a candidate the task in this process, on whatever device it is given.
 
     A frozen probe under a pooling with no weights of its own encodes the sample once and
-    trains its head over the stored states; the probe whose head is solved in closed form
-    encodes once too and writes the solution into the head, taking no step at all; every other
+    trains its head over the stored states; the probe whose head is solved to its optimum —
+    ridge for a quantity, penalised logistic regression for an outcome — encodes once too and
+    writes the solution into the head, taking no step at all; every other
     run has the encoder in the loop, the frozen probe under a learnt pooling included, since
     its pooling reads the states per token.
     The seconds an outcome reports start once the block is at hand, so the run that happens to
@@ -82,20 +87,20 @@ class TorchAdaptationRuntime:
         tuning = block.at([labelled.window.position for labelled in sample.windows])
         held = block.at([labelled.window.position for labelled in validation])
         started = time.perf_counter()
-        scale = task.label_scheme().scale
+        link = TargetLink.of(task.label_scheme())
         targets = torch.tensor(
-            [labelled.target / scale for labelled in sample.windows], dtype=torch.float32
+            [link.learnt(labelled.target) for labelled in sample.windows], dtype=torch.float32
         ).to(self._device)
         torch.manual_seed(plan.seed)
         candidate = AdaptedBackbone.under(
             plan,
             self._backbones,
             vocabulary_size=len(manifest.channels),
-            starting_at=sample.mean_target / scale,
+            starting_at=link.starting_at(sample.mean_target),
         ).to(self._device)
         if plan.ridge is not None:
             states = self._embedded(candidate, tuning, plan.schedule.batch_size)
-            RidgeSolution.fitted(states, targets, plan.ridge).applied_to(candidate.head)
+            self._solved(link, states, targets, plan.ridge).applied_to(candidate.head)
             losses: list[float] = []
         else:
             forward = (
@@ -105,9 +110,9 @@ class TorchAdaptationRuntime:
                 else self._over_windows(candidate, tuning)
             )
             losses = ScheduledTraining(plan.schedule, plan.seed).losses(
-                candidate, candidate.trainable_parameters(), forward, targets
+                candidate, candidate.trainable_parameters(), forward, targets, loss=link.loss
             )
-        predicted = self._answers(candidate, held, plan.schedule.batch_size) * scale
+        predicted = link.answered(self._answers(candidate, held, plan.schedule.batch_size))
         return AdaptationOutcome(
             plan=plan,
             task=task.task_id,
@@ -123,7 +128,7 @@ class TorchAdaptationRuntime:
             ),
             seconds=time.perf_counter() - started,
             artifact=(
-                self._kept(plan, candidate, task, held, predicted, len(manifest.channels), scale)
+                self._kept(plan, candidate, task, held, predicted, len(manifest.channels), link)
                 if retain
                 else None
             ),
@@ -137,7 +142,7 @@ class TorchAdaptationRuntime:
         held: Sequence[TokenWindow],
         predicted: Tensor,
         vocabulary_size: int,
-        target_scale: float,
+        link: TargetLink,
     ) -> ArtifactRef:
         """The candidate this run fitted, kept in both its forms, so the campaign can name it.
 
@@ -155,12 +160,10 @@ class TorchAdaptationRuntime:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it fitted and was given no store"
             )
-        fitted = FittedCandidate.of(
-            plan, candidate, vocabulary_size=vocabulary_size, target_scale=target_scale
-        )
-        graph = InferenceGraph.exported(candidate, target_scale=target_scale)
+        fitted = FittedCandidate.of(plan, candidate, vocabulary_size=vocabulary_size, link=link)
+        graph = InferenceGraph.exported(candidate, link=link)
         deviation = graph.deviation_from(
-            predicted.tolist(), held, target_scale=target_scale, batch_size=plan.schedule.batch_size
+            predicted.tolist(), held, target_scale=link.scale, batch_size=plan.schedule.batch_size
         )
         return self._kept_candidates.keep(
             CandidateKind.NEURAL,
@@ -192,6 +195,22 @@ class TorchAdaptationRuntime:
                 for start in range(0, len(windows), batch_size)
             ]
         return torch.cat(states)
+
+    @staticmethod
+    def _solved(
+        link: TargetLink, states: Tensor, taught: Tensor, penalties: RidgePenalties
+    ) -> RidgeSolution | LogisticSolution:
+        """The head solved to the optimum of the loss ``link`` teaches a network by.
+
+        Raises:
+            UnsolvableHeadError: If the head cannot be solved over these windows.
+            UnfoldableOutcomesError: If the outcomes leave no folds to choose a penalty on.
+        """
+        match link.kind:
+            case TargetKind.CONTINUOUS:
+                return RidgeSolution.fitted(states, taught, penalties)
+            case TargetKind.BINARY:
+                return LogisticSolution.fitted(states, taught, penalties)
 
     def _answers(
         self, candidate: AdaptedBackbone, windows: Sequence[TokenWindow], batch_size: int

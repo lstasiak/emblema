@@ -9,6 +9,7 @@ from emblema.evaluation.domain.exceptions import (
     UnknownCandidateError,
 )
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVerdict
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 
@@ -31,12 +32,15 @@ class CampaignVerdict:
         control: The candidate every comparison is measured against.
         read_on: Which side the campaign ran on, which is what makes its numbers preliminary or
             final.
+        measure: What the errors are, which decides how the sentence states them: an error
+            lowered, or an area under the ROC curve raised.
         endpoint: The single comparison the campaign was designed to test.
         secondary: Every other candidate at every other budget, in reporting order.
     """
 
     control: CandidateRef
     read_on: RunPurpose
+    measure: ErrorMeasure
     endpoint: CandidateComparison
     secondary: tuple[CandidateComparison, ...]
 
@@ -67,21 +71,44 @@ class CampaignVerdict:
     def sentence(self) -> str:
         """The verdict in one sentence, for whoever reads the outcome rather than the grid."""
         endpoint = self.endpoint
-        difference = endpoint.difference
-        interval = difference.interval
-        found = (
-            f"at {_labels(endpoint.budget)} {endpoint.candidate} lowers the error of "
-            f"{self.control} by {difference.relative_reduction:.1%} "
-            f"({endpoint.control_error.pooled:.3g} → {endpoint.candidate_error.pooled:.3g}, "
-            f"a reduction of {difference.reduction:.3g} with {interval.level:.0%} interval "
-            f"[{interval.low:.3g}; {interval.high:.3g}], floor {endpoint.floor.value:.3g}"
-            f"{self._spread_clause()})"
-        )
+        found = f"at {_labels(endpoint.budget)} {self._finding()}{self._spread_clause()})"
         if endpoint.verdict is ComparisonVerdict.CONFIRMED:
             opening = f"Confirmed on the registered endpoint: {found}"
         else:
             opening = f"Not confirmed on the registered endpoint ({endpoint.verdict}): {found}"
         return f"{opening}{self._shape_clause()}{self._others_clause()}. {self._side()}"
+
+    def _finding(self) -> str:
+        """The endpoint's difference in the words of the measure, the closing bracket left open."""
+        endpoint = self.endpoint
+        difference = endpoint.difference
+        interval = difference.interval
+        stated_at = (
+            f"with {interval.level:.0%} interval [{interval.low:.3g}; {interval.high:.3g}], "
+            f"floor {endpoint.floor.value:.3g}"
+        )
+        share = difference.relative_reduction
+        match self.measure:
+            case ErrorMeasure.RMSE:
+                by = "nothing: the control made no error" if share is None else f"{share:.1%}"
+                return (
+                    f"{endpoint.candidate} lowers the error of {self.control} by {by} "
+                    f"({endpoint.control_error.pooled:.3g} → "
+                    f"{endpoint.candidate_error.pooled:.3g}, a reduction of "
+                    f"{difference.reduction:.3g} {stated_at}"
+                )
+            case ErrorMeasure.AUROC_SHORTFALL:
+                closing = (
+                    "the control ranking perfectly"
+                    if share is None
+                    else f"closing {share:.1%} of its shortfall from a perfect ranking"
+                )
+                return (
+                    f"{endpoint.candidate} raises the AUROC of {self.control} by "
+                    f"{difference.reduction:.3g} "
+                    f"({1.0 - endpoint.control_error.pooled:.3g} → "
+                    f"{1.0 - endpoint.candidate_error.pooled:.3g}, {closing}, {stated_at}"
+                )
 
     def _spread_clause(self) -> str:
         control, candidate = self.endpoint.control_error, self.endpoint.candidate_error

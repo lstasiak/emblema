@@ -12,6 +12,7 @@ from torch.export import Dim
 
 from emblema.evaluation.adapters.onnx.inference_candidate import InferenceCandidate
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
+from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.contracts.inference_graph_signature import (
     INPUT_NAMES,
     OUTPUT_NAMES,
@@ -72,8 +73,8 @@ class InferenceGraph:
     proto: onnx.ModelProto
 
     @classmethod
-    def exported(cls, candidate: AdaptedBackbone, *, target_scale: float) -> Self:
-        """The graph of ``candidate``, answering in the unit ``target_scale`` multiplies back to.
+    def exported(cls, candidate: AdaptedBackbone, *, link: TargetLink) -> Self:
+        """The graph of ``candidate``, answering what ``link`` makes of its head.
 
         Moves ``candidate`` to the host in place, because the exporter refuses a module held on
         an accelerator; a caller that still needs it on the device moves it back.
@@ -81,7 +82,7 @@ class InferenceGraph:
         Raises:
             UnexportableCandidateError: If the exporter cannot trace the candidate.
         """
-        module = InferenceCandidate(candidate, target_scale=target_scale).to("cpu")
+        module = InferenceCandidate(candidate, link=link).to("cpu")
         try:
             program = torch.onnx.export(
                 module,

@@ -43,11 +43,11 @@ class AdaptedBackbone(nn.Module):
         """The candidate ``plan`` describes, built on the host from torch's current generator.
 
         The head is drawn first, so under one seed every mode starts it from the same weights,
-        whatever the encoder draws after it; its bias starts at ``starting_at``, the mean of the
-        labels the run holds in the task's scale. The encoder is asked for over
-        ``vocabulary_size``, the channels of the task's corpus; rows it grew for channels it was
-        never trained on are trained under every mode, as the head is, because there is nothing
-        pretrained in them to freeze.
+        whatever the encoder draws after it; its bias starts at ``starting_at``, where the task's
+        link places a predictor that knows nothing of the labels the run holds. The encoder is
+        asked for over ``vocabulary_size``, the channels of the task's corpus; rows it grew for
+        channels it was never trained on are trained under every mode, as the head is, because
+        there is nothing pretrained in them to freeze.
 
         Raises:
             UnknownBackboneError: If the plan names pretrained weights the factory does not

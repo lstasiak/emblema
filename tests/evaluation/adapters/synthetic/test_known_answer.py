@@ -10,8 +10,8 @@ def test_the_pairs_scatter_around_the_levels_stated_and_the_reduction_is_known()
     paired = known.paired(seed=1)
 
     assert known.true_reduction == 5.0
-    assert paired.rmse_control == pytest.approx(30.0, rel=0.1)
-    assert paired.rmse_candidate == pytest.approx(25.0, rel=0.1)
+    assert paired.error_control == pytest.approx(30.0, rel=0.1)
+    assert paired.error_candidate == pytest.approx(25.0, rel=0.1)
     assert len(paired.units) == 40
 
 

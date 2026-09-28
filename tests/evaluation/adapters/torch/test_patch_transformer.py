@@ -6,6 +6,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from torch.nn.functional import mse_loss  # noqa: E402
+
 from emblema.evaluation.adapters.torch.attention_pooling import AttentionPooling  # noqa: E402
 from emblema.evaluation.adapters.torch.patch_transformer import PatchTransformer  # noqa: E402
 from emblema.evaluation.adapters.torch.scheduled_training import (  # noqa: E402
@@ -96,6 +98,7 @@ def test_a_small_batch_is_learnt_by_the_loop_every_network_here_learns_by() -> N
         learner.parameters(),
         lambda indices: learner(values[indices], observed[indices]),
         targets,
+        loss=mse_loss,
     )
 
     assert losses[-1] < losses[0] / 10

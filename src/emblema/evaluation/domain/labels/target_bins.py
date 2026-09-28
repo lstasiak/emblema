@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from emblema.evaluation.domain.exceptions import InvalidTargetBinsError
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.shared.kernel.ordering import seeded_rank
 
 
 @dataclass(frozen=True)
@@ -54,3 +55,35 @@ class TargetBins:
             groups.append(tuple(ranked[start:end]))
             start = end
         return tuple(groups)
+
+    def draw(self, pool: Sequence[LabelledWindow], wanted: int, seed: int) -> tuple[int, ...]:
+        """Positions of ``wanted`` windows in ``pool``, spread evenly over the strata.
+
+        Each stratum is ordered by the rank its members' keys take under the seed, and the draw
+        goes round the strata taking one at a time, so the budget spreads as evenly as the strata
+        sizes allow and a stratum that runs out is simply skipped. A smaller budget is a prefix
+        of a larger one under the same seed, so the budgets of a curve are nested.
+
+        Raises:
+            InvalidTargetBinsError: If the pool holds fewer windows than there are bins.
+        """
+        strata = [
+            sorted(
+                group,
+                key=lambda index: seeded_rank(
+                    seed, pool[index].window.unit, pool[index].window.position
+                ),
+            )
+            for group in self.of_pool(pool)
+        ]
+        rotation = sorted(range(len(strata)), key=lambda index: seeded_rank(seed, "stratum", index))
+        taken: list[int] = []
+        depth = 0
+        while len(taken) < wanted:
+            for stratum in rotation:
+                if depth < len(strata[stratum]):
+                    taken.append(strata[stratum][depth])
+                    if len(taken) == wanted:
+                        break
+            depth += 1
+        return tuple(taken)

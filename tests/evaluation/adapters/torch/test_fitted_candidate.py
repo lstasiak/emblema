@@ -14,9 +14,11 @@ from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate  # noqa: E402
 from emblema.evaluation.adapters.torch.mean_pooling import MeanPooling  # noqa: E402
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead  # noqa: E402
+from emblema.evaluation.adapters.torch.target_link import TargetLink  # noqa: E402
 from emblema.evaluation.domain.exceptions import (  # noqa: E402
     UnreadableFittedCandidateError,
 )
+from emblema.evaluation.domain.labels.target_kind import TargetKind  # noqa: E402
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
 from tests.evaluation.support import plan  # noqa: E402
 from tests.support.experiments import CHANNELS, TINY  # noqa: E402
@@ -25,6 +27,7 @@ pytestmark = pytest.mark.ml
 
 VOCABULARY = 7
 SCALE = 125.0
+LINK = TargetLink(TargetKind.CONTINUOUS, SCALE)
 
 
 def candidate() -> AdaptedBackbone:
@@ -34,14 +37,14 @@ def candidate() -> AdaptedBackbone:
 
 
 def fitted() -> FittedCandidate:
-    return FittedCandidate.of(plan(), candidate(), vocabulary_size=VOCABULARY, target_scale=SCALE)
+    return FittedCandidate.of(plan(), candidate(), vocabulary_size=VOCABULARY, link=LINK)
 
 
 def test_a_candidate_carries_what_it_takes_to_build_it_again() -> None:
     kept = fitted()
 
     assert kept.vocabulary_size == VOCABULARY
-    assert kept.target_scale == SCALE
+    assert kept.link == LINK
     assert kept.parameters == plan().parameters()
     assert kept.weights.keys() == dict(candidate().state_dict()).keys()
 
@@ -58,7 +61,7 @@ def test_a_candidate_comes_back_from_its_bytes_as_it_went_in() -> None:
     read = FittedCandidate.read(kept.to_bytes())
 
     assert read.parameters == kept.parameters
-    assert (read.vocabulary_size, read.target_scale) == (kept.vocabulary_size, kept.target_scale)
+    assert (read.vocabulary_size, read.link) == (kept.vocabulary_size, kept.link)
     assert read.weights.keys() == kept.weights.keys()
     assert all(torch.equal(read.weights[key], kept.weights[key]) for key in kept.weights)
 

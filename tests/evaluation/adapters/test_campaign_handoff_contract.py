@@ -100,7 +100,7 @@ def test_a_reference_to_nothing_is_reported_as_missing(handoff: CampaignHandoff)
 def test_an_order_of_selection_cells_carries_how_the_tuning_side_is_divided(
     handoff: CampaignHandoff,
 ) -> None:
-    grid = replace(selection(), results=(), completed_at=None)
+    grid = replace(selection().campaign, recorded=(), completed_at=None)
     placed = CampaignOrder(
         campaign=grid.campaign_id,
         task=task(),

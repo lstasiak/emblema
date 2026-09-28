@@ -24,7 +24,10 @@ from emblema.entrypoints.cli.campaign_run.campaign_run_cli import CampaignRunCli
 from emblema.entrypoints.cli.campaign_run.composition_root import CompositionRoot
 from emblema.entrypoints.source_revision import SourceRevision
 from emblema.evaluation.adapters.in_memory.campaign_handoff import InMemoryCampaignHandoff
-from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
+from emblema.evaluation.adapters.in_memory.candidate_provider import (
+    InMemoryCandidateProvider,
+    StatedErrors,
+)
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
@@ -68,7 +71,7 @@ def root(handoff: InMemoryCampaignHandoff) -> CompositionRoot:
         candidates=InMemoryCandidateProvider(
             (candidate(CONTROL), candidate(CONTENDER)),
             tuple(sorted(units("c0", "c1"), key=str)),
-            lambda cell: (1.0, 2.0),
+            StatedErrors(lambda cell: (1.0, 2.0)),
             InMemoryArtifactStore(),
         ),
     )

@@ -7,8 +7,10 @@ import torch
 from emblema.evaluation.adapters.torch.fitted_candidate import UNREADABLE_BYTES
 from emblema.evaluation.adapters.torch.grid_reading import GridReading
 from emblema.evaluation.adapters.torch.patch_transformer import PatchTransformer
+from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.patching.patch_plan import PatchPlan
 
@@ -18,8 +20,8 @@ class FittedPatchModel:
     """A patch model as one run left it: its weights, and what it takes to answer again.
 
     The weights alone would not be enough: a window has to be laid on the same grid and read
-    over the same channels, the model built in the same shape, and the answer read back in the
-    task's unit. So the plan, the reading and the target's scale travel with the weights. A
+    over the same channels, the model built in the same shape, and the answer read back through
+    the task's link. So the plan, the reading and the link travel with the weights. A
     kept candidate's manifest names this form ``FORMAT``; it is the measured form and the only
     one.
 
@@ -27,7 +29,8 @@ class FittedPatchModel:
         parameters: The plan the model was trained under, flattened to scalars; the shape is
             read back out of them.
         reading: The grid a window is laid on and the channels read off it.
-        target_scale: What the targets were divided by.
+        link: How the head's output reaches the task's answer; a model kept before the link was
+            recorded answered a quantity in its scale.
         weights: State of the whole model, on the host.
     """
 
@@ -35,7 +38,7 @@ class FittedPatchModel:
 
     parameters: dict[str, str | int | float]
     reading: GridReading
-    target_scale: float
+    link: TargetLink
     weights: dict[str, Any]
 
     @classmethod
@@ -45,13 +48,13 @@ class FittedPatchModel:
         model: PatchTransformer,
         *,
         reading: GridReading,
-        target_scale: float,
+        link: TargetLink,
     ) -> Self:
         """The model as it ended, its weights moved to the host before anything else is done."""
         return cls(
             parameters=plan.parameters(),
             reading=reading,
-            target_scale=target_scale,
+            link=link,
             weights={key: value.detach().to("cpu") for key, value in model.state_dict().items()},
         )
 
@@ -91,7 +94,8 @@ class FittedPatchModel:
                 "parameters": self.parameters,
                 "grid": [self.reading.steps, self.reading.channels],
                 "held": list(self.reading.held),
-                "target_scale": self.target_scale,
+                "target_kind": str(self.link.kind),
+                "target_scale": self.link.scale,
                 "weights": self.weights,
             },
             buffer,
@@ -116,7 +120,9 @@ class FittedPatchModel:
                 reading=GridReading(
                     steps=int(steps), channels=int(channels), held=tuple(stored["held"])
                 ),
-                target_scale=float(stored["target_scale"]),
+                link=TargetLink.named(
+                    stored.get("target_kind", TargetKind.CONTINUOUS), float(stored["target_scale"])
+                ),
                 weights=stored["weights"],
             )
             read.build()

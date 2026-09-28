@@ -1,8 +1,13 @@
+import io
+
 import numpy as np
 import pytest
 
+from emblema.evaluation.adapters.grid.regular_grid import RegularGrid
 from emblema.evaluation.adapters.minirocket.fitted_convolutions import FittedConvolutions
 from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
+from emblema.evaluation.domain.heads.outcome_folds import OutcomeFolds
+from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.shared.kernel.tokens import TokenWindow
 from tests.evaluation.adapters.features.support import timed, window
 from tests.evaluation.support import convolutions, recipe
@@ -24,7 +29,14 @@ TARGETS = np.array((1.0, 2.0, 3.0, 4.0, 5.0, 6.0) * 3) / 10.0
 
 def fit() -> FittedConvolutions:
     return FittedConvolutions.fitted(
-        recipe(method=convolutions()), convolutions(), 2, 16, WINDOWS, TARGETS, 10.0
+        recipe(method=convolutions()),
+        convolutions(),
+        2,
+        16,
+        WINDOWS,
+        TARGETS,
+        10.0,
+        TargetKind.CONTINUOUS,
     )
 
 
@@ -68,6 +80,7 @@ def test_the_grid_reads_the_channels_the_fitted_windows_hold_and_no_other() -> N
         dense,
         np.linspace(0.0, 1.0, 6),
         1.0,
+        TargetKind.CONTINUOUS,
     )
 
     assert fitted.rows.tolist() == [0, 1, 5 + 1]
@@ -75,7 +88,14 @@ def test_the_grid_reads_the_channels_the_fitted_windows_hold_and_no_other() -> N
 
 def test_a_channel_no_fitted_window_held_is_not_read_when_answering() -> None:
     fitted = FittedConvolutions.fitted(
-        recipe(method=convolutions()), convolutions(), 5, 16, WINDOWS, TARGETS, 10.0
+        recipe(method=convolutions()),
+        convolutions(),
+        5,
+        16,
+        WINDOWS,
+        TARGETS,
+        10.0,
+        TargetKind.CONTINUOUS,
     )
     times = np.sort(np.random.default_rng(9).uniform(0.0, 1.0, 50))
     first = timed(1, [(float(np.sin(2 * np.pi * t)), float(t)) for t in times])
@@ -85,3 +105,142 @@ def test_a_channel_no_fitted_window_held_is_not_read_when_answering() -> None:
     beside = fitted.predict([window(first, second, timed(4, [(9.0, 0.5)]))], threads=1)
 
     assert np.array_equal(alone, beside)
+
+
+OUTCOMES = np.array((0.0, 0.0, 0.0, 1.0, 1.0, 1.0) * 3)
+
+
+def fit_outcomes() -> FittedConvolutions:
+    return FittedConvolutions.fitted(
+        recipe(method=convolutions()),
+        convolutions(),
+        2,
+        16,
+        WINDOWS,
+        OUTCOMES,
+        1.0,
+        TargetKind.BINARY,
+    )
+
+
+def features_with_a_rounding_column(seed: int = 3) -> tuple[np.ndarray, np.ndarray]:
+    """Informative features beside one constant in value that differs only in its last bits.
+
+    Convolutions over a window where a pattern never fires give such features: the share is the
+    same everywhere, summed in orders that round apart.
+    """
+    draws = np.random.default_rng(seed)
+    informative = draws.uniform(0.0, 1.0, size=(50, 20))
+    outcomes = (informative[:, 0] + 0.3 * draws.normal(size=50) > 0.9).astype(np.float64)
+    rounding = 0.3 + draws.integers(-2, 3, size=50) * np.spacing(0.3)
+    return np.column_stack([informative, rounding]), outcomes
+
+
+def test_a_feature_constant_but_for_rounding_is_left_unscaled() -> None:
+    features, _ = features_with_a_rounding_column()
+
+    scale = FittedConvolutions._scale_of(features)
+
+    assert scale[-1] == 1.0
+    assert np.array_equal(scale[:-1], features[:, :-1].std(axis=0))
+
+
+def test_a_feature_constant_but_for_rounding_does_not_stall_the_logistic_regression() -> None:
+    # Divided by its spread, the rounding became a column of unit spread around a mean near
+    # 1e15, and the solver stopped at its starting point with every answer the same.
+    features, outcomes = features_with_a_rounding_column()
+    scaled = features / FittedConvolutions._scale_of(features)
+
+    weights, intercept, _ = FittedConvolutions._logistic(
+        scaled, outcomes, convolutions().ridge.penalties
+    )
+
+    answered = scaled @ weights + intercept
+    assert np.unique(answered).size == len(outcomes)
+    assert answered[outcomes == 1.0].mean() > answered[outcomes == 0.0].mean()
+
+
+def features_of(fitted: FittedConvolutions) -> np.ndarray:
+    laid = RegularGrid(fitted.grid_steps, fitted.channels).of(WINDOWS)[:, fitted.rows]
+    return np.asarray(fitted.transform.of(laid) / fitted.feature_scale)
+
+
+def test_a_binary_task_is_answered_with_the_probabilities_of_its_log_odds() -> None:
+    fitted = fit_outcomes()
+
+    answered = fitted.predict(WINDOWS, threads=1)
+
+    log_odds = features_of(fitted) @ fitted.weights + fitted.intercept
+    assert fitted.kind is TargetKind.BINARY
+    assert np.all((answered > 0.0) & (answered < 1.0))
+    assert np.allclose(answered, 1.0 / (1.0 + np.exp(-log_odds)))
+    assert answered[OUTCOMES == 1.0].mean() > answered[OUTCOMES == 0.0].mean()
+
+
+def test_what_was_kept_of_a_binary_task_answers_exactly_as_what_was_fitted() -> None:
+    fitted = fit_outcomes()
+
+    read = FittedConvolutions.read(fitted.to_bytes())
+
+    assert read.kind is TargetKind.BINARY
+    assert np.array_equal(read.predict(WINDOWS, threads=1), fitted.predict(WINDOWS, threads=1))
+
+
+def test_a_candidate_kept_before_outcomes_were_answered_reads_as_a_quantity() -> None:
+    fitted = fit()
+    with np.load(io.BytesIO(fitted.to_bytes()), allow_pickle=False) as stored:
+        arrays = {name: stored[name] for name in stored.files if name != "kind"}
+    buffer = io.BytesIO()
+    np.savez(buffer, allow_pickle=False, **arrays)
+
+    read = FittedConvolutions.read(buffer.getvalue())
+
+    assert read.kind is TargetKind.CONTINUOUS
+    assert np.array_equal(read.predict(WINDOWS, threads=1), fitted.predict(WINDOWS, threads=1))
+
+
+def test_the_penalty_of_a_binary_task_gives_the_folds_the_smallest_log_loss() -> None:
+    from sklearn.linear_model import LogisticRegression
+
+    fitted = fit_outcomes()
+    features = features_of(fitted)
+    folds = OutcomeFolds.of(OUTCOMES.tolist())
+    losses = []
+    for penalty in convolutions().ridge.penalties:
+        per_fold = []
+        for fold in range(folds.count):
+            kept, held = list(folds.kept(fold)), list(folds.held_out(fold))
+            model = LogisticRegression(
+                C=1.0 / penalty, solver="newton-cholesky", tol=1e-12, max_iter=1000
+            ).fit(features[kept], OUTCOMES[kept])
+            probability = model.predict_proba(features[held])[:, 1]
+            truth = OUTCOMES[held]
+            per_fold.append(
+                -np.mean(truth * np.log(probability) + (1.0 - truth) * np.log(1.0 - probability))
+            )
+        losses.append(np.mean(per_fold))
+
+    assert fitted.penalty == convolutions().ridge.penalties[int(np.argmin(losses))]
+
+
+def test_outcomes_the_waves_barely_tell_apart_are_still_ranked_by_the_map() -> None:
+    # Outcomes that follow no wave: a least-squares map calibrated on answers left out one at a
+    # time reversed its ranking here; the likelihood's own map answers every window apart, and at
+    # its optimum its answers lean towards the outcomes it was fitted on, never against them.
+    outcomes = np.zeros(len(WINDOWS))
+    outcomes[[0, 2, 11, 13]] = 1.0
+    fitted = FittedConvolutions.fitted(
+        recipe(method=convolutions()),
+        convolutions(),
+        2,
+        16,
+        WINDOWS,
+        outcomes,
+        1.0,
+        TargetKind.BINARY,
+    )
+
+    answered = fitted.predict(WINDOWS, threads=1)
+
+    assert np.unique(answered).size == len(np.unique(features_of(fitted), axis=0))
+    assert answered[outcomes == 1.0].mean() > answered[outcomes == 0.0].mean()

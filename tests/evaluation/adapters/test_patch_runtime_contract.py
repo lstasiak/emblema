@@ -28,7 +28,7 @@ from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.ports.patch_runtime import PatchRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
-from tests.evaluation.support import TASK, labelled, patch_plan, task
+from tests.evaluation.support import OUTCOME, OUTCOMES, TASK, labelled, patch_plan, task
 
 SAMPLE = LabelSample(
     task=TASK,
@@ -78,6 +78,15 @@ def test_every_scored_window_is_answered_in_the_order_given(trained: Trained) ->
     assert [p.window for p in outcome.predictions] == [w.window for w in SCORED]
     assert [p.target for p in outcome.predictions] == [w.target for w in SCORED]
     assert outcome.artifact is None
+
+
+def test_a_binary_task_is_answered_with_probabilities(trained: Trained) -> None:
+    binary = replace(trained.task, labels=OUTCOME, strata=OUTCOMES)
+    outcomes = replace(SAMPLE, windows=(labelled("a", 0, 10.0, 1.0), labelled("b", 3, 10.0, 0.0)))
+
+    outcome = trained.runtime.train(patch_plan(), binary, outcomes, SCORED, retain=False)
+
+    assert all(0.0 < p.predicted < 1.0 for p in outcome.predictions)
 
 
 def test_a_sample_of_another_task_is_refused(trained: Trained) -> None:

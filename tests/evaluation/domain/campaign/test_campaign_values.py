@@ -9,15 +9,18 @@ from emblema.evaluation.domain.exceptions import (
     InvalidCampaignCandidateError,
     InvalidCellResultError,
     InvalidComputeBudgetError,
+    PredictionsNotKeptError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
 from emblema.evaluation.domain.scoring.unit_error import UnitError
 from tests.evaluation.support import (
     CONTENDER,
     CONTROL,
     adaptation_schedule,
+    answered,
     candidate,
     cell,
     prediction,
@@ -98,8 +101,35 @@ def test_a_result_read_off_an_outcome_keeps_its_errors_per_unit_its_time_and_its
     read = CellResult.of(cell(CONTENDER, LabelBudget.of(50), 1), outcome)
 
     assert read.errors == outcome.by_unit()
+    assert read.predictions == outcome.predictions
     assert read.seconds == 2.5
     assert read.rmse == pytest.approx(outcome.rmse)
+
+
+def test_answers_that_cover_other_windows_than_the_errors_are_refused() -> None:
+    scored = result(CONTENDER, LabelBudget.of(50), 1, (3.0, 4.0))
+
+    with pytest.raises(InvalidCellResultError, match="other units or windows"):
+        CellResult(
+            cell=scored.cell,
+            errors=scored.errors,
+            seconds=0.0,
+            artifact=None,
+            predictions=(prediction("c0", 0, 1.0, 4.0),),
+        )
+
+
+def test_a_cell_is_read_by_the_measure_its_campaign_names() -> None:
+    ranked = answered(CONTENDER, LabelBudget.of(50), 1, (0.9, 0.2, 0.1, 0.3, 0.4, 0.5))
+
+    # Positives at 0.9 and 0.1 against four negatives: the first wins four pairs, the second none.
+    assert ranked.error_under(ErrorMeasure.AUROC_SHORTFALL) == pytest.approx(0.5)
+    assert ranked.error_under(ErrorMeasure.RMSE) == ranked.rmse
+
+
+def test_a_cell_recorded_without_its_answers_cannot_be_read_by_how_they_rank() -> None:
+    with pytest.raises(PredictionsNotKeptError):
+        result(CONTENDER, LabelBudget.of(50), 1, (3.0,)).error_under(ErrorMeasure.AUROC_SHORTFALL)
 
 
 def test_the_error_of_a_cell_is_the_root_mean_over_every_window_it_answered() -> None:

@@ -6,6 +6,9 @@ from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import (
     ForeignLabelSampleError,
     FrozenTestSplitClosedError,
+    InvalidOutcomeError,
+    MismatchedStratificationError,
+    MixedTargetKindsError,
     UnknownGroundTruthError,
     UnlabelledWindowError,
 )
@@ -13,7 +16,18 @@ from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
-from tests.evaluation.support import FORECAST, TASK, TEST_SIDE, labelled, task, units, window
+from tests.evaluation.support import (
+    FORECAST,
+    OUTCOME,
+    OUTCOMES,
+    STRATA,
+    TASK,
+    TEST_SIDE,
+    labelled,
+    task,
+    units,
+    window,
+)
 
 
 def test_a_task_labels_windows_by_its_scheme_from_the_failure_of_their_unit() -> None:
@@ -44,6 +58,43 @@ def test_a_forecasting_task_labels_a_window_with_the_exact_reading_it_is_given()
     read = task(labels=FORECAST).labelled(windows, {windows[0]: -0.25, windows[1]: 1.5})
 
     assert [w.target for w in read] == [-0.25, 1.5]
+
+
+def test_a_binary_task_labels_every_window_with_the_outcome_its_unit_recorded() -> None:
+    windows = [window("a", 0, 48.0), window("a", 1, 96.0), window("b", 2, 48.0)]
+    recorded = {UnitKey("a"): 1.0, UnitKey("b"): 0.0}
+
+    read = task(labels=OUTCOME, strata=OUTCOMES).labelled(
+        windows, {w: recorded[w.unit] for w in windows}
+    )
+
+    assert [w.target for w in read] == [1.0, 1.0, 0.0]
+
+
+def test_an_outcome_recorded_as_anything_but_zero_or_one_cannot_be_labelled() -> None:
+    with pytest.raises(InvalidOutcomeError, match="as 0 or 1"):
+        task(labels=OUTCOME, strata=OUTCOMES).labelled(
+            [window("a", 0, 48.0)], {window("a", 0, 48.0): -1.0}
+        )
+
+
+def test_a_binary_target_spread_over_ranks_of_the_target_is_refused() -> None:
+    with pytest.raises(MismatchedStratificationError, match="binary target"):
+        task(labels=OUTCOME, strata=STRATA)
+
+
+def test_a_quantity_spread_over_outcomes_is_refused() -> None:
+    with pytest.raises(MismatchedStratificationError, match="continuous target"):
+        task(strata=OUTCOMES)
+
+
+def test_a_task_learns_from_another_task_whose_target_is_of_its_kind() -> None:
+    task().accept_source(task(labels=FORECAST))
+
+
+def test_a_task_refuses_to_learn_from_a_target_of_another_kind() -> None:
+    with pytest.raises(MixedTargetKindsError, match="binary target"):
+        task(labels=OUTCOME, strata=OUTCOMES).accept_source(task())
 
 
 def test_a_sample_drawn_from_the_task_is_accepted() -> None:

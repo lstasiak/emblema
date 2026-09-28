@@ -73,38 +73,39 @@ class PairedUnitErrors:
         return tuple(error.unit for error in self.control)
 
     @property
-    def rmse_control(self) -> float:
-        return self.rmse_control_over(range(len(self.control)))
+    def strata(self) -> tuple[tuple[int, ...], ...]:
+        """The units a resample draws from: all of them, as one stratum."""
+        return (tuple(range(len(self.control))),)
 
     @property
-    def rmse_candidate(self) -> float:
-        return self.rmse_candidate_over(range(len(self.candidate)))
+    def error_control(self) -> float:
+        return self.error_control_over(range(len(self.control)))
+
+    @property
+    def error_candidate(self) -> float:
+        return self.error_candidate_over(range(len(self.candidate)))
 
     @property
     def reduction(self) -> float:
         """How much lower the candidate's error is than the control's, in the error's unit."""
-        return self.rmse_control - self.rmse_candidate
+        return self.error_control - self.error_candidate
 
     @property
-    def relative_reduction(self) -> float:
-        """The reduction as a share of the control's error.
-
-        Raises:
-            InvalidPairedUnitErrorsError: If the control makes no error, so no share exists.
-        """
-        control = self.rmse_control
+    def relative_reduction(self) -> float | None:
+        """The reduction as a share of the control's error; ``None`` where it makes none."""
+        control = self.error_control
         if control == 0.0:
-            raise InvalidPairedUnitErrorsError("the control makes no error to reduce")
+            return None
         return self.reduction / control
 
     def reduction_over(self, picks: Sequence[int]) -> float:
         """The reduction over the units at ``picks``, a unit counted as often as it is picked."""
-        return self.rmse_control_over(picks) - self.rmse_candidate_over(picks)
+        return self.error_control_over(picks) - self.error_candidate_over(picks)
 
-    def rmse_control_over(self, picks: Sequence[int]) -> float:
+    def error_control_over(self, picks: Sequence[int]) -> float:
         return _rmse_over(self.control, picks)
 
-    def rmse_candidate_over(self, picks: Sequence[int]) -> float:
+    def error_candidate_over(self, picks: Sequence[int]) -> float:
         return _rmse_over(self.candidate, picks)
 
 

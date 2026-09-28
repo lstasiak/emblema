@@ -62,7 +62,7 @@ class CampaignOverview:
             design=campaign.design,
             opened_at=campaign.opened_at,
             completed_at=campaign.completed_at,
-            cells_recorded=len(campaign.results),
+            cells_recorded=campaign.cells_recorded,
         )
 
     @property

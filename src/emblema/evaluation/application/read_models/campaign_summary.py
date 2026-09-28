@@ -3,6 +3,7 @@ from typing import Self
 
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
 from emblema.evaluation.domain.campaign.campaign_overview import CampaignOverview
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.shared.kernel.compute import ComputeTier
 from emblema.shared.kernel.timestamps import UtcDateTime
@@ -29,6 +30,7 @@ class CampaignSummary:
         candidates: Every competitor, in the order the campaign reports them.
         budgets: Every budget, as text, in reporting order.
         seeds: Every repeat of a cell.
+        measure: What every run is read by.
         cells_recorded: How many cells of the grid have run.
         cells_planned: How many the grid holds.
     """
@@ -46,6 +48,7 @@ class CampaignSummary:
     candidates: tuple[CandidateRef, ...]
     budgets: tuple[str, ...]
     seeds: tuple[int, ...]
+    measure: ErrorMeasure
     cells_recorded: int
     cells_planned: int
 
@@ -66,6 +69,7 @@ class CampaignSummary:
             candidates=tuple(candidate.ref for candidate in design.candidates),
             budgets=tuple(budget.text() for budget in design.budgets),
             seeds=design.seeds,
+            measure=design.measure,
             cells_recorded=campaign.cells_recorded,
             cells_planned=len(design.cells()),
         )

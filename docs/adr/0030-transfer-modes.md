@@ -78,6 +78,8 @@ labelled windows).
   the sample's label mean.
 - **2026-09-27 — a fifth mode, `FROZEN_RIDGE`**: the probe's head solved in closed form over the
   same pooled states, beside the trained probe (ADR-0044).
+- **2026-09-27 — a task over outcomes**: the head's meaning became a value of the task, the link
+  of its target's kind; one linear head serves a quantity and an outcome (ADR-0045).
 
 ## Sources
 

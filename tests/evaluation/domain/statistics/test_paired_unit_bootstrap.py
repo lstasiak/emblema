@@ -8,6 +8,7 @@ from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
+from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
 
 # Enough datasets to read a rate off, few enough resamples to keep the whole check in a second.
 DATASETS = 200
@@ -24,7 +25,7 @@ def test_a_true_reduction_is_found_with_its_whole_interval_above_zero() -> None:
     assert compared.interval.above_zero
     assert compared.interval.low < compared.reduction < compared.interval.high
     assert compared.p_value < 0.01
-    assert compared.confirms(0.10)
+    assert compared.confirms(0.10, ThresholdKind.RELATIVE)
     assert compared.distinguishable
 
 
@@ -36,7 +37,7 @@ def test_no_true_difference_leaves_zero_inside_the_interval() -> None:
     assert abs(compared.reduction) < 1.0
     assert not compared.interval.excludes_zero
     assert compared.p_value > 0.2
-    assert not compared.confirms(0.10)
+    assert not compared.confirms(0.10, ThresholdKind.RELATIVE)
     assert not compared.distinguishable
 
 
@@ -76,6 +77,18 @@ def test_the_same_seed_gives_the_same_interval_and_another_seed_a_near_one() -> 
     assert first == again
     assert first.interval.low == pytest.approx(other.interval.low, abs=0.3)
     assert first.interval.high == pytest.approx(other.interval.high, abs=0.3)
+
+
+def test_an_interval_repeats_what_every_registered_verdict_was_read_from() -> None:
+    # Pinned values, not derived ones: a stored verdict is read again from its cells, so a change
+    # to the resampling that moved these would rewrite verdicts already reported.
+    compared = KnownAnswer(control_rmse=30.0, candidate_rmse=25.0).paired(seed=7)
+
+    found = PairedUnitBootstrap(resamples=1000, seed=1).compare(compared)
+
+    assert (found.interval.low, found.interval.high) == (2.944022212769967, 5.068296353669187)
+    assert found.p_value == 0.001998001998001998
+    assert found.reduction == 4.062481233026677
 
 
 def test_a_wider_level_gives_a_wider_interval() -> None:

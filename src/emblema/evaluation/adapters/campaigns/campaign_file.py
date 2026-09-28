@@ -12,15 +12,17 @@ import tomllib
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from emblema.evaluation.adapters.documents.family_correction_document import (
     FamilyCorrectionDocument,
 )
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
+from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
@@ -68,10 +70,18 @@ class _Budgets(_Section):
 class _Rules(_Section):
     """What a verdict requires, as the campaign's registration states it.
 
+    The thresholds are stated either both as shares of the control's error or both in the
+    error's own unit, and the keys say which, so a file cannot mix the two or leave the reader to
+    guess.
+
     Attributes:
         minimum_relative_reduction: Least share of the control's error a candidate must remove
             for the difference to be called one.
         floor_share: Share of the control's error below which a difference is not worth
+            reporting whatever the interval says.
+        minimum_absolute_reduction: Least reduction, in the error's unit, a candidate must make
+            for the difference to be called one.
+        absolute_floor: Reduction, in the error's unit, below which a difference is not worth
             reporting whatever the interval says.
         correction: Which correction the secondary family is read under, by name; Holm unless
             the file says otherwise, since that is the correction the registration names.
@@ -79,11 +89,56 @@ class _Rules(_Section):
         secondary_family_size: How many comparisons the secondary family holds.
     """
 
-    minimum_relative_reduction: float
-    floor_share: float
+    minimum_relative_reduction: float | None = None
+    floor_share: float | None = None
+    minimum_absolute_reduction: float | None = None
+    absolute_floor: float | None = None
     correction: str = FamilyCorrectionDocument.DEFAULT
     alpha: float = 0.05
     secondary_family_size: int
+
+    @model_validator(mode="after")
+    def _one_way_of_stating_thresholds(self) -> Self:
+        self.thresholds()
+        return self
+
+    def thresholds(self) -> tuple[ThresholdKind, float, float]:
+        """How the thresholds are stated, and the minimum and the floor's fixed part.
+
+        Raises:
+            ValueError: If the file states neither pair whole, or states both.
+        """
+        pairs = {
+            ThresholdKind.RELATIVE: (self.minimum_relative_reduction, self.floor_share),
+            ThresholdKind.ABSOLUTE: (self.minimum_absolute_reduction, self.absolute_floor),
+        }
+        stated = [kind for kind, pair in pairs.items() if any(v is not None for v in pair)]
+        if len(stated) == 1:
+            minimum, floor = pairs[stated[0]]
+            if minimum is not None and floor is not None:
+                return stated[0], minimum, floor
+        raise ValueError(
+            "state the minimum and the floor both as shares (minimum_relative_reduction, "
+            "floor_share) or both in the error's unit (minimum_absolute_reduction, "
+            "absolute_floor)"
+        )
+
+    def rules(self) -> ComparisonRules:
+        """The rules this section states.
+
+        Raises:
+            InvalidComparisonRulesError: If they do not stand up, or name a correction nobody
+                knows.
+            InvalidFamilyCorrectionError: If the level is not one.
+        """
+        threshold, minimum, floor = self.thresholds()
+        return ComparisonRules(
+            minimum_reduction=minimum,
+            floor_part=floor,
+            threshold=threshold,
+            correction=FamilyCorrectionDocument().decode(self.correction, self.alpha),
+            secondary_family_size=self.secondary_family_size,
+        )
 
 
 class _Bootstrap(_Section):
@@ -144,6 +199,8 @@ class CampaignFile(_Section):
         bootstrap: How each interval is drawn.
         selection: How the tuning side is divided, in a campaign that selects among variants.
         tuned: Which variant each tuned pairing runs, in a campaign that compares.
+        measure: What every run is read by; the one the task's target is read by unless the
+            file names another.
     """
 
     name: str
@@ -155,6 +212,7 @@ class CampaignFile(_Section):
     bootstrap: _Bootstrap = _Bootstrap()
     selection: _Selection | None = None
     tuned: tuple[_Tuned, ...] = ()
+    measure: ErrorMeasure | None = None
 
     @classmethod
     def load(cls, path: Path) -> Self:
@@ -202,12 +260,7 @@ class CampaignFile(_Section):
                 or names a correction nobody knows.
             InvalidFamilyCorrectionError: If the level is not one.
         """
-        return ComparisonRules(
-            minimum_relative_reduction=self.rules.minimum_relative_reduction,
-            floor_share=self.rules.floor_share,
-            correction=FamilyCorrectionDocument().decode(self.rules.correction, self.rules.alpha),
-            secondary_family_size=self.rules.secondary_family_size,
-        )
+        return self.rules.rules()
 
     def paired_bootstrap(self) -> PairedUnitBootstrap:
         """How the interval around each comparison is drawn.

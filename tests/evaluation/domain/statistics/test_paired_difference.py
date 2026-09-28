@@ -5,6 +5,7 @@ import pytest
 from emblema.evaluation.domain.exceptions import InvalidPairedDifferenceError
 from emblema.evaluation.domain.statistics.bootstrap_interval import BootstrapInterval
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
+from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
 
 
 def difference(
@@ -23,9 +24,32 @@ def difference(
 
 
 def test_the_claim_needs_both_the_share_and_the_interval() -> None:
-    assert difference().confirms(0.10)
-    assert not difference(relative=0.08).confirms(0.10)
-    assert not difference(low=-0.5).confirms(0.10)
+    assert difference().confirms(0.10, ThresholdKind.RELATIVE)
+    assert not difference(relative=0.08).confirms(0.10, ThresholdKind.RELATIVE)
+    assert not difference(low=-0.5).confirms(0.10, ThresholdKind.RELATIVE)
+
+
+def test_a_control_without_error_leaves_no_share_to_reach() -> None:
+    # The control made no error, so the candidate can at best tie it; no share of nothing is a
+    # reduction, and the absolute rule still reads the reduction itself.
+    tied = PairedDifference(
+        reduction=0.0,
+        relative_reduction=None,
+        interval=BootstrapInterval(low=0.0, high=0.0, level=0.95),
+        p_value=1.0,
+    )
+
+    assert not tied.confirms(0.10, ThresholdKind.RELATIVE)
+    assert not tied.confirms(0.01, ThresholdKind.ABSOLUTE)
+
+
+def test_an_absolute_claim_reads_the_reduction_in_the_errors_unit_not_its_share() -> None:
+    # A gain of 0.03 in area closes 12 % of a shortfall of 0.25: the absolute rule reads 0.03.
+    gain = difference(reduction=0.03, relative=0.12, low=0.01, high=0.05)
+
+    assert gain.confirms(0.02, ThresholdKind.ABSOLUTE)
+    assert not gain.confirms(0.04, ThresholdKind.ABSOLUTE)
+    assert not difference(reduction=0.03, low=-0.01).confirms(0.02, ThresholdKind.ABSOLUTE)
 
 
 def test_a_difference_is_distinguishable_when_its_interval_keeps_zero_out() -> None:

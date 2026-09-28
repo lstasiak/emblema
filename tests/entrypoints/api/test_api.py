@@ -35,7 +35,7 @@ from emblema.serving.domain.identifiers import ServedModelId
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
-from tests.evaluation.support import CAMPAIGN, closed_campaign
+from tests.evaluation.support import CAMPAIGN, closed_reading, store
 from tests.serving.support import KEPT, MODEL, WITHDRAWN, limits, served, stated
 from tests.support.settings import API, TELEMETRY
 
@@ -79,7 +79,7 @@ def client(
     models.save(served())
     models.save(served(served_model_id=WITHDRAWN_MODEL, artifact=KEPT).withdraw(WITHDRAWN))
     campaigns = InMemoryEvaluationCampaignRepository()
-    campaigns.save(closed_campaign(), seen=0)
+    store(campaigns, closed_reading())
     reporting = Telemetry(TELEMETRY) if telemetry else None
     root = CompositionRoot(
         telemetry=reporting,
@@ -246,7 +246,7 @@ def test_a_campaign_is_listed_shown_and_its_runs_paged(api: TestClient) -> None:
 
     assert [c["campaign_id"] for c in listed["items"]] == [str(CAMPAIGN)]
     assert shown["campaign"]["finished"] is True
-    assert shown["verdict"]["sentence"] == closed_campaign().verdict().sentence()
+    assert shown["verdict"]["sentence"] == closed_reading().verdict().sentence()
     assert len(shown["curves"]) == 2
     assert len(runs["items"]) == 2
     assert len(rest["items"]) == 2

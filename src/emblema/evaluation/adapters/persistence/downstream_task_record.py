@@ -13,8 +13,12 @@ from emblema.evaluation.adapters.persistence.task_unit_record import (
 )
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.class_strata import ClassStrata
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
+from emblema.evaluation.domain.labels.label_scheme import LabelScheme
+from emblema.evaluation.domain.labels.outcome_scheme import OutcomeScheme
 from emblema.evaluation.domain.labels.remaining_life_scheme import RemainingLifeScheme
+from emblema.evaluation.domain.labels.stratification import Stratification
 from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
@@ -23,7 +27,7 @@ from emblema.evaluation.domain.task.task_split import TaskSplit
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
 
-REMAINING_LIFE, FORECAST = "remaining_life", "forecast"
+REMAINING_LIFE, FORECAST, OUTCOME = "remaining_life", "forecast", "outcome"
 
 
 class DownstreamTaskRecord(Base):
@@ -33,7 +37,8 @@ class DownstreamTaskRecord(Base):
     reads and under what ceiling is asked about whenever results are compared, and a check
     constraint then keeps each scheme to the parameters it has. A protocol that spends no labels
     carries no scheme at all, and the constraints say that too, so the invariant the aggregate
-    holds is held by the database as well.
+    holds is held by the database as well. A task over outcomes is spread over its two outcomes,
+    which has no parameter to store: the number of strata is kept for a quantity's bins only.
     """
 
     __tablename__ = "downstream_task"
@@ -44,14 +49,19 @@ class DownstreamTaskRecord(Base):
             name="protocol_known",
         ),
         CheckConstraint(
-            f"label_scheme IS NULL OR label_scheme IN ('{REMAINING_LIFE}', '{FORECAST}')",
+            f"label_scheme IS NULL OR label_scheme IN ('{REMAINING_LIFE}', '{FORECAST}', "
+            f"'{OUTCOME}')",
             name="label_scheme_known",
         ),
         CheckConstraint(
             f"(protocol = '{EvaluationProtocol.LABEL_BUDGET}') = (label_scheme IS NOT NULL)",
             name="labels_match_protocol",
         ),
-        CheckConstraint("(label_scheme IS NULL) = (strata IS NULL)", name="strata_with_labels"),
+        CheckConstraint(
+            f"COALESCE(label_scheme IN ('{REMAINING_LIFE}', '{FORECAST}'), FALSE) "
+            "= (strata IS NOT NULL)",
+            name="strata_with_quantities",
+        ),
         CheckConstraint(
             f"(label_scheme = '{REMAINING_LIFE}') = (label_ceiling IS NOT NULL)",
             name="remaining_life_has_ceiling",
@@ -63,6 +73,10 @@ class DownstreamTaskRecord(Base):
         CheckConstraint(
             f"(label_scheme = '{FORECAST}') = (label_horizon IS NOT NULL)",
             name="forecast_has_horizon",
+        ),
+        CheckConstraint(
+            f"(label_scheme = '{OUTCOME}') = (label_outcome IS NOT NULL)",
+            name="outcome_has_name",
         ),
     )
 
@@ -77,6 +91,7 @@ class DownstreamTaskRecord(Base):
     label_ceiling: Mapped[float | None] = mapped_column(Float)
     label_channel: Mapped[str | None] = mapped_column(Text)
     label_horizon: Mapped[float | None] = mapped_column(Float)
+    label_outcome: Mapped[str | None] = mapped_column(Text)
     strata: Mapped[int | None] = mapped_column(Integer)
     units: Mapped[list[TaskUnitRecord]] = relationship(
         cascade="all, delete-orphan", lazy="selectin", order_by=TaskUnitRecord.unit
@@ -97,7 +112,8 @@ class DownstreamTaskRecord(Base):
             label_ceiling=labels.ceiling if isinstance(labels, RemainingLifeScheme) else None,
             label_channel=labels.channel if isinstance(labels, ForecastScheme) else None,
             label_horizon=labels.horizon if isinstance(labels, ForecastScheme) else None,
-            strata=None if task.strata is None else task.strata.count,
+            label_outcome=labels.outcome if isinstance(labels, OutcomeScheme) else None,
+            strata=task.strata.count if isinstance(task.strata, TargetBins) else None,
             units=[
                 TaskUnitRecord.of(task.task_id, unit, side)
                 for side, keys in (
@@ -125,13 +141,20 @@ class DownstreamTaskRecord(Base):
                 test=FrozenTestSplit(units=sides[TEST], source=self.test_source),
             ),
             labels=self._labels(),
-            strata=None if self.strata is None else TargetBins(self.strata),
+            strata=self._strata(),
         )
 
     def _side(self, side: str) -> frozenset[UnitKey]:
         return frozenset(record.to_unit() for record in self.units if record.side == side)
 
-    def _labels(self) -> RemainingLifeScheme | ForecastScheme | None:
+    def _strata(self) -> Stratification | None:
+        if self.strata is not None:
+            return TargetBins(self.strata)
+        if self.label_scheme == OUTCOME:
+            return ClassStrata()
+        return None
+
+    def _labels(self) -> LabelScheme | None:
         if self.label_scheme == REMAINING_LIFE and self.label_ceiling is not None:
             return RemainingLifeScheme(self.label_ceiling)
         if (
@@ -140,14 +163,18 @@ class DownstreamTaskRecord(Base):
             and self.label_horizon is not None
         ):
             return ForecastScheme(self.label_channel, self.label_horizon)
+        if self.label_scheme == OUTCOME and self.label_outcome is not None:
+            return OutcomeScheme(self.label_outcome)
         return None
 
     @staticmethod
-    def _scheme_name(labels: RemainingLifeScheme | ForecastScheme | None) -> str | None:
+    def _scheme_name(labels: LabelScheme | None) -> str | None:
         match labels:
             case RemainingLifeScheme():
                 return REMAINING_LIFE
             case ForecastScheme():
                 return FORECAST
+            case OutcomeScheme():
+                return OUTCOME
             case None:
                 return None

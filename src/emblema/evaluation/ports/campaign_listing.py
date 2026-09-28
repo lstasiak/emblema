@@ -26,6 +26,14 @@ class CampaignListing(Protocol):
         """
         ...
 
+    def get_overview(self, campaign: CampaignId) -> CampaignOverview:
+        """One campaign without its results: its design, and how many cells of it have run.
+
+        Raises:
+            CampaignNotFoundError: If no campaign is stored under that identity.
+        """
+        ...
+
     def results(
         self, campaign: CampaignId, *, after: CampaignCell | None, limit: int
     ) -> tuple[CellResult, ...]:

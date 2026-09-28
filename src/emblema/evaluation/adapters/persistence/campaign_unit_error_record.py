@@ -55,6 +55,9 @@ class CampaignUnitErrorRecord(Base):
         )
 
     def to_error(self) -> UnitError:
-        return UnitError(
-            unit=UnitKey(self.unit), squared_error=self.squared_error, windows=self.windows
-        )
+        return self.error_of(self.unit, self.squared_error, self.windows)
+
+    @staticmethod
+    def error_of(unit: str, squared_error: float, windows: int) -> UnitError:
+        """The error a row's columns hold, for a row read without the mapped instance."""
+        return UnitError(unit=UnitKey(unit), squared_error=squared_error, windows=windows)

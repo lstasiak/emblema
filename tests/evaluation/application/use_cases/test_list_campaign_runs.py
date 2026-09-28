@@ -13,16 +13,17 @@ from emblema.evaluation.application.use_cases.list_campaign_runs import (
 )
 from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.exceptions import CampaignNotFoundError
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.shared.kernel.exceptions import InvalidCursorError, InvalidPageError
 from emblema.shared.kernel.paging.cursor import Cursor
-from tests.evaluation.support import CAMPAIGN, artifact, closed_campaign
+from tests.evaluation.support import CAMPAIGN, artifact, closed_reading, store
 
 KEPT = artifact("kept")
 
 
 def listing() -> ListCampaignRuns:
     repository = InMemoryEvaluationCampaignRepository()
-    repository.save(closed_campaign(KEPT), seen=0)
+    store(repository, closed_reading(KEPT))
     return ListCampaignRuns(InMemoryCampaignListing(repository))
 
 
@@ -42,8 +43,8 @@ def test_the_runs_of_a_campaign_are_listed_whole_when_the_page_is_large_enough()
     ]
     assert page.items[0].units == 3
     assert page.items[0].error == pytest.approx(
-        closed_campaign()
-        .results_of(page.items[0].candidate, closed_campaign().design.budgets[1])[0]
+        closed_reading()
+        .results_of(page.items[0].candidate, closed_reading().campaign.design.budgets[1])[0]
         .rmse
     )
 
@@ -60,9 +61,9 @@ def test_pages_of_runs_follow_one_another_and_together_are_the_grid() -> None:
 
     assert [len(page.items) for page in pages] == [3, 3, 2]
     assert runs == [
-        CampaignRun.of(r)
+        CampaignRun.of(r, ErrorMeasure.RMSE)
         for r in sorted(
-            closed_campaign(KEPT).results,
+            closed_reading(KEPT).results,
             key=lambda r: (str(r.cell.candidate), r.cell.budget.text(), r.cell.seed),
         )
     ]

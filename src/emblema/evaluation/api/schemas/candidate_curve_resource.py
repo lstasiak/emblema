@@ -11,7 +11,12 @@ class CurvePointResource(BaseModel):
     """What a candidate scored at one budget, pooled over the repeats that have run."""
 
     budget: str
-    error: float | None = Field(description="Pooled over the repeats; absent while none has run.")
+    error: float | None = Field(
+        description=(
+            "The error under the campaign's measure, pooled over the repeats; absent while none "
+            "has run."
+        )
+    )
     spread: float
     repeats: int
 

@@ -5,7 +5,6 @@ from emblema.evaluation.application.use_cases.complete_campaign import (
     CompleteCampaignCommand,
 )
 from emblema.evaluation.contracts.identifiers import CampaignId
-from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.exceptions import (
     CampaignChangedElsewhereError,
@@ -63,16 +62,15 @@ class RecordCellResult:
         cell = command.result.cell
         for _ in range(self.ATTEMPTS):
             campaign = self._campaigns.get(command.campaign)
-            already = self.recorded(campaign.results, cell)
-            if already is not None:
-                return already
+            if cell in campaign.recorded:
+                return self._campaigns.get_result(command.campaign, cell)
             if cell not in campaign.pending():
                 raise UnknownCampaignCellError(
                     f"{cell} is not a cell of campaign {command.campaign}"
                 )
-            recorded = campaign.record(command.result)
+            recorded = campaign.record(cell)
             try:
-                self._campaigns.save(recorded, seen=campaign.revision)
+                self._campaigns.record(recorded, command.result, seen=campaign.revision)
             except CampaignChangedElsewhereError:
                 continue
             if recorded.is_complete:
@@ -82,11 +80,3 @@ class RecordCellResult:
             f"campaign {command.campaign} moved on under every one of {self.ATTEMPTS} attempts "
             f"to record {cell}"
         )
-
-    @staticmethod
-    def recorded(results: tuple[CellResult, ...], cell: CampaignCell) -> CellResult | None:
-        """The result already standing for ``cell``, if any."""
-        for result in results:
-            if result.cell == cell:
-                return result
-        return None

@@ -2,8 +2,8 @@
 
 - Registered: 2026-09-16, commit `e5ffafb`
 - Rules in force as of: 2026-09-22, after the amendment `060394b`
-- Applies to: the label-efficiency curve on the turbofan task, its single test run, and the
-  transfer leg of the synthetic control
+- Applies to: the label-efficiency curve on the turbofan task, its single test run, the
+  transfer leg of the synthetic control, and the protocol of the intensive-care task
 
 A curve read after it is drawn can be made to say almost anything: a threshold is chosen, a metric
 is swapped, a budget is called the interesting one. This document fixes, before the numbers it
@@ -289,6 +289,30 @@ The anomaly-detection tasks measure whether pretraining improves detection, whic
 quantity from label efficiency. They never share an axis, a panel or a summary sentence with the
 curve.
 
+## The intensive-care task
+
+Death in hospital after a stay in intensive care (PhysioNet/CinC Challenge 2012,
+`physionet2012-in-hospital-death`), read over the first 48 hours of the stay. The protocol is
+registered here before any run on the task; the numbers it is judged by — the budgets, the
+endpoint, the least gain that counts and the floor — are registered before the first cell of the
+grid, once the interval's coverage has been measured on known answers, and are not chosen from
+anything read on the validation side.
+
+| | |
+|---|---|
+| Units | Stays; one window per stay, the whole 48 hours and a minute. A stay with no measurement has no window and is not in the pool. |
+| Sides | Tuning: set A as published (3,997 stays with a window, 554 deaths). Validation: set B (3,994, 568). Frozen: set C (4,000), named from the challenge's listing and opened once, in the final run. The corpus's statistics and every backbone's pretraining read set A only. |
+| Label | `In-hospital_death`, zero or one, from `Outcomes-a.txt` and `Outcomes-b.txt`. |
+| Draw | A budget is a count of stays, drawn in proportion to the two outcomes, every prefix within one stay of each outcome's share, nested across budgets and seeded; a draw holding one outcome is refused. |
+| Measure | One minus the area under the ROC curve, ties counting half; reported as the area. A reduction is a gain in area. |
+| Thresholds | Stated in area, not as shares: the endpoint's least gain and the floor's fixed part are absolute. The floor is the larger of that part and the control's spread over seeds. |
+| Interval | Paired bootstrap over stays, both sides on the same draw, in two strata — stays that died and stays that did not — each resampled to its own size; 10,000 resamples, 95 %, two-sided p-value as for the turbofans. Repeats pooled by the mean of their areas over the same resample. If the percentile interval's coverage on known answers falls short of its level at these sizes, the bias-corrected interval is registered before the grid instead. |
+| Family | Every other candidate and budget against the control, under Holm, as for the turbofans. |
+| Calibration | The Brier score of every cell is reported beside the area and judged by nothing. |
+| Heads | Every network ends in one linear head read as log-odds, trained by binary cross-entropy from the log-odds of the sample's prevalence, no class weighted; the ridge probe and MiniRocket fit an L2-penalised logistic regression on their grid of penalties, chosen by the mean log-loss of five folds in the sample's proportion of outcomes; trees grow under the logistic objective (ADR-0045). |
+| Selection | A selection minimises one minus the area over the inner holdout, under the rule of one standard error. |
+| Final run | A stay of set C with no measurement is answered with the prevalence of the task's own sample the candidate learnt from, the answer of a predictor that has seen nothing; none is dropped. Every candidate answers those stays alike, so the paired comparison is unmoved except through the ties the constant answer makes with each candidate's other answers; the areas and Brier scores reported move by the same stays. The harness does not answer such a stay yet: it is built and tested before the final run, and this row is amended with the commit. |
+
 ## The test set
 
 The official test engines are frozen when the task is created and are used **once**, at the end,
@@ -361,3 +385,5 @@ title" resolves to a row here and to the commit the row names, where the full te
 | 2026-09-27 | the commit that adds this row | measured | under the declaration above | *the rates beyond the edge read: the chosen rates stand.* At 50 labels a third of the chosen rate costs full fine-tuning 0.9 and the low-rank arm 5.0 RMSE; 3.3e-4 and 3.3e-5 are what the curve runs them at there. `head-and-representation.md`, 2026-09-27, the G4 section. |
 | 2026-09-27 | the commit that adds this row | configuration, diagnostic | before the curve runs; every selection read on the tuning side, nothing on the validation side since the pilot's confirmation campaign | *the curve repeated by the harness: five arms and five baselines under the protocol, before it runs.* `campaigns/curve-fd001.toml`: the arm from nothing, full fine-tuning and the low-rank arm at the variants their selections chose per budget (`7a842dba…`, `199fb850…`/`9be0af77…`, `83ecaced…`/`f1b12cb1…`); the probe under the schedule at its registered peak and the probe solved in closed form (ADR-0044, a fifth method beside the four registered), both under the tail; the three families of trees and MiniRocket at the variants `3856e705…` and `2b81fda7…` chose; the patch model as published, an asymmetry in the baselines' disfavour stated here. Four budgets, five seeds, Holm over thirty-five secondary comparisons rather than the registered eleven, since the family holds every contender at every budget. Every cell of a budget on one kind of accelerator (Colab G4), the classical cells on the M1 Pro. Predictions: the endpoint is not confirmed, the reduction at 200 negative or indistinguishable; the pretrained arms lead at 50 and not at 1,000; the closed-form probe beats the trained probe at every budget; the trees per channel beat every network at 50 and 200. Endpoint, threshold, interval and floor unchanged. `label-efficiency-curve.md`, 2026-09-27. |
 | 2026-09-27 | the commit that adds this row | measured | under the declaration above; budgets 50 and 200 ran on an A100 rather than the G4 named, one kind per budget as the rule requires | *the repeated curve read: the endpoint is not confirmed, the wrong way.* At 200 labels full fine-tuning is 10.5 % above the arm from nothing ([−2.56, −0.54], floor 0.50); no secondary comparison is distinguishable under Holm over 35; the control leads every candidate at every budget. The first curve's confirmed endpoint is read as the control's handicap. `label-efficiency-curve.md`, 2026-09-27, the G4 and A100 section. |
+| 2026-09-27 | the commit that adds this row | configuration | before any run on the task | *the intensive-care task.* The protocol of `physionet2012-in-hospital-death`: sides, label, a draw in proportion to the outcomes, one minus the area as the measure, absolute thresholds, the paired bootstrap in two strata with repeats pooled by their mean area, Brier reported and not judged, the heads, selection by the same measure, and how a stay of the frozen side without a measurement is answered. The budgets, the endpoint, the least gain and the floor are left to a row before the grid (ADR-0045, ADR-0046). |
+| 2026-09-28 | the commit that adds this row | configuration | before any counted run on the task; one smoke campaign at the small tier with a two-epoch backbone, whose numbers are not cited | *the closed-form heads over outcomes.* The ridge probe and MiniRocket fit an L2-penalised logistic regression, the penalty chosen by the log-loss of five stratified folds, instead of calibrating their ridge on its leave-one-out answers. The smoke run put the probe at 0.43 AUROC at 50 stays: under a strong penalty those answers lean against the outcomes and the calibration reversed the ranking. Calibrating on stratified folds or in sample was measured on synthetic heads and rejected (ADR-0045). |

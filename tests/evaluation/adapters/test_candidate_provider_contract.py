@@ -35,7 +35,10 @@ from emblema.evaluation.adapters.candidates.routed_candidate_provider import (
     RoutedCandidateProvider,
 )
 from emblema.evaluation.adapters.in_memory.adaptation_runtime import InMemoryAdaptationRuntime
-from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
+from emblema.evaluation.adapters.in_memory.candidate_provider import (
+    InMemoryCandidateProvider,
+    StatedErrors,
+)
 from emblema.evaluation.adapters.in_memory.classical_runtime import InMemoryClassicalRuntime
 from emblema.evaluation.adapters.in_memory.corpus_windows import InMemoryCorpusWindows
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
@@ -166,7 +169,7 @@ def stated_provider(store: InMemoryArtifactStore | None) -> Supplied:
         provider=InMemoryCandidateProvider(
             (candidate(CONTROL), candidate(CONTENDER)),
             (UnitKey("c"),),
-            lambda _: (2.0,),
+            StatedErrors(lambda _: (2.0,)),
             store,
         ),
         contender=CONTENDER,

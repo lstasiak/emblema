@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from typing import Self
 from uuid import UUID
 
@@ -7,17 +8,22 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from emblema.evaluation.adapters.persistence.campaign_unit_error_record import (
     CampaignUnitErrorRecord,
 )
+from emblema.evaluation.adapters.persistence.campaign_window_prediction_record import (
+    CampaignWindowPredictionRecord,
+)
 from emblema.evaluation.adapters.persistence.orm import Base
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.unit_error import UnitError
+from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
 
 
 class CampaignCellRecord(Base):
-    """Row of ``evaluation.campaign_cell``: one point of a grid that has run, with its errors.
+    """Row of ``evaluation.campaign_cell``: one point of a grid that has run, with its results.
 
     The cell's own coordinates are its key, so a cell recorded twice is refused by the database
     as well as by the aggregate, and what a campaign has left to run is what has no row here.
@@ -47,15 +53,33 @@ class CampaignCellRecord(Base):
     errors: Mapped[list[CampaignUnitErrorRecord]] = relationship(
         cascade="all, delete-orphan", lazy="selectin", order_by=CampaignUnitErrorRecord.unit
     )
+    predictions: Mapped[list[CampaignWindowPredictionRecord]] = relationship(
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by=(CampaignWindowPredictionRecord.unit, CampaignWindowPredictionRecord.position),
+    )
+
+    @staticmethod
+    def key_of(cell: CampaignCell) -> tuple[str, str, int]:
+        """The cell's coordinates as the row spells them, without its campaign."""
+        return str(cell.candidate), cell.budget.text(), cell.seed
+
+    @staticmethod
+    def cell_of(candidate: str, budget: str, seed: int) -> CampaignCell:
+        """The cell a row's coordinates name."""
+        return CampaignCell(
+            candidate=CandidateRef(candidate), budget=LabelBudget.parse(budget), seed=seed
+        )
 
     @classmethod
     def from_result(cls, campaign_id: CampaignId, result: CellResult) -> Self:
         artifact = result.artifact
+        candidate, budget, seed = cls.key_of(result.cell)
         return cls(
             campaign_id=campaign_id.value,
-            candidate=str(result.cell.candidate),
-            budget=result.cell.budget.text(),
-            seed=result.cell.seed,
+            candidate=candidate,
+            budget=budget,
+            seed=seed,
             seconds=result.seconds,
             artifact_key=None if artifact is None else artifact.key,
             artifact_algorithm=None if artifact is None else str(artifact.checksum.algorithm),
@@ -64,28 +88,50 @@ class CampaignCellRecord(Base):
                 CampaignUnitErrorRecord.of(campaign_id, result.cell, error)
                 for error in result.errors
             ],
+            predictions=[
+                CampaignWindowPredictionRecord.of(campaign_id, result.cell, prediction)
+                for prediction in result.predictions
+            ],
         )
 
     def to_result(self) -> CellResult:
-        return CellResult(
-            cell=CampaignCell(
-                candidate=CandidateRef(self.candidate),
-                budget=LabelBudget.parse(self.budget),
-                seed=self.seed,
-            ),
-            errors=tuple(record.to_error() for record in self.errors),
-            seconds=self.seconds,
-            artifact=self._artifact(),
+        return self.result_of(
+            self.candidate,
+            self.budget,
+            self.seed,
+            self.seconds,
+            self.artifact_key,
+            self.artifact_algorithm,
+            self.artifact_digest,
+            [record.to_error() for record in self.errors],
+            [record.to_prediction() for record in self.predictions],
         )
 
-    def _artifact(self) -> ArtifactRef | None:
-        if (
-            self.artifact_key is None
-            or self.artifact_algorithm is None
-            or self.artifact_digest is None
-        ):
-            return None
-        return ArtifactRef(
-            self.artifact_key,
-            Checksum(HashAlgorithm(self.artifact_algorithm), self.artifact_digest),
+    @classmethod
+    def result_of(
+        cls,
+        candidate: str,
+        budget: str,
+        seed: int,
+        seconds: float,
+        artifact_key: str | None,
+        artifact_algorithm: str | None,
+        artifact_digest: str | None,
+        errors: Iterable[UnitError],
+        predictions: Iterable[WindowPrediction],
+    ) -> CellResult:
+        """The result a cell's row holds with its errors and answers, read without the instances."""
+        artifact = (
+            None
+            if artifact_key is None or artifact_algorithm is None or artifact_digest is None
+            else ArtifactRef(
+                artifact_key, Checksum(HashAlgorithm(artifact_algorithm), artifact_digest)
+            )
+        )
+        return CellResult(
+            cell=cls.cell_of(candidate, budget, seed),
+            errors=tuple(errors),
+            seconds=seconds,
+            artifact=artifact,
+            predictions=tuple(predictions),
         )

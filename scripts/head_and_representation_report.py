@@ -434,7 +434,8 @@ class Comparison:
         rival_sd: Spread of the rival's error between repeats.
         candidate_sd: Spread of the candidate's error between repeats.
         reduction: How much lower the candidate's error is than the rival's.
-        relative_reduction: The reduction as a share of the rival's error.
+        relative_reduction: The reduction as a share of the rival's error; ``None`` where the
+            rival made no error.
         low: Lower end of the paired interval over units.
         high: Upper end of the paired interval over units.
         p_value: Two-sided p-value of the reduction under the resampling.
@@ -449,7 +450,7 @@ class Comparison:
     rival_sd: float
     candidate_sd: float
     reduction: float
-    relative_reduction: float
+    relative_reduction: float | None
     low: float
     high: float
     p_value: float
@@ -481,7 +482,9 @@ class Comparison:
             "rival_sd": repr(self.rival_sd),
             "candidate_sd": repr(self.candidate_sd),
             "reduction": repr(self.reduction),
-            "relative_reduction": repr(self.relative_reduction),
+            "relative_reduction": (
+                "" if self.relative_reduction is None else repr(self.relative_reduction)
+            ),
             "low": repr(self.low),
             "high": repr(self.high),
             "p_value": repr(self.p_value),
@@ -499,7 +502,9 @@ class Comparison:
             rival_sd=float(record["rival_sd"]),
             candidate_sd=float(record["candidate_sd"]),
             reduction=float(record["reduction"]),
-            relative_reduction=float(record["relative_reduction"]),
+            relative_reduction=(
+                None if record["relative_reduction"] == "" else float(record["relative_reduction"])
+            ),
             low=float(record["low"]),
             high=float(record["high"]),
             p_value=float(record["p_value"]),
@@ -508,6 +513,12 @@ class Comparison:
     @property
     def excludes_zero(self) -> bool:
         return self.low > 0.0 or self.high < 0.0
+
+    def share(self) -> str:
+        """The relative reduction as a table shows it; a rival without error has no share."""
+        if self.relative_reduction is None:
+            return "no share: rival without error"
+        return f"{self.relative_reduction:+.1%}"
 
 
 class Fitted:
@@ -707,10 +718,10 @@ def compare(
                 candidate=[UnitError.per_unit(run) for run in candidate_runs],
             )
             rival_error = ErrorOverRepeats.of(
-                paired.rmse_control, [_rmse(run) for run in rival_runs]
+                paired.error_control, [_rmse(run) for run in rival_runs]
             )
             candidate_error = ErrorOverRepeats.of(
-                paired.rmse_candidate, [_rmse(run) for run in candidate_runs]
+                paired.error_candidate, [_rmse(run) for run in candidate_runs]
             )
             difference = bootstrap.compare(paired)
             found.append(
@@ -814,7 +825,7 @@ def render(measured: Measured, conditions: Mapping[str, object]) -> str:
                 str(row.budget),
                 f"{row.candidate_rmse:.2f}",
                 f"{row.rival_rmse:.2f}",
-                f"{row.reduction:+.2f} ({row.relative_reduction:+.1%})",
+                f"{row.reduction:+.2f} ({row.share()})",
                 f"[{row.low:+.2f}, {row.high:+.2f}]",
                 f"{row.p_value:.4f}",
             )

@@ -18,7 +18,7 @@ from emblema.evaluation.adapters.persistence.downstream_task_repository import (
 from emblema.evaluation.domain.exceptions import TaskNotFoundError
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
-from tests.evaluation.support import FORECAST, TASK, task
+from tests.evaluation.support import FORECAST, OUTCOME, OUTCOMES, TASK, task
 from tests.support.database import clear_evaluation, migrated_engine
 
 ADAPTERS = [
@@ -59,6 +59,16 @@ def test_a_forecasting_task_comes_back_reading_its_own_scheme(
     tasks.save(task(labels=FORECAST))
 
     assert tasks.get(TASK).label_scheme() == FORECAST
+
+
+def test_a_task_over_outcomes_comes_back_reading_its_outcome_spread_over_both(
+    tasks: DownstreamTaskRepository,
+) -> None:
+    stated = task(labels=OUTCOME, strata=OUTCOMES)
+
+    tasks.save(stated)
+
+    assert tasks.get(TASK) == stated
 
 
 def test_a_task_whose_ceiling_was_stored_comes_back_under_it(

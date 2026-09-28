@@ -10,8 +10,9 @@ from emblema.evaluation.adapters.in_memory.evaluation_campaign_repository import
     InMemoryEvaluationCampaignRepository,
 )
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
-from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
+from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
@@ -29,10 +30,11 @@ from scripts.campaign_pairs_report import (
 from tests.evaluation.support import (
     CONTENDER,
     CONTROL,
-    campaign,
     candidate,
     design,
+    reading,
     result,
+    store,
 )
 
 FLOOR = CampaignId(UUID(int=20))
@@ -43,9 +45,9 @@ BOOTSTRAP = PairedUnitBootstrap(resamples=400, seed=1, level=0.95)
 
 def selection(
     campaign_id: CampaignId, errors: dict[CandidateRef, tuple[float, ...]]
-) -> EvaluationCampaign:
+) -> CampaignReading:
     """A finished selection of the control and the contender at 200, three repeats each."""
-    grid = campaign(
+    grid = reading(
         campaign_id=campaign_id,
         purpose=RunPurpose.SELECTION,
         design=design(
@@ -55,7 +57,7 @@ def selection(
             inner_holdout=InnerHoldout(one_in=5),
         ),
     )
-    for cell in grid.design.cells():
+    for cell in grid.campaign.design.cells():
         # Every repeat of a selection holds out units of its own.
         stated = result(cell.candidate, cell.budget, cell.seed, errors[cell.candidate])
         grid = grid.record(
@@ -70,10 +72,10 @@ def selection(
     return grid
 
 
-def comparison(campaign_id: CampaignId, shift: float) -> EvaluationCampaign:
+def comparison(campaign_id: CampaignId, shift: float) -> CampaignReading:
     """A comparison whose grid ran whole on the same units under every seed."""
-    grid = campaign(campaign_id=campaign_id, design=design(budgets=(BUDGET,), seeds=(1, 2, 3)))
-    for cell in grid.design.cells():
+    grid = reading(campaign_id=campaign_id, design=design(budgets=(BUDGET,), seeds=(1, 2, 3)))
+    for cell in grid.campaign.design.cells():
         errors = (6.0, 8.0, 10.0) if cell.candidate == CONTROL else (3.0, 4.0, 5.0)
         grid = grid.record(
             result(cell.candidate, cell.budget, cell.seed, tuple(e + shift for e in errors))
@@ -196,12 +198,8 @@ def test_main_exports_from_the_registry_then_reads_the_pairs_off_the_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     registry = InMemoryEvaluationCampaignRepository()
-    registry.save(
-        selection(FLOOR, {CONTROL: (6.0, 8.0, 10.0), CONTENDER: (6.0, 8.0, 10.0)}), seen=0
-    )
-    registry.save(
-        selection(DOUBLED, {CONTROL: (5.0, 7.0, 9.0), CONTENDER: (6.0, 8.0, 10.0)}), seen=0
-    )
+    store(registry, selection(FLOOR, {CONTROL: (6.0, 8.0, 10.0), CONTENDER: (6.0, 8.0, 10.0)}))
+    store(registry, selection(DOUBLED, {CONTROL: (5.0, 7.0, 9.0), CONTENDER: (6.0, 8.0, 10.0)}))
     main(
         [
             "--out",
@@ -247,3 +245,10 @@ def test_render_names_the_pairing_and_the_floor() -> None:
 def test_main_refuses_a_command_line_that_asks_for_nothing(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         main(["--out", str(tmp_path)])
+
+
+def test_a_campaign_read_by_area_is_refused_by_name() -> None:
+    by_area = reading(design=replace(design(), measure=ErrorMeasure.AUROC_SHORTFALL))
+
+    with pytest.raises(SystemExit, match="auroc_shortfall"):
+        export([by_area])

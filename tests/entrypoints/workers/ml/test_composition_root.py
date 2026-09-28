@@ -17,7 +17,10 @@ from emblema.entrypoints.workers.campaign_worker import CampaignWorker
 from emblema.entrypoints.workers.known_arms import KnownArms
 from emblema.entrypoints.workers.known_patch_models import KnownPatchModels
 from emblema.entrypoints.workers.ml.composition_root import CompositionRoot
-from emblema.evaluation.adapters.in_memory.candidate_provider import InMemoryCandidateProvider
+from emblema.evaluation.adapters.in_memory.candidate_provider import (
+    InMemoryCandidateProvider,
+    StatedErrors,
+)
 from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
     InMemoryDownstreamTaskRepository,
 )
@@ -87,7 +90,7 @@ def process(tmp_path: Path) -> tuple[CompositionRoot, InMemoryEvaluationCampaign
         candidates=InMemoryCandidateProvider(
             (candidate(CONTROL), candidate(CONTENDER)),
             (UnitKey("c"),),
-            lambda _: (2.0,),
+            StatedErrors(lambda _: (2.0,)),
         ),
         jobs=ImmediateJobQueue({}),
         workspace=tmp_path,
@@ -114,7 +117,7 @@ def test_without_overrides_the_process_runs_on_what_the_settings_name(tmp_path: 
         corpora=tmp_path,
         backbone=WEIGHTS,
         schedule=SCHEDULE,
-        candidates=InMemoryCandidateProvider((), (), lambda _: ()),
+        candidates=InMemoryCandidateProvider((), (), StatedErrors(lambda _: ())),
     )
 
     assert isinstance(root.adapters.store, S3ArtifactStore)
@@ -204,7 +207,7 @@ def test_a_job_the_worker_is_handed_runs_the_cell_it_names(tmp_path: Path) -> No
         }
     )
 
-    recorded = campaigns.get(stated.campaign_id).results
+    recorded = campaigns.read(stated.campaign_id).results
     assert [(r.cell.candidate, r.cell.budget, r.cell.seed) for r in recorded] == [
         (CONTROL, LabelBudget.of(200), 2)
     ]

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, ClassVar
 
 from emblema.evaluation.adapters.documents.campaign_candidate_document import (
     CampaignCandidateDocument,
@@ -9,8 +9,10 @@ from emblema.evaluation.adapters.documents.family_correction_document import (
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
+from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 
@@ -22,7 +24,16 @@ class CampaignDesignDocument:
     is which campaigns exist, how far each got and what its cells scored, never which of them
     used a warm-up of one tenth. So it is stored whole, as a document, and the things that are
     queried — the results — are rows.
+
+    How the rules' thresholds are stated is carried by the names of their keys, as in the file a
+    campaign is declared in, so a design stored before absolute thresholds existed reads as it
+    was written and is written back the same.
     """
+
+    _KEYS: ClassVar[dict[ThresholdKind, tuple[str, str]]] = {
+        ThresholdKind.RELATIVE: ("minimum_relative_reduction", "floor_share"),
+        ThresholdKind.ABSOLUTE: ("minimum_absolute_reduction", "absolute_floor"),
+    }
 
     def __init__(self) -> None:
         self._candidates = CampaignCandidateDocument()
@@ -30,6 +41,7 @@ class CampaignDesignDocument:
 
     def encode(self, design: CampaignDesign) -> dict[str, Any]:
         """The design as the document the column holds."""
+        minimum, floor = self._KEYS[design.rules.threshold]
         return {
             "candidates": [self._candidates.encode(c) for c in design.candidates],
             "control": str(design.control),
@@ -38,8 +50,8 @@ class CampaignDesignDocument:
             "endpoint_budget": design.endpoint_budget.text(),
             "seeds": list(design.seeds),
             "rules": {
-                "minimum_relative_reduction": design.rules.minimum_relative_reduction,
-                "floor_share": design.rules.floor_share,
+                minimum: design.rules.minimum_reduction,
+                floor: design.rules.floor_part,
                 **self._corrections.encode(design.rules.correction),
                 "secondary_family_size": design.rules.secondary_family_size,
             },
@@ -61,6 +73,7 @@ class CampaignDesignDocument:
                 for choice in design.tuned
             ],
             "variants": [self._candidates.encode(variant) for variant in design.variants],
+            "measure": str(design.measure),
         }
 
     def decode(self, document: dict[str, Any]) -> CampaignDesign:
@@ -71,6 +84,11 @@ class CampaignDesignDocument:
             InvalidCampaignDesignError: If what it holds is not a design that stands up.
         """
         rules, bootstrap = document["rules"], document["bootstrap"]
+        threshold = next(
+            (kind for kind, (minimum, _) in self._KEYS.items() if minimum in rules),
+            ThresholdKind.RELATIVE,
+        )
+        minimum, floor = self._KEYS[threshold]
         return CampaignDesign(
             candidates=tuple(self._candidates.decode(c) for c in document["candidates"]),
             control=CandidateRef(document["control"]),
@@ -79,8 +97,9 @@ class CampaignDesignDocument:
             endpoint_budget=LabelBudget.parse(document["endpoint_budget"]),
             seeds=tuple(document["seeds"]),
             rules=ComparisonRules(
-                minimum_relative_reduction=rules["minimum_relative_reduction"],
-                floor_share=rules["floor_share"],
+                minimum_reduction=rules[minimum],
+                floor_part=rules[floor],
+                threshold=threshold,
                 # A design stored before a correction could be named was read under Holm.
                 correction=self._corrections.decode(
                     rules.get("correction", FamilyCorrectionDocument.DEFAULT), rules["alpha"]
@@ -106,4 +125,6 @@ class CampaignDesignDocument:
                 for choice in document.get("tuned", [])
             ),
             variants=tuple(self._candidates.decode(v) for v in document.get("variants", [])),
+            # A design stored before a measure could be named was read by squared error.
+            measure=ErrorMeasure(document.get("measure", ErrorMeasure.RMSE)),
         )

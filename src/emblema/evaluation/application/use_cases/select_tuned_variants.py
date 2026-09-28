@@ -37,13 +37,13 @@ class SelectTunedVariants:
             SelectionNotReadableError: If it is not a finished selection, or holds no choice
                 for the candidate.
         """
-        selection = self._campaigns.get(command.campaign)
+        selection = self._campaigns.read(command.campaign)
         return tuple(
             TunedChoice(
                 candidate=command.candidate,
                 budget=budget,
                 variant=selection.selected(command.candidate, budget),
-                selected_by=selection.campaign_id,
+                selected_by=selection.campaign.campaign_id,
             )
-            for budget in selection.design.budgets
+            for budget in selection.campaign.design.budgets
         )
