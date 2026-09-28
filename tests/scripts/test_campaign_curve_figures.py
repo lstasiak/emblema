@@ -9,6 +9,7 @@ pytest.importorskip("matplotlib")
 from scripts.campaign_curve_figures import (
     ARMS,
     STEM,
+    PanelAxes,
     Report,
     base_of,
     draw,
@@ -18,8 +19,10 @@ from scripts.campaign_curve_figures import (
 )
 from scripts.campaign_report import (
     CELL_COLUMNS,
+    CELL_COLUMNS_BY_AREA,
     CELLS,
     COMPARISON_COLUMNS,
+    COMPARISON_COLUMNS_BY_AREA,
     COMPARISONS,
     CellRow,
     ComparisonRow,
@@ -163,8 +166,50 @@ def test_labels_of_lines_that_end_apart_stay_at_their_ends() -> None:
     assert label_heights([30.0, 10.0, 20.0], gap=1.0) == [30.0, 10.0, 20.0]
 
 
-def test_a_report_read_by_area_is_refused_by_name(tmp_path: Path) -> None:
-    (tmp_path / CELLS).write_text("candidate,kind,budget,windows,seed,units,auroc,brier,seconds\n")
+def by_area() -> Report:
+    """The report of ``report`` read in areas: every error turned into an area near it."""
+    stated = report()
+    return Report(
+        cells=tuple(c._replace(score=1.0 - c.score / 50.0, brier=0.1) for c in stated.cells),
+        comparisons=tuple(
+            r._replace(
+                control_score=0.6,
+                candidate_score=1.0 - r.candidate_score / 50.0,
+                reduction=0.4 - r.candidate_score / 50.0,
+                relative_reduction=None,
+                low=0.35 - r.candidate_score / 50.0,
+                high=0.45 - r.candidate_score / 50.0,
+                floor=0.01,
+            )
+            for r in stated.comparisons
+        ),
+        by_area=True,
+    )
 
-    with pytest.raises(SystemExit, match="area under the ROC curve"):
-        read(tmp_path)
+
+def test_a_report_read_by_area_round_trips_and_is_drawn_in_areas(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stored = by_area()
+    directory = tmp_path / "report"
+    directory.mkdir()
+    write_rows(directory / CELLS, CELL_COLUMNS_BY_AREA, [r.written() for r in stored.cells])
+    write_rows(
+        directory / COMPARISONS,
+        COMPARISON_COLUMNS_BY_AREA,
+        [tuple("" if v is None else v for v in r) for r in stored.comparisons],
+    )
+
+    assert read(directory) == stored
+    main([str(directory), "--task", "the intensive-care task"])
+    assert (directory / f"{STEM}.png").is_file()
+    assert capsys.readouterr().out.strip().endswith(f"{STEM}.png")
+
+
+def test_the_panels_name_the_measure_they_draw() -> None:
+    errors, areas = PanelAxes.of(report()), PanelAxes.of(by_area())
+
+    assert (errors.score, errors.lowest) == ("validation RMSE (cycles)", 0.0)
+    assert (areas.score, areas.lowest) == ("validation AUROC", None)
+    assert "gain" in areas.reduction
+    assert "stays" in areas.reduction

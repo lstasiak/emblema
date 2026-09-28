@@ -3,9 +3,12 @@
 Three panels over one axis of labelled windows: the networks' error, the classical baselines'
 error beside the control, and the pretrained arms' reduction against the control with the
 interval and the practical floor the campaign judged them by. Each candidate keeps its hue
-whichever candidates a campaign holds, so two figures read alike.
+whichever candidates a campaign holds, so two figures read alike. A campaign read by the area
+under the ROC curve is drawn in areas: the scores rise with the budget, and the lowest panel
+shows the gain in area over the control.
 
     uv run scripts/campaign_curve_figures.py data/report/<dir> [--figure PATH] [--caption TEXT]
+        [--task TEXT]
 """
 
 import argparse
@@ -16,6 +19,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean, stdev
+from typing import Literal, Self
 
 import matplotlib
 
@@ -35,6 +39,7 @@ from scripts.campaign_report import CELLS, COMPARISONS, CellRow, ComparisonRow
 
 STEM = "label-efficiency-curve"
 CAPTION = "tier M — preliminary; validation, not test"
+TASK = "the turbofan task"
 # The five arms in reporting order, each on its own slot of the reference categorical palette:
 # the first five of a fixed order whose adjacent pairs are documented as colour-vision safe.
 ARMS = ("from_scratch", "frozen_probe", "frozen_ridge", "lora", "full_fine_tuning")
@@ -57,10 +62,44 @@ MARKERS = ("o", "s", "^", "D", "v", "P", "X")
 
 @dataclass(frozen=True)
 class Report:
-    """The two files of a campaign report, read."""
+    """The two files of a campaign report, read, and whether its scores are areas."""
 
     cells: tuple[CellRow, ...]
     comparisons: tuple[ComparisonRow, ...]
+    by_area: bool = False
+
+
+@dataclass(frozen=True)
+class PanelAxes:
+    """What the panels say of a campaign's measure: their labels and where the scores start.
+
+    Attributes:
+        score: What the scores' panels are labelled.
+        reduction: What the lowest panel is labelled.
+        lowest: Where the scores' panels start; ``None`` to let the scores place them.
+        legend: Where the scores' panels put their legends.
+    """
+
+    score: str
+    reduction: str
+    lowest: float | None
+    legend: Literal["lower left", "best"]
+
+    @classmethod
+    def of(cls, report: Report) -> Self:
+        if report.by_area:
+            return cls(
+                score="validation AUROC",
+                reduction="AUROC gain vs from scratch\n(95 % interval over stays)",
+                lowest=None,
+                legend="best",
+            )
+        return cls(
+            score="validation RMSE (cycles)",
+            reduction="RMSE reduction vs from scratch\n(95 % interval over engines)",
+            lowest=0.0,
+            legend="lower left",
+        )
 
 
 def base_of(candidate: str) -> str:
@@ -69,7 +108,7 @@ def base_of(candidate: str) -> str:
 
 
 def read(directory: Path) -> Report:
-    """The report stored under ``directory``.
+    """The report stored under ``directory``, in errors or in areas as its columns say.
 
     Raises:
         SystemExit: If nothing is stored there.
@@ -77,11 +116,15 @@ def read(directory: Path) -> Report:
     if not (directory / CELLS).is_file():
         raise SystemExit(f"{directory} holds no {CELLS}; nothing to draw")
     with (directory / CELLS).open(newline="") as handle:
-        if "rmse" not in (csv.DictReader(handle).fieldnames or ()):
-            raise SystemExit(
-                f"{directory} reports a campaign read by area under the ROC curve; this draws "
-                "the curve of an error in the task's unit"
-            )
+        area = "auroc" in (csv.DictReader(handle).fieldnames or ())
+    score, control, contender = (
+        ("auroc", "control_auroc", "candidate_auroc")
+        if area
+        else ("rmse", "control_rmse", "candidate_rmse")
+    )
+    reduction, share = (
+        ("gain", "share_of_shortfall") if area else ("reduction", "relative_reduction")
+    )
     with (directory / CELLS).open(newline="") as handle:
         cells = tuple(
             CellRow(
@@ -91,8 +134,8 @@ def read(directory: Path) -> Report:
                 windows=int(row["windows"]),
                 seed=int(row["seed"]),
                 units=int(row["units"]),
-                score=float(row["rmse"]),
-                brier=None,
+                score=float(row[score]),
+                brier=float(row["brier"]) if area else None,
                 seconds=float(row["seconds"]),
             )
             for row in csv.DictReader(handle)
@@ -104,14 +147,12 @@ def read(directory: Path) -> Report:
                 budget=row["budget"],
                 windows=int(row["windows"]),
                 repeats=int(row["repeats"]),
-                control_score=float(row["control_rmse"]),
+                control_score=float(row[control]),
                 control_sd=float(row["control_sd"]),
-                candidate_score=float(row["candidate_rmse"]),
+                candidate_score=float(row[contender]),
                 candidate_sd=float(row["candidate_sd"]),
-                reduction=float(row["reduction"]),
-                relative_reduction=(
-                    None if row["relative_reduction"] == "" else float(row["relative_reduction"])
-                ),
+                reduction=float(row[reduction]),
+                relative_reduction=None if row[share] == "" else float(row[share]),
                 low=float(row["low"]),
                 high=float(row["high"]),
                 p_value=float(row["p_value"]),
@@ -121,10 +162,10 @@ def read(directory: Path) -> Report:
             )
             for row in csv.DictReader(handle)
         )
-    return Report(cells=cells, comparisons=comparisons)
+    return Report(cells=cells, comparisons=comparisons, by_area=area)
 
 
-def draw(report: Report, path: Path, *, caption: str = CAPTION) -> Path:
+def draw(report: Report, path: Path, *, caption: str = CAPTION, task: str = TASK) -> Path:
     """Draw the panels into ``path`` and return it: the baselines' panel only where there are any.
 
     Raises:
@@ -132,6 +173,7 @@ def draw(report: Report, path: Path, *, caption: str = CAPTION) -> Path:
     """
     if not report.cells:
         raise SystemExit("the report holds no cell; nothing to draw")
+    axes = PanelAxes.of(report)
     budgets = sorted({c.budget for c in report.cells}, key=lambda b: _windows(report, b))
     positions = [_windows(report, budget) for budget in budgets]
     candidates = list(dict.fromkeys(c.candidate for c in report.cells))
@@ -166,22 +208,22 @@ def draw(report: Report, path: Path, *, caption: str = CAPTION) -> Path:
             linewidth=0,
         )
         ends.append((LABELS[base_of(candidate)], xs[-1], means[-1]))
-    _label_ends(upper, ends)
-    upper.set_ylabel("validation RMSE (cycles)")
+    _label_ends(upper, ends, axes.lowest)
+    upper.set_ylabel(axes.score)
     upper.legend(
         handles=[
             Line2D([], [], color=COLOURS[base_of(c)], linewidth=2, label=LABELS[base_of(c)])
             for c in arms
         ],
         fontsize=8,
-        loc="lower left",
+        loc=axes.legend,
         title="networks; mean over seeds, band = ±1 SD",
         title_fontsize=8,
     )
     upper.grid(True, alpha=0.25)
 
     if middle is not None:
-        _draw_baselines(middle, report, budgets, baselines, control)
+        _draw_baselines(middle, report, budgets, baselines, control, axes)
 
     compared_arms = [c for c in arms if base_of(c) != "from_scratch"]
     offsets = {c: 0.88 + 0.08 * i for i, c in enumerate(compared_arms)}
@@ -235,7 +277,7 @@ def draw(report: Report, path: Path, *, caption: str = CAPTION) -> Path:
         bottom, top = lower.get_ylim()
         lower.set_ylim(bottom, top + 0.45 * (top - bottom))
         lower.legend(fontsize=8, loc="upper center", ncol=3, frameon=False)
-    lower.set_ylabel("RMSE reduction vs from scratch\n(95 % interval over engines)")
+    lower.set_ylabel(axes.reduction)
     lower.set_xscale("log")
     lower.set_xticks(positions)
     lower.set_xticklabels(
@@ -245,10 +287,11 @@ def draw(report: Report, path: Path, *, caption: str = CAPTION) -> Path:
     lower.set_xlabel("labelled windows in the budget")
     lower.grid(True, alpha=0.25)
     for panel in (upper, middle) if middle is not None else (upper,):
-        panel.set_ylim(bottom=0)
+        if axes.lowest is not None:
+            panel.set_ylim(bottom=axes.lowest)
         panel.margins(x=0.12)
 
-    figure.suptitle(f"Label efficiency on the turbofan task — {caption}", fontsize=10)
+    figure.suptitle(f"Label efficiency on {task} — {caption}", fontsize=10)
     figure.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, dpi=150, bbox_inches="tight")
@@ -262,6 +305,7 @@ def _draw_baselines(
     budgets: Sequence[str],
     baselines: Sequence[str],
     control: str | None,
+    axes: PanelAxes,
 ) -> None:
     """The classical baselines in ink, told apart by marker and name, the control dotted beside."""
     ends = []
@@ -284,8 +328,8 @@ def _draw_baselines(
             markeredgewidth=1.2,
         )
         ends.append((LABELS.get(base_of(candidate), base_of(candidate)), xs[-1], means[-1]))
-    _label_ends(middle, ends)
-    middle.set_ylabel("validation RMSE (cycles)")
+    _label_ends(middle, ends, axes.lowest)
+    middle.set_ylabel(axes.score)
     middle.legend(
         handles=[
             Line2D(
@@ -303,7 +347,7 @@ def _draw_baselines(
             [Line2D([], [], color=INK_SOFT, linestyle=":", label="from scratch")] if control else []
         ),
         fontsize=8,
-        loc="lower left",
+        loc=axes.legend,
         title="classical baselines beside the control; mean over seeds",
         title_fontsize=8,
     )
@@ -332,11 +376,14 @@ def _line(
     )
 
 
-def _label_ends(panel: Axes, ends: Sequence[tuple[str, float, float]]) -> None:
+def _label_ends(
+    panel: Axes, ends: Sequence[tuple[str, float, float]], lowest: float | None
+) -> None:
     """Name each line where it ends, the names set apart where the ends crowd."""
     if not ends:
         return
-    panel.set_ylim(bottom=0)
+    if lowest is not None:
+        panel.set_ylim(bottom=lowest)
     bottom, top = panel.get_ylim()
     heights = label_heights([end for _, _, end in ends], (top - bottom) / 24)
     for (label, x, _), height in zip(ends, heights, strict=True):
@@ -373,9 +420,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--figure", type=Path, default=None, help=f"file to draw into; {STEM}.png beside the report"
     )
     parser.add_argument("--caption", default=CAPTION, help="tier, platform and precision")
+    parser.add_argument("--task", default=TASK, help="the task, as the title names it")
     arguments = parser.parse_args(argv)
     figure = arguments.figure or arguments.report / f"{STEM}.png"
-    print(draw(read(arguments.report), figure, caption=arguments.caption))
+    print(draw(read(arguments.report), figure, caption=arguments.caption, task=arguments.task))
 
 
 if __name__ == "__main__":
