@@ -123,6 +123,43 @@ def fit_outcomes() -> FittedConvolutions:
     )
 
 
+def features_with_a_rounding_column(seed: int = 3) -> tuple[np.ndarray, np.ndarray]:
+    """Informative features beside one constant in value that differs only in its last bits.
+
+    Convolutions over a window where a pattern never fires give such features: the share is the
+    same everywhere, summed in orders that round apart.
+    """
+    draws = np.random.default_rng(seed)
+    informative = draws.uniform(0.0, 1.0, size=(50, 20))
+    outcomes = (informative[:, 0] + 0.3 * draws.normal(size=50) > 0.9).astype(np.float64)
+    rounding = 0.3 + draws.integers(-2, 3, size=50) * np.spacing(0.3)
+    return np.column_stack([informative, rounding]), outcomes
+
+
+def test_a_feature_constant_but_for_rounding_is_left_unscaled() -> None:
+    features, _ = features_with_a_rounding_column()
+
+    scale = FittedConvolutions._scale_of(features)
+
+    assert scale[-1] == 1.0
+    assert np.array_equal(scale[:-1], features[:, :-1].std(axis=0))
+
+
+def test_a_feature_constant_but_for_rounding_does_not_stall_the_logistic_regression() -> None:
+    # Divided by its spread, the rounding became a column of unit spread around a mean near
+    # 1e15, and the solver stopped at its starting point with every answer the same.
+    features, outcomes = features_with_a_rounding_column()
+    scaled = features / FittedConvolutions._scale_of(features)
+
+    weights, intercept, _ = FittedConvolutions._logistic(
+        scaled, outcomes, convolutions().ridge.penalties
+    )
+
+    answered = scaled @ weights + intercept
+    assert np.unique(answered).size == len(outcomes)
+    assert answered[outcomes == 1.0].mean() > answered[outcomes == 0.0].mean()
+
+
 def features_of(fitted: FittedConvolutions) -> np.ndarray:
     laid = RegularGrid(fitted.grid_steps, fitted.channels).of(WINDOWS)[:, fitted.rows]
     return np.asarray(fitted.transform.of(laid) / fitted.feature_scale)

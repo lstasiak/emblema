@@ -79,6 +79,10 @@ class FittedConvolutions:
     # Enough for the quasi-Newton solver to reach its tolerance at the weakest penalty over ten
     # thousand features; a fit that needs more is refused rather than read half-way.
     _ITERATIONS: ClassVar[int] = 5000
+    # A spread below this share of a feature's largest value is rounding: thousands of units in
+    # the last place, where a feature that truly varies moves by at least one position of its
+    # convolution in a window's length.
+    _RESOLUTION: ClassVar[float] = 1e-12
 
     @classmethod
     def fitted(
@@ -190,14 +194,19 @@ class FittedConvolutions:
             1.0 / float(fit.C_),
         )
 
-    @staticmethod
-    def _scale_of(features: NDArray[np.float64]) -> NDArray[np.float64]:
+    @classmethod
+    def _scale_of(cls, features: NDArray[np.float64]) -> NDArray[np.float64]:
         """Each feature's spread, and one for a feature that never varies, which then stays put.
 
         Scaled but not centred, as the reference regressor is: the intercept absorbs the means.
+        A feature varies when its spread stands above the rounding of its own values: one that is
+        constant in value but not in its last bits, divided by that spread, would turn rounding
+        into a feature of unit spread around an enormous mean, which least squares centres away
+        and a logistic regression cannot step past.
         """
         spread = features.std(axis=0)
-        return np.where(spread > 0.0, spread, 1.0)
+        magnitude = np.abs(features).max(axis=0, initial=0.0)
+        return np.where(spread > cls._RESOLUTION * magnitude, spread, 1.0)
 
     def to_bytes(self) -> bytes:
         arrays: dict[str, NDArray[Any]] = {
