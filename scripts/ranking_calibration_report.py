@@ -6,10 +6,20 @@ This measures that interval on the project's known-answer generator at the size 
 intensive-care task's validation side: how often a 95 % interval covers a true gain in area,
 and how often it excludes, or lies wholly above, a true difference of zero. Two regimes are kept
 apart: repeats that differ only unit by unit, which is what resampling units can see, and
-repeats whose whole area moves from seed to seed, which it cannot. The numbers are written to
-CSV first and rendered from that file, so the table can be reshaped without drawing again.
+repeats whose whole area moves from seed to seed, which it cannot. A second suite asks whether
+the interval keeps its level where the generator's defaults stop describing a model: a lower
+area, two sides that share more or less of their answers, and answers that tie.
 
-    uv run scripts/ranking_calibration_report.py --out DIR [--workers N]
+The decomposition explains the coverage under a spread of repeats rather than measuring it
+again: the spread over datasets of the point difference, with and without the spread, gives the
+two parts of its variance, and the coverage a normal interval of the first part would keep
+against both. Set beside the measured coverage, it says whether that mechanism accounts for it.
+
+The numbers are written to CSV first and rendered from those files, so the tables can be
+reshaped without drawing again.
+
+    uv run scripts/ranking_calibration_report.py --out DIR [--suite robustness] [--workers N]
+    uv run scripts/ranking_calibration_report.py --out DIR --decompose [--workers N]
     uv run scripts/ranking_calibration_report.py --report-only DIR
 """
 
@@ -19,8 +29,10 @@ import sys
 import time
 from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from math import sqrt
 from pathlib import Path
+from statistics import NormalDist, stdev
 from typing import Self
 
 # Run from anywhere: the sibling script modules live in this directory's package at the repository
@@ -34,6 +46,7 @@ from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUni
 from scripts.reporting import dated_heading, table
 
 CALIBRATION = "ranking_calibration.csv"
+DECOMPOSITION = "decomposition.csv"
 # The validation side of the intensive-care task: set B's stays with a window, and its deaths.
 UNITS = 3994
 POSITIVES = 568
@@ -44,6 +57,10 @@ GAIN = 0.02
 REGIMES = ((1, 0.0), (5, 0.0), (5, 0.01), (5, 0.03))
 DATASETS = 400
 RESAMPLES = 1000
+# The generator's defaults: half an answer's variance within an outcome is the stay's.
+SHARED = 0.5
+# Seeds of the decomposition's datasets start here, clear of the calibration's.
+DECOMPOSITION_SEEDS = 10_000
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -54,11 +71,15 @@ class Setting:
         level: The control's area.
         repeats: How many repeats each side pools.
         spread: The standard deviation of one repeat's area around its side's.
+        shared: The share of an answer's variance within an outcome that is the stay's.
+        levels: How many distinct answers each side gives; zero for answers that never tie.
     """
 
     level: float
     repeats: int
     spread: float
+    shared: float = SHARED
+    levels: int = 0
 
     def known(self, gain: float, *, units: int, positives: int) -> KnownRanking:
         return KnownRanking(
@@ -66,8 +87,36 @@ class Setting:
             candidate_auroc=self.level + gain,
             units=units,
             positives=positives,
+            shared=self.shared,
             repeat_spread=self.spread,
+            answer_levels=self.levels,
         )
+
+
+def suite(name: str) -> tuple[Setting, ...]:
+    """The settings a suite reads the interval on.
+
+    Raises:
+        SystemExit: If no suite has that name.
+    """
+    if name == "registered":
+        return tuple(
+            Setting(level=level, repeats=repeats, spread=spread)
+            for level in LEVELS
+            for repeats, spread in REGIMES
+        )
+    if name == "robustness":
+        # Five repeats and no spread, the case the registered suite found at its level, moved one
+        # assumption at a time: a model barely above chance, two sides nearly independent or
+        # nearly the same, and answers in twenty or in five distinct values.
+        return (
+            Setting(level=0.60, repeats=5, spread=0.0),
+            Setting(level=0.80, repeats=5, spread=0.0, shared=0.2),
+            Setting(level=0.80, repeats=5, spread=0.0, shared=0.9),
+            Setting(level=0.80, repeats=5, spread=0.0, levels=20),
+            Setting(level=0.80, repeats=5, spread=0.0, levels=5),
+        )
+    raise SystemExit(f"no suite named {name!r}; the suites are registered and robustness")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -94,9 +143,11 @@ class RankingCalibration:
 
     Attributes:
         level: The control's area.
-        gain: The true gain in area the coverage is read on.
+        gain: The true gain in area the coverage is read on, as the answers can reach it.
         repeats: How many repeats each side pools.
         spread: The standard deviation of one repeat's area around its side's.
+        shared: The share of an answer's variance within an outcome that is the stay's.
+        levels: How many distinct answers each side gives; zero for answers that never tie.
         units: How many stays each dataset scores.
         positives: How many of them hold the positive outcome.
         datasets: How many datasets were drawn for each rate.
@@ -112,6 +163,8 @@ class RankingCalibration:
     gain: float
     repeats: int
     spread: float
+    shared: float
+    levels: int
     units: int
     positives: int
     datasets: int
@@ -126,6 +179,8 @@ class RankingCalibration:
         "gain",
         "repeats",
         "spread",
+        "shared",
+        "levels",
         "units",
         "positives",
         "datasets",
@@ -146,6 +201,9 @@ class RankingCalibration:
             gain=float(record["gain"]),
             repeats=int(record["repeats"]),
             spread=float(record["spread"]),
+            # A file written before the two columns existed was drawn under the defaults.
+            shared=float(record.get("shared", SHARED)),
+            levels=int(record.get("levels", 0)),
             units=int(record["units"]),
             positives=int(record["positives"]),
             datasets=int(record["datasets"]),
@@ -226,9 +284,11 @@ def calibrate(
     return tuple(
         RankingCalibration(
             level=setting.level,
-            gain=gain,
+            gain=setting.known(gain, units=units, positives=positives).true_reduction,
             repeats=setting.repeats,
             spread=setting.spread,
+            shared=setting.shared,
+            levels=setting.levels,
             units=units,
             positives=positives,
             datasets=datasets,
@@ -242,25 +302,167 @@ def calibrate(
     )
 
 
+@dataclass(frozen=True, kw_only=True)
+class Draws:
+    """A share of one setting's datasets whose point difference one process computes.
+
+    Attributes:
+        known: What the datasets are drawn from.
+        repeats: How many repeats each side pools.
+        seeds: The seeds of this share's datasets.
+    """
+
+    known: KnownRanking
+    repeats: int
+    seeds: range
+
+    def reductions(self) -> list[float]:
+        return [self.known.repeats(self.repeats, seed=seed).reduction for seed in self.seeds]
+
+
+@dataclass(frozen=True, kw_only=True)
+class Decomposition:
+    """The two parts of the point difference's variance under one spread of repeats.
+
+    Attributes:
+        level: The control's area; the candidate's is the same, so the true difference is zero.
+        repeats: How many repeats each side pools.
+        spread: The standard deviation of one repeat's area around its side's.
+        datasets: How many datasets each spread was read on.
+        over_stays: The difference's standard deviation over datasets without the spread: what
+            resampling stays can see.
+        over_both: Its standard deviation with the spread.
+    """
+
+    level: float
+    repeats: int
+    spread: float
+    datasets: int
+    over_stays: float
+    over_both: float
+
+    COLUMNS = ("level", "repeats", "spread", "datasets", "over_stays", "over_both")
+
+    @property
+    def over_seeds(self) -> float:
+        """The part the spread adds, as a standard deviation."""
+        return sqrt(max(self.over_both**2 - self.over_stays**2, 0.0))
+
+    @property
+    def expected_over_seeds(self) -> float:
+        """What the spread should add: the mean of ``repeats`` independent draws, on two sides."""
+        return self.spread * sqrt(2.0 / self.repeats)
+
+    @property
+    def predicted_coverage(self) -> float:
+        """The coverage of a normal 95 % interval as wide as the stays alone make it."""
+        standard = NormalDist()
+        return 2.0 * standard.cdf(standard.inv_cdf(0.975) * self.over_stays / self.over_both) - 1.0
+
+    def record(self) -> dict[str, str]:
+        return {column: repr(getattr(self, column)) for column in self.COLUMNS}
+
+    @classmethod
+    def parse(cls, record: dict[str, str]) -> Self:
+        return cls(
+            level=float(record["level"]),
+            repeats=int(record["repeats"]),
+            spread=float(record["spread"]),
+            datasets=int(record["datasets"]),
+            over_stays=float(record["over_stays"]),
+            over_both=float(record["over_both"]),
+        )
+
+
+def decompose(
+    settings: Sequence[Setting],
+    *,
+    units: int = UNITS,
+    positives: int = POSITIVES,
+    datasets: int = DATASETS,
+    workers: int = 1,
+) -> tuple[Decomposition, ...]:
+    """Each spread's settings split into the variance over stays and the variance it adds.
+
+    Every setting with a spread is read against the same setting without it, on datasets with no
+    true difference, seeded apart from the calibration's so that neither borrows the other's.
+    """
+    spread = [setting for setting in settings if setting.spread]
+    steady = {setting: replace(setting, spread=0.0) for setting in spread}
+    readings = list(dict.fromkeys([*steady.values(), *spread]))
+    keys: list[int] = []
+    shares: list[Draws] = []
+    for index, setting in enumerate(readings):
+        known = setting.known(0.0, units=units, positives=positives)
+        for start in range(workers):
+            keys.append(index)
+            shares.append(
+                Draws(
+                    known=known,
+                    repeats=setting.repeats,
+                    seeds=range(
+                        DECOMPOSITION_SEEDS + start, DECOMPOSITION_SEEDS + datasets, workers
+                    ),
+                )
+            )
+    if workers > 1:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            drawn = list(pool.map(Draws.reductions, shares))
+    else:
+        drawn = [share.reductions() for share in shares]
+    pooled: dict[int, list[float]] = {}
+    for key, reductions in zip(keys, drawn, strict=True):
+        pooled.setdefault(key, []).extend(reductions)
+    deviation = {setting: stdev(pooled[index]) for index, setting in enumerate(readings)}
+    return tuple(
+        Decomposition(
+            level=setting.level,
+            repeats=setting.repeats,
+            spread=setting.spread,
+            datasets=datasets,
+            over_stays=deviation[steady[setting]],
+            over_both=deviation[setting],
+        )
+        for setting in spread
+    )
+
+
 def write(rows: Sequence[RankingCalibration], directory: Path) -> Path:
+    return _write(
+        CALIBRATION, RankingCalibration.COLUMNS, [row.record() for row in rows], directory
+    )
+
+
+def write_decomposition(rows: Sequence[Decomposition], directory: Path) -> Path:
+    return _write(DECOMPOSITION, Decomposition.COLUMNS, [row.record() for row in rows], directory)
+
+
+def _write(
+    name: str, columns: Sequence[str], records: Sequence[dict[str, str]], directory: Path
+) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
-    with (directory / CALIBRATION).open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=RankingCalibration.COLUMNS, lineterminator="\n")
+    with (directory / name).open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
         writer.writeheader()
-        writer.writerows(row.record() for row in rows)
-    return directory / CALIBRATION
+        writer.writerows(records)
+    return directory / name
 
 
 def read(directory: Path) -> tuple[RankingCalibration, ...]:
-    """The calibration stored under ``directory``.
+    """The calibration stored under ``directory``, or none."""
+    return tuple(RankingCalibration.parse(row) for row in _read(CALIBRATION, directory))
 
-    Raises:
-        SystemExit: If nothing is stored there.
-    """
-    if not (directory / CALIBRATION).is_file():
-        raise SystemExit(f"{directory} holds no {CALIBRATION}; nothing to render")
-    with (directory / CALIBRATION).open(newline="", encoding="utf-8") as handle:
-        return tuple(RankingCalibration.parse(row) for row in csv.DictReader(handle))
+
+def read_decomposition(directory: Path) -> tuple[Decomposition, ...]:
+    """The decomposition stored under ``directory``, or none."""
+    return tuple(Decomposition.parse(row) for row in _read(DECOMPOSITION, directory))
+
+
+def _read(name: str, directory: Path) -> list[dict[str, str]]:
+    if not (directory / name).is_file():
+        return []
+    with (directory / name).open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
 
 def render(rows: Sequence[RankingCalibration]) -> str:
@@ -268,15 +470,17 @@ def render(rows: Sequence[RankingCalibration]) -> str:
     first = rows[0]
     return "\n\n".join(
         [
-            dated_heading(),
-            f"Known answer: {first.units:,} stays, {first.positives} positive; a true gain of "
-            f"{first.gain:g} in area, or none; a 95 % percentile interval over "
-            f"{first.resamples:,} resamples in two strata; {first.datasets} datasets per rate.",
+            f"Known answer: {first.units:,} stays, {first.positives} positive; a true gain in "
+            f"area, or none; a 95 % percentile interval over {first.resamples:,} resamples in "
+            f"two strata; {first.datasets} datasets per rate.",
             table(
                 (
                     "Control's area",
                     "Repeats",
                     "Spread of a repeat's area",
+                    "Shared",
+                    "Levels",
+                    "True gain",
                     "Coverage of the true gain",
                     "Zero excluded (two-sided)",
                     "Whole interval above zero",
@@ -287,6 +491,9 @@ def render(rows: Sequence[RankingCalibration]) -> str:
                         f"{row.level:.2f}",
                         str(row.repeats),
                         f"{row.spread:g}",
+                        f"{row.shared:g}",
+                        str(row.levels) if row.levels else "—",
+                        f"{row.gain:.4f}",
                         f"{row.coverage:.1%}",
                         f"{row.false_positive:.1%}",
                         f"{row.one_sided_false_positive:.1%}",
@@ -299,11 +506,63 @@ def render(rows: Sequence[RankingCalibration]) -> str:
     )
 
 
+def render_decomposition(
+    rows: Sequence[Decomposition], measured: Sequence[RankingCalibration]
+) -> str:
+    """The decomposition's table, with the coverage the calibration measured where it has one."""
+    coverage = {
+        (row.level, row.repeats, row.spread): row.coverage
+        for row in measured
+        if row.shared == SHARED and not row.levels
+    }
+    return "\n\n".join(
+        [
+            f"No true difference; {rows[0].datasets} datasets per spread; the part over seeds "
+            "expected from the spread is the spread times the square root of two over the repeats.",
+            table(
+                (
+                    "Control's area",
+                    "Repeats",
+                    "Spread of a repeat's area",
+                    "SD over stays",
+                    "SD over both",
+                    "SD over seeds (expected)",
+                    "Coverage predicted",
+                    "Coverage measured",
+                ),
+                (
+                    (
+                        f"{row.level:.2f}",
+                        str(row.repeats),
+                        f"{row.spread:g}",
+                        f"{row.over_stays:.4f}",
+                        f"{row.over_both:.4f}",
+                        f"{row.over_seeds:.4f} ({row.expected_over_seeds:.4f})",
+                        f"{row.predicted_coverage:.1%}",
+                        (
+                            f"{coverage[key]:.1%}"
+                            if (key := (row.level, row.repeats, row.spread)) in coverage
+                            else "—"
+                        ),
+                    )
+                    for row in rows
+                ),
+            ),
+        ]
+    )
+
+
 def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--out", type=Path, help="directory the CSV is written to")
     parser.add_argument(
-        "--report-only", type=Path, help="render the table from a directory written earlier"
+        "--report-only", type=Path, help="render the tables from a directory written earlier"
+    )
+    parser.add_argument("--suite", default="registered", help="registered or robustness")
+    parser.add_argument(
+        "--decompose",
+        action="store_true",
+        help="split the registered suite's spreads into their parts instead of calibrating",
     )
     parser.add_argument("--datasets", type=int, default=DATASETS)
     parser.add_argument("--resamples", type=int, default=RESAMPLES)
@@ -311,30 +570,58 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def report(directory: Path) -> str:
+    """Every table stored under ``directory``, under one dated heading.
+
+    Raises:
+        SystemExit: If nothing is stored there.
+    """
+    calibration = read(directory)
+    decomposition = read_decomposition(directory)
+    if not calibration and not decomposition:
+        raise SystemExit(
+            f"{directory} holds no {CALIBRATION} or {DECOMPOSITION}; nothing to render"
+        )
+    parts = [dated_heading()]
+    if calibration:
+        parts.append(render(calibration))
+    if decomposition:
+        parts.append(render_decomposition(decomposition, calibration))
+    return "\n\n".join(parts)
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     arguments = parse_arguments(argv)
     if arguments.report_only is not None:
-        print(render(read(arguments.report_only)))
+        print(report(arguments.report_only))
         return
     if arguments.out is None:
         raise SystemExit("either --out DIR or --report-only DIR is required")
     if arguments.workers < 1:
         raise SystemExit(f"--workers must be at least one, got {arguments.workers}")
-    settings = [
-        Setting(level=level, repeats=repeats, spread=spread)
-        for level in LEVELS
-        for repeats, spread in REGIMES
-    ]
-    rows = calibrate(
-        settings,
-        units=UNITS,
-        positives=POSITIVES,
-        datasets=arguments.datasets,
-        resamples=arguments.resamples,
-        workers=arguments.workers,
-    )
-    write(rows, arguments.out)
-    print(render(rows))
+    settings = suite(arguments.suite)
+    if arguments.decompose:
+        write_decomposition(
+            decompose(
+                settings,
+                units=UNITS,
+                positives=POSITIVES,
+                datasets=arguments.datasets,
+                workers=arguments.workers,
+            ),
+            arguments.out,
+        )
+    else:
+        rows = calibrate(
+            settings,
+            units=UNITS,
+            positives=POSITIVES,
+            datasets=arguments.datasets,
+            resamples=arguments.resamples,
+            workers=arguments.workers,
+        )
+        write(rows, arguments.out)
+    print(report(arguments.out))
 
 
 if __name__ == "__main__":
