@@ -24,6 +24,13 @@ class KnownRanking:
     comparison paired, and a residual drawn anew per side and per repeat. Both are inside the
     unit variance, so the stated areas hold whatever share the unit effect takes.
 
+    A third component belongs to the repeat as a whole: a run under another seed is another
+    model, and one seed's model can rank every unit better than another's. The resampling of
+    units does not see it, so it is kept apart and off by default, to measure what it does to
+    an interval stated over units. Each repeat of each side then ranks at its own area, drawn on
+    the scale of the normal quantile so that no area leaves the unit interval, and widened there
+    by exactly as much as keeps the stated area the expectation over repeats.
+
     Attributes:
         control_auroc: The control's area.
         candidate_auroc: The candidate's area; the true reduction of the error is the
@@ -32,6 +39,8 @@ class KnownRanking:
         positives: How many of them hold the positive outcome.
         shared: The share of the answers' variance within an outcome that belongs to the unit
             and not to the repeat.
+        repeat_spread: About how far one repeat's area strays from its side's stated area, as
+            a standard deviation; drawn anew per side and per repeat.
     """
 
     control_auroc: float
@@ -39,6 +48,7 @@ class KnownRanking:
     units: int = 400
     positives: int = 56
     shared: float = 0.5
+    repeat_spread: float = 0.0
 
     _STANDARD: ClassVar[NormalDist] = NormalDist()
 
@@ -60,6 +70,9 @@ class KnownRanking:
         )
 
     def _side(self, auroc: float, effects: list[float], draws: random.Random) -> WindowRanking:
+        # Drawn only when asked for, so a generator without it draws what it always drew.
+        if self.repeat_spread:
+            auroc = self._repeat_area(auroc, draws)
         shift = sqrt(2.0) * self._STANDARD.inv_cdf(auroc)
         own = sqrt(1.0 - self.shared)
         common = sqrt(self.shared)
@@ -73,3 +86,11 @@ class KnownRanking:
             )
             for index, effect in enumerate(effects)
         )
+
+    def _repeat_area(self, auroc: float, draws: random.Random) -> float:
+        # A normal quantile scattered by s averages to the area of the quantile shrunk by
+        # sqrt(1 + s^2), so the quantile is widened by that factor first; s is the spread asked
+        # for in area, carried to the quantile scale by the density at the stated area.
+        quantile = self._STANDARD.inv_cdf(auroc)
+        scatter = self.repeat_spread / self._STANDARD.pdf(quantile)
+        return self._STANDARD.cdf(quantile * sqrt(1.0 + scatter**2) + draws.gauss(0.0, scatter))
