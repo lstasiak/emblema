@@ -215,3 +215,32 @@ accepted back into the registry, read with `campaign select`. RMSE on the held-o
 **Limitations.** Ten repeats of 16 engines; the intervals of the trees' variants overlap at every
 budget and the rule reads them as ties broken towards the default. Nothing here touches the
 validation side.
+
+## 2026-09-28 — declared before the run: MiniRocket's penalty over outcomes on the intensive-care task
+
+**Question.** Over outcomes MiniRocket fits an L2-penalised logistic regression, its penalty
+chosen by the log-loss of five folds within the drawn labels among ten strengths from 0.001 to
+1,000, the list the regression task's ridge uses. A smoke campaign at the small tier chose 215 at
+50 stays, and a fit outside the campaign chose 1,000 at 200 — the strongest listed. Does the list
+stop too soon at the budgets the task's grid will run, and what does a fit cost?
+
+**Conditions.** Commit of this section; MacBook Pro M1 Pro, CPU, eight threads of linear
+algebra. Task `physionet2012-in-hospital-death` over manifest `cef44de2…`; budgets 50, 200,
+1,000 and every stay of the tuning side, each under seeds 1, 2 and 3, drawn by the task's own
+draw in proportion to the outcomes, as a campaign cell draws them; 9,996 features; the fit is the
+candidate's own code, offered the ten strengths in force and four more steps of the same factor
+(4,640, 21,500, 100,000, 464,000). The choice is made within the drawn labels; no window of the
+validation side is read and nothing is scored.
+
+    uv run scripts/convolution_penalty_report.py --manifest durable/sha256/cef44de2… sha256:cef44de2… --out data/report/t42c/penalties
+
+**Prediction.** At 200, 1,000 and every stay, at least two seeds of three choose 1,000 or a
+stronger penalty; no fit chooses the strongest of the longer list, so four steps are enough. The
+fit over every stay takes about ten minutes, most of it at the weakest penalties.
+
+**Reading, declared beforehand.** If any fit chooses 1,000 or stronger, the convolution baseline
+on outcomes gets a list of strengths of its own, apart from the regression's, which stays as it
+is: the list in force followed by every longer step up to one beyond the strongest chosen here,
+registered as configuration before any selection on the task runs. If no fit does, the list in
+force stands. The weak end of the list stays whatever it costs; dropping it would be a separate
+decision on a measured cost.
