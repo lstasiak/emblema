@@ -2,8 +2,9 @@
 
 Over outcomes the convolution baseline fits an L2-penalised logistic regression, its penalty
 chosen by the log-loss of folds within the drawn labels, among the strengths its settings list.
-A choice at the strongest strength listed says the list stops too soon. This draws the task's
-budgets from its tuning side exactly as a campaign's cell does, fits the candidate by the same
+A choice at the strongest strength listed means either that the list stops too soon or that the
+labels hold nothing a weaker penalty can use; the curves tell the two apart. This draws the
+task's budgets from its tuning side as a comparison's cell does, fits the candidate by the same
 code over a list of strengths that runs further, and records which one each fit chose and how
 long the fit took. No window of the validation side is read: the choice is made within the
 drawn labels, and nothing is scored.
