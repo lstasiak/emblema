@@ -282,3 +282,39 @@ validation side. The part of a seed's spread that comes from how its answers mee
 stays shrinks with more stays, so a spread read here errs high, towards a stricter floor. Ten
 seeds read an SD to about a quarter of itself. The arms' variants were chosen on fifths that
 overlap this one by about a fifth, which may raise the level of the areas and not their spread.
+
+## 2026-09-29 — the spread over seeds on a fixed fifth measured
+
+Under the declaration above: the campaign `596849cd…` of
+`campaigns/seed-spread-physionet2012.toml`, four orders placed at `c9a04936` and run on one Colab
+G4 under CUDA MPS, four processes, the longest order in 56 minutes; read by the same two scripts. All 80 cells scored the same 800 stays, 108 deaths; the
+full fine-tuning arm started from the mixed backbone's weights `sha256:869ed545…`.
+
+| Budget | Arm | Mean area | SD over 10 seeds | SE over stays |
+|---|---|---|---|---|
+| 50 | from nothing | 0.623 | 0.0526 | 0.0271 |
+| 50 | full fine-tuning | 0.676 | 0.0444 | 0.0245 |
+| 200 | from nothing | 0.651 | 0.0406 | 0.0261 |
+| 200 | full fine-tuning | 0.692 | 0.0400 | 0.0251 |
+| 1,000 | from nothing | 0.744 | 0.0352 | 0.0239 |
+| 1,000 | full fine-tuning | 0.736 | 0.0227 | 0.0239 |
+| all | from nothing | 0.782 | 0.0109 | 0.0212 |
+| all | full fine-tuning | 0.764 | 0.0186 | 0.0220 |
+
+**Conclusions.**
+
+1. The first prediction failed: at 200 both arms spread by about 0.040, above both bands.
+2. The second failed at 1,000 (0.035 and 0.023) and for full fine-tuning at every stay (0.019);
+   it held for the network from nothing at every stay (0.011).
+3. The third held: at 50 the network from nothing spreads by 0.053.
+4. The selections understated the spread at 200 and 1,000 by about half. Every selection's
+   repeat learnt and scored on the same division as every other's, so the sixty variants of a
+   budget read three divisions, not sixty; ten seeds on one fifth read ten.
+5. By the reading declared beforehand: the larger arm's SD at 200 is 0.0406, above 0.02, so the
+   endpoint's least gain is raised to **0.045**; the control's smallest SD, 0.0109 at every stay,
+   rounds down to 0.010, so the floor's fixed part is **0.01**.
+
+**Limitations.** The areas are read on a fifth of the tuning side and are not the grid's; the
+difference between the arms is not read here and decides nothing. The spread is of one seed's
+area; a grid pools its seeds per stay, and its floor reads the control's spread over its own
+seeds beside the fixed part.
