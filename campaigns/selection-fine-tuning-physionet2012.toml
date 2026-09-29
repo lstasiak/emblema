@@ -23,16 +23,16 @@ one_in = 5
 
 [candidates]
 competing = [
-    "full_fine_tuning@learning_rate=0.001",
+    "full_fine_tuning",
     "full_fine_tuning@learning_rate=0.000333",
     "full_fine_tuning@learning_rate=0.003",
-    "full_fine_tuning@learning_rate=0.001,pooling=tail,tail_share=0.2",
-    "full_fine_tuning@learning_rate=0.001,pooling=tail,tail_share=0.5",
-    "full_fine_tuning@learning_rate=0.001,pooling=attention",
+    "full_fine_tuning@pooling=tail,tail_share=0.2",
+    "full_fine_tuning@pooling=tail,tail_share=0.5",
+    "full_fine_tuning@pooling=attention",
 ]
 # A selection answers which variant, not whether a candidate beats another; the control and the
 # endpoint are named because every campaign names them, and read nothing here.
-control = "full_fine_tuning@learning_rate=0.001"
+control = "full_fine_tuning"
 endpoint = "full_fine_tuning@learning_rate=0.000333"
 
 [budgets]

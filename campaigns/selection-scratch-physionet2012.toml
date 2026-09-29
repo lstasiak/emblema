@@ -24,16 +24,16 @@ one_in = 5
 
 [candidates]
 competing = [
-    "from_scratch@learning_rate=0.001",
+    "from_scratch",
     "from_scratch@learning_rate=0.000333",
     "from_scratch@learning_rate=0.003",
-    "from_scratch@learning_rate=0.001,pooling=tail,tail_share=0.2",
-    "from_scratch@learning_rate=0.001,pooling=tail,tail_share=0.5",
-    "from_scratch@learning_rate=0.001,pooling=attention",
+    "from_scratch@pooling=tail,tail_share=0.2",
+    "from_scratch@pooling=tail,tail_share=0.5",
+    "from_scratch@pooling=attention",
 ]
 # A selection answers which variant, not whether a candidate beats another; the control and the
 # endpoint are named because every campaign names them, and read nothing here.
-control = "from_scratch@learning_rate=0.001"
+control = "from_scratch"
 endpoint = "from_scratch@learning_rate=0.000333"
 
 [budgets]
