@@ -140,7 +140,9 @@ def worker_told(**groups: object) -> Settings:
     """Settings of a machine that fulfils orders: a store and a worker, and no database."""
     return Settings(
         artifact_store=ARTIFACT_STORE,
-        worker=WorkerSettings(workspace=Path("data/workspace"), corpora=Path("data/raw"), **groups),
+        worker=WorkerSettings.model_validate(
+            {"workspace": Path("data/workspace"), "corpora": Path("data/raw"), **groups}
+        ),
     )
 
 
