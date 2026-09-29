@@ -1,0 +1,62 @@
+# Which setting each classical baseline runs at on the intensive-care task, chosen at every budget
+# before the grid, on stays held out of the tuning side; the validation side is not read.
+#
+# The knobs and values are the ones the turbofan selections turned, around the setting each method
+# was published with: the trees shallower and deeper, and a third of the rate with three times the
+# rounds; the convolutions on a grid of half, twice and four times one step an hour. MiniRocket
+# chooses its penalty within each fit, among the list registered for outcomes.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "selection-classical-physionet2012"
+purpose = "selection"
+tier = "S"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+
+[candidates]
+competing = [
+    "boosted_trees_per_channel@max_depth=3",
+    "boosted_trees_per_channel",
+    "boosted_trees_per_channel@max_depth=9",
+    "boosted_trees_per_channel@learning_rate=0.1,rounds=300",
+    "boosted_trees_spectral@max_depth=3",
+    "boosted_trees_spectral",
+    "boosted_trees_spectral@max_depth=9",
+    "boosted_trees_spectral@learning_rate=0.1,rounds=300",
+    "boosted_trees_across_channels@max_depth=3",
+    "boosted_trees_across_channels",
+    "boosted_trees_across_channels@max_depth=9",
+    "boosted_trees_across_channels@learning_rate=0.1,rounds=300",
+    "minirocket@grid_resolution=0.5",
+    "minirocket",
+    "minirocket@grid_resolution=2",
+    "minirocket@grid_resolution=4",
+]
+# A selection answers which variant, not whether a candidate beats another; the control and the
+# endpoint are named because every campaign names them, and read nothing here.
+control = "minirocket"
+endpoint = "minirocket@grid_resolution=2"
+
+[budgets]
+# The budgets the grid runs at, so a variant is chosen for every point it will stand at.
+labels = ["50", "200", "1000", "all"]
+endpoint = "200"
+# Three repeats: each holds a fresh fifth of the tuning stays out, and the rule reads its spread
+# from them.
+seeds = [1, 2, 3]
+
+[rules]
+# A selection chooses by the rule of one standard error and reads none of these; the task's own
+# thresholds are registered before its grid.
+minimum_absolute_reduction = 0.02
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 59
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

@@ -298,10 +298,10 @@ curve.
 
 Death in hospital after a stay in intensive care (PhysioNet/CinC Challenge 2012,
 `physionet2012-in-hospital-death`), read over the first 48 hours of the stay. The protocol is
-registered here before any run on the task; the numbers it is judged by — the budgets, the
-endpoint, the least gain that counts and the floor — are registered before the first cell of the
-grid, once the interval's coverage has been measured on known answers, and are not chosen from
-anything read on the validation side.
+registered here before any run on the task. The budgets, the endpoint and the selections are
+registered before any selection runs; the least gain that counts and the floor's fixed part
+before the first cell of the grid, once the spread over seeds has been read from the selections
+on the tuning side. None of them is chosen from anything read on the validation side.
 
 | | |
 |---|---|
@@ -309,6 +309,8 @@ anything read on the validation side.
 | Sides | Tuning: set A as published (3,997 stays with a window, 554 deaths). Validation: set B (3,994, 568). Frozen: set C (4,000), named from the challenge's listing and opened once, in the final run. The corpus's statistics and every backbone's pretraining read set A only. |
 | Backbones | Two at tier M, seed 1, pretrained without labels on set A's stays: `backbone-physionet2012-m-32` over the stays alone (weights `sha256:c5878c03…`), named by the doubling rule over 8, 16, 32 and 64 epochs, and `backbone-mixed5-m` over the four corpora of the mixed backbone and the stays (weights `sha256:869ed545…`). A campaign runs under one backbone, so each has its own. |
 | Label | `In-hospital_death`, zero or one, from `Outcomes-a.txt` and `Outcomes-b.txt`. |
+| Budgets | 50, 200 and 1,000 stays, and every stay of the tuning side. |
+| Endpoint | Full fine-tuning against the network trained from nothing, at 200 stays, under the mixed backbone; one comparison, carrying no correction. The campaign under the stays-alone backbone reads its own family; the two backbones set side by side are a declared diagnostic, not a claim. |
 | Draw | A budget is a count of stays, drawn in proportion to the two outcomes, every prefix within one stay of each outcome's share, nested across budgets and seeded; a draw holding one outcome is refused. |
 | Measure | One minus the area under the ROC curve, ties counting half; reported as the area. A reduction is a gain in area. |
 | Thresholds | Stated in area, not as shares: the endpoint's least gain and the floor's fixed part are absolute. The floor is the larger of that part and the control's spread over seeds. |
@@ -316,7 +318,7 @@ anything read on the validation side.
 | Family | Every other candidate and budget against the control, under Holm, as for the turbofans. |
 | Calibration | The Brier score of every cell is reported beside the area and judged by nothing. |
 | Heads | Every network ends in one linear head read as log-odds, trained by binary cross-entropy from the log-odds of the sample's prevalence, no class weighted; the ridge probe and MiniRocket fit an L2-penalised logistic regression on their grid of penalties, chosen by the mean log-loss of five folds in the sample's proportion of outcomes; trees grow under the logistic objective (ADR-0045). MiniRocket's grid over outcomes is the published ridge grid, 0.001 to 1,000 in ten steps, followed by 4,640, 21,500, 100,000, 464,000 and 2,150,000; the turbofan task keeps the published grid. |
-| Selection | A selection minimises one minus the area over the inner holdout, under the rule of one standard error. |
+| Selection | Every candidate is selected at each budget before the grid, under each backbone it runs on: one stay in five held out of the tuning side per repeat, three repeats, one minus the area under the rule of one standard error, and the edge rule. A network departs from its default — the turbofan's registered peak of its mode as the rate (the patch model at the schedule's 1e-3), pooled by the mean — by a third and three times the rate, the tail of a fifth or of half the window, and attention; the probe solved in closed form turns the two tails alone, having no query to train. A tail departs from the mean by two knobs, attention by one. The peaks are where the search starts, not a choice: a default is kept only on a tie. The classical baselines turn the knobs their turbofan selections turned. |
 | Final run | A stay of set C with no measurement is answered with the prevalence of the task's own sample the candidate learnt from, the answer of a predictor that has seen nothing; none is dropped. Every candidate answers those stays alike, so the paired comparison is unmoved except through the ties the constant answer makes with each candidate's other answers; the areas and Brier scores reported move by the same stays. The harness does not answer such a stay yet: it is built and tested before the final run, and this row is amended with the commit. |
 
 ## The test set
@@ -340,8 +342,8 @@ them.
   (`docs/verification/label-efficiency-curve.md`, `docs/findings.md`).
 - The synthetic control's transfer leg: complete, passed
   (`docs/verification/synthetic-transfer.md`).
-- Intensive-care task: protocol and backbones registered; budgets, endpoint, least gain and
-  floor not yet; no selection or grid run.
+- Intensive-care task: protocol, backbones, budgets, endpoint and selections registered; least
+  gain and floor not yet; no selection or grid run.
 - The single test run: not made.
 
 ## Register of amendments
@@ -399,3 +401,4 @@ title" resolves to a row here and to the commit the row names, where the full te
 | 2026-09-29 | the commit that adds this row | configuration | by the rule, after the ladder of 8 to 64 epochs; before any selection or grid on the task | *the intensive-care backbones named.* The rung of 32 epochs over the stays alone, and the mixture of five beside it. `manual-handoff.md`, 2026-09-29. |
 | 2026-09-29 | the commit that adds this row | editorial, reading | after every row above | *the rules brought in line with the register, and the register cut to what changed.* The rows of 2026-09-26 and 2026-09-27 had changed the configuration without the text above; the tail, the arms' variants per budget, the closed-form probe and the standing are now written in. Reading: the secondary family is every other candidate at every budget, its size stated in the campaign's file, as the repeated curve and the intensive-care task already read it. Rows keep their titles; the predictions and results they restated stay in the notes they name. |
 | 2026-09-29 | the commit that adds this row | measured | **post hoc**: after every campaign it concerns had been read | *the floor's fixed part declared at 2 % in the harness's campaign files.* Every turbofan campaign file since 2026-09-23 declares 2 % where 3 % is registered. Read again at 3 %, no verdict changes: each distinguishable cell is worse than the control or clears the larger floor by a wide margin, and one reading of the pilot's budget moves from at the floor to below it, with the same conclusion. The registered 3 % stands. |
+| 2026-09-29 | the commit that adds this row | configuration | before any selection on the task; the probes' penalties read on the tuning side, nothing on the validation side | *the intensive-care budgets, endpoint and selections, before any selection runs.* Budgets of 50, 200, 1,000 and every stay; full fine-tuning against the network from nothing at 200 under the mixed backbone as the endpoint; every candidate selected per budget and backbone, the pooling among the networks' knobs, in `campaigns/selection-*-physionet2012.toml`. The least gain and the floor wait for the selections' spread over seeds. |
