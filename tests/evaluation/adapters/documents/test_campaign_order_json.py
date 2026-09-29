@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -8,7 +9,8 @@ from emblema.evaluation.adapters.documents.campaign_order_result_json import (
 )
 from emblema.evaluation.domain.exceptions import UnreadableCampaignDocumentError
 from emblema.evaluation.domain.handoff.campaign_order import CampaignOrder
-from tests.evaluation.support import CAMPAIGN, campaign, task
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
+from tests.evaluation.support import CAMPAIGN, campaign, selection, task
 
 CODEC = CampaignOrderJson()
 
@@ -51,6 +53,32 @@ def test_an_order_that_states_something_no_order_can_be_is_refused() -> None:
 
     with pytest.raises(UnreadableCampaignDocumentError, match="git_commit"):
         CODEC.decode(json.dumps(document).encode())
+
+
+def test_an_order_of_a_fixed_division_carries_its_seed_and_one_placed_before_divides_afresh() -> (
+    None
+):
+    grid = replace(selection().campaign, recorded=(), completed_at=None)
+    fixed = replace(
+        grid, design=replace(grid.design, inner_holdout=InnerHoldout(one_in=5, division_seed=101))
+    )
+    placed = replace(
+        an_order(), evaluations=tuple(fixed.evaluation_of(cell) for cell in fixed.pending())
+    )
+    earlier = json.loads(
+        CODEC.encode(
+            replace(
+                an_order(), evaluations=tuple(grid.evaluation_of(cell) for cell in grid.pending())
+            )
+        )
+    )
+    for evaluation in earlier["evaluations"]:
+        del evaluation["division_seed"]
+
+    assert CODEC.decode(CODEC.encode(placed)) == placed
+    assert {e.holdout for e in CODEC.decode(json.dumps(earlier).encode()).evaluations} == {
+        InnerHoldout(one_in=5)
+    }
 
 
 def test_a_result_codec_refuses_an_order() -> None:

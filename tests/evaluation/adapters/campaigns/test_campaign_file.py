@@ -118,6 +118,16 @@ def test_a_selection_declares_how_it_divides_the_tuning_side(tmp_path: Path) -> 
     assert declared.inner_holdout() == InnerHoldout(one_in=5)
 
 
+def test_a_selection_may_hold_the_same_units_out_whatever_the_seed(tmp_path: Path) -> None:
+    declared = written(
+        DECLARED.replace('name = "', 'purpose = "selection"\nname = "', 1)
+        + "\n[selection]\none_in = 5\ndivision_seed = 101\n",
+        tmp_path,
+    )
+
+    assert declared.inner_holdout() == InnerHoldout(one_in=5, division_seed=101)
+
+
 def test_a_comparison_names_each_tuned_pairing_and_the_selection_behind_it(
     tmp_path: Path,
 ) -> None:

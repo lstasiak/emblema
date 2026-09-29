@@ -160,9 +160,12 @@ class _Selection(_Section):
 
     Attributes:
         one_in: One tuning unit in this many is held out to score the variants on.
+        division_seed: The seed every repeat divides under, where the units scored on stay
+            the same whatever the run's seed.
     """
 
     one_in: int
+    division_seed: int | None = None
 
 
 class _Tuned(_Section):
@@ -280,7 +283,11 @@ class CampaignFile(_Section):
         Raises:
             InvalidInnerHoldoutError: If one unit in fewer than two is to be held out.
         """
-        return None if self.selection is None else InnerHoldout(one_in=self.selection.one_in)
+        if self.selection is None:
+            return None
+        return InnerHoldout(
+            one_in=self.selection.one_in, division_seed=self.selection.division_seed
+        )
 
     def tuned_choices(self) -> tuple[TunedChoice, ...]:
         """Every tuned pairing the file names.

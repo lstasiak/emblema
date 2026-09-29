@@ -66,6 +66,15 @@ def test_a_selection_holding_no_variant_of_the_candidate_chooses_nothing() -> No
         selection().selected(FINER, AT_200)
 
 
+def test_a_selection_that_held_the_same_units_out_in_every_repeat_chooses_nothing() -> None:
+    finished = selection()
+    fixed = replace(finished.campaign.design, inner_holdout=InnerHoldout(one_in=5, division_seed=7))
+    held = replace(finished, campaign=replace(finished.campaign, design=fixed))
+
+    with pytest.raises(SelectionNotReadableError, match="same units out"):
+        held.selected(ROCKET, AT_200)
+
+
 def test_a_selection_campaign_divides_the_tuning_side_and_no_other_does() -> None:
     with pytest.raises(InvalidCampaignDesignError, match="selection"):
         replace(

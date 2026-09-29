@@ -67,6 +67,9 @@ class CampaignOrderJson:
             "retain": evaluation.retain,
             "declared": self._candidates.encode(evaluation.declared),
             "holdout": None if evaluation.holdout is None else evaluation.holdout.one_in,
+            "division_seed": None
+            if evaluation.holdout is None
+            else evaluation.holdout.division_seed,
         }
 
     def _read(self, document: dict[str, Any]) -> CandidateEvaluation:
@@ -76,7 +79,10 @@ class CampaignOrderJson:
             purpose=RunPurpose(document["purpose"]),
             retain=bool(document["retain"]),
             declared=self._candidates.decode(document["declared"]),
+            # An order placed before the fixed division existed holds no seed of its own.
             holdout=None
             if document["holdout"] is None
-            else InnerHoldout(one_in=document["holdout"]),
+            else InnerHoldout(
+                one_in=document["holdout"], division_seed=document.get("division_seed")
+            ),
         )

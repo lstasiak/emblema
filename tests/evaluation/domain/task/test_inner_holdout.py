@@ -22,6 +22,13 @@ def test_the_same_seed_divides_the_same_way_and_another_seed_otherwise() -> None
     assert holdout.divided(TWENTY, seed=1) != holdout.divided(TWENTY, seed=2)
 
 
+def test_a_division_seed_holds_the_same_units_out_whatever_the_runs_seed() -> None:
+    fixed = InnerHoldout(one_in=5, division_seed=7)
+
+    assert fixed.divided(TWENTY, seed=1) == fixed.divided(TWENTY, seed=2)
+    assert fixed.divided(TWENTY, seed=1) == InnerHoldout(one_in=5).divided(TWENTY, seed=7)
+
+
 def test_the_share_scored_per_unit_learnt_is_what_the_rule_corrects_by() -> None:
     assert InnerHoldout(one_in=5).test_to_train == pytest.approx(0.25)
 
