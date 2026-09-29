@@ -392,6 +392,66 @@ What the runs say:
   epoch took from 51 to 181 s; the minutes above are the runs' own epochs, however many ran
   beside them.
 
+### 2026-09-29 — Kaggle, Tesla T4 x2, fp16, against Cloudflare R2: the intensive-care backbones
+
+Two backbones for the intensive-care task: one over the stays of set A alone, named by the
+doubling rule, and the mixed backbone of 2026-09-19 with those stays added as a fifth corpus.
+Five orders placed here from `8b1b4349` as run `kaggle-t42c`, fulfilled in one "Save & Run All"
+session with one device per stream, and accepted here the next morning.
+
+|  |  |
+| --- | --- |
+| Experiments | `experiments/backbone-physionet2012-m-{8,16,32,64}.toml` and `experiments/backbone-mixed5-m.toml`: tier M, fp16, Huber δ = 1, dropout 0, micro-batch 16 with 2 accumulated, peak 1e-3 with a quarter-epoch warm-up and a cosine decay to one per cent spanning the run, seed 1. The mixture's file is the four-corpus file with `physionet2012` added and nothing else changed; its configuration in the registry differs from `058188f2`'s in the name and the corpora only |
+| Corpora | PhysioNet 2012 set A (`cef44de2…`, channels 85–128 of the chained vocabulary); the mixture adds it after the four manifests of 2026-09-19 |
+| Code | `8b1b4349641c28b601f076bd7eafa082bd659579`; between `265fc911` and this commit the training path changed only by modules moved |
+| Parameters | 4,779,264 in every run, the registry's count: 11,264 more than `058188f2`, which is 44 channel rows of width 256 |
+| Platform | Kaggle, GPU T4 x2: the mixture on one device, the four rungs one after another on the other |
+| Cost | the rungs 25 s an epoch of 125 steps, 3 to 27 minutes a run; the mixture 0.43 s a step, 4,618 steps and 2,127–2,153 s an epoch, 4.8 h of epochs. `accept` took 5–9 s a run |
+
+The ladder over the stays alone. Validation loss per hidden token over the whole held-out side;
+the best epoch is the last in every rung:
+
+| Experiment | Backbone | Result | Weights | Best epoch | Validation loss | Share of the trivial predictor's | Training loss | Minutes of epochs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-physionet2012-m-8` | `3c1a33cb-…` | `durable/sha256/b0a644ad…` | `durable/sha256/a64b19e3…` | 8 | 0.16837 | 0.478 | 0.1676 | 3 |
+| `backbone-physionet2012-m-16` | `4743a67a-…` | `durable/sha256/2f9aac34…` | `durable/sha256/f55e5aba…` | 16 | 0.15161 | 0.430 | 0.1517 | 7 |
+| `backbone-physionet2012-m-32` | `187235a1-…` | `durable/sha256/1cef575e…` | `durable/sha256/c5878c03…` | 32 | 0.14618 | 0.415 | 0.1442 | 14 |
+| `backbone-physionet2012-m-64` | `9bcec41c-…` | `durable/sha256/8738ecf9…` | `durable/sha256/32311e43…` | 64 | 0.14280 | 0.405 | 0.1374 | 27 |
+
+The mixture of five, `backbone-mixed5-m` (`2cfacb10-…`, result `durable/sha256/574e6566…`,
+weights `durable/sha256/869ed545…`, the eighth epoch's), against the four-corpus backbone
+epoch by epoch. Share of the trivial predictor's loss per corpus, four corpora then five:
+
+| epoch | cmapss | skab | smd | esa_ad | mean of the four | physionet2012 | mean of the five |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.070 / 0.065 | 0.331 / 0.366 | 0.348 / 0.360 | 0.399 / 0.385 | 0.2870 / 0.2940 | 0.590 | 0.3533 |
+| 2 | 0.045 / 0.048 | 0.308 / 0.291 | 0.383 / 0.393 | 0.335 / 0.333 | 0.2679 / 0.2662 | 0.552 | 0.3233 |
+| 3 | 0.030 / 0.046 | 0.281 / 0.279 | 0.354 / 0.378 | 0.325 / 0.322 | 0.2477 / 0.2562 | 0.533 | 0.3116 |
+| 4 | 0.015 / 0.035 | 0.270 / 0.265 | 0.379 / 0.364 | 0.309 / 0.333 | 0.2433 / 0.2493 | 0.519 | 0.3033 |
+| 5 | 0.010 / 0.031 | 0.268 / 0.263 | 0.397 / 0.379 | 0.290 / 0.292 | 0.2411 / 0.2412 | 0.506 | 0.2942 |
+| 6 | 0.009 / 0.030 | 0.265 / 0.263 | 0.375 / 0.361 | 0.294 / 0.291 | 0.2356 / 0.2362 | 0.494 | 0.2878 |
+| 7 | 0.007 / 0.028 | 0.263 / 0.262 | 0.368 / 0.365 | 0.280 / 0.279 | 0.2295 / 0.2335 | 0.489 | 0.2846 |
+| 8 | 0.007 / 0.026 | 0.263 / 0.260 | 0.373 / 0.364 | 0.281 / 0.277 | 0.2308 / 0.2318 | 0.487 | 0.2828 |
+
+Every number is validation, not test. What the runs say:
+
+- **The doublings fall by 9.96, 3.58 and 2.31 per cent** of the best epoch's loss. The first
+  doubling to gain less than five per cent is 16 to 32 epochs, so by the rule stated in the
+  experiment files before the ladder ran the backbone over the stays alone is the run of 32
+  epochs (`187235a1-…`, weights `c5878c03…`). The run of 64 finished as the curve's own
+  evidence.
+- **The mixture teaches the stays about as much as the rung of equal exposure.** The stays take
+  125 of 4,618 steps an epoch, 1,000 steps in all, as many as the rung of 8 epochs; the mixture
+  ends at 0.487 of the trivial predictor's loss on them, the rung at 0.478.
+- **Adding the stays leaves SKAB, SMD and ESA-AD where they were** or slightly lower at the last
+  epoch; the mean over the four shared corpora ends at 0.2318 against 0.2308.
+- **C-MAPSS ends about four times higher: 0.026 of the trivial predictor's loss against
+  0.007.** The two runs part at the third epoch and the gap does not close. The manifest is the
+  same (the same held-out tokens and the same trivial loss), the configurations differ in the
+  corpora only, and the training code did not change. The cause is not known: one run of each
+  mixture cannot separate the added corpus from the run's own spread. The intensive-care task
+  does not read C-MAPSS, so its campaigns are not affected.
+
 ### Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when
