@@ -1,7 +1,7 @@
 # Preregistration: what counts as success in the label-efficiency comparison
 
 - Registered: 2026-09-16, commit `e5ffafb`
-- Rules in force as of: 2026-09-22, after the amendment `060394b`
+- Rules in force as of: 2026-09-29, the last row of the register
 - Applies to: the label-efficiency curve on the turbofan task, its single test run, the
   transfer leg of the synthetic control, and the protocol of the intensive-care task
 
@@ -17,8 +17,10 @@ end, which says what changed, whether it changed before or after the result it c
 had been measured at the time. The rule in force on any earlier day is the file at that day's
 commit. Measurements live in `docs/verification/`, decisions about the system in `docs/adr/`, and a
 diagnostic declared before it runs is written into the note that will hold its result, with its
-prediction, before the run. A reader who wants to know how much moved, and when, reads the
-register; it is meant to be counted.
+prediction, before the run. A row of the register says in a sentence or two what changed and
+points to the note that holds the declaration and its result; it does not restate either, and
+the rules above are edited in the same commit as the row. A reader who wants to know how much
+moved, and when, reads the register; it is meant to be counted.
 
 ## The claim under test
 
@@ -42,7 +44,7 @@ budget.
 | Label budget unit | one labelled window |
 | Budgets | 50, 200, 1,000, all (2,568 on the corpus in force) |
 | Sampling | windows drawn from tuning units, stratified over four bins of the target, driven by a seed |
-| Methods | from scratch, frozen backbone with a linear head, low-rank updates, full fine-tuning |
+| Methods | from scratch, frozen backbone with a linear head (trained under the schedule, or solved in closed form as ADR-0044 adds), low-rank updates, full fine-tuning; the harness's classical baselines and patch model beside them |
 | Repeats | five seeds per cell, 1 to 5; one pretraining seed |
 | Resampling unit | the engine |
 
@@ -77,7 +79,9 @@ its letter, since a choice between two runs it calls equal, made after seeing wh
 the kind of choice this document exists to prevent.
 
 **How a candidate is made.** Every method answers through the same linear head over the mean of
-the observed token states. A run trains for a stated budget of steps and is scored after the
+the token states in the tail of the window, a fifth of it unless a selection chooses another
+share (ADR-0041); the first curve, of 2026-09-22, ran under the mean over the whole window. A
+run trains for a stated budget of steps and is scored after the
 last, never stopped on the validation error. Targets are learnt in units of the label ceiling. The
 head's bias starts at the mean of the labels the run holds; its weights are drawn from the seed.
 Low-rank updates go beside the attention's projections and the feed-forward network's linears of
@@ -94,8 +98,10 @@ spanning the run so lengthened. The floor gives every cell the same chance to le
 of the mean predictor and leaves the budget of labels as the only thing that differs between
 cells of one arm.
 
-**The peak rate of each arm**, one value for the whole grid: from scratch 1e-3, frozen probe
-3e-2, low-rank updates 1e-4, full fine-tuning 1e-3. Peaks are chosen on the validation side at
+**The peak rate of each arm**: from scratch 1e-3, frozen probe 3e-2, low-rank updates 1e-4,
+full fine-tuning 1e-3. It is the arm's default, the setting a selection departs from; a
+comparison runs each trained arm at the variant its selection chose at each budget
+(`campaigns/curve-fd001.toml` names them). Peaks are chosen on the validation side at
 the endpoint's budget, by a rule fixed before the sweep: three peaks per arm, 200 labelled
 windows under seeds 1, 2 and 3, the peak with the lowest mean validation RMSE over the three. A
 peak chosen at an edge of its grid is followed by one peak beyond that edge, half a decade away,
@@ -109,9 +115,10 @@ was published with; the default of an arm or of the patch model is the schedule 
 with the arm's registered peak. The knobs a selection may turn, and the values it may turn them
 to, are named in a committed campaign file whose purpose is *selection*. For a baseline they are
 the knobs of its method, the ridge penalty of the convolution baseline excepted, since every fit
-already chooses it by leave-one-out error. For a network they are the knobs of the schedule
-that leave the compute budget as it is — the peak rate, the weight decay, the share of the run
-the warm-up takes and the fraction of the peak the rate decays to — and never the epochs, the
+already chooses it, by leave-one-out error on a regression and by folds on outcomes. For a
+network they are the knobs that leave the compute budget as it is — the peak rate, the weight
+decay, the share of the run the warm-up takes, the fraction of the peak the rate decays to, and
+the head's pooling and the share of its tail — and never the epochs, the
 floor of steps or the batch, so a tuned network spends what its base spends. A selection never
 reads the validation side: in each repeat the seed ranks the task's tuning units, one in five is
 held out, the budget is drawn from the rest and every variant is scored on the held-out units. A
@@ -189,10 +196,13 @@ and read once: the cell at 200 labelled windows is not run again for the grid.
 
 ## Secondary comparisons
 
-The remaining eleven cells of the comparison, four budgets by three transfer modes less the
-primary, are secondary. They are tested at the 5 % level with a Holm correction over the family of
-eleven, and they are labelled secondary wherever they appear. The family is the registered eleven
-whatever has run: a cell that has not run enters the correction with a p-value of one, so a
+Every other candidate at every budget, against the control, less the primary, is secondary. The
+family's size is stated in the campaign's committed file before it runs: eleven for the three
+transfer modes first registered, four budgets by three less the primary; thirty-five for the ten
+candidates of the curve repeated on 2026-09-27. Secondary cells are tested at the 5 % level with
+a Holm correction over the family, and they are labelled secondary wherever they appear. The
+family is the declared size whatever has run: a cell that has not run enters the correction with
+a p-value of one, so a
 partial grid is read more strictly than the whole one, never less, and the conclusion states when
 the grid is incomplete. A secondary cell's verdict follows the family's word, not its own
 interval. A secondary result does not confirm the claim on its own; it describes the shape of the
@@ -236,27 +246,22 @@ a paired difference over 21 units, the half-width of a 95 % interval is about 0.
 deviations of the per-engine differences; under the Holm correction over eleven secondary
 comparisons it rises to roughly 0.8. Wide intervals are therefore a property of the experiment as
 designed, known now, and they will not be reinterpreted later as a finding about the method.
-Measured on synthetic data with a known answer (`docs/verification/verdict-statistics.md`), the
-percentile interval over 21 units covers a true reduction about 92 % of the time rather than 95,
-and its whole width lies above a true zero about 5 % of the time rather than 2.5: the endpoint's
-confirmation carries about twice its nominal one-sided error. The rule stands as registered; the
-shortfall is reported beside every reading made under it.
+Over 21 units the percentile interval falls short of its nominal coverage, and the endpoint's
+confirmation carries about twice its nominal one-sided error
+(`docs/verification/verdict-statistics.md`). The rule stands as registered; the shortfall is
+reported beside every reading made under it.
 
 ## The synthetic control
 
 The control corpora exist to make a negative result readable. The generator and the certificate
 that a pair carries the structure it claims are recorded in ADR-0018; the transfer leg, in
 ADR-0033. The leg is measured at the endpoint's budget alone, 200 labelled windows under seeds 1
-to 5, the four arms, under the schedule, the floor and the head's start of the curve, on corpora
-published with windows of 128 time units at stride 12, a window that spans the process's time
-scales. The task is the exact reading of one sensor twelve time units past the window's end,
-four strata of the target, its error the RMSE in the sensor's own units. The corpora are
-`control-a` and `null-a` for the pretraining and the wide second layouts `control-b-wide` and
-`null-b-wide` for the task, half their 800 units held out under seed 1, one in three of those
-frozen, 266 validation units on either pair; the backbones `control-a-s` (weights
-`sha256:488be6bd…`) and `null-a-s` (`sha256:30f71255…`), 24 epochs of batch 32 at tier S; the
-peaks, swept on each pair's own task by the curve's rule, from scratch 1e-3, frozen probe 1e-2,
-low-rank updates 3e-3, full fine-tuning 1e-3 on both pairs.
+to 5, the four arms, under the schedule, the floor and the head's start of the curve, on windows
+of 128 time units at stride 12, a window that spans the process's time scales. The task is the
+reading of one sensor twelve time units past the window's end, its error the RMSE in the
+sensor's own units; the pretraining pairs are `control-a` and `null-a`, the task's the wide
+second layouts `control-b-wide` and `null-b-wide`, the peaks swept on each pair's own task by the
+curve's rule. Backbones, sides and peaks are in `docs/verification/synthetic-transfer.md`.
 
 - **The positive control** is the coupled pair, judged by the rule the curve is judged by: the
   advantage of full fine-tuning over training from scratch must clear the practical floor with
@@ -328,13 +333,15 @@ them.
 
 ## Standing
 
-- Endpoint on the validation side, under the configuration in force: **confirmed** on 2026-09-22
-  (full fine-tuning +12.3 %, interval [+1.49, +3.30], floor 0.57;
-  `docs/verification/label-efficiency-curve.md`). Over four seeds of the five the reduction stays
-  between 10.2 and 15.3 %; over the two seeds the sweep did not see, 5.0 %.
-- Grid under the floor, validation side: measured on 2026-09-22 on the same configuration
-  (same note). The synthetic control's transfer leg: complete, passed
+- Turbofan endpoint, validation side: **not confirmed** by the curve repeated on 2026-09-27
+  under the configuration in force, the wrong way: full fine-tuning 10.5 % above the arm from
+  nothing at 200 labels, and the control ahead of every candidate at every budget. The first
+  curve's confirmation of 2026-09-22 is read as the control's handicap
+  (`docs/verification/label-efficiency-curve.md`, `docs/findings.md`).
+- The synthetic control's transfer leg: complete, passed
   (`docs/verification/synthetic-transfer.md`).
+- Intensive-care task: protocol and backbones registered; budgets, endpoint, least gain and
+  floor not yet; no selection or grid run.
 - The single test run: not made.
 
 ## Register of amendments
@@ -350,43 +357,45 @@ title" resolves to a row here and to the commit the row names, where the full te
 | Date | Commit | Kind | When | What changed |
 |---|---|---|---|---|
 | 2026-09-16 | `e5ffafb` | registered | before any run | The document as first registered: the claim, the task on 80/20 engines drawn by the task, the endpoint at 200 with 10 % and the interval, the family of eleven under Holm, the floor, the outcomes, the power, the synthetic control's two rules, the protocols, the test set. |
-| 2026-09-16 (committed 2026-09-17) | `dfab961` | configuration | before any run | *the held-out engines are the ones the backbone never saw.* The validation side becomes the published corpus's own held-out FD001 engines (then 18) and the tuning side the rest (82), so no validation engine was pretrained on; endpoint, thresholds and floor unchanged. |
-| 2026-09-18 | `4d01929` | configuration | before any run on it | *the backbone the curve is drawn from, and how a candidate is made.* `backbone-cmapss-m` (weights `sha256:6830e117…`, four epochs); the shared linear head, scoring after the last epoch, targets in ceiling units, the low-rank placement, the two seeds. ADR-0008, ADR-0030. |
-| 2026-09-19 | `3eb3769` | configuration | after a sweep on the validation side, before the grid | *the schedule of every arm, fixed on the validation side before the grid.* Warm-up over a tenth and cosine to 1 %, thirty epochs, batches of sixteen; peaks 3e-4 / 1e-2 / 3e-3 / 3e-4; repeats pooled per engine; the two-sided bootstrap p-value. Sweep in `label-efficiency-curve.md`, 2026-09-19. |
-| 2026-09-19 | `3eb3769` | reading | before the grid | *how the registered rules are read, made precise before the grid.* The floor binds the endpoint; the family is the registered eleven whatever ran; `(k + 1) / (B + 1)`; the asymmetric score as a mean per window; the last-window RMSE comparable on the test side only. A limit noted: at fifty windows a cell measures a budget of optimisation as much as of labels. |
-| 2026-09-20 | `605a5e0`, `96da833` | criterion, configuration | **after the first grid** (endpoint not confirmed: 7.17 RMSE, [5.92, 8.57], floor 7.25) | *a floor of optimiser steps, the head's start, and a sweep over three seeds.* The floor of 2,000 steps; the head's bias at the mean label; peaks to be chosen again over seeds 1–3; the backbone to be retrained to its plateau by the doubling rule. Recorded as corrections made after a result was seen, applied to every arm alike, with the endpoint, threshold, floor and family unchanged. Grid in `label-efficiency-curve.md`, 2026-09-20. |
-| 2026-09-20 | `6b7b191` | configuration | by the rule, before any grid under the floor | *the peaks under the floor, from the sweep over three seeds.* 1e-3 / 1e-2 / 3e-4 / 3e-5 under the four-epoch backbone; the control's peak stands from here. |
-| 2026-09-21 | `0e9b0f5` | configuration | after a pilot on the null pair's narrow corpus, before the leg's grid | *the synthetic control's transfer leg: corpora, sweep and power, before its grid.* The forecast task, the backbones `control-a-s` and `null-a-s`, the wide second layouts of 800 units, the curve's grid, peaks swept on each pair's own task, power from the pilot. ADR-0033. |
-| 2026-09-21 | `0e9b0f5` | configuration | by the rule, after the ladder of 4 to 64 epochs | *the backbone named again: sixty-four epochs, the plateau reached by the rule.* `backbone-cmapss-m-64` (weights `sha256:78b3c201…`), the fourth doubling lowering nothing. Ladder in `manual-handoff.md`, 2026-09-21. |
-| 2026-09-21 | `3426e0c` | configuration | after the leg's sweeps, before its grid | *the synthetic leg's peaks and its power, read off the sweep, before its grid.* 1e-3 / 1e-2 / 3e-3 / 1e-3 on both pairs; 266 validation units suffice. |
-| 2026-09-21 | `3426e0c` | configuration | by the rule, before any grid under the floor | *the peaks of the three pretrained arms under the backbone of sixty-four epochs.* 1e-2 / 3e-4 / 3e-4. Sweep in `label-efficiency-curve.md`, 2026-09-21. |
-| 2026-09-21 | `3426e0c` | criterion | before the leg's numbers under five seeds; twelve cells at fifty had run and are not read | *the synthetic leg is measured at the endpoint's budget alone.* The leg's grid reduced to 200 labelled windows: the other budgets answer nothing the control's rules ask. |
-| 2026-09-21 | `b463ed1` | diagnostic | after both pairs failed their rules at the endpoint | *the ceiling of the synthetic transfer: the second layout over the first's trajectories.* A leak layout as an upper bound. Prediction: if full fine-tuning beats the control here the pair's design is at fault, otherwise the fault is above the data. Outcome: it did not; the fault was above the data. `synthetic-transfer.md`, "the ceiling". |
-| 2026-09-21 | `36c3c19` | diagnostic | after the ceiling | *the window against the factors' periods: the coupled pair at a window of 128.* Prediction: if full fine-tuning beats the control at 128 the window was the fault and the control moves to it. Outcome: it did. `synthetic-transfer.md`, "the window". |
-| 2026-09-21 | `74fffe4` | configuration, criterion | after the window diagnostic, before any run at 128 under a rule | *the synthetic control moves to a window of 128: sweep, null pair, and the reading of both rules.* Both pairs republished at 128, backbones retrained, peaks re-swept, the null pair's equivalence and the coupled pair's rule read at 128 in that order. |
-| 2026-09-21 | `74fffe4` | measured, diagnostic | under the registration above | *the control at 128 read: the coupled pair passes, the null pair fails, and the family's share is measured by swapping the backbones.* Coupled +0.094 [+0.089, +0.099], floor 0.053; null +0.025 [+0.020, +0.029], above its floor of 0.013. The swap declared with two predictions. `synthetic-transfer.md`, "the control closed at a window of 128". |
-| 2026-09-21 | `3311640` | measured | under the swap's declaration | *the swapped backbones measured: the first prediction held, the second did not.* Coupled backbone on the null task +0.027 as predicted; null backbone on the coupled task +0.082, within the floor of the pair's own +0.094. The remedy left to a registered decision. `synthetic-transfer.md`, "the backbones swapped". |
-| 2026-09-21 | `7a8627c` | criterion, diagnostic | **post hoc**: after the swap's measurement | *the null pair read as the control of leakage it is, and a backbone pretrained on noise to bound what any pretraining gives.* The equivalence rule withdrawn after its measurement and replaced by the leakage reading; the structure's share reported (+0.011 [+0.008, +0.015]); the leg read as passed. The noise backbone declared with its prediction. |
-| 2026-09-21 | `7a8627c` | measured | under the declaration above | *the noise backbone measured: the mechanics alone are worse than a fresh encoder.* −0.025 and −0.011; the prediction held; the leg complete. `synthetic-transfer.md`, "a backbone pretrained on noise". |
-| 2026-09-21 | `c1c8a9c` | diagnostic, criterion | after the sweep under the 64-epoch backbone, before any run | *the turbofan backbone's pretext window, and peaks at the edge of their grids, before any run.* The pretext-window cell at 32, prediction failed (−0.044, `synthetic-transfer.md`, "the pretext window apart from the task's"); a ladder at 100 cycles ordered, later withdrawn; the edge rule for peaks adopted. |
-| 2026-09-21 | `3b1d5de` | configuration | after the normalisation finding, before any run under it | *the turbofan corpus normalised within one operating condition: a backbone on FD001 and FD003, before any run.* A corpus of the two subsets (`a9c73709…`), its ladder, a sweep of all four arms with the edge rule, the endpoint, and the decision rule for what follows. ADR-0034 records the finding. |
-| 2026-09-22 | `d5a181e`, `8ed23cc` | reading, measured | reading settled after the sweep and before the endpoint; then the endpoint measured | *the endpoint on FD001 and FD003 read by the endpoint's own rule, and where it runs, before any of it runs.* The stricter reading, all three conditions, settled. Measured: +10.5 % [+0.98, +3.13], floor 0.74, confirmed; the two-subset corpus and `backbone-cmapss-m-8` (`sha256:259fdc70…`) became the configuration, peaks 3e-3 / 3e-1 / 1e-4 / 1e-3. `label-efficiency-curve.md`, 2026-09-22, the edges and the endpoint. |
-| 2026-09-22 | `69aaa71`, `f0161e7`, `fcdfe35` | configuration, diagnostic, measured | grid registered before it ran; the check exploratory, choosing nothing | *the grid under the floor on FD001 and FD003, and whether a longer backbone helps the task, before either runs.* The grid at 50, 1,000 and all on two T4s at `d5a181e`. The check: prediction failed, 32 epochs not better than 8 on each seed. Measured grid: +12.5 % at 50 and 1,000, −3.6 at all, the last column no comparison. `label-efficiency-curve.md`, 2026-09-22, both sections. |
-| 2026-09-22 | `fdf8053`, `0523683`, `bad25e9` | configuration, measured | after the endpoint on two subsets, before any run on four | *the four subsets read per operating condition: a backbone over all of C-MAPSS, and when it replaces the one over FD001 and FD003, before any run.* The corpus `d63f8e1b…`, its ladder, sweep and endpoint, the replacement rule, and where the endpoint may run. Measured: ladder 8 epochs; peaks 1e-3 / 3e-2 / 1e-4 / 1e-3; endpoint +12.3 % confirmed; replacement +3.2 % [+0.05, +1.03]; the configuration replaced. `label-efficiency-curve.md`, 2026-09-22, the A100 section. |
-| 2026-09-22 | `7c543bc`, `fcdfe35` | configuration, measured | grid registered before it ran | *the grid under the floor on the four subsets read per operating condition, before it runs.* The grid at `fdf8053` on an A100, one accelerator per budget. Measured: +16.0 % at 50, +9.0 at 1,000, −5.1 at all; full fine-tuning at all not settled under two seeds. `label-efficiency-curve.md`, 2026-09-22, the last section. |
-| 2026-09-22 | `060394b` | diagnostic | before it runs; settles nothing | *the endpoint read again on seeds no sweep has seen, and whether a longer backbone helps this corpus, before either runs.* Seeds 6–10 at 200 under the peaks in force; the 16-epoch backbone (`sha256:8cd60452…`) against the one in force by the replacement arithmetic. Neither reading changes the configuration. Outcome: pending. |
-| 2026-09-22 | the commit that adds this row | editorial | after the readings above | The rules in force rewritten in place from the register as it stood at `060394b`; no criterion, threshold, configuration or reading changed, which a diff against that commit shows. Measurements, cost declarations and the full text of diagnostics stay in the commits the rows name and in the verification notes. |
-| 2026-09-24 | the commit that adds this row | criterion | before any selection runs | *how a classical baseline is tuned.* Baselines run as published unless a declared selection, scored on held-out tuning units and never on the validation side, chooses a variant per budget by the rule of one standard error with the Nadeau–Bengio correction, ties broken towards the published setting; a comparison runs only what a finished selection chose. Measured when it was written: nothing under this rule. |
-| 2026-09-25 | the commit that adds this row | criterion, reading, measured | before any selection of a network runs; the harness had run no arm but the control | *how a candidate is tuned.* The selection protocol extends to the arms and the patch model: their knobs are the schedule's fields that leave the compute budget as it is, their default the schedule in force with the arm's registered peak, and every candidate of a comparison is tuned by the one protocol. Reading: a campaign names its family's correction in its file, Holm for this claim. Measured: the percentile interval's coverage on a known answer (`verdict-statistics.md`); the rule stands, the shortfall is reported. |
-| 2026-09-26 | the commit that adds this row | configuration, diagnostic | before either selection runs; the pooling campaign `cb5ed115…` had been read on the validation side | *the networks' default head, and a pilot selection of their knobs before the curve is repeated.* Every network arm of the repeated curve pools by the tail of the window rather than by the mean (`@pooling=tail`), the share and the rate chosen per arm and budget by the selection protocol; the mean is what the first curve ran under and what handicapped the control (`docs/verification/head-and-representation.md`). Before that repeat, two selections at 200 labels on held-out tuning engines and never on the validation side: `campaigns/selection-networks-fd001.toml` turns the tail's share (0.1, 0.2, 0.5), the rate (a third, once, three times the peak) and a weight decay (0, 0.01) one at a time around the pooling campaign's setting for the arm trained from nothing and for full fine-tuning; `campaigns/selection-networks-budget-fd001.toml` runs the same arms under twice the floor of steps on the same repeats, to ask whether they are short of budget. Declared before the runs: a longer tail than 0.2 and a lower rate than the peak are expected to be chosen for the arm from nothing; the doubled budget is expected to lower the arm from nothing by more than the practical floor and full fine-tuning by less. What is chosen becomes the default of the repeated curve; the endpoint, its threshold and its interval are unchanged. |
-| 2026-09-27 | the commit that adds this row | diagnostic | before it runs; the pilot had been read on the tuning side, nothing on the validation side | *the floor of steps asked again at the rate the pilot chose, before the curve's selections.* The pilot found the arm from nothing short of rate, not of steps, and kept the floor of 2,000; two selections on the pilot's held-out tuning engines, `campaigns/selection-networks-floor-fd001.toml` and `campaigns/selection-networks-floor-doubled-fd001.toml`, run the arm at 3e-3, full fine-tuning at 1e-3 and the probe under the floor and under twice it, both on one kind of accelerator, read cell by cell on the same repeats. Prediction: neither trained arm is lowered by more than the practical floor. Reading: a reduction above the floor with its interval above zero makes 4,000 steps the curve's floor by a configuration row before any selection of the repeat runs; otherwise 2,000 stands. `head-and-representation.md`, 2026-09-27. |
-| 2026-09-27 | the commit that adds this row | measured | under the declaration above | *the floor read: 2,000 steps stand.* At 3e-3 the doubled floor lowers the arm from nothing by 0.37 [−0.04, +0.78], floor 0.29, not above zero; full fine-tuning is raised by 1.70 [+0.63, +2.81]. No configuration changes. `head-and-representation.md`, 2026-09-27, the A100 section. |
-| 2026-09-27 | the commit that adds this row | configuration, diagnostic | before any of the three selections runs; the floor had been read on the tuning side | *the three trained arms selected per budget before the curve is repeated.* `campaigns/selection-scratch-fd001.toml`, `campaigns/selection-fine-tuning-fd001.toml` and `campaigns/selection-lora-fd001.toml`: one arm each, four variants turned one at a time around the setting in force (the rate a third and three times it, the other share of the tail), at 50, 200, 1,000 and all, three repeats of held-out tuning engines, the one-standard-error rule per budget; the low-rank arm's setting in force is its registered peak of 1e-4 under the tail of 20 %. Predictions: the arm from nothing keeps 3e-3 or more at every budget and the longer tail at 50; full fine-tuning takes 3.3e-4 at 1,000 and at all; the low-rank arm keeps its setting. The curve runs each arm at what its selection chose, and the registered edge rule applies to a rate chosen at an edge. |
-| 2026-09-27 | the commit that adds this row | measured, diagnostic | under the declaration above; before the two follow-ups run | *the three arms selected per budget, and two rates beyond the edge declared.* Measured: the arm from nothing keeps 3e-3 everywhere and takes the tail of 0.5 at 1,000 and at all; full fine-tuning takes 3.3e-4 at 50, the tail of 0.1 at 200 and its setting at 1,000 and all; the low-rank arm takes 3.3e-5 at 50 and its setting elsewhere. Two choices at 50 lie at the edge of their grids, so by the edge rule `campaigns/selection-fine-tuning-edge-fd001.toml` and `campaigns/selection-lora-edge-fd001.toml` ask one rate beyond, at 50 labels, before the curve runs; prediction: the chosen rates stand. `head-and-representation.md`, 2026-09-27, the two last sections. |
-| 2026-09-27 | the commit that adds this row | measured | under the declaration above | *the rates beyond the edge read: the chosen rates stand.* At 50 labels a third of the chosen rate costs full fine-tuning 0.9 and the low-rank arm 5.0 RMSE; 3.3e-4 and 3.3e-5 are what the curve runs them at there. `head-and-representation.md`, 2026-09-27, the G4 section. |
-| 2026-09-27 | the commit that adds this row | configuration, diagnostic | before the curve runs; every selection read on the tuning side, nothing on the validation side since the pilot's confirmation campaign | *the curve repeated by the harness: five arms and five baselines under the protocol, before it runs.* `campaigns/curve-fd001.toml`: the arm from nothing, full fine-tuning and the low-rank arm at the variants their selections chose per budget (`7a842dba…`, `199fb850…`/`9be0af77…`, `83ecaced…`/`f1b12cb1…`); the probe under the schedule at its registered peak and the probe solved in closed form (ADR-0044, a fifth method beside the four registered), both under the tail; the three families of trees and MiniRocket at the variants `3856e705…` and `2b81fda7…` chose; the patch model as published, an asymmetry in the baselines' disfavour stated here. Four budgets, five seeds, Holm over thirty-five secondary comparisons rather than the registered eleven, since the family holds every contender at every budget. Every cell of a budget on one kind of accelerator (Colab G4), the classical cells on the M1 Pro. Predictions: the endpoint is not confirmed, the reduction at 200 negative or indistinguishable; the pretrained arms lead at 50 and not at 1,000; the closed-form probe beats the trained probe at every budget; the trees per channel beat every network at 50 and 200. Endpoint, threshold, interval and floor unchanged. `label-efficiency-curve.md`, 2026-09-27. |
-| 2026-09-27 | the commit that adds this row | measured | under the declaration above; budgets 50 and 200 ran on an A100 rather than the G4 named, one kind per budget as the rule requires | *the repeated curve read: the endpoint is not confirmed, the wrong way.* At 200 labels full fine-tuning is 10.5 % above the arm from nothing ([−2.56, −0.54], floor 0.50); no secondary comparison is distinguishable under Holm over 35; the control leads every candidate at every budget. The first curve's confirmed endpoint is read as the control's handicap. `label-efficiency-curve.md`, 2026-09-27, the G4 and A100 section. |
-| 2026-09-27 | the commit that adds this row | configuration | before any run on the task | *the intensive-care task.* The protocol of `physionet2012-in-hospital-death`: sides, label, a draw in proportion to the outcomes, one minus the area as the measure, absolute thresholds, the paired bootstrap in two strata with repeats pooled by their mean area, Brier reported and not judged, the heads, selection by the same measure, and how a stay of the frozen side without a measurement is answered. The budgets, the endpoint, the least gain and the floor are left to a row before the grid (ADR-0045, ADR-0046). |
-| 2026-09-28 | the commit that adds this row | configuration | before any counted run on the task; one smoke campaign at the small tier with a two-epoch backbone, whose numbers are not cited | *the closed-form heads over outcomes.* The ridge probe and MiniRocket fit an L2-penalised logistic regression, the penalty chosen by the log-loss of five stratified folds, instead of calibrating their ridge on its leave-one-out answers. The smoke run put the probe at 0.43 AUROC at 50 stays: under a strong penalty those answers lean against the outcomes and the calibration reversed the ranking. Calibrating on stratified folds or in sample was measured on synthetic heads and rejected (ADR-0045). |
-| 2026-09-29 | the commit that adds this row | configuration | before any selection or grid on the task; measured on the tuning side only, nothing scored | *MiniRocket's penalties over outcomes.* The logistic regression chose 4,640, past the published grid's strongest step of 1,000, at 200, 1,000 and every stay under all three seeds, and at 50 stays chose the strongest step of a longer grid under two seeds of three, where no strength beats the prevalence alone. By the reading declared before the check, the convolution baseline on outcomes chooses among the published grid followed by five steps of the same factor, up to one beyond the strongest chosen. `classical-baselines.md`, 2026-09-28. |
-| 2026-09-29 | the commit that adds this row | configuration | by the rule, after the ladder of 8 to 64 epochs; before any selection or grid on the task | *the intensive-care backbones named.* The doublings fall by 9.96, 3.58 and 2.31 per cent, so the rung of 32 epochs is the backbone over the stays alone; the mixture of five is the four-corpus file with the stays added. `manual-handoff.md`, 2026-09-29. |
+| 2026-09-16 (committed 2026-09-17) | `dfab961` | configuration | before any run | *the held-out engines are the ones the backbone never saw.* The validation side becomes the corpus's own held-out FD001 engines; endpoint, thresholds and floor unchanged. |
+| 2026-09-18 | `4d01929` | configuration | before any run on it | *the backbone the curve is drawn from, and how a candidate is made.* `backbone-cmapss-m` named; the shared linear head, scoring after the last epoch, targets in ceiling units, the low-rank placement, the two seeds. ADR-0008, ADR-0030. |
+| 2026-09-19 | `3eb3769` | configuration | after a sweep on the validation side, before the grid | *the schedule of every arm, fixed on the validation side before the grid.* The schedule's shape, epochs and batch; the first peaks; repeats pooled per engine; the two-sided p-value. `label-efficiency-curve.md`, 2026-09-19. |
+| 2026-09-19 | `3eb3769` | reading | before the grid | *how the registered rules are read, made precise before the grid.* The floor binds the endpoint; the family is the registered eleven whatever ran; the p-value's form; the asymmetric score as a mean per window; the last-window RMSE comparable on the test side only. |
+| 2026-09-20 | `605a5e0`, `96da833` | criterion, configuration | **after the first grid**, endpoint not confirmed | *a floor of optimiser steps, the head's start, and a sweep over three seeds.* The floor of 2,000 steps, the head's bias at the mean label, peaks chosen again over seeds 1–3, the backbone retrained to its plateau by the doubling rule; corrections made after a result was seen, applied to every arm alike, with the endpoint, threshold, floor and family unchanged. `label-efficiency-curve.md`, 2026-09-20. |
+| 2026-09-20 | `6b7b191` | configuration | by the rule, before any grid under the floor | *the peaks under the floor, from the sweep over three seeds.* The four peaks; the control's stands from here. |
+| 2026-09-21 | `0e9b0f5` | configuration | after a pilot on the null pair's narrow corpus, before the leg's grid | *the synthetic control's transfer leg: corpora, sweep and power, before its grid.* The forecast task, the two backbones, the wide second layouts, the grid, peaks per pair, power from the pilot. ADR-0033. |
+| 2026-09-21 | `0e9b0f5` | configuration | by the rule, after the ladder of 4 to 64 epochs | *the backbone named again: sixty-four epochs, the plateau reached by the rule.* `backbone-cmapss-m-64`. `manual-handoff.md`, 2026-09-21. |
+| 2026-09-21 | `3426e0c` | configuration | after the leg's sweeps, before its grid | *the synthetic leg's peaks and its power, read off the sweep, before its grid.* The same four peaks on both pairs. |
+| 2026-09-21 | `3426e0c` | configuration | by the rule, before any grid under the floor | *the peaks of the three pretrained arms under the backbone of sixty-four epochs.* `label-efficiency-curve.md`, 2026-09-21. |
+| 2026-09-21 | `3426e0c` | criterion | before the leg's numbers under five seeds; twelve cells at fifty had run and are not read | *the synthetic leg is measured at the endpoint's budget alone.* The other budgets answer nothing the control's rules ask. |
+| 2026-09-21 | `b463ed1` | diagnostic | after both pairs failed their rules at the endpoint | *the ceiling of the synthetic transfer: the second layout over the first's trajectories.* Outcome: the fault lay above the data. `synthetic-transfer.md`, "the ceiling". |
+| 2026-09-21 | `36c3c19` | diagnostic | after the ceiling | *the window against the factors' periods: the coupled pair at a window of 128.* Outcome: the window was the fault. `synthetic-transfer.md`, "the window". |
+| 2026-09-21 | `74fffe4` | configuration, criterion | after the window diagnostic, before any run at 128 under a rule | *the synthetic control moves to a window of 128: sweep, null pair, and the reading of both rules.* Both pairs republished at 128, backbones retrained, peaks swept again, both rules read at 128 in that order. |
+| 2026-09-21 | `74fffe4` | measured, diagnostic | under the registration above | *the control at 128 read: the coupled pair passes, the null pair fails, and the family's share is measured by swapping the backbones.* `synthetic-transfer.md`, "the control closed at a window of 128". |
+| 2026-09-21 | `3311640` | measured | under the swap's declaration | *the swapped backbones measured: the first prediction held, the second did not.* The remedy left to a registered decision. `synthetic-transfer.md`, "the backbones swapped". |
+| 2026-09-21 | `7a8627c` | criterion, diagnostic | **post hoc**: after the swap's measurement | *the null pair read as the control of leakage it is, and a backbone pretrained on noise to bound what any pretraining gives.* The equivalence rule withdrawn after its measurement and replaced by the leakage reading; the structure's share reported; the leg read as passed; the noise backbone declared. |
+| 2026-09-21 | `7a8627c` | measured | under the declaration above | *the noise backbone measured: the mechanics alone are worse than a fresh encoder.* The prediction held; the leg complete. `synthetic-transfer.md`, "a backbone pretrained on noise". |
+| 2026-09-21 | `c1c8a9c` | diagnostic, criterion | after the sweep under the 64-epoch backbone, before any run | *the turbofan backbone's pretext window, and peaks at the edge of their grids, before any run.* The pretext-window cell, prediction failed (`synthetic-transfer.md`, "the pretext window apart from the task's"); a ladder at 100 cycles ordered and withdrawn; the edge rule for peaks adopted. |
+| 2026-09-21 | `3b1d5de` | configuration | after the normalisation finding, before any run under it | *the turbofan corpus normalised within one operating condition: a backbone on FD001 and FD003, before any run.* The corpus, its ladder, a sweep of all four arms under the edge rule, the endpoint, and the decision rule for what follows. ADR-0034. |
+| 2026-09-22 | `d5a181e`, `8ed23cc` | reading, measured | reading settled after the sweep and before the endpoint; then the endpoint measured | *the endpoint on FD001 and FD003 read by the endpoint's own rule, and where it runs, before any of it runs.* The stricter reading, all three conditions. Measured: confirmed; the two-subset corpus and its 8-epoch backbone became the configuration. `label-efficiency-curve.md`, 2026-09-22, the edges and the endpoint. |
+| 2026-09-22 | `69aaa71`, `f0161e7`, `fcdfe35` | configuration, diagnostic, measured | grid registered before it ran; the check exploratory, choosing nothing | *the grid under the floor on FD001 and FD003, and whether a longer backbone helps the task, before either runs.* The grid at 50, 1,000 and all; the longer backbone not better, prediction failed. `label-efficiency-curve.md`, 2026-09-22, both sections. |
+| 2026-09-22 | `fdf8053`, `0523683`, `bad25e9` | configuration, measured | after the endpoint on two subsets, before any run on four | *the four subsets read per operating condition: a backbone over all of C-MAPSS, and when it replaces the one over FD001 and FD003, before any run.* The corpus, its ladder, sweep and endpoint, the replacement rule. Measured: endpoint confirmed, the replacement rule met, the configuration replaced. `label-efficiency-curve.md`, 2026-09-22, the A100 section. |
+| 2026-09-22 | `7c543bc`, `fcdfe35` | configuration, measured | grid registered before it ran | *the grid under the floor on the four subsets read per operating condition, before it runs.* One accelerator per budget. `label-efficiency-curve.md`, 2026-09-22, the last section. |
+| 2026-09-22 | `060394b` | diagnostic | before it runs; settles nothing | *the endpoint read again on seeds no sweep has seen, and whether a longer backbone helps this corpus, before either runs.* Neither reading changes the configuration. `label-efficiency-curve.md`, 2026-09-22, the endpoint on seeds no sweep has seen. |
+| 2026-09-22 (committed 2026-09-23) | `d4933fa` | editorial | after the readings above | The rules in force rewritten in place from the register as it stood at `060394b`; no criterion, threshold, configuration or reading changed. |
+| 2026-09-24 | `ca5c767` | criterion | before any selection runs | *how a classical baseline is tuned.* A baseline runs as published unless a declared selection on held-out tuning units chooses a variant per budget by the rule of one standard error. |
+| 2026-09-25 | `97b0b2a` | criterion, reading, measured | before any selection of a network runs | *how a candidate is tuned.* The selection protocol extends to the arms and the patch model; a campaign names its family's correction in its file. Measured: the interval's coverage on known answers; the rule stands (`verdict-statistics.md`). |
+| 2026-09-26 | `591277d` | configuration, diagnostic | before either selection runs; the pooling campaign `cb5ed115…` had been read on the validation side | *the networks' default head, and a pilot selection of their knobs before the curve is repeated.* Every network pools by the tail of the window; two pilot selections at 200 labels declared with their predictions. `head-and-representation.md`, 2026-09-26. |
+| 2026-09-27 | `38fe056` | diagnostic | before it runs; nothing read on the validation side since the pilot | *the floor of steps asked again at the rate the pilot chose, before the curve's selections.* Two selections under the floor and twice it, with the reading that would change it. `head-and-representation.md`, 2026-09-27. |
+| 2026-09-27 | `a0a8970` | measured | under the declaration above | *the floor read: 2,000 steps stand.* No configuration changes. `head-and-representation.md`, 2026-09-27, the A100 section. |
+| 2026-09-27 | `a0a8970` | configuration, diagnostic | before any of the three selections runs | *the three trained arms selected per budget before the curve is repeated.* One selection per trained arm at the four budgets, declared with predictions; the curve runs each arm at what its selection chose. `head-and-representation.md`, 2026-09-27. |
+| 2026-09-27 | `98be0ab` | measured, diagnostic | under the declaration above; before the two follow-ups run | *the three arms selected per budget, and two rates beyond the edge declared.* Two choices at 50 lie at an edge, so two selections one rate beyond are declared by the edge rule. `head-and-representation.md`, 2026-09-27, the two last sections. |
+| 2026-09-27 | `bb09023` | measured | under the declaration above | *the rates beyond the edge read: the chosen rates stand.* `head-and-representation.md`, 2026-09-27, the G4 section. |
+| 2026-09-27 | `bb09023` | configuration, diagnostic | before the curve runs; nothing read on the validation side since the pilot's confirmation campaign | *the curve repeated by the harness: five arms and five baselines under the protocol, before it runs.* `campaigns/curve-fd001.toml`: the trained arms at their selected variants, the probe solved in closed form added (ADR-0044), the patch model as published, Holm over thirty-five; predictions declared. Endpoint, threshold, interval and floor unchanged. `label-efficiency-curve.md`, 2026-09-27. |
+| 2026-09-27 | `2fb9063` | measured | under the declaration above; budgets 50 and 200 ran on an A100 rather than the G4 named, one kind per budget as the rule requires | *the repeated curve read: the endpoint is not confirmed, the wrong way.* The first curve's confirmed endpoint is read as the control's handicap. `label-efficiency-curve.md`, 2026-09-27, the G4 and A100 section. |
+| 2026-09-27 (committed 2026-09-28) | `589790b` | configuration | before any run on the task | *the intensive-care task.* The protocol of `physionet2012-in-hospital-death`; the budgets, the endpoint, the least gain and the floor left to a row before the grid. ADR-0045, ADR-0046. |
+| 2026-09-28 | `91bedc0` | configuration | before any counted run on the task; one smoke campaign at the small tier, whose numbers are not cited | *the closed-form heads over outcomes.* The ridge probe and MiniRocket fit an L2-penalised logistic regression chosen by the log-loss of five stratified folds, after the smoke run showed calibration on leave-one-out answers reversing the ranking. ADR-0045. |
+| 2026-09-29 | the commit that adds this row | configuration | before any selection or grid on the task; measured on the tuning side only | *MiniRocket's penalties over outcomes.* The grid over outcomes extended past the published one by five steps. `classical-baselines.md`, 2026-09-28. |
+| 2026-09-29 | the commit that adds this row | configuration | by the rule, after the ladder of 8 to 64 epochs; before any selection or grid on the task | *the intensive-care backbones named.* The rung of 32 epochs over the stays alone, and the mixture of five beside it. `manual-handoff.md`, 2026-09-29. |
+| 2026-09-29 | the commit that adds this row | editorial, reading | after every row above | *the rules brought in line with the register, and the register cut to what changed.* The rows of 2026-09-26 and 2026-09-27 had changed the configuration without the text above; the tail, the arms' variants per budget, the closed-form probe and the standing are now written in. Reading: the secondary family is every other candidate at every budget, its size stated in the campaign's file, as the repeated curve and the intensive-care task already read it. Rows keep their titles; the predictions and results they restated stay in the notes they name. |
+| 2026-09-29 | the commit that adds this row | measured | **post hoc**: after every campaign it concerns had been read | *the floor's fixed part declared at 2 % in the harness's campaign files.* Every turbofan campaign file since 2026-09-23 declares 2 % where 3 % is registered. Read again at 3 %, no verdict changes: each distinguishable cell is worse than the control or clears the larger floor by a wide margin, and one reading of the pilot's budget moves from at the floor to below it, with the same conclusion. The registered 3 % stands. |
