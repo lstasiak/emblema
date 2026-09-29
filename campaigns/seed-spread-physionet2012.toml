@@ -1,0 +1,71 @@
+# How far the area of the grid's control and endpoint moves between seeds alone, on the
+# intensive-care task, before the least gain and the floor's fixed part are registered.
+#
+# A selection's repeats each hold a fresh fifth of the tuning stays out, so their spread mixes
+# what a seed changes with which stays are scored. The grid scores every seed on the same
+# validation stays. Here every seed is scored on one fifth of the tuning stays, fixed by its own
+# seed, so the spread is the one a grid sees; the validation side is not read. A campaign divided
+# this way chooses nothing.
+#
+# Both arms run under the mixed backbone at the variant their selection chose at each budget.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "seed-spread-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+# One tuning stay in five, about eight hundred, the same fifth for every seed: a seed no
+# selection repeat divided under.
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = ["from_scratch", "full_fine_tuning"]
+control = "from_scratch"
+endpoint = "full_fine_tuning"
+
+[budgets]
+labels = ["50", "200", "1000", "all"]
+endpoint = "200"
+# Ten seeds, so that a standard deviation is read to about a quarter of itself.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the task's own thresholds are what this run is read for.
+minimum_absolute_reduction = 0.02
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 7
+
+[bootstrap]
+resamples = 10000
+
+# The variants each selection under the mixed backbone chose, where it chose other than the
+# candidate's own setting.
+
+[[tuned]]
+candidate = "from_scratch"
+budget = "200"
+variant = "from_scratch@learning_rate=0.003"
+selected_by = "45436489-e0fe-4b06-bfff-2a04948ce969"
+
+[[tuned]]
+candidate = "from_scratch"
+budget = "1000"
+variant = "from_scratch@learning_rate=0.000333"
+selected_by = "45436489-e0fe-4b06-bfff-2a04948ce969"
+
+[[tuned]]
+candidate = "from_scratch"
+budget = "all"
+variant = "from_scratch@learning_rate=0.000333"
+selected_by = "45436489-e0fe-4b06-bfff-2a04948ce969"
+
+[[tuned]]
+candidate = "full_fine_tuning"
+budget = "1000"
+variant = "full_fine_tuning@pooling=tail,tail_share=0.2"
+selected_by = "5eb48e89-3675-4c84-a7f0-d412a6ab7ff7"

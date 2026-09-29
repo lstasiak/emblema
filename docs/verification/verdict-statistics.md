@@ -210,3 +210,75 @@ the task has; heavier tails or several windows per unit are not covered. The rob
 moved one assumption at a time and at one level of area; it did not combine a low area with ties.
 How far the grid's seeds actually spread is the open quantity, read from the selections on the
 tuning side before the numbers of the protocol are registered.
+
+## 2026-09-29 — the spread over seeds read from the selections, and declared on a fixed fifth before it runs
+
+**Question.** How far does a cell's area move between seeds on the intensive-care task? The
+least gain the endpoint must reach and the floor's fixed part are registered against it, before
+the first cell of the grid. The selections' repeats were read first; what they cannot answer is
+put to a campaign declared here before it runs.
+
+**Conditions.** The eleven network selections, 44 orders placed at `54986419` and run on Colab
+G4 sessions, read from the local registry by `scripts/campaign_pairs_report.py` and
+`scripts/seed_spread_report.py` of the commit that adds this section; a thousand resamples for
+the standard error over units. Each repeat holds out a fifth of the tuning stays, 800 stays with
+108 deaths, chosen by the repeat's seed: repeat 1 of every selection scored the same 800 stays,
+and repeats 1 and 2 share 152 of them.
+
+    uv run scripts/campaign_pairs_report.py --campaign ID [--campaign ID ...] --out DIR
+    uv run scripts/seed_spread_report.py --out DIR
+
+Pooled over the 60 variants of each budget, three repeats each (area; SD over the repeats; SE of
+one area over its 800 stays, in two strata; the SD left once each repeat's shift shared by every
+variant is taken out):
+
+| Budget | Median SD | RMS SD | RMS SE over stays | SD without the repeat's shift |
+|---|---|---|---|---|
+| 50 | 0.0506 | 0.0571 | 0.0283 | 0.0342 |
+| 200 | 0.0310 | 0.0343 | 0.0267 | 0.0297 |
+| 1,000 | 0.0128 | 0.0149 | 0.0232 | 0.0148 |
+| all | 0.0125 | 0.0145 | 0.0220 | 0.0140 |
+
+**Conclusions from the selections.**
+
+1. A repeat changes the seed, the draw of labels and the stays scored at once. The grid holds
+   the stays scored fixed, so a selection's spread is not the spread the floor reads.
+2. At 1,000 and every stay the repeats spread less than one area's own error over its stays.
+   Three fifths, shared by every selection, cannot separate a seed from the stays it was scored
+   on: the seed's own part there is not measured.
+3. At 50 and 200 the repeats spread more than the stays alone explain. The spread without the
+   repeat's shift, 0.034 and 0.030, still holds each variant's own answer to its fifth, so it
+   bounds a seed's spread on fixed stays from above rather than measuring it.
+
+**The run declared.** `campaigns/seed-spread-physionet2012.toml`: the grid's control, the
+network trained from nothing, and its endpoint, full fine-tuning under the mixed backbone, each
+at the variant its selection chose per budget; budgets of 50, 200, 1,000 and every stay; seeds 1
+to 10; every seed scored on one fifth of the tuning stays fixed by a seed no selection used,
+`division_seed = 101`, so repeats differ in the draw of labels and the model's seed only, as the
+grid's do. The validation side is not read. A campaign divided this way chooses nothing; the
+harness refuses to read a selection from it. Eighty cells, ordered to the ml pool and run on one
+G4 under CUDA MPS, four processes.
+
+**Predictions.**
+
+1. At 200, the SD of the area over the ten seeds lies between 0.010 and 0.030 for the network
+   from nothing and between 0.005 and 0.025 for full fine-tuning.
+2. At 1,000 and every stay, both arms spread by at most 0.015.
+3. At 50, the network from nothing spreads by at least 0.020.
+
+**Reading, declared beforehand.** Neither reading consults any difference between the two arms.
+
+- *Least gain at the endpoint.* 0.02 in area is a judgement: the smallest gain at 200 labels
+  worth reporting on this task, not a quantity measured here. It stands if neither arm spreads
+  by more than 0.02 at 200. Otherwise it is raised to the larger arm's SD at 200, rounded up to
+  0.005, since a gain one seed's luck reaches is not the least that counts.
+- *Fixed part of the floor.* The smallest SD of the control over the four budgets, rounded down
+  to 0.005 and not below 0.01. The measured part, the control's spread over the grid's own
+  seeds, still binds wherever it is larger; the fixed part keeps a grid whose seeds happen to be
+  quiet from lowering the floor below the spread measured here.
+
+**Limitations.** A fifth of the tuning side, 800 stays, is scored rather than the 3,994 of the
+validation side. The part of a seed's spread that comes from how its answers meet particular
+stays shrinks with more stays, so a spread read here errs high, towards a stricter floor. Ten
+seeds read an SD to about a quarter of itself. The arms' variants were chosen on fifths that
+overlap this one by about a fifth, which may raise the level of the areas and not their spread.
