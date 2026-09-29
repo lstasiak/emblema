@@ -300,8 +300,9 @@ Death in hospital after a stay in intensive care (PhysioNet/CinC Challenge 2012,
 `physionet2012-in-hospital-death`), read over the first 48 hours of the stay. The protocol is
 registered here before any run on the task. The budgets, the endpoint and the selections are
 registered before any selection runs; the least gain that counts and the floor's fixed part
-before the first cell of the grid, once the spread over seeds has been read from the selections
-on the tuning side. None of them is chosen from anything read on the validation side.
+before the first cell of the grid, by the reading declared for a campaign of the control and the
+endpoint over ten seeds on one fixed fifth of the tuning side (`verdict-statistics.md`,
+2026-09-29). None of them is chosen from anything read on the validation side.
 
 | | |
 |---|---|
@@ -342,8 +343,9 @@ them.
   (`docs/verification/label-efficiency-curve.md`, `docs/findings.md`).
 - The synthetic control's transfer leg: complete, passed
   (`docs/verification/synthetic-transfer.md`).
-- Intensive-care task: protocol, backbones, budgets, endpoint and selections registered; least
-  gain and floor not yet; no selection or grid run.
+- Intensive-care task: protocol, backbones, budgets, endpoint and selections registered; the
+  networks' selections run; least gain and floor wait for the spread over seeds declared on a
+  fixed fifth; no grid run.
 - The single test run: not made.
 
 ## Register of amendments
@@ -402,3 +404,4 @@ title" resolves to a row here and to the commit the row names, where the full te
 | 2026-09-29 | the commit that adds this row | editorial, reading | after every row above | *the rules brought in line with the register, and the register cut to what changed.* The rows of 2026-09-26 and 2026-09-27 had changed the configuration without the text above; the tail, the arms' variants per budget, the closed-form probe and the standing are now written in. Reading: the secondary family is every other candidate at every budget, its size stated in the campaign's file, as the repeated curve and the intensive-care task already read it. Rows keep their titles; the predictions and results they restated stay in the notes they name. |
 | 2026-09-29 | the commit that adds this row | measured | **post hoc**: after every campaign it concerns had been read | *the floor's fixed part declared at 2 % in the harness's campaign files.* Every turbofan campaign file since 2026-09-23 declares 2 % where 3 % is registered. Read again at 3 %, no verdict changes: each distinguishable cell is worse than the control or clears the larger floor by a wide margin, and one reading of the pilot's budget moves from at the floor to below it, with the same conclusion. The registered 3 % stands. |
 | 2026-09-29 | the commit that adds this row | configuration | before any selection on the task; the probes' penalties read on the tuning side, nothing on the validation side | *the intensive-care budgets, endpoint and selections, before any selection runs.* Budgets of 50, 200, 1,000 and every stay; full fine-tuning against the network from nothing at 200 under the mixed backbone as the endpoint; every candidate selected per budget and backbone, the pooling among the networks' knobs, in `campaigns/selection-*-physionet2012.toml`. The least gain and the floor wait for the selections' spread over seeds. |
+| 2026-09-29 | the commit that adds this row | diagnostic | after the selections, read on the tuning side only; before any grid | *the spread over seeds read on a fixed fifth before the thresholds.* The selections' repeats score other stays each and cannot separate a seed from them; the least gain and the floor's fixed part follow the reading declared for `campaigns/seed-spread-physionet2012.toml`. `verdict-statistics.md`, 2026-09-29. |
