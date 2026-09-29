@@ -314,7 +314,7 @@ endpoint over ten seeds on one fixed fifth of the tuning side (`verdict-statisti
 | Endpoint | Full fine-tuning against the network trained from nothing, at 200 stays, under the mixed backbone; one comparison, carrying no correction. The campaign under the stays-alone backbone reads its own family; the two backbones set side by side are a declared diagnostic, not a claim. |
 | Draw | A budget is a count of stays, drawn in proportion to the two outcomes, every prefix within one stay of each outcome's share, nested across budgets and seeded; a draw holding one outcome is refused. |
 | Measure | One minus the area under the ROC curve, ties counting half; reported as the area. A reduction is a gain in area. |
-| Thresholds | Stated in area, not as shares: the endpoint's least gain and the floor's fixed part are absolute. The floor is the larger of that part and the control's spread over seeds. |
+| Thresholds | Stated in area, not as shares: the endpoint's least gain is 0.045 and the floor's fixed part 0.01. The floor is the larger of that part and the control's spread over seeds. |
 | Interval | Paired bootstrap over stays, both sides on the same draw, in two strata — stays that died and stays that did not — each resampled to its own size; 10,000 resamples, 95 %, two-sided p-value as for the turbofans. Repeats pooled by the mean of their areas over the same resample. If the percentile interval's coverage on known answers falls short of its level at these sizes, the bias-corrected interval is registered before the grid instead. |
 | Family | Every other candidate and budget against the control, under Holm, as for the turbofans. |
 | Calibration | The Brier score of every cell is reported beside the area and judged by nothing. |
@@ -343,9 +343,8 @@ them.
   (`docs/verification/label-efficiency-curve.md`, `docs/findings.md`).
 - The synthetic control's transfer leg: complete, passed
   (`docs/verification/synthetic-transfer.md`).
-- Intensive-care task: protocol, backbones, budgets, endpoint and selections registered; the
-  networks' selections run; least gain and floor wait for the spread over seeds declared on a
-  fixed fifth; no grid run.
+- Intensive-care task: protocol, backbones, budgets, endpoint, selections, least gain and floor
+  registered; every selection run; no grid run.
 - The single test run: not made.
 
 ## Register of amendments
@@ -405,3 +404,4 @@ title" resolves to a row here and to the commit the row names, where the full te
 | 2026-09-29 | the commit that adds this row | measured | **post hoc**: after every campaign it concerns had been read | *the floor's fixed part declared at 2 % in the harness's campaign files.* Every turbofan campaign file since 2026-09-23 declares 2 % where 3 % is registered. Read again at 3 %, no verdict changes: each distinguishable cell is worse than the control or clears the larger floor by a wide margin, and one reading of the pilot's budget moves from at the floor to below it, with the same conclusion. The registered 3 % stands. |
 | 2026-09-29 | the commit that adds this row | configuration | before any selection on the task; the probes' penalties read on the tuning side, nothing on the validation side | *the intensive-care budgets, endpoint and selections, before any selection runs.* Budgets of 50, 200, 1,000 and every stay; full fine-tuning against the network from nothing at 200 under the mixed backbone as the endpoint; every candidate selected per budget and backbone, the pooling among the networks' knobs, in `campaigns/selection-*-physionet2012.toml`. The least gain and the floor wait for the selections' spread over seeds. |
 | 2026-09-29 | the commit that adds this row | diagnostic | after the selections, read on the tuning side only; before any grid | *the spread over seeds read on a fixed fifth before the thresholds.* The selections' repeats score other stays each and cannot separate a seed from them; the least gain and the floor's fixed part follow the reading declared for `campaigns/seed-spread-physionet2012.toml`. `verdict-statistics.md`, 2026-09-29. |
+| 2026-09-29 | the commit that adds this row | configuration | by the reading declared beforehand; nothing on the validation side | *the intensive-care least gain and the floor's fixed part.* One seed's area moved by 0.041 at 200 on a fixed fifth, so the least gain rises from 0.02 to 0.045; the fixed part is 0.01. `verdict-statistics.md`, 2026-09-29. |
