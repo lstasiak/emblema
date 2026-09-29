@@ -583,3 +583,59 @@ processes on one G4, the same three repeats of the same division as above.
 The prediction held: neither arm gains from the lower rate, the chosen rates stand and no
 further step is asked for. The low-rank arm's cell at 3.3e-5 reproduced the selection above to
 the second decimal on each repeat, as a run under one seed should.
+
+## 2026-09-29 — declared before the run: the closed-form probe's penalty over outcomes on the intensive-care task
+
+**Question.** Over outcomes the probe solved in closed form fits an L2-penalised logistic
+regression on the frozen backbone's 256 pooled states, its penalty chosen by the log-loss of five
+folds within the drawn labels among nine strengths from 0.001 to 100,000, a decade apart — the
+list the regression task uses. MiniRocket's fit on the same task passed its list's strongest
+step (`classical-baselines.md`, 2026-09-28). Does the probe's list reach far enough at every
+budget, under both backbones of the task and both poolings a selection would choose between, and
+does every fit converge?
+
+**Conditions.** Commit of this section; MacBook Pro M1 Pro, the encoder on MPS in fp32, the head
+in double precision on the host. Task `physionet2012-in-hospital-death` over manifest
+`cef44de2…`; backbones `backbone-physionet2012-m-32` (weights `c5878c03…`) and
+`backbone-mixed5-m` (`869ed545…`); the mean over the window and the tail of a fifth; budgets 50,
+200, 1,000 and every stay of the tuning side, each under seeds 1, 2 and 3, drawn by the task's
+own draw as a campaign cell draws them. The candidate is built and its stays embedded by the
+campaign's code, sixteen at a time; the head is fitted once over a longer list — one decade below
+the list in force and three above, 0.0001 to 100,000,000 — as the candidate fits it, and once per
+strength alone on the same folds, so a strength that does not converge is named. Beside each draw
+goes the folds' log-loss of answering with the prevalence. No window of the validation side is
+read and nothing is scored. Before this was written the embedding was timed on one draw of seed
+9, 200 stays; no head was fitted.
+
+    M=cef44de241af45ebb9f99da55679445a72632ada9f8b982dc9651e8554e51a78
+    P=c5878c0399789c43a2363170105c7b879a6beb639d67d933915d4da0a4262598
+    X=869ed54532a47bca801de6f11049020be786e7550376f65120beee7a9c93ed55
+    uv run --env-file .env.r2 scripts/probe_penalty_report.py \
+        --manifest durable/sha256/$M sha256:$M \
+        --backbone physionet-32 durable/sha256/$P sha256:$P \
+        --backbone mixed5 durable/sha256/$X sha256:$X --out data/report/t42c/probe
+
+**Prediction.**
+
+1. At 200, 1,000 and every stay, every fit under both backbones and both poolings chooses a
+   strength strictly inside the list in force, between 0.01 and 10,000.
+2. At 50 stays, under each backbone and pooling, at least two seeds of three choose the strongest
+   strength offered, where the folds' log-loss does not fall below the prevalence's.
+3. Every fit converges at every strength of the longer list.
+4. Embedding takes under 10 ms a stay and a fit over every stay under a minute; the whole run
+   under half an hour.
+
+**Reading, declared beforehand.**
+
+- If any fit at 200, 1,000 or every stay chooses 100,000 or stronger, or 0.001 or weaker, the
+  probe on outcomes gets a list of its own: the list in force extended by decades up to one
+  beyond the most extreme choice, registered as configuration before any selection on the task
+  runs. The regression task keeps its list. One list serves both poolings.
+- A choice at 50 stays at either end of the longer list is read against the prevalence: where
+  the folds' loss does not fall below it, no longer list would change the choice, and the list
+  stands on that account; where it does, the choice is read by the first point.
+- A fit that does not converge at a strength of the list in force is a defect of the candidate,
+  fixed and tested before any selection runs, and this check is run again. A failure at a
+  strength of the longer list alone is reported and changes nothing unless that strength joins
+  the list.
+- The probe's pooling on this task is not chosen here; that is a selection's to make.
