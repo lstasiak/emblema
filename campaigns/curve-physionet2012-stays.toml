@@ -1,0 +1,172 @@
+# The label-efficiency curve on the intensive-care task under the backbone of the stays alone.
+#
+# Its own family, no claim: the four ways of using the backbone against the network trained from
+# nothing, whose variants were selected in this backbone's run. The classical baselines and the
+# patch model read no backbone and run in the mixed backbone's campaign only; the two backbones
+# are set side by side as a declared diagnostic.
+#
+# Every candidate runs at the variant its selection chose at each budget, on the tuning side,
+# under this backbone where the candidate reads one; the entries below are the selections'
+# own choices, read again by the harness when the campaign is defined. Scored on the validation
+# side, set B. Every cell of one budget runs on one kind of accelerator: the budgets are handed
+# out by `campaign order --budget`, the cells of the general pool run on the host's processor.
+#
+# Defined with the worker's backbone set to the stays alone,
+# sha256:c5878c03…; the design records it.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "curve-physionet2012-stays"
+purpose = "tuning"
+tier = "M"
+measure = "auroc_shortfall"
+
+[candidates]
+competing = [
+    "from_scratch",
+    "frozen_probe",
+    "frozen_ridge",
+    "lora",
+    "full_fine_tuning",
+]
+control = "from_scratch"
+endpoint = "full_fine_tuning"
+
+[budgets]
+labels = ["50", "200", "1000", "all"]
+endpoint = "200"
+seeds = [1, 2, 3, 4, 5]
+
+[rules]
+# In area: the least gain and the floor's fixed part registered for the task on 2026-09-29.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+correction = "holm"
+# Four contenders at four budgets, less the endpoint.
+secondary_family_size = 15
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
+
+[[tuned]]
+candidate = "from_scratch"
+budget = "50"
+variant = "from_scratch"
+selected_by = "99cda00a-06e8-42f0-a184-9d6fc02655df"
+
+[[tuned]]
+candidate = "from_scratch"
+budget = "200"
+variant = "from_scratch@learning_rate=0.000333"
+selected_by = "99cda00a-06e8-42f0-a184-9d6fc02655df"
+
+[[tuned]]
+candidate = "from_scratch"
+budget = "1000"
+variant = "from_scratch@learning_rate=0.000333"
+selected_by = "99cda00a-06e8-42f0-a184-9d6fc02655df"
+
+[[tuned]]
+candidate = "from_scratch"
+budget = "all"
+variant = "from_scratch@learning_rate=0.000333"
+selected_by = "99cda00a-06e8-42f0-a184-9d6fc02655df"
+
+[[tuned]]
+candidate = "frozen_probe"
+budget = "50"
+variant = "frozen_probe@learning_rate=0.03"
+selected_by = "edd1e48b-5f43-4a10-9323-e8eea8614863"
+
+[[tuned]]
+candidate = "frozen_probe"
+budget = "200"
+variant = "frozen_probe@learning_rate=0.03"
+selected_by = "edd1e48b-5f43-4a10-9323-e8eea8614863"
+
+[[tuned]]
+candidate = "frozen_probe"
+budget = "1000"
+variant = "frozen_probe@learning_rate=0.03,pooling=attention"
+selected_by = "edd1e48b-5f43-4a10-9323-e8eea8614863"
+
+[[tuned]]
+candidate = "frozen_probe"
+budget = "all"
+variant = "frozen_probe@learning_rate=0.03,pooling=attention"
+selected_by = "edd1e48b-5f43-4a10-9323-e8eea8614863"
+
+[[tuned]]
+candidate = "frozen_ridge"
+budget = "50"
+variant = "frozen_ridge@pooling=tail,tail_share=0.5"
+selected_by = "51eebf2d-8021-4cc4-8487-308a018ae08d"
+
+[[tuned]]
+candidate = "frozen_ridge"
+budget = "200"
+variant = "frozen_ridge@pooling=tail,tail_share=0.5"
+selected_by = "51eebf2d-8021-4cc4-8487-308a018ae08d"
+
+[[tuned]]
+candidate = "frozen_ridge"
+budget = "1000"
+variant = "frozen_ridge"
+selected_by = "51eebf2d-8021-4cc4-8487-308a018ae08d"
+
+[[tuned]]
+candidate = "frozen_ridge"
+budget = "all"
+variant = "frozen_ridge"
+selected_by = "51eebf2d-8021-4cc4-8487-308a018ae08d"
+
+[[tuned]]
+candidate = "lora"
+budget = "50"
+variant = "lora@learning_rate=0.0001"
+selected_by = "99f0ced3-4cc9-482a-99e4-28a4a248f616"
+
+[[tuned]]
+candidate = "lora"
+budget = "200"
+variant = "lora@learning_rate=0.0001"
+selected_by = "99f0ced3-4cc9-482a-99e4-28a4a248f616"
+
+[[tuned]]
+candidate = "lora"
+budget = "1000"
+variant = "lora@learning_rate=0.0001"
+selected_by = "99f0ced3-4cc9-482a-99e4-28a4a248f616"
+
+[[tuned]]
+candidate = "lora"
+budget = "all"
+variant = "lora@learning_rate=0.0001"
+selected_by = "99f0ced3-4cc9-482a-99e4-28a4a248f616"
+
+[[tuned]]
+candidate = "full_fine_tuning"
+budget = "50"
+variant = "full_fine_tuning"
+selected_by = "649ea5ec-dd5b-4f58-8bc5-5a2fbfaef4ce"
+
+[[tuned]]
+candidate = "full_fine_tuning"
+budget = "200"
+variant = "full_fine_tuning"
+selected_by = "649ea5ec-dd5b-4f58-8bc5-5a2fbfaef4ce"
+
+[[tuned]]
+candidate = "full_fine_tuning"
+budget = "1000"
+variant = "full_fine_tuning@learning_rate=0.000333"
+selected_by = "649ea5ec-dd5b-4f58-8bc5-5a2fbfaef4ce"
+
+[[tuned]]
+candidate = "full_fine_tuning"
+budget = "all"
+variant = "full_fine_tuning@learning_rate=0.000333"
+selected_by = "649ea5ec-dd5b-4f58-8bc5-5a2fbfaef4ce"
