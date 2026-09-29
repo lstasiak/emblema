@@ -175,6 +175,13 @@ class Answers:
             key = (row.campaign, row.candidate, row.budget, row.seed)
             self._by_repeat.setdefault(key, []).append(row.prediction())
 
+    def sides(self) -> dict[Side, list[int]]:
+        """Every side the answers hold, with the seeds it ran under in ascending order."""
+        seeds: dict[Side, list[int]] = {}
+        for campaign, candidate, budget, seed in self._by_repeat:
+            seeds.setdefault(Side(campaign, candidate, budget), []).append(seed)
+        return {side: sorted(each) for side, each in seeds.items()}
+
     def ranking(self, side: Side, seed: int) -> WindowRanking:
         """One repeat of a side, its windows ranked by their answers.
 
