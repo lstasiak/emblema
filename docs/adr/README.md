@@ -59,5 +59,5 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0042](0042-the-prediction-service.md) | The prediction service: open host services, a runtime routed by the form kept, and each context's API inside the context | proposed |
 | [0043](0043-the-networks-memory-is-bounded-by-cost.md) | The networks' memory is bounded by cost: batches cut and admitted by token pairs | accepted |
 | [0044](0044-the-probe-solved-in-closed-form.md) | The probe solved in closed form: a fifth arm whose head is a ridge over the pooled states, chosen leave-one-out, on the arms' budget | accepted |
-| [0045](0045-a-binary-task.md) | A binary task: the kind of the target decides the head's link, the draw and what a cell keeps | proposed |
-| [0046](0046-comparing-candidates-by-auroc.md) | Comparing candidates by AUROC: one orientation for every measure, strata in the resampling, thresholds in the measure's unit | proposed |
+| [0045](0045-a-binary-task.md) | A binary task: the kind of the target decides the head's link, the draw and what a cell keeps | accepted |
+| [0046](0046-comparing-candidates-by-auroc.md) | Comparing candidates by AUROC: one orientation for every measure, strata in the resampling, thresholds in the measure's unit | accepted |
