@@ -1,6 +1,6 @@
 # ADR-0045: A binary task — the kind of the target decides the head's link, the draw and what a cell keeps
 
-- Status: proposed (accepted once the first campaign over outcomes has run)
+- Status: accepted (2026-09-30, after the two intensive-care grids ran under it)
 - Date: 2026-09-27
 
 ## Context

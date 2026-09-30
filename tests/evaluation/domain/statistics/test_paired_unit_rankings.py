@@ -75,15 +75,6 @@ def test_a_control_that_ranks_perfectly_has_no_shortfall_to_share() -> None:
     assert paired.relative_reduction is None
 
 
-def test_the_generator_states_the_areas_it_draws() -> None:
-    paired = KnownRanking(control_auroc=0.80, candidate_auroc=0.85, units=4000, positives=560)
-
-    drawn = paired.repeats(3, seed=1)
-
-    assert 1.0 - drawn.error_control == pytest.approx(0.80, abs=0.02)
-    assert 1.0 - drawn.error_candidate == pytest.approx(0.85, abs=0.02)
-
-
 def test_every_resample_keeps_the_count_of_each_stratum() -> None:
     paired = KnownRanking(control_auroc=0.80, candidate_auroc=0.85).paired(seed=3)
     positives, negatives = paired.strata

@@ -14,6 +14,7 @@ from emblema.evaluation.domain.statistics.benjamini_hochberg_correction import (
     BenjaminiHochbergCorrection,
 )
 from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
+from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 from tests.evaluation.support import (
     CONTENDER,
@@ -112,6 +113,18 @@ def test_a_selection_and_a_comparison_of_tuned_variants_survive_the_round_trip()
 
     assert DOCUMENTS.decode(DOCUMENTS.encode(chosen)) == chosen
     assert DOCUMENTS.decode(DOCUMENTS.encode(tuned)) == tuned
+
+
+def test_a_fixed_division_survives_the_round_trip_and_one_stored_before_it_reads_back_fresh() -> (
+    None
+):
+    chosen = selection().campaign.design
+    fixed = replace(chosen, inner_holdout=InnerHoldout(one_in=5, division_seed=101))
+    written = DOCUMENTS.encode(chosen)
+    del written["inner_holdout"]["division_seed"]
+
+    assert DOCUMENTS.decode(DOCUMENTS.encode(fixed)) == fixed
+    assert DOCUMENTS.decode(written) == chosen
 
 
 def test_a_design_stored_before_selections_existed_reads_back_tuning_nothing() -> None:

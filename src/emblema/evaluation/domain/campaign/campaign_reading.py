@@ -169,8 +169,8 @@ class CampaignReading:
 
         Raises:
             SelectionNotReadableError: If this is not a finished selection, it holds fewer than
-                two variants of that candidate at that budget, or no one variant is the setting
-                the others are turned around.
+                two variants of that candidate at that budget, no one variant is the setting
+                the others are turned around, or every repeat held the same units out.
         """
         campaign = self.campaign
         holdout = campaign.design.inner_holdout
@@ -179,6 +179,11 @@ class CampaignReading:
             raise SelectionNotReadableError(
                 f"campaign {campaign.campaign_id} holds no choice between {candidate} and a "
                 f"variant of it at {budget}"
+            )
+        if holdout.division_seed is not None:
+            raise SelectionNotReadableError(
+                f"campaign {campaign.campaign_id} holds the same units out in every repeat, "
+                f"which the rule's correction does not describe"
             )
         default = campaign.turned_around(candidate).method
         return OneStandardErrorRule().choose(

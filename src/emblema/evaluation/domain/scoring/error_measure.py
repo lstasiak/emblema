@@ -1,5 +1,4 @@
 from enum import StrEnum
-from typing import Self
 
 from emblema.evaluation.domain.exceptions import MismatchedErrorMeasureError
 from emblema.evaluation.domain.labels.target_kind import TargetKind
@@ -27,7 +26,7 @@ class ErrorMeasure(StrEnum):
     AUROC_SHORTFALL = "auroc_shortfall"
 
     @classmethod
-    def of(cls, kind: TargetKind) -> Self:
+    def of(cls, kind: TargetKind) -> "ErrorMeasure":
         """The measure that reads targets of ``kind``: the only one ``accept`` admits for it."""
         match kind:
             case TargetKind.CONTINUOUS:

@@ -1,0 +1,56 @@
+# Which setting the patch model runs at on the intensive-care task, chosen at every budget
+# before the grid, on stays held out of the tuning side; the validation side is not read.
+#
+# The knobs turn around the mode's registered turbofan peak, 0.001, pooled by the mean over the
+# window: where the search starts, kept only on a tie. The rate moves a third down and three
+# times up; the pooling moves to the tail of a fifth or of half the 48 hours, or to a learnt
+# attention that starts at the mean. No tail is shorter than a fifth, since about one stay in a
+# hundred has no reading in its last fifth and would pool its static features alone.
+#
+# The patch model learns from labels alone, so one run serves both backbones' campaigns.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "selection-patch-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+# One tuning stay in five held out in every repeat, about eight hundred to score on.
+one_in = 5
+
+[candidates]
+competing = [
+    "patch_transformer",
+    "patch_transformer@learning_rate=0.000333",
+    "patch_transformer@learning_rate=0.003",
+    "patch_transformer@pooling=tail,tail_share=0.2",
+    "patch_transformer@pooling=tail,tail_share=0.5",
+    "patch_transformer@pooling=attention",
+]
+# A selection answers which variant, not whether a candidate beats another; the control and the
+# endpoint are named because every campaign names them, and read nothing here.
+control = "patch_transformer"
+endpoint = "patch_transformer@learning_rate=0.000333"
+
+[budgets]
+# The budgets the grid runs at, so a variant is chosen for every point it will stand at.
+labels = ["50", "200", "1000", "all"]
+endpoint = "200"
+# Three repeats: each holds a fresh fifth of the tuning stays out, and the rule reads its spread
+# from them.
+seeds = [1, 2, 3]
+
+[rules]
+# A selection chooses by the rule of one standard error and reads none of these; the task's own
+# thresholds are registered before its grid.
+minimum_absolute_reduction = 0.02
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 19
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

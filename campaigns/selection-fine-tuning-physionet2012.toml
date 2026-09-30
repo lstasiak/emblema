@@ -1,0 +1,57 @@
+# Which setting full fine-tuning runs at on the intensive-care task, chosen at every budget
+# before the grid, on stays held out of the tuning side; the validation side is not read.
+#
+# The knobs turn around the mode's registered turbofan peak, 0.001, pooled by the mean over the
+# window: where the search starts, kept only on a tie. The rate moves a third down and three
+# times up; the pooling moves to the tail of a fifth or of half the 48 hours, or to a learnt
+# attention that starts at the mean. No tail is shorter than a fifth, since about one stay in a
+# hundred has no reading in its last fifth and would pool its static features alone.
+#
+# Run once under each backbone of the task: the arm reads the backbone's weights, so its
+# setting is chosen under the backbone it will run on.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "selection-fine-tuning-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+# One tuning stay in five held out in every repeat, about eight hundred to score on.
+one_in = 5
+
+[candidates]
+competing = [
+    "full_fine_tuning",
+    "full_fine_tuning@learning_rate=0.000333",
+    "full_fine_tuning@learning_rate=0.003",
+    "full_fine_tuning@pooling=tail,tail_share=0.2",
+    "full_fine_tuning@pooling=tail,tail_share=0.5",
+    "full_fine_tuning@pooling=attention",
+]
+# A selection answers which variant, not whether a candidate beats another; the control and the
+# endpoint are named because every campaign names them, and read nothing here.
+control = "full_fine_tuning"
+endpoint = "full_fine_tuning@learning_rate=0.000333"
+
+[budgets]
+# The budgets the grid runs at, so a variant is chosen for every point it will stand at.
+labels = ["50", "200", "1000", "all"]
+endpoint = "200"
+# Three repeats: each holds a fresh fifth of the tuning stays out, and the rule reads its spread
+# from them.
+seeds = [1, 2, 3]
+
+[rules]
+# A selection chooses by the rule of one standard error and reads none of these; the task's own
+# thresholds are registered before its grid.
+minimum_absolute_reduction = 0.02
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 19
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

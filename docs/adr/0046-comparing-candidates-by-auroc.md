@@ -1,6 +1,7 @@
 # ADR-0046: Comparing candidates by AUROC — one orientation for every measure, strata in the resampling, thresholds in the measure's unit
 
-- Status: proposed (accepted once the interval's coverage is measured on known answers)
+- Status: accepted (2026-09-30; the percentile interval kept its coverage on known answers,
+  `docs/verification/verdict-statistics.md`, 2026-09-28)
 - Date: 2026-09-27
 
 ## Context

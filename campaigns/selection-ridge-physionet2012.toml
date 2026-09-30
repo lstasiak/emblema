@@ -1,0 +1,48 @@
+# Which pooling the probe solved in closed form reads on the intensive-care task, chosen at every
+# budget before the grid, on stays held out of the tuning side; the validation side is not read.
+#
+# The setting is the mean over the window; the variants are the tail of a fifth and of half the
+# 48 hours. A closed form trains nothing, so it has no rate to turn and no attention query to
+# learn; its penalty is chosen within each fit.
+#
+# Run once under each backbone of the task: the probe reads the backbone's states.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "selection-ridge-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+
+[candidates]
+competing = [
+    "frozen_ridge",
+    "frozen_ridge@pooling=tail,tail_share=0.2",
+    "frozen_ridge@pooling=tail,tail_share=0.5",
+]
+control = "frozen_ridge"
+endpoint = "frozen_ridge@pooling=tail,tail_share=0.2"
+
+[budgets]
+# The budgets the grid runs at, so a variant is chosen for every point it will stand at.
+labels = ["50", "200", "1000", "all"]
+endpoint = "200"
+# Three repeats: each holds a fresh fifth of the tuning stays out, and the rule reads its spread
+# from them.
+seeds = [1, 2, 3]
+
+[rules]
+# A selection chooses by the rule of one standard error and reads none of these; the task's own
+# thresholds are registered before its grid.
+minimum_absolute_reduction = 0.02
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 7
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

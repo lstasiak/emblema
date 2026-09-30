@@ -583,3 +583,106 @@ processes on one G4, the same three repeats of the same division as above.
 The prediction held: neither arm gains from the lower rate, the chosen rates stand and no
 further step is asked for. The low-rank arm's cell at 3.3e-5 reproduced the selection above to
 the second decimal on each repeat, as a run under one seed should.
+
+## 2026-09-29 — declared before the run: the closed-form probe's penalty over outcomes on the intensive-care task
+
+**Question.** Over outcomes the probe solved in closed form fits an L2-penalised logistic
+regression on the frozen backbone's 256 pooled states, its penalty chosen by the log-loss of five
+folds within the drawn labels among nine strengths from 0.001 to 100,000, a decade apart — the
+list the regression task uses. MiniRocket's fit on the same task passed its list's strongest
+step (`classical-baselines.md`, 2026-09-28). Does the probe's list reach far enough at every
+budget, under both backbones of the task and both poolings a selection would choose between, and
+does every fit converge?
+
+**Conditions.** Commit of this section; MacBook Pro M1 Pro, the encoder on MPS in fp32, the head
+in double precision on the host. Task `physionet2012-in-hospital-death` over manifest
+`cef44de2…`; backbones `backbone-physionet2012-m-32` (weights `c5878c03…`) and
+`backbone-mixed5-m` (`869ed545…`); the mean over the window and the tail of a fifth; budgets 50,
+200, 1,000 and every stay of the tuning side, each under seeds 1, 2 and 3, drawn by the task's
+own draw as a campaign cell draws them. The candidate is built and its stays embedded by the
+campaign's code, sixteen at a time; the head is fitted once over a longer list — one decade below
+the list in force and three above, 0.0001 to 100,000,000 — as the candidate fits it, and once per
+strength alone on the same folds, so a strength that does not converge is named. Beside each draw
+goes the folds' log-loss of answering with the prevalence. No window of the validation side is
+read and nothing is scored. Before this was written the embedding was timed on one draw of seed
+9, 200 stays; no head was fitted.
+
+    M=cef44de241af45ebb9f99da55679445a72632ada9f8b982dc9651e8554e51a78
+    P=c5878c0399789c43a2363170105c7b879a6beb639d67d933915d4da0a4262598
+    X=869ed54532a47bca801de6f11049020be786e7550376f65120beee7a9c93ed55
+    uv run --env-file .env.r2 scripts/probe_penalty_report.py \
+        --manifest durable/sha256/$M sha256:$M \
+        --backbone physionet-32 durable/sha256/$P sha256:$P \
+        --backbone mixed5 durable/sha256/$X sha256:$X --out data/report/t42c/probe
+
+**Prediction.**
+
+1. At 200, 1,000 and every stay, every fit under both backbones and both poolings chooses a
+   strength strictly inside the list in force, between 0.01 and 10,000.
+2. At 50 stays, under each backbone and pooling, at least two seeds of three choose the strongest
+   strength offered, where the folds' log-loss does not fall below the prevalence's.
+3. Every fit converges at every strength of the longer list.
+4. Embedding takes under 10 ms a stay and a fit over every stay under a minute; the whole run
+   under half an hour.
+
+**Reading, declared beforehand.**
+
+- If any fit at 200, 1,000 or every stay chooses 100,000 or stronger, or 0.001 or weaker, the
+  probe on outcomes gets a list of its own: the list in force extended by decades up to one
+  beyond the most extreme choice, registered as configuration before any selection on the task
+  runs. The regression task keeps its list. One list serves both poolings.
+- A choice at 50 stays at either end of the longer list is read against the prevalence: where
+  the folds' loss does not fall below it, no longer list would change the choice, and the list
+  stands on that account; where it does, the choice is read by the first point.
+- A fit that does not converge at a strength of the list in force is a defect of the candidate,
+  fixed and tested before any selection runs, and this check is run again. A failure at a
+  strength of the longer list alone is reported and changes nothing unless that strength joins
+  the list.
+- The probe's pooling on this task is not chosen here; that is a selection's to make.
+
+## 2026-09-29 — the closed-form probe's penalty over outcomes measured
+
+Under the declaration above, at `d0d64e7b`, on the MacBook Pro M1 Pro: 48 draws of backbone,
+pooling, budget and seed, 624 fits of one strength each, in about eight minutes; the embedding
+6.5–7 ms a stay, a fit over every stay 1.0–1.1 s. CSV in `data/report/t42c/probe`.
+
+Penalty chosen by the candidate's own fit, seeds 1, 2 and 3; the list in force runs from 0.001
+to 100,000:
+
+| Backbone | Pooling | 50 stays | 200 | 1,000 | 3,997 (every stay) |
+| --- | --- | --- | --- | --- | --- |
+| `physionet-32` | mean | 100, 100, 10,000 | 1,000, 10, 1,000 | 100, 10, 10 | 1, 1, 1 |
+| `physionet-32` | tail of a fifth | 100, 10, 1,000 | 100, 100, 100 | 100, 100, 10 | 1, 1, 1 |
+| `mixed5` | mean | 1,000, **1e8**, 1,000 | 1,000, 1,000, 100 | 100, 100, 100 | 10, 10, 10 |
+| `mixed5` | tail of a fifth | 1,000, **1e8**, 1,000 | 1,000, 10,000, 1,000 | 100, 100, 100 | 10, 10, 10 |
+
+Folds' mean log-loss at the chosen penalty against answering with the prevalence, over every
+stay: `physionet-32` 0.314 (mean) and 0.319 (tail), `mixed5` 0.344 and 0.345, the prevalence
+0.402. The draw of every stay holds the same stays in the same order under each seed, checked on
+the draws themselves, so its folds are the same and its three rows are one fit. The curve at every stay is an interior minimum on both sides: for `physionet-32` under
+the mean, 0.357 at 0.0001, 0.314 at 1, 0.402 from 1,000,000 up.
+
+**Against the predictions.**
+
+1. Held: at 200, 1,000 and every stay all 36 choices lie strictly inside the list in force, from
+   1 to 10,000.
+2. Failed: at 50 stays one seed of three reaches the strongest strength, and only under
+   `mixed5`, seed 2 under both poolings, where the folds' loss equals the prevalence's (0.4107).
+   `physionet-32` finds a signal at 50 under seeds 1 and 2 (0.323 and 0.373 against 0.411).
+3. Held: every fit converged at every strength, 0.0001 at 50 stays included.
+4. Held: under 10 ms a stay, about a second a fit over every stay, eight minutes in all.
+
+**Conclusions.**
+
+- By the reading declared beforehand the probe's list in force stands on outcomes: no choice at
+  200 or more reaches either end, and the one choice at the strongest end, at 50 stays, answers
+  no better than the prevalence, which no longer list would change. Nothing is registered.
+- The choices move towards weaker penalties as the budget grows, as a penalised likelihood
+  should, and lie two decades or more from either end from 1,000 stays up.
+- Read on the tuning side only, and not a comparison: at every stay the folds find less in
+  `mixed5`'s states than in `physionet-32`'s (0.344 against 0.314), and the two poolings are
+  within 0.005 of each other under either backbone.
+
+**Limitations.** One pooling of each scheme, tier M, one seed of each backbone; a selection
+draws its budget from four fifths of the tuning side, so its largest budget is smaller than the
+every-stay row here and its choice may sit a step stronger.

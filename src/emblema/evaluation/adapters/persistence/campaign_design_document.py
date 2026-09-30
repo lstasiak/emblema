@@ -62,7 +62,10 @@ class CampaignDesignDocument:
             },
             "inner_holdout": None
             if design.inner_holdout is None
-            else {"one_in": design.inner_holdout.one_in},
+            else {
+                "one_in": design.inner_holdout.one_in,
+                "division_seed": design.inner_holdout.division_seed,
+            },
             "tuned": [
                 {
                     "candidate": str(choice.candidate),
@@ -114,7 +117,11 @@ class CampaignDesignDocument:
             # A design stored before selections existed holds neither key and tunes nothing.
             inner_holdout=None
             if document.get("inner_holdout") is None
-            else InnerHoldout(one_in=document["inner_holdout"]["one_in"]),
+            else InnerHoldout(
+                one_in=document["inner_holdout"]["one_in"],
+                # A division stored before the fixed one existed holds no seed of its own.
+                division_seed=document["inner_holdout"].get("division_seed"),
+            ),
             tuned=tuple(
                 TunedChoice(
                     candidate=CandidateRef(choice["candidate"]),

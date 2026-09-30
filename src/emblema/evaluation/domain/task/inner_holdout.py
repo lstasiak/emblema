@@ -19,13 +19,21 @@ class InnerHoldout:
     out from the top of that ranking, so the same units always divide the same way whatever
     order they are named in.
 
+    A division seed holds the same units out whatever the run's seed, so repeats differ only
+    in what they learn and not in what they are scored on: a measure of the spread over seeds
+    on a fixed side, as a grid has. The selection rule's correction describes fresh divisions,
+    so a campaign divided this way chooses nothing.
+
     Invariants: one in at least two units is held out, so some are left to learn from.
 
     Attributes:
         one_in: One tuning unit in this many is held out to score on.
+        division_seed: The seed every repeat divides under, or None to divide each under its
+            own.
     """
 
     one_in: int
+    division_seed: int | None = None
 
     def __post_init__(self) -> None:
         if self.one_in < 2:
@@ -39,12 +47,13 @@ class InnerHoldout:
     def divided(
         self, units: frozenset[UnitKey], seed: int
     ) -> tuple[frozenset[UnitKey], frozenset[UnitKey]]:
-        """The units to learn from and the units to score on, under ``seed``.
+        """The units to learn from and the units to score on, under ``seed`` or the fixed one.
 
         Raises:
             InvalidInnerHoldoutError: If there are too few units to leave one on either side.
         """
-        ranked = sorted(units, key=lambda unit: seeded_rank(seed, "inner-holdout", str(unit)))
+        under = seed if self.division_seed is None else self.division_seed
+        ranked = sorted(units, key=lambda unit: seeded_rank(under, "inner-holdout", str(unit)))
         held = -(-len(ranked) // self.one_in)
         if held >= len(ranked):
             raise InvalidInnerHoldoutError(

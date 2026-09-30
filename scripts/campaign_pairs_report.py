@@ -14,12 +14,19 @@ afresh under every seed, so its repeats hold out different units and the pair is
 are pooled per unit first, as the registered rules do. Both sides must have been run for the
 same purpose, on the same seeds and over the same units.
 
+A campaign read by the area under the ROC curve is paired as its verdict pairs it: from every
+window's answer, each repeat ranked on its own and the repeats of a side pooled by the mean of
+their areas, the units resampled in two strata, the floor stated in area. Only comparisons pair
+that way, since a selection's repeats score other units and two models' answers are never ranked
+together.
+
     uv run scripts/campaign_pairs_report.py --campaign ID [--campaign ID ...] --out DIR
     uv run scripts/campaign_pairs_report.py --out DIR
         --pair CONTROL_ID CONTROL_CANDIDATE BUDGET CANDIDATE_ID CANDIDATE BUDGET [--pair ...]
 
-The first form writes ``cells.csv``; the second reads it, writes ``comparisons.csv`` and prints
-the table a note pastes. Both may be given at once.
+The first form writes ``cells.csv``, and ``predictions.csv`` for campaigns read by area; the
+second reads them, writes ``comparisons.csv`` and prints the table a note pastes. Both may be
+given at once.
 """
 
 import argparse
@@ -40,23 +47,29 @@ sys.path.insert(0, str(REPO_ROOT))
 from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.scoring.unit_error import UnitError
+from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
+from emblema.evaluation.domain.scoring.window_ranking import WindowRanking
 from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
+from emblema.evaluation.domain.statistics.paired_unit_rankings import PairedUnitRankings
+from emblema.evaluation.domain.statistics.paired_units import PairedUnits
 from emblema.evaluation.domain.statistics.practical_floor import PracticalFloor
 from emblema.evaluation.domain.statistics.threshold_kind import ThresholdKind
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCampaignRepository
 from scripts.reporting import table
 
-CELLS, COMPARISONS = "cells.csv", "comparisons.csv"
+CELLS, PREDICTIONS, COMPARISONS = "cells.csv", "predictions.csv", "comparisons.csv"
 CELL_COLUMNS = (
     "campaign",
     "purpose",
     "tier",
+    "measure",
     "candidate",
     "budget",
     "seed",
@@ -74,9 +87,9 @@ COMPARISON_COLUMNS = (
     "pairing",
     "repeats",
     "units",
-    "rmse_control",
+    "error_control",
     "spread_control",
-    "rmse_candidate",
+    "error_candidate",
     "spread_candidate",
     "reduction",
     "relative_reduction",
@@ -84,6 +97,18 @@ COMPARISON_COLUMNS = (
     "high",
     "p_value",
     "floor",
+    "measure",
+)
+PREDICTION_COLUMNS = (
+    "campaign",
+    "candidate",
+    "budget",
+    "seed",
+    "unit",
+    "position",
+    "ends_at",
+    "target",
+    "predicted",
 )
 
 
@@ -93,6 +118,7 @@ class CellRow(NamedTuple):
     campaign: str
     purpose: str
     tier: str
+    measure: str
     candidate: str
     budget: str
     seed: int
@@ -100,6 +126,29 @@ class CellRow(NamedTuple):
     squared_error: float
     windows: int
     seconds: float
+
+
+class PredictionRow(NamedTuple):
+    """One window's answer in one cell, as the CSV holds it, for a campaign read by area."""
+
+    campaign: str
+    candidate: str
+    budget: str
+    seed: int
+    unit: str
+    position: int
+    ends_at: float
+    target: float
+    predicted: float
+
+    def prediction(self) -> WindowPrediction:
+        return WindowPrediction(
+            window=TaskWindow(
+                unit=UnitKey(self.unit), position=self.position, ends_at=self.ends_at
+            ),
+            target=self.target,
+            predicted=self.predicted,
+        )
 
 
 class Side(NamedTuple):
@@ -113,12 +162,47 @@ class Side(NamedTuple):
         return f"{self.candidate} at {self.budget} of {self.campaign[:8]}"
 
 
+class Answers:
+    """Every exported answer, looked up by the repeat of a side it belongs to.
+
+    Indexed once, because a full grid read by area holds millions of answers and a pair asks
+    for one repeat of each side in turn.
+    """
+
+    def __init__(self, rows: Iterable[PredictionRow]) -> None:
+        self._by_repeat: dict[tuple[str, str, str, int], list[WindowPrediction]] = {}
+        for row in rows:
+            key = (row.campaign, row.candidate, row.budget, row.seed)
+            self._by_repeat.setdefault(key, []).append(row.prediction())
+
+    def sides(self) -> dict[Side, list[int]]:
+        """Every side the answers hold, with the seeds it ran under in ascending order."""
+        seeds: dict[Side, list[int]] = {}
+        for campaign, candidate, budget, seed in self._by_repeat:
+            seeds.setdefault(Side(campaign, candidate, budget), []).append(seed)
+        return {side: sorted(each) for side, each in seeds.items()}
+
+    def ranking(self, side: Side, seed: int) -> WindowRanking:
+        """One repeat of a side, its windows ranked by their answers.
+
+        Raises:
+            ValueError: If no answer of that repeat was exported.
+        """
+        answers = self._by_repeat.get((side.campaign, side.candidate, side.budget, seed))
+        if not answers:
+            raise ValueError(
+                f"no answer of {side} under seed {seed} among the exported predictions"
+            )
+        return WindowRanking.of(answers)
+
+
 @dataclass(frozen=True, kw_only=True)
 class Comparison:
     """One pair read: what each side scored, and the paired difference between them."""
 
     control: Side
     candidate: Side
+    measure: ErrorMeasure
     pairing: str
     repeats: int
     units: int
@@ -148,29 +232,18 @@ class Comparison:
             repr(self.difference.interval.high),
             repr(self.difference.p_value),
             repr(self.floor.value),
+            self.measure.value,
         )
 
 
 def export(readings: Iterable[CampaignReading]) -> list[CellRow]:
-    """Every unit of every recorded cell of ``readings``, in the order they were recorded.
-
-    Raises:
-        SystemExit: If a campaign is read by the area under the ROC curve, which does not split
-            into the errors per unit this pairs.
-    """
-    readings = list(readings)
-    for reading in readings:
-        design = reading.campaign.design
-        if design.measure is not ErrorMeasure.RMSE:
-            raise SystemExit(
-                f"campaign {reading.campaign.campaign_id} is read by {design.measure}; this "
-                "pairs errors per unit, which a ranking does not split into"
-            )
+    """Every unit of every recorded cell of ``readings``, in the order they were recorded."""
     return [
         CellRow(
             campaign=str(reading.campaign.campaign_id),
             purpose=reading.campaign.purpose.value,
             tier=str(reading.campaign.tier),
+            measure=reading.campaign.design.measure.value,
             candidate=str(result.cell.candidate),
             budget=result.cell.budget.text(),
             seed=result.cell.seed,
@@ -185,13 +258,34 @@ def export(readings: Iterable[CampaignReading]) -> list[CellRow]:
     ]
 
 
+def export_predictions(readings: Iterable[CampaignReading]) -> list[PredictionRow]:
+    """Every window's answer in every recorded cell of the campaigns read by area."""
+    return [
+        PredictionRow(
+            campaign=str(reading.campaign.campaign_id),
+            candidate=str(result.cell.candidate),
+            budget=result.cell.budget.text(),
+            seed=result.cell.seed,
+            unit=str(prediction.window.unit),
+            position=prediction.window.position,
+            ends_at=prediction.window.ends_at,
+            target=prediction.target,
+            predicted=prediction.predicted,
+        )
+        for reading in readings
+        if reading.campaign.design.measure is ErrorMeasure.AUROC_SHORTFALL
+        for result in reading.results
+        for prediction in result.predictions
+    ]
+
+
 def write_cells(path: Path, rows: Sequence[CellRow]) -> None:
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(CELL_COLUMNS)
         for row in rows:
             writer.writerow(
-                (*row[:7], repr(row.squared_error), row.windows, repr(row.seconds)),
+                (*row[:8], repr(row.squared_error), row.windows, repr(row.seconds)),
             )
 
 
@@ -202,6 +296,8 @@ def read_cells(path: Path) -> list[CellRow]:
                 campaign=line["campaign"],
                 purpose=line["purpose"],
                 tier=line["tier"],
+                # A file written before campaigns were read by area holds errors only.
+                measure=line.get("measure", ErrorMeasure.RMSE.value),
                 candidate=line["candidate"],
                 budget=line["budget"],
                 seed=int(line["seed"]),
@@ -214,6 +310,44 @@ def read_cells(path: Path) -> list[CellRow]:
         ]
 
 
+def write_predictions(path: Path, rows: Sequence[PredictionRow]) -> None:
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(PREDICTION_COLUMNS)
+        for row in rows:
+            writer.writerow(
+                (
+                    *row[:4],
+                    row.unit,
+                    row.position,
+                    repr(row.ends_at),
+                    repr(row.target),
+                    repr(row.predicted),
+                )
+            )
+
+
+def read_predictions(path: Path) -> list[PredictionRow]:
+    """The answers stored at ``path``; none where no campaign read by area was exported."""
+    if not path.is_file():
+        return []
+    with path.open(newline="") as handle:
+        return [
+            PredictionRow(
+                campaign=line["campaign"],
+                candidate=line["candidate"],
+                budget=line["budget"],
+                seed=int(line["seed"]),
+                unit=line["unit"],
+                position=int(line["position"]),
+                ends_at=float(line["ends_at"]),
+                target=float(line["target"]),
+                predicted=float(line["predicted"]),
+            )
+            for line in csv.DictReader(handle)
+        ]
+
+
 def pair(
     rows: Sequence[CellRow],
     control: Side,
@@ -221,45 +355,74 @@ def pair(
     *,
     bootstrap: PairedUnitBootstrap,
     floor_share: float,
+    floor_area: float,
+    answers: Answers | None = None,
 ) -> Comparison:
-    """``candidate`` against ``control``, paired as the campaigns' purpose says.
+    """``candidate`` against ``control``, paired as the campaigns' purpose and measure say.
 
     Raises:
-        ValueError: If a side has no cell, the sides were run for different purposes or on
-            different seeds, or the units of a repeat do not pair.
+        ValueError: If a side has no cell, the sides were run for different purposes, read by
+            different measures or run on different seeds, a selection is to be paired by area,
+            or the units of a repeat do not pair.
     """
     control_cells = _cells_of(rows, control)
     candidate_cells = _cells_of(rows, candidate)
     purposes = {row.purpose for row in control_cells} | {row.purpose for row in candidate_cells}
     if len(purposes) != 1:
         raise ValueError(f"the sides were run for different purposes: {sorted(purposes)}")
+    measures = {row.measure for row in control_cells} | {row.measure for row in candidate_cells}
+    if len(measures) != 1:
+        raise ValueError(f"the sides were read by different measures: {sorted(measures)}")
+    measure = ErrorMeasure(measures.pop())
     seeds = sorted({row.seed for row in control_cells})
     if seeds != sorted({row.seed for row in candidate_cells}):
         raise ValueError(f"{control} and {candidate} were not run on the same seeds")
-    control_repeats = [_errors_of(control_cells, seed) for seed in seeds]
-    candidate_repeats = [_errors_of(candidate_cells, seed) for seed in seeds]
-    if purposes == {RunPurpose.SELECTION.value}:
-        pairing = "repeat-unit"
-        paired = PairedUnitErrors(
-            control=_stamped(control_repeats, seeds), candidate=_stamped(candidate_repeats, seeds)
-        )
-    else:
-        pairing = "unit-pooled"
-        paired = PairedUnitErrors.pooled(control_repeats, candidate_repeats)
-    control_error = ErrorOverRepeats.of(paired.error_control, [_rmse(r) for r in control_repeats])
-    candidate_error = ErrorOverRepeats.of(
-        paired.error_candidate, [_rmse(r) for r in candidate_repeats]
-    )
+    paired: PairedUnits
+    match measure:
+        case ErrorMeasure.RMSE:
+            control_repeats = [_errors_of(control_cells, seed) for seed in seeds]
+            candidate_repeats = [_errors_of(candidate_cells, seed) for seed in seeds]
+            if purposes == {RunPurpose.SELECTION.value}:
+                pairing = "repeat-unit"
+                paired = PairedUnitErrors(
+                    control=_stamped(control_repeats, seeds),
+                    candidate=_stamped(candidate_repeats, seeds),
+                )
+            else:
+                pairing = "unit-pooled"
+                paired = PairedUnitErrors.pooled(control_repeats, candidate_repeats)
+            control_spread = [_rmse(r) for r in control_repeats]
+            candidate_spread = [_rmse(r) for r in candidate_repeats]
+            floor_part, threshold = floor_share, ThresholdKind.RELATIVE
+        case ErrorMeasure.AUROC_SHORTFALL:
+            if purposes == {RunPurpose.SELECTION.value}:
+                raise ValueError(
+                    "a selection read by area scores other units under every seed, and two "
+                    "models' answers are never ranked together; only comparisons pair by area"
+                )
+            pairing = "area-pooled"
+            found = Answers(()) if answers is None else answers
+            rankings = PairedUnitRankings(
+                control=tuple(found.ranking(control, seed) for seed in seeds),
+                candidate=tuple(found.ranking(candidate, seed) for seed in seeds),
+            )
+            paired = rankings
+            control_spread = list(rankings.per_repeat_control())
+            candidate_spread = list(rankings.per_repeat_candidate())
+            floor_part, threshold = floor_area, ThresholdKind.ABSOLUTE
+    control_error = ErrorOverRepeats.of(paired.error_control, control_spread)
+    candidate_error = ErrorOverRepeats.of(paired.error_candidate, candidate_spread)
     return Comparison(
         control=control,
         candidate=candidate,
+        measure=measure,
         pairing=pairing,
         repeats=len(seeds),
         units=len(paired.units),
         control_error=control_error,
         candidate_error=candidate_error,
         difference=bootstrap.compare(paired),
-        floor=PracticalFloor.of(control_error, part=floor_share, threshold=ThresholdKind.RELATIVE),
+        floor=PracticalFloor.of(control_error, part=floor_part, threshold=threshold),
     )
 
 
@@ -314,7 +477,16 @@ def share_of(difference: PairedDifference) -> str:
 
 
 def render(comparisons: Sequence[Comparison]) -> str:
-    """The table a note pastes: each side's error over its repeats, the difference, the floor."""
+    """The table a note pastes: each side's error over its repeats, the difference, the floor.
+
+    Raises:
+        ValueError: If the comparisons are read by different measures, which one table's
+            columns cannot name.
+    """
+    measures = {comparison.measure for comparison in comparisons}
+    if len(measures) > 1:
+        raise ValueError(f"one table holds one measure, and these are read by {len(measures)}")
+    error = "1 - AUROC" if measures == {ErrorMeasure.AUROC_SHORTFALL} else "RMSE"
     rows = [
         (
             str(comparison.control),
@@ -332,9 +504,9 @@ def render(comparisons: Sequence[Comparison]) -> str:
     return table(
         (
             "control",
-            "RMSE",
+            error,
             "candidate",
-            "RMSE",
+            error,
             "reduction",
             "95 % interval",
             "p",
@@ -369,6 +541,12 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--floor-share", type=float, default=0.02, help="share of the control's error"
     )
+    parser.add_argument(
+        "--floor-area",
+        type=float,
+        default=0.01,
+        help="fixed part of the floor in area, for campaigns read by area",
+    )
     arguments = parser.parse_args(argv)
     if not arguments.campaign and not arguments.pair:
         parser.error("give a campaign to export, a pair to read, or both")
@@ -389,11 +567,17 @@ def main(
     out.mkdir(parents=True, exist_ok=True)
     if arguments.campaign:
         campaigns = _registry() if registry is None else registry
-        rows = export(campaigns.read(CampaignId.parse(each)) for each in arguments.campaign)
+        readings = [campaigns.read(CampaignId.parse(each)) for each in arguments.campaign]
+        rows = export(readings)
         write_cells(out / CELLS, rows)
         print(f"{len(rows)} unit errors of {len(arguments.campaign)} campaigns in {out / CELLS}")
+        # Written even when empty, so no answers of an earlier export stay beside these cells.
+        answers = export_predictions(readings)
+        write_predictions(out / PREDICTIONS, answers)
+        print(f"{len(answers)} answers of the campaigns read by area in {out / PREDICTIONS}")
     if arguments.pair:
         rows = read_cells(out / CELLS)
+        found = Answers(read_predictions(out / PREDICTIONS))
         bootstrap = PairedUnitBootstrap(
             resamples=arguments.resamples, seed=arguments.seed, level=arguments.level
         )
@@ -404,6 +588,8 @@ def main(
                 Side(*each[3:]),
                 bootstrap=bootstrap,
                 floor_share=arguments.floor_share,
+                floor_area=arguments.floor_area,
+                answers=found,
             )
             for each in arguments.pair
         ]
