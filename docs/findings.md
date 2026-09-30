@@ -5,7 +5,7 @@ validation side**: the frozen test side of every task is opened once, at the end
 comparison were registered before the run they judge ([preregistration](preregistration.md)).
 The evidence for each line is in [`docs/verification/`](verification/README.md).
 
-Last updated 2026-09-27.
+Last updated 2026-09-30.
 
 ## The claim
 
@@ -18,7 +18,7 @@ classical baselines, with paired intervals over independent units.
 
 | | |
 | --- | --- |
-| Task | Remaining useful life on C-MAPSS FD001: 79 tuning engines, 21 validation engines, 100 frozen test engines |
+| Task | Remaining useful life on C-MAPSS FD001: 79 tuning engines, 21 validation engines, 100 frozen test engines; the second task, in-hospital death on PhysioNet 2012, is set out in section 6 |
 | Corpus | The four C-MAPSS subsets, one channel per sensor and operating condition, scaled within the condition ([ADR-0034](adr/0034-the-turbofan-corpus-read-per-operating-condition.md)); window 50 cycles, stride 5 |
 | Backbone | 4.75M-parameter encoder (256 wide, 6 blocks), masked reconstruction, 8 epochs |
 | Arms | From scratch (control), frozen probe, frozen probe solved in closed form, low-rank updates (LoRA), full fine-tuning; one linear head over the tail of the window ([ADR-0030](adr/0030-transfer-modes.md), [ADR-0041](adr/0041-the-pooling-of-the-head-as-a-knob.md), [ADR-0044](adr/0044-the-probe-solved-in-closed-form.md)); rate and tail chosen per arm and budget by a declared selection |
@@ -134,6 +134,36 @@ Under training, in one paired campaign at 200 labels, tier S, three seeds:
   control 2.4 % [+0.04, +0.70]. At each arm's own setting the control leads full fine-tuning by
   8.0 % [+0.47, +2.03] on those engines. One peak for every arm was the curve's second handicap.
 
+### 6. On in-hospital death the endpoint is not confirmed; the task's own backbone helps the probe
+
+Death in hospital after an intensive-care stay (PhysioNet/CinC Challenge 2012), read over the
+first 48 hours: learnt from set A's 3,997 stays, scored on set B's 3,994, AUROC with a paired
+bootstrap over stays ([ADR-0046](adr/0046-comparing-candidates-by-auroc.md),
+[note](verification/intensive-care-curve.md)). Two campaigns, one per backbone, every candidate at
+its selection's choice per budget, five seeds; the registered least gain is 0.045 in area.
+
+| Labelled stays | From scratch | Frozen probe | Full fine-tuning | Trees per channel | MiniRocket |
+| --- | --- | --- | --- | --- | --- |
+| 50 | 0.65 | 0.64 (0.67) | 0.67 (0.71) | 0.66 | 0.71 |
+| 200 | 0.68 | 0.66 (0.75) | 0.70 (0.71) | 0.76 | **0.76** |
+| 1,000 | 0.78 | 0.76 (0.82) | 0.77 (0.79) | **0.83** | 0.82 |
+| 3,997 (all) | 0.81 | 0.79 (0.84) | 0.81 (0.80) | **0.86** | 0.85 |
+
+AUROC, mean over five seeds, under the mixed backbone; in brackets under the backbone of the
+stays alone.
+
+- **The endpoint is not confirmed**: under the mixed backbone full fine-tuning gains 0.024 in area
+  at 200 stays, interval [+0.012, +0.036], below a floor of 0.040 set by one seed's spread.
+- Under the mixed backbone no way of using it beats the network trained from nothing at any
+  budget. Under a backbone pretrained on the stays alone the frozen probe gains 0.055, 0.047 and
+  0.031 at 200, 1,000 and every stay, above the floor. The two backbones side by side were not given a
+  prediction beforehand, so this is a description, not a test.
+- From 200 stays up a classical baseline has the highest mean area: MiniRocket at 200, the trees
+  per channel at 1,000 and every stay; the stays-alone probe comes within 0.005 of the trees at
+  1,000. At 50 stays full fine-tuning under the stays alone and MiniRocket are level.
+- Two possible handicaps of the networks are open: rates chosen at the edge of their grid, and a
+  step floor confirmed on the turbofans only.
+
 ## Limitations
 
 - **Validation only.** Every configuration choice (window, normalisation, corpus, backbone, peaks)
@@ -145,14 +175,15 @@ Under training, in one paired campaign at 200 labels, tier S, three seeds:
   lies above a true zero about 5 % of the time rather than 2.5 %
   (`docs/verification/verdict-statistics.md`). The confirmed endpoint sits far from that
   boundary; a result near it would need a bias-corrected interval, registered before the run.
-- **One supervised task so far.** Transfer across corpora (leave-one-corpus-out, zero-shot) is not
-  yet measured.
+- **Two supervised tasks so far.** Transfer across corpora (leave-one-corpus-out, zero-shot) is not
+  yet measured. The intensive-care task learns from set A only, under half the stays the
+  published benchmarks on this corpus learn from, so its levels are not comparable with theirs.
 - **Two kinds of accelerator.** The repeated curve ran budgets 50 and 200 on an A100 and 1,000
   and all on a G4, one kind per budget as registered; the arm from nothing was selected on an
   A100 and the other arms on a G4. Between accelerators an arm drifts by up to 0.7 RMSE.
-- **One pretraining corpus for this task.** The backbone was pretrained on C-MAPSS itself; a
-  fresh encoder has the same data to learn the task from. The mixture backbone and transfer
-  across corpora are not yet read on a task.
+- **One pretraining corpus for the turbofan task.** Its backbone was pretrained on C-MAPSS itself;
+  a fresh encoder has the same data to learn the task from. The mixture backbone is read on the
+  intensive-care task only, where it is the weaker of the two.
 - The patch model ran as published, under the mean, since no selection turned its pooling.
 - The pretrained arms' spread over seeds is largest at 50 labels (LoRA 2.2) and at every window
   (full fine-tuning 1.65).
@@ -161,5 +192,7 @@ Under training, in one paired campaign at 200 labels, tier S, three seeds:
 
 1. Measure transfer across corpora and to unseen sensor layouts, where a fresh encoder has
    nothing of the target to learn from and the pretrained one has everything else.
-2. Read the mixture backbone on a task, and a per-corpus weight in the mixture.
+2. Find why the mixture learns the stays less than their own backbone does, and weigh corpora
+   in it; on the intensive-care task, select the networks' rates beyond the edge their
+   selections chose and check the step floor there, each declared before it runs.
 3. Open the frozen test side once.

@@ -343,8 +343,10 @@ them.
   (`docs/verification/label-efficiency-curve.md`, `docs/findings.md`).
 - The synthetic control's transfer leg: complete, passed
   (`docs/verification/synthetic-transfer.md`).
-- Intensive-care task: protocol, backbones, budgets, endpoint, selections, least gain, floor and
-  both grids registered; every selection run; no grid run.
+- Intensive-care endpoint, validation side: **not confirmed** by the grid of 2026-09-30 under the
+  mixed backbone: full fine-tuning 0.024 in area above the arm from nothing at 200 stays, below
+  the floor of 0.040 and the least gain of 0.045
+  (`docs/verification/intensive-care-curve.md`, `docs/findings.md`).
 - The single test run: not made.
 
 ## Register of amendments
