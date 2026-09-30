@@ -161,6 +161,10 @@ stays alone.
 - From 200 stays up a classical baseline has the highest mean area: MiniRocket at 200, the trees
   per channel at 1,000 and every stay; the stays-alone probe comes within 0.005 of the trees at
   1,000. At 50 stays full fine-tuning under the stays alone and MiniRocket are level.
+- The methods that need a grid pay nothing measurable for it: the patch model leads the network
+  on raw readings by 0.042 and 0.041 at 50 and 200 stays, MiniRocket by 0.04 to 0.08 at every
+  budget. The patch model also differs in shape and dropout, so the grid alone is not isolated;
+  the raw readings give the network no advantage at these budgets.
 - Two possible handicaps of the networks are open: rates chosen at the edge of their grid, and a
   step floor confirmed on the turbofans only.
 
@@ -190,9 +194,12 @@ stays alone.
 
 ## Next
 
-1. Measure transfer across corpora and to unseen sensor layouts, where a fresh encoder has
-   nothing of the target to learn from and the pretrained one has everything else.
-2. Find why the mixture learns the stays less than their own backbone does, and weigh corpora
-   in it; on the intensive-care task, select the networks' rates beyond the edge their
+1. Find why the networks trail the classical baselines and the patch model on the intensive-care
+   task before measuring transfer: reproduce a published protocol with the network from nothing,
+   check how excursions and normalisation are prepared, select the rates beyond the edge their
    selections chose and check the step floor there, each declared before it runs.
-3. Open the frozen test side once.
+2. Find why the mixture learns the stays less than their own backbone does, and weigh corpora
+   in it.
+3. Measure transfer across corpora and to unseen sensor layouts, where a fresh encoder has
+   nothing of the target to learn from and the pretrained one has everything else.
+4. Open the frozen test side once.
