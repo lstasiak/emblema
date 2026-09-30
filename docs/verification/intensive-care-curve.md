@@ -21,7 +21,7 @@ stay, under that backbone and under the backbone of the stays alone?
 |---|---|
 | Campaigns | `87cbc0e7…`, `campaigns/curve-physionet2012-mixed5.toml`, backbone `sha256:869ed545…`; `9129eabc…`, `campaigns/curve-physionet2012-stays.toml`, backbone `sha256:c5878c03…` |
 | Code | orders placed at `933425fb` |
-| Variants | each candidate at its selection's choice per budget, on the tuning side (`seed-spread`, selections of 2026-09-29) |
+| Variants | each candidate at its selection's choice per budget, on the tuning side (`campaigns/selection-*-physionet2012.toml`, run 2026-09-29) |
 | Sides | learnt from set A's stays, 50 to 3,997; scored on set B, 3,994 stays, 568 deaths, every cell |
 | Seeds | 1 to 5 per cell; tier M |
 | Rules | least gain 0.045, floor the larger of 0.01 and the control's SD over seeds, paired bootstrap over stays in two strata, 10,000 resamples, Holm over 35 and 15 |
@@ -65,17 +65,20 @@ using the backbone; under the stays alone 6 of 12, with the frozen probe above t
 
 1. The endpoint is not confirmed under either backbone. Full fine-tuning's gain at 200 is
    distinguishable from zero but below both the floor and the least gain. Under the mixed
-   backbone it clears no floor at any budget; under the stays alone it clears it at 50 and
-   1,000, by 0.061 and 0.015, and not at every stay.
+   backbone it clears no floor at any budget; under the stays alone it clears the floor at 50
+   and 1,000, with gains of 0.061 and 0.015, and not at every stay.
 2. Under the mixed backbone no way of using it beats the network from nothing at any budget; the
    closed-form probe is worse at 1,000 and every stay. Under the stays alone the frozen probe
    gains 0.055, 0.047 and 0.031 in area at 200, 1,000 and every stay. The mixture, which learnt
    the stays about as well as eight epochs on them alone (`manual-handoff.md`, 2026-09-29), is
    the weaker backbone for this task. This comparison was named a diagnostic in the registration
    but given no prediction beforehand, so it is descriptive only.
-3. Trees on per-channel features and MiniRocket are the best candidates from 200 stays up, 0.76
-   at 200 and 0.86 and 0.85 at every stay, above every network. The patch model beats the
-   pretrained arms at 50 and 200 under the mixed backbone.
+3. From 200 stays up a classical baseline has the highest mean area of any candidate:
+   MiniRocket at 200 (0.765), the trees per channel at 1,000 and every stay (0.829 and 0.856).
+   The nearest network is the stays-alone probe, 0.824 at 1,000, above MiniRocket's 0.818. At
+   50 the stays-alone full fine-tuning and MiniRocket are level, 0.712 and 0.711. The two
+   campaigns are not paired against each other, so these are means, not tests. The patch
+   model's mean is above every pretrained arm's at 50 and 200 under the mixed backbone.
 4. One seed's area moves by about 0.04 at 200 stays; the floor at 200 is therefore 0.040 and
    0.041, above the gain of every pretrained arm but the stays-alone probe.
 

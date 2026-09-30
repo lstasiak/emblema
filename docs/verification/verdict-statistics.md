@@ -287,8 +287,11 @@ overlap this one by about a fifth, which may raise the level of the areas and no
 
 Under the declaration above: the campaign `596849cd…` of
 `campaigns/seed-spread-physionet2012.toml`, four orders placed at `c9a04936` and run on one Colab
-G4 under CUDA MPS, four processes, the longest order in 56 minutes; read by the same two scripts. All 80 cells scored the same 800 stays, 108 deaths; the
-full fine-tuning arm started from the mixed backbone's weights `sha256:869ed545…`.
+G4 under CUDA MPS, four processes, the longest order in 56 minutes; read by the same two
+scripts. All 80 cells scored the same 800 stays, 127 deaths; the full fine-tuning arm started
+from the mixed backbone's weights `sha256:869ed545…`. A correction to the section above: its 108
+deaths hold for the selections' first fifth only; the three fifths hold 108, 103 and 115 deaths
+in 800, 799 and 799 stays.
 
 | Budget | Arm | Mean area | SD over 10 seeds | SE over stays |
 |---|---|---|---|---|
@@ -307,9 +310,10 @@ full fine-tuning arm started from the mixed backbone's weights `sha256:869ed545�
 2. The second failed at 1,000 (0.035 and 0.023) and for full fine-tuning at every stay (0.019);
    it held for the network from nothing at every stay (0.011).
 3. The third held: at 50 the network from nothing spreads by 0.053.
-4. The selections understated the spread at 200 and 1,000 by about half. Every selection's
-   repeat learnt and scored on the same division as every other's, so the sixty variants of a
-   budget read three divisions, not sixty; ten seeds on one fifth read ten.
+4. The selections understated the spread: by about a quarter at 200 (0.031 against 0.040) and
+   by half or more at 1,000 (0.013 against 0.023–0.035). Every selection's repeat learnt and
+   scored on the same division as every other's, so the sixty variants of a budget read three
+   divisions, not sixty; ten seeds on one fifth read ten.
 5. By the reading declared beforehand: the larger arm's SD at 200 is 0.0406, above 0.02, so the
    endpoint's least gain is raised to **0.045**; the control's smallest SD, 0.0109 at every stay,
    rounds down to 0.010, so the floor's fixed part is **0.01**.
