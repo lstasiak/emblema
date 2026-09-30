@@ -96,3 +96,53 @@ using the backbone; under the stays alone 6 of 12, with the frozen probe above t
   not the same cell of the other.
 - Networks ran on a G4, the classical baselines on the M1 Pro's processor; every cell of one
   budget of one pool ran on one kind of machine.
+
+## 2026-09-30 — the cost of laying stays on a grid
+
+**Question.** MiniRocket and the patch model can only read a regular grid, so an irregular stay
+is resampled for them. Does that cost them area against the network that reads the raw readings,
+the one trained from nothing?
+
+**Conditions.**
+
+| | |
+|---|---|
+| Campaign | `87cbc0e7…`, mixed backbone, the section above; no new run |
+| Grid | one step an hour, 49 steps over 48 hours and a minute (MiniRocket at every stay: two steps an hour, its selection's choice); a step with no reading carries the channel's last one forward, a channel not yet seen carries zero, the corpus mean; every channel doubled by a mask of the steps really observed; statics held at every step |
+| Patch model | 192 wide, 4 blocks, patches of 8 steps at a stride of 4, dropout 0.2, mean pooling; rate 0.001, 0.003 at 1,000 |
+| Network on raw readings | the backbone's shape, 256 wide, 6 blocks, dropout 0; mean pooling; rate 0.001 at 50, 0.003 at 200, 0.000333 at 1,000 and every stay |
+| Schedule | both networks from nothing: 30 epochs of 16 stays and at least 2,000 steps |
+| Rules | the registered secondary comparisons, paired over set B's 3,994 stays, Holm over 35 |
+
+**Gain in area over the network on raw readings**, mean over five seeds:
+
+| Stays | Raw readings | Patch model [95 % interval] | MiniRocket [95 % interval] |
+|---|---|---|---|
+| 50 | 0.652 | 0.694: +0.042 [+0.027; +0.057] | 0.711: +0.060 [+0.044; +0.075] |
+| 200 | 0.681 | 0.722: +0.041 [+0.028; +0.055] | 0.765: +0.084 [+0.072; +0.097] |
+| 1,000 | 0.775 | 0.791: +0.016 [+0.003; +0.028], n.s. | 0.818: +0.043 [+0.029; +0.057] |
+| all | 0.809 | 0.826: +0.017 [+0.004; +0.029], n.s. | 0.850: +0.041 [+0.029; +0.053] |
+
+n.s.: not distinguishable under the family's correction; every other cell is.
+
+**Conclusions.**
+
+1. Measured as the gap to the network on raw readings, the grid costs the methods that need it
+   nothing: both lead that network at every budget, and six of the eight gains are
+   distinguishable.
+2. The patch model is the closer comparison: a transformer trained from nothing on the same
+   schedule. It leads by about 0.04 at 50 and 200 stays and by under 0.02, not distinguishable,
+   from 1,000 up.
+3. The raw readings do not give the network an advantage at these budgets. Whether they cost it
+   one is not settled here (limitations).
+
+**Limitations.**
+
+- The patch model differs from the network on raw readings in more than its input: it is
+  narrower and shallower, reads patches of eight hours rather than single readings, and is
+  regularised by dropout 0.2 against none. The gap is the cost of the whole design, not of the
+  grid alone. Only the same network fed the gridded readings as tokens would isolate the grid.
+- The mask tells the grid methods where a reading was made. The network on raw readings learns
+  the same from which readings its tokens hold, so the mask gives the grid no information the
+  other side lacks.
+- One backbone's campaign; the stays-alone campaign holds no grid method.
