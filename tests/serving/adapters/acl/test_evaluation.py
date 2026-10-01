@@ -19,6 +19,7 @@ from emblema.serving.adapters.in_memory.promotable_artifact_repository import (
 from emblema.serving.adapters.in_memory.served_model_repository import (
     InMemoryServedModelRepository,
 )
+from emblema.serving.application.authorisation.promotion_policy import PromotionPolicy
 from emblema.serving.application.use_cases.promote_artifact import (
     PromoteArtifact,
     PromoteArtifactCommand,
@@ -36,7 +37,7 @@ from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubs
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.events.domain_event import EventId
 from tests.evaluation.support import CAMPAIGN, CLOSED_AT, CONTENDER, CONTROL, TASK, closed_reading
-from tests.serving.support import FITTED, PROMOTED
+from tests.serving.support import FITTED, OPERATOR, PROMOTED
 
 
 class WatchedRecord(RecordPromotableArtifacts):
@@ -120,10 +121,17 @@ def test_what_a_finished_campaign_kept_can_be_put_into_service(heard: Heard) -> 
     heard.announced()
     served = InMemoryServedModelRepository()
     promote = PromoteArtifact(
-        heard.promotables, served, heard.store, SequentialIdGenerator(), FixedClock(PROMOTED)
+        heard.promotables,
+        served,
+        heard.store,
+        SequentialIdGenerator(),
+        FixedClock(PROMOTED),
+        PromotionPolicy(),
     )
 
-    model = served.get(promote(PromoteArtifactCommand(checksum=heard.kept.checksum)))
+    model = served.get(
+        promote(PromoteArtifactCommand(actor=OPERATOR, checksum=heard.kept.checksum))
+    )
 
     assert model.origin.candidate == CONTENDER
     assert model.artifact == heard.kept

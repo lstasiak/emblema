@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
+from emblema.serving.application.authorisation.promotion_policy import PromotionPolicy
 from emblema.serving.domain.artifact_origin import ArtifactOrigin
 from emblema.serving.domain.exceptions import (
     AmbiguousArtifactError,
@@ -13,6 +14,7 @@ from emblema.serving.domain.served_model import ServedModel
 from emblema.serving.ports.promotable_artifact_repository import PromotableArtifactRepository
 from emblema.serving.ports.served_model_repository import ServedModelRepository
 from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.identity.principal import Principal
 from emblema.shared.ports.artifact_store import ArtifactStore
 from emblema.shared.ports.clock import Clock
 from emblema.shared.ports.id_generator import IdGenerator
@@ -23,12 +25,14 @@ class PromoteArtifactCommand:
     """Request to serve an artifact a finished campaign kept.
 
     Attributes:
+        actor: Who asks, as the edge identified them; whether they may is decided here.
         checksum: What the artifact's content hashes to, which is how it is named.
         campaign: The campaign it is promoted out of, needed only when several kept it.
         candidate: The competitor it is promoted as, needed only when one campaign kept the
             same artifact as several of them.
     """
 
+    actor: Principal
     checksum: Checksum
     campaign: CampaignId | None = None
     candidate: CandidateRef | None = None
@@ -48,6 +52,9 @@ class PromoteArtifact:
     Its bytes are confirmed present before anything is recorded: the store is content-addressed
     and checks every read against the checksum, so a model whose artifact is there will load the
     bytes it was measured with, and one whose artifact is gone would never load at all.
+
+    Who may promote is the policy's rule, asked before anything is looked up: a caller that may
+    not is told so without learning what the registry holds.
     """
 
     def __init__(
@@ -57,17 +64,20 @@ class PromoteArtifact:
         store: ArtifactStore,
         ids: IdGenerator,
         clock: Clock,
+        policy: PromotionPolicy,
     ) -> None:
         self._promotables = promotables
         self._served = served
         self._store = store
         self._ids = ids
         self._clock = clock
+        self._policy = policy
 
     def __call__(self, command: PromoteArtifactCommand) -> ServedModelId:
         """Serve the artifact and return the identity of the model now serving it.
 
         Raises:
+            OperationNotPermittedError: If the actor was not granted promotion.
             ArtifactNotPromotableError: If no finished campaign kept an artifact with that
                 checksum, or none did under the campaign or competitor named.
             AmbiguousArtifactError: If it was kept more than once and the request does not say
@@ -76,6 +86,7 @@ class PromoteArtifact:
             ArtifactAlreadyServedError: If a model not withdrawn already serves it.
             InvalidServedModelError: If the clock reads earlier than the campaign finished.
         """
+        self._policy.permit_promotion(command.actor)
         kept = self._promotable(command)
         if not self._store.exists(kept.artifact):
             raise ArtifactUnavailableError(
