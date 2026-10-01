@@ -304,3 +304,79 @@ selection chooses, and the gap that remains is read against the shape. If the gr
 representation of irregular readings is reopened before any backbone is retrained. If neither
 does, a narrower network from nothing is the next candidate. No verdict of the registered grids
 changes.
+
+## 2026-10-01 — Colab G4: dropout and the gridded input
+
+**Question.** The one declared above: does the network from nothing gain from a dropout of 0.2,
+from readings laid on one step an hour, or from both, at every stay and at 200, and does either
+close the patch model's lead at 200?
+
+**Conditions.**
+
+| | |
+|---|---|
+| Campaigns | `f8c5225b…` (every stay, seeds 1–5) and `4e28a197…` (200 stays, seeds 1–10), both selections |
+| Code | orders placed at `477bbe2b` |
+| Scored | the fifth of the tuning stays held out by seed 101: 800 stays, 127 deaths, the same for every cell |
+| Machine | one Colab G4, two orders at once under CUDA MPS: 79 min for the 50 cells at 200, 103 min for the 25 at every stay; tier M; no verdict drawn |
+
+    uv run scripts/campaign_pairs_report.py --campaign f8c5225b-872f-4c7a-97a7-5b0861827486 \
+        --campaign 4e28a197-7eee-4355-b272-4a786ac0f2c8 --out DIR
+    uv run scripts/campaign_pairs_report.py --out DIR \
+        --pair CONTROL_CAMPAIGN CONTROL BUDGET CANDIDATE_CAMPAIGN CANDIDATE BUDGET [...]
+
+**Area under the ROC curve**, mean over seeds (seed-by-seed values in the CSV):
+
+| Candidate | Every stay | 200 stays |
+|---|---|---|
+| network from nothing | 0.786 | 0.652 |
+| … under a dropout of 0.2 | 0.782 | 0.654 |
+| … on the hourly grid | 0.797 | 0.664 |
+| … under both | 0.798 | 0.665 |
+| patch model | 0.796 | 0.696 |
+
+**Gain in area over the network from nothing**: paired over stays (95 % interval), and seed by
+seed (mean ± standard error). *Gains* marks where both conditions declared hold.
+
+| Candidate | Budget | Paired gain | Seed by seed | Gains |
+|---|---|---|---|---|
+| dropout 0.2 | every stay | −0.005 [−0.022; +0.012] | −0.005 ± 0.005 | no |
+| dropout 0.2 | 200 | +0.002 [−0.017; +0.020] | +0.002 ± 0.017 | no |
+| hourly grid | every stay | +0.010 [−0.014; +0.036] | +0.010 ± 0.008 | no |
+| hourly grid | 200 | +0.012 [−0.010; +0.033] | +0.012 ± 0.010 | no |
+| both | every stay | +0.012 [−0.012; +0.036] | +0.012 ± 0.004 | no |
+| both | 200 | +0.013 [−0.008; +0.033] | +0.013 ± 0.013 | no |
+| patch model | every stay | +0.010 [−0.019; +0.038] | +0.010 ± 0.010 | no |
+| patch model | 200 | +0.043 [+0.018; +0.069] | +0.043 ± 0.017 | yes |
+
+Against the network under dropout, the grid added on top gains +0.017 [−0.007; +0.041] at every
+stay and +0.011 [−0.009; +0.032] at 200, and the patch model at 200 gains +0.042 [+0.017; +0.067].
+
+**Conclusions.**
+
+1. Prediction 1 fails: the dropout gains nothing at either budget. Its estimate at every stay is
+   slightly below zero, and its interval excludes the declared gain of 0.015. This network's gap
+   to the published ones is not the dropout they use.
+2. Prediction 2 is not decided. The grid's estimate is +0.010 to +0.017 in all four comparisons
+   that add it, at the declared limit of 0.01 or above it, but no single comparison gains. With
+   the grid, the network ties the patch model at every stay (0.797 against 0.796). The grid's
+   effect, if it has one, is about 0.01, too small to explain a gap of 0.04–0.06.
+3. Prediction 3 fails narrowly, and only because the dropout adds nothing: both knobs together
+   land on the grid alone (within 0.001), not on the dropout alone.
+4. Prediction 4 holds for the patch model and fails for the dropout. The patch model's lead at
+   200 is reproduced (+0.043, against +0.041 on the validation side), and at every stay it is
+   under 0.02. Neither knob closes the lead: the gridded network still trails the patch model at
+   200 by about 0.03. Dropout and the grid together account for at most a third of the lead,
+   which lies in how the patch model reads a window.
+5. As declared for a result where neither knob gains, a narrower network from nothing is the next
+   candidate. The learning rate's edge and the floor of steps follow first because they are
+   cheaper. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- 800 stays with 127 deaths. At every stay the paired interval is about ±0.025, wider than the
+  spread of the seeds, so a gain of 0.01 cannot be confirmed there by the first condition,
+  whatever the number of seeds.
+- One dropout, 0.2, applied wherever the encoder learns; the rate was not selected again under it.
+- Learnt from about 3,200 tuning stays at every stay, the size of the published fixed split, not
+  from the registered 3,997.
