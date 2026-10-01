@@ -7,6 +7,7 @@ from emblema.config.api_settings import ApiSettings
 from emblema.config.artifact_store_settings import ArtifactStoreSettings
 from emblema.config.broker_settings import BrokerSettings
 from emblema.config.database_settings import DatabaseSettings
+from emblema.config.identity_settings import IdentitySettings
 from emblema.config.telemetry_settings import TelemetrySettings
 from emblema.config.worker_settings import WorkerSettings
 from emblema.shared.kernel.compute import ComputeTier
@@ -80,6 +81,14 @@ class Settings(BaseSettings):
         ),
     )
 
+    identity: IdentitySettings | None = Field(
+        default=None,
+        description=(
+            "Who the HTTP process trusts to say who a caller is. Every other process leaves it "
+            "unset: a command line acts as the operator of the machine it runs on."
+        ),
+    )
+
     def require_api(self) -> ApiSettings:
         """What the HTTP process was told about where it listens and what it allows.
 
@@ -90,6 +99,17 @@ class Settings(BaseSettings):
         if self.api is None:
             raise ValueError("the process serves HTTP and EMBLEMA_API__* is not set")
         return self.api
+
+    def require_identity(self) -> IdentitySettings:
+        """Whom the HTTP process was told to trust about who a caller is.
+
+        Raises:
+            ValueError: If nothing is configured; the process fails as it is assembled rather
+                than serving routes that change what is served to whoever asks.
+        """
+        if self.identity is None:
+            raise ValueError("the process protects routes and EMBLEMA_IDENTITY__* is not set")
+        return self.identity
 
     def require_telemetry(self) -> TelemetrySettings:
         """How a process that reports itself was told to name itself and where to report.

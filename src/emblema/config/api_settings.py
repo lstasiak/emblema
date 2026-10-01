@@ -64,6 +64,21 @@ class ApiSettings(BaseModel):
             "also what a refused client is told to wait before it tries again."
         ),
     )
+    inference_requests_per_minute: int = Field(
+        ge=1,
+        description=(
+            "Requests one caller may make a minute to the open routes that run a model, per "
+            "server process; also the burst a caller may make at once. A caller is its "
+            "network address, so callers behind one proxy share an allowance."
+        ),
+    )
+    inference_clients_remembered: int = Field(
+        ge=1,
+        description=(
+            "Callers whose allowance one process keeps track of at once; the least recently "
+            "seen is forgotten first."
+        ),
+    )
     default_page_size: int = Field(ge=1)
     max_page_size: int = Field(ge=1)
     verdict_memo_capacity: int = Field(

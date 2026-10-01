@@ -7,6 +7,7 @@ from emblema.config.api_settings import ApiSettings
 from emblema.config.artifact_store_settings import ArtifactStoreSettings
 from emblema.config.broker_settings import BrokerSettings
 from emblema.config.database_settings import DatabaseSettings
+from emblema.config.identity_settings import IdentitySettings
 from emblema.config.settings import Settings
 from emblema.config.telemetry_settings import TelemetrySettings
 
@@ -33,11 +34,16 @@ API = ApiSettings(
     onnx_threads=1,
     inference_budget_windows=2,
     inference_wait_seconds=0.5,
+    inference_requests_per_minute=60,
+    inference_clients_remembered=8,
     default_page_size=1,
     max_page_size=2,
     verdict_memo_capacity=4,
 )
 TELEMETRY = TelemetrySettings(service_name="emblema-test")
+IDENTITY = IdentitySettings(
+    static_tokens="token-of-operator:operator:serving:promote serving:withdraw"
+)
 
 
 def unreachable_store() -> Settings:
@@ -48,6 +54,7 @@ def unreachable_store() -> Settings:
         broker=BROKER,
         api=API,
         telemetry=TELEMETRY,
+        identity=IDENTITY,
     )
 
 
