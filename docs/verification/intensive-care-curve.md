@@ -250,3 +250,57 @@ paired with this run): network 0.809, trees 0.856, MiniRocket 0.850.
 - Each candidate runs at the variant selected at every stay of set A; nothing was selected again
   at 6,400 stays.
 - 1,599 stays scored and 213 deaths: the paired intervals above are about ±0.02 wide.
+
+## 2026-10-01 — declared before the run: dropout and the gridded input
+
+**Question.** At 3,997 and 6,400 stays the network trained from nothing reaches about 0.80 in area,
+where published networks reach 0.83–0.86 from 3,200 to 7,700 stays (the two sections above). Those
+networks drop a fifth of their activations or more; this one drops none. The patch model, which
+led it by 0.041 at 200 stays on the validation side, both drops a fifth and reads its readings on
+a grid of one step an hour. Does the same network gain from either knob, and how much of the gap
+does each close?
+
+**Design.** Two campaigns on the registered task, each scored on the fifth of the tuning stays held
+out by seed 101 for every seed, about 800 stays, the fifth the spread over seeds was read on; the
+validation side is not read.
+
+| | `campaigns/grid-cost-all-physionet2012.toml` | `campaigns/grid-cost-200-physionet2012.toml` |
+|---|---|---|
+| Campaign | `f8c5225b…` | `4e28a197…` |
+| Stays learnt from | every tuning stay outside the fifth | 200 |
+| Network's rate | 0.000333 | 0.003 |
+| Seeds | 1 to 5 | 1 to 10 |
+
+Five candidates in each: the network from nothing at the rate the registered grid ran it at that
+budget; the same network fed the readings laid on one step an hour, a token per channel and step
+from the channel's first reading on, its gap the time since a real reading; the same network under
+a dropout of 0.2; the same network under both; the patch model at its registered setting. Each is
+described in its campaign exactly as the registered grid describes it, the turned knobs aside. 50
+stays are left out: one seed moves the area there by 0.057 on this fifth, so even ten seeds would
+read a difference of two candidates only to about 0.03. A first definition, `d4d5e7a4…`, ran every
+network at 0.001 and was never ordered: at every stay that rate is not the one the network's
+selections chose, and a gain under dropout could then be a correction of the rate.
+
+**Reading.** Each candidate against the network from nothing, by `scripts/campaign_pairs_report.py`:
+the gain in area paired over the stays, two strata, 10,000 resamples, 95 % interval; and beside
+it the gain seed by seed, each seed's two answers drawn from the same labels, with its mean and
+standard error over the seeds. A knob *gains* where the interval lies above zero and the mean over
+seeds exceeds twice its standard error; the interval alone cannot see how far another seed moves
+either side. At 200 stays a knob *closes the patch model's lead* where it gains and its gain is at
+least half the patch model's.
+
+**Predictions.**
+
+1. At every stay, the dropout gains at least 0.015, half the gap between this network and the
+   published ones at a similar size.
+2. At every stay and at 200, the grid alone moves the area by less than 0.01 either way: published
+   networks reach the same level on hourly aggregates and on raw readings.
+3. At both budgets, the two knobs together land within 0.01 of the dropout alone.
+4. At 200 stays the patch model gains 0.02 or more, and the dropout closes its lead; at every stay
+   the patch model's gain is under 0.02, as on the validation side.
+
+**What follows.** If the dropout gains, the networks of the next backbones learn under a dropout a
+selection chooses, and the gap that remains is read against the shape. If the grid gains, the
+representation of irregular readings is reopened before any backbone is retrained. If neither
+does, a narrower network from nothing is the next candidate. No verdict of the registered grids
+changes.
