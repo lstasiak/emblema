@@ -380,3 +380,52 @@ stay and +0.011 [−0.009; +0.032] at 200, and the patch model at 200 gains +0.0
 - One dropout, 0.2, applied wherever the encoder learns; the rate was not selected again under it.
 - Learnt from about 3,200 tuning stays at every stay, the size of the published fixed split, not
   from the registered 3,997.
+
+## 2026-10-01 — declared before the run: a published network on the same stays
+
+**Question.** Is the network's deficit in the data it is given or in the network? Neither the
+size of the learning side, nor dropout, nor the grid explains why the network from nothing
+reaches 0.786 where STraTS (Tipirneni and Reddy, TKDD 2022) reports 0.835 from about 3,200
+stays. STraTS reads stays as triplets of time, variable and value, much as this project's tokens
+do. Its official code, run on the same stays, separates the two.
+
+**Design.** STraTS's PyTorch code at commit `e936cda`
+(https://github.com/sindhura97/STraTS), in the setting its run script gives this corpus
+without self-supervision: 64 wide, 2 blocks, 16 heads, dropout 0.2, rate 5e-4, batch 16, a
+positive class weighted by the ratio of the classes, early stop on the sum of the areas under
+the ROC and the precision-recall curves, patience 10, at most 50 epochs. Its dataset, model and
+evaluator are imported unchanged. Its training loop is restated step for step in
+`scripts/strats_reference_run.py`.
+
+| | |
+|---|---|
+| Learnt from | 2,560 of the 3,200 tuning stays outside the scored fifth, three of them without a reading; the other 640 drive the early stop |
+| Scored | the fifth held out by seed 101: 800 stays, 127 deaths, the stays every campaign above scored |
+| Preparation (1) | its own, from the challenge's files: negative values dropped, repeated rows dropped, the ward as four variables |
+| Preparation (2) | this project's tokens of the same stays (`scripts/strats_reference_data.py`) |
+| Seeds | 1 to 5 for each |
+
+Before the run, the two preparations were compared reading by reading. They hold the same
+readings, apart from 455 readings at 48:00 that the published window of 48 hours leaves out and
+24 negative temperatures that STraTS drops, of 1.75 million. After the tokens' standardisation is
+undone, every value both hold agrees to within 1e-3. Its network standardises each variable again on its learning
+side, so (1) and (2) differ by those readings alone.
+
+**Reading.** Each preparation against the network from nothing at every stay (`f8c5225b…`,
+0.786) and (2) against (1), by `scripts/campaign_pairs_report.py` after
+`scripts/strats_reference_answers.py` has put STraTS's answers beside the campaign's. The rule is
+the one used above: a side *gains* where the paired interval over stays lies above zero and the
+mean over seeds exceeds twice its standard error.
+
+**Predictions.**
+
+1. On its own preparation STraTS reaches at least 0.83 and gains over the network from nothing.
+2. On this project's tokens it lands within 0.01 of its own preparation.
+
+**What follows.** If both hold, this project's data are as good as the published preparation of
+them, and the deficit lies in the network or in how it is trained. Candidates are, in order: how
+the static features enter, how the states are pooled, how a value is embedded, the early stop,
+and the weighting of the classes. They are tried on the network from nothing before any backbone
+is retrained. If (2) falls short of (1) by 0.02 or more, the preparation loses something, and
+the data are revisited first. If (1) stays below 0.81, these stays are harder than the published
+split, and STraTS's area here replaces 0.835 as the reference.
