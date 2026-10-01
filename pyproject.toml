@@ -193,6 +193,8 @@ allowed-confusables = ["×"]
 "scripts/campaign_pairs_report.py" = ["E402"]
 "scripts/campaign_report.py" = ["E402"]
 "scripts/campaign_curve_figures.py" = ["E402"]
+"scripts/strats_reference_data.py" = ["E402"]
+"scripts/strats_reference_answers.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
