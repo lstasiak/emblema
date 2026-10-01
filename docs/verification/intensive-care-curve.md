@@ -195,3 +195,58 @@ The second outcome is expected less: mTAN reaches 0.85 from fewer stays than set
 side; the third points them at the network: dropout, the gridded input and the floor of steps,
 each declared before its own run. A result between the two is reported as such. No verdict of
 the registered grids changes.
+
+## 2026-10-01 — Colab G4 and the M1 Pro: the task at the size published results learn from
+
+**Question.** The one declared above: at 6,400 stays from sets A and B, does the network trained
+from nothing reach the level of published networks, so that its deficit at 3,997 stays is a matter
+of size, or does it stay where it was?
+
+**Conditions.**
+
+| | |
+|---|---|
+| Campaign | `af0cae4a…`, `campaigns/reproduction-physionet2012.toml`; task over manifest `sha256:d5d0947a…` |
+| Code | orders placed at `a6a777fd` |
+| Sides | learnt from 6,400 stays of sets A and B; scored on the 1,599 of the other 1,600 that hold a window, 213 deaths |
+| Seeds | 1 to 5; tier M; no verdict drawn |
+| Machines | network: one Colab G4, 3.6 min a cell; classical: MacBook Pro M1 Pro, CPU, 7 s a cell for the trees, 23 min for MiniRocket |
+
+    uv run scripts/campaign_report.py --campaign af0cae4a-1026-45a4-8d53-57a9e17f9e44 \
+        --out DIR --everything 6400
+
+**Area under the ROC curve**, mean ± SD over five seeds, and the paired gain over the network
+(95 % interval, 10,000 resamples over stays):
+
+| Candidate | Area | Gain over the network |
+|---|---|---|
+| network from nothing, rate 0.000333 | 0.799 ± 0.009 | — |
+| trees per channel | 0.861 ± 0.000 | +0.062 [+0.043; +0.081] |
+| MiniRocket, two steps an hour | 0.824 ± 0.003 | +0.025 [+0.006; +0.046] |
+
+**The same candidates at 3,997 stays** (the mixed backbone's grid above, scored on set B; not
+paired with this run): network 0.809, trees 0.856, MiniRocket 0.850.
+
+**Conclusions.**
+
+1. The third outcome declared holds: the network stays below 0.83 and trails the trees by 0.062,
+   more than at 3,997 stays. The second, a deficit of size, is rejected.
+2. Published networks reach 0.83–0.86 learning from 3,200 to 7,700 stays; this network reaches
+   0.80 at 6,400. Its deficit lies in the network or how it is trained, which the remaining
+   diagnostics take up: dropout, the gridded input and the floor of steps.
+3. The trees per channel reach the level of the challenge's winner (0.860) from 4,000 stays and
+   gain nothing measurable from 6,400; neither does the network.
+4. The first prediction holds for the trees, not for MiniRocket: at 0.824 it is 0.037 below them
+   and 0.026 below its own area at 3,997 stays, far beyond the spread of its seeds. Not explained
+   here; its variant was selected on the smaller labelled side.
+
+**Limitations.**
+
+- Learnt and scored on a division of sets A and B that the registered grids do not use; 3,209 of
+  the 6,400 stays are set B's, the registered grids' validation side. No model fitted here is used
+  by them.
+- The comparisons with 3,997 stays are across scored sides and not paired; a difference of 0.01
+  between them is within what another scored side moves an area by.
+- Each candidate runs at the variant selected at every stay of set A; nothing was selected again
+  at 6,400 stays.
+- 1,599 stays scored and 213 deaths: the paired intervals above are about ±0.02 wide.
