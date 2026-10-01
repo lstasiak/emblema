@@ -1,0 +1,52 @@
+# The intensive-care task at the size published results learn from, to tell whether the network
+# trailing the classical baselines is a matter of how many stays it learns from.
+#
+# Published networks for in-hospital death learn from about 2,600 to 7,700 stays of the
+# challenge's three sets; set C is this project's frozen side, so the same share is drawn from
+# sets A and B alone: a version of the corpus published with one stay in five held out by seed 1,
+# 6,400 stays to learn from and 1,600 to score on, its normalisation fitted on the 6,400. Nothing
+# else of the corpus changes: the same stays, windows, tokens and channels as the version the
+# registered grids read.
+#
+# Each candidate runs at the variant its selection chose at every stay in the registered grids
+# (campaigns/curve-physionet2012-mixed5.toml), named outright here because those selections ran
+# over the other task; nothing is selected again, and no candidate stops early, so no part of the
+# 6,400 is set aside for validation. The 6,400 include 3,209 stays of set B, the side the
+# registered grids score on; no model fitted here is used by them.
+#
+# A reading, not a claim: means and intervals, no verdict. The rules are the task's registered
+# ones because every campaign states some.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "reproduction-physionet2012"
+purpose = "tuning"
+tier = "M"
+measure = "auroc_shortfall"
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.000333",
+    "boosted_trees_per_channel@learning_rate=0.1,rounds=300",
+    "minirocket@grid_resolution=2",
+]
+control = "from_scratch@learning_rate=0.000333"
+endpoint = "boosted_trees_per_channel@learning_rate=0.1,rounds=300"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3, 4, 5]
+
+[rules]
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+correction = "holm"
+# Two contenders at one budget, less the endpoint.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
