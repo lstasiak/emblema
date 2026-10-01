@@ -238,8 +238,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     seconds: dict[str, float] = {}
     torch.manual_seed(arguments.fresh_seed)
     encoders = {
-        PRETRAINED: backbones.pretrained(weights, vocabulary_size=len(published.channels)),
-        FRESH: backbones.fresh(vocabulary_size=len(published.channels)),
+        PRETRAINED: backbones.pretrained(
+            weights, vocabulary_size=len(published.channels), dropout=0.0
+        ),
+        FRESH: backbones.fresh(vocabulary_size=len(published.channels), dropout=0.0),
     }
     for name, encoder in encoders.items():
         started = time.perf_counter()

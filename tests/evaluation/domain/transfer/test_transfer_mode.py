@@ -1,5 +1,6 @@
 import pytest
 
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 
 
@@ -30,3 +31,22 @@ def test_the_axis_holds_the_control_arm_and_the_four_transfer_modes() -> None:
         "lora",
         "full_fine_tuning",
     ]
+
+
+@pytest.mark.parametrize(
+    ("mode", "pooling", "in_the_loop"),
+    [
+        (TransferMode.FROM_SCRATCH, PoolingScheme.MEAN, True),
+        (TransferMode.FULL_FINE_TUNING, PoolingScheme.TAIL, True),
+        (TransferMode.LORA, PoolingScheme.MEAN, True),
+        (TransferMode.FROZEN_PROBE, PoolingScheme.MEAN, False),
+        (TransferMode.FROZEN_PROBE, PoolingScheme.TAIL, False),
+        (TransferMode.FROZEN_PROBE, PoolingScheme.ATTENTION, True),
+        (TransferMode.FROZEN_RIDGE, PoolingScheme.MEAN, False),
+        (TransferMode.FROZEN_RIDGE, PoolingScheme.TAIL, False),
+    ],
+)
+def test_the_encoder_runs_in_the_loop_unless_it_states_every_window_once(
+    mode: TransferMode, pooling: PoolingScheme, in_the_loop: bool
+) -> None:
+    assert mode.encodes_in_the_loop(HeadPooling(pooling=pooling)) is in_the_loop

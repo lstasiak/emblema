@@ -57,10 +57,13 @@ class AdaptedBackbone(nn.Module):
         """
         head = RegressionHead(backbones.width, starting_at=starting_at)
         pooling = pooling_module(plan.pooling, width=backbones.width)
+        dropout = plan.encoder.dropout
         if plan.backbone is None:
-            encoder = backbones.fresh(vocabulary_size=vocabulary_size)
+            encoder = backbones.fresh(vocabulary_size=vocabulary_size, dropout=dropout)
         else:
-            encoder = backbones.pretrained(plan.backbone, vocabulary_size=vocabulary_size)
+            encoder = backbones.pretrained(
+                plan.backbone, vocabulary_size=vocabulary_size, dropout=dropout
+            )
         encoder.requires_grad_(plan.mode.trains_backbone_weights)
         for module in encoder.modules():
             if isinstance(module, GrownParameters):

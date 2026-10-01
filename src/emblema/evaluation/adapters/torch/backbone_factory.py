@@ -18,6 +18,9 @@ class BackboneFactory(Protocol):
     published under a vocabulary that continues the backbone's names channels the backbone never
     saw: a pretrained encoder grows rows for them, and the modules holding grown rows say so
     through ``GrownParameters``, so the adapter can train them under every mode.
+
+    Every encoder is asked for with the share of activations it drops while it learns: dropout
+    holds no weights, so the stored ones serve every share alike.
     """
 
     @property
@@ -25,7 +28,9 @@ class BackboneFactory(Protocol):
         """Size of the state a token comes back as, which sizes the head."""
         ...
 
-    def pretrained(self, weights: ArtifactRef, *, vocabulary_size: int) -> nn.Module:
+    def pretrained(
+        self, weights: ArtifactRef, *, vocabulary_size: int, dropout: float
+    ) -> nn.Module:
         """The encoder holding the weights stored under ``weights``, in evaluation mode.
 
         Grown to ``vocabulary_size`` channels where the stored ones cover fewer.
@@ -35,7 +40,7 @@ class BackboneFactory(Protocol):
         """
         ...
 
-    def fresh(self, *, vocabulary_size: int) -> nn.Module:
+    def fresh(self, *, vocabulary_size: int, dropout: float) -> nn.Module:
         """An encoder of the same shape with weights drawn anew from torch's generator.
 
         Over ``vocabulary_size`` channels, or the stored vocabulary where that is larger, so

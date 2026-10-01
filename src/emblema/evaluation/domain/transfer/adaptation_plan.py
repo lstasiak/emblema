@@ -4,6 +4,7 @@ from emblema.evaluation.domain.exceptions import InvalidAdaptationPlanError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling
 from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -22,7 +23,8 @@ class AdaptationPlan:
     Invariants: weights are named exactly when the mode starts from pretrained ones; low-rank
     updates are specified exactly when the mode adds them; penalties are named exactly when the
     mode solves its head in closed form, and that mode pools under no learnt weights, since a
-    closed form has nothing to train them with.
+    closed form has nothing to train them with; the encoder drops activations only where it runs
+    inside the optimiser's loop, since elsewhere the dropout would change nothing.
 
     Attributes:
         mode: What the backbone's weights do while the task is learnt.
@@ -37,6 +39,8 @@ class AdaptationPlan:
             over the window unless a variant turns it.
         ridge: The penalties a closed-form head chooses among, where the mode solves one;
             ``None`` otherwise.
+        encoder: What the encoder drops while it learns and which readings it is given; the
+            standard setting unless a variant turns it.
     """
 
     mode: TransferMode
@@ -46,6 +50,7 @@ class AdaptationPlan:
     seed: int
     pooling: HeadPooling = field(default_factory=HeadPooling.mean)
     ridge: RidgePenalties | None = None
+    encoder: EncoderSetting = field(default_factory=EncoderSetting.standard)
 
     def __post_init__(self) -> None:
         if (self.backbone is None) == self.mode.starts_from_pretrained_weights:
@@ -80,6 +85,16 @@ class AdaptationPlan:
                 f"{self.mode} solves its head in closed form and cannot learn a "
                 f"{self.pooling.pooling} pooling"
             )
+        if self.encoder.dropout > 0.0 and not self.encodes_in_the_loop:
+            raise InvalidAdaptationPlanError(
+                f"{self.mode} under a {self.pooling.pooling} pooling encodes every window once, "
+                "so a dropout would change nothing"
+            )
+
+    @property
+    def encodes_in_the_loop(self) -> bool:
+        """Whether the encoder runs inside the optimiser's loop, rather than once per window."""
+        return self.mode.encodes_in_the_loop(self.pooling)
 
     def parameters(self) -> dict[str, str | int | float]:
         """The plan flattened to scalars, in a fixed order, for whoever reports a run.
@@ -106,4 +121,5 @@ class AdaptationPlan:
             "lora_dropout": 0.0 if self.lora is None else float(self.lora.dropout),
             "lora_targets": "" if self.lora is None else " ".join(self.lora.targets),
             "ridge_penalties": "" if self.ridge is None else str(self.ridge),
+            **self.encoder.parameters(),
         }

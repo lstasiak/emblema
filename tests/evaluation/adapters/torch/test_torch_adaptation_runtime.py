@@ -47,6 +47,7 @@ from emblema.evaluation.domain.labels.target_kind import TargetKind  # noqa: E40
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting  # noqa: E402
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
@@ -194,7 +195,7 @@ def test_a_runtime_with_nowhere_to_keep_a_candidate_refuses_to_keep_one(
 def pretrained_weights() -> dict[str, Tensor]:
     return (
         SmallBackbones(vocabulary_size=len(CHANNELS))
-        .pretrained(WEIGHTS, vocabulary_size=len(CHANNELS))
+        .pretrained(WEIGHTS, vocabulary_size=len(CHANNELS), dropout=0.0)
         .state_dict()
     )
 
@@ -414,3 +415,70 @@ def test_the_closed_form_probe_answers_what_its_solution_says_over_the_pooled_st
         RidgeSolution.fitted(states, targets, stated.ridge or PENALTIES).applied_to(candidate.head)
         answered = candidate(TokenTensors.from_windows(list(held))).double() * CEILING
     assert [p.predicted for p in outcome.predictions] == pytest.approx(answered.tolist(), rel=1e-4)
+
+
+@pytest.mark.parametrize("mode", [TransferMode.FROM_SCRATCH, TransferMode.FULL_FINE_TUNING])
+def test_the_encoder_drops_what_the_plan_says_while_it_learns(
+    published: Published, mode: TransferMode
+) -> None:
+    dropped = adapt(published, plan(mode, encoder=EncoderSetting(dropout=0.2)))
+    standard = adapt(published, plan(mode))
+
+    received = published.backbones.built[0]
+    assert {module.p for module in received.modules() if isinstance(module, nn.Dropout)} == {0.2}
+    assert dropped.training_losses != standard.training_losses
+
+
+def test_a_run_under_a_dropout_repeats_bit_for_bit(published: Published) -> None:
+    stated = plan(TransferMode.FULL_FINE_TUNING, encoder=EncoderSetting(dropout=0.2))
+
+    first, again = adapt(published, stated), adapt(published, stated)
+
+    assert first.training_losses == again.training_losses
+    assert first.predictions == again.predictions
+
+
+def test_the_answers_are_read_with_the_dropout_off(published: Published) -> None:
+    adapt(published, plan(TransferMode.FULL_FINE_TUNING, encoder=EncoderSetting(dropout=0.5)))
+
+    received = published.backbones.built[0]
+    assert not any(module.training for module in received.modules())
+
+
+def test_the_encoder_reads_the_gridded_readings_where_the_plan_lays_them_on_a_grid(
+    published: Published,
+) -> None:
+    gridded = plan(TransferMode.FULL_FINE_TUNING, encoder=EncoderSetting(grid_resolution=0.5))
+
+    first, again = adapt(published, gridded), adapt(published, gridded)
+    raw = adapt(published, plan(TransferMode.FULL_FINE_TUNING))
+
+    assert first.predictions == again.predictions
+    assert first.predictions != raw.predictions
+    assert first.plan.parameters()["grid_resolution"] == 0.5
+
+
+def test_a_candidate_fitted_on_gridded_readings_is_kept_without_a_graph(
+    tmp_path: Path,
+) -> None:
+    # A campaign keeps one cell of every candidate, so a gridded one is kept too; its graph
+    # would take the raw readings a served model is handed, so only the fitted state is kept,
+    # naming the grid it was fitted on, and serving refuses it as a form it cannot run.
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "scratch")
+    runtime = TorchAdaptationRuntime(
+        SmallBackbones(vocabulary_size=len(CHANNELS)),
+        PublishedCorpusBlocks(store, tmp_path / "workspace"),
+        device="cpu",
+        store=store,
+    )
+    defined = replace(task(), manifest=published.manifest, labels=RemainingLifeScheme(CEILING))
+    gridded = plan(TransferMode.FULL_FINE_TUNING, encoder=EncoderSetting(grid_resolution=0.5))
+
+    outcome = runtime.adapt(gridded, defined, SAMPLE, VALIDATION, retain=True)
+
+    assert outcome.artifact is not None
+    kept = KeptCandidates(store).read(outcome.artifact)
+    assert [form.format for form in kept.representations] == [FittedCandidate.FORMAT]
+    fitted = FittedCandidate.read(store.get(kept.measured.artifact))
+    assert fitted.parameters["grid_resolution"] == 0.5

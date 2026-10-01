@@ -33,7 +33,9 @@ class RestoredBackbones:
     def width(self) -> int:
         return self._trained.architecture.width
 
-    def pretrained(self, weights: ArtifactRef, *, vocabulary_size: int) -> nn.Module:
+    def pretrained(
+        self, weights: ArtifactRef, *, vocabulary_size: int, dropout: float
+    ) -> nn.Module:
         """The stored encoder in evaluation mode, grown to the task's vocabulary where it is short.
 
         Raises:
@@ -43,9 +45,11 @@ class RestoredBackbones:
             raise UnknownBackboneError(
                 f"this process serves the backbone {self._weights.key}, not {weights.key}"
             )
-        return self._trained.build().encoder.grown_to(vocabulary_size).eval()
+        return self._trained.build(dropout=dropout).encoder.grown_to(vocabulary_size).eval()
 
-    def fresh(self, *, vocabulary_size: int) -> nn.Module:
+    def fresh(self, *, vocabulary_size: int, dropout: float) -> nn.Module:
         return SetEncoder.for_vocabulary(
-            self._trained.architecture, max(vocabulary_size, self._trained.vocabulary_size)
+            self._trained.architecture,
+            max(vocabulary_size, self._trained.vocabulary_size),
+            dropout=dropout,
         )

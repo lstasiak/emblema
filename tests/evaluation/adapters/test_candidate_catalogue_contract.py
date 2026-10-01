@@ -28,6 +28,7 @@ from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import InvalidBackboneArmError, UnknownCandidateError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
 from tests.evaluation.support import (
@@ -312,3 +313,65 @@ def test_a_variant_of_the_patch_model_turns_the_pooling_of_its_head() -> None:
 def test_a_pooling_no_head_can_take_is_refused(name: str) -> None:
     with pytest.raises(UnknownCandidateError, match="names no variant"):
         ROUTED.describe(CandidateRef(name))
+
+
+def test_an_arm_at_the_standard_encoder_is_described_as_before_the_encoder_had_knobs() -> None:
+    # A campaign checks each cell's candidate against the description it stored, whole: one
+    # more column here would refuse every cell and selection of the campaigns that ran before.
+    described = ARMS.describe(CONTENDER)
+
+    assert [p.name for p in described.method.parameters] == sorted(
+        [
+            "transfer_mode",
+            "learning_rate",
+            "weight_decay",
+            "warmup_fraction",
+            "final_lr_fraction",
+            "pooling",
+            "tail_share",
+            "lora_rank",
+            "lora_alpha",
+            "lora_dropout",
+            "lora_targets",
+        ]
+    )
+
+
+def test_a_variant_of_an_arm_turns_its_encoder_on_the_same_budget() -> None:
+    base = ARMS.describe(CONTENDER)
+
+    variant = ARMS.describe(CandidateRef("full_fine_tuning@dropout=0.2,grid_resolution=1"))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    before = {p.name: p.value for p in base.method.parameters}
+    assert {name: stated[name] for name in stated.keys() - before.keys()} == {
+        "encoder_dropout": "0.2",
+        "grid_resolution": "1.0",
+    }
+    assert all(stated[name] == before[name] for name in before)
+    assert variant.budget == base.budget
+    turned = ARMS.arm_of(variant.ref)
+    assert turned.encoder == EncoderSetting(dropout=0.2, grid_resolution=1.0)
+    assert turned.schedule == adaptation_schedule()
+
+
+def test_a_dropout_is_refused_where_the_probe_states_every_window_once() -> None:
+    probes = BackboneArmCatalogue(
+        (arm(CandidateRef("frozen_probe"), TransferMode.FROZEN_PROBE, backbone=WEIGHTS, lora=None),)
+    )
+
+    with pytest.raises(UnknownCandidateError, match="a dropout would change nothing"):
+        probes.describe(CandidateRef("frozen_probe@dropout=0.2"))
+    # Knobs turn in name order, the dropout's before the pooling's: the arm is judged once all
+    # of them are turned, so the pooling that puts the encoder in the loop is counted.
+    learnt = probes.arm_of(CandidateRef("frozen_probe@dropout=0.2,pooling=attention"))
+    assert learnt.encoder.dropout == 0.2
+    assert learnt.pooling == HeadPooling(pooling=PoolingScheme.ATTENTION)
+
+
+@pytest.mark.parametrize(
+    "name", ["full_fine_tuning@dropout=1", "full_fine_tuning@grid_resolution=0"]
+)
+def test_an_encoder_setting_no_encoder_can_take_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError, match="names no variant"):
+        ARMS.describe(CandidateRef(name))

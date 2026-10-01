@@ -7,6 +7,7 @@ from torch import Tensor
 from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
+from emblema.evaluation.adapters.grid.gridded_tokens import GriddedTokens
 from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
@@ -28,7 +29,6 @@ from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
-from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
@@ -86,6 +86,10 @@ class TorchAdaptationRuntime:
         block = self._blocks.block_of(manifest)
         tuning = block.at([labelled.window.position for labelled in sample.windows])
         held = block.at([labelled.window.position for labelled in validation])
+        steps = plan.encoder.steps_over(manifest.window_length)
+        if steps is not None:
+            grid = GriddedTokens(steps)
+            tuning, held = grid.of(tuning), grid.of(held)
         started = time.perf_counter()
         link = TargetLink.of(task.label_scheme())
         targets = torch.tensor(
@@ -104,10 +108,9 @@ class TorchAdaptationRuntime:
             losses: list[float] = []
         else:
             forward = (
-                self._over_stored_states(candidate, tuning, plan.schedule.batch_size)
-                if plan.mode is TransferMode.FROZEN_PROBE
-                and not plan.pooling.pooling.learns_weights
-                else self._over_windows(candidate, tuning)
+                self._over_windows(candidate, tuning)
+                if plan.encodes_in_the_loop
+                else self._over_stored_states(candidate, tuning, plan.schedule.batch_size)
             )
             losses = ScheduledTraining(plan.schedule, plan.seed).losses(
                 candidate, candidate.trainable_parameters(), forward, targets, loss=link.loss
@@ -144,12 +147,15 @@ class TorchAdaptationRuntime:
         vocabulary_size: int,
         link: TargetLink,
     ) -> ArtifactRef:
-        """The candidate this run fitted, kept in both its forms, so the campaign can name it.
+        """The candidate this run fitted, kept in every form it has, so the campaign can name it.
 
         The fitted state is the measured form. The inference graph is derived from it here,
         while the run still holds the candidate, and is checked against the answers the run just
         gave on the same windows before anything is stored: a graph that would answer otherwise
-        than what the campaign scored is refused, not kept.
+        than what the campaign scored is refused, not kept. A candidate fitted on gridded
+        readings is kept in its measured form alone: the graph takes the raw readings a served
+        model is handed, and would answer them as something other than what was scored, so no
+        graph is derived and serving refuses the candidate as one it cannot run.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep it.
@@ -161,6 +167,11 @@ class TorchAdaptationRuntime:
                 "this runtime was asked to keep what it fitted and was given no store"
             )
         fitted = FittedCandidate.of(plan, candidate, vocabulary_size=vocabulary_size, link=link)
+        measured = RepresentationBytes(FittedCandidate.FORMAT, fitted.to_bytes())
+        if plan.encoder.grid_resolution is not None:
+            return self._kept_candidates.keep(
+                CandidateKind.NEURAL, corpus_manifest=task.manifest, measured=measured
+            )
         graph = InferenceGraph.exported(candidate, link=link)
         deviation = graph.deviation_from(
             predicted.tolist(), held, target_scale=link.scale, batch_size=plan.schedule.batch_size
@@ -168,7 +179,7 @@ class TorchAdaptationRuntime:
         return self._kept_candidates.keep(
             CandidateKind.NEURAL,
             corpus_manifest=task.manifest,
-            measured=RepresentationBytes(FittedCandidate.FORMAT, fitted.to_bytes()),
+            measured=measured,
             derived=(RepresentationBytes(InferenceGraph.FORMAT, graph.to_bytes(), deviation),),
         )
 

@@ -2,6 +2,7 @@ import pytest
 
 from emblema.evaluation.domain.exceptions import InvalidAdaptationPlanError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from tests.evaluation.support import LORA, PENALTIES, WEIGHTS, plan
 
@@ -84,3 +85,43 @@ def test_another_seed_is_a_repeat_of_the_same_plan() -> None:
 
     assert {key for key in first if first[key] != again[key]} == {"run_seed"}
     assert again["run_seed"] == 2
+
+
+@pytest.mark.parametrize(
+    ("mode", "pooling"),
+    [
+        (TransferMode.FROZEN_RIDGE, PoolingScheme.MEAN),
+        (TransferMode.FROZEN_PROBE, PoolingScheme.MEAN),
+        (TransferMode.FROZEN_PROBE, PoolingScheme.TAIL),
+    ],
+)
+def test_a_dropout_is_refused_where_the_encoder_states_every_window_once(
+    mode: TransferMode, pooling: PoolingScheme
+) -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="a dropout would change nothing"):
+        plan(mode, pooling=HeadPooling(pooling=pooling), encoder=EncoderSetting(dropout=0.2))
+
+
+@pytest.mark.parametrize(
+    ("mode", "pooling"),
+    [
+        (TransferMode.FROM_SCRATCH, PoolingScheme.MEAN),
+        (TransferMode.LORA, PoolingScheme.MEAN),
+        (TransferMode.FULL_FINE_TUNING, PoolingScheme.TAIL),
+        (TransferMode.FROZEN_PROBE, PoolingScheme.ATTENTION),
+    ],
+)
+def test_a_dropout_is_taken_where_the_encoder_runs_in_the_loop(
+    mode: TransferMode, pooling: PoolingScheme
+) -> None:
+    dropped = plan(mode, pooling=HeadPooling(pooling=pooling), encoder=EncoderSetting(dropout=0.2))
+
+    assert dropped.encodes_in_the_loop
+    assert dropped.parameters()["encoder_dropout"] == 0.2
+
+
+def test_a_grid_is_taken_under_every_mode_and_recorded_with_the_run() -> None:
+    for mode in TransferMode:
+        gridded = plan(mode, encoder=EncoderSetting(grid_resolution=1.0))
+        assert gridded.parameters()["grid_resolution"] == 1.0
+    assert plan(TransferMode.FROM_SCRATCH).parameters()["grid_resolution"] == 0.0

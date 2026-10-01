@@ -1,5 +1,7 @@
 from enum import StrEnum
 
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling
+
 
 class TransferMode(StrEnum):
     """What the backbone's weights do while a task is learnt from a budget of labels.
@@ -47,3 +49,14 @@ class TransferMode(StrEnum):
     def solves_the_head_in_closed_form(self) -> bool:
         """Whether the head is solved rather than trained, so the run takes no optimiser step."""
         return self is TransferMode.FROZEN_RIDGE
+
+    def encodes_in_the_loop(self, pooling: HeadPooling) -> bool:
+        """Whether the encoder runs inside the optimiser's loop under ``pooling``.
+
+        Not where the head is solved, and not for a probe whose pooling has no weights: there the
+        frozen encoder states every window once, outside training, and what it would do only
+        while learning — dropping activations — never reaches the answer.
+        """
+        if self.solves_the_head_in_closed_form:
+            return False
+        return self is not TransferMode.FROZEN_PROBE or pooling.pooling.learns_weights

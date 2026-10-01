@@ -50,6 +50,7 @@ class BackboneCandidateProvider:
                     seed=cell.seed,
                     pooling=arm.pooling,
                     ridge=arm.ridge,
+                    encoder=arm.encoder,
                 ),
                 budget=cell.budget,
                 sample_seed=cell.seed,

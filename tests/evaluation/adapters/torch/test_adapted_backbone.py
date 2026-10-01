@@ -63,7 +63,7 @@ def test_a_transfer_mode_asks_for_the_plans_weights(mode: TransferMode) -> None:
 
 def test_the_control_arm_starts_from_weights_of_its_own() -> None:
     built, backbones = candidate(TransferMode.FROM_SCRATCH)
-    pretrained = backbones.pretrained(WEIGHTS, vocabulary_size=VOCABULARY_SIZE)
+    pretrained = backbones.pretrained(WEIGHTS, vocabulary_size=VOCABULARY_SIZE, dropout=0.0)
 
     assert backbones.requested == [WEIGHTS]
     assert not torch.equal(

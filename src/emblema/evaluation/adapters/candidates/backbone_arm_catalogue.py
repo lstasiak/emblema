@@ -66,6 +66,14 @@ class BackboneArmCatalogue:
             turned = variant.applied_to(arm, BackboneArm.tuned)
         except (UnknownKnobError, InvalidCandidateVariantError) as error:
             raise UnknownCandidateError(f"{variant.ref} names no variant: {error}") from error
+        # Judged once every knob is turned, since knobs turn in name order and the dropout's
+        # comes before the pooling that may put the encoder in the loop.
+        if turned.encoder.dropout > 0.0 and not turned.mode.encodes_in_the_loop(turned.pooling):
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: {turned.mode} under a "
+                f"{turned.pooling.pooling} pooling encodes every window once, so a dropout "
+                "would change nothing"
+            )
         return replace(turned, ref=variant.ref)
 
     @staticmethod
@@ -84,6 +92,7 @@ class BackboneArmCatalogue:
             "warmup_fraction": arm.schedule.warmup_fraction,
             "final_lr_fraction": arm.schedule.final_lr_fraction,
             **arm.pooling.parameters(),
+            **arm.encoder.turned_away(),
         }
         if arm.backbone is None:
             stated["architecture_of"] = f"{arm.architecture.key}@{arm.architecture.checksum}"
