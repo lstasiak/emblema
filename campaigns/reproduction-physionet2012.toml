@@ -17,6 +17,10 @@
 # A reading, not a claim: means and intervals, no verdict. The rules are the task's registered
 # ones because every campaign states some.
 #
+# Defined under the worker settings of the registered grids, with the mixed backbone,
+# sha256:869ed545…, as the control's architecture, so every candidate's description is the one
+# that grid recorded.
+#
 # Committed before the campaign runs, for the reason every campaign file is.
 
 name = "reproduction-physionet2012"

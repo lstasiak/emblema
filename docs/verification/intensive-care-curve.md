@@ -167,7 +167,7 @@ Each of the three papers on networks keeps the model of the best validation epoc
 runs and SeFT use dropout of 0.2 or more, and STraTS is 32 to 50 wide with two blocks, far
 smaller than this project's backbone shape (256 wide, six blocks, no dropout).
 
-**Design.** `campaigns/reproduction-physionet2012.toml`, campaign `0cb127f5…`, tier M. A version of
+**Design.** `campaigns/reproduction-physionet2012.toml`, campaign `af0cae4a…`, tier M. A version of
 the corpus published from sets A and B with one stay in five held out by seed 1 (manifest
 `sha256:d5d0947a…`): 6,400 stays to learn from, 1,600 to score on, normalisation fitted on the
 6,400; stays, windows, tokens and channels are those of the version the grids read (manifest
@@ -176,7 +176,10 @@ candidates at every stay, at the variants their selections chose at every stay i
 grids: the network from nothing at a rate of 0.000333, the trees per channel, MiniRocket at two
 steps an hour. Five seeds; the network's cells through an order on a Colab GPU, the classical
 cells on the M1 Pro's processor. Read as means and paired intervals by
-`scripts/campaign_report.py`; no verdict is drawn.
+`scripts/campaign_report.py`; no verdict is drawn. Each candidate's description, its compute
+budget included, is the one the mixed backbone's grid recorded. A first definition, `0cb127f5…`,
+was made without the grids' worker settings and recorded MiniRocket's published penalties
+rather than the registered fifteen; it was never ordered.
 
 **Predictions.**
 
