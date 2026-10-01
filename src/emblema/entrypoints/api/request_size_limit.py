@@ -1,12 +1,11 @@
 import json
 from http import HTTPStatus
+from typing import ClassVar
 
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from emblema.entrypoints.api.problem_details import MEDIA_TYPE
+from emblema.entrypoints.api.problem_details import ProblemDetails
 from emblema.shared.api.problem import Problem
-
-_BODILESS = {"GET", "HEAD", "OPTIONS", "DELETE"}
 
 
 class RequestSizeLimit:
@@ -21,6 +20,8 @@ class RequestSizeLimit:
     it, and refuses in plain text, where this process answers every refusal in one shape.
     """
 
+    _BODILESS: ClassVar[frozenset[str]] = frozenset({"GET", "HEAD", "OPTIONS", "DELETE"})
+
     def __init__(self, app: ASGIApp, *, max_bytes: int) -> None:
         if max_bytes < 1:
             raise ValueError(f"a request may carry at least one byte, got {max_bytes}")
@@ -28,7 +29,7 @@ class RequestSizeLimit:
         self._max_bytes = max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["method"] in _BODILESS:
+        if scope["type"] != "http" or scope["method"] in self._BODILESS:
             await self._app(scope, receive, send)
             return
         headers = dict(scope["headers"])
@@ -61,7 +62,7 @@ class RequestSizeLimit:
                 "type": "http.response.start",
                 "status": status.value,
                 "headers": [
-                    (b"content-type", MEDIA_TYPE.encode("ascii")),
+                    (b"content-type", ProblemDetails.MEDIA_TYPE.encode("ascii")),
                     (b"content-length", str(len(body)).encode("ascii")),
                 ],
             }
