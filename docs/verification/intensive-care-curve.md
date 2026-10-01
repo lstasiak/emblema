@@ -146,3 +146,49 @@ n.s.: not distinguishable under the family's correction; every other cell is.
   the same from which readings its tokens hold, so the mask gives the grid no information the
   other side lacks.
 - One backbone's campaign; the stays-alone campaign holds no grid method.
+
+## 2026-10-01 — declared before the run: the task at the size published results learn from
+
+**Question.** The network trained from nothing reaches 0.81 in area at every stay of set A
+(3,997 stays), while the trees per channel reach 0.856. The best published networks for in-hospital
+death reach 0.83–0.86 learning from about 2,600 to 7,700 stays. Is the network's deficit a matter of
+how many stays it learns from, or of the network and how it is trained?
+
+**What the published results learn from**, read in each paper:
+
+| Source | Stays learnt from | Scored on | Networks' area |
+|---|---|---|---|
+| Shukla and Marlin, ICLR 2021 (mTAN), Table 2 | about 2,560, set A | 20 % of set A | 0.76–0.86; mTAND-Enc 0.854 |
+| Tipirneni and Reddy, TKDD 2022 (STraTS), Tables 4–5 | about 3,200: half of the 80 % of sets B and C it learns from | set A | 0.80–0.84; without its pretraining 0.835 |
+| Horn et al., ICML 2020 (SeFT), Table 1 | about 7,700: 64 % of all three sets, by its appendix | about 2,400 | 0.79–0.86; GRU-D and Transformer 0.863 |
+| Johnson and Mark, AMIA 2017, on the challenge's winner | set A, 4,000 | set C | trees in a Bayesian ensemble, 0.860 |
+
+Each of the three papers on networks keeps the model of the best validation epoch. STraTS, the recurrent baselines it
+runs and SeFT use dropout of 0.2 or more, and STraTS is 32 to 50 wide with two blocks, far
+smaller than this project's backbone shape (256 wide, six blocks, no dropout).
+
+**Design.** `campaigns/reproduction-physionet2012.toml`, campaign `0cb127f5…`, tier M. A version of
+the corpus published from sets A and B with one stay in five held out by seed 1 (manifest
+`sha256:d5d0947a…`): 6,400 stays to learn from, 1,600 to score on, normalisation fitted on the
+6,400; stays, windows, tokens and channels are those of the version the grids read (manifest
+`sha256:cef44de2…`), only the division and the statistics differ. Set C stays frozen. Three
+candidates at every stay, at the variants their selections chose at every stay in the registered
+grids: the network from nothing at a rate of 0.000333, the trees per channel, MiniRocket at two
+steps an hour. Five seeds; the network's cells through an order on a Colab GPU, the classical
+cells on the M1 Pro's processor. Read as means and paired intervals by
+`scripts/campaign_report.py`; no verdict is drawn.
+
+**Predictions.**
+
+1. The trees per channel reach 0.86 or more, and MiniRocket within 0.01 of them.
+2. If the network's deficit is the number of stays, it reaches 0.84 or more at 6,400, the level
+   of published networks at 3,200 to 7,700 stays, and its gap to the trees is under 0.02.
+3. If it is the network or its training, it stays below 0.83 and the gap to the trees stays near
+   0.04, as at 3,997 stays.
+
+The second outcome is expected less: mTAN reaches 0.85 from fewer stays than set A holds.
+
+**Reading.** The second outcome points the remaining diagnostics at the size of the labelled
+side; the third points them at the network: dropout, the gridded input and the floor of steps,
+each declared before its own run. A result between the two is reported as such. No verdict of
+the registered grids changes.
