@@ -1,6 +1,7 @@
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from http import HTTPStatus
+from typing import ClassVar
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -14,17 +15,9 @@ from emblema.shared.kernel.exceptions import (
     InvalidEntityIdError,
     InvalidPageError,
 )
-
-MEDIA_TYPE = "application/problem+json"
+from emblema.shared.ports.exceptions import IdentityProviderUnavailableError
 
 logger = logging.getLogger(__name__)
-
-# What the shared kernel refuses on the way in: a cursor, a page or an identity a client wrote.
-_KERNEL: tuple[tuple[type[Exception], HTTPStatus], ...] = (
-    (InvalidCursorError, HTTPStatus.UNPROCESSABLE_ENTITY),
-    (InvalidPageError, HTTPStatus.UNPROCESSABLE_ENTITY),
-    (InvalidEntityIdError, HTTPStatus.UNPROCESSABLE_ENTITY),
-)
 
 
 class ProblemDetails:
@@ -37,12 +30,26 @@ class ProblemDetails:
     error carries none: the reason is logged with the trace the request ran under, and the body
     names that trace, so whoever reads the log can find it and whoever calls the service learns
     nothing about its insides.
+
+    Attributes:
+        MEDIA_TYPE: What every refusal is served as.
     """
+
+    MEDIA_TYPE: ClassVar[str] = "application/problem+json"
+    # What the shared kernel refuses on the way in — a cursor, a page or an identity a client
+    # wrote — and what a shared port cannot answer: an identity provider that could not be
+    # asked makes the process unavailable for the routes that need it, with a time to come back.
+    _SHARED: ClassVar[tuple[tuple[type[Exception], HTTPStatus], ...]] = (
+        (InvalidCursorError, HTTPStatus.UNPROCESSABLE_ENTITY),
+        (InvalidPageError, HTTPStatus.UNPROCESSABLE_ENTITY),
+        (InvalidEntityIdError, HTTPStatus.UNPROCESSABLE_ENTITY),
+        (IdentityProviderUnavailableError, HTTPStatus.SERVICE_UNAVAILABLE),
+    )
 
     def __init__(
         self, refusals: Sequence[tuple[type[Exception], HTTPStatus]], *, retry_after_seconds: int
     ) -> None:
-        self._refusals = (*_KERNEL, *refusals)
+        self._refusals = (*self._SHARED, *refusals)
         self._retry_after = retry_after_seconds
 
     def register(self, app: FastAPI) -> None:
@@ -52,12 +59,13 @@ class ProblemDetails:
             app.add_exception_handler(refusal, self._refused(status))
         app.add_exception_handler(Exception, self._refused(HTTPStatus.INTERNAL_SERVER_ERROR))
 
-    @staticmethod
+    @classmethod
     def problem(
+        cls,
         request: Request,
         status: HTTPStatus,
         detail: str,
-        headers: dict[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> JSONResponse:
         """The problem document for ``status``, about the request's path."""
         body = Problem(
@@ -66,7 +74,7 @@ class ProblemDetails:
         return JSONResponse(
             status_code=status.value,
             content=body.model_dump(),
-            media_type=MEDIA_TYPE,
+            media_type=cls.MEDIA_TYPE,
             headers=headers,
         )
 
@@ -105,7 +113,11 @@ class ProblemDetails:
 
     def _http(self, request: Request, error: Exception) -> Response:
         if isinstance(error, HTTPException):
-            return self.problem(request, HTTPStatus(error.status_code), str(error.detail))
+            # The framework's refusals carry the headers their status requires — the challenge
+            # of a 401, the wait of a 429 — and the one shape keeps them.
+            return self.problem(
+                request, HTTPStatus(error.status_code), str(error.detail), error.headers
+            )
         # Registered for the framework's exception alone; the branch keeps the type honest.
         return self.problem(
             request, HTTPStatus.INTERNAL_SERVER_ERROR, str(error)

@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import ClassVar
 
 from sqlalchemy import Engine, text
 
@@ -34,6 +35,9 @@ from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCa
 from emblema.evaluation.ports.verdict_memo import VerdictMemo
 from emblema.serving.adapters.onnx.onnx_graph_inference import OnnxGraphInference
 from emblema.serving.adapters.onnx.weighted_semaphore import WeightedSemaphore
+from emblema.serving.adapters.persistence.promotable_artifact_repository import (
+    SqlAlchemyPromotableArtifactRepository,
+)
 from emblema.serving.adapters.persistence.served_model_listing import SqlAlchemyServedModelListing
 from emblema.serving.adapters.persistence.served_model_repository import (
     SqlAlchemyServedModelRepository,
@@ -42,31 +46,42 @@ from emblema.serving.adapters.routing.format_routed_inference_runtime import (
     FormatRoutedInferenceRuntime,
 )
 from emblema.serving.application.admission.window_admission import WindowAdmission
+from emblema.serving.application.authorisation.promotion_policy import PromotionPolicy
 from emblema.serving.application.use_cases.embed_windows import EmbedWindows
 from emblema.serving.application.use_cases.list_served_models import ListServedModels
 from emblema.serving.application.use_cases.predict_windows import PredictWindows
+from emblema.serving.application.use_cases.promote_artifact import PromoteArtifact
 from emblema.serving.application.use_cases.view_served_model import ViewServedModel
+from emblema.serving.application.use_cases.withdraw_served_model import WithdrawServedModel
 from emblema.serving.domain.inference_budget import InferenceBudget
 from emblema.serving.domain.inference_limits import InferenceLimits
 from emblema.serving.ports.inference_runtime import InferenceRuntime
+from emblema.serving.ports.promotable_artifact_repository import PromotableArtifactRepository
 from emblema.serving.ports.served_model_listing import ServedModelListing
 from emblema.serving.ports.served_model_repository import ServedModelRepository
+from emblema.shared.adapters.identity.jwt_identity_provider import JwtIdentityProvider
+from emblema.shared.adapters.identity.static_token_identity_provider import (
+    StaticTokenIdentityProvider,
+)
+from emblema.shared.adapters.system.clock import SystemClock
+from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.ports.artifact_store import ArtifactStore
-
-# What the readiness probe asks the store for: a reference to nothing, so that a reachable
-# bucket answers "no" and an unreachable one raises, and nothing is written either way.
-_PROBE = ArtifactRef(key="readiness/probe", checksum=Checksum.of_bytes(b""))
+from emblema.shared.ports.clock import Clock
+from emblema.shared.ports.id_generator import IdGenerator
+from emblema.shared.ports.identity_provider import IdentityProvider
 
 
 class CompositionRoot:
     """Assembles the HTTP process: what it answers with, and what it runs on.
 
-    Two contexts answer here. Serving answers predictions and representations and shows what it
-    serves; Evaluation shows its campaigns. Both read one database and one store, so both are
-    composed on one engine and one store, and neither feeds the other: what is promotable is
-    decided where campaigns close, and this process closes none.
+    Two contexts answer here. Serving answers predictions and representations, shows what it
+    serves and, for a caller with a token, changes it; Evaluation shows its campaigns. Both
+    read one database and one store, so both are composed on one engine and one store, and
+    neither feeds the other: what is promotable is decided where campaigns close, and this
+    process closes none. Who a token stands for is the identity provider's answer, chosen by
+    the settings: the tokens the process was given, or an issuer whose keys it fetches.
 
     Nothing of the training stack is composed in: a network is run through its graph, a
     classical candidate through the service the Evaluation context publishes for it, and the
@@ -80,6 +95,12 @@ class CompositionRoot:
         readiness: What the readiness probe asks: the database and the store unless given.
     """
 
+    # What the readiness probe asks the store for: a reference to nothing, so that a reachable
+    # bucket answers "no" and an unreachable one raises, and nothing is written either way.
+    _PROBE: ClassVar[ArtifactRef] = ArtifactRef(
+        key="readiness/probe", checksum=Checksum.of_bytes(b"")
+    )
+
     def __init__(
         self,
         settings: Settings | None = None,
@@ -87,13 +108,17 @@ class CompositionRoot:
         telemetry: Telemetry | None = None,
         limits: InferenceLimits | None = None,
         store: ArtifactStore | None = None,
+        identity: IdentityProvider | None = None,
         served: ServedModelRepository | None = None,
         served_listing: ServedModelListing | None = None,
+        promotables: PromotableArtifactRepository | None = None,
         campaigns: EvaluationCampaignRepository | None = None,
         campaign_listing: CampaignListing | None = None,
         verdicts: VerdictMemo | None = None,
         runtime: InferenceRuntime | None = None,
         tokeniser: WindowTokeniser | None = None,
+        clock: Clock | None = None,
+        ids: IdGenerator | None = None,
         checks: dict[str, Callable[[], None]] | None = None,
     ) -> None:
         """Assemble the process.
@@ -103,21 +128,27 @@ class CompositionRoot:
             telemetry: What the process reports itself through; nothing is reported unless given.
             limits: How much one request may ask; read from the settings unless given.
             store: Artifact store; the configured S3-compatible bucket unless given.
+            identity: Who a bearer token stands for; the configured provider unless given.
             served: Registry of served models; the configured database unless given.
             served_listing: Pages of served models; the same database unless given.
+            promotables: What finished campaigns kept; the same database unless given.
             campaigns: Registry of campaigns; the same database unless given.
             campaign_listing: Pages of campaigns and their runs; the same database unless given.
             verdicts: Memo of verdicts read; one of the configured capacity unless given.
             runtime: What runs a served artifact; routed by the form kept, over the store,
                 with the graph runtime and the classical service composed in, unless given.
             tokeniser: The Catalog's service for one window; its adapter unless given.
+            clock: Source of the current instant; the system clock unless given.
+            ids: Source of new identifiers; random UUIDs unless given.
             checks: What the readiness probe asks; the database and the store unless given.
 
         Raises:
             ValueError: If an adapter is left to the root without settings to build it from.
         """
         chosen_store = configured_store(settings_for(settings, "store")) if store is None else store
-        engine = self._engine(settings, served, served_listing, campaigns, campaign_listing)
+        engine = self._engine(
+            settings, served, served_listing, promotables, campaigns, campaign_listing
+        )
         chosen_runtime = (
             self._runtime(settings, chosen_store, telemetry) if runtime is None else runtime
         )
@@ -127,8 +158,10 @@ class CompositionRoot:
             chosen_tokeniser = InstrumentedWindowTokeniser(chosen_tokeniser, telemetry)
         self.adapters = Adapters(
             store=chosen_store,
+            identity=self._identity(settings) if identity is None else identity,
             served=self._built(served, engine, SqlAlchemyServedModelRepository),
             served_listing=self._built(served_listing, engine, SqlAlchemyServedModelListing),
+            promotables=self._built(promotables, engine, SqlAlchemyPromotableArtifactRepository),
             campaigns=self._built(campaigns, engine, SqlAlchemyEvaluationCampaignRepository),
             campaign_listing=self._built(campaign_listing, engine, SqlAlchemyCampaignListing),
             verdicts=(
@@ -138,11 +171,14 @@ class CompositionRoot:
             ),
             runtime=chosen_runtime,
             tokeniser=chosen_tokeniser,
+            clock=SystemClock() if clock is None else clock,
+            ids=Uuid4IdGenerator() if ids is None else ids,
         )
         chosen_limits = self._limits(self._api(settings)) if limits is None else limits
         admission = WindowAdmission(self.adapters.runtime, self.adapters.tokeniser, chosen_limits)
         predict = PredictWindows(self.adapters.served, self.adapters.runtime, admission)
         embed = EmbedWindows(self.adapters.served, self.adapters.runtime, admission)
+        policy = PromotionPolicy()
         self.services = Services(
             predict_windows=(
                 predict
@@ -154,6 +190,17 @@ class CompositionRoot:
             ),
             view_served_model=ViewServedModel(self.adapters.served, self.adapters.runtime),
             list_served_models=ListServedModels(self.adapters.served_listing),
+            promote_artifact=PromoteArtifact(
+                self.adapters.promotables,
+                self.adapters.served,
+                self.adapters.store,
+                self.adapters.ids,
+                self.adapters.clock,
+                policy,
+            ),
+            withdraw_served_model=WithdrawServedModel(
+                self.adapters.served, self.adapters.clock, policy
+            ),
             view_campaign=ViewCampaign(self.adapters.campaigns, self.adapters.verdicts),
             list_campaigns=ListCampaigns(self.adapters.campaign_listing),
             list_campaign_runs=ListCampaignRuns(self.adapters.campaign_listing),
@@ -163,6 +210,17 @@ class CompositionRoot:
     @staticmethod
     def _api(settings: Settings | None) -> ApiSettings:
         return settings_for(settings, "the service's limits").require_api()
+
+    @staticmethod
+    def _identity(settings: Settings | None) -> IdentityProvider:
+        """The provider the settings name: an issuer's tokens, or tokens given as they are."""
+        identity = settings_for(settings, "the identity provider").require_identity()
+        issuer = identity.named_issuer()
+        if issuer is None:
+            return StaticTokenIdentityProvider(identity.principals())
+        return JwtIdentityProvider.over_jwks(
+            issuer=issuer.issuer, audience=issuer.audience, jwks_url=issuer.jwks_url
+        )
 
     @classmethod
     def _runtime(
@@ -228,12 +286,12 @@ class CompositionRoot:
             raise ValueError("a registry was left to the root without an engine to build it on")
         return build(engine)
 
-    @staticmethod
-    def _checks(engine: Engine | None, store: ArtifactStore) -> dict[str, Callable[[], None]]:
+    @classmethod
+    def _checks(cls, engine: Engine | None, store: ArtifactStore) -> dict[str, Callable[[], None]]:
         """What readiness asks of the real adapters: a round trip to each."""
 
         def artifact_store() -> None:
-            store.exists(_PROBE)
+            store.exists(cls._PROBE)
 
         checks: dict[str, Callable[[], None]] = {"artifact_store": artifact_store}
         if engine is not None:

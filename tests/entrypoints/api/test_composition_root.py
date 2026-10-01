@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from emblema.catalog.adapters.tokenisation.published_window_tokeniser import (
     PublishedWindowTokeniser,
 )
+from emblema.config.identity_settings import IdentitySettings
 from emblema.entrypoints.api.api_server import ApiServer
 from emblema.entrypoints.api.composition_root import CompositionRoot
 from emblema.entrypoints.api.telemetry.counted_answers import CountedAnswers
@@ -29,6 +30,9 @@ from emblema.evaluation.adapters.persistence.campaign_listing import SqlAlchemyC
 from emblema.evaluation.adapters.persistence.evaluation_campaign_repository import (
     SqlAlchemyEvaluationCampaignRepository,
 )
+from emblema.serving.adapters.persistence.promotable_artifact_repository import (
+    SqlAlchemyPromotableArtifactRepository,
+)
 from emblema.serving.adapters.persistence.served_model_listing import SqlAlchemyServedModelListing
 from emblema.serving.adapters.persistence.served_model_repository import (
     SqlAlchemyServedModelRepository,
@@ -36,7 +40,13 @@ from emblema.serving.adapters.persistence.served_model_repository import (
 from emblema.serving.adapters.routing.format_routed_inference_runtime import (
     FormatRoutedInferenceRuntime,
 )
+from emblema.shared.adapters.identity.jwt_identity_provider import JwtIdentityProvider
+from emblema.shared.adapters.identity.static_token_identity_provider import (
+    StaticTokenIdentityProvider,
+)
 from emblema.shared.adapters.storage.s3 import S3ArtifactStore
+from emblema.shared.adapters.system.clock import SystemClock
+from emblema.shared.adapters.system.id_generator import Uuid4IdGenerator
 from tests.support.settings import TELEMETRY, unreachable_store
 
 
@@ -46,11 +56,38 @@ def test_without_overrides_the_process_runs_on_what_the_settings_name() -> None:
     assert isinstance(root.adapters.store, S3ArtifactStore)
     assert isinstance(root.adapters.served, SqlAlchemyServedModelRepository)
     assert isinstance(root.adapters.served_listing, SqlAlchemyServedModelListing)
+    assert isinstance(root.adapters.promotables, SqlAlchemyPromotableArtifactRepository)
+    assert isinstance(root.adapters.identity, StaticTokenIdentityProvider)
+    assert isinstance(root.adapters.clock, SystemClock)
+    assert isinstance(root.adapters.ids, Uuid4IdGenerator)
     assert isinstance(root.adapters.campaigns, SqlAlchemyEvaluationCampaignRepository)
     assert isinstance(root.adapters.campaign_listing, SqlAlchemyCampaignListing)
     assert isinstance(root.adapters.runtime, FormatRoutedInferenceRuntime)
     assert isinstance(root.adapters.tokeniser, PublishedWindowTokeniser)
     assert isinstance(root.adapters.verdicts, InMemoryVerdictMemo)
+
+
+def test_an_issuer_in_the_settings_makes_the_process_verify_its_tokens() -> None:
+    settings = unreachable_store().model_copy(
+        update={
+            "identity": IdentitySettings(
+                issuer="https://issuer.example",
+                audience="emblema-api",
+                jwks_url="https://issuer.example/jwks",
+            )
+        }
+    )
+
+    root = CompositionRoot(settings)
+
+    assert isinstance(root.adapters.identity, JwtIdentityProvider)
+
+
+def test_a_process_told_no_identity_provider_refuses_to_assemble() -> None:
+    settings = unreachable_store().model_copy(update={"identity": None})
+
+    with pytest.raises(ValueError, match="EMBLEMA_IDENTITY__"):
+        CompositionRoot(settings)
 
 
 def test_a_process_bringing_neither_settings_nor_its_registries_is_refused() -> None:

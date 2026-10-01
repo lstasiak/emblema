@@ -3,12 +3,17 @@ from typing import ClassVar
 
 from emblema.catalog.contracts.exceptions import CatalogContractError
 from emblema.serving.domain.exceptions import (
+    AmbiguousArtifactError,
+    ArtifactAlreadyServedError,
+    ArtifactNotPromotableError,
     ArtifactUnavailableError,
     EmbeddingUnavailableError,
     InferenceBusyError,
     NonFiniteAnswerError,
+    OperationNotPermittedError,
     ServedModelNotFoundError,
     ServedModelNotServingError,
+    ServedModelWithdrawnError,
     ServingError,
     UnreadableServedArtifactError,
     UnservableArtifactError,
@@ -23,15 +28,21 @@ class ServingRefusals:
     own, and the framework picks the handler of the nearest class in the hierarchy, so a
     specific refusal answers with its own status and every other one falls under the base. A
     window that breaks the Catalog's rules for a window is the caller's error, as it arrives
-    through this context's routes.
+    through this context's routes. A caller identified but not granted what it asks is told so
+    apart from one that was not identified at all, which the edge answers before any route.
 
     Attributes:
         STATUSES: Each refusal and its status, most specific first.
     """
 
     STATUSES: ClassVar[tuple[tuple[type[Exception], HTTPStatus], ...]] = (
+        (OperationNotPermittedError, HTTPStatus.FORBIDDEN),
         (ServedModelNotFoundError, HTTPStatus.NOT_FOUND),
+        (ArtifactNotPromotableError, HTTPStatus.NOT_FOUND),
         (ServedModelNotServingError, HTTPStatus.CONFLICT),
+        (ServedModelWithdrawnError, HTTPStatus.CONFLICT),
+        (ArtifactAlreadyServedError, HTTPStatus.CONFLICT),
+        (AmbiguousArtifactError, HTTPStatus.CONFLICT),
         (EmbeddingUnavailableError, HTTPStatus.CONFLICT),
         (UnservableArtifactError, HTTPStatus.CONFLICT),
         (InferenceBusyError, HTTPStatus.SERVICE_UNAVAILABLE),
