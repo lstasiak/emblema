@@ -20,6 +20,7 @@ from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from scripts.campaign_pairs_report import (
     CELL_COLUMNS,
     CELLS,
+    COMPARISON_COLUMNS,
     COMPARISONS,
     PREDICTIONS,
     Answers,
@@ -137,6 +138,26 @@ def test_a_selection_pairs_every_repeat_and_unit_on_its_own() -> None:
     )
     assert read.difference.interval.above_zero
     assert read.floor.value == pytest.approx(0.02 * read.control_error.pooled)
+    # Seed by seed: each repeat's error on its own, the control's less the candidate's.
+    each = ((36 + 64 + 100) / 3) ** 0.5 - ((25 + 49 + 81) / 3) ** 0.5
+    assert read.per_seed == pytest.approx((each, each, each))
+
+
+def test_the_reduction_seed_by_seed_is_stated_with_its_standard_error() -> None:
+    floor = selection(FLOOR, {CONTROL: (6.0, 8.0, 10.0), CONTENDER: (6.0, 8.0, 10.0)})
+    read = pair(
+        export([floor]),
+        side(FLOOR, CONTROL),
+        side(FLOOR, CONTENDER),
+        bootstrap=BOOTSTRAP,
+        floor_share=0.02,
+        floor_area=0.01,
+    )
+
+    spread = replace(read, per_seed=(0.01, 0.03, 0.05))
+
+    assert spread.seed_mean == pytest.approx(0.03)
+    assert spread.seed_se == pytest.approx(0.02 / 3**0.5)
 
 
 def test_a_comparison_pools_its_repeats_per_unit_before_pairing() -> None:
@@ -334,7 +355,12 @@ def test_two_campaigns_read_by_area_pair_on_the_stays_both_answered() -> None:
     read = paired_by_area([first, second], side(BY_AREA, CONTENDER), side(BY_AREA_TOO, CONTENDER))
 
     assert read.difference.reduction == pytest.approx(0.25)
-    assert read.row()[-1] == "auroc_shortfall"
+    named = dict(zip(COMPARISON_COLUMNS, read.row(), strict=True))
+    assert named["measure"] == "auroc_shortfall"
+    # Every repeat ranks the stays as every other does, so each seed gains what the pool gains.
+    assert read.per_seed == pytest.approx((0.25, 0.25, 0.25))
+    assert float(named["seed_reduction_mean"]) == pytest.approx(0.25)
+    assert float(named["seed_reduction_se"]) == pytest.approx(0.0)
 
 
 def test_the_answers_of_a_campaign_read_by_area_are_written_and_read_back(tmp_path: Path) -> None:
@@ -373,11 +399,37 @@ def test_an_export_of_errors_alone_leaves_no_answers_of_an_earlier_export_behind
     assert read_predictions(tmp_path / PREDICTIONS) == []
 
 
-def test_a_selection_read_by_area_is_refused_as_a_pair() -> None:
+def test_a_selection_whose_repeats_scored_the_same_units_pairs_by_area() -> None:
+    # Divided under a fixed seed, every repeat scores the same fifth, as a comparison's do.
     selected = by_area(BY_AREA, PERFECT_ANSWERS, purpose=RunPurpose.SELECTION)
 
-    with pytest.raises(ValueError, match="only comparisons pair by area"):
-        paired_by_area([selected], side(BY_AREA, CONTROL), side(BY_AREA, CONTENDER))
+    read = paired_by_area([selected], side(BY_AREA, CONTROL), side(BY_AREA, CONTENDER))
+
+    assert read.pairing == "area-pooled"
+    assert read.measure is ErrorMeasure.AUROC_SHORTFALL
+    assert read == paired_by_area(
+        [by_area(BY_AREA, PERFECT_ANSWERS)], side(BY_AREA, CONTROL), side(BY_AREA, CONTENDER)
+    )
+
+
+def test_a_selection_whose_repeats_scored_other_units_is_refused_as_a_pair_by_area() -> None:
+    selected = by_area(BY_AREA, PERFECT_ANSWERS, purpose=RunPurpose.SELECTION)
+    rows = export([selected])
+    moved = [
+        row._replace(unit=f"other-{row.unit}") if row.seed == 2 else row
+        for row in export_predictions([selected])
+    ]
+
+    with pytest.raises(ValueError, match="pairs only where every repeat scored the same units"):
+        pair(
+            rows,
+            side(BY_AREA, CONTROL),
+            side(BY_AREA, CONTENDER),
+            bootstrap=BOOTSTRAP,
+            floor_share=0.02,
+            floor_area=0.01,
+            answers=Answers(moved),
+        )
 
 
 def test_sides_read_by_different_measures_are_refused() -> None:
@@ -457,6 +509,9 @@ def test_main_exports_the_answers_of_campaigns_read_by_area_and_pairs_them(
         "error_candidate",
         "spread_candidate",
     ]
-    written = (tmp_path / COMPARISONS).read_text().splitlines()[1].split(",")
-    assert written[-1] == "auroc_shortfall"
-    assert float(written[-2]) == pytest.approx(0.02)
+    written = dict(
+        zip(header, (tmp_path / COMPARISONS).read_text().splitlines()[1].split(","), strict=True)
+    )
+    assert written["measure"] == "auroc_shortfall"
+    assert float(written["floor"]) == pytest.approx(0.02)
+    assert "per seed, mean ± SE" in printed
