@@ -1,0 +1,63 @@
+# What the network trained from nothing lacks on the intensive-care task at 200 stays, read as two
+# knobs of its input and training: the readings laid on a grid, and dropout.
+#
+# At 200 stays the patch model led this network by 0.041 on the validation side. Published
+# networks that reach 0.83 to 0.86 drop a fifth of their activations or more; the patch model,
+# which leads this network, reads its readings on a grid of one step an hour and drops a fifth
+# too. Here the same network is fed the gridded readings, trained under a dropout of 0.2, and
+# both, beside the patch model, so each knob is read on its own against the same network.
+#
+# Every variant of the network learns at 0.003, the rate the registered grid ran it at
+# (campaigns/curve-physionet2012-mixed5.toml), and the patch model at its own registered rate, so
+# the candidates differ in their input and their dropout and in nothing else.
+#
+# Scored on one tuning stay in five, the same fifth for every seed, so the candidates' answers
+# pair by area across seeds; the validation side is not read. A campaign divided this way chooses
+# nothing.
+#
+# Defined under the worker settings of the registered grids, with the mixed backbone,
+# sha256:869ed545…, as the networks' architecture.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "grid-cost-200-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+# The fifth the spread over seeds was read on (campaigns/seed-spread-physionet2012.toml), about
+# eight hundred stays.
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.003",
+    "from_scratch@grid_resolution=1,learning_rate=0.003",
+    "from_scratch@dropout=0.2,learning_rate=0.003",
+    "from_scratch@dropout=0.2,grid_resolution=1,learning_rate=0.003",
+    "patch_transformer",
+]
+control = "from_scratch@learning_rate=0.003"
+endpoint = "from_scratch@dropout=0.2,learning_rate=0.003"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+# Ten seeds: at 200 stays one seed moves the area by about 0.034 on this fifth, so five would read
+# the difference of two candidates only to about 0.02, half the lead under study.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# Four contenders at one budget, less the endpoint.
+secondary_family_size = 3
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
