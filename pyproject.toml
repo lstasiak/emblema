@@ -71,6 +71,9 @@ tracking = ["mlflow-skinny>=3.1"]
 api = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
+    # A caller's token from an external issuer is verified offline, by the issuer's published
+    # keys; `crypto` brings the signature algorithms such issuers use.
+    "pyjwt[crypto]>=2.10",
     "numpy>=2.2",
     "onnxruntime>=1.22",
     "opentelemetry-api>=1.30",
@@ -324,7 +327,7 @@ forbidden_modules = [
     "sqlalchemy", "alembic",
     "fastapi", "starlette", "pydantic", "pydantic_settings", "uvicorn", "httpx",
     "opentelemetry", "prometheus_client",
-    "celery", "kombu", "amqp", "mlflow", "boto3", "botocore",
+    "celery", "kombu", "amqp", "mlflow", "boto3", "botocore", "jwt",
 ]
 
 [[tool.importlinter.contracts]]
