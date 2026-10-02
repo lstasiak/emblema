@@ -92,6 +92,7 @@ class BackboneArmCatalogue:
             "warmup_fraction": arm.schedule.warmup_fraction,
             "final_lr_fraction": arm.schedule.final_lr_fraction,
             **arm.pooling.parameters(),
+            **arm.pooling.turned_away(),
             **arm.encoder.turned_away(),
         }
         if arm.backbone is None:

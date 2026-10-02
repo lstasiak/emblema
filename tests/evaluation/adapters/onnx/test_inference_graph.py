@@ -117,12 +117,14 @@ def test_under_every_mode_a_window_over_the_tasks_grown_channels_matches_pytorch
     assert_matches_eager(exported(mode), over_grown_channels(random_batch(2, 64, seed=9)))
 
 
-@pytest.mark.parametrize("pooling", POOLINGS, ids=[str(p.pooling) for p in POOLINGS])
+@pytest.mark.parametrize(
+    "pooling", POOLINGS, ids=[f"{p.pooling}-statics-{p.statics}" for p in POOLINGS]
+)
 def test_under_every_pooling_both_outputs_match_pytorch_over_padded_windows(
     pooling: HeadPooling,
 ) -> None:
     # The tail reads the times and attention the states; both have to survive the export with
-    # the padding weighted out, as the mean does.
+    # the padding weighted out, as the mean does, and so does a split of the static features.
     assert_matches_eager(
         exported(TransferMode.LORA, pooling), random_batch(3, 41, seed=41, padding=17)
     )

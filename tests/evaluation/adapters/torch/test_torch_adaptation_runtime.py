@@ -359,7 +359,9 @@ def test_under_the_frozen_probe_a_learnt_pooling_trains_and_the_backbone_still_k
     assert outcome.trainable_parameters == SMALL.width + 1 + SMALL.width
 
 
-def test_a_tail_and_an_attention_pooling_each_answer_the_task(published: Published) -> None:
+def test_a_tail_an_attention_and_static_features_set_apart_each_answer_the_task(
+    published: Published,
+) -> None:
     tail = plan(
         TransferMode.FULL_FINE_TUNING,
         pooling=HeadPooling(pooling=PoolingScheme.TAIL, tail_share=0.5),
@@ -368,10 +370,13 @@ def test_a_tail_and_an_attention_pooling_each_answer_the_task(published: Publish
         TransferMode.FROM_SCRATCH, pooling=HeadPooling(pooling=PoolingScheme.ATTENTION)
     )
 
-    for stated in (tail, attention):
+    apart = plan(TransferMode.FROM_SCRATCH, pooling=HeadPooling.mean().tuned("statics", "apart"))
+
+    for stated in (tail, attention, apart):
         outcome = adapt(published, stated)
         assert len(outcome.predictions) == len(VALIDATION)
         assert outcome.plan.parameters()["pooling"] == str(stated.pooling.pooling)
+        assert outcome.plan.parameters()["statics"] == str(stated.pooling.statics)
 
 
 def test_under_the_closed_form_probe_the_backbone_keeps_every_value_and_no_step_is_taken(

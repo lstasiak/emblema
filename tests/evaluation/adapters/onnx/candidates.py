@@ -33,6 +33,9 @@ POOLINGS = (
     HeadPooling.mean(),
     HeadPooling(pooling=PoolingScheme.TAIL, tail_share=0.2),
     HeadPooling(pooling=PoolingScheme.ATTENTION),
+    HeadPooling.mean().tuned("statics", "apart"),
+    HeadPooling(pooling=PoolingScheme.TAIL, tail_share=0.2).tuned("statics", "apart"),
+    HeadPooling(pooling=PoolingScheme.ATTENTION).tuned("statics", "apart"),
 )
 
 

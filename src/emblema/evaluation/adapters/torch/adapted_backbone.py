@@ -55,7 +55,7 @@ class AdaptedBackbone(nn.Module):
             LoraTargetNotFoundError: If the plan's low-rank updates name a layer the backbone
                 does not have.
         """
-        head = RegressionHead(backbones.width, starting_at=starting_at)
+        head = RegressionHead(backbones.width * plan.pooling.width_factor, starting_at=starting_at)
         pooling = pooling_module(plan.pooling, width=backbones.width)
         dropout = plan.encoder.dropout
         if plan.backbone is None:
@@ -74,7 +74,7 @@ class AdaptedBackbone(nn.Module):
         return cls(encoder, pooling, head)
 
     def embed(self, batch: TokenTensors) -> Tensor:
-        """One state per window, ``[batch, width]``."""
+        """One state per window, ``[batch, width × the pooling's width factor]``."""
         pooled: Tensor = self.pooling(
             self.encoder(*batch.args), batch.padding_mask, batch.timestamps, batch.timeless
         )

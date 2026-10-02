@@ -125,3 +125,10 @@ def test_a_grid_is_taken_under_every_mode_and_recorded_with_the_run() -> None:
         gridded = plan(mode, encoder=EncoderSetting(grid_resolution=1.0))
         assert gridded.parameters()["grid_resolution"] == 1.0
     assert plan(TransferMode.FROM_SCRATCH).parameters()["grid_resolution"] == 0.0
+
+
+def test_where_the_static_features_stand_is_recorded_with_every_run() -> None:
+    apart = plan(TransferMode.FROM_SCRATCH, pooling=HeadPooling.mean().tuned("statics", "apart"))
+
+    assert apart.parameters()["statics"] == "apart"
+    assert plan(TransferMode.FROM_SCRATCH).parameters()["statics"] == "among"

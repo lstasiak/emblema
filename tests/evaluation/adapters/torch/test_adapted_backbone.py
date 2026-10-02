@@ -4,6 +4,7 @@ torch = pytest.importorskip("torch")
 
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling  # noqa: E402
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
 from tests.evaluation.support import WEIGHTS, plan  # noqa: E402
 from tests.support.backbones import SmallBackbones  # noqa: E402
@@ -91,6 +92,21 @@ def test_the_candidate_answers_one_number_per_window() -> None:
 
     assert answers.shape == (3,)
     assert torch.isfinite(answers).all()
+
+
+def test_set_apart_the_static_features_double_the_state_the_head_reads() -> None:
+    torch.manual_seed(5)
+    apart = AdaptedBackbone.under(
+        plan(TransferMode.FROM_SCRATCH, pooling=HeadPooling.mean().tuned("statics", "apart")),
+        SmallBackbones(),
+        vocabulary_size=VOCABULARY_SIZE,
+        starting_at=0.0,
+    )
+    batch = random_batch(3, 9, seed=2)
+
+    assert apart.embed(batch).shape == (3, 2 * SMALL.width)
+    assert sum(p.numel() for p in apart.head.parameters()) == 2 * SMALL.width + 1
+    assert torch.isfinite(apart(batch)).all()
 
 
 GROWN = 6

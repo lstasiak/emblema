@@ -116,6 +116,7 @@ class AdaptationPlan:
             "warmup_fraction": float(self.schedule.warmup_fraction),
             "final_lr_fraction": float(self.schedule.final_lr_fraction),
             **self.pooling.parameters(),
+            "statics": str(self.pooling.statics),
             "lora_rank": 0 if self.lora is None else self.lora.rank,
             "lora_alpha": 0.0 if self.lora is None else float(self.lora.alpha),
             "lora_dropout": 0.0 if self.lora is None else float(self.lora.dropout),

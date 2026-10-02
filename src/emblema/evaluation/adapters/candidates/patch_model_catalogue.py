@@ -32,6 +32,10 @@ class _PatchModel:
         Raises:
             UnknownKnobError: If none of them has such a knob, or it cannot take that value.
         """
+        if knob == "statics":
+            # The grid lays a static feature out as a channel held level across the window, so
+            # the patch model has no static token to set apart.
+            raise UnknownKnobError("the patch model reads static features as channels")
         if knob in HeadPooling.KNOBS:
             return replace(self, pooling=self.pooling.tuned(knob, value))
         if knob in PatchModelSpec.KNOBS:

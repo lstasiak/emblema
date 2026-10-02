@@ -9,12 +9,27 @@ from torch import nn
 
 from emblema.evaluation.adapters.torch.attention_pooling import AttentionPooling
 from emblema.evaluation.adapters.torch.mean_pooling import MeanPooling
+from emblema.evaluation.adapters.torch.statics_apart_pooling import StaticsApartPooling
 from emblema.evaluation.adapters.torch.tail_pooling import TailPooling
-from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
+from emblema.evaluation.domain.heads.head_pooling import (
+    HeadPooling,
+    PoolingScheme,
+    StaticsPlacement,
+)
 
 
 def pooling_module(pooling: HeadPooling, *, width: int) -> nn.Module:
-    """The module computing ``pooling`` over states of ``width``."""
+    """The module computing ``pooling`` over states of ``width``.
+
+    Its state is ``pooling.width_factor`` times ``width`` wide.
+    """
+    scheme = _scheme_module(pooling, width=width)
+    if pooling.statics is StaticsPlacement.APART:
+        return StaticsApartPooling(scheme)
+    return scheme
+
+
+def _scheme_module(pooling: HeadPooling, *, width: int) -> nn.Module:
     match pooling.pooling:
         case PoolingScheme.MEAN:
             return MeanPooling()

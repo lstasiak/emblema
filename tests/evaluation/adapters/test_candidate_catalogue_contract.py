@@ -27,7 +27,11 @@ from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.classical.boosted_trees import BoostedTrees
 from emblema.evaluation.domain.classical.feature_scheme import FeatureScheme
 from emblema.evaluation.domain.exceptions import InvalidBackboneArmError, UnknownCandidateError
-from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
+from emblema.evaluation.domain.heads.head_pooling import (
+    HeadPooling,
+    PoolingScheme,
+    StaticsPlacement,
+)
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
@@ -308,6 +312,9 @@ def test_a_variant_of_the_patch_model_turns_the_pooling_of_its_head() -> None:
         # A share means nothing to the mean.
         "full_fine_tuning@tail_share=0.2",
         "patch_transformer@pooling=median",
+        "full_fine_tuning@statics=beside",
+        # The grid holds a static feature as a channel, so the patch model has none to set apart.
+        "patch_transformer@statics=apart",
     ],
 )
 def test_a_pooling_no_head_can_take_is_refused(name: str) -> None:
@@ -353,6 +360,21 @@ def test_a_variant_of_an_arm_turns_its_encoder_on_the_same_budget() -> None:
     turned = ARMS.arm_of(variant.ref)
     assert turned.encoder == EncoderSetting(dropout=0.2, grid_resolution=1.0)
     assert turned.schedule == adaptation_schedule()
+
+
+def test_a_variant_that_sets_static_features_apart_names_only_that_on_the_same_budget() -> None:
+    base = ARMS.describe(CONTENDER)
+
+    variant = ARMS.describe(CandidateRef("full_fine_tuning@pooling=attention,statics=apart"))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    before = {p.name: p.value for p in base.method.parameters}
+    assert {name: stated[name] for name in stated.keys() - before.keys()} == {"statics": "apart"}
+    assert stated["pooling"] == "attention"
+    assert variant.budget == base.budget
+    assert ARMS.arm_of(variant.ref).pooling == HeadPooling(
+        pooling=PoolingScheme.ATTENTION, statics=StaticsPlacement.APART
+    )
 
 
 def test_a_dropout_is_refused_where_the_probe_states_every_window_once() -> None:
