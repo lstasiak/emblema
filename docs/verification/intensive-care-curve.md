@@ -726,3 +726,68 @@ is not turned, and the next ablation turns those. No verdict of the registered g
 - A part's loss is read inside STraTS. In this network it may act otherwise, which is why a
   part is confirmed by a campaign of this network before anything changes.
 - Five seeds and 800 stays: a loss under about 0.025 is not told from none.
+
+## 2026-10-02 — Colab G4: STraTS turned towards this network, part by part
+
+**Question.** Which parts of STraTS carry its lead over the network from nothing? The design and
+predictions are in the section declared on 2026-10-02 for STraTS turned part by part.
+
+**Conditions.** Commit `88ec177b`, STraTS at `e936cda`, this project's tokens; the split file
+hashes as on the Mac (`787648be5e3adeb3`). One NVIDIA RTX PRO 6000 Blackwell (Colab G4),
+torch 2.11.0+cu130, CUDA, fp32, five runs at a time; tier M; 50 runs of 4 to 11 minutes of
+training. Every run's record states the parts it turned, its rate, shape, dropout, class
+weight and number of parameters, and each matches its variant: the linear value has 400 parameters fewer than CVE,
+the mean 4,224 fewer than the learnt attention. `baseline` repeats the earlier runs exactly,
+step for step: STraTS trains deterministically on this card.
+
+**Area under the ROC curve on the 800 scored stays**, mean and range over seeds 1 to 5, and the
+loss against `baseline` paired over stays (95 % interval) and seed by seed (mean ± standard error).
+
+| Variant | Area | Seeds | Paired loss | Seed by seed | Loses |
+|---|---|---|---|---|---|
+| `baseline` | 0.827 | 0.814–0.842 | | | |
+| `unweighted` | 0.826 | 0.818–0.839 | −0.000 [−0.007; +0.006] | −0.000 ± 0.003 | no |
+| `fixed-epochs` | 0.820 | 0.797–0.831 | −0.007 [−0.017; +0.003] | −0.007 ± 0.009 | no |
+| `our-schedule` | 0.816 | 0.811–0.825 | −0.011 [−0.020; −0.001] | −0.011 ± 0.005 | yes, under 0.025 |
+| `no-dropout` | 0.824 | 0.816–0.835 | −0.002 [−0.013; +0.008] | −0.002 ± 0.003 | no |
+| `our-size` | 0.721 | 0.705–0.742 | −0.105 [−0.148; −0.065] | −0.105 ± 0.007 | yes, see below |
+| `linear-value` | 0.787 | 0.783–0.792 | −0.039 [−0.063; −0.018] | −0.039 ± 0.004 | **yes** |
+| `statics-among` | 0.817 | 0.801–0.826 | −0.010 [−0.020; +0.000] | −0.010 ± 0.006 | no |
+| `mean-pooling` | 0.822 | 0.813–0.839 | −0.004 [−0.008; −0.001] | −0.004 ± 0.002 | yes, under 0.025 |
+| `ours` | 0.571 | 0.439–0.619 | −0.255 [−0.299; −0.212] | −0.255 ± 0.033 | yes, see below |
+
+`our-schedule` against `fixed-epochs`: −0.004 [−0.013; +0.005]. `ours` against the network from
+nothing (`e9e0aac5…`, 0.782): −0.210 [−0.257; −0.166].
+
+**`our-size` does not train.** Its validation area moves between 0.58 and 0.75 from the first
+epoch to the last, over the five seeds, and its best validation sum is 1.02 against the
+baseline's 1.43. Not
+overfitting, but no learning at all: STraTS has no normalisation inside its blocks and averages
+each residual with its input, and six such blocks 256 wide do not train at its rate. The loss
+measures STraTS's blocks at this network's size, not the size; `ours`, which carries it, says
+nothing either.
+
+**Conclusions.**
+
+1. Prediction 1 fails. The training regime costs little: no class weight, no early stop, this
+   network's schedule and no dropout each lose under 0.025, the most 0.011. The size could not
+   be read (above).
+2. Prediction 2 fails for one part. The value embedded by one linear map instead of CVE loses
+   0.039, by both conditions, and lands at 0.787, where this network from nothing stands
+   (0.782–0.786). The static features among the readings and the mean instead of the attention
+   lose 0.010 and 0.004, under the threshold, as the campaign `e9e0aac5…` found from the other
+   side.
+3. Prediction 3 fails: `ours` lands at 0.571, because its blocks do not train at this size.
+4. Prediction 4 holds: `baseline` repeats 0.827 exactly.
+5. As declared, the value's embedding is tried in this network next, alone, under one campaign.
+   This network embeds a value and its gap by one linear map shared by every channel; CVE passes
+   the value through a narrow hidden layer and a tanh first. The size is tried in this network
+   too, since its own blocks are normalised and the question STraTS could not answer remains.
+   No verdict of the registered grids changes.
+
+**Limitations.**
+
+- A part's loss is read inside STraTS. The value embedding's 0.039 is a lead to test in this
+  network, not a measure of what it will gain there.
+- Five seeds and 800 stays: losses under about 0.025 are not told from none, even where the
+  paired interval excludes zero.
