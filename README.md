@@ -139,9 +139,11 @@ run on:
 docker compose run --rm tests pytest -o addopts="-ra --strict-markers" --cov
 ```
 
-On macOS the XGBoost tests run in a process of their own, since its OpenMP runtime cannot share
-one with torch's: `uv run pytest tests/evaluation/adapters/xgboost
-tests/evaluation/adapters/test_classical_runtime_contract.py`. With `--env-file .env.r2` the
+On macOS XGBoost's OpenMP runtime cannot share a process with torch's, so the suite loads torch
+first and skips the fits, which run in a process that refuses torch:
+`uv run pytest --without-torch tests/evaluation/adapters/xgboost
+tests/evaluation/adapters/test_classical_runtime_contract.py
+tests/scripts/test_head_and_representation_report.py`. With `--env-file .env.r2` the
 integration tests run against the remote bucket; the variable names are in `env.example`.
 
 ### Workflow
