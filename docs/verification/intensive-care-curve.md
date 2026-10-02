@@ -791,3 +791,52 @@ nothing either.
   network, not a measure of what it will gain there.
 - Five seeds and 800 stays: losses under about 0.025 are not told from none, even where the
   paired interval excludes zero.
+
+## 2026-10-02 — declared before the run: a nonlinear value and a small shape
+
+**Question.** Does the network from nothing gain from a value embedded through a narrow hidden
+layer and a tanh, from a much smaller shape, or from both? Turned towards this network, STraTS
+lost 0.039 to a value embedded by one linear map and landed where this network stands (the
+section above). The size could not be read there; it can here, because this network's blocks
+are normalised.
+
+**Design.** Campaign `bb75a701…` (`campaigns/value-shape-all-physionet2012.toml`) has the same
+fifth, seeds, budget, schedule and description of the control as `e9e0aac5…`.
+
+| Candidate | Value embedding | Shape | Parameters |
+|---|---|---|---|
+| network from nothing (control) | one linear map | 256 wide, 4 heads, 6 blocks, feed-forward 1,024 | 4.8 million |
+| … nonlinear value | 2 → 16 → tanh → 256 | as the control | 4.8 million |
+| … small shape | one linear map | 64 wide, 16 heads, 2 blocks, feed-forward 128 (STraTS's) | 77,000 |
+| … both | 2 → 8 → tanh → 64 | as the small shape | 78,000 |
+
+The nonlinear value (`NonlinearValueEmbedding`) takes a token's value and its gap, as the
+linear map does. CVE in STraTS takes the value alone and embeds time by a second CVE; this
+network keeps its Fourier time features.
+
+**Reading.** As above: each candidate against the control, *both* against each change alone,
+and each against STraTS on this project's tokens, by `scripts/campaign_pairs_report.py`. A
+candidate *gains* where the paired interval over stays lies above zero and the mean over seeds
+exceeds twice its standard error; on this fifth that takes about 0.025. The control's area lands
+within 0.01 of 0.782.
+
+**Predictions.**
+
+1. The nonlinear value gains over the control.
+2. The small shape does not gain: a dropout of 0.2 gained nothing (the section on dropout and
+   the grid), so this network is not held back by fitting its learning side too closely.
+3. Both together land within 0.01 of the nonlinear value alone.
+
+**What follows.** If the nonlinear value gains, it is a change to the encoder, not to the head,
+so a backbone takes it only by being pretrained again; it becomes a candidate for the next
+backbones, before the transfer matrix. If the small shape holds the control's area, a smaller
+encoder becomes a candidate too, at a fraction of the arithmetic. If the nonlinear value gains
+nothing, STraTS's lead does not carry over through this part, and what this network does not
+share with STraTS is read next: time embedded by CVE, and the residual without normalisation.
+No verdict of the registered grids changes.
+
+**Limitations.**
+
+- The nonlinear value is one form of the idea, its hidden width the square root of the width,
+  as in CVE. Another form could gain where this one does not.
+- 800 stays: a difference under about 0.025 is not confirmed either way.
