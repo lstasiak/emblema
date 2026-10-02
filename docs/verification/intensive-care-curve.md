@@ -429,3 +429,67 @@ and the weighting of the classes. They are tried on the network from nothing bef
 is retrained. If (2) falls short of (1) by 0.02 or more, the preparation loses something, and
 the data are revisited first. If (1) stays below 0.81, these stays are harder than the published
 split, and STraTS's area here replaces 0.835 as the reference.
+
+## 2026-10-01 — Colab G4: a published network on the same stays
+
+**Question.** Does STraTS, run on the stays the network was scored on, reach the published area,
+and does it lose anything when fed this project's tokens instead of its own preparation? The
+design and predictions are the section above.
+
+**Conditions.** Commit `9af2e1c0`, STraTS at `e936cda`. One NVIDIA RTX PRO 6000 Blackwell (Colab
+G4), torch 2.11.0+cu130, CUDA, fp32, five runs at a time; tier M. The split file hashes the same
+on Colab and on the Mac (`787648be5e3adeb3`). Every run learnt from 2,557 stays, stopped on 640,
+weighted the positive class by 6.61 and stopped ten epochs after its best one: 4.5 to 10
+minutes of training a run, none of them at the cap of 50 epochs. Commands:
+
+    python scripts/strats_reference_data.py \
+        --manifest durable/sha256/cef44de2... sha256:cef44de2... --workspace data/workspace --corpora data/raw --out DATA
+    python scripts/strats_reference_run.py --strats STRATS --seed N \
+        --data DATA/PREPARATION.pkl --out RUN --device cuda
+    uv run scripts/strats_reference_answers.py --into DIR --side strats-e936cda PREPARATION \
+        --purpose selection --runs RUN_1 ... RUN_5
+    uv run scripts/campaign_pairs_report.py --out DIR --pair f8c5225b... \
+        from_scratch@learning_rate=0.000333 all strats-e936cda PREPARATION all
+
+**Area under the ROC curve on the 800 scored stays**, mean over seeds 1 to 5, and the range of
+the seeds.
+
+| Candidate | Mean | Seeds |
+|---|---|---|
+| network from nothing (`f8c5225b…`) | 0.786 | 0.770–0.797 |
+| STraTS, its own preparation (1) | 0.822 | 0.820–0.828 |
+| STraTS, this project's tokens (2) | 0.827 | 0.814–0.842 |
+
+**Gain in area**, paired over stays (95 % interval), and seed by seed (mean ± standard error).
+
+| Control | Candidate | Paired gain | Seed by seed | Gains |
+|---|---|---|---|---|
+| network from nothing | STraTS (1) | +0.036 [+0.011; +0.062] | +0.036 ± 0.004 | yes |
+| network from nothing | STraTS (2) | +0.040 [+0.016; +0.066] | +0.040 ± 0.007 | yes |
+| STraTS (1) | STraTS (2) | +0.004 [−0.004; +0.013] | +0.004 ± 0.003 | no |
+
+**Conclusions.**
+
+1. Prediction 1 fails on its threshold and holds on its gain. STraTS on its own preparation
+   reaches 0.822, short of 0.83, and gains over the network from nothing by 0.036. It learnt from
+   2,557 stays where the published run learnt from about 3,200. It stays above 0.81, so 0.835
+   stays the published reference, and 0.82 is the reference on these stays.
+2. Prediction 2 holds. On this project's tokens STraTS lands 0.004 above its own preparation,
+   within the declared 0.01, and its interval excludes a loss of 0.01. The tokens carry what the
+   published preparation carries.
+3. Every seed of STraTS, on either preparation, scores above every seed of the network. Trained
+   on the same tokens, with fewer stays to learn from, a published network gains about 0.04 over
+   this one on the same stays.
+4. Only the threshold of prediction 1 fails, on fewer stays than the published run, so the
+   branch declared for both predictions holding is followed: the deficit lies in the network or
+   how it is trained, not in the data. Next, the network from nothing tries, one at a time: how
+   the static features enter, how the states are pooled, how a value is embedded, the early stop
+   and the weighting of the classes. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- 800 stays with 127 deaths: the paired interval is about ±0.025, so (2) against (1) is read
+  only to about 0.01.
+- One setting of STraTS, the one its run script gives this corpus; it was not tuned here.
+- STraTS stopped on 640 of the tuning stays; the network learnt from all 3,200 without a stop.
+  Their difference in what they learnt from favours the network.
