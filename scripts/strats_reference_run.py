@@ -17,6 +17,11 @@ instead of the early stop; this project's rate schedule on top of that; no dropo
 width, depth and heads; a value embedded by one linear map; the static features read among the
 readings; the mean over the readings instead of the learnt attention. The clone is not edited:
 each part is a setting, a module put in place of one of its model's, or a subclass of its dataset.
+One more name, ``clipped-values``, is not a part of this project's network and ``ours`` does not
+include it: it clips every standardised value to ``CLIP_BOUND`` standard deviations either side
+of zero, so the readings whose record is off by a unit or a decimal point (a pH of 735, a
+temperature of minus 17.8) no longer reach the network as they are. Read beside ``linear-value``, it
+asks whether what a value's embedding through a tanh buys is the bound it puts on such readings.
 
 Its dataset reads ``../data/processed/<dataset>.pkl`` relative to where it runs, so each run gets
 a directory laid out that way, the file linked in.
@@ -76,6 +81,10 @@ ABLATIONS = (
     "statics-among",
     "mean-pooling",
 )
+# Not a part of this project's network: a bound on the standardised values, in standard
+# deviations either side of zero, read beside the linear value embedding.
+EXTRAS = ("clipped-values",)
+CLIP_BOUND = 5.0
 # The network from nothing at every stay, as its campaigns run it: thirty epochs, no early stop,
 # the peak rate its selections chose, a tenth of the run warming up and a cosine decay to a
 # hundredth, no clipping, 256 wide in six blocks of four heads.
@@ -120,10 +129,12 @@ def ablations_of(names: Sequence[str]) -> frozenset[str]:
     Raises:
         ValueError: If a name is none of the parts.
     """
-    unknown = sorted(set(names) - {*ABLATIONS, "ours"})
+    unknown = sorted(set(names) - {*ABLATIONS, *EXTRAS, "ours"})
     if unknown:
-        raise ValueError(f"no part is called {unknown}; the parts are {ABLATIONS} and ours")
-    turned = set(ABLATIONS) if "ours" in names else set(names)
+        raise ValueError(
+            f"no part is called {unknown}; the parts are {ABLATIONS} and ours, and {EXTRAS}"
+        )
+    turned = set(ABLATIONS) | (set(names) & set(EXTRAS)) if "ours" in names else set(names)
     if "our-schedule" in turned:
         turned.add("fixed-epochs")
     return frozenset(turned)
@@ -136,6 +147,22 @@ def our_schedule(total_steps: int) -> LearningRateSchedule:
         total_steps=total_steps,
         final_fraction=OUR_FINAL_FRACTION,
     )
+
+
+# Any: STraTS's dataset holds a list of values per stay and carries no types to name here.
+def clip_values(dataset: Any, bound: float) -> int:
+    """Clip every standardised value its dataset holds to ``[-bound, bound]``, in place.
+
+    Returns:
+        How many readings were clipped.
+    """
+    clipped = 0
+    for stay in dataset.values:
+        for index, value in enumerate(stay):
+            if abs(value) > bound:
+                stay[index] = max(-bound, min(bound, value))
+                clipped += 1
+    return clipped
 
 
 # Any: STraTS's dataset class carries no types to name here.
@@ -256,6 +283,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     if "statics-among" in ablations:
         dataset_class = statics_among(dataset_class)
     dataset = dataset_class(args)
+    clipped = clip_values(dataset, CLIP_BOUND) if "clipped-values" in ablations else None
+    if clipped is not None:
+        logger.write(f"# readings clipped to ±{CLIP_BOUND}: {clipped}")
     if "unweighted" in ablations:
         # Its model reads the weight when it is built.
         args.pos_class_weight = 1.0
@@ -341,6 +371,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "seconds": seconds,
                 "sides": {side: len(ids) for side, ids in dataset.splits.items()},
                 "positive_weight": float(args.pos_class_weight),
+                "clip_bound": None if clipped is None else CLIP_BOUND,
+                "clipped_readings": clipped,
             },
             indent=2,
         )

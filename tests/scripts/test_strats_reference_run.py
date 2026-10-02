@@ -1,6 +1,7 @@
 """The parts of the published network an ablation turns towards this project's network."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,9 +10,11 @@ torch = pytest.importorskip("torch")
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule  # noqa: E402
 from scripts.strats_reference_run import (  # noqa: E402
     ABLATIONS,
+    CLIP_BOUND,
     LinearValue,
     MeanWeights,
     ablations_of,
+    clip_values,
     our_schedule,
     settings,
 )
@@ -23,6 +26,12 @@ def test_ours_turns_every_part_and_this_projects_schedule_brings_the_fixed_epoch
     assert ablations_of(["ours"]) == frozenset(ABLATIONS)
     assert ablations_of(["our-schedule"]) == {"our-schedule", "fixed-epochs"}
     assert ablations_of([]) == frozenset()
+
+
+def test_clipping_the_values_is_not_a_part_of_ours_but_may_join_it() -> None:
+    assert "clipped-values" not in ablations_of(["ours"])
+    assert ablations_of(["clipped-values"]) == {"clipped-values"}
+    assert ablations_of(["ours", "clipped-values"]) == {*ABLATIONS, "clipped-values"}
 
 
 def test_a_part_that_does_not_exist_is_refused() -> None:
@@ -77,3 +86,10 @@ def test_a_value_is_embedded_by_one_linear_map() -> None:
     embedded = LinearValue(8)(torch.randn(2, 5))
 
     assert embedded.shape == (2, 5, 8)
+
+
+def test_values_beyond_the_bound_are_clipped_in_place_and_counted() -> None:
+    dataset = SimpleNamespace(values=[[0.5, -7.0, 88.0], [CLIP_BOUND, -CLIP_BOUND - 0.5]])
+
+    assert clip_values(dataset, CLIP_BOUND) == 3
+    assert dataset.values == [[0.5, -CLIP_BOUND, CLIP_BOUND], [CLIP_BOUND, -CLIP_BOUND]]
