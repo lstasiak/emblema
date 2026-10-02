@@ -613,3 +613,61 @@ of the windows). No verdict of the registered grids changes.
   the mixture learnt from, so the turbofan task is left to the next mixtures.
 - SMD's channel rows stay in the table of A and B, untrained, so all three backbones have the
   same parameters. The intensive-care task does not read those rows.
+
+## 2026-10-02 — Colab G4: the static features set apart
+
+**Question.** Does setting the static features apart, or pooling under attention, gain the
+network from nothing anything? The design and predictions are in the section declared on
+2026-10-02 for the static features.
+
+**Conditions.** Commit `4691e274`, campaign `e9e0aac5…`, order `e61fac82…`. One NVIDIA RTX PRO
+6000 Blackwell (Colab G4), torch 2.11.0+cu130, CUDA, one process; tier M. 20 cells in 2,005 s,
+about 100 s a cell. Read with:
+
+    uv run scripts/campaign_pairs_report.py --out DIR \
+        --campaign e9e0aac5... --campaign f8c5225b...
+    uv run scripts/strats_reference_answers.py --into DIR --side strats-e936cda tokens ...
+    uv run scripts/campaign_pairs_report.py --out DIR --pair CONTROL ... CANDIDATE ...
+
+**Area under the ROC curve on the 800 scored stays**, seeds 1 to 5:
+
+| Candidate | Mean | Seeds |
+|---|---|---|
+| network from nothing (control) | 0.782 | 0.754–0.804 |
+| … static features apart | 0.769 | 0.740–0.803 |
+| … attention | 0.786 | 0.769–0.798 |
+| … both | 0.765 | 0.749–0.785 |
+| STraTS on this project's tokens | 0.827 | 0.814–0.842 |
+
+**Gain in area**, paired over stays (95 % interval), and seed by seed (mean ± standard error).
+
+| Control | Candidate | Paired gain | Seed by seed | Gains |
+|---|---|---|---|---|
+| network from nothing | static features apart | −0.013 [−0.033; +0.008] | −0.013 ± 0.011 | no |
+| network from nothing | attention | +0.005 [−0.008; +0.017] | +0.005 ± 0.012 | no |
+| network from nothing | both | −0.017 [−0.036; +0.003] | −0.017 ± 0.010 | no |
+| static features apart | both | −0.004 [−0.021; +0.013] | −0.004 ± 0.015 | no |
+| static features apart | STraTS | +0.058 [+0.033; +0.084] | +0.058 ± 0.010 | yes |
+| both | STraTS | +0.062 [+0.037; +0.087] | +0.062 ± 0.009 | yes |
+| control of `f8c5225b…` | control here | −0.004 [−0.020; +0.011] | −0.004 ± 0.009 | no |
+
+**Conclusions.**
+
+1. Prediction 1 fails. Set apart, the static features gain nothing; the estimate is below zero,
+   and its interval excludes a gain of 0.01. Set apart this way, the static features close none
+   of the gap to STraTS.
+2. Prediction 2 holds: the attention alone gains nothing, as its selections said.
+3. Prediction 3 holds: both together land 0.004 from the static features apart.
+4. The check holds on the mean: the control lands at 0.782 against 0.786. Seed by seed it does
+   not repeat its earlier cells: seed 4 moves from 0.788 to 0.754 on the same code, seeds and
+   kind of card. Training on this card is not deterministic from run to run, so the spread of
+   the seeds includes that noise.
+5. As declared, the value's embedding is the next element. STraTS's lead over the network stays
+   at 0.04 to 0.045, by which run of the control it is read against. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- The static features apart are a mean of their states after the encoder, which shares one
+  projection of the value across all channels. A network of their own fed the raw values, as
+  STraTS has, is not what was tried.
+- 800 stays: a difference under about 0.025 is not confirmed either way.
