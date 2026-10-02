@@ -443,7 +443,8 @@ weighted the positive class by 6.61 and stopped ten epochs after its best one: 4
 minutes of training a run, none of them at the cap of 50 epochs. Commands:
 
     python scripts/strats_reference_data.py \
-        --manifest durable/sha256/cef44de2... sha256:cef44de2... --workspace data/workspace --corpora data/raw --out DATA
+        --manifest durable/sha256/cef44de2... sha256:cef44de2... \
+        --workspace data/workspace --corpora data/raw --out DATA
     python scripts/strats_reference_run.py --strats STRATS --seed N \
         --data DATA/PREPARATION.pkl --out RUN --device cuda
     uv run scripts/strats_reference_answers.py --into DIR --side strats-e936cda PREPARATION \
