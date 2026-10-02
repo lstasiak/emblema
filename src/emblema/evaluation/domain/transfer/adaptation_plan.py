@@ -24,7 +24,9 @@ class AdaptationPlan:
     updates are specified exactly when the mode adds them; penalties are named exactly when the
     mode solves its head in closed form, and that mode pools under no learnt weights, since a
     closed form has nothing to train them with; the encoder drops activations only where it runs
-    inside the optimiser's loop, since elsewhere the dropout would change nothing.
+    inside the optimiser's loop, since elsewhere the dropout would change nothing; the encoder is
+    built otherwise than its backbone (its own shape, its own value embedding) only where it starts
+    from no weights, and its own shape is stated whole.
 
     Attributes:
         mode: What the backbone's weights do while the task is learnt.
@@ -90,6 +92,16 @@ class AdaptationPlan:
                 f"{self.mode} under a {self.pooling.pooling} pooling encodes every window once, "
                 "so a dropout would change nothing"
             )
+        if self.encoder.builds_its_own_encoder and self.backbone is not None:
+            raise InvalidAdaptationPlanError(
+                f"{self.mode} starts from pretrained weights, which fix its encoder's build"
+            )
+        if self.encoder.shape_partly_stated:
+            raise InvalidAdaptationPlanError(
+                "an encoder's own shape states its width, heads, layers and feed-forward width"
+            )
+        # A whole shape is judged by its own invariants as it is read.
+        _ = self.encoder.shape
 
     @property
     def encodes_in_the_loop(self) -> bool:

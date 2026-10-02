@@ -18,7 +18,9 @@ class SetEncoder(nn.Module):
     permuting the tokens permutes their states and padding leaves the observed states unchanged.
     Every position gets a state, padding included; an objective scores the observed ones and
     ``MaskedMeanPooling`` averages them. The time and channel modules are injected, so either can be
-    replaced alone; ``for_vocabulary`` builds the standard pair ``parameter_count`` describes.
+    replaced alone; ``for_vocabulary`` builds the standard pair ``parameter_count`` describes. The
+    value's module may be injected too; without one it is the linear map ``parameter_count``
+    counts, made where it always was, so an encoder built without one draws what it always drew.
     Dropout is a run's argument, not a shape.
 
     Attributes:
@@ -32,11 +34,16 @@ class SetEncoder(nn.Module):
         channel_embedding: nn.Module,
         time_encoding: nn.Module,
         dropout: float = 0.0,
+        value_embedding: nn.Module | None = None,
     ) -> None:
         super().__init__()
         self.architecture = architecture
         self.channel_embedding = channel_embedding
-        self.value_projection = nn.Linear(N_FEATURES, architecture.width)
+        self.value_projection = (
+            nn.Linear(N_FEATURES, architecture.width)
+            if value_embedding is None
+            else value_embedding
+        )
         self.time_encoding = time_encoding
         self.blocks = nn.ModuleList(
             EncoderBlock(architecture, dropout) for _ in range(architecture.layers)
@@ -45,14 +52,23 @@ class SetEncoder(nn.Module):
 
     @classmethod
     def for_vocabulary(
-        cls, architecture: EncoderArchitecture, vocabulary_size: int, *, dropout: float = 0.0
+        cls,
+        architecture: EncoderArchitecture,
+        vocabulary_size: int,
+        *,
+        dropout: float = 0.0,
+        value_embedding: nn.Module | None = None,
     ) -> Self:
-        """The encoder in its standard composition over a vocabulary of ``vocabulary_size``."""
+        """The encoder in its standard composition over a vocabulary of ``vocabulary_size``.
+
+        A value module given here takes the linear map's place; the rest stays standard.
+        """
         return cls(
             architecture,
             channel_embedding=LearnedChannelEmbedding(vocabulary_size, architecture.width),
             time_encoding=FourierTimeEncoding(architecture.time_frequencies, architecture.width),
             dropout=dropout,
+            value_embedding=value_embedding,
         )
 
     def grown_to(self, vocabulary_size: int) -> Self:

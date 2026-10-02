@@ -6,9 +6,16 @@ asked for and different from anything drawn afterwards; a "fresh" one is drawn f
 generator as it stands, which is what the runtime seeds before asking.
 """
 
+from dataclasses import replace
+
 import torch
 from torch import nn
 
+from emblema.evaluation.domain.transfer.encoder_setting import ValueEmbedding
+from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
+from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (
+    NonlinearValueEmbedding,
+)
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.shared.kernel.artifacts import ArtifactRef
 from tests.support.encoders import SMALL
@@ -43,10 +50,30 @@ class SmallBackbones:
         # the task's new channels are drawn from the generator the runtime seeded.
         return self._kept(encoder.grown_to(vocabulary_size))
 
-    def fresh(self, *, vocabulary_size: int, dropout: float) -> nn.Module:
+    def fresh(
+        self,
+        *,
+        vocabulary_size: int,
+        dropout: float,
+        value_embedding: ValueEmbedding = ValueEmbedding.LINEAR,
+        shape: EncoderShape | None = None,
+    ) -> nn.Module:
+        architecture = SMALL
+        if shape is not None:
+            architecture = replace(
+                SMALL,
+                width=shape.width,
+                heads=shape.heads,
+                layers=shape.layers,
+                feedforward_width=shape.feedforward_width,
+            )
+        nonlinear = value_embedding is ValueEmbedding.NONLINEAR
         return self._kept(
             SetEncoder.for_vocabulary(
-                SMALL, max(vocabulary_size, self._vocabulary_size), dropout=dropout
+                architecture,
+                max(vocabulary_size, self._vocabulary_size),
+                dropout=dropout,
+                value_embedding=NonlinearValueEmbedding(architecture.width) if nonlinear else None,
             )
         )
 

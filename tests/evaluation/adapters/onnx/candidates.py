@@ -18,6 +18,7 @@ from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.labels.target_kind import TargetKind
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from tests.evaluation.support import plan
@@ -38,13 +39,26 @@ POOLINGS = (
     HeadPooling(pooling=PoolingScheme.ATTENTION).tuned("statics", "apart"),
 )
 
+# A network from nothing built otherwise than its backbone: its own shape and value embedding.
+OWN_BUILD = EncoderSetting(
+    value_embedding=ValueEmbedding.NONLINEAR, width=16, heads=4, layers=1, feedforward_width=32
+)
+
 
 def adapted(
-    mode: TransferMode, *, seed: int = 1, pooling: HeadPooling | None = None
+    mode: TransferMode,
+    *,
+    seed: int = 1,
+    pooling: HeadPooling | None = None,
+    encoder: EncoderSetting | None = None,
 ) -> AdaptedBackbone:
     """A candidate under ``mode`` as a short run might leave it, in evaluation mode on the host."""
     torch.manual_seed(seed)
-    stated = plan(mode) if pooling is None else plan(mode, pooling=pooling)
+    stated = plan(
+        mode,
+        pooling=HeadPooling.mean() if pooling is None else pooling,
+        encoder=EncoderSetting.standard() if encoder is None else encoder,
+    )
     candidate = AdaptedBackbone.under(
         stated, SmallBackbones(), vocabulary_size=VOCABULARY, starting_at=0.5
     )
@@ -75,9 +89,11 @@ class Exported:
 
 
 @cache
-def exported(mode: TransferMode, pooling: HeadPooling | None = None) -> Exported:
-    """Export once per mode, pooling and process: it takes seconds, and is deterministic."""
-    candidate = adapted(mode, pooling=pooling)
+def exported(
+    mode: TransferMode, pooling: HeadPooling | None = None, encoder: EncoderSetting | None = None
+) -> Exported:
+    """Export once per mode, pooling, encoder and process: it takes seconds and is deterministic."""
+    candidate = adapted(mode, pooling=pooling, encoder=encoder)
     return Exported(
         candidate,
         InferenceGraph.exported(candidate, link=TargetLink(TargetKind.CONTINUOUS, TARGET_SCALE)),

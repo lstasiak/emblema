@@ -1,6 +1,8 @@
+import math
+
 import pytest
 
-from emblema.shared.kernel.tokens import Token, TokenWindow
+from emblema.shared.kernel.tokens import N_FEATURES, Token, TokenWindow
 
 torch = pytest.importorskip("torch")
 
@@ -11,6 +13,9 @@ from emblema.pretraining.adapters.encoder.fourier_time_encoding import (  # noqa
 )
 from emblema.pretraining.adapters.encoder.learned_channel_embedding import (  # noqa: E402
     LearnedChannelEmbedding,
+)
+from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (  # noqa: E402
+    NonlinearValueEmbedding,
 )
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
 from emblema.shared.adapters.tensors.masked_mean_pooling import MaskedMeanPooling  # noqa: E402
@@ -182,3 +187,39 @@ def test_a_variant_input_module_takes_the_place_of_the_standard_one() -> None:
         encoder(*with_timestamps(batch, seed=9).args), encoder(*batch.args), rtol=0, atol=0
     )
     assert not isinstance(encoder.time_encoding, FourierTimeEncoding)
+
+
+def test_a_nonlinear_value_module_takes_the_linear_maps_place_and_learns() -> None:
+    torch.manual_seed(1)
+    encoder = SetEncoder.for_vocabulary(
+        SMALL, VOCABULARY_SIZE, value_embedding=NonlinearValueEmbedding(SMALL.width)
+    )
+    batch = random_batch(2, 24, seed=5, padding=4)
+
+    MaskedMeanPooling()(encoder(*batch.args), batch.padding_mask).pow(2).mean().backward()
+
+    assert isinstance(encoder.value_projection, NonlinearValueEmbedding)
+    assert encoder.value_projection.hidden_width == math.isqrt(SMALL.width)
+    for name, parameter in encoder.value_projection.named_parameters():
+        assert parameter.grad is not None, name
+        assert parameter.grad.abs().sum() > 0, name
+    linear = SMALL.width * N_FEATURES + SMALL.width
+    hidden = encoder.value_projection.hidden_width
+    nonlinear = (N_FEATURES + 1) * hidden + (hidden + 1) * SMALL.width
+    held = sum(parameter.numel() for parameter in encoder.parameters())
+    assert held == SMALL.parameter_count(VOCABULARY_SIZE) - linear + nonlinear
+
+
+def test_a_value_bent_by_the_tanh_does_not_move_its_state_along_one_line() -> None:
+    torch.manual_seed(2)
+    embedding = NonlinearValueEmbedding(SMALL.width)
+    values = torch.linspace(-3.0, 3.0, 7)
+    features = torch.stack((values, torch.zeros_like(values)), dim=-1)
+
+    with torch.no_grad():
+        states = embedding(features)
+
+    steps = states[1:] - states[:-1]
+    cosines = torch.nn.functional.cosine_similarity(steps[:-1], steps[1:], dim=-1)
+    assert states.shape == (7, SMALL.width)
+    assert cosines.min() < 0.999

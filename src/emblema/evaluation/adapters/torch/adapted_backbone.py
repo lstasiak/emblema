@@ -55,11 +55,18 @@ class AdaptedBackbone(nn.Module):
             LoraTargetNotFoundError: If the plan's low-rank updates name a layer the backbone
                 does not have.
         """
-        head = RegressionHead(backbones.width * plan.pooling.width_factor, starting_at=starting_at)
-        pooling = pooling_module(plan.pooling, width=backbones.width)
+        shape = plan.encoder.shape
+        width = backbones.width if shape is None else shape.width
+        head = RegressionHead(width * plan.pooling.width_factor, starting_at=starting_at)
+        pooling = pooling_module(plan.pooling, width=width)
         dropout = plan.encoder.dropout
         if plan.backbone is None:
-            encoder = backbones.fresh(vocabulary_size=vocabulary_size, dropout=dropout)
+            encoder = backbones.fresh(
+                vocabulary_size=vocabulary_size,
+                dropout=dropout,
+                value_embedding=plan.encoder.value_embedding,
+                shape=shape,
+            )
         else:
             encoder = backbones.pretrained(
                 plan.backbone, vocabulary_size=vocabulary_size, dropout=dropout

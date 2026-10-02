@@ -2,6 +2,8 @@ from typing import Protocol
 
 from torch import nn
 
+from emblema.evaluation.domain.transfer.encoder_setting import ValueEmbedding
+from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
 from emblema.shared.kernel.artifacts import ArtifactRef
 
 
@@ -40,10 +42,19 @@ class BackboneFactory(Protocol):
         """
         ...
 
-    def fresh(self, *, vocabulary_size: int, dropout: float) -> nn.Module:
-        """An encoder of the same shape with weights drawn anew from torch's generator.
+    def fresh(
+        self,
+        *,
+        vocabulary_size: int,
+        dropout: float,
+        value_embedding: ValueEmbedding = ValueEmbedding.LINEAR,
+        shape: EncoderShape | None = None,
+    ) -> nn.Module:
+        """An encoder with weights drawn anew from torch's generator.
 
         Over ``vocabulary_size`` channels, or the stored vocabulary where that is larger, so
-        that a fresh encoder has the parameters a pretrained one has over the same task.
+        that a fresh encoder has the parameters a pretrained one has over the same task. Of the
+        stored shape and with a linear value unless ``shape`` and ``value_embedding`` say
+        otherwise; the time and channel modules stay the stored architecture's.
         """
         ...

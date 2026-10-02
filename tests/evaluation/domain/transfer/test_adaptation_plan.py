@@ -1,8 +1,11 @@
 import pytest
 
-from emblema.evaluation.domain.exceptions import InvalidAdaptationPlanError
+from emblema.evaluation.domain.exceptions import (
+    InvalidAdaptationPlanError,
+    InvalidEncoderSettingError,
+)
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
-from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from tests.evaluation.support import LORA, PENALTIES, WEIGHTS, plan
 
@@ -132,3 +135,28 @@ def test_where_the_static_features_stand_is_recorded_with_every_run() -> None:
 
     assert apart.parameters()["statics"] == "apart"
     assert plan(TransferMode.FROM_SCRATCH).parameters()["statics"] == "among"
+
+
+@pytest.mark.parametrize(
+    "encoder",
+    [
+        EncoderSetting(value_embedding=ValueEmbedding.NONLINEAR),
+        EncoderSetting(width=64, heads=16, layers=2, feedforward_width=128),
+    ],
+)
+def test_an_encoder_built_otherwise_than_its_backbone_starts_from_no_weights(
+    encoder: EncoderSetting,
+) -> None:
+    assert plan(TransferMode.FROM_SCRATCH, encoder=encoder).encoder == encoder
+    with pytest.raises(InvalidAdaptationPlanError, match="fix its encoder's build"):
+        plan(TransferMode.FULL_FINE_TUNING, encoder=encoder)
+
+
+def test_an_encoders_own_shape_is_stated_whole() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="states its width, heads"):
+        plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(width=64, heads=16))
+    with pytest.raises(InvalidEncoderSettingError, match="multiple of heads"):
+        plan(
+            TransferMode.FROM_SCRATCH,
+            encoder=EncoderSetting(width=64, heads=5, layers=2, feedforward_width=128),
+        )

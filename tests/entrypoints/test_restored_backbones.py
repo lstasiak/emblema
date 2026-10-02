@@ -7,11 +7,16 @@ from torch import nn  # noqa: E402
 from emblema.entrypoints.restored_backbones import RestoredBackbones  # noqa: E402
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory  # noqa: E402
 from emblema.evaluation.domain.exceptions import UnknownBackboneError  # noqa: E402
+from emblema.evaluation.domain.transfer.encoder_setting import ValueEmbedding  # noqa: E402
+from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape  # noqa: E402
 from emblema.pretraining.adapters.encoder.grown_channel_embedding import (  # noqa: E402
     GrownChannelEmbedding,
 )
 from emblema.pretraining.adapters.encoder.learned_channel_embedding import (  # noqa: E402
     LearnedChannelEmbedding,
+)
+from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (  # noqa: E402
+    NonlinearValueEmbedding,
 )
 from emblema.pretraining.adapters.encoder.self_attention import SelfAttention  # noqa: E402
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
@@ -133,3 +138,24 @@ def test_both_encoders_drop_what_they_are_asked_to_and_the_stored_weights_stay()
     assert dropout_rates(backbones.pretrained(weights, vocabulary_size=CHANNELS, dropout=0.0)) == {
         0.0
     }
+
+
+def test_a_fresh_encoder_takes_a_shape_and_a_value_embedding_of_its_own() -> None:
+    store = InMemoryArtifactStore()
+    weights, _ = stored(store)
+    backbones = RestoredBackbones(store, weights)
+    shape = EncoderShape(width=8, heads=2, layers=2, feedforward_width=16)
+
+    fresh = backbones.fresh(
+        vocabulary_size=CHANNELS,
+        dropout=0.0,
+        value_embedding=ValueEmbedding.NONLINEAR,
+        shape=shape,
+    )
+
+    assert isinstance(fresh, SetEncoder)
+    built = fresh.architecture
+    assert (built.width, built.heads, built.layers, built.feedforward_width) == (8, 2, 2, 16)
+    assert built.time_frequencies == TINY.time_frequencies
+    assert isinstance(fresh.value_projection, NonlinearValueEmbedding)
+    assert len(fresh.blocks) == 2

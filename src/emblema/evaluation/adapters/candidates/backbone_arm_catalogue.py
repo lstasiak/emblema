@@ -9,6 +9,7 @@ from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.campaign.compute_budget import ComputeBudget
 from emblema.evaluation.domain.exceptions import (
     InvalidCandidateVariantError,
+    InvalidEncoderSettingError,
     UnknownCandidateError,
     UnknownKnobError,
 )
@@ -74,6 +75,20 @@ class BackboneArmCatalogue:
                 f"{turned.pooling.pooling} pooling encodes every window once, so a dropout "
                 "would change nothing"
             )
+        if turned.encoder.builds_its_own_encoder and turned.mode.starts_from_pretrained_weights:
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: {turned.mode} starts from pretrained weights, "
+                "which fix its encoder's build"
+            )
+        if turned.encoder.shape_partly_stated:
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: an encoder's own shape states its width, "
+                "heads, layers and feed-forward width"
+            )
+        try:
+            _ = turned.encoder.shape
+        except InvalidEncoderSettingError as error:
+            raise UnknownCandidateError(f"{variant.ref} names no variant: {error}") from error
         return replace(turned, ref=variant.ref)
 
     @staticmethod

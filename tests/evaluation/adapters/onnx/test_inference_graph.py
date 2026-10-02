@@ -26,6 +26,7 @@ from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.tokens import N_FEATURES
 from tests.evaluation.adapters.onnx.candidates import (
+    OWN_BUILD,
     POOLINGS,
     TARGET_SCALE,
     Exported,
@@ -227,3 +228,10 @@ def test_a_graph_that_strays_from_the_measured_answers_is_refused(lora: Exported
 
     with pytest.raises(InferenceGraphDivergedError, match="strays"):
         lora.graph.deviation_from(other, scored, target_scale=TARGET_SCALE, batch_size=8)
+
+
+def test_a_network_from_nothing_of_its_own_shape_and_value_embedding_matches_pytorch() -> None:
+    # The tanh between the value's two maps and the narrower blocks have to survive the export.
+    pair = exported(TransferMode.FROM_SCRATCH, None, OWN_BUILD)
+
+    assert_matches_eager(pair, random_batch(3, 41, seed=41, padding=17))

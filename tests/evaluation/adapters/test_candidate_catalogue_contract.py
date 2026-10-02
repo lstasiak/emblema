@@ -32,7 +32,8 @@ from emblema.evaluation.domain.heads.head_pooling import (
     PoolingScheme,
     StaticsPlacement,
 )
-from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
+from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
 from tests.evaluation.support import (
@@ -50,6 +51,12 @@ from tests.evaluation.support import (
 TREES = CandidateRef("boosted_trees_per_channel")
 ARMS = BackboneArmCatalogue(
     (arm(CONTENDER, TransferMode.FULL_FINE_TUNING, backbone=WEIGHTS, lora=LORA),)
+)
+BOTH_ARMS = BackboneArmCatalogue(
+    (
+        arm(CONTENDER, TransferMode.FULL_FINE_TUNING, backbone=WEIGHTS, lora=LORA),
+        arm(CandidateRef("from_scratch"), TransferMode.FROM_SCRATCH, backbone=None, lora=None),
+    )
 )
 BASELINES = ClassicalBaselineCatalogue(
     (
@@ -392,8 +399,42 @@ def test_a_dropout_is_refused_where_the_probe_states_every_window_once() -> None
 
 
 @pytest.mark.parametrize(
-    "name", ["full_fine_tuning@dropout=1", "full_fine_tuning@grid_resolution=0"]
+    "name",
+    [
+        "full_fine_tuning@dropout=1",
+        "full_fine_tuning@grid_resolution=0",
+        # Pretrained weights fix the encoder's build.
+        "full_fine_tuning@value_embedding=nonlinear",
+        "full_fine_tuning@feedforward_width=128,heads=16,layers=2,width=64",
+        # A shape stated in part, or whose width its heads cannot split.
+        "from_scratch@heads=16,width=64",
+        "from_scratch@feedforward_width=128,heads=5,layers=2,width=64",
+    ],
 )
 def test_an_encoder_setting_no_encoder_can_take_is_refused(name: str) -> None:
     with pytest.raises(UnknownCandidateError, match="names no variant"):
-        ARMS.describe(CandidateRef(name))
+        BOTH_ARMS.describe(CandidateRef(name))
+
+
+def test_a_network_from_nothing_names_its_own_build_and_nothing_else() -> None:
+    base = BOTH_ARMS.describe(CandidateRef("from_scratch"))
+
+    variant = BOTH_ARMS.describe(
+        CandidateRef(
+            "from_scratch@feedforward_width=128,heads=16,layers=2,value_embedding=nonlinear,width=64"
+        )
+    )
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    before = {p.name: p.value for p in base.method.parameters}
+    assert {name: stated[name] for name in stated.keys() - before.keys()} == {
+        "value_embedding": "nonlinear",
+        "encoder_width": "64",
+        "encoder_heads": "16",
+        "encoder_layers": "2",
+        "encoder_feedforward_width": "128",
+    }
+    assert variant.budget == base.budget
+    turned = BOTH_ARMS.arm_of(variant.ref).encoder
+    assert turned.shape == EncoderShape(width=64, heads=16, layers=2, feedforward_width=128)
+    assert turned.value_embedding is ValueEmbedding.NONLINEAR

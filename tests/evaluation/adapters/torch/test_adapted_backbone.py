@@ -5,7 +5,15 @@ torch = pytest.importorskip("torch")
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling  # noqa: E402
+from emblema.evaluation.domain.transfer.encoder_setting import (  # noqa: E402
+    EncoderSetting,
+    ValueEmbedding,
+)
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
+from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (  # noqa: E402
+    NonlinearValueEmbedding,
+)
+from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
 from tests.evaluation.support import WEIGHTS, plan  # noqa: E402
 from tests.support.backbones import SmallBackbones  # noqa: E402
 from tests.support.encoders import SMALL  # noqa: E402
@@ -107,6 +115,27 @@ def test_set_apart_the_static_features_double_the_state_the_head_reads() -> None
     assert apart.embed(batch).shape == (3, 2 * SMALL.width)
     assert sum(p.numel() for p in apart.head.parameters()) == 2 * SMALL.width + 1
     assert torch.isfinite(apart(batch)).all()
+
+
+def test_a_network_from_nothing_is_built_to_its_own_shape_and_value_embedding() -> None:
+    torch.manual_seed(5)
+    encoder = EncoderSetting(
+        value_embedding=ValueEmbedding.NONLINEAR, width=16, heads=4, layers=1, feedforward_width=32
+    )
+    built = AdaptedBackbone.under(
+        plan(TransferMode.FROM_SCRATCH, encoder=encoder),
+        SmallBackbones(),
+        vocabulary_size=VOCABULARY_SIZE,
+        starting_at=0.0,
+    )
+    batch = random_batch(3, 9, seed=2)
+
+    assert built.embed(batch).shape == (3, 16)
+    assert sum(p.numel() for p in built.head.parameters()) == 16 + 1
+    assert isinstance(built.encoder, SetEncoder)
+    assert isinstance(built.encoder.value_projection, NonlinearValueEmbedding)
+    assert len(built.encoder.blocks) == 1
+    assert torch.isfinite(built(batch)).all()
 
 
 GROWN = 6
