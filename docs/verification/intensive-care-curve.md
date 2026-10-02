@@ -915,3 +915,271 @@ the small shape ran in half the time.
   a hidden layer as wide as the square root of the width (8 in the small shape). STraTS embeds
   the value alone. Another form could gain where this one does not.
 - 800 stays: a difference under about 0.025 is not confirmed either way.
+
+## 2026-10-02 — Colab G4: the mixture without SMD
+
+**Question.** Does SMD teach the mixed backbone anything the intensive-care task uses, and are
+its steps better spent on the other corpora? The design and predictions are in the section
+declared on 2026-10-02 for the mixture without SMD.
+
+**Conditions.** Backbones trained on a Kaggle T4 at `b6569a82` (tables in `manual-handoff.md`,
+2026-10-02): A, `backbone-mixed5-nosmd-m`, keeps its eighth epoch (weights `994d1642…`); B,
+`backbone-mixed5-nosmd-m-13`, keeps its twelfth of thirteen (`b4d3ad42…`). Campaigns
+`4d17e289…` (mixture of five), `f7dae909…` (A) and `d5c27be6…` (B), orders placed at
+`b8a7a09d`, three orders of 20 cells on one Colab G4 under CUDA MPS, 747 to 760 s an order.
+Both candidates at the variants the mixture's selections chose at 200 stays: the frozen probe
+at a rate of 0.03 over the mean of the states, full fine-tuning at a peak of 0.001 over the
+same pooling, 2,000 steps at least in batches of 16, so 154 passes over the 200 stays, the last
+weights kept. Scored on the fifth held out by seed 101, 800 stays, seeds 1 to 10. Read with:
+
+    uv run scripts/campaign_pairs_report.py --out DIR --campaign 4d17e289... \
+        --campaign f7dae909... --campaign d5c27be6... --campaign 596849cd...
+    uv run scripts/campaign_pairs_report.py --out DIR --pair CONTROL ... CANDIDATE ...
+
+**Pretext**, the kept epoch's validation loss as a share of the trivial predictor's:
+
+| Backbone | Kept epoch | C-MAPSS | SKAB | ESA-AD | Stays | Mean of these four |
+|---|---|---|---|---|---|---|
+| mixture of five | 8 | 0.026 | 0.260 | 0.277 | 0.487 | 0.263 |
+| A, without SMD | 8 | 0.006 | 0.266 | 0.294 | 0.489 | 0.264 |
+| B, without SMD, 13 passes | 12 | 0.006 | 0.267 | 0.286 | 0.480 | 0.260 |
+
+The mixture of five also ends at 0.364 on SMD, which A and B do not read.
+
+**Area under the ROC curve at 200 stays**, mean over seeds 1 to 10 and their range:
+
+| Backbone | Frozen probe | Full fine-tuning |
+|---|---|---|
+| mixture of five | 0.668 (0.599–0.717) | 0.686 (0.637–0.765) |
+| A, without SMD | 0.650 (0.620–0.672) | 0.693 (0.657–0.726) |
+| B, without SMD, 13 passes | 0.644 (0.609–0.691) | 0.636 (0.587–0.688) |
+| network from nothing, `596849cd…` | — | 0.651 (0.591–0.698) |
+
+The check holds: the mixture's fine-tuning lands at 0.686 against 0.692 in `596849cd…`.
+
+**Gain in area**, paired over stays (95 % interval), and seed by seed (mean ± standard error).
+A side *gains* or *loses* where the interval excludes zero and the mean over seeds exceeds twice
+its standard error; a difference is acted on where it also reaches 0.03.
+
+| Control | Candidate | Arm | Paired gain | Seed by seed | Reads |
+|---|---|---|---|---|---|
+| mixture of five | A | probe | −0.018 [−0.045; +0.009] | −0.018 ± 0.010 | no |
+| mixture of five | A | fine-tuning | +0.007 [−0.014; +0.027] | +0.007 ± 0.011 | no |
+| mixture of five | B | probe | −0.024 [−0.046; −0.001] | −0.024 ± 0.010 | loses, under 0.03 |
+| mixture of five | B | fine-tuning | −0.050 [−0.074; −0.027] | −0.050 ± 0.009 | **loses** |
+| A | B | probe | −0.006 [−0.028; +0.016] | −0.006 ± 0.006 | no |
+| A | B | fine-tuning | −0.057 [−0.079; −0.035] | −0.057 ± 0.008 | **loses** |
+
+Fine-tuning against the probe of the same backbone: the mixture +0.019 [−0.005; +0.044], A
++0.043 [+0.014; +0.074], B −0.008 [−0.030; +0.015].
+
+**Conclusions.**
+
+1. Prediction 1 holds for A and fails for B. A's loss on the stays lies 0.002 from the
+   mixture's; B's lies 0.009 below A's, not the declared 0.02. Without SMD, C-MAPSS returns
+   to 0.006, the level of the mixture of four, so the "four times higher" C-MAPSS of the
+   mixture of five came with SMD's share of the run, not with the stays.
+2. Prediction 2 holds. A holds the mixture's areas under both arms: the probe's estimate is
+   −0.018, inside an interval that reaches +0.009, and fine-tuning's +0.007. SMD, three quarters
+   of the mixture's attention, teaches the intensive-care task nothing measurable. As declared,
+   SMD leaves the mixture of the next backbones unless it returns without its constant channels.
+3. Prediction 3 fails. B's probe does not gain over A's (−0.006), and B's fine-tuning loses
+   0.057 to A's, by both conditions and well past 0.03. B saw the stays 1.6 times as often and
+   ends with the better pretext loss on every corpus but SKAB, yet fine-tuned it lands below its
+   own probe (0.636 against 0.644) and below the network from nothing (0.651). Fine-tuning
+   takes from A what the probe cannot show (+0.043) and from B nothing at all.
+4. The pretext loss did not order the backbones on the task, for the second time: the turbofan
+   backbone of 16 epochs did not replace the one of 8 either (`label-efficiency-curve.md`,
+   2026-09-22). A backbone is chosen on the task, by the probe and by fine-tuning, never by its
+   pretext loss. The fine-tuning recipe at 200 stays, 154 passes at a peak of 0.001 with the
+   last weights kept, is the suspect: it leaves the better-trained backbone worse than nothing.
+   What it does to B at a tenth of the rate, and under a floor of 500 steps, is read next; both
+   knobs exist. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- One pretraining run per backbone. A's and B's difference under fine-tuning is beyond what the
+  seeds of the task explain, but a pretraining run's own spread has not been measured, and a
+  run of 13 epochs is also a longer cosine decay, not only more steps.
+- One task and one fifth of 800 stays with 127 deaths. C-MAPSS is read under another version of
+  the corpus than these backbones learnt from, so the turbofan task is not read here.
+- SMD's channel rows stay in A's and B's tables untrained, which the intensive-care task does
+  not read.
+
+## 2026-10-02 — declared before the run: the rate and the floor of full fine-tuning
+
+**Question.** Does the recipe of full fine-tuning at 200 stays, not the backbone, decide what a
+backbone transfers? The mixture without SMD at thirteen passes (B) ends with the better pretext
+loss and fine-tunes to 0.057 below its eight-pass twin (A), below its own frozen probe and below
+the network from nothing (the section above). The recipe in force is a peak of 0.001 over 2,000
+steps at least, 154 passes over the 200 stays with the last weights kept and no stop. Here the
+same two backbones fine-tune at a third and a tenth of that rate, and under a floor of 500
+steps, 39 passes.
+
+**Design.** Two files, each defined once under A (`994d1642…`) and once under B
+(`b4d3ad42…`), the same fifth, seeds and budget as the mixture campaigns:
+
+| File | Floor of steps | Candidates |
+|---|---|---|
+| `campaigns/fine-tuning-rate-200-physionet2012.toml` | 2,000, the registered one | full fine-tuning at 0.001 (control), 0.000333, 0.0001 |
+| `campaigns/fine-tuning-floor-200-physionet2012.toml` | 500 | the same three |
+
+Everything else stays the mixture campaigns' recipe: the mean of the states pooled, warm-up a
+tenth of the run, cosine decay to a hundredth, no weight decay, batches of 16, the last weights.
+Four campaigns of 30 cells, seeds 1 to 10, on a Colab GPU: `810ad80d…` (rate, A),
+`cddace8e…` (rate, B), `5d47a256…` (floor, A), `60b7e023…` (floor, B).
+
+**Reading.** By `scripts/campaign_pairs_report.py`, the rule used above: a side *gains* where
+the paired interval over stays lies above zero and the mean over seeds exceeds twice its
+standard error; a difference is acted on where it also reaches 0.03. Pairs: each rate and each
+floor against the control of its own backbone; B against A at every setting; the control of
+each new campaign at the floor of 2,000 against the fine-tuning cell of the mixture campaign of
+the same backbone (`f7dae909…`, 0.693; `d5c27be6…`, 0.636), which it repeats.
+
+**Predictions.**
+
+1. The checks hold: each control at the floor of 2,000 lands within 0.01 of its mixture
+   campaign's fine-tuning.
+2. B gains from a lower rate: at 0.0001 and the floor of 2,000 it gains 0.03 or more over its
+   control and lands at or above its probe (0.644).
+3. A does not: at every rate and floor A lands within 0.02 of its control (0.693), so the
+   recipe in force is near A's best and the registered selections, made under the mixture, are
+   not far off for a backbone of its kind.
+4. At B's best setting B lands within 0.02 of A at the same setting: the longer pretraining is
+   not worse, it was fine-tuned wrongly.
+5. The floor of 500 at 0.001 moves B up and A down, each by less than the rate does.
+
+**What follows.** If 2 and 4 hold, the fine-tuning cells of the registered grids at 200 stays
+measured the recipe as much as the backbone, and the rate of fine-tuning joins the selection of
+every campaign of the next backbones, chosen per backbone. If the floor matters more than the
+rate, the one floor every arm shares has to be re-read for fine-tuning, which is a change to the
+campaign's budget, not to a knob. If B stays below A at every setting, the longer pretraining
+itself transfers worse, and the next backbones keep the mixture's eight passes. No verdict of
+the registered grids changes.
+
+**Limitations.**
+
+- Three rates and two floors, one backbone of each length; the surface is read at six points.
+- One pretraining run per backbone, as above.
+- 800 stays, 127 deaths, ten seeds: a difference under about 0.03 is not told from none.
+
+## 2026-10-02 — declared before the run: the small shape again, on another fifth and at 200 stays
+
+**Question.** Does the small shape's gain hold where it has not been read: on a fifth no
+campaign has scored, over ten seeds, and at 200 stays? On the fifth held out by seed 101 it
+gained 0.021 at every stay against a bar of 0.019, over five seeds, as one of about ten
+comparisons this diagnosis has made on that fifth (the section on the nonlinear value and the
+small shape). And which of its four counts carries the gain?
+
+**Design.** Two campaigns, four shapes each, every candidate at the rate the registered grid
+ran the network from nothing at that budget, so the candidates differ in shape only:
+
+| Candidate | Width | Heads | Blocks | Feed-forward | Parameters |
+|---|---|---|---|---|---|
+| network from nothing (control) | 256 | 4 | 6 | 1,024 | 4.8 million |
+| small shape (STraTS's) | 64 | 16 | 2 | 128 | 77,000 |
+| shallow: the control's width in two blocks | 256 | 4 | 2 | 1,024 | 1.6 million |
+| narrow: the small width in six blocks | 64 | 16 | 6 | 128 | 210,000 |
+
+| Campaign | File | Fifth | Rate | Seeds |
+|---|---|---|---|---|
+| `afe91236…` | `campaigns/small-shape-all-physionet2012.toml` | seed 202, about 800 stays | 0.000333 | 1–10 |
+| `a9ab91cc…` | `campaigns/small-shape-200-physionet2012.toml` | seed 101, the one above | 0.003 | 1–10 |
+
+At 200 stays the campaign pairs with `4e28a197…` (the grid and the dropout), whose network
+from nothing (0.652) and patch model (0.696) were scored on the same fifth and seeds. On a Kaggle
+T4, one campaign a device.
+
+**Reading.** As above, by `scripts/campaign_pairs_report.py`: each shape against the control
+of its campaign; the shallow and the narrow against the small shape; at 200, the small shape
+against the patch model of `4e28a197…`, and the control against that campaign's control, which
+it repeats. A candidate *gains* where the paired interval over stays lies above zero and the
+mean over seeds exceeds twice its standard error. The small shape's gain at every stay is
+*confirmed* where it gains on the new fifth by 0.015 or more.
+
+**Predictions.**
+
+1. The check holds: at 200 the control lands within 0.02 of 0.652.
+2. At every stay on the new fifth, the small shape gains 0.015 or more over the control.
+3. At 200 stays the small shape gains 0.02 or more over the control and closes at least half of
+   the patch model's lead of 0.043.
+4. Both half-turned shapes gain over the control at every stay, and the narrow lands closer to
+   the small shape than the shallow does: what the control pays for is its parameters, not its
+   depth.
+
+**What follows.** If 2 holds, the small shape is the encoder the next backbones are pretrained
+in, and a pretraining at that shape over the stays is the next pretraining ordered. If 3 holds
+too, the shape, not the input, explains most of what the patch model had over the network at
+200 stays. If 2 fails, the gain of 2026-10-02 was the fifth's and the control's shape stands
+for the next backbones. Whichever half-turned shape lands nearer the small one says which count
+to vary next, with the small shape's own rate. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- Each candidate learns at the control's rate at its budget; a shape's own rate is not chosen.
+- The two half-turned shapes read two of fifteen ways of turning four counts.
+- A fifth of 800 stays: at every stay a gain under about 0.015 is not told from none even over
+  ten seeds; at 200 stays, under about 0.03.
+
+## 2026-10-02 — declared before the run: STraTS without its size and its value, and under clipped values
+
+**Question.** Two questions left by the ablation of 2026-10-02 (STraTS turned part by part) and
+by the campaign `bb75a701…`. First: turned towards this network in everything but its size and
+its value embedding, where does STraTS land? That reads at once what the parts never turned (time
+embedded by CVE, the gap feature, a feed-forward width of twice the width, residuals averaged
+rather than normalised) carry together. Second: is what the value's embedding through a tanh
+buys STraTS the bound it puts on readings that are off by a unit or a decimal point? STraTS
+has no normalisation inside its blocks, so a value embedded by one linear map carries a pH of
+735 (88 standard deviations) into the residual stream as it is, while a tanh cannot pass more
+than its weights. This network's blocks are normalised, which would explain why the nonlinear
+value gained it nothing.
+
+**Design.** STraTS at `e936cda` on this project's tokens, the division and seeds 1 to 5 of the
+ablation, `scripts/strats_reference_run.py`; the clone is not edited.
+
+| Variant | `--ablate` |
+|---|---|
+| `baseline` | nothing; run again in the same session |
+| `minus-size-value` | every part but `our-size` and `linear-value`: `unweighted fixed-epochs our-schedule no-dropout statics-among mean-pooling` |
+| `baseline-clipped` | `clipped-values`: every standardised value clipped to ±5 |
+| `linear-clipped` | `linear-value clipped-values` |
+
+Clipping is not a part of this network, which clips nothing; `ours` does not include it. The
+runner logs how many readings each run clips.
+
+**Reading.** Each variant against `baseline` of the same session, and `linear-clipped` against
+`linear-value` of the earlier session (0.787), by `scripts/strats_reference_answers.py` and
+`scripts/campaign_pairs_report.py`, the rule of the ablation: a variant *loses* or *gains* where
+the paired interval over stays excludes zero and the mean over seeds exceeds twice its standard
+error in that direction.
+
+**Predictions.**
+
+1. `baseline` repeats 0.827.
+2. `minus-size-value` loses no more than 0.03 to `baseline` and lands within 0.015 of this
+   network's small shape on the same fifth (0.803): the training regime and the head cost
+   about 0.02 together, and the parts never turned cost nothing measurable.
+3. `baseline-clipped` lands within 0.01 of `baseline`: with a tanh the bound changes nothing.
+4. `linear-clipped` recovers at least half of what `linear-value` lost: it gains 0.02 or more
+   over `linear-value` and lands at 0.807 or above.
+
+**What follows.** If 2 holds, STraTS with this network's regime and head is this network's
+small shape, and what separates the two is the value's embedding and nothing else that was not
+turned; the search for the remaining 0.023 then stays with the value and the readings' tails.
+If 4 holds, the embedding's lead is a bound on the tails, not a nonlinearity: the next
+candidate for this network is the readings' preparation, clipped or robustly standardised, which
+is a new version of the corpus, rather than another embedding. If 4 fails and 3 holds, the tanh
+buys STraTS a nonlinearity its unnormalised blocks cannot make, and this network, whose blocks
+can, has nothing to take from it. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- One bound, five standard deviations; a tighter one could act where this one does not.
+- Clipping bounds a tail; it does not undo what the tail did to the scale. STraTS
+  standardises each variable by a standard deviation the tail inflates (pH: 8.2 against 0.08
+  without the 11 readings beyond its range), so the clinical range of such a variable stays
+  compressed near zero under both variants. A robust standardisation is the next variant if
+  clipping gains nothing.
+- Five seeds and 800 stays: a difference under about 0.025 is not told from none.
+- The parts never turned are read together; if `minus-size-value` loses more than 0.03, which
+  of them carries it is not read here.
