@@ -494,3 +494,58 @@ the seeds.
 - One setting of STraTS, the one its run script gives this corpus; it was not tuned here.
 - STraTS stopped on 640 of the tuning stays; the network learnt from all 3,200 without a stop.
   Their difference in what they learnt from favours the network.
+
+## 2026-10-02 — declared before the run: the static features set apart
+
+**Question.** Does the network from nothing gain when its static features are read apart from
+its readings, and does a learnt pooling add to that? On the same stays, STraTS gains about 0.04
+over it from the same tokens (the section above). Of what STraTS does differently, the static
+features are tried first. STraTS reads a stay's demographics on a path of their own, beside its
+pooled readings. This network pools its static features, four at most, with some four hundred
+readings, so each weighs as one reading among them.
+
+**Design.** Campaign `e9e0aac5…` (`campaigns/statics-apart-all-physionet2012.toml`) has the same
+fifth, seeds, budget, schedule and description of the control as `f8c5225b…`.
+
+| Candidate | Pooling | Static features |
+|---|---|---|
+| network from nothing (control) | mean | among the readings |
+| … static features apart | mean | apart |
+| … attention | learnt attention | among the readings |
+| … both | learnt attention | apart |
+
+*Apart* means the encoder is unchanged. Its states of the readings are pooled by the scheme, and
+its states of the static features are averaged on their own. The head reads the two side by side
+(`StaticsApartPooling`), 512 wide instead of 256. The attention pooling starts as the mean and
+learns which states to weigh. The selections of this network never chose it, at any budget,
+under either backbone (`campaigns/selection-scratch-physionet2012.toml`), with the static
+features among the readings.
+
+**Reading.** As above: each candidate against the control, and *both* against the static
+features apart, by `scripts/campaign_pairs_report.py`. A candidate *gains* where the paired
+interval over stays lies above zero and the mean over seeds exceeds twice its standard error.
+Each candidate is also paired with STraTS on this project's tokens, to measure what is left of
+its lead. The control reruns `f8c5225b…`'s cells on the same code path, so its area is a check:
+it lands within 0.01 of 0.786.
+
+**Predictions.**
+
+1. The static features apart gain over the control. On this fifth that takes a gain of about
+   0.025 or more.
+2. The attention alone does not gain.
+3. Both together land within 0.01 of the static features apart.
+
+**What follows.** If the static features apart gain, the placement is a candidate for the whole
+matrix: it is a knob of the head, so a pretrained backbone takes it without being trained again.
+The next element is how a value is embedded. If they do not gain, they explain at most a part of
+the gap smaller than this fifth can confirm, and the value's embedding follows at once. Neither
+outcome changes a verdict of the registered grids.
+
+**Limitations.**
+
+- The static features are averaged after the encoder. The value of every token enters through
+  one projection shared by all channels, so age and height are told apart only by what the
+  encoder makes of their channels. STraTS feeds the raw demographics to a network of their own.
+- At every stay the paired interval is about ±0.025, so a gain smaller than that is not
+  confirmed, however consistent the seeds. A smaller one shows as an estimate whose interval
+  holds zero, as the grid's did above.
