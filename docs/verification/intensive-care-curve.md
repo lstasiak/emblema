@@ -549,3 +549,67 @@ outcome changes a verdict of the registered grids.
 - At every stay the paired interval is about ±0.025, so a gain smaller than that is not
   confirmed, however consistent the seeds. A smaller one shows as an estimate whose interval
   holds zero, as the grid's did above.
+
+## 2026-10-02 — declared before the run: the mixture without SMD
+
+**Question.** Does SMD teach the mixed backbone anything the intensive-care task uses? In the
+mixture of five, SMD takes 40 % of the steps. At 1,900 tokens a window it takes 59 % of the
+tokens and about three quarters of the attention. Its validation stays at 0.35 to 0.40 of the
+trivial predictor's loss from the first epoch to the eighth (`manual-handoff.md`, 2026-09-29).
+In its training halves, 18 % of the channel series are constant throughout, and a channel is
+constant across 26 % of the windows it is read in. The stays get 3 % of the steps.
+
+**Design.** Two backbones, each against the mixture of five (`869ed545…`):
+
+| Backbone | Experiment | Corpora | Epochs | Steps | Steps on the stays |
+|---|---|---|---|---|---|
+| mixture of five | `backbone-mixed5-m` | all five | 8 | 36,950 | 1,000 |
+| A, without SMD | `backbone-mixed5-nosmd-m` | without SMD | 8 | 22,340 | 1,000 |
+| B, without SMD, the mixture's steps | `backbone-mixed5-nosmd-m-13` | without SMD | 13 | 36,310 | 1,625 |
+
+Everything else is the mixture's: manifests, vocabulary, shape, masks, objective, rate and seed.
+B's warm-up keeps the mixture's share of the run. A asks whether SMD's steps teach the other
+corpora anything at equal exposure. B asks whether those steps are better spent on the rest,
+which then is seen more often; adding steps adds no data. Each backbone is trained once, on a
+Kaggle T4.
+
+**Reading.**
+
+- *Pretext.* Each corpus's validation loss as a share of the trivial predictor's, at the kept
+  epoch, against the mixture's.
+- *Task.* Campaign `campaigns/mixture-transfer-200-physionet2012.toml`, defined once under each
+  backbone (`4d17e289…` under the mixture). The frozen probe and full fine-tuning at 200 stays,
+  at the variants the mixture's selections chose, seeds 1 to 10, on the fifth held out by seed
+  101. Each backbone is paired with the mixture by `scripts/campaign_pairs_report.py`, and B with
+  A, by the rule used above.
+- One seed moves the area at 200 stays by about 0.04 on this fifth, so the seeds read a
+  difference of two backbones to about 0.013. Each backbone is one pretraining run, whose own
+  spread is not known. A difference is acted on only where it gains by both conditions and by
+  0.03 or more.
+- Check: the mixture's fine-tuning repeats the cells of `596849cd…` (0.692), so it lands within
+  0.01 of that.
+
+**Predictions.**
+
+1. Pretext: A's loss on the stays lies within 0.02 of the mixture's 0.487. B's lies at least
+   0.02 below A's, as the stays alone fell from 0.478 to 0.430 between 8 and 16 epochs.
+2. Task, A against the mixture: neither the probe nor fine-tuning differs. SMD teaches the
+   stays nothing.
+3. Task, B against A: the probe gains and fine-tuning does not. The stays-alone backbone's probe
+   led the mixture's by 0.09 at 200 stays, and B sees the stays 1.6 times as often.
+
+**What follows.** If A holds the mixture's areas, SMD leaves the mixture of the next backbones,
+or returns republished without its constant channels: three quarters of the arithmetic, for
+nothing the task uses. If the mixture gains over A, SMD helps the transfer despite its own
+plateau, and it stays, cleaned. If B gains over A, how often a corpus is seen matters, and the
+next mixtures need a weight per corpus, which they do not have now (a corpus weighs its share
+of the windows). No verdict of the registered grids changes.
+
+**Limitations.**
+
+- One pretraining run per backbone: a difference under about 0.03 cannot be told from the
+  run's own spread.
+- One task. C-MAPSS is read under another version of the corpus (per condition) than the one
+  the mixture learnt from, so the turbofan task is left to the next mixtures.
+- SMD's channel rows stay in the table of A and B, untrained, so all three backbones have the
+  same parameters. The intensive-care task does not read those rows.
