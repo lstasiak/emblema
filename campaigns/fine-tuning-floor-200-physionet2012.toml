@@ -1,0 +1,49 @@
+# The same candidates as campaigns/fine-tuning-rate-200-physionet2012.toml under a floor of 500
+# optimiser steps instead of 2,000: 39 passes over the 200 stays instead of 154, at the same
+# three rates, so a rate that wants fewer steps is seen and not only the floor at one rate. The
+# worker that defines and runs it is told EMBLEMA_WORKER__SCHEDULE__MIN_STEPS=500; every other
+# setting stays. Defined once under each of the two backbones without SMD.
+#
+# Scored on the fifth the mixture campaigns were scored on, so the cells pair with theirs by
+# stay and seed; the validation side is not read. A campaign divided this way chooses nothing.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+
+name = "fine-tuning-floor-200-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "full_fine_tuning",
+    "full_fine_tuning@learning_rate=0.000333",
+    "full_fine_tuning@learning_rate=0.0001",
+]
+control = "full_fine_tuning"
+endpoint = "full_fine_tuning@learning_rate=0.0001"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+# Ten seeds, as the mixture campaigns ran: one seed moves the area at 200 stays by about 0.04 on
+# this fifth, so the difference of two candidates is read to about 0.013.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# Two contenders at one budget, less the endpoint.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
