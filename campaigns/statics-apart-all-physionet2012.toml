@@ -1,0 +1,63 @@
+# Whether the network trained from nothing on the intensive-care task reads its static features
+# better set apart from its readings, and whether a learnt pooling helps it once they are.
+#
+# A published network fed this project's tokens of the same stays gains about 0.04 in area over
+# this one, so the deficit lies in the network, not in the data. That network reads a stay's
+# demographics on a path of their own and sets them beside its pooled readings; this one pools
+# its handful of static features with some four hundred readings, where each weighs as one
+# reading among them. Here the same network sets them apart, pools its readings under a learnt
+# attention, and does both, beside the network as it was, so each change is read on its own.
+#
+# Every variant learns at 0.000333, the rate the registered grid ran the network at
+# (campaigns/curve-physionet2012-mixed5.toml), so the candidates differ in their pooling and in
+# nothing else.
+#
+# Scored on one tuning stay in five, the same fifth for every seed and the fifth the published
+# network was scored on, so the candidates' answers pair by area across seeds and with its
+# answers; the validation side is not read. A campaign divided this way chooses nothing.
+#
+# Defined under the worker settings of the registered grids, with the mixed backbone,
+# sha256:869ed545…, as the networks' architecture.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "statics-apart-all-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+# The fifth the spread over seeds was read on (campaigns/seed-spread-physionet2012.toml), about
+# eight hundred stays.
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.000333",
+    "from_scratch@learning_rate=0.000333,statics=apart",
+    "from_scratch@learning_rate=0.000333,pooling=attention",
+    "from_scratch@learning_rate=0.000333,pooling=attention,statics=apart",
+]
+control = "from_scratch@learning_rate=0.000333"
+endpoint = "from_scratch@learning_rate=0.000333,statics=apart"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+# Five seeds: at every stay one seed moves the area by about 0.015 on this fifth, so the
+# difference of two candidates is read to about 0.01.
+seeds = [1, 2, 3, 4, 5]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# Three contenders at one budget, less the endpoint.
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
