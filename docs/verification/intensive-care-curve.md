@@ -671,3 +671,58 @@ about 100 s a cell. Read with:
   projection of the value across all channels. A network of their own fed the raw values, as
   STraTS has, is not what was tried.
 - 800 stays: a difference under about 0.025 is not confirmed either way.
+
+## 2026-10-02 — declared before the run: STraTS turned towards this network, part by part
+
+**Question.** Which parts of STraTS carry its lead of about 0.04 over the network from nothing
+on the same stays and tokens? Moving its parts into this network one at a time costs a campaign
+each, and the first one, the static features apart, gained nothing (the section above). Here
+STraTS is turned towards this network instead, one part at a time and then all of them, in
+`scripts/strats_reference_run.py --ablate`, so each part's share of the lead is read where the
+lead exists.
+
+**Design.** STraTS at `e936cda` on this project's tokens (preparation (2) above), the same
+division, seeds 1 to 5 for each variant; the clone is not edited.
+
+| Variant | Changed towards this network |
+|---|---|
+| `baseline` | nothing; run again in the same session, since training on the card is not deterministic |
+| `unweighted` | no weight on the positive class |
+| `fixed-epochs` | no early stop: 30 epochs, the last weights |
+| `our-schedule` | as `fixed-epochs`, under this network's rate: peak 0.000333, a tenth warming up, cosine to a hundredth, no clipping |
+| `no-dropout` | no dropout anywhere, the dropout of whole variables included |
+| `our-size` | 256 wide, 6 blocks, 4 heads |
+| `linear-value` | a value embedded by one linear map instead of CVE |
+| `statics-among` | the static features as triplets among the readings; no path for demographics |
+| `mean-pooling` | the mean over the observed triplets instead of the learnt attention |
+| `ours` | all of the above |
+
+Not turned, so `ours` still differs from this network in: time embedded by CVE rather than
+fixed Fourier features; no gap feature; residuals averaged rather than pre-normalised; a
+feed-forward width of twice the width rather than four times; at most 880 readings a stay,
+which cuts 13 of 3,997 stays; 2,557 stays learnt from rather than about 3,200, since 640 drive
+STraTS's validation.
+
+**Reading.** Each variant against `baseline` of the same session, by
+`scripts/strats_reference_answers.py` and `scripts/campaign_pairs_report.py`. A variant *loses*
+where the paired interval over stays lies below zero and the mean over seeds is below minus
+twice its standard error. A part is acted on only where its variant loses 0.025 or more. `ours`
+is also paired with the network from nothing (`e9e0aac5…`, 0.782).
+
+**Predictions.**
+
+1. The largest losses come from the training regime (`fixed-epochs`, `our-schedule`) and the
+   size (`our-size`).
+2. `unweighted`, `statics-among`, `mean-pooling` and `linear-value` each lose less than 0.025.
+3. `ours` lands within 0.02 of the network from nothing.
+4. `baseline` lands within 0.01 of the earlier 0.827.
+
+**What follows.** A part whose variant loses 0.025 or more is tried in this network, alone,
+under one campaign. If `ours` stays well above the network from nothing, the lead lies in what
+is not turned, and the next ablation turns those. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- A part's loss is read inside STraTS. In this network it may act otherwise, which is why a
+  part is confirmed by a campaign of this network before anything changes.
+- Five seeds and 800 stays: a loss under about 0.025 is not told from none.
