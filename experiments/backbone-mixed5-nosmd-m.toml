@@ -1,0 +1,44 @@
+# The mixture of five without SMD, at the same eight passes over every window: every other corpus
+# sees exactly what it saw in backbone-mixed5-m.toml, so the two backbones differ by SMD alone.
+#
+# SMD takes 40 % of that mixture's steps and, at 1,900 tokens a window, 59 % of its tokens and
+# about three quarters of its attention, while its validation stays at 0.35 to 0.40 of the trivial
+# predictor's loss from the first epoch to the last. Whether those steps teach the other corpora
+# anything is what this run answers; the corpora's published manifests and the vocabulary they
+# chain through are the mixture's, so SMD's channel rows stay in the table, untrained, and the
+# backbone has the mixture's parameters.
+#
+# About 2,790 steps an epoch: 23 % C-MAPSS, 4 % SKAB, 68 % the satellite corpus, 4 % the stays.
+# The warm-up is the mixture's share of the run, a quarter of the first of eight epochs.
+name = "backbone-mixed5-nosmd-m"
+tier = "M"
+corpora = ["cmapss", "skab", "esa_ad", "physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+# The mixture's budget: eight passes over every window, the epoch kept the one whose mean
+# relative validation over the four corpora is lowest; sixteen windows a micro-batch, two to
+# a step, as in the mixture, so a step holds as many windows although without SMD's windows of
+# 1,900 tokens the memory would allow more.
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000
