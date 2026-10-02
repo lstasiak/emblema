@@ -840,3 +840,78 @@ No verdict of the registered grids changes.
 - The nonlinear value is one form of the idea, its hidden width the square root of the width,
   as in CVE. Another form could gain where this one does not.
 - 800 stays: a difference under about 0.025 is not confirmed either way.
+
+## 2026-10-02 — Colab G4: a nonlinear value and a small shape
+
+**Question.** Does the network from nothing gain from a nonlinear value embedding, from
+STraTS's small shape, or from both? The design and predictions are in the section declared on
+2026-10-02 for the nonlinear value and the small shape.
+
+**Conditions.** Commit `b8a7a09d`, campaign `bb75a701…`, order `0db49a68…`. One Colab G4, CUDA,
+one process; tier M. 20 cells in 1,493 s: about 100 s a cell in the control's shape, 47 s in the
+small one. Read with:
+
+    uv run scripts/campaign_pairs_report.py --out DIR \
+        --campaign bb75a701... --campaign e9e0aac5...
+    uv run scripts/strats_reference_answers.py --into DIR --side strats-e936cda tokens ...
+    uv run scripts/campaign_pairs_report.py --out DIR --pair CONTROL ... CANDIDATE ...
+
+The order declares `value_embedding: nonlinear` and the four counts of the shape in each
+variant's method, and every cell was checked against that method before it ran. The cells of
+the small shape ran in half the time.
+
+**Area under the ROC curve on the 800 scored stays**, seeds 1 to 5:
+
+| Candidate | Parameters | Mean | Seeds |
+|---|---|---|---|
+| network from nothing (control) | 4.8 million | 0.782 | 0.764–0.792 |
+| … nonlinear value | 4.8 million | 0.779 | 0.764–0.801 |
+| … small shape | 77,000 | 0.803 | 0.783–0.821 |
+| … both | 78,000 | 0.783 | 0.766–0.795 |
+| STraTS on this project's tokens | — | 0.827 | 0.814–0.842 |
+
+**Gain in area**, paired over stays (95 % interval), and seed by seed (mean ± standard error).
+
+| Control | Candidate | Paired gain | Seed by seed | Gains |
+|---|---|---|---|---|
+| network from nothing | nonlinear value | −0.003 [−0.024; +0.016] | −0.003 ± 0.010 | no |
+| network from nothing | small shape | +0.021 [+0.003; +0.040] | +0.021 ± 0.010 | yes, narrowly |
+| network from nothing | both | +0.001 [−0.019; +0.021] | +0.001 ± 0.007 | no |
+| nonlinear value | both | +0.004 [−0.018; +0.027] | +0.004 ± 0.007 | no |
+| small shape | both | −0.020 [−0.034; −0.006] | −0.020 ± 0.008 | loses |
+| network from nothing | STraTS | +0.045 [+0.021; +0.070] | +0.045 ± 0.009 | yes |
+| nonlinear value | STraTS | +0.048 [+0.022; +0.074] | +0.048 ± 0.007 | yes |
+| small shape | STraTS | +0.023 [+0.003; +0.044] | +0.023 ± 0.006 | yes |
+| both | STraTS | +0.044 [+0.023; +0.065] | +0.044 ± 0.006 | yes |
+| control of `e9e0aac5…` | control here | +0.000 [−0.014; +0.014] | +0.000 ± 0.006 | no |
+
+**Conclusions.**
+
+1. Prediction 1 fails. The nonlinear value gains nothing: −0.003, an interval that excludes a
+   gain of 0.02. The part that carries 0.039 of STraTS's lead inside STraTS does not carry it
+   into this network.
+2. Prediction 2 fails. The small shape gains 0.021: the interval lies above zero and the mean
+   exceeds twice its standard error, 0.019. With about 60 times fewer parameters it closes about
+   half of the gap to STraTS; 0.023 remains, and that remainder is confirmed.
+3. Prediction 3 holds: both land 0.004 from the nonlinear value alone. Inside the small shape,
+   though, the nonlinear value loses 0.020 of the small shape's gain, and that loss is
+   confirmed too.
+4. The check holds: the control lands at 0.782, as in `e9e0aac5…`.
+5. As declared for a nonlinear value that gains nothing, what this network does not share with
+   STraTS is read next: time embedded by CVE, and the residual without normalisation. The small
+   shape is a candidate for the encoder of the next backbones. No verdict of the registered
+   grids changes.
+
+**Limitations.**
+
+- The small shape gains by the rule, but only just: 0.021 against a bar of 0.019. Training on
+  this card is not deterministic from run to run, and with five seeds a bar of twice the
+  standard error is a loose one.
+- The shape changes four counts at once. Which of width, depth, heads and feed-forward width
+  carries the gain is not read here.
+- Every candidate learns at 0.000333, the rate chosen for the control's shape; the small shape's
+  own rate was not tuned.
+- The nonlinear value is one form of the idea: the value and the gap embedded together, through
+  a hidden layer as wide as the square root of the width (8 in the small shape). STraTS embeds
+  the value alone. Another form could gain where this one does not.
+- 800 stays: a difference under about 0.025 is not confirmed either way.
