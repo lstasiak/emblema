@@ -1,8 +1,11 @@
+from dataclasses import replace
+
 import pytest
 
 torch = pytest.importorskip("torch")
 
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
+from emblema.evaluation.adapters.torch.clipped_values import ClippedValues  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling  # noqa: E402
 from emblema.evaluation.domain.transfer.encoder_setting import (  # noqa: E402
@@ -136,6 +139,41 @@ def test_a_network_from_nothing_is_built_to_its_own_shape_and_value_embedding() 
     assert isinstance(built.encoder.value_projection, NonlinearValueEmbedding)
     assert len(built.encoder.blocks) == 1
     assert torch.isfinite(built(batch)).all()
+
+
+@pytest.mark.parametrize("mode", [TransferMode.FROM_SCRATCH, TransferMode.FULL_FINE_TUNING])
+def test_a_clip_feeds_any_encoder_bounded_values_and_leaves_the_rest_as_it_was(
+    mode: TransferMode,
+) -> None:
+    torch.manual_seed(5)
+    clipped = AdaptedBackbone.under(
+        plan(mode, encoder=EncoderSetting(value_clip=5.0)),
+        SmallBackbones(),
+        vocabulary_size=VOCABULARY_SIZE,
+        starting_at=0.0,
+    )
+    torch.manual_seed(5)
+    plain = AdaptedBackbone.under(
+        plan(mode), SmallBackbones(), vocabulary_size=VOCABULARY_SIZE, starting_at=0.0
+    )
+    batch = random_batch(3, 9, seed=2)
+    wild = batch.features.clone()
+    wild[0, 0, 0] = 88.0
+    wild[1, 2, 0] = -31.0
+    bounded = wild.clone()
+    bounded[0, 0, 0] = 5.0
+    bounded[1, 2, 0] = -5.0
+
+    assert isinstance(clipped.encoder, ClippedValues)
+    assert [p.shape for p in clipped.trainable_parameters()] == [
+        p.shape for p in plain.trainable_parameters()
+    ]
+    torch.testing.assert_close(
+        clipped(replace(batch, features=wild)), plain(replace(batch, features=bounded))
+    )
+    assert not torch.allclose(
+        clipped(replace(batch, features=wild)), plain(replace(batch, features=wild))
+    )
 
 
 GROWN = 6

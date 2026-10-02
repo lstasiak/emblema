@@ -3,6 +3,7 @@ from typing import Self
 from torch import Tensor, nn
 
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
+from emblema.evaluation.adapters.torch.clipped_values import ClippedValues
 from emblema.evaluation.adapters.torch.low_rank_adaptation import LowRankAdaptation
 from emblema.evaluation.adapters.torch.pooling import pooling_module
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead
@@ -20,7 +21,8 @@ class AdaptedBackbone(nn.Module):
     pooling has of its own train under every mode, as the head does.
 
     Attributes:
-        encoder: The backbone, with whatever the mode left trainable.
+        encoder: The backbone, with whatever the mode left trainable; fed bounded values where
+            the plan clips them.
         pooling: One state per window out of the states per token, as the plan named it.
         head: The task's answer out of the pooled state.
     """
@@ -78,6 +80,8 @@ class AdaptedBackbone(nn.Module):
                     parameter.requires_grad_(True)
         if plan.lora is not None:
             LowRankAdaptation(plan.lora).applied_to(encoder)
+        if plan.encoder.value_clip is not None:
+            encoder = ClippedValues(encoder, plan.encoder.value_clip)
         return cls(encoder, pooling, head)
 
     def embed(self, batch: TokenTensors) -> Tensor:

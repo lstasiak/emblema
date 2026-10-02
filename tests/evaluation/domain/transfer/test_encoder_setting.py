@@ -69,6 +69,7 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
         "encoder_heads": 0,
         "encoder_layers": 0,
         "encoder_feedforward_width": 0,
+        "value_clip": 0.0,
     }
     turned = EncoderSetting(
         dropout=0.2,
@@ -78,6 +79,7 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
         heads=16,
         layers=2,
         feedforward_width=128,
+        value_clip=5.0,
     )
     assert turned.parameters() == {
         "encoder_dropout": 0.2,
@@ -87,6 +89,7 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
         "encoder_heads": 16,
         "encoder_layers": 2,
         "encoder_feedforward_width": 128,
+        "value_clip": 5.0,
     }
 
 
@@ -124,3 +127,18 @@ def test_the_shape_is_whole_once_its_four_counts_are_turned_one_at_a_time() -> N
 def test_a_whole_shape_whose_width_its_heads_cannot_split_is_refused() -> None:
     with pytest.raises(InvalidEncoderSettingError, match="multiple of heads"):
         _ = EncoderSetting(width=64, heads=5, layers=2, feedforward_width=128).shape
+
+
+def test_a_clip_bounds_the_values_fed_and_changes_no_build() -> None:
+    clipped = EncoderSetting.standard().tuned("value_clip", "5")
+
+    assert clipped.value_clip == 5.0
+    assert clipped.turned_away() == {"value_clip": 5.0}
+    assert clipped.builds_its_own_encoder is False
+    assert clipped.shape is None
+
+
+@pytest.mark.parametrize("bound", ["0", "-5", "inf", "nan", "five"])
+def test_a_clip_that_is_not_a_positive_finite_number_is_refused(bound: str) -> None:
+    with pytest.raises(UnknownKnobError):
+        EncoderSetting.standard().tuned("value_clip", bound)
