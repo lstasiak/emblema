@@ -1,0 +1,57 @@
+# Whether the small shape's gain holds on another fifth of the tuning stays, and which of its
+# counts carries it. On the fifth held out by seed 101, STraTS's shape (64 wide, 16 heads, 2
+# blocks, feed-forward 128) gained 0.021 in area over the network from nothing at every stay,
+# against a bar of 0.019 over five seeds, on a card whose training is not deterministic
+# (docs/verification/intensive-care-curve.md, 2026-10-02). One narrow gain among many comparisons
+# on one fifth is not a result to build backbones on, so it is read again on a fifth no campaign
+# has scored, over ten seeds, beside two shapes that turn half of its counts each: two blocks at
+# the control's width, and the control's six blocks at the small width.
+#
+# Every variant learns at 0.000333, the rate the registered grid ran the network at every stay,
+# so the candidates differ in shape and in nothing else. Defined under the worker settings of
+# the registered grids, with the mixed backbone, sha256:869ed545…, as the architecture the
+# control is shaped like.
+#
+# Scored on one tuning stay in five held out by seed 202, the same fifth for every seed; the
+# validation side is not read. A campaign divided this way chooses nothing.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "small-shape-all-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 202
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.000333",
+    "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,width=64",
+    "from_scratch@feedforward_width=1024,heads=4,layers=2,learning_rate=0.000333,width=256",
+    "from_scratch@feedforward_width=128,heads=16,layers=6,learning_rate=0.000333,width=64",
+]
+control = "from_scratch@learning_rate=0.000333"
+endpoint = "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,width=64"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+# Ten seeds: at every stay one seed moves the area by about 0.015 on a fifth, so the difference
+# of two candidates is read to about 0.007.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# Three contenders at one budget, less the endpoint.
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
