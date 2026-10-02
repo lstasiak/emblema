@@ -733,12 +733,12 @@ is not turned, and the next ablation turns those. No verdict of the registered g
 predictions are in the section declared on 2026-10-02 for STraTS turned part by part.
 
 **Conditions.** Commit `88ec177b`, STraTS at `e936cda`, this project's tokens; the split file
-hashes as on the Mac (`787648be5e3adeb3`). One NVIDIA RTX PRO 6000 Blackwell (Colab G4),
-torch 2.11.0+cu130, CUDA, fp32, five runs at a time; tier M; 50 runs of 4 to 11 minutes of
-training. Every run's record states the parts it turned, its rate, shape, dropout, class
-weight and number of parameters, and each matches its variant: the linear value has 400 parameters fewer than CVE,
-the mean 4,224 fewer than the learnt attention. `baseline` repeats the earlier runs exactly,
-step for step: STraTS trains deterministically on this card.
+hashes as on the Mac (`787648be5e3adeb3`). One NVIDIA RTX PRO 6000 Blackwell (Colab G4), torch
+2.11.0+cu130, CUDA, fp32, five runs at a time; tier M; 50 runs of 4 to 11 minutes of training.
+Every run's record states the parts it turned, its rate, shape, dropout, class weight and number of
+parameters, and each matches its variant: the linear value has 400 parameters fewer than CVE, the
+mean 4,224 fewer than the learnt attention. `baseline` repeats the earlier runs exactly, step for
+step: STraTS trains deterministically on this card.
 
 **Area under the ROC curve on the 800 scored stays**, mean and range over seeds 1 to 5, and the
 loss against `baseline` paired over stays (95 % interval) and seed by seed (mean ± standard error).
