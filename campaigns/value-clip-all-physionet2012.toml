@@ -1,0 +1,59 @@
+# Whether the network trained from nothing gains when every token's value is bounded at the
+# encoder's input, in its own shape and in the small one. STraTS fed this project's tokens
+# lost 0.039 to a value embedded by one linear map, as this network embeds it, and recovered
+# 0.034 of that once the readings were clipped to five standard deviations
+# (docs/verification/intensive-care-curve.md, 2026-10-02): the 0.16 % of readings beyond the
+# bound, which a tanh cannot pass, are what the linear map could not take. This network's
+# blocks are normalised, so whether those readings cost it as much is read here, at the bound
+# STraTS was read at, beside the small shape that gained 0.021 on this fifth.
+#
+# Every candidate learns at 0.000333, the rate the registered grid ran the network at every
+# stay, so the candidates differ in the bound and the shape and in nothing else. Defined under
+# the worker settings of the registered grids, with the mixed backbone, sha256:869ed545…, as
+# the architecture the control is shaped like.
+#
+# Scored on one tuning stay in five held out by seed 101, the same fifth for every seed and the
+# fifth STraTS and the earlier shapes were scored on, over ten seeds this time, since the card's
+# training moved a mean over ten seeds by 0.018 between two runs of the same cells; the
+# validation side is not read. A campaign divided this way chooses nothing.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "value-clip-all-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.000333",
+    "from_scratch@learning_rate=0.000333,value_clip=5",
+    "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,width=64",
+    "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,value_clip=5,width=64",
+]
+control = "from_scratch@learning_rate=0.000333"
+endpoint = "from_scratch@learning_rate=0.000333,value_clip=5"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+# Ten seeds: at every stay one seed moves the area by about 0.015 on this fifth, so the
+# difference of two candidates is read to about 0.007.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# Three contenders at one budget, less the endpoint.
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
