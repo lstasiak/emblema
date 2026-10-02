@@ -1183,3 +1183,224 @@ can, has nothing to take from it. No verdict of the registered grids changes.
 - Five seeds and 800 stays: a difference under about 0.025 is not told from none.
 - The parts never turned are read together; if `minus-size-value` loses more than 0.03, which
   of them carries it is not read here.
+
+## 2026-10-02 — Colab G4: the rate and the floor of full fine-tuning
+
+**Question.** Does the recipe of full fine-tuning at 200 stays, not the backbone, decide what
+backbone B transfers? The design and predictions are in the section declared on 2026-10-02 for
+the rate and the floor of full fine-tuning.
+
+**Conditions.** Orders placed at `dcad779c`; four orders of 30 cells on one Colab G4 under CUDA
+MPS, four at once: 778–785 s for the floor of 500, 1,906–1,907 s for the floor of 2,000; mean
+utilisation 96 %. Scored on the fifth held out by seed 101, 800 stays, seeds 1 to 10. Read with:
+
+    uv run scripts/campaign_pairs_report.py --out DIR --campaign 810ad80d... \
+        --campaign cddace8e... --campaign 5d47a256... --campaign 60b7e023... \
+        --campaign f7dae909... --campaign d5c27be6...
+    uv run scripts/campaign_pairs_report.py --out DIR --pair CONTROL ... CANDIDATE ...
+
+**Area under the ROC curve at 200 stays**, mean over seeds 1 to 10 (seed-by-seed values in the
+CSV); the frozen probe and the network from nothing from the campaigns above, for reference.
+
+| Backbone | Floor | Peak 0.001 | Peak 0.000333 | Peak 0.0001 | Probe | From nothing |
+|---|---|---|---|---|---|---|
+| A, without SMD, 8 passes | 2,000 | 0.689 | 0.688 | 0.682 | 0.650 | 0.651 |
+| A | 500 | 0.690 | 0.702 | 0.685 | | |
+| B, without SMD, 13 passes | 2,000 | 0.654 | 0.643 | 0.622 | 0.644 | |
+| B | 500 | 0.663 | 0.639 | 0.618 | | |
+
+**Gain in area**, paired over stays (95 % interval) and seed by seed (mean ± standard error).
+A side *gains* or *loses* where the interval excludes zero and the mean over seeds exceeds twice
+its standard error; a difference is acted on where it also reaches 0.03.
+
+| Control | Candidate | Paired gain | Seed by seed | Reads |
+|---|---|---|---|---|
+| A at 0.001, floor 2,000 | A at 0.000333 | −0.001 [−0.016; +0.013] | −0.001 ± 0.008 | no |
+| A at 0.001, floor 2,000 | A at 0.0001 | −0.008 [−0.024; +0.009] | −0.008 ± 0.008 | no |
+| A at 0.001, floor 2,000 | A at 0.001, floor 500 | +0.000 [−0.011; +0.013] | +0.000 ± 0.008 | no |
+| A at 0.001, floor 2,000 | A at 0.000333, floor 500 | +0.012 [−0.003; +0.028] | +0.012 ± 0.009 | no |
+| A at 0.001, floor 2,000 | A at 0.0001, floor 500 | −0.004 [−0.023; +0.014] | −0.004 ± 0.008 | no |
+| B at 0.001, floor 2,000 | B at 0.000333 | −0.011 [−0.028; +0.006] | −0.011 ± 0.007 | no |
+| B at 0.001, floor 2,000 | B at 0.0001 | −0.032 [−0.051; −0.012] | −0.032 ± 0.009 | **loses** |
+| B at 0.001, floor 2,000 | B at 0.001, floor 500 | +0.009 [−0.007; +0.025] | +0.009 ± 0.013 | no |
+| B at 0.001, floor 2,000 | B at 0.000333, floor 500 | −0.015 [−0.031; +0.001] | −0.015 ± 0.009 | no |
+| B at 0.001, floor 2,000 | B at 0.0001, floor 500 | −0.036 [−0.055; −0.016] | −0.036 ± 0.009 | **loses** |
+| A at 0.001, floor 2,000 | B, the same | −0.036 [−0.059; −0.013] | −0.036 ± 0.016 | loses |
+| A at 0.000333, floor 2,000 | B, the same | −0.045 [−0.070; −0.020] | −0.045 ± 0.017 | loses |
+| A at 0.0001, floor 2,000 | B, the same | −0.060 [−0.086; −0.034] | −0.060 ± 0.010 | loses |
+| A at 0.001, floor 500 | B, the same | −0.027 [−0.050; −0.005] | −0.027 ± 0.008 | loses, under 0.03 |
+| A at 0.000333, floor 500 | B, the same | −0.063 [−0.089; −0.037] | −0.063 ± 0.009 | loses |
+| A at 0.0001, floor 500 | B, the same | −0.067 [−0.094; −0.041] | −0.067 ± 0.009 | loses |
+| A of `f7dae909…` (0.693) | A at 0.001, floor 2,000 | −0.003 [−0.014; +0.007] | −0.003 ± 0.012 | check holds |
+| B of `d5c27be6…` (0.636) | B at 0.001, floor 2,000 | +0.018 [+0.002; +0.033] | +0.018 ± 0.011 | check fails on the mean |
+
+**Conclusions.**
+
+1. Prediction 1 holds for A and fails for B: A's control repeats its mixture campaign's cell
+   within 0.003; B's lands 0.018 above its own, on the same code, order kind and card. The
+   card's training is not deterministic from run to run, and 30 cells of B moved its mean by
+   about what one seed moves it. B's level is read to about 0.02.
+2. Prediction 2 fails, in the other direction. B does not gain from a lower rate: at a tenth of
+   the rate it loses 0.032 at the floor of 2,000 and 0.036 at 500, by both conditions; at a
+   third it loses 0.011 and 0.015, not confirmed. The less fine-tuning moves B's weights, the
+   worse B does.
+3. Prediction 3 holds. A lands within 0.012 of its control at every rate and floor; the recipe
+   in force is near A's best, and no rate or floor read here would have changed A's cell.
+4. Prediction 4 fails. At its best setting (0.001, floor 500) B lands 0.027 below A at the same
+   setting, and 0.036 to 0.067 below A at the others. B is below A at every one of the six
+   points, and at every point B's fine-tuning lands at or below the network from nothing
+   (0.651), while A's lands 0.03 to 0.05 above it.
+5. Prediction 5 holds in the letter and says little: the floor of 500 moves B by +0.009 and A
+   by 0.000 at 0.001, both inside noise.
+6. As declared for B below A at every setting: the longer pretraining itself transfers worse
+   under fine-tuning, and the next backbones keep the mixture's eight passes. The recipe is not
+   what limited fine-tuning at 200 stays, so the fine-tuning rate does not join the selections
+   on this account. What B holds that fine-tuning cannot use, when its probe reads the same as
+   A's, is not answered here. No verdict of the registered grids changes.
+
+**Post hoc, not declared: the weights themselves.** The Frobenius norm of each module's
+weights, A against B (`data/report/t42d/fine-tuning/weight-norms.txt`,
+`data/report/t42d/weight_norms.py`): B's attention weights are 1.20 to 1.31 times A's in every
+block and its feed-forward weights 1.25 to 1.57 times, growing with depth; the embeddings, the
+time encoding and the value projection are within 3 %, and the LayerNorm gains differ by under
+10 % except the first block's attention norm, whose mean gain is 0.16 in B against 0.33 in A.
+The mixture of five, trained for about as many steps as B, has norms like B's and fine-tunes
+like A, so the size of the weights alone does not explain B. Larger weights under pre-norm
+blocks make a given rate move the function less, which is consistent with B wanting a higher
+rate, not a lower one; a rate of 0.003 for B is the one cheap reading this leaves open.
+
+**Limitations.**
+
+- One pretraining run per backbone, and B's own level moved by 0.018 between two runs of the
+  same cells.
+- Three rates and two floors; a rate above 0.001 was not read.
+- The weights' norms are a measurement made after the result, to be declared before it is read
+  for anything.
+
+## 2026-10-02 — Colab G4: STraTS without its size and its value, and under clipped values
+
+**Question.** Where does STraTS land turned towards this network in everything but its size and
+its value embedding, and is what the value's embedding through a tanh buys it the bound it puts
+on readings that are off by a unit or a decimal point? The design and predictions are in the
+section declared on 2026-10-02 for STraTS without its size and its value.
+
+**Conditions.** Commit `dcad779c`, STraTS at `e936cda`, this project's tokens, the division
+and seeds of the ablation (the split file hashes as on the Mac). One Colab G4, CUDA, fp32, five
+runs at a time under CUDA MPS; 20 runs of 3.5 to 9 minutes. Each run's record names its parts;
+the clipped runs clip 2,789 or 2,790 of the 1.75 million readings (0.16 %) to ±5 standard
+deviations, the count differing by one between the sides each run's standardisation is fitted
+on. Archive `durable/sha256/d791aa24…`, unpacked under `data/report/t42d/strats-ft/runs/`;
+read by `data/report/t42d/strats-ft-pairs.sh`.
+
+**Area under the ROC curve on the 800 scored stays**, seeds 1 to 5:
+
+| Variant | Mean | Seeds |
+|---|---|---|
+| `baseline` | 0.827 | 0.814–0.842 |
+| `minus-size-value`: every part but the size and the value | 0.783 | 0.769–0.794 |
+| `baseline-clipped` | 0.827 | 0.815–0.842 |
+| `linear-clipped` | 0.821 | 0.809–0.826 |
+| `linear-value` (session of 2026-10-02, part by part) | 0.787 | 0.783–0.792 |
+| this network's small shape (`bb75a701…`) | 0.803 | 0.783–0.821 |
+| this network from nothing (`bb75a701…`) | 0.782 | 0.764–0.792 |
+
+**Gain in area**, paired over stays (95 % interval), and seed by seed (mean ± standard error).
+
+| Control | Candidate | Paired gain | Seed by seed | Reads |
+|---|---|---|---|---|
+| `baseline` | `minus-size-value` | −0.043 [−0.063; −0.025] | −0.043 ± 0.009 | loses |
+| `baseline` | `baseline-clipped` | +0.001 [−0.000; +0.001] | +0.001 ± 0.000 | within 0.01 |
+| `baseline` | `linear-clipped` | −0.006 [−0.020; +0.008] | −0.006 ± 0.004 | no |
+| `linear-value` | `linear-clipped` | **+0.034 [+0.016; +0.053]** | +0.034 ± 0.004 | **gains** |
+| small shape | `minus-size-value` | −0.020 [−0.042; +0.002] | −0.020 ± 0.011 | no |
+| `baseline` of the earlier session | `baseline` here | +0.000 [+0.000; +0.000] | 0.000 ± 0.000 | repeats exactly |
+
+**Conclusions.**
+
+1. Prediction 1 holds: `baseline` repeats 0.827 to the stay.
+2. Prediction 2 fails on both counts. STraTS under this network's training regime and head loses
+   0.043, beyond the declared 0.03, and lands at 0.783, where this network from nothing stands
+   (0.782) and 0.020 below this network's small shape, not within 0.015. The parts cost more
+   together than one at a time (their single losses summed to 0.027). What was never turned
+   (time by CVE, the gap, the feed-forward width, the residual's normalisation) does not carry
+   STraTS's lead: with the regime and head turned, STraTS is this network, value embedding
+   aside.
+3. Prediction 3 holds: with CVE the bound changes nothing, +0.001.
+4. **Prediction 4 holds, and more than asked.** With a linear value embedding and the readings
+   clipped to ±5 standard deviations, STraTS recovers 0.034 of the 0.039 the linear map lost,
+   and lands 0.006 from its baseline, within noise. The 0.16 % of readings beyond the bound,
+   which the tanh of CVE cannot pass, are what the linear map could not take.
+5. As declared for 4 holding: the value embedding's lead over this network is a bound on the
+   readings' tails, not a nonlinearity, which is why the nonlinear value gained this network
+   nothing. The next candidate for this network is the readings' preparation, clipped or
+   standardised robustly, and the first reading of it is this network from nothing, in both
+   shapes, on readings clipped at the input. For the next backbones that is a change to the
+   corpus's preparation, declared in its own section. No verdict of the registered grids
+   changes.
+
+**Limitations.**
+
+- Clipping is read inside STraTS. This network's blocks are normalised, so an outlier token
+  may cost it less, or otherwise; it is read in this network next.
+- One bound, ±5 standard deviations after a standardisation the tails inflate; clinical
+  pipelines bound by physiological ranges instead, which this did not try.
+- Five seeds and 800 stays: a difference under about 0.025 is not told from none.
+
+## 2026-10-02 — declared before the run: the network from nothing on bounded values
+
+**Question.** Does this network gain when every token's value is bounded at its input? Inside
+STraTS, the value embedding's lead of 0.039 over a linear map is a bound on the readings'
+tails: with the readings clipped to ±5 standard deviations, the linear map recovers 0.034 of it
+(the section above). This network embeds a value by a linear map and its blocks are normalised,
+which may absorb an outlier token or may not; its nonlinear value, which also bounds, gained it
+nothing in its own shape and lost 0.020 in the small one, so the answer is not known.
+
+**Design.** Campaign `40a666f9…` (`campaigns/value-clip-all-physionet2012.toml`), the fifth
+held out by seed 101, every candidate at 0.000333, seeds 1 to 10:
+
+| Candidate | Shape | Values at the input |
+|---|---|---|
+| network from nothing (control) | 256 wide, 4 heads, 6 blocks, feed-forward 1,024 | as they are |
+| … bounded | the same | clipped to ±5 |
+| small shape | 64, 16, 2, 128 | as they are |
+| small shape, bounded | the same | clipped to ±5 |
+
+The bound is the plan's knob `value_clip`, applied by a module without weights in front of the
+encoder (`ClippedValues`); the gap feature is not bounded. Ten seeds this time, because a mean
+over ten seeds moved by 0.018 between two runs of the same cells on this card; the campaigns
+of five seeds (`bb75a701…`) and STraTS's runs are therefore compared by their means, not paired.
+One order on a Colab GPU.
+
+**Reading.** By `scripts/campaign_pairs_report.py`, within the campaign: each bounded candidate
+against its unbounded shape, the small shape against the control, and the two bounded ones
+against each other. A candidate *gains* where the paired interval over stays lies above zero
+and the mean over seeds exceeds twice its standard error. Reference levels on this fifth:
+STraTS 0.827, STraTS with a linear value on clipped readings 0.821, the small shape 0.803, the
+control 0.782.
+
+**Predictions.**
+
+1. The check holds: the control lands within 0.01 of 0.782 and the small shape within 0.015 of
+   0.803.
+2. The bound gains the control's shape 0.02 or more.
+3. The bound gains the small shape 0.015 or more, and the small shape bounded lands at 0.815 or
+   above, within 0.01 of STraTS with a linear value on clipped readings.
+4. The two gains add: the small shape bounded lands above the control bounded by 0.01 or more.
+
+**What follows.** If 2 or 3 holds, the readings' tails cost this network too, and the next
+backbones are pretrained on a corpus whose preparation bounds them: a new version of the
+intensive-care corpus, by physiological ranges as the clinical pipelines do or by a bound after
+a robust standardisation, with the window of 48 hours and a minute, under an ADR that replaces
+that part of ADR-0031; the other corpora get the same reading of their tails first. If neither
+holds, the tails cost STraTS alone, for want of normalisation in its blocks, and the shape is
+decided on by the campaigns on Kaggle. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- One bound, ±5 after the corpus's standardisation, whose standard deviation the tails inflate
+  (pH: 8.2 against 0.08 without 11 readings); the clinical range stays compressed under both
+  candidates, so a gain here is a lower bound on what a robust preparation could give.
+- A bound at the input of a network trained from nothing; a backbone pretrained on unbounded
+  values is another question.
+- 800 stays: a difference under about 0.02 is not confirmed by the paired interval even over
+  ten seeds.
