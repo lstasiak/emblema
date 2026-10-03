@@ -125,3 +125,11 @@ def test_workers_deliver_the_epoch_the_training_process_ordered() -> None:
 def test_a_loader_needs_a_window() -> None:
     with pytest.raises(ValueError, match="at least one window"):
         WindowLoader([], batch_size=2, seed=1)
+
+
+def test_a_later_turn_delivers_the_windows_in_another_order() -> None:
+    first = WindowLoader(WINDOWS, batch_size=2, seed=1)
+    second = WindowLoader(WINDOWS, batch_size=2, seed=1, turn=1)
+
+    assert epoch_identities(first, 0) != epoch_identities(second, 0)
+    assert sorted(epoch_identities(second, 0)) == sorted(epoch_identities(first, 0))
