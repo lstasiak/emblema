@@ -1,0 +1,53 @@
+# Whether the small shape gains under the stop alone, the registered recipe at every stay from
+# 2026-10-03. The stop alone gained the control's shape 0.027 and the small shape under the
+# published regime whole landed 0.009 from the published network; the regime's other parts cost
+# the control's shape 0.011 beside the stop (docs/verification/intensive-care-curve.md,
+# 2026-10-03). The one cell that reading left unread is the small shape with the stop and
+# nothing else, read here beside the stop alone in the control's shape, run again as the control
+# of this campaign because a cell of that shape does not repeat to the stay on a GPU.
+#
+# Both candidates learn at 0.000333 under the registered schedule, its thirty epochs the stop's
+# cap, and are scored on the fifth held out by seed 101, the fifth every diagnosis of this
+# network was read on, over ten seeds; the validation side is not read, by the stop or by
+# anything else. A campaign divided this way chooses nothing. Defined under the worker settings
+# of the registered grids, with the mixed backbone, sha256:869ed545…, as the architecture the
+# control is shaped like.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "small-shape-stop-all-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2",
+    "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,patience=10,stop_share=0.2,width=64",
+]
+control = "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2"
+endpoint = "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,patience=10,stop_share=0.2,width=64"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+# Ten seeds: under the stop one seed moves the area by about 0.01 on this fifth, so the
+# difference of two candidates is read to about 0.005.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# One contender at one budget, less the endpoint.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

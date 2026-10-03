@@ -1,0 +1,57 @@
+# Whether the stop on held-out labels gains at 200 stays, the budget the registered grids'
+# endpoint is read at and the one the thesis is read at. At every stay the stop alone gained the
+# network from nothing 0.027 and is the registered recipe there from 2026-10-03; at 200 stays a
+# fifth held out is 40 stays with five or six deaths among them, and the stop was not read
+# (docs/verification/intensive-care-curve.md, 2026-10-03). Read here in both shapes: the
+# control's and the small one, which gained 0.026 at 200 stays by the paired interval without a
+# stop (campaigns/small-shape-200-physionet2012.toml). The schedule's 154 epochs over 200 stays
+# are the stop's cap.
+#
+# Every candidate learns at 0.003, the rate of that campaign, so the four differ in shape and in
+# the stop and in nothing else. Scored on the fifth held out by seed 101, the fifth of
+# campaigns/grid-cost-200-physionet2012.toml and of the small shape's campaign at 200, so the
+# cells pair by stay and seed with their network from nothing, their small shape and their patch
+# model; the validation side is not read, by the stop or by anything else. A campaign divided
+# this way chooses nothing. Defined under the worker settings of the registered grids, with the
+# mixed backbone, sha256:869ed545…, as the architecture the control is shaped like.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "stop-200-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.003",
+    "from_scratch@learning_rate=0.003,patience=10,stop_share=0.2",
+    "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.003,width=64",
+    "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.003,patience=10,stop_share=0.2,width=64",
+]
+control = "from_scratch@learning_rate=0.003"
+endpoint = "from_scratch@learning_rate=0.003,patience=10,stop_share=0.2"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+# Ten seeds: at 200 stays one seed moves the area by about 0.04 on this fifth, so the difference
+# of two candidates is read to about 0.013.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# Three contenders at one budget, less the endpoint.
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
