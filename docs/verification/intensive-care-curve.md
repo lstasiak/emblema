@@ -1545,3 +1545,64 @@ its standard error.
 - At 200 stays ten seeds read a difference only to about 0.017 seed by seed, so a gain of
   0.026 is neither confirmed nor excluded by the second condition.
 - Two half-turned shapes read two of fifteen ways of turning four counts.
+
+## 2026-10-03 — declared before the run: the published regime, whole
+
+**Question.** Does this network gain from the training regime of the published network taken
+whole? Turned towards this network's regime one part at a time, STraTS lost at most 0.011 to any
+part; turned in all of them, 0.043, and landed where this network stands (the sections of
+2026-10-02). This network tried the parts it had one at a time (dropout, the static features
+apart, attention pooling) and gained nothing, and neither its value embedding nor the readings'
+tails carry STraTS's lead into it. The parts together are the one measured lever left.
+
+**Design.** Campaign `e1959b4f…` (`campaigns/published-regime-all-physionet2012.toml`), the
+fifth held out by seed 101, seeds 1 to 10, every candidate capped at the control's thirty
+epochs, under ADR-0047:
+
+| Candidate | Shape | Regime |
+|---|---|---|
+| network from nothing (control) | 256 wide, 6 blocks | as every campaign: 0.000333 with warm-up and cosine decay, every epoch, last weights |
+| … with the stop alone | the same | a fifth of the labelled units held out by unit, patience 10, best epoch's weights |
+| … under the published regime | the same | the stop; the positive outcome weighted by the ratio of the classes; a fifth of each window's channels withheld per step; dropout 0.2; a constant rate of 0.0005 |
+| the small shape under the published regime | 64 wide, 16 heads, 2 blocks, feed-forward 128 | the same |
+
+The stop scores the held-out units after each epoch by the sum of the areas under the ROC and
+precision-recall curves, as STraTS does; the learning side is 2,560 of the 3,200 tuning stays,
+as STraTS's was. Not transplanted: STraTS's gradient clipping at 0.3, its cap of 50 epochs and
+its path for the demographics. One order on a Colab GPU.
+
+**Reading.** By `scripts/campaign_pairs_report.py`, within the campaign: the stop against the
+control; the regime against the control and against the stop; the small shape under the regime
+against the regime in the control's shape. A candidate *gains* where the paired interval over
+stays lies above zero and the mean over seeds exceeds twice its standard error. Reference
+levels on this fifth, by their means: STraTS 0.827; STraTS under this network's regime and head
+0.783; this network's control 0.782–0.790 over the earlier campaigns; its small shape 0.794–0.803.
+
+**Predictions.**
+
+1. The check holds: the control lands within 0.01 of 0.790, the mean of its last reading over
+   ten seeds.
+2. The stop alone gains less than 0.01: on 2,560 stays the cosine decay already ends the run
+   where it would stop.
+3. The regime whole gains less than 0.02 in the control's shape. Its parts, where this network
+   has read them, gained nothing, and the interaction STraTS showed is expected to be STraTS's,
+   whose blocks have no normalisation to steady them.
+4. The small shape under the regime lands below 0.815: the lead of 0.827 is not reached by
+   transplanting the regime into this network's blocks.
+
+**What follows.** If 3 or 4 fails and the regime gains 0.02 or more, the lever is found: the
+regime becomes a protocol variant for the budget of every stay, ADR-0047 is accepted with that
+reading, the preregistration records the change, and the next backbones' campaigns read their
+arms under it at that budget. If the predictions hold, nothing measured separates this network
+from the published one except what it does not need, and the diagnosis closes: the remaining
+0.03 at every stay is left as the published network's, the shape is read on pretrained backbones
+as declared on 2026-10-03, and the next ticket starts from eight-pass backbones without SMD.
+No verdict of the registered grids changes.
+
+**Limitations.**
+
+- One stop share and one patience; one class weight; one channel dropout rate.
+- The stop's learning side is a fifth smaller than the control's, so a gain under the regime is
+  a gain against fewer labels, and a loss may be the labels'.
+- 800 stays and ten seeds: a difference under about 0.02 is not confirmed by the paired
+  interval.
