@@ -1674,3 +1674,68 @@ the runs ended at about half the control's epochs.
 - The regime's other parts were read together; which of them costs the 0.011 is not read.
 - 800 stays and ten seeds: a difference under about 0.02 is not confirmed by the paired
   interval.
+
+## 2026-10-03 — declared before the run: the stop alone in the small shape, and the stop at 200 and 1,000 stays
+
+**Question.** Two things the reading of the published regime left unread. Does the small shape
+gain under the stop alone, the recipe registered at every stay, or did it need the regime's
+other parts? And does the stop gain at 200 and 1,000 stays, where a fifth held out is 40 and
+200 stays, the budgets where the thesis is read and where the registered rule does not reach?
+
+**Design.** Three campaigns, every one scored on the fifth held out by seed 101 over seeds 1 to
+10, the validation side unread, under ADR-0047; the stop holds a fifth of the labelled stays
+out by unit with a patience of ten epochs, the schedule's epochs its cap.
+
+| Campaign | Budget | Rate | Cap | Candidates |
+|---|---|---|---|---|
+| `f7e06744…` (`campaigns/small-shape-stop-all-physionet2012.toml`) | every stay | 0.000333 | 30 epochs | the stop alone in the control's shape, run again; the small shape under the stop alone |
+| `4230d83b…` (`campaigns/stop-200-physionet2012.toml`) | 200 | 0.003 | 154 epochs | the control; the stop alone; the small shape; the small shape under the stop alone |
+| `53e8d389…` (`campaigns/stop-1000-physionet2012.toml`) | 1,000 | 0.000333 | 32 epochs | the same four |
+
+The rates are the ones the earlier campaigns ran the network at each budget, so within a
+campaign the candidates differ in shape and in the stop and in nothing else. The small shape is
+64 wide, 16 heads, 2 blocks, feed-forward 128. At every stay the stop in the control's shape
+runs again because a cell of that shape does not repeat to the stay on a GPU; at 200 the four
+cells pair with `a9ab91cc…` (the small shape at 200: control 0.660, small 0.686, the patch model
+0.696 on the same fifth and seeds). Three orders on one Colab GPU.
+
+**Reading.** By `scripts/campaign_pairs_report.py`, within each campaign: at every stay, the
+small shape under the stop against the stop in the control's shape, and against the small shape
+under the regime whole (0.818, campaign `e1959b4f…`, deterministic cells); at 200 and 1,000,
+the stop against the control in each shape, and the small shape against the control's shape
+under the stop. A candidate *gains* where the paired interval over stays lies above zero and
+the mean over seeds exceeds twice its standard error.
+
+**Predictions.**
+
+1. The checks hold: the stop in the control's shape lands within 0.01 of 0.810 at every stay,
+   and the control at 200 within 0.015 of 0.660.
+2. At every stay the small shape under the stop alone lands at or above the small shape under
+   the regime whole, 0.818 to 0.830: the regime's other parts cost the control's shape 0.011
+   and are not expected to help the small one. It gains over the stop in the control's shape by
+   0.01 to 0.02, seed by seed and not by the interval.
+3. At 1,000 stays the stop gains in both shapes by both conditions, 0.02 or more: the run is
+   32 epochs of cosine decay over 1,000 stays, and the held-out 200 stays score an epoch to
+   about 0.05.
+4. At 200 stays the stop gains in the control's shape by the paired interval, 0.02 to 0.04,
+   and the spread over seeds does not fall: 154 epochs at 0.003 over 200 stays overfit, but 40
+   held-out stays with five or six deaths score an epoch to about 0.11, so the epoch kept is
+   noisy. The small shape under the stop lands at or above the patch model's 0.696.
+
+**What follows.** If 2 holds, the stop alone is the recipe of every shape at every stay, and
+the two-block backbone's arms read under it there; if the small shape under the stop lands
+below the regime whole by more than twice the standard error, the regime's other parts are its
+recipe and the arms of the two-block backbone declare them. If 3 holds, the registered rule
+extends to 1,000 stays, by a register row, before the next backbones' campaigns. If 4 holds in
+both conditions the rule extends to 200 as well; if it holds by the interval only, the stop at
+200 stays a declared variant beside the fixed epochs there, read again on the pretrained arms
+under more seeds before it is registered; if the stop loses at 200, the fixed epochs stand at
+200 and 50, and the rule's lower edge is 1,000. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- One share and one patience at every budget; at 200 stays a larger share would leave fewer
+  stays to learn from, and a longer patience would spend the cap.
+- At 1,000 stays nothing of this network was read on this fifth before; the check there is the
+  control's level against the registered grid's, read under another division.
+- Ten seeds read a difference to about 0.013 at 200 stays and about 0.007 at every stay.
