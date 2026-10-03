@@ -1,0 +1,62 @@
+# Whether the network trained from nothing on the intensive-care task gains from a value embedded
+# through a narrow hidden layer and a tanh, from a much smaller shape, or from both.
+#
+# STraTS, a published network fed this project's tokens of the same stays, falls from 0.827 to
+# 0.787 when its continuous value embedding is replaced by one linear map, which is how this
+# network embeds a value; 0.787 is where this network stands. The same ablation could not read
+# the size: STraTS's blocks, which hold no normalisation, do not train at this network's width
+# and depth. This network's blocks are normalised, so its own shape can be read here. Each change
+# is read on its own, and both together, beside the network as it was.
+#
+# The small shape is STraTS's: 64 wide, 16 heads, 2 blocks, a feed-forward width of 128, some
+# 77,000 parameters against 4.8 million. Every variant learns at 0.000333, the rate the
+# registered grid ran the network at (campaigns/curve-physionet2012-mixed5.toml), so the
+# candidates differ in how the encoder is built and in nothing else.
+#
+# Scored on one tuning stay in five, the same fifth for every seed and the fifth STraTS was scored
+# on, so the candidates' answers pair by area across seeds and with its answers; the validation
+# side is not read. A campaign divided this way chooses nothing.
+#
+# Defined under the worker settings of the registered grids, with the mixed backbone,
+# sha256:869ed545…, as the architecture the control and the value's variant are shaped like.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "value-shape-all-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.000333",
+    "from_scratch@learning_rate=0.000333,value_embedding=nonlinear",
+    "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,width=64",
+    "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,value_embedding=nonlinear,width=64",
+]
+control = "from_scratch@learning_rate=0.000333"
+endpoint = "from_scratch@learning_rate=0.000333,value_embedding=nonlinear"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+# Five seeds: at every stay one seed moves the area by about 0.015 on this fifth, so the
+# difference of two candidates is read to about 0.01.
+seeds = [1, 2, 3, 4, 5]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# Three contenders at one budget, less the endpoint.
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

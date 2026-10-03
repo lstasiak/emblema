@@ -1,0 +1,47 @@
+# The mixture of five without SMD, at the mixture's number of optimiser steps: the steps SMD took
+# are spent on the other corpora, thirteen passes over every window instead of eight, so against
+# backbone-mixed5-nosmd-m.toml it differs by how often the rest is seen, and against
+# backbone-mixed5-m.toml by where the same arithmetic went.
+#
+# SMD takes 40 % of that mixture's steps and, at 1,900 tokens a window, 59 % of its tokens and
+# about three quarters of its attention, while its validation stays at 0.35 to 0.40 of the trivial
+# predictor's loss from the first epoch to the last. Whether those steps teach the other corpora
+# anything is what this run answers; the corpora's published manifests and the vocabulary they
+# chain through are the mixture's, so SMD's channel rows stay in the table, untrained, and the
+# backbone has the mixture's parameters.
+#
+# About 2,790 steps an epoch: 23 % C-MAPSS, 4 % SKAB, 68 % the satellite corpus, 4 % the stays;
+# thirteen epochs are 36,300 steps against the mixture's 36,950. The warm-up keeps the mixture's
+# share of the run, 3 %: 0.4 of an epoch here where it was a quarter of one of eight.
+name = "backbone-mixed5-nosmd-m-13"
+tier = "M"
+corpora = ["cmapss", "skab", "esa_ad", "physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+# The mixture's budget but for the passes: thirteen over every window, the epoch kept the one whose
+# mean relative validation over the four corpora is lowest; sixteen windows a micro-batch, two to
+# a step, as in the mixture, so a step holds as many windows although without SMD's windows of
+# 1,900 tokens the memory would allow more.
+[budget]
+epochs = 13
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.4
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000

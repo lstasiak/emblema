@@ -16,9 +16,10 @@ same purpose, on the same seeds and over the same units.
 
 A campaign read by the area under the ROC curve is paired as its verdict pairs it: from every
 window's answer, each repeat ranked on its own and the repeats of a side pooled by the mean of
-their areas, the units resampled in two strata, the floor stated in area. Only comparisons pair
-that way, since a selection's repeats score other units and two models' answers are never ranked
-together.
+their areas, the units resampled in two strata, the floor stated in area. A selection pairs that
+way only where every repeat of both sides scored the same units, as one divided under a fixed
+seed does; a selection divided afresh under every seed scores other units each time, and two
+models' answers are never ranked together.
 
     uv run scripts/campaign_pairs_report.py --campaign ID [--campaign ID ...] --out DIR
     uv run scripts/campaign_pairs_report.py --out DIR
@@ -36,6 +37,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from math import sqrt
 from pathlib import Path
+from statistics import mean, stdev
 from typing import NamedTuple
 
 # Run from anywhere: the sibling script modules live in this directory's package at the repository
@@ -46,6 +48,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.evaluation.contracts.identifiers import CampaignId
 from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
+from emblema.evaluation.domain.exceptions import InvalidPairedUnitRankingsError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
@@ -98,6 +101,8 @@ COMPARISON_COLUMNS = (
     "p_value",
     "floor",
     "measure",
+    "seed_reduction_mean",
+    "seed_reduction_se",
 )
 PREDICTION_COLUMNS = (
     "campaign",
@@ -198,7 +203,13 @@ class Answers:
 
 @dataclass(frozen=True, kw_only=True)
 class Comparison:
-    """One pair read: what each side scored, and the paired difference between them."""
+    """One pair read: what each side scored, and the paired difference between them.
+
+    The interval resamples the units and holds the repeats as they ran, so it cannot see how far
+    another seed would move either side. The reduction is therefore also stated seed by seed —
+    each repeat of the control against the candidate's repeat under the same seed, which drew the
+    same labels — and its mean and standard error over the seeds sit beside the interval.
+    """
 
     control: Side
     candidate: Side
@@ -210,6 +221,17 @@ class Comparison:
     candidate_error: ErrorOverRepeats
     difference: PairedDifference
     floor: PracticalFloor
+    per_seed: tuple[float, ...]
+
+    @property
+    def seed_mean(self) -> float:
+        """The reduction averaged over the seeds."""
+        return mean(self.per_seed)
+
+    @property
+    def seed_se(self) -> float:
+        """Standard error of that mean over the seeds."""
+        return stdev(self.per_seed) / sqrt(len(self.per_seed))
 
     def row(self) -> tuple[str, ...]:
         share = self.difference.relative_reduction
@@ -233,6 +255,8 @@ class Comparison:
             repr(self.difference.p_value),
             repr(self.floor.value),
             self.measure.value,
+            repr(self.seed_mean),
+            repr(self.seed_se),
         )
 
 
@@ -362,8 +386,8 @@ def pair(
 
     Raises:
         ValueError: If a side has no cell, the sides were run for different purposes, read by
-            different measures or run on different seeds, a selection is to be paired by area,
-            or the units of a repeat do not pair.
+            different measures or run on different seeds, a selection to be paired by area scored
+            other units in some repeat, or the units of a repeat do not pair.
     """
     control_cells = _cells_of(rows, control)
     candidate_cells = _cells_of(rows, candidate)
@@ -395,17 +419,21 @@ def pair(
             candidate_spread = [_rmse(r) for r in candidate_repeats]
             floor_part, threshold = floor_share, ThresholdKind.RELATIVE
         case ErrorMeasure.AUROC_SHORTFALL:
-            if purposes == {RunPurpose.SELECTION.value}:
-                raise ValueError(
-                    "a selection read by area scores other units under every seed, and two "
-                    "models' answers are never ranked together; only comparisons pair by area"
-                )
             pairing = "area-pooled"
             found = Answers(()) if answers is None else answers
-            rankings = PairedUnitRankings(
-                control=tuple(found.ranking(control, seed) for seed in seeds),
-                candidate=tuple(found.ranking(candidate, seed) for seed in seeds),
-            )
+            try:
+                rankings = PairedUnitRankings(
+                    control=tuple(found.ranking(control, seed) for seed in seeds),
+                    candidate=tuple(found.ranking(candidate, seed) for seed in seeds),
+                )
+            except InvalidPairedUnitRankingsError as error:
+                if purposes != {RunPurpose.SELECTION.value}:
+                    raise
+                raise ValueError(
+                    "a selection read by area pairs only where every repeat scored the same "
+                    "units, as one divided under a fixed seed does; this one did not, and two "
+                    f"models' answers are never ranked together: {error}"
+                ) from error
             paired = rankings
             control_spread = list(rankings.per_repeat_control())
             candidate_spread = list(rankings.per_repeat_candidate())
@@ -423,6 +451,12 @@ def pair(
         candidate_error=candidate_error,
         difference=bootstrap.compare(paired),
         floor=PracticalFloor.of(control_error, part=floor_part, threshold=threshold),
+        per_seed=tuple(
+            control_repeat - candidate_repeat
+            for control_repeat, candidate_repeat in zip(
+                control_spread, candidate_spread, strict=True
+            )
+        ),
     )
 
 
@@ -497,6 +531,7 @@ def render(comparisons: Sequence[Comparison]) -> str:
             str(comparison.difference.interval),
             f"{comparison.difference.p_value:.3f}",
             f"{comparison.floor.value:.3f}",
+            f"{comparison.seed_mean:+.3f} ± {comparison.seed_se:.3f}",
             f"{comparison.pairing}, {comparison.repeats} repeats, {comparison.units} pairs",
         )
         for comparison in comparisons
@@ -511,6 +546,7 @@ def render(comparisons: Sequence[Comparison]) -> str:
             "95 % interval",
             "p",
             "floor",
+            "per seed, mean ± SE",
             "paired",
         ),
         rows,

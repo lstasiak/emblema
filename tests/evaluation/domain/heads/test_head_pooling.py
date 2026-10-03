@@ -3,7 +3,11 @@ import math
 import pytest
 
 from emblema.evaluation.domain.exceptions import InvalidHeadPoolingError, UnknownKnobError
-from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
+from emblema.evaluation.domain.heads.head_pooling import (
+    HeadPooling,
+    PoolingScheme,
+    StaticsPlacement,
+)
 
 
 def test_every_network_starts_from_the_mean_over_the_whole_window() -> None:
@@ -57,3 +61,24 @@ def test_a_knob_the_pooling_lacks_or_cannot_take_is_refused() -> None:
         HeadPooling.mean().tuned("pooling", "median")
     with pytest.raises(UnknownKnobError, match="takes a float"):
         HeadPooling.mean().tuned("tail_share", "a fifth")
+    with pytest.raises(UnknownKnobError, match="takes a StaticsPlacement"):
+        HeadPooling.mean().tuned("statics", "beside")
+
+
+def test_static_features_stand_among_the_readings_unless_a_variant_sets_them_apart() -> None:
+    mean = HeadPooling.mean()
+
+    apart = mean.tuned("statics", "apart")
+
+    assert (mean.statics, mean.width_factor, mean.turned_away()) == (StaticsPlacement.AMONG, 1, {})
+    assert apart == HeadPooling(pooling=PoolingScheme.MEAN, statics=StaticsPlacement.APART)
+    assert (apart.width_factor, apart.turned_away()) == (2, {"statics": "apart"})
+    # Named apart from the scheme and its share, so descriptions stored before it are unchanged.
+    assert apart.parameters() == mean.parameters()
+
+
+@pytest.mark.parametrize("scheme", ["tail", "attention"])
+def test_static_features_are_set_apart_under_every_scheme(scheme: str) -> None:
+    apart = HeadPooling.mean().tuned("pooling", scheme).tuned("statics", "apart")
+
+    assert (apart.pooling, apart.statics) == (PoolingScheme(scheme), StaticsPlacement.APART)

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from math import log
 from typing import ClassVar, Self
@@ -6,8 +7,12 @@ import torch
 from torch import Tensor
 from torch.nn.functional import binary_cross_entropy_with_logits, mse_loss
 
+from emblema.evaluation.domain.exceptions import InvalidTrainingRegimeError
 from emblema.evaluation.domain.labels.label_scheme import LabelScheme
 from emblema.evaluation.domain.labels.target_kind import TargetKind
+
+# What a batch's answers are held to against what they were taught.
+Loss = Callable[[Tensor, Tensor], Tensor]
 
 
 @dataclass(frozen=True)
@@ -19,9 +24,9 @@ class TargetLink:
     error, and the answer is multiplied back. An outcome is learnt as the log-odds of the
     positive one under binary cross-entropy, and the answer is the sigmoid: the probability a
     campaign ranks and a consumer reads. The bias starts at the mean label in the head's unit,
-    or at the log-odds of the prevalence. No class is weighted: the area under the ROC curve
-    does not depend on the prevalence, and weighting would move the probabilities off the
-    outcomes.
+    or at the log-odds of the prevalence. No class is weighted unless a regime asks for it: the
+    area under the ROC curve does not depend on the prevalence, and weighting moves the
+    probabilities off the outcomes.
 
     Attributes:
         kind: What kind of number the target is.
@@ -73,6 +78,21 @@ class TargetLink:
                 return mse_loss(raw, taught)
             case TargetKind.BINARY:
                 return binary_cross_entropy_with_logits(raw, taught)
+
+    def weighted(self, positive_weight: float) -> Loss:
+        """The loss with the positive outcome weighing ``positive_weight`` against a negative.
+
+        Raises:
+            InvalidTrainingRegimeError: If the target is a quantity, which has no classes.
+        """
+        if self.kind is not TargetKind.BINARY:
+            raise InvalidTrainingRegimeError("a quantity has no classes to weigh in its loss")
+        weight = torch.tensor(positive_weight)
+
+        def loss(raw: Tensor, taught: Tensor) -> Tensor:
+            return binary_cross_entropy_with_logits(raw, taught, pos_weight=weight.to(raw.device))
+
+        return loss
 
     def answered(self, raw: Tensor) -> Tensor:
         """The head's output as the task's answer: in the target's unit, or as a probability."""

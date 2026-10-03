@@ -1,7 +1,12 @@
 import pytest
 
-from emblema.evaluation.domain.exceptions import InvalidAdaptationPlanError
+from emblema.evaluation.domain.exceptions import (
+    InvalidAdaptationPlanError,
+    InvalidEncoderSettingError,
+)
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
+from emblema.evaluation.domain.transfer.training_regime import ClassWeight, TrainingRegime
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from tests.evaluation.support import LORA, PENALTIES, WEIGHTS, plan
 
@@ -84,3 +89,95 @@ def test_another_seed_is_a_repeat_of_the_same_plan() -> None:
 
     assert {key for key in first if first[key] != again[key]} == {"run_seed"}
     assert again["run_seed"] == 2
+
+
+@pytest.mark.parametrize(
+    ("mode", "pooling"),
+    [
+        (TransferMode.FROZEN_RIDGE, PoolingScheme.MEAN),
+        (TransferMode.FROZEN_PROBE, PoolingScheme.MEAN),
+        (TransferMode.FROZEN_PROBE, PoolingScheme.TAIL),
+    ],
+)
+def test_a_dropout_is_refused_where_the_encoder_states_every_window_once(
+    mode: TransferMode, pooling: PoolingScheme
+) -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="a dropout would change nothing"):
+        plan(mode, pooling=HeadPooling(pooling=pooling), encoder=EncoderSetting(dropout=0.2))
+
+
+@pytest.mark.parametrize(
+    ("mode", "pooling"),
+    [
+        (TransferMode.FROM_SCRATCH, PoolingScheme.MEAN),
+        (TransferMode.LORA, PoolingScheme.MEAN),
+        (TransferMode.FULL_FINE_TUNING, PoolingScheme.TAIL),
+        (TransferMode.FROZEN_PROBE, PoolingScheme.ATTENTION),
+    ],
+)
+def test_a_dropout_is_taken_where_the_encoder_runs_in_the_loop(
+    mode: TransferMode, pooling: PoolingScheme
+) -> None:
+    dropped = plan(mode, pooling=HeadPooling(pooling=pooling), encoder=EncoderSetting(dropout=0.2))
+
+    assert dropped.encodes_in_the_loop
+    assert dropped.parameters()["encoder_dropout"] == 0.2
+
+
+def test_a_grid_is_taken_under_every_mode_and_recorded_with_the_run() -> None:
+    for mode in TransferMode:
+        gridded = plan(mode, encoder=EncoderSetting(grid_resolution=1.0))
+        assert gridded.parameters()["grid_resolution"] == 1.0
+    assert plan(TransferMode.FROM_SCRATCH).parameters()["grid_resolution"] == 0.0
+
+
+def test_where_the_static_features_stand_is_recorded_with_every_run() -> None:
+    apart = plan(TransferMode.FROM_SCRATCH, pooling=HeadPooling.mean().tuned("statics", "apart"))
+
+    assert apart.parameters()["statics"] == "apart"
+    assert plan(TransferMode.FROM_SCRATCH).parameters()["statics"] == "among"
+
+
+@pytest.mark.parametrize(
+    "encoder",
+    [
+        EncoderSetting(value_embedding=ValueEmbedding.NONLINEAR),
+        EncoderSetting(width=64, heads=16, layers=2, feedforward_width=128),
+    ],
+)
+def test_an_encoder_built_otherwise_than_its_backbone_starts_from_no_weights(
+    encoder: EncoderSetting,
+) -> None:
+    assert plan(TransferMode.FROM_SCRATCH, encoder=encoder).encoder == encoder
+    with pytest.raises(InvalidAdaptationPlanError, match="fix its encoder's build"):
+        plan(TransferMode.FULL_FINE_TUNING, encoder=encoder)
+
+
+def test_an_encoders_own_shape_is_stated_whole() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="states its width, heads"):
+        plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(width=64, heads=16))
+    with pytest.raises(InvalidEncoderSettingError, match="multiple of heads"):
+        plan(
+            TransferMode.FROM_SCRATCH,
+            encoder=EncoderSetting(width=64, heads=5, layers=2, feedforward_width=128),
+        )
+
+
+def test_a_stop_stated_in_part_is_refused_and_whole_it_is_taken_under_every_trained_mode() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="both the share"):
+        plan(regime=TrainingRegime(patience=10))
+    for mode in (TransferMode.FROM_SCRATCH, TransferMode.FROZEN_PROBE, TransferMode.LORA):
+        stopped = plan(mode, regime=TrainingRegime(stop_share=0.2, patience=10))
+        assert stopped.regime.stops
+        assert stopped.parameters()["stop_share"] == 0.2
+
+
+def test_a_closed_form_head_takes_no_regime() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="takes no step"):
+        plan(TransferMode.FROZEN_RIDGE, regime=TrainingRegime(class_weight=ClassWeight.RATIO))
+
+
+def test_withholding_channels_is_refused_where_the_encoder_states_every_window_once() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="withholding channels"):
+        plan(TransferMode.FROZEN_PROBE, regime=TrainingRegime(channel_dropout=0.2))
+    assert plan(TransferMode.FROM_SCRATCH, regime=TrainingRegime(channel_dropout=0.2)).regime

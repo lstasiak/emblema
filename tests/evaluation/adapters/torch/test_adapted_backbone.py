@@ -1,10 +1,22 @@
+from dataclasses import replace
+
 import pytest
 
 torch = pytest.importorskip("torch")
 
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
+from emblema.evaluation.adapters.torch.clipped_values import ClippedValues  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling  # noqa: E402
+from emblema.evaluation.domain.transfer.encoder_setting import (  # noqa: E402
+    EncoderSetting,
+    ValueEmbedding,
+)
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
+from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (  # noqa: E402
+    NonlinearValueEmbedding,
+)
+from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
 from tests.evaluation.support import WEIGHTS, plan  # noqa: E402
 from tests.support.backbones import SmallBackbones  # noqa: E402
 from tests.support.encoders import SMALL  # noqa: E402
@@ -63,7 +75,7 @@ def test_a_transfer_mode_asks_for_the_plans_weights(mode: TransferMode) -> None:
 
 def test_the_control_arm_starts_from_weights_of_its_own() -> None:
     built, backbones = candidate(TransferMode.FROM_SCRATCH)
-    pretrained = backbones.pretrained(WEIGHTS, vocabulary_size=VOCABULARY_SIZE)
+    pretrained = backbones.pretrained(WEIGHTS, vocabulary_size=VOCABULARY_SIZE, dropout=0.0)
 
     assert backbones.requested == [WEIGHTS]
     assert not torch.equal(
@@ -91,6 +103,77 @@ def test_the_candidate_answers_one_number_per_window() -> None:
 
     assert answers.shape == (3,)
     assert torch.isfinite(answers).all()
+
+
+def test_set_apart_the_static_features_double_the_state_the_head_reads() -> None:
+    torch.manual_seed(5)
+    apart = AdaptedBackbone.under(
+        plan(TransferMode.FROM_SCRATCH, pooling=HeadPooling.mean().tuned("statics", "apart")),
+        SmallBackbones(),
+        vocabulary_size=VOCABULARY_SIZE,
+        starting_at=0.0,
+    )
+    batch = random_batch(3, 9, seed=2)
+
+    assert apart.embed(batch).shape == (3, 2 * SMALL.width)
+    assert sum(p.numel() for p in apart.head.parameters()) == 2 * SMALL.width + 1
+    assert torch.isfinite(apart(batch)).all()
+
+
+def test_a_network_from_nothing_is_built_to_its_own_shape_and_value_embedding() -> None:
+    torch.manual_seed(5)
+    encoder = EncoderSetting(
+        value_embedding=ValueEmbedding.NONLINEAR, width=16, heads=4, layers=1, feedforward_width=32
+    )
+    built = AdaptedBackbone.under(
+        plan(TransferMode.FROM_SCRATCH, encoder=encoder),
+        SmallBackbones(),
+        vocabulary_size=VOCABULARY_SIZE,
+        starting_at=0.0,
+    )
+    batch = random_batch(3, 9, seed=2)
+
+    assert built.embed(batch).shape == (3, 16)
+    assert sum(p.numel() for p in built.head.parameters()) == 16 + 1
+    assert isinstance(built.encoder, SetEncoder)
+    assert isinstance(built.encoder.value_projection, NonlinearValueEmbedding)
+    assert len(built.encoder.blocks) == 1
+    assert torch.isfinite(built(batch)).all()
+
+
+@pytest.mark.parametrize("mode", [TransferMode.FROM_SCRATCH, TransferMode.FULL_FINE_TUNING])
+def test_a_clip_feeds_any_encoder_bounded_values_and_leaves_the_rest_as_it_was(
+    mode: TransferMode,
+) -> None:
+    torch.manual_seed(5)
+    clipped = AdaptedBackbone.under(
+        plan(mode, encoder=EncoderSetting(value_clip=5.0)),
+        SmallBackbones(),
+        vocabulary_size=VOCABULARY_SIZE,
+        starting_at=0.0,
+    )
+    torch.manual_seed(5)
+    plain = AdaptedBackbone.under(
+        plan(mode), SmallBackbones(), vocabulary_size=VOCABULARY_SIZE, starting_at=0.0
+    )
+    batch = random_batch(3, 9, seed=2)
+    wild = batch.features.clone()
+    wild[0, 0, 0] = 88.0
+    wild[1, 2, 0] = -31.0
+    bounded = wild.clone()
+    bounded[0, 0, 0] = 5.0
+    bounded[1, 2, 0] = -5.0
+
+    assert isinstance(clipped.encoder, ClippedValues)
+    assert [p.shape for p in clipped.trainable_parameters()] == [
+        p.shape for p in plain.trainable_parameters()
+    ]
+    torch.testing.assert_close(
+        clipped(replace(batch, features=wild)), plain(replace(batch, features=bounded))
+    )
+    assert not torch.allclose(
+        clipped(replace(batch, features=wild)), plain(replace(batch, features=wild))
+    )
 
 
 GROWN = 6

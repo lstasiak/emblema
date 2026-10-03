@@ -1,6 +1,13 @@
+from dataclasses import replace
+
 from torch import nn
 
 from emblema.evaluation.domain.exceptions import UnknownBackboneError
+from emblema.evaluation.domain.transfer.encoder_setting import ValueEmbedding
+from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
+from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (
+    NonlinearValueEmbedding,
+)
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -33,7 +40,9 @@ class RestoredBackbones:
     def width(self) -> int:
         return self._trained.architecture.width
 
-    def pretrained(self, weights: ArtifactRef, *, vocabulary_size: int) -> nn.Module:
+    def pretrained(
+        self, weights: ArtifactRef, *, vocabulary_size: int, dropout: float
+    ) -> nn.Module:
         """The stored encoder in evaluation mode, grown to the task's vocabulary where it is short.
 
         Raises:
@@ -43,9 +52,32 @@ class RestoredBackbones:
             raise UnknownBackboneError(
                 f"this process serves the backbone {self._weights.key}, not {weights.key}"
             )
-        return self._trained.build().encoder.grown_to(vocabulary_size).eval()
+        return self._trained.build(dropout=dropout).encoder.grown_to(vocabulary_size).eval()
 
-    def fresh(self, *, vocabulary_size: int) -> nn.Module:
+    def fresh(
+        self,
+        *,
+        vocabulary_size: int,
+        dropout: float,
+        value_embedding: ValueEmbedding = ValueEmbedding.LINEAR,
+        shape: EncoderShape | None = None,
+    ) -> nn.Module:
+        architecture = self._trained.architecture
+        if shape is not None:
+            architecture = replace(
+                architecture,
+                width=shape.width,
+                heads=shape.heads,
+                layers=shape.layers,
+                feedforward_width=shape.feedforward_width,
+            )
         return SetEncoder.for_vocabulary(
-            self._trained.architecture, max(vocabulary_size, self._trained.vocabulary_size)
+            architecture,
+            max(vocabulary_size, self._trained.vocabulary_size),
+            dropout=dropout,
+            value_embedding=(
+                NonlinearValueEmbedding(architecture.width)
+                if value_embedding is ValueEmbedding.NONLINEAR
+                else None
+            ),
         )

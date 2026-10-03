@@ -32,6 +32,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind  # noqa: E
 from emblema.evaluation.domain.exceptions import (  # noqa: E402
     CandidateNotRetainableError,
     DivergedAdaptationError,
+    InvalidTrainingRegimeError,
     LoraTargetNotFoundError,
 )
 from emblema.evaluation.domain.heads.head_pooling import (  # noqa: E402
@@ -47,6 +48,11 @@ from emblema.evaluation.domain.labels.target_kind import TargetKind  # noqa: E40
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting  # noqa: E402
+from emblema.evaluation.domain.transfer.training_regime import (  # noqa: E402
+    ClassWeight,
+    TrainingRegime,
+)
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
@@ -194,7 +200,7 @@ def test_a_runtime_with_nowhere_to_keep_a_candidate_refuses_to_keep_one(
 def pretrained_weights() -> dict[str, Tensor]:
     return (
         SmallBackbones(vocabulary_size=len(CHANNELS))
-        .pretrained(WEIGHTS, vocabulary_size=len(CHANNELS))
+        .pretrained(WEIGHTS, vocabulary_size=len(CHANNELS), dropout=0.0)
         .state_dict()
     )
 
@@ -358,7 +364,9 @@ def test_under_the_frozen_probe_a_learnt_pooling_trains_and_the_backbone_still_k
     assert outcome.trainable_parameters == SMALL.width + 1 + SMALL.width
 
 
-def test_a_tail_and_an_attention_pooling_each_answer_the_task(published: Published) -> None:
+def test_a_tail_an_attention_and_static_features_set_apart_each_answer_the_task(
+    published: Published,
+) -> None:
     tail = plan(
         TransferMode.FULL_FINE_TUNING,
         pooling=HeadPooling(pooling=PoolingScheme.TAIL, tail_share=0.5),
@@ -367,10 +375,13 @@ def test_a_tail_and_an_attention_pooling_each_answer_the_task(published: Publish
         TransferMode.FROM_SCRATCH, pooling=HeadPooling(pooling=PoolingScheme.ATTENTION)
     )
 
-    for stated in (tail, attention):
+    apart = plan(TransferMode.FROM_SCRATCH, pooling=HeadPooling.mean().tuned("statics", "apart"))
+
+    for stated in (tail, attention, apart):
         outcome = adapt(published, stated)
         assert len(outcome.predictions) == len(VALIDATION)
         assert outcome.plan.parameters()["pooling"] == str(stated.pooling.pooling)
+        assert outcome.plan.parameters()["statics"] == str(stated.pooling.statics)
 
 
 def test_under_the_closed_form_probe_the_backbone_keeps_every_value_and_no_step_is_taken(
@@ -414,3 +425,118 @@ def test_the_closed_form_probe_answers_what_its_solution_says_over_the_pooled_st
         RidgeSolution.fitted(states, targets, stated.ridge or PENALTIES).applied_to(candidate.head)
         answered = candidate(TokenTensors.from_windows(list(held))).double() * CEILING
     assert [p.predicted for p in outcome.predictions] == pytest.approx(answered.tolist(), rel=1e-4)
+
+
+@pytest.mark.parametrize("mode", [TransferMode.FROM_SCRATCH, TransferMode.FULL_FINE_TUNING])
+def test_the_encoder_drops_what_the_plan_says_while_it_learns(
+    published: Published, mode: TransferMode
+) -> None:
+    dropped = adapt(published, plan(mode, encoder=EncoderSetting(dropout=0.2)))
+    standard = adapt(published, plan(mode))
+
+    received = published.backbones.built[0]
+    assert {module.p for module in received.modules() if isinstance(module, nn.Dropout)} == {0.2}
+    assert dropped.training_losses != standard.training_losses
+
+
+def test_a_run_under_a_dropout_repeats_bit_for_bit(published: Published) -> None:
+    stated = plan(TransferMode.FULL_FINE_TUNING, encoder=EncoderSetting(dropout=0.2))
+
+    first, again = adapt(published, stated), adapt(published, stated)
+
+    assert first.training_losses == again.training_losses
+    assert first.predictions == again.predictions
+
+
+def test_the_answers_are_read_with_the_dropout_off(published: Published) -> None:
+    adapt(published, plan(TransferMode.FULL_FINE_TUNING, encoder=EncoderSetting(dropout=0.5)))
+
+    received = published.backbones.built[0]
+    assert not any(module.training for module in received.modules())
+
+
+def test_the_encoder_reads_the_gridded_readings_where_the_plan_lays_them_on_a_grid(
+    published: Published,
+) -> None:
+    gridded = plan(TransferMode.FULL_FINE_TUNING, encoder=EncoderSetting(grid_resolution=0.5))
+
+    first, again = adapt(published, gridded), adapt(published, gridded)
+    raw = adapt(published, plan(TransferMode.FULL_FINE_TUNING))
+
+    assert first.predictions == again.predictions
+    assert first.predictions != raw.predictions
+    assert first.plan.parameters()["grid_resolution"] == 0.5
+
+
+def test_a_candidate_fitted_on_gridded_readings_is_kept_without_a_graph(
+    tmp_path: Path,
+) -> None:
+    # A campaign keeps one cell of every candidate, so a gridded one is kept too; its graph
+    # would take the raw readings a served model is handed, so only the fitted state is kept,
+    # naming the grid it was fitted on, and serving refuses it as a form it cannot run.
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "scratch")
+    runtime = TorchAdaptationRuntime(
+        SmallBackbones(vocabulary_size=len(CHANNELS)),
+        PublishedCorpusBlocks(store, tmp_path / "workspace"),
+        device="cpu",
+        store=store,
+    )
+    defined = replace(task(), manifest=published.manifest, labels=RemainingLifeScheme(CEILING))
+    gridded = plan(TransferMode.FULL_FINE_TUNING, encoder=EncoderSetting(grid_resolution=0.5))
+
+    outcome = runtime.adapt(gridded, defined, SAMPLE, VALIDATION, retain=True)
+
+    assert outcome.artifact is not None
+    kept = KeptCandidates(store).read(outcome.artifact)
+    assert [form.format for form in kept.representations] == [FittedCandidate.FORMAT]
+    fitted = FittedCandidate.read(store.get(kept.measured.artifact))
+    assert fitted.parameters["grid_resolution"] == 0.5
+
+
+def test_a_run_that_stops_learns_from_the_units_left_and_ends_within_its_patience(
+    published: Published,
+) -> None:
+    # Two units: one is held out for the stop, the run learns from the other and is held to the
+    # whole sample's count of epochs at most.
+    stopping = plan(
+        schedule=adaptation_schedule(epochs=6, batch_size=2),
+        regime=TrainingRegime(stop_share=0.5, patience=1),
+    )
+
+    outcome = adapt(published, stopping)
+
+    assert 1 <= len(outcome.training_losses) <= 6
+    assert all(torch.isfinite(torch.tensor(outcome.training_losses)))
+    assert len(outcome.predictions) == len(VALIDATION)
+
+
+def test_a_stop_needs_a_unit_to_hold_out_and_one_to_learn_from(published: Published) -> None:
+    one_unit = replace(SAMPLE, windows=SAMPLE.windows[:2], budget=LabelBudget.of(2))
+    stopping = plan(regime=TrainingRegime(stop_share=0.5, patience=1))
+
+    with pytest.raises(InvalidTrainingRegimeError, match="still learn"):
+        published.runtime.adapt(stopping, published.task, one_unit, VALIDATION, retain=False)
+
+
+def test_withheld_channels_change_what_is_learnt_and_repeat_under_the_seed(
+    published: Published,
+) -> None:
+    # Only the first window holds two channels, so a draw changes a step about half the time;
+    # eight epochs leave almost no chance that none does.
+    schedule = adaptation_schedule(epochs=8, batch_size=2)
+    perturbed = plan(schedule=schedule, regime=TrainingRegime(channel_dropout=0.5))
+
+    first = adapt(published, perturbed)
+    again = adapt(published, perturbed)
+    plain = adapt(published, plan(schedule=schedule))
+
+    assert first.training_losses == again.training_losses
+    assert first.training_losses != plain.training_losses
+
+
+def test_a_class_weight_is_refused_for_a_quantity(published: Published) -> None:
+    weighted = plan(regime=TrainingRegime(class_weight=ClassWeight.RATIO))
+
+    with pytest.raises(InvalidTrainingRegimeError, match="no classes"):
+        adapt(published, weighted)

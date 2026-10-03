@@ -63,3 +63,10 @@ was not turnable (ADR-0039).
   head reads, and the patch model's schedule is the arms'. Rejected.
 - **A fifth transfer mode.** A mode says what the backbone's weights do; the pooling is the same
   question for every mode. Rejected.
+
+## Amendments
+
+- **2026-10-01 — knobs added later stay out of old descriptions.** The arms' encoder gains
+  `dropout` and `grid_resolution` (`EncoderSetting`), and a candidate's recorded method names such
+  a knob only when turned away from its default, because cells and selections are checked against
+  the stored description whole and an extra column would refuse every campaign run before.

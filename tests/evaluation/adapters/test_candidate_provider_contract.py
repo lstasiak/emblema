@@ -66,6 +66,7 @@ from emblema.evaluation.domain.exceptions import (
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.domain.tuning.tuned_choice import TunedChoice
 from emblema.evaluation.ports.candidate_provider import CandidateProvider
@@ -460,3 +461,15 @@ def test_every_adapter_runs_the_variant_a_cell_was_declared_to_run(
     answered = supplied.provider.evaluate(asked)
 
     assert answered.cell.candidate == supplied.contender
+
+
+def test_a_cell_declared_under_a_turned_encoder_runs_the_encoder_so_turned() -> None:
+    _, labels, _ = drawing()
+    runtime = InMemoryAdaptationRuntime(None)
+    provider = BackboneCandidateProvider(ARMS, RunAdaptation(labels, runtime))
+    variant = CandidateRef(f"{CONTENDER}@dropout=0.2,grid_resolution=1")
+    asked = replace(request_of(Supplied(provider, CONTENDER)), declared=provider.describe(variant))
+
+    provider.evaluate(asked)
+
+    assert runtime.adaptations[-1].plan.encoder == EncoderSetting(dropout=0.2, grid_resolution=1.0)

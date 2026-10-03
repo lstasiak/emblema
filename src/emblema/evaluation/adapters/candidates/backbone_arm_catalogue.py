@@ -9,9 +9,11 @@ from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
 from emblema.evaluation.domain.campaign.compute_budget import ComputeBudget
 from emblema.evaluation.domain.exceptions import (
     InvalidCandidateVariantError,
+    InvalidEncoderSettingError,
     UnknownCandidateError,
     UnknownKnobError,
 )
+from emblema.evaluation.domain.transfer.training_regime import TrainingRegime
 from emblema.evaluation.domain.tuning.candidate_variant import CandidateVariant
 
 
@@ -66,6 +68,47 @@ class BackboneArmCatalogue:
             turned = variant.applied_to(arm, BackboneArm.tuned)
         except (UnknownKnobError, InvalidCandidateVariantError) as error:
             raise UnknownCandidateError(f"{variant.ref} names no variant: {error}") from error
+        # Judged once every knob is turned, since knobs turn in name order and the dropout's
+        # comes before the pooling that may put the encoder in the loop.
+        if turned.encoder.dropout > 0.0 and not turned.mode.encodes_in_the_loop(turned.pooling):
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: {turned.mode} under a "
+                f"{turned.pooling.pooling} pooling encodes every window once, so a dropout "
+                "would change nothing"
+            )
+        if turned.encoder.builds_its_own_encoder and turned.mode.starts_from_pretrained_weights:
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: {turned.mode} starts from pretrained weights, "
+                "which fix its encoder's build"
+            )
+        if turned.encoder.shape_partly_stated:
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: an encoder's own shape states its width, "
+                "heads, layers and feed-forward width"
+            )
+        if turned.regime.channel_dropout > 0.0 and not turned.mode.encodes_in_the_loop(
+            turned.pooling
+        ):
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: {turned.mode} under a "
+                f"{turned.pooling.pooling} pooling encodes every window once, so withholding "
+                "channels would change nothing"
+            )
+        if turned.regime.stop_partly_stated:
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: a stop states both the share it holds out "
+                "and the patience it waits"
+            )
+        closed_form = turned.mode.solves_the_head_in_closed_form
+        if turned.regime != TrainingRegime.standard() and closed_form:
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: {turned.mode} solves its head in closed form "
+                "and takes no step a regime could stop, weight or perturb"
+            )
+        try:
+            _ = turned.encoder.shape
+        except InvalidEncoderSettingError as error:
+            raise UnknownCandidateError(f"{variant.ref} names no variant: {error}") from error
         return replace(turned, ref=variant.ref)
 
     @staticmethod
@@ -84,6 +127,9 @@ class BackboneArmCatalogue:
             "warmup_fraction": arm.schedule.warmup_fraction,
             "final_lr_fraction": arm.schedule.final_lr_fraction,
             **arm.pooling.parameters(),
+            **arm.pooling.turned_away(),
+            **arm.encoder.turned_away(),
+            **arm.regime.turned_away(),
         }
         if arm.backbone is None:
             stated["architecture_of"] = f"{arm.architecture.key}@{arm.architecture.checksum}"

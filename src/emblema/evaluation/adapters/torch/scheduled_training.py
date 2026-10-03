@@ -12,6 +12,8 @@ from emblema.shared.adapters.loaders.seeded_shuffle_sampler import SeededShuffle
 Forward = Callable[[Sequence[int]], Tensor]
 # What a batch's answers are held to against what they were taught.
 Loss = Callable[[Tensor, Tensor], Tensor]
+# Told the index of the epoch just finished; answers whether the run stops here.
+AfterEpoch = Callable[[int], bool]
 
 
 class ScheduledTraining:
@@ -36,26 +38,33 @@ class ScheduledTraining:
         targets: Tensor,
         *,
         loss: Loss,
+        epochs: int | None = None,
+        after_epoch: AfterEpoch | None = None,
     ) -> list[float]:
         """The schedule's epochs over the targets, in the seeded order; the mean loss of each.
 
         The epochs are the schedule's over this many targets: the stated ones, or more where the
-        floor of steps asks for them. The rate follows the schedule's shape step by step.
+        floor of steps asks for them; or ``epochs``, where a run learning from part of a sample
+        is held to the whole sample's count. The rate follows the schedule's shape step by step
+        over that many epochs. ``after_epoch``, if given, is called with each epoch's index once
+        its loss is in and may end the run early by returning ``True``; the model is put back
+        into training afterwards, whatever it was called in.
 
         Raises:
             DivergedAdaptationError: If a batch's loss stops being finite.
         """
         schedule = self._schedule
+        planned = schedule.epochs_over(len(targets)) if epochs is None else epochs
         optimiser = torch.optim.AdamW(
             trainable, lr=schedule.learning_rate, weight_decay=schedule.weight_decay
         )
         rate = torch.optim.lr_scheduler.LambdaLR(
-            optimiser, schedule.learning_rate_schedule(len(targets)).factor
+            optimiser, schedule.learning_rate_schedule(len(targets), planned).factor
         )
         order = SeededShuffleSampler(len(targets), seed=self._seed)
         losses = []
         model.train()
-        for epoch in range(schedule.epochs_over(len(targets))):
+        for epoch in range(planned):
             order.set_epoch(epoch)
             positions = list(order)
             total = 0.0
@@ -71,4 +80,9 @@ class ScheduledTraining:
                 rate.step()
                 total += mean * len(indices)
             losses.append(total / len(positions))
+            if after_epoch is not None:
+                stop = after_epoch(epoch)
+                model.train()
+                if stop:
+                    break
         return losses

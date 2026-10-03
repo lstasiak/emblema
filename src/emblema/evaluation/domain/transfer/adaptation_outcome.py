@@ -65,11 +65,18 @@ class AdaptationOutcome(ScoredOutcome):
             if self.plan.mode.solves_the_head_in_closed_form
             else self.plan.schedule.epochs_over(self.labelled_windows)
         )
-        if len(self.training_losses) != epochs:
+        # A regime that stops may end the run early, never lengthen it.
+        if (
+            len(self.training_losses) > epochs
+            if self.plan.regime.stops
+            else len(self.training_losses) != epochs
+        ):
             raise InvalidAdaptationOutcomeError(
                 f"{len(self.training_losses)} training losses reported for "
                 f"{epochs} planned epochs over {self.labelled_windows} windows"
             )
+        if self.plan.regime.stops and not self.training_losses and epochs:
+            raise InvalidAdaptationOutcomeError("a stopped run still takes at least one epoch")
         for loss in self.training_losses:
             if not isfinite(loss) or loss < 0.0:
                 raise InvalidAdaptationOutcomeError(

@@ -61,3 +61,23 @@ def test_weights_that_do_not_fit_the_shape_stored_are_refused() -> None:
 
     with pytest.raises(UnreadableTrainedModelError, match="do not fit"):
         mismatched.build()
+
+
+def test_a_model_rebuilt_to_go_on_learning_drops_what_it_is_asked_to_and_predicts_the_same() -> (
+    None
+):
+    # Dropout holds no weights and is off in evaluation mode, so the share asked for changes
+    # what the model does while it learns and nothing it predicts.
+    stated = configuration()
+    trained = objective()
+    batch = TokenTensors.from_windows(windows(2, seed=9))
+    masks = TokenMasking(stated.masking).draw(batch, torch.Generator().manual_seed(4))
+
+    read = TrainedModel.read(TrainedModel.of(stated, CHANNELS, trained).to_bytes()).build(
+        dropout=0.3
+    )
+
+    rates = {module.p for module in read.modules() if isinstance(module, torch.nn.Dropout)}
+    assert rates == {0.3}
+    with torch.no_grad():
+        assert torch.equal(read(batch, masks), trained(batch, masks))

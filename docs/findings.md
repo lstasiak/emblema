@@ -168,6 +168,47 @@ stays alone.
 - Two possible handicaps of the networks are open: rates chosen at the edge of their grid, and a
   step floor confirmed on the turbofans only.
 
+### 7. The network's deficit on the stays is in its training, not in its data
+
+A diagnosis before transfer is measured, read on one fifth of set A's tuning stays (800 stays,
+held out by one seed, the validation side unread), seeds 1 to 10, every step declared with a
+prediction before it ran ([note](verification/intensive-care-curve.md), sections from
+2026-10-01; [ADR-0047](adr/0047-a-training-regime-beside-the-schedule.md)). Levels here are on
+that fifth and are not those of the table in section 6.
+
+| Network from nothing, every stay | AUROC | Gain over the control |
+| --- | --- | --- |
+| control: 30 epochs of cosine decay, last weights | 0.783 | |
+| kept at its best epoch on a fifth of its labels held out | 0.810 | +0.027 [+0.009, +0.044] |
+| 64 wide, 2 blocks (77,000 parameters), under the published network's regime whole | 0.818 | +0.034 [+0.015, +0.054] |
+| STraTS, the published network, on the same stays | 0.827 | |
+
+- **The data are not the deficit.** The published network run on this project's tokens reaches
+  0.827, on its own preparation 0.822; the tokens are the raw files.
+- **Nor are the things tried first.** Static features set apart in the head, pooling under
+  attention, dropout, readings on an hourly grid, a nonlinear value embedding and values
+  bounded at five standard deviations each gain the network nothing measurable. The published
+  network's own lead from its value embedding is a bound on the tails: a linear value with
+  clipped readings recovers 0.034 of the 0.039 it loses.
+- **The stop is the lever.** Kept at its best epoch on held-out labels the network gains 0.027
+  from fewer labels (2,560 against 3,200) and its spread over seeds falls from 0.018 to 0.006;
+  the network overfitted through the second half of its schedule and the protocol read the last
+  weights. The stop is the registered recipe of every arm at the budget of every stay from
+  2026-10-03. No registered verdict changes.
+- **Two blocks instead of six close the rest.** Under the published regime whole the small shape
+  lands 0.009 from the published network, an interval that includes it. It needs the regime's
+  other parts (a class weight, withheld channels, dropout, a constant rate), which cost the
+  large shape 0.011.
+- **The stop does not scale down.** At 1,000 stays it gains 0.018 and 0.013 by the interval
+  only; at 200 it gains nothing in the large shape and loses 0.038 in the small one, because a
+  patience of ten epochs is 100 steps there, inside the warm-up. The fixed epochs stand below
+  the budget of every stay.
+- **The mixture.** Without SMD, 40 % of its steps, the mixture transfers as the mixture does, so
+  that corpus teaches the task nothing; the same mixture at thirteen passes, with the better
+  pretext loss, loses 0.057 under fine-tuning to its eight-pass twin. A backbone is chosen on
+  the task, never by its pretext loss. The rate and the step floor of fine-tuning at 200 stays
+  move it by at most 0.012.
+
 ## Limitations
 
 - **Validation only.** Every configuration choice (window, normalisation, corpus, backbone, peaks)
@@ -194,12 +235,12 @@ stays alone.
 
 ## Next
 
-1. Find why the networks trail the classical baselines and the patch model on the intensive-care
-   task before measuring transfer: reproduce a published protocol with the network from nothing,
-   check how excursions and normalisation are prepared, select the rates beyond the edge their
-   selections chose and check the step floor there, each declared before it runs.
-2. Find why the mixture learns the stays less than their own backbone does, and weigh corpora
-   in it.
+1. Measure transfer on the intensive-care task again under the stop at every stay, with
+   backbones of eight passes over a mixture without SMD, in the control's shape and in two
+   blocks on the stays alone; the stop for the pretrained arms is declared with a prediction
+   before the first campaign.
+2. Weigh the corpora that remain in the mixture, now that one of them is known to teach the
+   task nothing.
 3. Measure transfer across corpora and to unseen sensor layouts, where a fresh encoder has
    nothing of the target to learn from and the pretrained one has everything else.
 4. Open the frozen test side once.

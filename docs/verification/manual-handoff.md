@@ -452,6 +452,62 @@ Every number is validation, not test. What the runs say:
   mixture cannot separate the added corpus from the run's own spread. The intensive-care task
   does not read C-MAPSS, so its campaigns are not affected.
 
+### 2026-10-02 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the mixture without SMD
+
+Two backbones over the mixture of five less SMD, for the question whether SMD teaches the
+intensive-care task anything (`intensive-care-curve.md`, 2026-10-02): A at the mixture's eight
+passes and B at thirteen, which spends about the mixture's number of steps on the four corpora
+that remain. Ordered here from `b6569a82`, fulfilled on Kaggle, one device each, and accepted
+here the same day.
+
+|  |  |
+| --- | --- |
+| Experiments | `experiments/backbone-mixed5-nosmd-m.toml` and `experiments/backbone-mixed5-nosmd-m-13.toml`: the mixture's file without `smd`, everything else the same; B states 13 epochs and keeps the mixture's share of the run warming up |
+| Code | `b6569a82`; the training path unchanged since the mixture's run |
+| Parameters | 4,779,264 in both, the mixture's count: SMD's channel rows stay in the table, untrained |
+| Platform | Kaggle, GPU T4, one device a run |
+| Cost | 0.33 s a step: 896–920 s an epoch of about 2,790 steps, 2.0 h for A and 3.3 h for B; `accept` took 4–5 s a run |
+
+The kept epoch is the best by the mean over the four corpora of the validation loss's share of
+the trivial predictor's. Every number is validation, not test.
+
+| Experiment | Backbone | Result | Weights | Epochs | Kept | cmapss | skab | esa_ad | physionet2012 | Mean of the four | Training loss |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-mixed5-nosmd-m` (A) | `1c1c57c6-…` | `durable/sha256/a78bfd6d…` | `durable/sha256/994d1642…` | 8 | 8 | 0.006 | 0.266 | 0.294 | 0.489 | 0.2639 | 0.03550 |
+| `backbone-mixed5-nosmd-m-13` (B) | `2523c734-…` | `durable/sha256/21a5422b…` | `durable/sha256/b4d3ad42…` | 13 | 12 | 0.006 | 0.267 | 0.286 | 0.480 | 0.2597 | 0.03372 |
+| `backbone-mixed5-m`, for comparison | `2cfacb10-…` | `durable/sha256/574e6566…` | `durable/sha256/869ed545…` | 8 | 8 | 0.026 | 0.260 | 0.277 | 0.487 | 0.2625 (and 0.364 on SMD) | — |
+
+Epoch by epoch, as `scripts/pretraining_curve_report.py` writes them
+(`data/report/pretraining/{1c1c57c6…,2523c734…}/epochs.csv`), A then B:
+
+| epoch | cmapss | skab | esa_ad | physionet2012 | mean of the four |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 0.079 / 0.071 | 0.314 / 0.404 | 0.416 / 0.448 | 0.597 / 0.629 | 0.3514 / 0.3881 |
+| 2 | 0.047 / 0.020 | 0.305 / 0.315 | 0.351 / 0.366 | 0.573 / 0.568 | 0.3188 / 0.3172 |
+| 3 | 0.038 / 0.020 | 0.299 / 0.320 | 0.335 / 0.358 | 0.557 / 0.566 | 0.3071 / 0.3161 |
+| 4 | 0.010 / 0.013 | 0.279 / 0.283 | 0.331 / 0.345 | 0.527 / 0.555 | 0.2869 / 0.2990 |
+| 5 | 0.009 / 0.010 | 0.275 / 0.291 | 0.301 / 0.331 | 0.514 / 0.523 | 0.2746 / 0.2888 |
+| 6 | 0.007 / 0.008 | 0.269 / 0.280 | 0.304 / 0.337 | 0.499 / 0.515 | 0.2699 / 0.2848 |
+| 7 | 0.007 / 0.008 | 0.267 / 0.276 | 0.291 / 0.309 | 0.491 / 0.501 | 0.2640 / 0.2733 |
+| 8 | 0.006 / 0.006 | 0.266 / 0.271 | 0.294 / 0.288 | 0.489 / 0.492 | 0.2639 / 0.2644 |
+| 9 | — / 0.009 | — / 0.272 | — / 0.294 | — / 0.493 | — / 0.2669 |
+| 10 | — / 0.006 | — / 0.268 | — / 0.284 | — / 0.486 | — / 0.2609 |
+| 11 | — / 0.006 | — / 0.268 | — / 0.284 | — / 0.482 | — / 0.2600 |
+| 12 | — / 0.006 | — / 0.267 | — / 0.286 | — / 0.480 | — / 0.2597 |
+| 13 | — / 0.006 | — / 0.267 | — / 0.286 | — / 0.480 | — / 0.2597 |
+
+What the runs say:
+
+- **Without SMD, C-MAPSS ends at 0.006, where the mixture of four ended (0.007).** The mixture
+  of five's 0.026 came with SMD's share of the run, not with the stays: both runs without SMD
+  hold the stays and lose SMD, and both return C-MAPSS to its level.
+- **The stays and the other corpora end where the mixture of five left them**, within 0.02 of
+  the trivial predictor's share; A's eighth epoch matches the mixture's on the stays (0.489
+  against 0.487).
+- **Five more passes buy B 0.004 on the mean and 0.009 on the stays**, and its best epoch is
+  the twelfth, not the last. What the two backbones do on the intensive-care task is in
+  `intensive-care-curve.md` (2026-10-02): B's fine-tuning loses 0.057 to A's.
+
 ### Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when

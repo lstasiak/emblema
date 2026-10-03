@@ -93,8 +93,20 @@ class InvalidPatchModelSpecError(EvaluationError, ValueError):
     """A patch model has no patch, a stride past its patch, or a width its heads cannot split."""
 
 
+class InvalidPatchPlanError(EvaluationError, ValueError):
+    """A patch plan sets apart static features the patch model reads as channels."""
+
+
 class InvalidHeadPoolingError(EvaluationError, ValueError):
     """A pooling keeps a share of the window it cannot, or a share where it means nothing."""
+
+
+class InvalidTrainingRegimeError(EvaluationError, ValueError):
+    """A training regime breaks one of its invariants."""
+
+
+class InvalidEncoderSettingError(EvaluationError, ValueError):
+    """An encoder drops a share of its activations it cannot, or reads a grid with no steps."""
 
 
 class UnsupportedClassicalMethodError(EvaluationError):

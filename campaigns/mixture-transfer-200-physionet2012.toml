@@ -1,0 +1,53 @@
+# What a mixture teaches the intensive-care task at 200 stays, read the same way under each of
+# three backbones: the mixture of five (sha256:869ed545…), the same mixture without SMD at its
+# eight passes (experiments/backbone-mixed5-nosmd-m.toml), and without SMD at the mixture's
+# number of steps (experiments/backbone-mixed5-nosmd-m-13.toml). Defined once under each, since
+# a campaign names its backbone through the worker settings it is defined under.
+#
+# 200 stays is the registered grid's endpoint, where the mixture's full fine-tuning gained 0.024
+# over the network from nothing, and where the frozen probe differed most between the two
+# backbones of that grid (0.66 against 0.75); the probe is the cheaper and the more sensitive
+# reading of what a backbone holds, fine-tuning what a task gets from it. Both at the variant
+# their selections chose at 200 under the mixture (campaigns/curve-physionet2012-mixed5.toml),
+# so the backbones are compared on one recipe.
+#
+# Scored on one tuning stay in five, the same fifth for every seed and every backbone (the fifth
+# of campaigns/seed-spread-physionet2012.toml), so the answers of two backbones pair by stay and
+# seed; the validation side is not read. A campaign divided this way chooses nothing.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "mixture-transfer-200-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = ["frozen_probe@learning_rate=0.03", "full_fine_tuning"]
+control = "frozen_probe@learning_rate=0.03"
+endpoint = "full_fine_tuning"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+# Ten seeds: at 200 stays one seed moves the area by about 0.04 on this fifth
+# (campaigns/seed-spread-physionet2012.toml), so the mean difference of two backbones is read to
+# about 0.013, one standard error, and a difference under about 0.03 is not told from none.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# One contender at one budget, less the endpoint.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

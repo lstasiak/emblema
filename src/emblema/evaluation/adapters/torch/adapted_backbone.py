@@ -3,6 +3,7 @@ from typing import Self
 from torch import Tensor, nn
 
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
+from emblema.evaluation.adapters.torch.clipped_values import ClippedValues
 from emblema.evaluation.adapters.torch.low_rank_adaptation import LowRankAdaptation
 from emblema.evaluation.adapters.torch.pooling import pooling_module
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead
@@ -20,7 +21,8 @@ class AdaptedBackbone(nn.Module):
     pooling has of its own train under every mode, as the head does.
 
     Attributes:
-        encoder: The backbone, with whatever the mode left trainable.
+        encoder: The backbone, with whatever the mode left trainable; fed bounded values where
+            the plan clips them.
         pooling: One state per window out of the states per token, as the plan named it.
         head: The task's answer out of the pooled state.
     """
@@ -55,12 +57,22 @@ class AdaptedBackbone(nn.Module):
             LoraTargetNotFoundError: If the plan's low-rank updates name a layer the backbone
                 does not have.
         """
-        head = RegressionHead(backbones.width, starting_at=starting_at)
-        pooling = pooling_module(plan.pooling, width=backbones.width)
+        shape = plan.encoder.shape
+        width = backbones.width if shape is None else shape.width
+        head = RegressionHead(width * plan.pooling.width_factor, starting_at=starting_at)
+        pooling = pooling_module(plan.pooling, width=width)
+        dropout = plan.encoder.dropout
         if plan.backbone is None:
-            encoder = backbones.fresh(vocabulary_size=vocabulary_size)
+            encoder = backbones.fresh(
+                vocabulary_size=vocabulary_size,
+                dropout=dropout,
+                value_embedding=plan.encoder.value_embedding,
+                shape=shape,
+            )
         else:
-            encoder = backbones.pretrained(plan.backbone, vocabulary_size=vocabulary_size)
+            encoder = backbones.pretrained(
+                plan.backbone, vocabulary_size=vocabulary_size, dropout=dropout
+            )
         encoder.requires_grad_(plan.mode.trains_backbone_weights)
         for module in encoder.modules():
             if isinstance(module, GrownParameters):
@@ -68,10 +80,12 @@ class AdaptedBackbone(nn.Module):
                     parameter.requires_grad_(True)
         if plan.lora is not None:
             LowRankAdaptation(plan.lora).applied_to(encoder)
+        if plan.encoder.value_clip is not None:
+            encoder = ClippedValues(encoder, plan.encoder.value_clip)
         return cls(encoder, pooling, head)
 
     def embed(self, batch: TokenTensors) -> Tensor:
-        """One state per window, ``[batch, width]``."""
+        """One state per window, ``[batch, width × the pooling's width factor]``."""
         pooled: Tensor = self.pooling(
             self.encoder(*batch.args), batch.padding_mask, batch.timestamps, batch.timeless
         )

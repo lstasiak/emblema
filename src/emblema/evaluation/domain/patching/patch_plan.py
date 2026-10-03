@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
-from emblema.evaluation.domain.heads.head_pooling import HeadPooling
+from emblema.evaluation.domain.exceptions import InvalidPatchPlanError
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling, StaticsPlacement
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 
@@ -14,6 +15,9 @@ class PatchPlan:
     because a patch model shares their compute budget: a comparison of two networks that were
     given different amounts of arithmetic would measure the difference in arithmetic.
 
+    Invariant: the static features stay among the readings. The grid lays each one out as a
+    channel held level across the window, so the model holds no static token to set apart.
+
     Attributes:
         spec: How a window is read and how large the model is.
         schedule: How long the task is learnt, in how large a step, under what decay.
@@ -26,6 +30,10 @@ class PatchPlan:
     schedule: AdaptationSchedule
     seed: int
     pooling: HeadPooling = field(default_factory=HeadPooling.mean)
+
+    def __post_init__(self) -> None:
+        if self.pooling.statics is not StaticsPlacement.AMONG:
+            raise InvalidPatchPlanError("the patch model reads static features as channels")
 
     def parameters(self) -> dict[str, str | int | float]:
         """The plan flattened to scalars, in a fixed order, for whoever records a run.

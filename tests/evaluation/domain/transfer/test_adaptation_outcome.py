@@ -10,6 +10,7 @@ from emblema.evaluation.domain.exceptions import (
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
+from emblema.evaluation.domain.transfer.training_regime import TrainingRegime
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from tests.evaluation.support import TASK, adaptation_schedule, plan, prediction
 
@@ -58,3 +59,13 @@ def test_a_head_solved_in_closed_form_reports_no_training_loss_and_no_step() -> 
     assert solved.optimiser_steps == 0
     with pytest.raises(InvalidAdaptationOutcomeError, match="0 planned epochs"):
         outcome(plan=plan(TransferMode.FROZEN_RIDGE), training_losses=(0.5,))
+
+
+def test_a_run_that_may_stop_reports_fewer_epochs_than_planned_but_never_more_or_none() -> None:
+    stopping = plan(regime=TrainingRegime(stop_share=0.5, patience=1))
+
+    assert outcome(plan=stopping, training_losses=(0.5,)).optimiser_steps == 1
+    with pytest.raises(InvalidAdaptationOutcomeError, match="planned epochs"):
+        outcome(plan=stopping, training_losses=(0.5, 0.4, 0.3))
+    with pytest.raises(InvalidAdaptationOutcomeError, match="at least one epoch"):
+        outcome(plan=stopping, training_losses=())

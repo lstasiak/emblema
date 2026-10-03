@@ -26,6 +26,7 @@ from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.tokens import N_FEATURES
 from tests.evaluation.adapters.onnx.candidates import (
+    OWN_BUILD,
     POOLINGS,
     TARGET_SCALE,
     Exported,
@@ -117,12 +118,14 @@ def test_under_every_mode_a_window_over_the_tasks_grown_channels_matches_pytorch
     assert_matches_eager(exported(mode), over_grown_channels(random_batch(2, 64, seed=9)))
 
 
-@pytest.mark.parametrize("pooling", POOLINGS, ids=[str(p.pooling) for p in POOLINGS])
+@pytest.mark.parametrize(
+    "pooling", POOLINGS, ids=[f"{p.pooling}-statics-{p.statics}" for p in POOLINGS]
+)
 def test_under_every_pooling_both_outputs_match_pytorch_over_padded_windows(
     pooling: HeadPooling,
 ) -> None:
     # The tail reads the times and attention the states; both have to survive the export with
-    # the padding weighted out, as the mean does.
+    # the padding weighted out, as the mean does, and so does a split of the static features.
     assert_matches_eager(
         exported(TransferMode.LORA, pooling), random_batch(3, 41, seed=41, padding=17)
     )
@@ -225,3 +228,10 @@ def test_a_graph_that_strays_from_the_measured_answers_is_refused(lora: Exported
 
     with pytest.raises(InferenceGraphDivergedError, match="strays"):
         lora.graph.deviation_from(other, scored, target_scale=TARGET_SCALE, batch_size=8)
+
+
+def test_a_network_from_nothing_of_its_own_shape_and_value_embedding_matches_pytorch() -> None:
+    # The tanh between the value's two maps and the narrower blocks have to survive the export.
+    pair = exported(TransferMode.FROM_SCRATCH, None, OWN_BUILD)
+
+    assert_matches_eager(pair, random_batch(3, 41, seed=41, padding=17))

@@ -96,18 +96,20 @@ class TrainedModel:
                 error
             )
 
-    def build(self) -> MaskedReconstruction:
+    def build(self, *, dropout: float = 0.0) -> MaskedReconstruction:
         """The objective rebuilt on the host, in evaluation mode, holding these weights.
 
-        Dropout is left at zero: a model being read back is being asked what it predicts, and the
-        dropout it trained under is a property of the run, not of the weights.
+        Dropout is zero unless asked for: a model being read back is being asked what it
+        predicts, and the dropout it trained under is a property of the run, not of the weights.
+        A process that goes on training the weights names the dropout of its own run.
 
         Raises:
             UnreadableTrainedModelError: If the weights do not fit the shape stored with them.
         """
         model = MaskedReconstruction(
-            SetEncoder.for_vocabulary(self.architecture, self.vocabulary_size),
+            SetEncoder.for_vocabulary(self.architecture, self.vocabulary_size, dropout=dropout),
             decoder_layers=self.decoder_layers,
+            dropout=dropout,
         )
         try:
             model.load_state_dict(self.weights)
