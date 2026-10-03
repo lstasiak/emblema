@@ -95,8 +95,15 @@ from scratch at 200 labelled windows; diagnostics showed the control had been ha
 its head and its learning rate. Repeated with every arm tuned per budget by one declared
 procedure, in one paired campaign with the classical baselines, the network trained from
 scratch is the best candidate at every budget: 10 % better than the fine-tuned encoder at 200
-labels, level with the tuned gradient-boosted trees. Transfer across corpora, where a fresh
-encoder has nothing to learn from, is the next question.
+labels, level with the tuned gradient-boosted trees.
+
+On the second task, death in hospital after an intensive-care stay (PhysioNet 2012), no way of
+using the mixed backbone beats the network trained from scratch, and the classical baselines
+lead.
+A diagnosis against a published network on the same stays found the deficit in the training,
+not the data: kept at its best epoch on held-out labels and shrunk to two blocks, the network
+trained from scratch lands within noise of the published one. Transfer is measured next under
+that recipe, and across corpora, where a fresh encoder has nothing to learn from.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
