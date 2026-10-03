@@ -1739,3 +1739,94 @@ under more seeds before it is registered; if the stop loses at 200, the fixed ep
 - At 1,000 stays nothing of this network was read on this fifth before; the check there is the
   control's level against the registered grid's, read under another division.
 - Ten seeds read a difference to about 0.013 at 200 stays and about 0.007 at every stay.
+
+## 2026-10-03 — Colab G4: the stop alone in the small shape, and the stop at 200 and 1,000 stays
+
+**Question.** Does the small shape gain under the stop alone, and does the stop gain at 200 and
+1,000 stays? The design and predictions are in the section declared on 2026-10-03 for the stop
+alone in the small shape.
+
+**Conditions.** Commit `3c30f410`; campaigns `f7e06744…` (every stay), `4230d83b…` (200),
+`53e8d389…` (1,000); orders `1391bd94…`, `571e8098…`, `d6b5e0a1…`. One Colab G4, CUDA, three
+processes under CUDA MPS; tier M; 100 cells in 1,738 s. Scored on the fifth held out by seed
+101, 800 stays, seeds 1 to 10. Read with `data/report/t42d/stop-pairs.sh`; CSV under
+`data/report/t42d/stop/`.
+
+**Area under the ROC curve on the 800 scored stays**, mean over seeds 1 to 10, the seeds'
+standard deviation, and the seconds a cell took (three cells shared the GPU).
+
+| Budget | Candidate | Mean | SD over seeds | Seconds a cell |
+|---|---|---|---|---|
+| every stay | the stop alone, control's shape (run again) | 0.810 | 0.009 | 120 |
+| every stay | the small shape under the stop alone | 0.805 | 0.011 | 43 |
+| every stay | the small shape under the regime whole (`e1959b4f…`, for reference) | 0.818 | 0.011 | 37 |
+| 1,000 | control (32 epochs, last weights) | 0.750 | 0.032 | 76 |
+| 1,000 | the stop alone | 0.769 | 0.025 | 47 |
+| 1,000 | the small shape | 0.763 | 0.020 | 26 |
+| 1,000 | the small shape under the stop | 0.777 | 0.019 | 17 |
+| 200 | control (154 epochs, last weights) | 0.656 | 0.023 | 73 |
+| 200 | the stop alone | 0.668 | 0.043 | 9 |
+| 200 | the small shape | 0.690 | 0.046 | 26 |
+| 200 | the small shape under the stop | 0.652 | 0.085 | 4 |
+
+**Gain in area**, paired over stays (95 % interval), and seed by seed (mean ± standard error).
+A candidate *gains* where the interval lies above zero and the mean over seeds exceeds twice
+its standard error.
+
+| Budget | Control | Candidate | Paired gain | Seed by seed | Reads |
+|---|---|---|---|---|---|
+| every stay | stop alone of `e1959b4f…` (0.810) | stop alone here | −0.000 [−0.005; +0.004] | −0.000 ± 0.003 | check holds |
+| every stay | stop alone | small shape under the stop | −0.005 [−0.015; +0.005] | −0.005 ± 0.005 | no |
+| every stay | small shape under the regime (0.818) | small shape under the stop | **−0.013 [−0.025; −0.002]** | −0.013 ± 0.005 | **loses** |
+| 1,000 | control | stop alone | +0.018 [+0.003; +0.033] | +0.018 ± 0.013 | interval yes, seeds no |
+| 1,000 | small shape | small shape under the stop | +0.013 [+0.002; +0.024] | +0.013 ± 0.007 | interval yes, seeds no |
+| 1,000 | stop alone | small shape under the stop | +0.008 [−0.004; +0.019] | +0.008 ± 0.005 | no |
+| 1,000 | control | small shape | +0.013 [−0.003; +0.028] | +0.013 ± 0.011 | no |
+| 200 | control of `a9ab91cc…` (0.660) | control here | −0.004 [−0.021; +0.013] | −0.004 ± 0.015 | check holds |
+| 200 | small shape of `a9ab91cc…` (0.686) | small shape here | +0.004 [+0.002; +0.006] | +0.004 ± 0.003 | a T4 and a G4 differ by 0.004 |
+| 200 | control | stop alone | +0.012 [−0.008; +0.031] | +0.012 ± 0.013 | no |
+| 200 | small shape | small shape under the stop | **−0.038 [−0.059; −0.018]** | −0.038 ± 0.022 | **loses by the interval** |
+| 200 | stop alone | small shape under the stop | −0.016 [−0.032; +0.002] | −0.016 ± 0.025 | no |
+
+**Conclusions.**
+
+1. Prediction 1 holds: the stop in the control's shape repeats to 0.000 at every stay and the
+   control at 200 lands 0.004 from its earlier reading.
+2. Prediction 2 fails. Under the stop alone the small shape lands at 0.805, 0.005 under the
+   control's shape and 0.013 under itself under the regime whole, by both conditions. The
+   regime's other parts (the class weight, the channels withheld, dropout, the constant rate)
+   cost the control's shape 0.011 and gain the small shape 0.013: they regularise a network of
+   77,000 parameters and burden one of 4.8 million. As declared, the regime whole is the recipe
+   of the two-block shape, and the two-block backbone's arms declare it; the stop alone is the
+   recipe of the control's shape.
+3. Prediction 3 fails in its second condition. At 1,000 stays the stop gains 0.018 in the
+   control's shape and 0.013 in the small one by the paired interval, under 0.02 and at 1.4 and
+   1.9 standard errors seed by seed. The registered rule does not extend to 1,000 stays; the
+   stop there is a declared variant beside the fixed epochs, to be read on the pretrained arms
+   under more seeds before it is registered, as declared for the same case at 200.
+4. Prediction 4 fails the other way. At 200 stays the stop gains nothing in the control's shape
+   (+0.012, 1.0 standard error) and loses 0.038 in the small shape by the interval, with a
+   spread over seeds of 0.085 and three seeds near 0.5. The seconds say why: the stopped cells
+   took 4 and 9 s against 26 and 73 s for the whole 154 epochs, so the stop fired at about the
+   fifteenth epoch. Under the stop the learning side is 160 stays, ten steps an epoch, and the
+   patience of ten epochs is 100 steps, inside the warm-up of 154. The stop kept weights from
+   the warm-up, chosen by the noise of 40 held-out stays (an epoch's area there is read to about
+   0.11). The fixed epochs stand at 200 and 50; the registered rule's lower edge stays the budget
+   of every stay.
+5. A patience counted in epochs is 1,600 steps at every stay, 500 at 1,000 and 100 at 200. The
+   stop as registered is a recipe for the budget where it was read, not a rule of training that
+   scales with the budget. A stop whose patience is counted in steps, or begins after the
+   warm-up, is a variant this reading did not run; whether it enters the next ticket's first
+   declaration at 200 and 1,000 is a decision for that ticket. No verdict of the registered
+   grids changes.
+
+**Limitations.**
+
+- The epochs a stopped cell trained are inferred from its seconds; the runtime does not record
+  them.
+- One share and one patience at every budget, both the published network's; at 200 stays a
+  larger share would leave fewer stays to learn from.
+- At 1,000 stays nothing of this network was read on this fifth before; the control's 0.750 has
+  no earlier reading to check against.
+- The small shape's cells repeat to the stay on one GPU and differ by 0.004 between a T4 and a
+  G4, so a difference of that size between campaigns run on different cards is the card's.
