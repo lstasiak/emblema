@@ -1,6 +1,6 @@
 # ADR-0047: A training regime beside the schedule — a stop on held-out labels, a class weight and withheld channels, as declared knobs
 
-- Status: proposed (2026-10-03; decided on the reading of `campaigns/published-regime-all-physionet2012.toml`)
+- Status: accepted (2026-10-03; the stop alone gained the network from nothing 0.027 in area at every stay from fewer labels and halved its spread over seeds, `docs/verification/intensive-care-curve.md`, 2026-10-03; the class weight, the channels withheld and the constant rate cost 0.011 beside it and stay knobs, not protocol)
 - Date: 2026-10-03
 
 ## Context
@@ -39,9 +39,11 @@ networks any more.
   only an outcome has one. **Withholding channels** marks a window's channel as padding for one
   step, static features excepted, and never empties a window; it is refused where the encoder
   states every window once, as the dropout is.
-- **The standard regime stays the campaigns' default.** The regime is a declared diagnosis of
-  the network from nothing at every stay first; it enters the registered selections only if it
-  gains there by the rule every knob is read by, and the preregistration records that change.
+- **The standard regime stays the default where the stop was not read.** At the budget of every
+  stay the stop (a fifth held out, patience 10) is the registered recipe of every arm of the
+  backbone from 2026-10-03 on (`docs/preregistration.md`, that date); at smaller budgets, where
+  a held-out fifth is a handful of units, the standard regime stands until a stop is read there.
+  The other three knobs stay knobs a selection may turn.
 
 ## Consequences
 

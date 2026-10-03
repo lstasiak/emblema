@@ -61,4 +61,4 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0044](0044-the-probe-solved-in-closed-form.md) | The probe solved in closed form: a fifth arm whose head is a ridge over the pooled states, chosen leave-one-out, on the arms' budget | accepted |
 | [0045](0045-a-binary-task.md) | A binary task: the kind of the target decides the head's link, the draw and what a cell keeps | accepted |
 | [0046](0046-comparing-candidates-by-auroc.md) | Comparing candidates by AUROC: one orientation for every measure, strata in the resampling, thresholds in the measure's unit | accepted |
-| [0047](0047-a-training-regime-beside-the-schedule.md) | A training regime beside the schedule: a stop on held-out labels, a class weight and withheld channels, as declared knobs | proposed |
+| [0047](0047-a-training-regime-beside-the-schedule.md) | A training regime beside the schedule: a stop on held-out labels, a class weight and withheld channels, as declared knobs | accepted |

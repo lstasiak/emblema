@@ -98,6 +98,18 @@ spanning the run so lengthened. The floor gives every cell the same chance to le
 of the mean predictor and leaves the budget of labels as the only thing that differs between
 cells of one arm.
 
+**The stop, at the budget of every labelled unit (from 2026-10-03).** At that budget every arm
+of the backbone holds one unit in five of its labelled sample out, ranked by a digest of the
+run's seed and the unit, learns from the rest, scores the held-out units after each epoch (the
+areas under the ROC and precision-recall curves summed for an outcome, the negative squared
+error for a quantity) and keeps the weights of the best epoch, giving up after ten epochs
+without a better one; the schedule's epochs are its cap. The validation side is never read for
+the stop. At smaller budgets a held-out fifth is a handful of units, and every run keeps the
+schedule above with its last weights, as before. The patch model keeps its fixed epochs at every
+budget until it has the stop. Read on the intensive-care task, where the stop alone gained the
+network from nothing 0.027 in area at every stay from fewer labels and halved its spread over
+seeds (`intensive-care-curve.md`, 2026-10-03; ADR-0047). Nothing read before this date changes.
+
 **The peak rate of each arm**: from scratch 1e-3, frozen probe 3e-2, low-rank updates 1e-4,
 full fine-tuning 1e-3. It is the arm's default, the setting a selection departs from; a
 comparison runs each trained arm at the variant its selection chose at each budget
@@ -408,3 +420,4 @@ title" resolves to a row here and to the commit the row names, where the full te
 | 2026-09-29 | `c9a0493` | diagnostic | after the selections, read on the tuning side only; before any grid | *the spread over seeds read on a fixed fifth before the thresholds.* The selections' repeats score other stays each and cannot separate a seed from them; the least gain and the floor's fixed part follow the reading declared for `campaigns/seed-spread-physionet2012.toml`. `verdict-statistics.md`, 2026-09-29. |
 | 2026-09-29 | `4bbf491` | configuration | by the reading declared beforehand; nothing on the validation side | *the intensive-care least gain and the floor's fixed part.* One seed's area moved by 0.041 at 200 on a fixed fifth, so the least gain rises from 0.02 to 0.045; the fixed part is 0.01. `verdict-statistics.md`, 2026-09-29. |
 | 2026-09-29 | `933425f` | configuration | after every selection, before either grid runs; nothing on the validation side | *the intensive-care grids.* `campaigns/curve-physionet2012-mixed5.toml` and `campaigns/curve-physionet2012-stays.toml`: every candidate at its selection's choice per budget, seeds 1 to 5, the thresholds above; the campaign under the stays alone holds the backbone's four ways and the control. |
+| 2026-10-03 | the commit that adds this row | criterion | after the diagnosis of the network from nothing on the intensive-care task, read on a fifth of the tuning side; nothing on the validation side; no registered verdict changes | *the stop, at the budget of every labelled unit.* Every arm of the backbone keeps the weights of its best epoch on a fifth of its labels held out by unit, patience ten, the schedule's epochs as a cap; smaller budgets and the patch model unchanged. `intensive-care-curve.md`, 2026-10-03; ADR-0047. |
