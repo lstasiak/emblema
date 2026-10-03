@@ -1404,3 +1404,144 @@ decided on by the campaigns on Kaggle. No verdict of the registered grids change
   values is another question.
 - 800 stays: a difference under about 0.02 is not confirmed by the paired interval even over
   ten seeds.
+
+## 2026-10-02 — Colab G4: the network from nothing on bounded values
+
+**Question.** Does this network gain when every token's value is bounded at its input, in its
+own shape or in the small one? The design and predictions are in the section declared on
+2026-10-02 for the network from nothing on bounded values.
+
+**Conditions.** Commit `7be57e0d`, campaign `40a666f9…`, order `1d788275…`. One Colab G4, CUDA,
+one process; tier M; 40 cells in 2,972 s. Scored on the fifth held out by seed 101, 800 stays,
+seeds 1 to 10. Read with `data/report/t42d/value-clip-pairs.sh`; CSV under
+`data/report/t42d/value-clip/`.
+
+**Area under the ROC curve on the 800 scored stays**, mean over seeds 1 to 10, and the mean
+over seeds 1 to 5 beside the earlier campaign's:
+
+| Candidate | Seeds 1–10 | Seeds 1–5 | Seeds 1–5 in `bb75a701…` |
+|---|---|---|---|
+| network from nothing (control) | 0.790 | 0.792 | 0.782 |
+| … bounded at ±5 | 0.789 | 0.790 | — |
+| small shape | 0.794 | 0.803 | 0.803 |
+| … bounded at ±5 | 0.795 | 0.803 | — |
+
+The small shape's cells under seeds 1 to 5 repeat the earlier campaign's to the third decimal;
+the control's do not (0.792 against 0.782). Under seeds 6 to 10 the small shape lands at 0.785
+and the control at 0.789.
+
+**Gain in area**, paired over stays (95 % interval), and seed by seed (mean ± standard error).
+
+| Control | Candidate | Paired gain | Seed by seed | Reads |
+|---|---|---|---|---|
+| control | control bounded | −0.001 [−0.011; +0.010] | −0.001 ± 0.003 | no |
+| small shape | small shape bounded | +0.001 [−0.002; +0.003] | +0.001 ± 0.001 | no |
+| control | small shape | +0.004 [−0.011; +0.019] | +0.004 ± 0.007 | no |
+| control bounded | small shape bounded | +0.005 [−0.010; +0.020] | +0.005 ± 0.007 | no |
+| control | small shape bounded | +0.004 [−0.011; +0.020] | +0.004 ± 0.007 | no |
+
+**Conclusions.**
+
+1. Prediction 1 holds: the control lands 0.008 from 0.782 and the small shape 0.009 from
+   0.803, both inside the declared bounds, though the control's seeds moved by up to 0.026.
+2. Predictions 2, 3 and 4 fail. The bound gains neither shape anything: −0.001 and +0.001,
+   with intervals that exclude a gain of 0.01. Bounding the small shape's values changes its
+   seed-by-seed answers by 0.001 ± 0.001: the 0.16 % of readings beyond ±5 reach this network
+   and cost it nothing.
+3. As declared for neither prediction holding: the readings' tails cost STraTS alone, for want
+   of normalisation in its blocks, and this network's blocks absorb them. The corpus's
+   preparation is not reopened on this account; the window of 48 hours and a minute remains the
+   one change the next publication makes.
+4. Not declared, but read in passing: over ten seeds the small shape's gain on this fifth is
+   +0.004, not the +0.021 five seeds gave. Its first five seeds repeat exactly; its next five
+   land at 0.785 against the control's 0.789. The gain of 2026-10-02 was those five seeds'. The
+   shape is decided by the campaigns on Kaggle, on another fifth and at 200 stays, as declared
+   there.
+5. STraTS's lead of about 0.035 over this network stands, and neither of its two parts carries
+   over one at a time: its value embedding's part is a bound this network does not need, and
+   its training regime and head, which cost STraTS 0.043 when turned together, cost this
+   network nothing when turned one at a time (dropout, the static features apart, attention
+   pooling). What is left untried in this network is that regime whole: the early stop on a
+   validation side, the class weight and the variable dropout together. No verdict of the
+   registered grids changes.
+
+**Limitations.**
+
+- One bound; a robust standardisation that undoes the compression of the clinical range was not
+  tried, and nothing here says it would gain nothing.
+- The control's cells are not deterministic on this card, the small shape's are; a comparison
+  of the two across campaigns carries the control's drift.
+- 800 stays: a difference under about 0.02 is not confirmed either way.
+
+## 2026-10-03 — Kaggle T4: the small shape again, on another fifth and at 200 stays
+
+**Question.** Does the small shape's gain hold on a fifth no campaign had scored, and at 200
+stays, and which of its counts carries it? The design and predictions are in the section
+declared on 2026-10-02 for the small shape again.
+
+**Conditions.** Orders placed at `dcad779c`; two orders on one Kaggle session, a Tesla T4
+each: `afe91236…` (every stay, fifth of seed 202) in 32,406 s, `a9ab91cc…` (200 stays, fifth
+of seed 101) in 10,739 s; 40 cells each, seeds 1 to 10; tier M. Read with
+`data/report/t42d/small-shape-pairs.sh`; CSV under `data/report/t42d/small-shape/`.
+
+**Area under the ROC curve**, mean over seeds 1 to 10 (seed by seed in the CSV):
+
+| Candidate | Parameters | Every stay, fifth 202 | 200 stays, fifth 101 |
+|---|---|---|---|
+| network from nothing (control) | 4.8 million | 0.798 | 0.660 |
+| small shape: 64 wide, 2 blocks | 77,000 | 0.803 | 0.686 |
+| shallow: 256 wide, 2 blocks | 1.6 million | 0.787 | 0.674 |
+| narrow: 64 wide, 6 blocks | 210,000 | 0.789 | 0.653 |
+| patch model (`4e28a197…`, same fifth and seeds) | | | 0.696 |
+
+**Gain in area**, paired over stays (95 % interval), and seed by seed (mean ± standard error).
+A candidate *gains* where the interval lies above zero and the mean over seeds exceeds twice
+its standard error.
+
+| Budget | Control | Candidate | Paired gain | Seed by seed | Reads |
+|---|---|---|---|---|---|
+| every stay | control | small | +0.005 [−0.009; +0.020] | +0.005 ± 0.006 | no |
+| every stay | control | shallow | −0.011 [−0.022; −0.000] | −0.011 ± 0.005 | loses, narrowly |
+| every stay | control | narrow | −0.009 [−0.024; +0.007] | −0.009 ± 0.006 | no |
+| every stay | small | shallow | −0.016 [−0.031; −0.002] | −0.016 ± 0.005 | loses |
+| every stay | small | narrow | −0.014 [−0.024; −0.004] | −0.014 ± 0.006 | loses |
+| 200 | control | small | +0.026 [+0.009; +0.044] | +0.026 ± 0.017 | interval yes, seeds no |
+| 200 | control | shallow | +0.014 [−0.003; +0.031] | +0.014 ± 0.016 | no |
+| 200 | control | narrow | −0.007 [−0.030; +0.015] | −0.007 ± 0.017 | no |
+| 200 | small | shallow | −0.012 [−0.032; +0.007] | −0.012 ± 0.014 | no |
+| 200 | small | narrow | −0.034 [−0.050; −0.017] | −0.034 ± 0.008 | loses |
+| 200 | control of `4e28a197…` (0.652) | control here | +0.008 [−0.010; +0.026] | +0.008 ± 0.019 | check holds |
+| 200 | patch model (0.696) | small | −0.009 [−0.035; +0.015] | −0.009 ± 0.016 | no |
+
+**Conclusions.**
+
+1. Prediction 1 holds: the control at 200 lands 0.008 from the earlier campaign's.
+2. Prediction 2 fails. On the new fifth at every stay the small shape gains 0.005, an interval
+   that excludes the declared 0.015 only just and a mean under one standard error. With the
+   reading of the same day on the first fifth over ten seeds (+0.004), the small shape's gain
+   at every stay is not confirmed: the +0.021 of 2026-10-02 belonged to five seeds.
+3. Prediction 3 holds in its first part and not in its second. At 200 stays the small shape
+   gains 0.026 by the paired interval, above the declared 0.02, and lands 0.009 from the patch
+   model, closing most of its lead of 0.043; but seed by seed the gain is 1.5 standard errors,
+   under the bar of two, so by the rule it does not gain. The spread over seeds at 200 stays
+   (0.045) is three times the one at every stay.
+4. Prediction 4 fails, and the shapes point the other way. At every stay both half-turned
+   shapes lose to the small one by 0.014 to 0.016, by both conditions, and sit at or below the
+   control. At 200 the shallow shape, the control's width in two blocks, lands 0.014 above the
+   control and 0.012 below the small shape, while the narrow shape, the small width in six
+   blocks, lands below the control and 0.034 below the small shape, by both conditions. Depth
+   is what costs at 200 stays, not the count of parameters; the width matters little; and the
+   small shape needs both of its counts to hold at every stay.
+5. For the next backbones: the small shape is not confirmed to gain at every stay, where the
+   backbones are compared, and gains by the interval at 200 stays, where the thesis is read. A
+   two-block encoder is a candidate for the low-budget regime, not a settled choice; the
+   control's shape stands until a pretrained small shape is read against a pretrained large one
+   on the task. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- Each shape learns at the control's rate at its budget; a shape's own rate could move the
+  small ones more than the control.
+- At 200 stays ten seeds read a difference only to about 0.017 seed by seed, so a gain of
+  0.026 is neither confirmed nor excluded by the second condition.
+- Two half-turned shapes read two of fifteen ways of turning four counts.
