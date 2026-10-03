@@ -5,7 +5,9 @@ every answer's shape, every refusal's status and format, the pages and their cur
 and the metrics — over adapters that answer as they are told.
 """
 
-from collections.abc import Iterator, Sequence
+import threading
+from collections.abc import Iterator, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Any
 from uuid import UUID
@@ -18,29 +20,62 @@ from emblema.catalog.adapters.tokenisation.published_window_tokeniser import (
 )
 from emblema.entrypoints.api.composition_root import CompositionRoot
 from emblema.entrypoints.api.emblema_api import EmblemaApi
-from emblema.entrypoints.api.problem_details import MEDIA_TYPE
+from emblema.entrypoints.api.problem_details import ProblemDetails
 from emblema.entrypoints.api.telemetry.telemetry import Telemetry
 from emblema.evaluation.adapters.in_memory.campaign_listing import InMemoryCampaignListing
 from emblema.evaluation.adapters.in_memory.evaluation_campaign_repository import (
     InMemoryEvaluationCampaignRepository,
 )
 from emblema.evaluation.adapters.in_memory.verdict_memo import InMemoryVerdictMemo
-from emblema.serving.adapters.in_memory.inference_runtime import InMemoryInferenceRuntime
+from emblema.serving.adapters.in_memory.inference_runtime import (
+    InMemoryInferenceRuntime,
+    StatedCandidate,
+)
+from emblema.serving.adapters.in_memory.promotable_artifact_repository import (
+    InMemoryPromotableArtifactRepository,
+)
 from emblema.serving.adapters.in_memory.served_model_listing import InMemoryServedModelListing
 from emblema.serving.adapters.in_memory.served_model_repository import (
     InMemoryServedModelRepository,
 )
 from emblema.serving.domain.exceptions import InferenceBusyError
 from emblema.serving.domain.identifiers import ServedModelId
+from emblema.shared.adapters.identity.static_token_identity_provider import (
+    StaticTokenIdentityProvider,
+)
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
+from emblema.shared.adapters.in_memory.clock import FixedClock
+from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.identity.principal import Principal
+from emblema.shared.kernel.identity.scope import Scope
 from emblema.shared.kernel.tokens import TokenWindow
 from tests.evaluation.support import CAMPAIGN, closed_reading, store
-from tests.serving.support import KEPT, MODEL, WITHDRAWN, limits, served, stated
+from tests.serving.support import (
+    FITTED,
+    KEPT,
+    MODEL,
+    OPERATOR,
+    OTHER_CAMPAIGN,
+    PROMOTED,
+    WITHDRAWN,
+    limits,
+    origin,
+    promotable,
+    served,
+    stated,
+)
 from tests.support.settings import API, TELEMETRY
 
+MEDIA_TYPE = ProblemDetails.MEDIA_TYPE
 WITHDRAWN_MODEL = ServedModelId(UUID(int=15))
 ORIGIN = "http://localhost:5173"
+PROMOTER = Principal(subject="promoter", scopes=frozenset({Scope("serving:promote")}))
+TOKENS = {"t-operator": OPERATOR, "t-promoter": PROMOTER}
+AS_OPERATOR = {"Authorization": "Bearer t-operator"}
+# What a second finished campaign kept: in the store, promotable, not yet served.
+UNSERVED = b"kept by another campaign"
 
 
 def failing() -> None:
@@ -66,6 +101,20 @@ class _Busy(InMemoryInferenceRuntime):
         raise InferenceBusyError("the networks are running as much as they may")
 
 
+class _Held(InMemoryInferenceRuntime):
+    """A runtime whose answers wait until the test lets them go, holding a request thread."""
+
+    def __init__(self, candidates: Mapping[Checksum, StatedCandidate]) -> None:
+        super().__init__(candidates)
+        self.entered = threading.Event()
+        self.released = threading.Event()
+
+    def predict(self, artifact: ArtifactRef, windows: Sequence[TokenWindow]) -> tuple[float, ...]:
+        self.entered.set()
+        self.released.wait(timeout=30)
+        return super().predict(artifact, windows)
+
+
 @contextmanager
 def client(
     *,
@@ -80,20 +129,36 @@ def client(
     models.save(served(served_model_id=WITHDRAWN_MODEL, artifact=KEPT).withdraw(WITHDRAWN))
     campaigns = InMemoryEvaluationCampaignRepository()
     store(campaigns, closed_reading())
+    # What finished campaigns kept, bytes in the store: the artifact the served model answers
+    # with, and one nothing serves yet.
+    artifacts = InMemoryArtifactStore()
+    promotables = InMemoryPromotableArtifactRepository()
+    promotables.save(promotable(artifact=artifacts.put(FITTED)))
+    promotables.save(
+        promotable(artifact=artifacts.put(UNSERVED), origin=origin(campaign=OTHER_CAMPAIGN))
+    )
     reporting = Telemetry(TELEMETRY) if telemetry else None
     root = CompositionRoot(
         telemetry=reporting,
         limits=limits(),
-        store=InMemoryArtifactStore(),
+        store=artifacts,
+        identity=StaticTokenIdentityProvider(TOKENS),
         served=models,
         served_listing=InMemoryServedModelListing(models),
+        promotables=promotables,
         campaigns=campaigns,
         campaign_listing=InMemoryCampaignListing(campaigns),
         verdicts=InMemoryVerdictMemo(capacity=4),
         runtime=(
-            InMemoryInferenceRuntime({KEPT.checksum: stated()}) if runtime is None else runtime
+            InMemoryInferenceRuntime(
+                {KEPT.checksum: stated(), Checksum.of_bytes(UNSERVED): stated()}
+            )
+            if runtime is None
+            else runtime
         ),
         tokeniser=PublishedWindowTokeniser(),
+        clock=FixedClock(PROMOTED),
+        ids=SequentialIdGenerator(),
         checks={"artifact_store": lambda: None, "database": (lambda: None) if ready else failing},
     )
     api = EmblemaApi(
@@ -101,6 +166,7 @@ def client(
         root.readiness,
         API.model_copy(update={"cors_origins": origins, **settings}),
         reporting,
+        identity=root.adapters.identity,
     )
     with TestClient(api.app, raise_server_exceptions=False) as test_client:
         yield test_client
@@ -140,11 +206,31 @@ def test_the_schema_describes_every_route_by_a_stable_operation(api: TestClient)
         ("/served-models/{served_model_id}", "get"): "view_served_model",
         ("/served-models/{served_model_id}/predictions", "post"): "predict",
         ("/served-models/{served_model_id}/embeddings", "post"): "embed",
+        ("/served-models", "post"): "promote",
+        ("/served-models/{served_model_id}/withdrawal", "post"): "withdraw",
         ("/campaigns", "get"): "list_campaigns",
         ("/campaigns/{campaign_id}", "get"): "view_campaign",
         ("/campaigns/{campaign_id}/runs", "get"): "list_campaign_runs",
     }
     assert "Problem" in schema["components"]["schemas"]
+
+
+def test_the_schema_marks_exactly_the_routes_that_change_what_is_served_as_protected(
+    api: TestClient,
+) -> None:
+    schema = api.get("/openapi.json").json()
+
+    protected = {
+        (path, method)
+        for path, methods in schema["paths"].items()
+        for method, operation in methods.items()
+        if operation.get("security") == [{"bearerAuth": []}]
+    }
+    assert protected == {
+        ("/served-models", "post"),
+        ("/served-models/{served_model_id}/withdrawal", "post"),
+    }
+    assert list(schema["components"]["securitySchemes"]) == ["bearerAuth"]
 
 
 def test_the_process_reports_up_and_ready(api: TestClient) -> None:
@@ -400,3 +486,136 @@ def test_a_refusal_because_the_service_is_busy_is_counted_apart_from_a_failure()
         exposition = api.get("/metrics").text
 
         assert 'emblema_inference_refused_total{answer="prediction"' in exposition
+
+
+def test_a_kept_artifact_is_promoted_with_a_token_and_withdrawn_with_it(api: TestClient) -> None:
+    kept = Checksum.of_bytes(UNSERVED)
+
+    promoted = api.post("/served-models", json={"checksum": str(kept)}, headers=AS_OPERATOR)
+
+    assert promoted.status_code == 201
+    model = promoted.json()["served_model_id"]
+    assert promoted.headers["location"] == f"/served-models/{model}"
+    assert api.get(f"/served-models/{model}").json()["model"]["state"] == "serving"
+
+    withdrawn = api.post(f"/served-models/{model}/withdrawal", headers=AS_OPERATOR)
+
+    assert withdrawn.status_code == 204
+    assert withdrawn.content == b""
+    assert api.get(f"/served-models/{model}").json()["model"]["state"] == "withdrawn"
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/served-models", {"checksum": str(KEPT.checksum)}),
+        (f"/served-models/{MODEL}/withdrawal", None),
+    ],
+)
+def test_a_change_to_what_is_served_without_a_token_is_challenged(
+    api: TestClient, path: str, body: dict[str, Any] | None
+) -> None:
+    answered = api.post(path, json=body)
+
+    assert answered.status_code == 401
+    assert answered.headers["content-type"] == MEDIA_TYPE
+    assert answered.headers["www-authenticate"] == "Bearer"
+    assert answered.json()["detail"] == "a bearer token is required"
+    assert api.get(f"/served-models/{MODEL}").json()["model"]["state"] == "serving"
+
+
+def test_a_token_that_stands_for_nobody_is_refused_the_same_way(api: TestClient) -> None:
+    answered = api.post(
+        "/served-models",
+        json={"checksum": str(KEPT.checksum)},
+        headers={"Authorization": "Bearer t-nobody"},
+    )
+
+    assert answered.status_code == 401
+    assert answered.headers["www-authenticate"] == "Bearer"
+
+
+def test_a_caller_identified_but_not_granted_the_operation_is_forbidden(api: TestClient) -> None:
+    withdrawn = api.post(
+        f"/served-models/{MODEL}/withdrawal", headers={"Authorization": "Bearer t-promoter"}
+    )
+
+    assert withdrawn.status_code == 403
+    assert withdrawn.headers["content-type"] == MEDIA_TYPE
+    assert "serving:withdraw" in withdrawn.json()["detail"]
+    assert api.get(f"/served-models/{MODEL}").json()["model"]["state"] == "serving"
+
+
+@pytest.mark.parametrize(
+    ("path", "body", "status", "detail"),
+    [
+        ("/served-models", {"checksum": str(KEPT.checksum)}, 409, "already"),
+        ("/served-models", {"checksum": f"sha256:{'0' * 64}"}, 404, "no finished campaign"),
+        ("/served-models", {"checksum": "not-a-checksum"}, 422, "checksum"),
+        ("/served-models", {"checksum": str(KEPT.checksum), "campaign_id": "x"}, 422, "campaign"),
+        ("/served-models", {"checksum": str(KEPT.checksum), "candidate": " "}, 422, "candidate"),
+        (f"/served-models/{WITHDRAWN_MODEL}/withdrawal", None, 409, "already been withdrawn"),
+        (f"/served-models/{UUID(int=99)}/withdrawal", None, 404, "no served model"),
+    ],
+)
+def test_a_refused_change_answers_as_a_problem_with_its_status_and_reason(
+    api: TestClient, path: str, body: dict[str, Any] | None, status: int, detail: str
+) -> None:
+    answered = api.post(path, json=body, headers=AS_OPERATOR)
+
+    assert answered.status_code == status
+    assert answered.headers["content-type"] == MEDIA_TYPE
+    assert detail in answered.json()["detail"]
+
+
+@pytest.mark.parametrize("route", ["predictions", "embeddings"])
+def test_a_caller_past_its_allowance_on_the_open_routes_is_told_when_to_come_back(
+    route: str,
+) -> None:
+    with client(inference_requests_per_minute=2) as api:
+        for _ in range(2):
+            assert (
+                api.post(f"/served-models/{MODEL}/{route}", json=request_body()).status_code == 200
+            )
+
+        refused = api.post(f"/served-models/{MODEL}/{route}", json=request_body())
+
+        assert refused.status_code == 429
+        assert refused.headers["content-type"] == MEDIA_TYPE
+        assert refused.headers["retry-after"] == "30"
+        assert "2 requests a minute" in refused.json()["detail"]
+        # Reading is not rationed: the same caller still sees what is served.
+        assert api.get(f"/served-models/{MODEL}").status_code == 200
+
+
+def test_the_two_open_routes_share_one_allowance() -> None:
+    with client(inference_requests_per_minute=1) as api:
+        assert (
+            api.post(f"/served-models/{MODEL}/predictions", json=request_body()).status_code == 200
+        )
+
+        assert (
+            api.post(f"/served-models/{MODEL}/embeddings", json=request_body()).status_code == 429
+        )
+
+
+def test_a_caller_past_its_allowance_is_refused_while_every_request_thread_is_busy() -> None:
+    held = _Held({KEPT.checksum: stated()})
+    with (
+        client(runtime=held, request_threads=1, inference_requests_per_minute=1) as api,
+        ThreadPoolExecutor(max_workers=2) as callers,
+    ):
+        answering = callers.submit(
+            api.post, f"/served-models/{MODEL}/predictions", json=request_body()
+        )
+        assert held.entered.wait(timeout=10)
+        try:
+            # The one request thread is taken; a refusal must not wait for it to come back.
+            refused = callers.submit(
+                api.post, f"/served-models/{MODEL}/predictions", json=request_body()
+            ).result(timeout=10)
+        finally:
+            held.released.set()
+
+        assert refused.status_code == 429
+        assert answering.result(timeout=10).status_code == 200

@@ -21,6 +21,9 @@ PG_USER=${EMBLEMA_DATABASE__USER:?EMBLEMA_DATABASE__USER is required (copy env.e
 PG_DB=${EMBLEMA_DATABASE__NAME:?EMBLEMA_DATABASE__NAME is required (copy env.example to .env)}
 BROKER_USER=${EMBLEMA_BROKER__USER:?EMBLEMA_BROKER__USER is required (copy env.example to .env)}
 BROKER_VHOST=${EMBLEMA_BROKER__VHOST:?EMBLEMA_BROKER__VHOST is required (copy env.example to .env)}
+TOKENS=${EMBLEMA_IDENTITY__STATIC_TOKENS:?EMBLEMA_IDENTITY__STATIC_TOKENS is required (copy env.example to .env)}
+# The first token of the list, which is what precedes its first colon.
+TOKEN=${TOKENS%%:*}
 
 fail() {
   echo "FAIL: $*" >&2
@@ -91,5 +94,18 @@ curl -fsS "${API_URL}/served-models" | grep -q '"items":' || fail "the API does 
 # A refusal answers as a problem document, whatever was asked.
 [[ $(curl -sS -o /dev/null -w '%{content_type}' "${API_URL}/served-models/not-a-uuid") == "application/problem+json" ]] \
   || fail "a refusal is not a problem document"
+
+echo "api: a change to what is served is challenged, and the token the stack was given opens it"
+# The same promotion twice: of an artifact nothing kept, so nothing is served by it either way.
+# Without a token it is challenged before anything is looked up; with the token it is refused
+# for what it names, which says the token was read and accepted.
+promotion="{\"checksum\": \"sha256:$(printf '%064d' 0)\"}"
+status() {
+  curl -sS -o /dev/null -w '%{http_code}' -X POST -H "Content-Type: application/json" "$@" \
+    "${API_URL}/served-models" -d "$promotion"
+}
+[[ $(status) == 401 ]] || fail "a promotion without a token was not challenged (got $(status))"
+[[ $(status -H "Authorization: Bearer ${TOKEN}") == 404 ]] \
+  || fail "the token was not accepted, or the promotion was not refused for what it names (got $(status -H "Authorization: Bearer ${TOKEN}"))"
 
 echo "OK: postgres, broker, bucket, mlflow and the api are ready"

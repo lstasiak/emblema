@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from http import HTTPStatus
+from typing import Any, ClassVar
 
 from fastapi import APIRouter
 
@@ -18,8 +19,6 @@ from emblema.shared.api.page_request import CursorParameter, LimitParameter, Pag
 from emblema.shared.api.problem import Problem
 from emblema.shared.kernel.paging.page import Page
 
-_REFUSALS = Problem.responses(HTTPStatus.NOT_FOUND, HTTPStatus.UNPROCESSABLE_ENTITY)
-
 
 class CampaignRoutes:
     """What the API shows of evaluation campaigns: a list, one in full, and its runs.
@@ -30,6 +29,10 @@ class CampaignRoutes:
     Attributes:
         router: The routes, under ``/campaigns``.
     """
+
+    _REFUSALS: ClassVar[dict[int | str, dict[str, Any]]] = Problem.responses(
+        HTTPStatus.NOT_FOUND, HTTPStatus.UNPROCESSABLE_ENTITY
+    )
 
     def __init__(
         self,
@@ -56,14 +59,14 @@ class CampaignRoutes:
             operation_id="view_campaign",
             summary="One campaign: its design, every candidate's curve, and the verdict",
             response_model=CampaignDetail,
-            responses=_REFUSALS,
+            responses=self._REFUSALS,
         )(self.view_campaign)
         self.router.get(
             "/{campaign_id}/runs",
             operation_id="list_campaign_runs",
             summary="The cells of a campaign that have run",
             response_model=CursorPage[CampaignRunResource],
-            responses=_REFUSALS,
+            responses=self._REFUSALS,
         )(self.list_runs)
 
     def list_campaigns(

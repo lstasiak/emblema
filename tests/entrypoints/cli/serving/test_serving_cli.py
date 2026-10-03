@@ -53,14 +53,19 @@ def test_a_promotion_names_the_artifact_by_checksum_and_optionally_its_origin() 
     )
 
     assert parsed.command == PromoteArtifactCommand(
-        checksum=promotable().artifact.checksum, campaign=CAMPAIGN, candidate=TREES
+        actor=ServingCli.OPERATOR,
+        checksum=promotable().artifact.checksum,
+        campaign=CAMPAIGN,
+        candidate=TREES,
     )
 
 
 def test_a_withdrawal_names_the_model() -> None:
     parsed = ServingCli().parse(["withdraw", "--model", str(MODEL)])
 
-    assert parsed.command == WithdrawServedModelCommand(served_model=MODEL)
+    assert parsed.command == WithdrawServedModelCommand(
+        actor=ServingCli.OPERATOR, served_model=MODEL
+    )
 
 
 def test_a_promoted_artifact_prints_the_model_that_now_serves_it_and_can_be_withdrawn(

@@ -8,6 +8,7 @@ from emblema.serving.adapters.persistence.promotable_artifact_repository import 
 from emblema.serving.adapters.persistence.served_model_repository import (
     SqlAlchemyServedModelRepository,
 )
+from emblema.serving.application.authorisation.promotion_policy import PromotionPolicy
 from emblema.serving.application.use_cases.promote_artifact import PromoteArtifact
 from emblema.serving.application.use_cases.withdraw_served_model import WithdrawServedModel
 from emblema.serving.ports.promotable_artifact_repository import PromotableArtifactRepository
@@ -62,6 +63,7 @@ class CompositionRoot:
             clock=SystemClock() if clock is None else clock,
             ids=Uuid4IdGenerator() if ids is None else ids,
         )
+        policy = PromotionPolicy()
         self.services = Services(
             promote_artifact=PromoteArtifact(
                 self.adapters.promotables,
@@ -69,8 +71,11 @@ class CompositionRoot:
                 self.adapters.store,
                 self.adapters.ids,
                 self.adapters.clock,
+                policy,
             ),
-            withdraw_served_model=WithdrawServedModel(self.adapters.served, self.adapters.clock),
+            withdraw_served_model=WithdrawServedModel(
+                self.adapters.served, self.adapters.clock, policy
+            ),
         )
 
     @staticmethod

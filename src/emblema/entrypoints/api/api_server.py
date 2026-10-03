@@ -50,4 +50,10 @@ class ApiServer:
 
     def _assembled(self, telemetry: Telemetry) -> EmblemaApi:
         root = CompositionRoot(self._settings, telemetry=telemetry)
-        return EmblemaApi(root.services, root.readiness, self._settings.require_api(), telemetry)
+        return EmblemaApi(
+            root.services,
+            root.readiness,
+            self._settings.require_api(),
+            telemetry,
+            identity=root.adapters.identity,
+        )

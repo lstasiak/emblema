@@ -103,3 +103,7 @@ class WindowBeyondBudgetError(ServingError):
 
 class InferenceBusyError(ServingError):
     """The service is running as much as its budget allows and could not admit more in time."""
+
+
+class OperationNotPermittedError(ServingError):
+    """The caller was identified, and not granted the operation it asked for."""

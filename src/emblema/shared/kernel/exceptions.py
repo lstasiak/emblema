@@ -35,3 +35,11 @@ class InvalidCursorError(ValueError):
 
 class InvalidPageError(ValueError):
     pass
+
+
+class InvalidScopeError(ValueError):
+    pass
+
+
+class InvalidPrincipalError(ValueError):
+    pass

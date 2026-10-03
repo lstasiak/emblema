@@ -9,7 +9,9 @@ from emblema.serving.application.read_models.predictions import Predictions
 from emblema.serving.application.use_cases.embed_windows import EmbedWindowsQuery
 from emblema.serving.application.use_cases.list_served_models import ListServedModels
 from emblema.serving.application.use_cases.predict_windows import PredictWindowsQuery
+from emblema.serving.application.use_cases.promote_artifact import PromoteArtifact
 from emblema.serving.application.use_cases.view_served_model import ViewServedModel
+from emblema.serving.application.use_cases.withdraw_served_model import WithdrawServedModel
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,8 @@ class Services:
     embed_windows: Callable[[EmbedWindowsQuery], Embeddings]
     view_served_model: ViewServedModel
     list_served_models: ListServedModels
+    promote_artifact: PromoteArtifact
+    withdraw_served_model: WithdrawServedModel
     view_campaign: ViewCampaign
     list_campaigns: ListCampaigns
     list_campaign_runs: ListCampaignRuns

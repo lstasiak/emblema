@@ -14,6 +14,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.candidate_standing import CandidateStanding
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
 from emblema.serving.adapters.in_memory.inference_runtime import StatedCandidate
+from emblema.serving.application.authorisation.promotion_policy import PromotionPolicy
 from emblema.serving.domain.artifact_origin import ArtifactOrigin
 from emblema.serving.domain.campaign_score import CampaignScore
 from emblema.serving.domain.identifiers import ServedModelId
@@ -23,6 +24,7 @@ from emblema.serving.domain.promotable_artifact import PromotableArtifact
 from emblema.serving.domain.served_model import ServedModel
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.identity.principal import Principal
 from emblema.shared.kernel.timestamps import UtcDateTime
 
 CAMPAIGN = CampaignId(UUID(int=11))
@@ -34,6 +36,10 @@ FINISHED = UtcDateTime(datetime(2026, 9, 1, tzinfo=UTC))
 PROMOTED = UtcDateTime(datetime(2026, 9, 2, tzinfo=UTC))
 WITHDRAWN = UtcDateTime(datetime(2026, 9, 3, tzinfo=UTC))
 FITTED = b"fitted candidate"
+OPERATOR = Principal(
+    subject="operator", scopes=frozenset({PromotionPolicy.PROMOTE, PromotionPolicy.WITHDRAW})
+)
+VISITOR = Principal(subject="visitor")
 KEPT = ArtifactRef(key="durable/fitted", checksum=Checksum.of_bytes(FITTED))
 
 

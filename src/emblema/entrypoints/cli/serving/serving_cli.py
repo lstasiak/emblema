@@ -2,12 +2,14 @@ import argparse
 import sys
 from collections.abc import Sequence
 from contextlib import redirect_stdout
+from typing import ClassVar
 
 from emblema.config.settings import Settings
 from emblema.entrypoints.cli.serving.composition_root import CompositionRoot
 from emblema.entrypoints.cli.serving.services import Services
 from emblema.entrypoints.cli.serving.serving_invocation import ServingInvocation
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef
+from emblema.serving.application.authorisation.promotion_policy import PromotionPolicy
 from emblema.serving.application.use_cases.promote_artifact import PromoteArtifactCommand
 from emblema.serving.application.use_cases.withdraw_served_model import (
     WithdrawServedModelCommand,
@@ -15,6 +17,7 @@ from emblema.serving.application.use_cases.withdraw_served_model import (
 from emblema.serving.domain.exceptions import ServingError
 from emblema.serving.domain.identifiers import ServedModelId
 from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.identity.principal import Principal
 
 
 class ServingCli:
@@ -35,10 +38,21 @@ class ServingCli:
 
     Standard output is the identifier and nothing else: whatever a library prints while a use
     case runs goes to standard error.
+
+    The command line speaks for the operator: whoever can run it on the machine that keeps the
+    registry was let in by that machine, so every invocation carries the operator's grants and
+    the policy in the use case is what still says no.
+
+    Attributes:
+        OPERATOR: Whom an invocation acts as.
     """
 
     PROMOTE = "promote"
     WITHDRAW = "withdraw"
+    OPERATOR: ClassVar[Principal] = Principal(
+        subject="operator",
+        scopes=frozenset({PromotionPolicy.PROMOTE, PromotionPolicy.WITHDRAW}),
+    )
 
     def parse(self, argv: Sequence[str] | None = None) -> ServingInvocation:
         """The command the arguments ask for."""
@@ -46,12 +60,15 @@ class ServingCli:
         if arguments.what == self.PROMOTE:
             return ServingInvocation(
                 command=PromoteArtifactCommand(
+                    actor=self.OPERATOR,
                     checksum=arguments.checksum,
                     campaign=arguments.campaign,
                     candidate=arguments.candidate,
                 )
             )
-        return ServingInvocation(command=WithdrawServedModelCommand(served_model=arguments.model))
+        return ServingInvocation(
+            command=WithdrawServedModelCommand(actor=self.OPERATOR, served_model=arguments.model)
+        )
 
     def run(self, argv: Sequence[str] | None = None) -> None:  # pragma: no cover - environment
         invocation = self.parse(argv)

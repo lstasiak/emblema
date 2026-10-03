@@ -88,6 +88,7 @@ jobs:
             echo "EMBLEMA_ARTIFACT_STORE__ACCESS_KEY=GK$(openssl rand -hex 16)"
             echo "EMBLEMA_ARTIFACT_STORE__SECRET_KEY=$(openssl rand -hex 32)"
             echo "EMBLEMA_WORKER__BACKBONE=dev/durable/absent@sha256:$(openssl rand -hex 32)"
+            echo "EMBLEMA_IDENTITY__STATIC_TOKENS=\"$(openssl rand -hex 32):ci-operator:serving:promote serving:withdraw\""
           } >> .env
       - name: Validate the compose file
         run: docker compose --profile workers --profile tests config --quiet
@@ -186,6 +187,7 @@ jobs:
             echo "EMBLEMA_BROKER__PASSWORD=$(openssl rand -hex 16)"
             echo "EMBLEMA_ARTIFACT_STORE__ACCESS_KEY=GK$(openssl rand -hex 16)"
             echo "EMBLEMA_ARTIFACT_STORE__SECRET_KEY=$(openssl rand -hex 32)"
+            echo "EMBLEMA_IDENTITY__STATIC_TOKENS=$(openssl rand -hex 32):ci-operator:serving:promote serving:withdraw"
           } >> "$GITHUB_ENV"
 
       - name: Start the artifact store and the metadata database

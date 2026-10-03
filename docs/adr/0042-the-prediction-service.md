@@ -1,7 +1,8 @@
 # ADR-0042: The prediction service — open host services, a runtime routed by the form kept, and each context's API inside the context
 
-- Status: proposed (accepted once a promoted candidate answers on arm64)
-- Date: 2026-09-25; amended 2026-09-27 (the networks' concurrency is bounded by cost, ADR-0043)
+- Status: accepted
+- Date: 2026-09-25; amended 2026-09-27 (the networks' concurrency is bounded by cost, ADR-0043);
+  amended 2026-10-01 (status; promotion and withdrawal over HTTP, ADR-0048)
 
 ## Context
 
@@ -48,7 +49,8 @@ process could also hand work to the queue.
 - A request names the model it asks; nothing yet answers "the model for task X".
 - The API image carries the graph runtime and the baselines' libraries, and no torch.
 - Tokenisation is pure Python, about two microseconds a token; it is timed on its own.
-- Promotion and withdrawal stay on the command line until authenticated.
+- Promotion and withdrawal stayed on the command line until a caller could be identified;
+  they answer over HTTP since ADR-0048.
 
 ## Alternatives considered
 
@@ -70,3 +72,9 @@ process could also hand work to the queue.
   (`202 Accepted`) run by a worker.
 - Tokenisation shows in the latency budget → the vectorised tokeniser (ADR-0012).
 - An efficiency variant is served in place of its source → the served model names the variant.
+
+## Amendments
+
+- 2026-09-27: accepted. Six promoted candidates, networks and classical, answered over HTTP on
+  the arm64 stack.
+- 2026-10-01: promotion and withdrawal answer over HTTP to an identified caller (ADR-0048).

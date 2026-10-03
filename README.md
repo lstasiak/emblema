@@ -203,6 +203,21 @@ uv run python -m emblema.entrypoints.cli.serving promote --checksum <checksum>
 uv run python -m emblema.entrypoints.cli.serving withdraw --model <model id>
 ```
 
+The same two operations answer over HTTP to a caller whose bearer token carries the scope of
+the operation (`serving:promote`, `serving:withdraw`). Who a token stands for is the configured
+identity provider's answer: tokens the process was given, for the local stack, or an issuer's
+signed tokens verified by its published keys
+([ADR-0048](docs/adr/0048-authentication-at-the-edge-authorisation-in-the-use-case.md)). On
+the local stack the token is the first field of `EMBLEMA_IDENTITY__STATIC_TOKENS` in `.env`:
+
+```sh
+curl -s -X POST http://127.0.0.1:8000/served-models \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"checksum": "<checksum>"}'
+curl -s -X POST http://127.0.0.1:8000/served-models/<model id>/withdrawal \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 A promoted model answers over HTTP with raw readings by channel name: unknown channels are
 ignored and named in the answer, a window without a reading the model takes is refused
 ([ADR-0042](docs/adr/0042-the-prediction-service.md)):
@@ -216,7 +231,8 @@ curl -s -X POST http://127.0.0.1:8000/served-models/<model id>/predictions \
 
 `/embeddings` returns each window's pooled representation. What the networks run at once is
 bounded by cost ([ADR-0043](docs/adr/0043-the-networks-memory-is-bounded-by-cost.md)): a
-request that cannot start in time gets `503` with a `Retry-After`. `/campaigns` and its pages
+request that cannot start in time gets `503` with a `Retry-After`, and a caller past its
+allowance of requests a minute gets `429` with the same header. `/campaigns` and its pages
 show each comparison's design, curves, verdict and grid. Every refusal is a problem details
 document (RFC 9457).
 
