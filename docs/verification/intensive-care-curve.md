@@ -1606,3 +1606,71 @@ No verdict of the registered grids changes.
   a gain against fewer labels, and a loss may be the labels'.
 - 800 stays and ten seeds: a difference under about 0.02 is not confirmed by the paired
   interval.
+
+## 2026-10-03 — Colab G4: the published regime, whole
+
+**Question.** Does this network gain from the published network's training regime taken whole,
+and from its stop alone? The design and predictions are in the section declared on 2026-10-03
+for the published regime.
+
+**Conditions.** Commit `1f489909`, campaign `e1959b4f…`, order `bdfdabf2…`. One Colab G4, CUDA,
+one process; tier M; 40 cells in 2,502 s. Scored on the fifth held out by seed 101, 800 stays,
+seeds 1 to 10. Read with `data/report/t42d/published-regime-pairs.sh`; CSV under
+`data/report/t42d/published-regime/`.
+
+**Area under the ROC curve on the 800 scored stays**, mean over seeds 1 to 10, with the seeds'
+standard deviation and the seconds a cell took:
+
+| Candidate | Mean | SD over seeds | Seconds a cell |
+|---|---|---|---|
+| network from nothing (control; 30 epochs, last weights) | 0.783 | 0.018 | 98 |
+| … with the stop alone | 0.810 | 0.006 | 51 |
+| … under the published regime | 0.799 | 0.012 | 55 |
+| the small shape under the published regime | 0.818 | 0.011 | 37 |
+| STraTS on the same stays, for reference | 0.827 | 0.010 | |
+
+A cell under the stop learns from 2,560 stays and scores 640 after each epoch; its seconds say
+the runs ended at about half the control's epochs.
+
+**Gain in area**, paired over stays (95 % interval), and seed by seed (mean ± standard error).
+
+| Control | Candidate | Paired gain | Seed by seed | Reads |
+|---|---|---|---|---|
+| control | stop alone | **+0.027 [+0.009; +0.044]** | +0.027 ± 0.005 | **gains** |
+| control | regime, whole | +0.016 [−0.006; +0.038] | +0.016 ± 0.008 | no |
+| stop alone | regime, whole | −0.011 [−0.023; +0.001] | −0.011 ± 0.004 | no, narrowly |
+| regime, whole | small shape under it | +0.019 [+0.004; +0.033] | +0.019 ± 0.006 | gains |
+| control | small shape under the regime | **+0.034 [+0.015; +0.054]** | +0.034 ± 0.008 | **gains** |
+
+**Conclusions.**
+
+1. Prediction 1 holds: the control lands at 0.783, 0.007 from 0.790.
+2. Prediction 2 fails, and it is the finding. The stop alone gains 0.027 by both conditions,
+   from fewer labels (2,560 against 3,200), and cuts the spread over seeds from 0.018 to 0.006.
+   Thirty epochs of cosine decay with the last weights kept were not where this network should
+   have stopped: kept at its best epoch on held-out stays, the network from nothing lands at
+   0.810.
+3. Prediction 3 holds in the letter and misleads: the regime whole gains 0.016 in the control's
+   shape, under 0.02, because the parts beside the stop (the class weight, the channels
+   withheld, dropout, the constant rate) cost 0.011 against the stop alone. The lever is the
+   stop; the rest of the regime is STraTS's, not this network's.
+4. Prediction 4 fails. The small shape under the regime lands at 0.818, above 0.815 and 0.009
+   from STraTS, with an interval that includes STraTS's level. With the stop, the small shape
+   gains over the control's shape (+0.019), which it did not do without one over ten seeds.
+5. As declared for the regime gaining 0.02 or more: the lever is found. ADR-0047 is accepted
+   with this reading, the stop enters the protocol for the budget of every stay
+   (`docs/preregistration.md`, 2026-10-03), and the next backbones' campaigns read their arms
+   under it there. The gap between this network and the published one at every stay is closed to
+   within noise by two things the diagnosis measured: the best epoch kept on held-out labels, and
+   two blocks instead of six. No verdict of the registered grids changes: they were read under
+   the regime registered at the time, and the stop is a change for campaigns defined from now on.
+
+**Limitations.**
+
+- The stop alone was read in the control's shape; the small shape was read under the regime
+  whole. The small shape with the stop alone is the one cell this leaves unread.
+- One share and one patience; the stop's held-out fifth is 640 stays here and would be 40 at
+  200 stays, where it was not read and is not registered.
+- The regime's other parts were read together; which of them costs the 0.011 is not read.
+- 800 stays and ten seeds: a difference under about 0.02 is not confirmed by the paired
+  interval.
