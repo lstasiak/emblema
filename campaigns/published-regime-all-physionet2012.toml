@@ -1,0 +1,57 @@
+# Whether the network trained from nothing gains from the training regime of the published
+# networks on this task, taken whole: a stop on a fifth of its labels held out by unit, with
+# a patience of ten epochs; the positive outcome weighted by the ratio of the classes; a fifth
+# of a window's channels withheld at each step; dropout 0.2; and a constant rate of 0.0005, the
+# published network's. Turned towards this project's regime one part at a time, that network
+# lost at most 0.011 to any part; turned in all of them, 0.043, and landed where this network
+# stands (docs/verification/intensive-care-curve.md, 2026-10-02). This network tried the parts
+# it had one at a time and gained nothing; the parts together are read here, under ADR-0047,
+# in the control's shape and in the published network's small shape, beside the stop alone.
+#
+# Every candidate is held to the control's thirty epochs as a cap and scored on the fifth held
+# out by seed 101, the same fifth for every seed, the one every diagnosis of this network was
+# read on, over ten seeds; the validation side is not read, by the stop or by anything else. A
+# campaign divided this way chooses nothing. Defined under the worker settings of the registered
+# grids, with the mixed backbone, sha256:869ed545…, as the architecture the control is shaped
+# like.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "published-regime-all-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.000333",
+    "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2",
+    "from_scratch@channel_dropout=0.2,class_weight=ratio,dropout=0.2,final_lr_fraction=1,learning_rate=0.0005,patience=10,stop_share=0.2,warmup_fraction=0",
+    "from_scratch@channel_dropout=0.2,class_weight=ratio,dropout=0.2,feedforward_width=128,final_lr_fraction=1,heads=16,layers=2,learning_rate=0.0005,patience=10,stop_share=0.2,warmup_fraction=0,width=64",
+]
+control = "from_scratch@learning_rate=0.000333"
+endpoint = "from_scratch@channel_dropout=0.2,class_weight=ratio,dropout=0.2,final_lr_fraction=1,learning_rate=0.0005,patience=10,stop_share=0.2,warmup_fraction=0"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+# Ten seeds: at every stay one seed moves the area by about 0.015 on this fifth, so the
+# difference of two candidates is read to about 0.007.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# Three contenders at one budget, less the endpoint.
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
