@@ -5,7 +5,9 @@ every answer's shape, every refusal's status and format, the pages and their cur
 and the metrics — over adapters that answer as they are told.
 """
 
-from collections.abc import Iterator, Sequence
+import threading
+from collections.abc import Iterator, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Any
 from uuid import UUID
@@ -25,7 +27,10 @@ from emblema.evaluation.adapters.in_memory.evaluation_campaign_repository import
     InMemoryEvaluationCampaignRepository,
 )
 from emblema.evaluation.adapters.in_memory.verdict_memo import InMemoryVerdictMemo
-from emblema.serving.adapters.in_memory.inference_runtime import InMemoryInferenceRuntime
+from emblema.serving.adapters.in_memory.inference_runtime import (
+    InMemoryInferenceRuntime,
+    StatedCandidate,
+)
 from emblema.serving.adapters.in_memory.promotable_artifact_repository import (
     InMemoryPromotableArtifactRepository,
 )
@@ -94,6 +99,20 @@ class _Busy(InMemoryInferenceRuntime):
         self, artifact: ArtifactRef, windows: Sequence[TokenWindow]
     ) -> tuple[tuple[float, ...], ...]:
         raise InferenceBusyError("the networks are running as much as they may")
+
+
+class _Held(InMemoryInferenceRuntime):
+    """A runtime whose answers wait until the test lets them go, holding a request thread."""
+
+    def __init__(self, candidates: Mapping[Checksum, StatedCandidate]) -> None:
+        super().__init__(candidates)
+        self.entered = threading.Event()
+        self.released = threading.Event()
+
+    def predict(self, artifact: ArtifactRef, windows: Sequence[TokenWindow]) -> tuple[float, ...]:
+        self.entered.set()
+        self.released.wait(timeout=30)
+        return super().predict(artifact, windows)
 
 
 @contextmanager
@@ -578,3 +597,25 @@ def test_the_two_open_routes_share_one_allowance() -> None:
         assert (
             api.post(f"/served-models/{MODEL}/embeddings", json=request_body()).status_code == 429
         )
+
+
+def test_a_caller_past_its_allowance_is_refused_while_every_request_thread_is_busy() -> None:
+    held = _Held({KEPT.checksum: stated()})
+    with (
+        client(runtime=held, request_threads=1, inference_requests_per_minute=1) as api,
+        ThreadPoolExecutor(max_workers=2) as callers,
+    ):
+        answering = callers.submit(
+            api.post, f"/served-models/{MODEL}/predictions", json=request_body()
+        )
+        assert held.entered.wait(timeout=10)
+        try:
+            # The one request thread is taken; a refusal must not wait for it to come back.
+            refused = callers.submit(
+                api.post, f"/served-models/{MODEL}/predictions", json=request_body()
+            ).result(timeout=10)
+        finally:
+            held.released.set()
+
+        assert refused.status_code == 429
+        assert answering.result(timeout=10).status_code == 200

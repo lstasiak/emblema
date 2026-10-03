@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from http import HTTPStatus
 from typing import ClassVar
 
@@ -29,7 +29,8 @@ class ProblemDetails:
     because the service is busy: that one is not a failure, it says when to come back. A server
     error carries none: the reason is logged with the trace the request ran under, and the body
     names that trace, so whoever reads the log can find it and whoever calls the service learns
-    nothing about its insides.
+    nothing about its insides. The handlers are asynchronous, so a refusal is answered on the
+    event loop and never waits for a request thread the routes have taken.
 
     Attributes:
         MEDIA_TYPE: What every refusal is served as.
@@ -78,8 +79,8 @@ class ProblemDetails:
             headers=headers,
         )
 
-    def _refused(self, status: HTTPStatus) -> Callable[[Request, Exception], Response]:
-        def handler(request: Request, error: Exception) -> Response:
+    def _refused(self, status: HTTPStatus) -> Callable[[Request, Exception], Awaitable[Response]]:
+        async def handler(request: Request, error: Exception) -> Response:
             if status == HTTPStatus.SERVICE_UNAVAILABLE:
                 logger.warning("%s %s refused: %s", request.method, request.url.path, error)
                 return self.problem(
@@ -102,7 +103,7 @@ class ProblemDetails:
             f"{context.trace_id:032x}"
         )
 
-    def _validation(self, request: Request, error: Exception) -> Response:
+    async def _validation(self, request: Request, error: Exception) -> Response:
         detail = str(error)
         if isinstance(error, RequestValidationError):
             detail = "; ".join(
@@ -111,7 +112,7 @@ class ProblemDetails:
             )
         return self.problem(request, HTTPStatus.UNPROCESSABLE_ENTITY, detail)
 
-    def _http(self, request: Request, error: Exception) -> Response:
+    async def _http(self, request: Request, error: Exception) -> Response:
         if isinstance(error, HTTPException):
             # The framework's refusals carry the headers their status requires — the challenge
             # of a 401, the wait of a 429 — and the one shape keeps them.

@@ -55,8 +55,12 @@ class RequestRateLimit:
         self._buckets: OrderedDict[str, _Bucket] = OrderedDict()
         self._lock = threading.Lock()
 
-    def __call__(self, request: Request) -> None:
+    async def __call__(self, request: Request) -> None:
         """Admit the request or refuse it.
+
+        Asynchronous so that it runs on the event loop: a synchronous dependency would wait for
+        a request thread, and a caller flooding the routes would hold every thread just to be
+        refused. The work under the lock is a few arithmetic operations.
 
         Raises:
             HTTPException: With ``429`` and a ``Retry-After`` if the caller's allowance is spent.

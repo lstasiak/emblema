@@ -1,5 +1,7 @@
 """The allowance one caller has on the open routes, counted in this process."""
 
+import asyncio
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -30,14 +32,12 @@ def request_from(host: str | None) -> Request:
     return Request(scope)
 
 
-def limit(per_minute: int = 3, remembered: int = 2) -> tuple[RequestRateLimit, Ticking]:
+def limit(per_minute: int = 3, remembered: int = 2) -> tuple[Callable[[Request], None], Ticking]:
     clock = Ticking()
-    return (
-        RequestRateLimit(
-            requests_per_minute=per_minute, clients_remembered=remembered, clock=clock
-        ),
-        clock,
+    rate_limit = RequestRateLimit(
+        requests_per_minute=per_minute, clients_remembered=remembered, clock=clock
     )
+    return (lambda request: asyncio.run(rate_limit(request))), clock
 
 
 def test_a_caller_may_burst_the_whole_allowance_and_is_then_told_when_to_come_back() -> None:
