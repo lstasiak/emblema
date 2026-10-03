@@ -66,32 +66,34 @@
 | src/emblema/catalog/ports/corpus\_reader.py                                               |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/ports/corpus\_repository.py                                           |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/ports/tokeniser.py                                                    |       11 |        0 |        0 |        0 |    100% |           |
-| src/emblema/config/api\_settings.py                                                       |       27 |        0 |        0 |        0 |    100% |           |
+| src/emblema/config/api\_settings.py                                                       |       29 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/artifact\_store\_settings.py                                           |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/boosting\_settings.py                                                  |        2 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/broker\_settings.py                                                    |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/compute\_tiers.py                                                      |       34 |        0 |        2 |        0 |    100% |           |
 | src/emblema/config/convolution\_settings.py                                               |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/database\_settings.py                                                  |        5 |        0 |        0 |        0 |    100% |           |
+| src/emblema/config/identity\_settings.py                                                  |       40 |        0 |       14 |        0 |    100% |           |
 | src/emblema/config/lora\_settings.py                                                      |        3 |        0 |        0 |        0 |    100% |           |
+| src/emblema/config/named\_issuer.py                                                       |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/patch\_settings.py                                                     |        2 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/probe\_settings.py                                                     |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/schedule\_settings.py                                                  |        5 |        0 |        0 |        0 |    100% |           |
-| src/emblema/config/settings.py                                                            |       42 |        0 |       10 |        0 |    100% |           |
+| src/emblema/config/settings.py                                                            |       48 |        0 |       12 |        0 |    100% |           |
 | src/emblema/config/telemetry\_settings.py                                                 |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/worker\_settings.py                                                    |       53 |        0 |       16 |        0 |    100% |           |
-| src/emblema/entrypoints/api/adapters.py                                                   |       11 |        0 |        0 |        0 |    100% |           |
+| src/emblema/entrypoints/api/adapters.py                                                   |       15 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/api/api\_server.py                                                |       14 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/api/composition\_root.py                                          |       94 |        0 |        8 |        1 |     99% | 239-\>246 |
-| src/emblema/entrypoints/api/emblema\_api.py                                               |       42 |        0 |        6 |        0 |    100% |           |
+| src/emblema/entrypoints/api/composition\_root.py                                          |      115 |        0 |       10 |        1 |     99% | 297-\>304 |
+| src/emblema/entrypoints/api/emblema\_api.py                                               |       50 |        0 |        6 |        0 |    100% |           |
 | src/emblema/entrypoints/api/health\_routes.py                                             |       28 |        0 |        2 |        0 |    100% |           |
-| src/emblema/entrypoints/api/problem\_details.py                                           |       51 |        0 |       10 |        1 |     98% |  99-\>104 |
+| src/emblema/entrypoints/api/problem\_details.py                                           |       53 |        0 |       10 |        1 |     98% | 108-\>113 |
 | src/emblema/entrypoints/api/readiness.py                                                  |       18 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/api/readiness\_report.py                                          |        4 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/api/request\_size\_limit.py                                       |       31 |        1 |       10 |        2 |     93% |26, 37-\>50 |
+| src/emblema/entrypoints/api/request\_size\_limit.py                                       |       32 |        1 |       10 |        2 |     93% |27, 38-\>51 |
 | src/emblema/entrypoints/api/schemas/health\_resource.py                                   |        2 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/api/schemas/readiness\_resource.py                                |        7 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/api/services.py                                                   |       13 |        0 |        0 |        0 |    100% |           |
+| src/emblema/entrypoints/api/services.py                                                   |       15 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/api/telemetry/counted\_answers.py                                 |       17 |        0 |        2 |        1 |     95% |   25-\>27 |
 | src/emblema/entrypoints/api/telemetry/instrumented\_inference\_runtime.py                 |       36 |        9 |        0 |        0 |     75% |     45-56 |
 | src/emblema/entrypoints/api/telemetry/instrumented\_window\_tokeniser.py                  |       17 |        0 |        0 |        0 |    100% |           |
@@ -119,9 +121,9 @@
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_invocation.py                |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/services.py                                   |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/serving/adapters.py                                           |        8 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/serving/composition\_root.py                                  |       26 |        0 |        2 |        0 |    100% |           |
+| src/emblema/entrypoints/cli/serving/composition\_root.py                                  |       28 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/serving/services.py                                           |        5 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/serving/serving\_cli.py                                       |       42 |        0 |        6 |        1 |     98% | 74-\>exit |
+| src/emblema/entrypoints/cli/serving/serving\_cli.py                                       |       46 |        0 |        6 |        1 |     98% | 91-\>exit |
 | src/emblema/entrypoints/cli/serving/serving\_invocation.py                                |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/configured.py                                                     |       16 |        0 |        4 |        0 |    100% |           |
 | src/emblema/entrypoints/known\_ground\_truths.py                                          |       22 |        0 |        0 |        0 |    100% |           |
@@ -233,7 +235,7 @@
 | src/emblema/evaluation/adapters/torch/torch\_patch\_runtime.py                            |       57 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/xgboost/fitted\_baseline.py                               |       34 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/xgboost/xgboost\_classical\_runtime.py                    |       83 |        0 |       18 |        3 |     97% |112-\>exit, 165-\>exit, 178-\>exit |
-| src/emblema/evaluation/api/campaign\_routes.py                                            |       39 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/api/campaign\_routes.py                                            |       40 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/api/evaluation\_refusals.py                                        |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/api/schemas/campaign\_detail.py                                    |       11 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/api/schemas/campaign\_resource.py                                  |        9 |        0 |        0 |        0 |    100% |           |
@@ -488,17 +490,21 @@
 | src/emblema/serving/adapters/persistence/served\_model\_record.py                         |       33 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/adapters/persistence/served\_model\_repository.py                     |       28 |        1 |        4 |        1 |     94% |        41 |
 | src/emblema/serving/adapters/routing/format\_routed\_inference\_runtime.py                |       81 |        0 |       16 |        0 |    100% |           |
+| src/emblema/serving/api/promotion\_routes.py                                              |       27 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/api/schemas/embeddings\_resource.py                                   |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/api/schemas/inference\_request.py                                     |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/api/schemas/model\_input\_resource.py                                 |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/api/schemas/observed\_window\_body.py                                 |       18 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/api/schemas/predictions\_resource.py                                  |       10 |        0 |        0 |        0 |    100% |           |
+| src/emblema/serving/api/schemas/promoted\_model\_resource.py                              |        8 |        0 |        0 |        0 |    100% |           |
+| src/emblema/serving/api/schemas/promotion\_request.py                                     |       28 |        2 |        4 |        2 |     88% |    34, 41 |
 | src/emblema/serving/api/schemas/served\_model\_detail.py                                  |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/api/schemas/served\_model\_resource.py                                |       11 |        0 |        0 |        0 |    100% |           |
-| src/emblema/serving/api/served\_model\_routes.py                                          |       49 |        0 |        0 |        0 |    100% |           |
+| src/emblema/serving/api/served\_model\_routes.py                                          |       51 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/api/serving\_refusals.py                                              |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/application/admission/prepared\_window.py                             |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/application/admission/window\_admission.py                            |       38 |        0 |        4 |        0 |    100% |           |
+| src/emblema/serving/application/authorisation/promotion\_policy.py                        |       15 |        0 |        2 |        0 |    100% |           |
 | src/emblema/serving/application/read\_models/embedded\_window.py                          |        8 |        0 |        2 |        0 |    100% |           |
 | src/emblema/serving/application/read\_models/embeddings.py                                |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/application/read\_models/model\_input\_view.py                        |       10 |        0 |        0 |        0 |    100% |           |
@@ -509,14 +515,14 @@
 | src/emblema/serving/application/use\_cases/embed\_windows.py                              |       21 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/application/use\_cases/list\_served\_models.py                        |       36 |        0 |        2 |        0 |    100% |           |
 | src/emblema/serving/application/use\_cases/predict\_windows.py                            |       21 |        0 |        0 |        0 |    100% |           |
-| src/emblema/serving/application/use\_cases/promote\_artifact.py                           |       49 |        0 |       10 |        0 |    100% |           |
+| src/emblema/serving/application/use\_cases/promote\_artifact.py                           |       53 |        0 |       10 |        0 |    100% |           |
 | src/emblema/serving/application/use\_cases/record\_promotable\_artifacts.py               |       11 |        0 |        2 |        0 |    100% |           |
 | src/emblema/serving/application/use\_cases/view\_served\_model.py                         |       16 |        0 |        0 |        0 |    100% |           |
-| src/emblema/serving/application/use\_cases/withdraw\_served\_model.py                     |       13 |        0 |        0 |        0 |    100% |           |
+| src/emblema/serving/application/use\_cases/withdraw\_served\_model.py                     |       17 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/domain/admitted\_window.py                                            |       14 |        0 |        4 |        0 |    100% |           |
 | src/emblema/serving/domain/artifact\_origin.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/domain/campaign\_score.py                                             |       14 |        0 |        8 |        0 |    100% |           |
-| src/emblema/serving/domain/exceptions.py                                                  |       26 |        0 |        0 |        0 |    100% |           |
+| src/emblema/serving/domain/exceptions.py                                                  |       27 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/domain/identifiers.py                                                 |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/domain/inference\_budget.py                                           |       28 |        0 |       10 |        0 |    100% |           |
 | src/emblema/serving/domain/inference\_limits.py                                           |       16 |        0 |       10 |        0 |    100% |           |
@@ -530,6 +536,8 @@
 | src/emblema/serving/ports/served\_model\_listing.py                                       |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/ports/served\_model\_repository.py                                    |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/arrays/token\_batch.py                                        |       38 |        0 |        4 |        0 |    100% |           |
+| src/emblema/shared/adapters/identity/jwt\_identity\_provider.py                           |       52 |        0 |        6 |        0 |    100% |           |
+| src/emblema/shared/adapters/identity/static\_token\_identity\_provider.py                 |       16 |        0 |        8 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/artifact\_store.py                                 |       28 |        0 |        6 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/clock.py                                           |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/event\_publisher.py                                |        8 |        0 |        2 |        0 |    100% |           |
@@ -564,10 +572,12 @@
 | src/emblema/shared/adapters/windows/format.py                                             |       29 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/windows/window\_block.py                                      |       79 |        0 |       12 |        0 |    100% |           |
 | src/emblema/shared/adapters/windows/window\_block\_writer.py                              |      118 |        0 |       26 |        1 |     99% | 251-\>255 |
+| src/emblema/shared/api/bearer\_authentication.py                                          |       30 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/api/cursor\_page.py                                                    |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/api/cursor\_token.py                                                   |       25 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/api/page\_request.py                                                   |       18 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/api/problem.py                                                         |       12 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/api/request\_rate\_limit.py                                            |       46 |        0 |       12 |        0 |    100% |           |
 | src/emblema/shared/events/domain\_event.py                                                |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/jobs/job\_argument.py                                                  |        1 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/jobs/queued\_job.py                                                    |        6 |        0 |        0 |        0 |    100% |           |
@@ -575,8 +585,10 @@
 | src/emblema/shared/kernel/artifacts.py                                                    |        8 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/kernel/checksums.py                                                    |       42 |        0 |        8 |        0 |    100% |           |
 | src/emblema/shared/kernel/compute.py                                                      |        5 |        0 |        0 |        0 |    100% |           |
-| src/emblema/shared/kernel/exceptions.py                                                   |       16 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/kernel/exceptions.py                                                   |       20 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/kernel/identifiers.py                                                  |       17 |        0 |        2 |        0 |    100% |           |
+| src/emblema/shared/kernel/identity/principal.py                                           |       11 |        0 |        2 |        0 |    100% |           |
+| src/emblema/shared/kernel/identity/scope.py                                               |       12 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/kernel/learning\_rate\_schedule.py                                     |       21 |        0 |       10 |        0 |    100% |           |
 | src/emblema/shared/kernel/ordering.py                                                     |       10 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/kernel/paging/cursor.py                                                |       11 |        0 |        4 |        0 |    100% |           |
@@ -589,12 +601,13 @@
 | src/emblema/shared/ports/clock.py                                                         |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/event\_publisher.py                                              |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/event\_subscriber.py                                             |        4 |        0 |        0 |        0 |    100% |           |
-| src/emblema/shared/ports/exceptions.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/ports/exceptions.py                                                    |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **15641** |   **95** | **2846** |   **88** | **99%** |           |
+| **TOTAL**                                                                                 | **16004** |   **97** | **2904** |   **90** | **99%** |           |
 
-127 empty files skipped.
+130 empty files skipped.
 
 
 ## Setup coverage badge
