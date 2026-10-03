@@ -1,7 +1,7 @@
 # ADR-0048: Authentication at the edge, authorisation in the use case — a shared identity port consumed by the driving side, a policy per context, and an allowance per caller on the open routes
 
-- Status: proposed (accepted once a token-bearing promotion answers on the local stack)
-- Date: 2026-10-01
+- Status: accepted
+- Date: 2026-10-01; accepted 2026-10-03 (a token-bearing promotion answered on the arm64 stack)
 
 ## Context
 
