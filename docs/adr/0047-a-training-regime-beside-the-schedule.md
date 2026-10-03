@@ -1,6 +1,6 @@
 # ADR-0047: A training regime beside the schedule — a stop on held-out labels, a class weight and withheld channels, as declared knobs
 
-- Status: accepted (2026-10-03; the stop alone gained the network from nothing 0.027 in area at every stay from fewer labels and halved its spread over seeds, `docs/verification/intensive-care-curve.md`, 2026-10-03; the class weight, the channels withheld and the constant rate cost 0.011 beside it and stay knobs, not protocol)
+- Status: accepted (2026-10-03; the stop alone gained the network from nothing 0.027 in area at every stay, the other knobs cost 0.011 beside it: `docs/verification/intensive-care-curve.md`, 2026-10-03)
 - Date: 2026-10-03
 
 ## Context
