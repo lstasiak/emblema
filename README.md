@@ -125,7 +125,7 @@
 | src/emblema/entrypoints/cli/serving/serving\_invocation.py                                |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/configured.py                                                     |       16 |        0 |        4 |        0 |    100% |           |
 | src/emblema/entrypoints/known\_ground\_truths.py                                          |       22 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/restored\_backbones.py                                            |       19 |        0 |        2 |        0 |    100% |           |
+| src/emblema/entrypoints/restored\_backbones.py                                            |       26 |        0 |        4 |        0 |    100% |           |
 | src/emblema/entrypoints/source\_revision.py                                               |       59 |        0 |       14 |        1 |     99% |   88-\>92 |
 | src/emblema/entrypoints/workers/adapters.py                                               |       13 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/workers/campaign\_process.py                                      |       67 |        0 |        2 |        0 |    100% |           |
@@ -146,14 +146,14 @@
 | src/emblema/evaluation/adapters/blocks/published\_corpus\_blocks.py                       |       25 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/blocks/read\_corpus.py                                    |       25 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/campaigns/campaign\_file.py                               |       78 |        0 |        6 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/candidates/backbone\_arm.py                               |       21 |        0 |        4 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/candidates/backbone\_arm\_catalogue.py                    |       45 |        2 |       10 |        0 |     96% |     56-57 |
+| src/emblema/evaluation/adapters/candidates/backbone\_arm.py                               |       29 |        0 |        8 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/candidates/backbone\_arm\_catalogue.py                    |       63 |        3 |       22 |        1 |     95% |58-59, 104 |
 | src/emblema/evaluation/adapters/candidates/backbone\_candidate\_provider.py               |       20 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/classical\_arm.py                              |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/classical\_baseline\_catalogue.py              |       35 |        2 |        4 |        0 |     95% |     51-52 |
 | src/emblema/evaluation/adapters/candidates/classical\_candidate\_provider.py              |       20 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/patch\_candidate\_provider.py                  |       18 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/candidates/patch\_model\_catalogue.py                     |       44 |        3 |        6 |        0 |     94% |101, 106-107 |
+| src/emblema/evaluation/adapters/candidates/patch\_model\_catalogue.py                     |       46 |        3 |        8 |        0 |     94% |105, 110-111 |
 | src/emblema/evaluation/adapters/candidates/routed\_candidate\_catalogue.py                |       19 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/routed\_candidate\_provider.py                 |       23 |        2 |        2 |        0 |     92% |     48-49 |
 | src/emblema/evaluation/adapters/documents/campaign\_candidate\_document.py                |       14 |        0 |        0 |        0 |    100% |           |
@@ -169,7 +169,9 @@
 | src/emblema/evaluation/adapters/features/window\_features.py                              |       13 |        0 |        6 |        1 |     95% | 29-\>exit |
 | src/emblema/evaluation/adapters/features/window\_spectrum.py                              |       54 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/features/window\_statistics.py                            |       37 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/grid/regular\_grid.py                                     |       45 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/grid/gridded\_tokens.py                                   |       28 |        0 |        2 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/grid/regular\_grid.py                                     |       44 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/grid/steps.py                                             |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/handoff/artifact\_store\_campaign\_handoff.py             |       24 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/in\_memory/adaptation\_runtime.py                         |       33 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/in\_memory/campaign\_handoff.py                           |       36 |        0 |        4 |        0 |    100% |           |
@@ -206,9 +208,12 @@
 | src/emblema/evaluation/adapters/synthetic/known\_answer.py                                |       23 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/synthetic/known\_ranking.py                               |       73 |        0 |       12 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/synthetic/synthetic\_ground\_truth.py                     |       33 |        0 |       10 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/torch/adapted\_backbone.py                                |       37 |        0 |       10 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/torch/adapted\_backbone.py                                |       43 |        0 |       12 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/attention\_pooling.py                               |       13 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/torch/backbone\_factory.py                                |        8 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/torch/backbone\_factory.py                                |       10 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/torch/channel\_dropout.py                                 |       16 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/torch/clipped\_values.py                                  |       12 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/torch/early\_stop.py                                      |       58 |        2 |       12 |        3 |     93% |46-\>exit, 68, 78 |
 | src/emblema/evaluation/adapters/torch/fitted\_candidate.py                                |       29 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/fitted\_patch\_model.py                             |       40 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/grid\_reading.py                                    |       21 |        0 |        0 |        0 |    100% |           |
@@ -217,13 +222,14 @@
 | src/emblema/evaluation/adapters/torch/low\_rank\_adaptation.py                            |       24 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/mean\_pooling.py                                    |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/patch\_transformer.py                               |       35 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/torch/pooling.py                                          |       13 |        0 |        6 |        1 |     95% | 23-\>exit |
+| src/emblema/evaluation/adapters/torch/pooling.py                                          |       19 |        0 |        8 |        1 |     96% | 38-\>exit |
 | src/emblema/evaluation/adapters/torch/regression\_head.py                                 |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/ridge\_solution.py                                  |       40 |        0 |        4 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/torch/scheduled\_training.py                              |       37 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/torch/scheduled\_training.py                              |       44 |        0 |       10 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/torch/statics\_apart\_pooling.py                          |       14 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/tail\_pooling.py                                    |       11 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/torch/target\_link.py                                     |       42 |        0 |       16 |        4 |     93% |57-\>exit, 65-\>exit, 74-\>exit, 82-\>exit |
-| src/emblema/evaluation/adapters/torch/torch\_adaptation\_runtime.py                       |       88 |        0 |       10 |        1 |     99% |212-\>exit |
+| src/emblema/evaluation/adapters/torch/target\_link.py                                     |       52 |        0 |       18 |        4 |     94% |62-\>exit, 70-\>exit, 79-\>exit, 102-\>exit |
+| src/emblema/evaluation/adapters/torch/torch\_adaptation\_runtime.py                       |      135 |        1 |       26 |        2 |     98% |249, 331-\>exit |
 | src/emblema/evaluation/adapters/torch/torch\_patch\_runtime.py                            |       57 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/xgboost/fitted\_baseline.py                               |       34 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/xgboost/xgboost\_classical\_runtime.py                    |       83 |        0 |       18 |        3 |     97% |112-\>exit, 165-\>exit, 178-\>exit |
@@ -296,10 +302,10 @@
 | src/emblema/evaluation/domain/classical/minirocket\_spec.py                               |       18 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/classical/random\_convolutions.py                           |       22 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/domain/classical/ridge\_spec.py                                    |       14 |        0 |        2 |        0 |    100% |           |
-| src/emblema/evaluation/domain/exceptions.py                                               |      101 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/exceptions.py                                               |      104 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/campaign\_order.py                                  |       36 |        0 |       16 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/campaign\_order\_result.py                          |       22 |        0 |        6 |        0 |    100% |           |
-| src/emblema/evaluation/domain/heads/head\_pooling.py                                      |       31 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/domain/heads/head\_pooling.py                                      |       42 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/domain/heads/outcome\_folds.py                                     |       37 |        0 |       14 |        0 |    100% |           |
 | src/emblema/evaluation/domain/heads/ridge\_penalties.py                                   |       15 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/domain/identifiers.py                                              |        9 |        0 |        2 |        0 |    100% |           |
@@ -317,7 +323,7 @@
 | src/emblema/evaluation/domain/labels/target\_kind.py                                      |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/labels/task\_window.py                                      |       11 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/patching/patch\_model\_spec.py                              |       32 |        1 |       16 |        1 |     96% |        92 |
-| src/emblema/evaluation/domain/patching/patch\_plan.py                                     |        9 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/patching/patch\_plan.py                                     |       13 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/domain/scoring/error\_measure.py                                   |       16 |        0 |        6 |        1 |     95% | 34-\>exit |
 | src/emblema/evaluation/domain/scoring/scored\_outcome.py                                  |       21 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/domain/scoring/unit\_error.py                                      |       32 |        0 |       10 |        0 |    100% |           |
@@ -346,12 +352,15 @@
 | src/emblema/evaluation/domain/task/inner\_holdout.py                                      |       20 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/task/run\_purpose.py                                        |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/task/task\_split.py                                         |       15 |        0 |        8 |        0 |    100% |           |
-| src/emblema/evaluation/domain/transfer/adaptation\_outcome.py                             |       26 |        4 |       12 |        4 |     79% |75, 79, 85, 89 |
-| src/emblema/evaluation/domain/transfer/adaptation\_plan.py                                |       23 |        0 |        8 |        0 |    100% |           |
-| src/emblema/evaluation/domain/transfer/adaptation\_schedule.py                            |       37 |        0 |       18 |        0 |    100% |           |
+| src/emblema/evaluation/domain/transfer/adaptation\_outcome.py                             |       28 |        4 |       14 |        4 |     81% |82, 86, 92, 96 |
+| src/emblema/evaluation/domain/transfer/adaptation\_plan.py                                |       43 |        0 |       20 |        0 |    100% |           |
+| src/emblema/evaluation/domain/transfer/adaptation\_schedule.py                            |       39 |        1 |       20 |        1 |     97% |       136 |
+| src/emblema/evaluation/domain/transfer/encoder\_setting.py                                |       93 |        1 |       44 |        1 |     99% |       121 |
+| src/emblema/evaluation/domain/transfer/encoder\_shape.py                                  |       11 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/domain/transfer/lora\_spec.py                                      |       22 |        0 |       14 |        0 |    100% |           |
 | src/emblema/evaluation/domain/transfer/remaining\_life\_metrics.py                        |       43 |        0 |       18 |        0 |    100% |           |
-| src/emblema/evaluation/domain/transfer/transfer\_mode.py                                  |       19 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/transfer/training\_regime.py                                |       55 |        0 |       18 |        0 |    100% |           |
+| src/emblema/evaluation/domain/transfer/transfer\_mode.py                                  |       24 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/domain/tuning/candidate\_variant.py                                |       49 |        1 |       26 |        1 |     97% |        35 |
 | src/emblema/evaluation/domain/tuning/knob.py                                              |       13 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/tuning/one\_standard\_error\_rule.py                        |       20 |        1 |        4 |        1 |     92% |        55 |
@@ -386,6 +395,7 @@
 | src/emblema/pretraining/adapters/encoder/fourier\_time\_encoding.py                       |       15 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/grown\_channel\_embedding.py                     |       24 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/learned\_channel\_embedding.py                   |       14 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/encoder/nonlinear\_value\_embedding.py                   |       11 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/self\_attention.py                               |       21 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/set\_encoder.py                                  |       34 |        0 |        6 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/tier\_architecture.py                            |        4 |        0 |        0 |        0 |    100% |           |
@@ -582,7 +592,7 @@
 | src/emblema/shared/ports/exceptions.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **15179** |   **89** | **2696** |   **81** | **99%** |           |
+| **TOTAL**                                                                                 | **15641** |   **95** | **2846** |   **88** | **99%** |           |
 
 127 empty files skipped.
 
