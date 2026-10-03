@@ -1,0 +1,44 @@
+# A small backbone over the intensive-care stays alone: two blocks 64 wide with sixteen heads
+# and a feed-forward of 128, the shape under which a network from nothing came within 0.009 of
+# the published network on in-hospital death, where the tier's shape of six blocks 256 wide
+# stays 0.04 behind. Whether pretraining helps that shape at 200 stays is what this backbone is
+# for; it is the cheap reading beside the mixture of four.
+#
+# Everything but the shape is the stays-alone backbone's at eight epochs
+# (backbone-physionet2012-m-8.toml): the same publication of the stays, read continuing the
+# chain of the mixture of four so that the task's channel table is this backbone's, the same
+# masks, loss, schedule and seed. About 125 steps an epoch; the run is minutes on the platform.
+name = "backbone-stays-small-m"
+tier = "M"
+corpora = ["physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 500

@@ -1,0 +1,34 @@
+# The mixture of four (backbone-mixed4-m.toml) without SKAB: the same publications, read in the
+# same order, with the test rig left out, so a task on it reads this backbone as one that never
+# saw it. Its channels keep their rows in the table, untrained, because the vocabulary is chained
+# through the publication that is skipped.
+#
+# About 2,670 steps an epoch: 72 % the satellite corpus, 24 % C-MAPSS, 5 % the stays.
+name = "backbone-mixed4-without-skab-m"
+tier = "M"
+corpora = ["cmapss", "esa_ad", "physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000

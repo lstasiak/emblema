@@ -1,0 +1,35 @@
+# The mixture of four (backbone-mixed4-m.toml) without the intensive-care stays: the same
+# publications, read in the same order, with the last corpus of the chain left out, so the
+# in-hospital-death task reads this backbone as one that never saw a stay. The stays are the last
+# publication of the chain, so this is the one backbone of the family whose table ends before the
+# corpus left out: the task grows rows for the stays' channels.
+#
+# About 2,660 steps an epoch: 72 % the satellite corpus, 24 % C-MAPSS, 5 % SKAB.
+name = "backbone-mixed4-without-physionet2012-m"
+tier = "M"
+corpora = ["cmapss", "skab", "esa_ad"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000
