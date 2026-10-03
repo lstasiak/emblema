@@ -77,10 +77,19 @@ class OrderPretraining:
 
         Raises:
             PretrainingOrderRejectedError: If a manifest publishes a corpus other than the one
-                it is named for.
+                it is named for, or the configuration states passes for a corpus the order
+                does not read.
             InvalidTrainingMixtureError: If the corpora read are not a chain of one vocabulary.
             UnreadablePublishedCorpusError: If a manifest or its block cannot be read.
         """
+        named = {name for name, _ in command.corpora}
+        unread = [
+            stated.corpus for stated in command.configuration.passes if stated.corpus not in named
+        ]
+        if unread:
+            raise PretrainingOrderRejectedError(
+                f"the configuration states passes for corpora the order does not read: {unread}"
+            )
         described = tuple(self._reader.describe(manifest) for _, manifest in command.corpora)
         for (expected, _), found in zip(command.corpora, described, strict=True):
             if found.corpus != expected:

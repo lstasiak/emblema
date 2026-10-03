@@ -5,6 +5,7 @@ from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.exceptions import InvalidExperimentConfigurationError
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
@@ -25,7 +26,7 @@ class ExperimentConfiguration:
 
     Invariants: the name is non-empty and carries no surrounding whitespace; dropout lies in
     ``[0, 1)``, since a run that drops everything learns nothing; the decoder has at least one
-    layer; the corpus fraction is a share a run could read.
+    layer; the corpus fraction is a share a run could read; no corpus has its passes stated twice.
 
     Attributes:
         name: What the experiment is called, and what its runs are grouped under.
@@ -43,6 +44,8 @@ class ExperimentConfiguration:
         budget: How long the run trains and in how large a step.
         precision: What the forward and backward pass are computed at.
         checkpoint: How often resumable state is written.
+        passes: The corpora of the mixture an epoch reads more than once, and how many times;
+            empty where every corpus is read once, which is every run before the knob existed.
     """
 
     name: str
@@ -56,8 +59,14 @@ class ExperimentConfiguration:
     budget: TrainingBudget
     precision: Precision
     checkpoint: CheckpointPolicy
+    passes: tuple[CorpusPasses, ...] = ()
 
     def __post_init__(self) -> None:
+        corpora = [stated.corpus for stated in self.passes]
+        if len(set(corpora)) != len(corpora):
+            raise InvalidExperimentConfigurationError(
+                f"a corpus has its passes stated twice: {corpora}"
+            )
         if not self.name or self.name != self.name.strip():
             raise InvalidExperimentConfigurationError(
                 "name must be non-empty without surrounding whitespace"
@@ -82,6 +91,13 @@ class ExperimentConfiguration:
         """
         return CorpusShare(fraction=self.corpus_fraction, seed=self.budget.seed)
 
+    def passes_of(self, corpus: str) -> int:
+        """How many times an epoch reads ``corpus``: once unless the configuration says more."""
+        for stated in self.passes:
+            if stated.corpus == corpus:
+                return stated.passes
+        return 1
+
     def schedule(self, batches: int) -> LearningRateSchedule:
         """The learning rate over the run, for an epoch of ``batches`` micro-batches."""
         return self.budget.schedule(batches)
@@ -94,8 +110,13 @@ class ExperimentConfiguration:
         for a run whose parameters differ. Nested values are prefixed by what they belong to, so
         two configurations differing anywhere differ in this mapping. Rates are rendered as floats
         whatever they were built as: an integer zero and a float zero are one configuration and
-        must digest to one signature.
+        must digest to one signature. Passes are rendered last, by corpus name, and only where
+        stated: a run that reads every corpus once renders as it did before the knob existed.
         """
+        passes = {
+            f"passes.{stated.corpus}": stated.passes
+            for stated in sorted(self.passes, key=lambda stated: stated.corpus)
+        }
         return {
             "name": self.name,
             "tier": str(self.tier),
@@ -124,9 +145,15 @@ class ExperimentConfiguration:
             "seed": self.budget.seed,
             "precision": str(self.precision),
             "checkpoint_every_steps": self.checkpoint.every_steps,
+            **passes,
         }
 
     def differences_from(self, other: Self) -> tuple[str, ...]:
-        """Names of the parameters on which this configuration differs from ``other``."""
+        """Names of the parameters on which this configuration differs from ``other``.
+
+        A parameter one configuration states and the other does not, such as the passes of a
+        corpus, is a difference as much as one they value differently.
+        """
         stated, expected = self.parameters(), other.parameters()
-        return tuple(key for key in expected if stated[key] != expected[key])
+        keys = list(expected) + [key for key in stated if key not in expected]
+        return tuple(key for key in keys if stated.get(key) != expected.get(key))

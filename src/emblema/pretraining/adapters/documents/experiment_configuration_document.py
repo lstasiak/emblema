@@ -4,6 +4,7 @@ from emblema.pretraining.adapters.documents.fields import Document, Fields
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
@@ -60,6 +61,7 @@ class ExperimentConfigurationDocument:
             },
             "precision": str(configuration.precision),
             "checkpoint": {"every_steps": configuration.checkpoint.every_steps},
+            "passes": {stated.corpus: stated.passes for stated in configuration.passes},
         }
 
     def decode(self, document: Mapping[str, object]) -> ExperimentConfiguration:
@@ -76,6 +78,9 @@ class ExperimentConfigurationDocument:
             fields.fields("budget"),
         )
         objective = fields.fields("objective")
+        # Absent from every document written before a corpus could be read more than once an
+        # epoch, and those runs read each corpus once.
+        passes = fields.optional_fields("passes")
         return ExperimentConfiguration(
             name=fields.text("name"),
             tier=ComputeTier(fields.text("tier")),
@@ -111,5 +116,11 @@ class ExperimentConfigurationDocument:
             precision=Precision(fields.text("precision")),
             checkpoint=CheckpointPolicy(
                 every_steps=fields.fields("checkpoint").integer("every_steps")
+            ),
+            passes=()
+            if passes is None
+            else tuple(
+                CorpusPasses(corpus=corpus, passes=passes.integer(corpus))
+                for corpus in fields.mapping("passes")
             ),
         )

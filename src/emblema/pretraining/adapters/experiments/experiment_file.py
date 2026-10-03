@@ -9,13 +9,14 @@ import tomllib
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
@@ -129,6 +130,8 @@ class ExperimentFile(_Section):
         dropout: Dropout of the encoder and the decoder.
         decoder_layers: Blocks of the decoder thrown away when the run ends.
         shape: What the run overrides of the tier's shape, where it does.
+        passes: The corpora an epoch reads more than once, by name, and how many times; each
+            one of ``corpora``. A corpus left out is read once.
         masking: What the objective hides.
         objective: What it counts a miss as; the squared error unless the file says otherwise,
             which is what every run before the reading existed was scored by.
@@ -144,10 +147,18 @@ class ExperimentFile(_Section):
     dropout: float
     decoder_layers: int
     shape: _Shape | None = None
+    passes: dict[str, int] = {}
     masking: _Masking
     objective: _Objective = _Objective()
     budget: _Budget
     checkpoint: _Checkpoint
+
+    @model_validator(mode="after")
+    def _passes_name_corpora_of_the_run(self) -> Self:
+        unknown = [corpus for corpus in self.passes if corpus not in self.corpora]
+        if unknown:
+            raise ValueError(f"passes are stated for corpora the run does not read: {unknown}")
+        return self
 
     @classmethod
     def load(cls, path: Path) -> Self:
@@ -167,6 +178,7 @@ class ExperimentFile(_Section):
         Raises:
             InvalidExperimentConfigurationError: If what the file states is not a configuration.
             InvalidCorpusShareError: If the share of the corpus is not one a run could read.
+            InvalidCorpusPassesError: If a corpus is stated to be read fewer than twice.
             InvalidEncoderArchitectureError: If the shape it states is not an architecture.
             InvalidMaskingStrategyError: If the strategy hides everything or nothing.
             InvalidObjectiveLossError: If the reading states a knee it does not read, or none.
@@ -189,4 +201,7 @@ class ExperimentFile(_Section):
             budget=self.budget.budget(),
             precision=self.precision,
             checkpoint=self.checkpoint.policy(),
+            passes=tuple(
+                CorpusPasses(corpus=corpus, passes=passes) for corpus, passes in self.passes.items()
+            ),
         )

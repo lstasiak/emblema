@@ -12,6 +12,7 @@ import pytest
 
 from emblema.pretraining.domain.exceptions import DivergedRunError, UnsupportedPrecisionError
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
@@ -27,6 +28,7 @@ from tests.support.experiments import (
     configuration,
     continued,
     corpus,
+    irregular,
     mixture,
 )
 
@@ -384,3 +386,39 @@ def test_a_log_says_how_long_is_left_in_the_unit_a_person_reads(seconds: float, 
     # The only line of a long run a person watches, so its unit switches at the hour rather than
     # counting thousands of minutes.
     assert _duration(seconds) == said
+
+
+def test_a_run_over_corpora_of_both_regimes_learns_and_scores_each() -> None:
+    stays = irregular(name="stays", seed=5, training=6, validation=3)
+    mixed = TrainingMixture.of(CORPUS, stays)
+    stated = configuration(budget=budget(epochs=1, batch_size=2))
+
+    outcomes = list(
+        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(stated, mixed)
+    )
+
+    scored = outcomes[-1].validation
+    assert math.isfinite(outcomes[-1].training_loss)
+    assert [entry.corpus for entry in scored] == ["invented", "stays"]
+    assert all(math.isfinite(entry.loss) and entry.tokens > 0 for entry in scored)
+
+
+def test_a_corpus_read_twice_an_epoch_takes_twice_its_steps(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    second = continued(name="second", seed=2, training=4, validation=2)
+    mixed = TrainingMixture.of(CORPUS, second)
+    weighted = configuration(
+        budget=budget(epochs=1, batch_size=2),
+        passes=(CorpusPasses(corpus="second", passes=2),),
+    )
+    runtime = TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu", progress_every=1)
+
+    with caplog.at_level("INFO", logger="emblema.pretraining"):
+        list(runtime.train(weighted, mixed))
+
+    progress = [
+        record.getMessage() for record in caplog.records if ", step " in record.getMessage()
+    ]
+    # Four batches of the first corpus and two of the second, read twice: eight steps, not six.
+    assert progress[-1].startswith("epoch 1 of 1, step 8 of 8")

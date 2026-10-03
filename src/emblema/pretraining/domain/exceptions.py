@@ -49,6 +49,10 @@ class InvalidCorpusShareError(PretrainingError, ValueError):
     pass
 
 
+class InvalidCorpusPassesError(PretrainingError, ValueError):
+    pass
+
+
 class InvalidObjectiveLossError(PretrainingError, ValueError):
     pass
 

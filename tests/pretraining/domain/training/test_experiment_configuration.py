@@ -4,6 +4,7 @@ from emblema.pretraining.domain.exceptions import (
     InvalidCorpusShareError,
     InvalidExperimentConfigurationError,
 )
+from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
@@ -96,3 +97,40 @@ def test_the_share_of_the_corpus_is_the_fraction_ranked_by_the_run_s_seed() -> N
 def test_a_share_no_run_could_read_is_refused(fraction: float) -> None:
     with pytest.raises(InvalidCorpusShareError):
         configuration(corpus_fraction=fraction)
+
+
+def test_a_corpus_is_read_once_unless_its_passes_are_stated() -> None:
+    weighted = configuration(passes=(CorpusPasses(corpus="stays", passes=4),))
+
+    assert configuration().passes_of("stays") == 1
+    assert weighted.passes_of("stays") == 4
+    assert weighted.passes_of("another") == 1
+
+
+def test_passes_render_last_by_corpus_name_and_only_where_stated() -> None:
+    weighted = configuration(
+        passes=(CorpusPasses(corpus="stays", passes=4), CorpusPasses(corpus="engines", passes=2))
+    )
+
+    parameters = weighted.parameters()
+
+    assert "passes.stays" not in configuration().parameters()
+    assert list(parameters)[-2:] == ["passes.engines", "passes.stays"]
+    assert (parameters["passes.engines"], parameters["passes.stays"]) == (2, 4)
+    # The order the passes were stated in is not a difference between runs.
+    assert parameters == configuration(passes=tuple(reversed(weighted.passes))).parameters()
+
+
+def test_a_corpus_stated_more_than_once_is_refused() -> None:
+    with pytest.raises(InvalidExperimentConfigurationError, match="twice"):
+        configuration(
+            passes=(CorpusPasses(corpus="stays", passes=4), CorpusPasses(corpus="stays", passes=2))
+        )
+
+
+def test_passes_stated_on_one_side_only_are_a_named_difference() -> None:
+    weighted = configuration(passes=(CorpusPasses(corpus="stays", passes=4),))
+
+    assert weighted.differences_from(configuration()) == ("passes.stays",)
+    assert configuration().differences_from(weighted) == ("passes.stays",)
+    assert weighted.differences_from(weighted) == ()
