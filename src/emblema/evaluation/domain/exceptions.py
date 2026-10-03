@@ -101,6 +101,10 @@ class InvalidHeadPoolingError(EvaluationError, ValueError):
     """A pooling keeps a share of the window it cannot, or a share where it means nothing."""
 
 
+class InvalidTrainingRegimeError(EvaluationError, ValueError):
+    """A training regime breaks one of its invariants."""
+
+
 class InvalidEncoderSettingError(EvaluationError, ValueError):
     """An encoder drops a share of its activations it cannot, or reads a grid with no steps."""
 

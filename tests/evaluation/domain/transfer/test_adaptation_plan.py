@@ -6,6 +6,7 @@ from emblema.evaluation.domain.exceptions import (
 )
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
+from emblema.evaluation.domain.transfer.training_regime import ClassWeight, TrainingRegime
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from tests.evaluation.support import LORA, PENALTIES, WEIGHTS, plan
 
@@ -160,3 +161,23 @@ def test_an_encoders_own_shape_is_stated_whole() -> None:
             TransferMode.FROM_SCRATCH,
             encoder=EncoderSetting(width=64, heads=5, layers=2, feedforward_width=128),
         )
+
+
+def test_a_stop_stated_in_part_is_refused_and_whole_it_is_taken_under_every_trained_mode() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="both the share"):
+        plan(regime=TrainingRegime(patience=10))
+    for mode in (TransferMode.FROM_SCRATCH, TransferMode.FROZEN_PROBE, TransferMode.LORA):
+        stopped = plan(mode, regime=TrainingRegime(stop_share=0.2, patience=10))
+        assert stopped.regime.stops
+        assert stopped.parameters()["stop_share"] == 0.2
+
+
+def test_a_closed_form_head_takes_no_regime() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="takes no step"):
+        plan(TransferMode.FROZEN_RIDGE, regime=TrainingRegime(class_weight=ClassWeight.RATIO))
+
+
+def test_withholding_channels_is_refused_where_the_encoder_states_every_window_once() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="withholding channels"):
+        plan(TransferMode.FROZEN_PROBE, regime=TrainingRegime(channel_dropout=0.2))
+    assert plan(TransferMode.FROM_SCRATCH, regime=TrainingRegime(channel_dropout=0.2)).regime

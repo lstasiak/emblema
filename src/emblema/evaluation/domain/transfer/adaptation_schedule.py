@@ -118,16 +118,25 @@ class AdaptationSchedule:
         per_epoch = self.steps_per_epoch(windows)
         return max(self.epochs, -(-self.min_steps // per_epoch))
 
-    def learning_rate_schedule(self, windows: int) -> LearningRateSchedule:
+    def learning_rate_schedule(
+        self, windows: int, epochs: int | None = None
+    ) -> LearningRateSchedule:
         """The rate over the whole run, in optimiser steps, for a sample of ``windows``.
 
-        The warmup is rounded to whole steps and capped so that at least one step is left to
-        decay over, which a run of a single step needs.
+        Over the epochs this schedule takes for the sample, or over ``epochs`` where a run is
+        held to a count fixed elsewhere, as one learning from part of its sample is held to the
+        whole sample's. The warmup is rounded to whole steps and capped so that at least one
+        step is left to decay over, which a run of a single step needs.
 
         Raises:
-            InvalidAdaptationScheduleError: If there is no window to learn from.
+            InvalidAdaptationScheduleError: If there is no window to learn from, or the epochs
+                given are not positive.
         """
-        total = self.epochs_over(windows) * self.steps_per_epoch(windows)
+        if epochs is not None and epochs < 1:
+            raise InvalidAdaptationScheduleError(f"epochs must be positive, got {epochs}")
+        total = (self.epochs_over(windows) if epochs is None else epochs) * self.steps_per_epoch(
+            windows
+        )
         return LearningRateSchedule(
             warmup_steps=min(round(self.warmup_fraction * total), total - 1),
             total_steps=total,

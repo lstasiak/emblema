@@ -8,6 +8,7 @@ from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
+from emblema.evaluation.domain.transfer.training_regime import TrainingRegime
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.kernel.artifacts import ArtifactRef
 
@@ -39,6 +40,7 @@ class BackboneArm:
         ridge: The penalties a head solved in closed form chooses among, where the mode
             solves one; ``None`` otherwise.
         encoder: What the encoder drops while it learns and which readings it is given.
+        regime: How the arm's run is stopped, weighted and perturbed inside its schedule.
     """
 
     ref: CandidateRef
@@ -50,6 +52,7 @@ class BackboneArm:
     pooling: HeadPooling = field(default_factory=HeadPooling.mean)
     ridge: RidgePenalties | None = None
     encoder: EncoderSetting = field(default_factory=EncoderSetting.standard)
+    regime: TrainingRegime = field(default_factory=TrainingRegime.standard)
 
     def __post_init__(self) -> None:
         if (self.ridge is None) == self.mode.solves_the_head_in_closed_form:
@@ -72,4 +75,6 @@ class BackboneArm:
             return replace(self, pooling=self.pooling.tuned(knob, value))
         if knob in EncoderSetting.KNOBS:
             return replace(self, encoder=self.encoder.tuned(knob, value))
+        if knob in TrainingRegime.KNOBS:
+            return replace(self, regime=self.regime.tuned(knob, value))
         return replace(self, schedule=self.schedule.tuned(knob, value))

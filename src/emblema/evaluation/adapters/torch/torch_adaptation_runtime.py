@@ -1,5 +1,6 @@
 import time
 from collections.abc import Sequence
+from math import ceil
 
 import torch
 from torch import Tensor
@@ -11,15 +12,23 @@ from emblema.evaluation.adapters.grid.gridded_tokens import GriddedTokens
 from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
+from emblema.evaluation.adapters.torch.channel_dropout import ChannelDropout
+from emblema.evaluation.adapters.torch.early_stop import EarlyStop
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate
 from emblema.evaluation.adapters.torch.logistic_solution import LogisticSolution
 from emblema.evaluation.adapters.torch.ridge_solution import RidgeSolution
-from emblema.evaluation.adapters.torch.scheduled_training import Forward, ScheduledTraining
+from emblema.evaluation.adapters.torch.scheduled_training import (
+    AfterEpoch,
+    Forward,
+    Loss,
+    ScheduledTraining,
+)
 from emblema.evaluation.adapters.torch.target_link import TargetLink
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
+    InvalidTrainingRegimeError,
 )
 from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.labels.label_sample import LabelSample
@@ -29,8 +38,10 @@ from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
+from emblema.evaluation.domain.transfer.training_regime import ClassWeight, TrainingRegime
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.ordering import seeded_rank
 from emblema.shared.kernel.tokens import TokenWindow
 from emblema.shared.ports.artifact_store import ArtifactStore
 
@@ -84,17 +95,17 @@ class TorchAdaptationRuntime:
             raise InvalidScoredOutcomeError("there is no validation window to answer")
         manifest = self._blocks.manifest_of(task.manifest)
         block = self._blocks.block_of(manifest)
-        tuning = block.at([labelled.window.position for labelled in sample.windows])
+        learnt, stopped = self._divided(sample, plan)
+        tuning = block.at([labelled.window.position for labelled in learnt])
+        stopping = block.at([labelled.window.position for labelled in stopped])
         held = block.at([labelled.window.position for labelled in validation])
         steps = plan.encoder.steps_over(manifest.window_length)
         if steps is not None:
             grid = GriddedTokens(steps)
-            tuning, held = grid.of(tuning), grid.of(held)
+            tuning, stopping, held = grid.of(tuning), grid.of(stopping), grid.of(held)
         started = time.perf_counter()
         link = TargetLink.of(task.label_scheme())
-        targets = torch.tensor(
-            [link.learnt(labelled.target) for labelled in sample.windows], dtype=torch.float32
-        ).to(self._device)
+        targets = self._taught(link, learnt)
         torch.manual_seed(plan.seed)
         candidate = AdaptedBackbone.under(
             plan,
@@ -107,14 +118,30 @@ class TorchAdaptationRuntime:
             self._solved(link, states, targets, plan.ridge).applied_to(candidate.head)
             losses: list[float] = []
         else:
+            regime = plan.regime
             forward = (
-                self._over_windows(candidate, tuning)
+                self._over_windows(candidate, tuning, regime.channel_dropout, plan.seed)
                 if plan.encodes_in_the_loop
                 else self._over_stored_states(candidate, tuning, plan.schedule.batch_size)
             )
+            stop = EarlyStop(regime.patience) if regime.stops else None
             losses = ScheduledTraining(plan.schedule, plan.seed).losses(
-                candidate, candidate.trainable_parameters(), forward, targets, loss=link.loss
+                candidate,
+                candidate.trainable_parameters(),
+                forward,
+                targets,
+                loss=self._loss(link, regime, targets),
+                epochs=plan.schedule.epochs_over(len(sample.windows)),
+                after_epoch=(
+                    None
+                    if stop is None
+                    else self._stopping(
+                        stop, candidate, link, stopping, self._taught(link, stopped), plan
+                    )
+                ),
             )
+            if stop is not None:
+                stop.restore(candidate)
         predicted = link.answered(self._answers(candidate, held, plan.schedule.batch_size))
         return AdaptationOutcome(
             plan=plan,
@@ -183,9 +210,90 @@ class TorchAdaptationRuntime:
             derived=(RepresentationBytes(InferenceGraph.FORMAT, graph.to_bytes(), deviation),),
         )
 
-    def _over_windows(self, candidate: AdaptedBackbone, windows: Sequence[TokenWindow]) -> Forward:
-        """The candidate run whole over the windows at the indices asked for."""
-        return lambda indices: candidate(self._batch(windows, indices))
+    def _over_windows(
+        self,
+        candidate: AdaptedBackbone,
+        windows: Sequence[TokenWindow],
+        channel_dropout: float,
+        seed: int,
+    ) -> Forward:
+        """The candidate run whole over the windows at the indices asked for.
+
+        Where the regime withholds channels, each batch has some withheld before the candidate
+        reads it, drawn from a generator of the run's seed so the run repeats.
+        """
+        if channel_dropout <= 0.0:
+            return lambda indices: candidate(self._batch(windows, indices))
+        dropout = ChannelDropout(channel_dropout, torch.Generator().manual_seed(seed))
+        return lambda indices: candidate(dropout.applied_to(self._batch(windows, indices)))
+
+    def _taught(self, link: TargetLink, windows: Sequence[LabelledWindow]) -> Tensor:
+        return torch.tensor(
+            [link.learnt(labelled.target) for labelled in windows], dtype=torch.float32
+        ).to(self._device)
+
+    @staticmethod
+    def _loss(link: TargetLink, regime: TrainingRegime, taught: Tensor) -> Loss:
+        """What the run descends: the link's loss, the positive outcome weighted if asked.
+
+        The weight is the ratio of negatives to positives among the labels learnt from, so each
+        class contributes alike, as the published network weights.
+
+        Raises:
+            InvalidTrainingRegimeError: If a weight is asked for a quantity's loss.
+        """
+        if regime.class_weight is ClassWeight.NONE:
+            return link.loss
+        positives = float(taught.sum())
+        if positives == 0.0 or positives == len(taught):
+            raise InvalidTrainingRegimeError("a class weight needs both outcomes among the labels")
+        return link.weighted((len(taught) - positives) / positives)
+
+    def _stopping(
+        self,
+        stop: EarlyStop,
+        candidate: AdaptedBackbone,
+        link: TargetLink,
+        windows: Sequence[TokenWindow],
+        taught: Tensor,
+        plan: AdaptationPlan,
+    ) -> AfterEpoch:
+        """What is done after each epoch: score the held-out windows and ask whether to stop."""
+
+        def after(epoch: int) -> bool:
+            answers = self._answers(candidate, windows, plan.schedule.batch_size)
+            return stop.observe(epoch, EarlyStop.score(link, answers, taught), candidate)
+
+        return after
+
+    @staticmethod
+    def _divided(
+        sample: LabelSample, plan: AdaptationPlan
+    ) -> tuple[list[LabelledWindow], list[LabelledWindow]]:
+        """The sample's windows learnt from and the ones held out for the stop, by unit.
+
+        Whole units are held out, ranked by a digest of the run's seed and the unit, so no unit
+        lends windows to both sides and the division repeats under the seed. Without a stop,
+        every window is learnt from.
+
+        Raises:
+            InvalidTrainingRegimeError: If the sample has too few units to hold any out and
+                still learn.
+        """
+        if not plan.regime.stops:
+            return list(sample.windows), []
+        units = sorted({labelled.window.unit for labelled in sample.windows}, key=str)
+        held = ceil(len(units) * plan.regime.stop_share)
+        if held < 1 or held >= len(units):
+            raise InvalidTrainingRegimeError(
+                f"a stop over {len(units)} units cannot hold {held} out and still learn"
+            )
+        ranked = sorted(units, key=lambda unit: seeded_rank(plan.seed, "stop", str(unit)))
+        stopped = set(ranked[:held])
+        return (
+            [labelled for labelled in sample.windows if labelled.window.unit not in stopped],
+            [labelled for labelled in sample.windows if labelled.window.unit in stopped],
+        )
 
     def _over_stored_states(
         self, candidate: AdaptedBackbone, windows: Sequence[TokenWindow], batch_size: int

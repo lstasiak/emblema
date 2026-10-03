@@ -13,6 +13,7 @@ from emblema.evaluation.domain.exceptions import (
     UnknownCandidateError,
     UnknownKnobError,
 )
+from emblema.evaluation.domain.transfer.training_regime import TrainingRegime
 from emblema.evaluation.domain.tuning.candidate_variant import CandidateVariant
 
 
@@ -85,6 +86,25 @@ class BackboneArmCatalogue:
                 f"{variant.ref} names no variant: an encoder's own shape states its width, "
                 "heads, layers and feed-forward width"
             )
+        if turned.regime.channel_dropout > 0.0 and not turned.mode.encodes_in_the_loop(
+            turned.pooling
+        ):
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: {turned.mode} under a "
+                f"{turned.pooling.pooling} pooling encodes every window once, so withholding "
+                "channels would change nothing"
+            )
+        if turned.regime.stop_partly_stated:
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: a stop states both the share it holds out "
+                "and the patience it waits"
+            )
+        closed_form = turned.mode.solves_the_head_in_closed_form
+        if turned.regime != TrainingRegime.standard() and closed_form:
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: {turned.mode} solves its head in closed form "
+                "and takes no step a regime could stop, weight or perturb"
+            )
         try:
             _ = turned.encoder.shape
         except InvalidEncoderSettingError as error:
@@ -109,6 +129,7 @@ class BackboneArmCatalogue:
             **arm.pooling.parameters(),
             **arm.pooling.turned_away(),
             **arm.encoder.turned_away(),
+            **arm.regime.turned_away(),
         }
         if arm.backbone is None:
             stated["architecture_of"] = f"{arm.architecture.key}@{arm.architecture.checksum}"

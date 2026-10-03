@@ -51,6 +51,7 @@ class BackboneCandidateProvider:
                     pooling=arm.pooling,
                     ridge=arm.ridge,
                     encoder=arm.encoder,
+                    regime=arm.regime,
                 ),
                 budget=cell.budget,
                 sample_seed=cell.seed,

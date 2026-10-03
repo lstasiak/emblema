@@ -32,6 +32,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind  # noqa: E
 from emblema.evaluation.domain.exceptions import (  # noqa: E402
     CandidateNotRetainableError,
     DivergedAdaptationError,
+    InvalidTrainingRegimeError,
     LoraTargetNotFoundError,
 )
 from emblema.evaluation.domain.heads.head_pooling import (  # noqa: E402
@@ -48,6 +49,10 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask  # noq
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting  # noqa: E402
+from emblema.evaluation.domain.transfer.training_regime import (  # noqa: E402
+    ClassWeight,
+    TrainingRegime,
+)
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
@@ -487,3 +492,51 @@ def test_a_candidate_fitted_on_gridded_readings_is_kept_without_a_graph(
     assert [form.format for form in kept.representations] == [FittedCandidate.FORMAT]
     fitted = FittedCandidate.read(store.get(kept.measured.artifact))
     assert fitted.parameters["grid_resolution"] == 0.5
+
+
+def test_a_run_that_stops_learns_from_the_units_left_and_ends_within_its_patience(
+    published: Published,
+) -> None:
+    # Two units: one is held out for the stop, the run learns from the other and is held to the
+    # whole sample's count of epochs at most.
+    stopping = plan(
+        schedule=adaptation_schedule(epochs=6, batch_size=2),
+        regime=TrainingRegime(stop_share=0.5, patience=1),
+    )
+
+    outcome = adapt(published, stopping)
+
+    assert 1 <= len(outcome.training_losses) <= 6
+    assert all(torch.isfinite(torch.tensor(outcome.training_losses)))
+    assert len(outcome.predictions) == len(VALIDATION)
+
+
+def test_a_stop_needs_a_unit_to_hold_out_and_one_to_learn_from(published: Published) -> None:
+    one_unit = replace(SAMPLE, windows=SAMPLE.windows[:2], budget=LabelBudget.of(2))
+    stopping = plan(regime=TrainingRegime(stop_share=0.5, patience=1))
+
+    with pytest.raises(InvalidTrainingRegimeError, match="still learn"):
+        published.runtime.adapt(stopping, published.task, one_unit, VALIDATION, retain=False)
+
+
+def test_withheld_channels_change_what_is_learnt_and_repeat_under_the_seed(
+    published: Published,
+) -> None:
+    # Only the first window holds two channels, so a draw changes a step about half the time;
+    # eight epochs leave almost no chance that none does.
+    schedule = adaptation_schedule(epochs=8, batch_size=2)
+    perturbed = plan(schedule=schedule, regime=TrainingRegime(channel_dropout=0.5))
+
+    first = adapt(published, perturbed)
+    again = adapt(published, perturbed)
+    plain = adapt(published, plan(schedule=schedule))
+
+    assert first.training_losses == again.training_losses
+    assert first.training_losses != plain.training_losses
+
+
+def test_a_class_weight_is_refused_for_a_quantity(published: Published) -> None:
+    weighted = plan(regime=TrainingRegime(class_weight=ClassWeight.RATIO))
+
+    with pytest.raises(InvalidTrainingRegimeError, match="no classes"):
+        adapt(published, weighted)

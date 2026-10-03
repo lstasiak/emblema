@@ -1,5 +1,6 @@
 """What a network's head means under each kind of target: its loss, its start, its answer."""
 
+import math
 from math import log
 
 import pytest
@@ -9,6 +10,7 @@ torch = pytest.importorskip("torch")
 from torch.nn.functional import binary_cross_entropy, mse_loss  # noqa: E402
 
 from emblema.evaluation.adapters.torch.target_link import TargetLink  # noqa: E402
+from emblema.evaluation.domain.exceptions import InvalidTrainingRegimeError  # noqa: E402
 from emblema.evaluation.domain.labels.target_kind import TargetKind  # noqa: E402
 from tests.evaluation.support import OUTCOME, SCHEME  # noqa: E402
 
@@ -52,3 +54,17 @@ def test_a_link_is_named_by_its_kind_to_be_read_back() -> None:
     assert TargetLink.named(str(TargetKind.BINARY), 1.0) == OUTCOMES
     with pytest.raises(ValueError, match="count"):
         TargetLink.named("count", 1.0)
+
+
+def test_the_positive_outcome_can_be_weighted_and_a_quantity_cannot() -> None:
+    link = TargetLink(kind=TargetKind.BINARY, scale=1.0)
+    raw = torch.tensor([0.0, 0.0])
+    taught = torch.tensor([1.0, 0.0])
+
+    weighted = link.weighted(3.0)(raw, taught)
+
+    # A positive weighs three negatives: (3 + 1) · log 2 over two windows.
+    assert float(weighted) == pytest.approx(2.0 * math.log(2.0))
+    assert float(link.loss(raw, taught)) == pytest.approx(math.log(2.0))
+    with pytest.raises(InvalidTrainingRegimeError, match="no classes"):
+        TargetLink(kind=TargetKind.CONTINUOUS, scale=1.0).weighted(2.0)

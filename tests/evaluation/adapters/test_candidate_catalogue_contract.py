@@ -409,6 +409,8 @@ def test_a_dropout_is_refused_where_the_probe_states_every_window_once() -> None
         # A shape stated in part, or whose width its heads cannot split.
         "from_scratch@heads=16,width=64",
         "from_scratch@feedforward_width=128,heads=5,layers=2,width=64",
+        # A stop stated in part.
+        "from_scratch@patience=10",
     ],
 )
 def test_an_encoder_setting_no_encoder_can_take_is_refused(name: str) -> None:
@@ -438,3 +440,38 @@ def test_a_network_from_nothing_names_its_own_build_and_nothing_else() -> None:
     turned = BOTH_ARMS.arm_of(variant.ref).encoder
     assert turned.shape == EncoderShape(width=64, heads=16, layers=2, feedforward_width=128)
     assert turned.value_embedding is ValueEmbedding.NONLINEAR
+
+
+def test_a_variant_of_an_arm_turns_its_regime_and_is_described_by_the_knobs_turned() -> None:
+    base = BOTH_ARMS.describe(CandidateRef("from_scratch"))
+
+    variant = BOTH_ARMS.describe(
+        CandidateRef(
+            "from_scratch@channel_dropout=0.2,class_weight=ratio,patience=10,stop_share=0.2"
+        )
+    )
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    before = {p.name: p.value for p in base.method.parameters}
+    assert {name: stated[name] for name in stated.keys() - before.keys()} == {
+        "stop_share": "0.2",
+        "patience": "10",
+        "class_weight": "ratio",
+        "channel_dropout": "0.2",
+    }
+    assert variant.budget == base.budget
+    turned = BOTH_ARMS.arm_of(variant.ref).regime
+    assert turned.stops
+    assert turned.channel_dropout == 0.2
+
+
+def test_a_regime_is_refused_where_the_probe_states_every_window_once() -> None:
+    probes = BackboneArmCatalogue(
+        (arm(CandidateRef("frozen_probe"), TransferMode.FROZEN_PROBE, backbone=WEIGHTS, lora=None),)
+    )
+
+    with pytest.raises(UnknownCandidateError, match="withholding channels would change nothing"):
+        probes.describe(CandidateRef("frozen_probe@channel_dropout=0.2"))
+    # Under a learnt pooling the encoder is in the loop, and the channels can be withheld.
+    learnt = probes.arm_of(CandidateRef("frozen_probe@channel_dropout=0.2,pooling=attention"))
+    assert learnt.regime.channel_dropout == 0.2
