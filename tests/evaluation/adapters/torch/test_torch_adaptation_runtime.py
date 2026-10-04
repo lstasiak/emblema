@@ -512,6 +512,11 @@ def test_a_run_that_stops_learns_from_the_units_left_and_ends_within_its_patienc
 
     assert 1 <= len(outcome.training_losses) <= 6
     assert all(torch.isfinite(torch.tensor(outcome.training_losses)))
+    # One window of the held-out unit or two of the other: one step an epoch either way here,
+    # but the count runs over the windows learnt from, not the three given.
+    assert outcome.stop_windows in (1, 2)
+    learnt = len(SAMPLE.windows) - outcome.stop_windows
+    assert outcome.optimiser_steps == len(outcome.training_losses) * -(-learnt // 2)
     assert len(outcome.predictions) == len(VALIDATION)
 
 

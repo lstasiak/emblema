@@ -160,6 +160,7 @@ class TorchAdaptationRuntime:
             labelled_units=sample.unit_count,
             trainable_parameters=sum(p.numel() for p in candidate.trainable_parameters()),
             training_losses=tuple(losses),
+            stop_windows=len(stopped),
             predictions=tuple(
                 WindowPrediction(window=labelled.window, target=labelled.target, predicted=answer)
                 for labelled, answer in zip(validation, predicted.tolist(), strict=True)

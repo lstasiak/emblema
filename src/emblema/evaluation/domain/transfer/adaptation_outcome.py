@@ -23,7 +23,8 @@ class AdaptationOutcome(ScoredOutcome):
     mode that solves its head and takes no step, each finite and not negative; at least one
     trainable parameter; the labels are at least one window from at
     least one unit, no more units than windows, and as many windows as a counted budget asked
-    for.
+    for; windows are held out for a stop only by a regime that stops, and some are left to learn
+    from.
 
     Attributes:
         plan: How the candidate was made out of the backbone.
@@ -38,6 +39,8 @@ class AdaptationOutcome(ScoredOutcome):
         trainable_parameters: How many weights the run could change.
         training_losses: Mean training loss per epoch, in the order trained; empty for a run
             that solved its head in closed form.
+        stop_windows: How many of the labelled windows were held out for a stop rather than
+            learnt from; zero for a run that does not stop.
     """
 
     plan: AdaptationPlan
@@ -48,15 +51,20 @@ class AdaptationOutcome(ScoredOutcome):
     labelled_units: int
     trainable_parameters: int
     training_losses: tuple[float, ...]
+    stop_windows: int = 0
 
     @property
     def optimiser_steps(self) -> int:
-        """Optimiser steps the run took: its epochs over the batches its labelled windows make.
+        """Optimiser steps the run took: its epochs over the batches its learnt windows make.
 
         The schedule's floor of steps lengthens a run in whole epochs, so what a cell cost in
-        steps is read off the outcome rather than off the schedule.
+        steps is read off the outcome rather than off the schedule; a stop learns from fewer
+        windows than it was given, so its epochs are shorter.
         """
-        return len(self.training_losses) * self.plan.schedule.steps_per_epoch(self.labelled_windows)
+        if not self.training_losses:
+            return 0
+        learnt = self.labelled_windows - self.stop_windows
+        return len(self.training_losses) * self.plan.schedule.steps_per_epoch(learnt)
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -91,6 +99,13 @@ class AdaptationOutcome(ScoredOutcome):
         if self.budget.windows is not None and self.labelled_windows != self.budget.windows:
             raise InvalidAdaptationOutcomeError(
                 f"a budget of {self.budget.windows} windows resolved to {self.labelled_windows}"
+            )
+        if self.stop_windows and not self.plan.regime.stops:
+            raise InvalidAdaptationOutcomeError("windows are held out for a stop only by one")
+        if not 0 <= self.stop_windows < self.labelled_windows:
+            raise InvalidAdaptationOutcomeError(
+                f"a stop holds out some of the {self.labelled_windows} labelled windows and "
+                f"leaves some to learn from, got {self.stop_windows}"
             )
         if self.trainable_parameters < 1:
             raise InvalidAdaptationOutcomeError(
