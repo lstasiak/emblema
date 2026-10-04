@@ -77,19 +77,21 @@ class OrderPretraining:
 
         Raises:
             PretrainingOrderRejectedError: If a manifest publishes a corpus other than the one
-                it is named for, or the configuration states passes for a corpus the order
-                does not read.
+                it is named for, or the configuration states passes or fractions for a corpus
+                the order does not read.
             InvalidTrainingMixtureError: If the corpora read are not a chain of one vocabulary.
             UnreadablePublishedCorpusError: If a manifest or its block cannot be read.
         """
         named = {name for name, _ in command.corpora}
-        unread = [
-            stated.corpus for stated in command.configuration.passes if stated.corpus not in named
-        ]
-        if unread:
-            raise PretrainingOrderRejectedError(
-                f"the configuration states passes for corpora the order does not read: {unread}"
-            )
+        for knob, stated_for in (
+            ("passes", command.configuration.passes),
+            ("fractions", command.configuration.fractions),
+        ):
+            unread = [stated.corpus for stated in stated_for if stated.corpus not in named]
+            if unread:
+                raise PretrainingOrderRejectedError(
+                    f"the configuration states {knob} for corpora the order does not read: {unread}"
+                )
         described = tuple(self._reader.describe(manifest) for _, manifest in command.corpora)
         for (expected, _), found in zip(command.corpora, described, strict=True):
             if found.corpus != expected:
@@ -99,8 +101,8 @@ class OrderPretraining:
                 )
         mixture = TrainingMixture(
             corpora=tuple(
-                self._reader.read(manifest, command.configuration.corpus_share)
-                for _, manifest in command.corpora
+                self._reader.read(manifest, command.configuration.corpus_share_of(name))
+                for name, manifest in command.corpora
             )
         )
         backbone = Backbone(

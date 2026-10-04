@@ -56,9 +56,14 @@ class FulfilPretrainingOrder:
         """
         order = self._exchange.read_order(command.order)
         order.require_commit(command.git_commit)
+        # The order names its corpora by manifest alone, and a share may be a corpus's own, so
+        # each manifest is described before it is read: the description is a few kilobytes.
         mixture = TrainingMixture(
             corpora=tuple(
-                self._reader.read(manifest, order.configuration.corpus_share)
+                self._reader.read(
+                    manifest,
+                    order.configuration.corpus_share_of(self._reader.describe(manifest).corpus),
+                )
                 for manifest in order.manifests
             )
         )
