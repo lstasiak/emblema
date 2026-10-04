@@ -23,7 +23,7 @@ kept as recorded.
 | [published-corpus.md](published-corpus.md) | A published corpus round-trips through the remote bucket byte for byte, and its checksums repeat across machines. |
 | [loader-throughput.md](loader-throughput.md) | Batching costs a negligible share of a training step on MPS; windows as Python objects are too large to hold a corpus. |
 | [training-loop.md](training-loop.md) | A run resumed mid-epoch ends in the uninterrupted run's weights: bit for bit on the host, within repeat spread on MPS. |
-| [manual-handoff.md](manual-handoff.md) | Runs ordered here, made on a GPU platform and accepted back keep full provenance; includes the first mixed-corpus backbone and its per-corpus curve, and the intensive-care backbones, where adding the stays to the mixture leaves C-MAPSS four times higher; without SMD the same mixture returns C-MAPSS to its level, so SMD's share of the run, not the stays, carried that cost. |
+| [manual-handoff.md](manual-handoff.md) | Runs ordered here, made on a GPU platform and accepted back keep full provenance; includes the first mixed-corpus backbone and its per-corpus curve, and the intensive-care backbones, where adding the stays to the mixture leaves C-MAPSS four times higher; without SMD the same mixture returns C-MAPSS to its level, so SMD's share of the run, not the stays, carried that cost; on a vocabulary chained from C-MAPSS read per condition, the mixture of four and its four leave-one-corpus-out variants learn each corpus to within 0.01 of one another, so on the pretext the corpora learn beside, not from, one another. |
 
 ## Data
 
