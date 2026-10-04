@@ -1,6 +1,6 @@
 import math
 import re
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import pairwise
@@ -13,6 +13,7 @@ from numpy.typing import NDArray
 from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.exceptions import (
     CorpusDataNotFoundError,
+    IndivisibleReadingError,
     MalformedCorpusDataError,
     UnknownUnitError,
 )
@@ -31,8 +32,8 @@ _ITEM_ID = "item_id"
 _TARGET = "target"
 # The collection stores every value as a single-precision float; the checksum reads them as such.
 _VALUE_DTYPE = "<f4"
-# What a record is called: its dataset, the series it belongs to and the variate it carries.
-_ITEM = re.compile(r"^(?P<dataset>.+)_(?P<series>\d+)_(?P<variate>\d+)$")
+# What a record is called: its dataset and the two numbers the publisher gave it.
+_ITEM = re.compile(r"^(?P<dataset>.+)_(?P<a>\d+)_(?P<b>\d+)$")
 _UNIT = re.compile(r"^series_\d+(_\d+)?$")
 _VALUE_CHANNEL = Channel("value")
 # Three digits order the variate names as the publisher numbers them, which is the order every
@@ -46,19 +47,58 @@ class UtsdLayout(StrEnum):
     The collection stores every record as one univariate series named ``<dataset>_<a>_<b>``, but
     the publisher built the records of a multivariate dataset and of a collection of separate
     series differently, and only the dataset says which. Declared per dataset rather than inferred
-    from the records, and checked against them when the dataset is described.
+    from the records, and checked against them when the dataset is described: it is a fact about
+    the data, and how the data is read is a separate choice, the ``UtsdReading``.
 
     Attributes:
-        SERIES_OF_VARIATES: ``a`` numbers a multivariate series and ``b`` its variate: the series
-            is the unit, each variate a channel, and every series carries the same variates.
-        COLLECTION_OF_SERIES: every record is a univariate series of its own, a unit on the
-            collection's single channel; the two numbers only name it, since the publisher
-            numbered such series in ``a``, in ``b``, or in ``b`` within blocks of a thousand
-            numbered by ``a``.
+        SERIES_OF_VARIATES: ``a`` numbers a multivariate series and ``b`` its variate.
+        VARIATES_OF_SERIES: ``a`` numbers the variate and ``b`` the series, as for a grid of
+            locations each measuring the same quantities.
+        COLLECTION_OF_SERIES: every record is a univariate series of its own; the two numbers
+            only name it, since the publisher numbered such series in ``a``, in ``b``, or in
+            ``b`` within blocks of a thousand numbered by ``a``.
     """
 
     SERIES_OF_VARIATES = "series_of_variates"
+    VARIATES_OF_SERIES = "variates_of_series"
     COLLECTION_OF_SERIES = "collection_of_series"
+
+
+class UtsdScale(StrEnum):
+    """Which scale a record's values are read on.
+
+    Attributes:
+        WITHIN_UNIT: Each record's values less their mean, over their standard deviation, so a
+            series is read on its own scale: the datasets gather series whose levels differ by
+            orders of magnitude, and on one scale per channel most of them span a sliver of it
+            while a few span the rest. A record that never varies is centred and not divided.
+        AS_PUBLISHED: The values as the collection stores them.
+    """
+
+    WITHIN_UNIT = "within_unit"
+    AS_PUBLISHED = "as_published"
+
+
+@dataclass(frozen=True)
+class UtsdReading:
+    """How a dataset is read: whether its variates stay one unit's channels, and on what scale.
+
+    A reading is the publication's choice, not a fact about the data, so it is part of what a
+    description hashes: two readings of one dataset publish as two corpus versions.
+
+    Attributes:
+        independent_channels: Whether every record is a unit of its own on one channel, whatever
+            the dataset's layout; a collection is read so either way.
+        scale: The scale a record's values are read on.
+    """
+
+    independent_channels: bool = False
+    scale: UtsdScale = UtsdScale.WITHIN_UNIT
+
+    def tag(self) -> bytes:
+        """The reading as the bytes a description's checksum begins with."""
+        channels = "independent" if self.independent_channels else "as_laid_out"
+        return f"reading:channels={channels};scale={self.scale}\0".encode()
 
 
 @dataclass(frozen=True)
@@ -80,26 +120,22 @@ class UtsdDataset:
 
 @dataclass(frozen=True, slots=True)
 class _Record:
-    """Where one record of the dataset lies and what it names."""
+    """Where one record of the dataset lies in its shard, and the two numbers it is named by."""
 
     shard: int
-    row: int
-    series: int
-    variate: int
+    chunk: int
+    index: int
+    a: int
+    b: int
     length: int
 
 
 @dataclass(frozen=True)
-class _Index:
-    """Every record of the dataset, found once by scanning the names of every shard.
+class _Chunk:
+    """One record batch of a shard as arrays: where each record's values start, and the values."""
 
-    Attributes:
-        units: Each unit's records in variate order, by unit key, in the order units are read.
-        variates: Every variate number the dataset's records carry.
-    """
-
-    units: dict[UnitKey, tuple[_Record, ...]]
-    variates: frozenset[int]
+    offsets: NDArray[np.int64]
+    values: NDArray[np.float32]
 
 
 class UtsdCorpusReader:
@@ -110,25 +146,34 @@ class UtsdCorpusReader:
     a start, an end and a frequency are empty, so a value is placed at its index. Every dataset
     is a corpus of its own here — the datasets measure unrelated things — and a reader is bound
     to one, finding its records among the shards by name. What the two numbers mean is the
-    dataset's declared ``UtsdLayout``; a dataset whose records contradict it is malformed.
+    dataset's declared ``UtsdLayout``; a dataset whose records contradict it is malformed. How
+    the records become units, and on what scale, is the ``UtsdReading``.
 
     Values are evenly spaced, so the regime is regular; a unit of ``L`` values spans ``[0, L)``,
-    the longest of its variates where they differ. A value stored as not-a-number is no
-    observation. The checksum covers the dataset's records alone, name and values in canonical
-    order, so a dataset describes the same wherever the shards cut it. Shards stay mapped once
-    read, so the records of a dataset are served without reopening a shard per unit.
+    the longest of its channels where they differ. A value stored as not-a-number is no
+    observation. The checksum covers the reading and the dataset's records, name and stored values
+    in the order of their two numbers, so a dataset describes the same wherever the shards cut it
+    and differently under another reading. Shards stay mapped once read, and a record's values are
+    a slice of its batch's, so no record is copied out of the map to be read.
     """
 
     CORPUS_PREFIX: ClassVar[str] = _CORPUS_PREFIX
-    # The datasets of the 12G volume and their layouts, declared from the names their records
-    # carry (sampled through the repository's rows API on 2026-10-04) and checked against the
-    # shards when a dataset is described. A dataset the shards hold and this table does not is
-    # found by the test that lists them where the shards are.
+    # The datasets of the 12G volume and their layouts, declared from the numbers their records
+    # carry over the whole volume (2026-10-04) and checked against the shards when a dataset is
+    # described.
     DATASETS: ClassVar[tuple[UtsdDataset, ...]] = (
+        UtsdDataset("ERA5_pressure", UtsdLayout.VARIATES_OF_SERIES),
+        UtsdDataset("ERA5_surface", UtsdLayout.VARIATES_OF_SERIES),
+        UtsdDataset(
+            "Energy_australian_electricity_demand_dataset", UtsdLayout.COLLECTION_OF_SERIES
+        ),
         UtsdDataset(
             "Energy_london_smart_meters_dataset_without_missing_values",
             UtsdLayout.COLLECTION_OF_SERIES,
         ),
+        UtsdDataset("Environment_AustraliaRainfall", UtsdLayout.SERIES_OF_VARIATES),
+        UtsdDataset("Environment_BeijingPM25Quality", UtsdLayout.SERIES_OF_VARIATES),
+        UtsdDataset("Environment_BenzeneConcentration", UtsdLayout.SERIES_OF_VARIATES),
         UtsdDataset("Health_AtrialFibrillation", UtsdLayout.SERIES_OF_VARIATES),
         UtsdDataset("Health_BIDMC32HR", UtsdLayout.COLLECTION_OF_SERIES),
         UtsdDataset("Health_IEEEPPG", UtsdLayout.COLLECTION_OF_SERIES),
@@ -144,6 +189,9 @@ class UtsdCorpusReader:
         UtsdDataset("Nature_StarLightCurves", UtsdLayout.COLLECTION_OF_SERIES),
         UtsdDataset("Nature_Worms", UtsdLayout.COLLECTION_OF_SERIES),
         UtsdDataset(
+            "Nature_kdd_cup_2018_dataset_without_missing_values", UtsdLayout.COLLECTION_OF_SERIES
+        ),
+        UtsdDataset(
             "Nature_temperature_rain_dataset_without_missing_values",
             UtsdLayout.COLLECTION_OF_SERIES,
         ),
@@ -153,13 +201,26 @@ class UtsdCorpusReader:
             UtsdLayout.COLLECTION_OF_SERIES,
         ),
     )
+    # Datasets of the volume no reading publishes, and why: a dataset of one univariate series is
+    # one unit under every reading, and no split divides it into units to learn from and to hold
+    # out.
+    EXCLUDED: ClassVar[Mapping[str, str]] = {
+        "Energy_wind_4_seconds_dataset": "one univariate series",
+        "Nature_saugeenday_dataset": "one univariate series",
+        "Nature_sunspot_dataset_without_missing_values": "one univariate series",
+        "Nature_us_births_dataset": "one univariate series",
+    }
 
-    def __init__(self, root: Path, dataset: UtsdDataset) -> None:
+    def __init__(
+        self, root: Path, dataset: UtsdDataset, reading: UtsdReading | None = None
+    ) -> None:
         self._root = root
         self._dataset = dataset
-        self._index: _Index | None = None
+        self._reading = UtsdReading() if reading is None else reading
+        self._units: dict[UnitKey, tuple[_Record, ...]] | None = None
         # pyarrow ships no type information, so a mapped shard is whatever it hands back.
         self._tables: dict[int, Any] = {}
+        self._chunks: dict[tuple[int, int], _Chunk] = {}
 
     @classmethod
     def dataset_named(cls, corpus: str) -> UtsdDataset:
@@ -174,66 +235,90 @@ class UtsdCorpusReader:
         raise ValueError(f"no dataset of the collection is named {corpus!r}")
 
     def describe(self) -> CorpusDescription:
-        index = self._indexed()
+        units = self._indexed()
+        records = sorted(
+            (record for unit in units.values() for record in unit),
+            key=lambda record: (record.a, record.b),
+        )
         observations = 0
 
         def contents() -> Iterator[bytes]:
             nonlocal observations
-            for records in index.units.values():
-                for record in records:
-                    values = self._values_of(record)
-                    observations += int(np.count_nonzero(np.isfinite(values)))
-                    yield self._name_of(record).encode("utf-8") + b"\0"
-                    yield values.tobytes()
+            yield self._reading.tag()
+            for record in records:
+                values = self._values_of(record)
+                observations += int(np.count_nonzero(np.isfinite(values)))
+                yield self._name_of(record).encode("utf-8") + b"\0"
+                yield values.tobytes()
 
         # The checksum consumes the records one at a time, so the dataset is never held whole.
         checksum = Checksum.of_chunks(contents())
         return CorpusDescription(
-            channel_schema=self._schema(index),
+            channel_schema=ChannelSchema(frozenset(self._channel_of(record) for record in records)),
             sampling_regime=SamplingRegime.REGULAR,
             content=CorpusContent(
-                checksum=checksum, unit_count=len(index.units), observation_count=observations
+                checksum=checksum, unit_count=len(units), observation_count=observations
             ),
         )
 
     def read_units(self) -> Iterator[CorpusUnit]:
-        for key, records in self._indexed().units.items():
+        for key, records in self._indexed().items():
             yield CorpusUnit(key, TimeExtent(0.0, float(max(record.length for record in records))))
 
     def read_observations(self, unit: UnitKey) -> Iterator[Observation]:
         if not _UNIT.match(unit.value):
             raise UnknownUnitError(f"{unit} is not a series of the dataset")
-        records = self._indexed().units.get(unit)
+        records = self._indexed().get(unit)
         if records is None:
             raise UnknownUnitError(f"{self._dataset.prefix} has no {unit}")
         return self._observations_of(records)
 
     def _observations_of(self, records: tuple[_Record, ...]) -> Iterator[Observation]:
         """The unit's values index by index, its channels in variate order at each."""
-        channels = [(self._channel_of(record).name, self._values_of(record)) for record in records]
+        channels = [
+            (self._channel_of(record).name, self._read(record).tolist()) for record in records
+        ]
         for index in range(max(len(values) for _, values in channels)):
             for channel, values in channels:
                 if index < len(values) and math.isfinite(values[index]):
-                    yield Observation(channel, float(index), float(values[index]))
+                    yield Observation(channel, float(index), values[index])
 
-    def _schema(self, index: _Index) -> ChannelSchema:
-        if self._dataset.layout is UtsdLayout.COLLECTION_OF_SERIES:
-            return ChannelSchema(frozenset((_VALUE_CHANNEL,)))
-        return ChannelSchema(frozenset(_variate_channel(variate) for variate in index.variates))
+    def _read(self, record: _Record) -> NDArray[np.float64]:
+        """The record's values on the reading's scale, not-a-number where none was stored."""
+        values = self._values_of(record).astype(np.float64)
+        finite = values[np.isfinite(values)]
+        if self._reading.scale is UtsdScale.AS_PUBLISHED or finite.size == 0:
+            return values
+        centred = values - finite.mean()
+        spread = float(finite.std())
+        return centred / spread if spread > 0.0 else centred
+
+    @property
+    def _one_unit_per_record(self) -> bool:
+        return (
+            self._reading.independent_channels
+            or self._dataset.layout is UtsdLayout.COLLECTION_OF_SERIES
+        )
 
     def _channel_of(self, record: _Record) -> Channel:
-        if self._dataset.layout is UtsdLayout.COLLECTION_OF_SERIES:
+        if self._one_unit_per_record:
             return _VALUE_CHANNEL
-        return _variate_channel(record.variate)
+        return Channel(f"variate_{self._variate_of(record):0{_VARIATE_WIDTH}d}")
+
+    def _series_of(self, record: _Record) -> int:
+        return record.b if self._dataset.layout is UtsdLayout.VARIATES_OF_SERIES else record.a
+
+    def _variate_of(self, record: _Record) -> int:
+        return record.a if self._dataset.layout is UtsdLayout.VARIATES_OF_SERIES else record.b
 
     def _name_of(self, record: _Record) -> str:
-        return f"{self._dataset.prefix}_{record.series}_{record.variate}"
+        return f"{self._dataset.prefix}_{record.a}_{record.b}"
 
-    def _indexed(self) -> _Index:
-        """The dataset's records, found on first use by scanning every shard's names."""
-        if self._index is None:
-            self._index = self._scan()
-        return self._index
+    def _indexed(self) -> dict[UnitKey, tuple[_Record, ...]]:
+        """The dataset's records by unit, found on first use by scanning every shard's names."""
+        if self._units is None:
+            self._units = self._laid_out(self._scan())
+        return self._units
 
     def _shards(self) -> list[Path]:
         if not self._root.is_dir():
@@ -243,76 +328,104 @@ class UtsdCorpusReader:
             raise CorpusDataNotFoundError(f"{self._root} holds no shard")
         return shards
 
-    def _scan(self) -> _Index:
+    def _scan(self) -> list[_Record]:
         """Find the dataset's records by name, touching no values.
 
         Raises:
             CorpusDataNotFoundError: If the shards hold no record of the dataset.
-            MalformedCorpusDataError: If a shard is not one of the collection's, a record's name
-                is not a dataset's and two numbers, or the records contradict the layout.
+            MalformedCorpusDataError: If a shard is not one of the collection's, or a record's
+                name is not a dataset's and two numbers, or a record holds no value.
         """
         found: list[_Record] = []
         prefix = f"{self._dataset.prefix}_"
         for shard, path in enumerate(self._shards()):
-            table = self._table_of(path)
-            names = table.column(_ITEM_ID).to_pylist()
-            # The lengths come from the list offsets, so no value of any record is touched here.
-            lengths = [
-                length
-                for chunk in table.column(_TARGET).chunks
-                for length in chunk.value_lengths().to_pylist()
-            ]
-            for row, (name, length) in enumerate(zip(names, lengths, strict=True)):
-                if not name.startswith(prefix):
-                    continue
-                parsed = _ITEM.match(name)
-                if parsed is None:
-                    raise MalformedCorpusDataError(
-                        f"{path.name}, row {row}: {name!r} does not name a series and a variate"
+            table = self._table(shard)
+            row = 0
+            batches = zip(table.column(_ITEM_ID).chunks, table.column(_TARGET).chunks, strict=True)
+            for chunk, (names, targets) in enumerate(batches):
+                # The lengths come from the list offsets, so no value of any record is touched.
+                lengths = targets.value_lengths().to_pylist()
+                for index, (name, length) in enumerate(
+                    zip(names.to_pylist(), lengths, strict=True)
+                ):
+                    if not name.startswith(prefix):
+                        continue
+                    where = f"{path.name}, row {row + index}"
+                    parsed = _ITEM.match(name)
+                    if parsed is None:
+                        raise MalformedCorpusDataError(
+                            f"{where}: {name!r} does not name a dataset and two numbers"
+                        )
+                    # A dataset whose name extends this one's is another dataset, not a bad one.
+                    if parsed["dataset"] != self._dataset.prefix:
+                        continue
+                    if length == 0:
+                        raise MalformedCorpusDataError(f"{where}: {name!r} holds no value")
+                    found.append(
+                        _Record(shard, chunk, index, int(parsed["a"]), int(parsed["b"]), length)
                     )
-                # A dataset whose name extends this one's is another dataset, not a bad record.
-                if parsed["dataset"] != self._dataset.prefix:
-                    continue
-                if length == 0:
-                    raise MalformedCorpusDataError(
-                        f"{path.name}, row {row}: {name!r} holds no value"
-                    )
-                found.append(
-                    _Record(shard, row, int(parsed["series"]), int(parsed["variate"]), length)
-                )
+                row += len(names)
         if not found:
             raise CorpusDataNotFoundError(f"{self._root} holds no record of {self._dataset.prefix}")
-        return self._laid_out(found)
+        return found
 
-    def _laid_out(self, found: list[_Record]) -> _Index:
-        """The records grouped into units as the layout says, checked against it."""
+    def _laid_out(self, found: list[_Record]) -> dict[UnitKey, tuple[_Record, ...]]:
+        """The records grouped into units as the layout and the reading say, checked.
+
+        Raises:
+            MalformedCorpusDataError: If a record is stored twice, or the series of a
+                multivariate layout do not all carry the same variates.
+            IndivisibleReadingError: If the reading leaves the dataset a single unit.
+        """
         name = self._dataset.prefix
-        found.sort(key=lambda found_record: (found_record.series, found_record.variate))
+        found.sort(key=lambda record: (record.a, record.b))
         for earlier, later in pairwise(found):
-            if (earlier.series, earlier.variate) == (later.series, later.variate):
-                raise MalformedCorpusDataError(
-                    f"{name}: series {later.series} carries variate {later.variate} twice"
-                )
+            if (earlier.a, earlier.b) == (later.a, later.b):
+                raise MalformedCorpusDataError(f"{name}_{later.a}_{later.b} is stored twice")
         units: dict[UnitKey, tuple[_Record, ...]] = {}
-        if self._dataset.layout is UtsdLayout.COLLECTION_OF_SERIES:
+        if self._one_unit_per_record:
             for record in found:
-                units[UnitKey(f"series_{record.series}_{record.variate}")] = (record,)
+                units[UnitKey(f"series_{record.a}_{record.b}")] = (record,)
         else:
-            for record in found:
-                key = UnitKey(f"series_{record.series}")
+            for record in sorted(found, key=lambda r: (self._series_of(r), self._variate_of(r))):
+                key = UnitKey(f"series_{self._series_of(record)}")
                 units[key] = (*units.get(key, ()), record)
-            variates = {tuple(record.variate for record in records) for records in units.values()}
-            if len(variates) > 1:
+            carried = {
+                tuple(self._variate_of(record) for record in records) for records in units.values()
+            }
+            if len(carried) > 1:
                 raise MalformedCorpusDataError(
-                    f"{name} is declared series of variates, but its series do not all carry "
-                    f"the same variates: {sorted(len(carried) for carried in variates)} per series"
+                    f"{name} is declared {self._dataset.layout}, but its series do not all carry "
+                    f"the same variates: {sorted(len(variates) for variates in carried)} per "
+                    "series"
                 )
-        return _Index(units, frozenset(record.variate for record in found))
+        if len(units) == 1:
+            raise IndivisibleReadingError(
+                f"{name} read so is one unit, which no split divides; read its channels "
+                "independently"
+            )
+        return units
 
     def _values_of(self, record: _Record) -> NDArray[np.float32]:
-        """The record's values as the collection stores them, single-precision floats."""
-        column = self._table(record.shard).column(_TARGET)[record.row]
-        return np.asarray(column.values.to_numpy(zero_copy_only=False), dtype=_VALUE_DTYPE)
+        """The record's values as the collection stores them: a slice of its batch, not a copy."""
+        chunk = self._chunk(record.shard, record.chunk)
+        return chunk.values[chunk.offsets[record.index] : chunk.offsets[record.index + 1]]
+
+    def _chunk(self, shard: int, number: int) -> _Chunk:
+        """One batch of a shard as arrays, built once: the offsets and the values they index.
+
+        The values are read over the map where they hold no null, and copied with not-a-number
+        where one does; the offsets index the whole child array, as a sliced batch's still do.
+        """
+        if (shard, number) not in self._chunks:
+            targets = self._table(shard).column(_TARGET).chunk(number)
+            self._chunks[(shard, number)] = _Chunk(
+                offsets=np.asarray(targets.offsets.to_numpy(), dtype=np.int64),
+                values=np.asarray(
+                    targets.values.to_numpy(zero_copy_only=False), dtype=_VALUE_DTYPE
+                ),
+            )
+        return self._chunks[(shard, number)]
 
     def _table(self, shard: int) -> Any:
         """The shard mapped as a table, mapped once: units of a dataset may interleave shards."""
@@ -348,7 +461,3 @@ class UtsdCorpusReader:
                 f"{path.name}: expected named series of single-precision values, got {schema}"
             )
         return table
-
-
-def _variate_channel(variate: int) -> Channel:
-    return Channel(f"variate_{variate:0{_VARIATE_WIDTH}d}")

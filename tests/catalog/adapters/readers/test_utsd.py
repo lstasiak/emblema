@@ -6,9 +6,16 @@ from typing import Any
 import numpy as np
 import pytest
 
-from emblema.catalog.adapters.readers.utsd import UtsdCorpusReader, UtsdDataset, UtsdLayout
+from emblema.catalog.adapters.readers.utsd import (
+    UtsdCorpusReader,
+    UtsdDataset,
+    UtsdLayout,
+    UtsdReading,
+    UtsdScale,
+)
 from emblema.catalog.domain.exceptions import (
     CorpusDataNotFoundError,
+    IndivisibleReadingError,
     MalformedCorpusDataError,
     UnknownUnitError,
 )
@@ -32,6 +39,8 @@ SCP1_VARIATES = 6
 SCP1_LENGTH = 32
 RAIN_UNITS = tuple(f"series_0_{number}" for number in range(971, 976))
 RAIN_LENGTH = 20
+# The values as stored, for the tests that check what a record holds rather than how it is scaled.
+AS_STORED = UtsdReading(scale=UtsdScale.AS_PUBLISHED)
 # One record per row, as the collection stores them.
 Record = tuple[str, Sequence[float]]
 SCHEMA = pa.schema(
@@ -72,14 +81,19 @@ def record(dataset: UtsdDataset, series: int, variate: int, values: Sequence[flo
     return f"{dataset.prefix}_{series}_{variate}", values
 
 
+# A second series of the brain-signal dataset, for the tests about the first: a dataset read as
+# one unit is refused, since no split divides it.
+OTHER_SERIES = (record(SCP1, 9, 0, [7.0]), record(SCP1, 9, 1, [8.0]))
+
+
 @pytest.fixture
 def scp1() -> UtsdCorpusReader:
-    return UtsdCorpusReader(SAMPLE, SCP1)
+    return UtsdCorpusReader(SAMPLE, SCP1, AS_STORED)
 
 
 @pytest.fixture
 def rain() -> UtsdCorpusReader:
-    return UtsdCorpusReader(SAMPLE, RAIN)
+    return UtsdCorpusReader(SAMPLE, RAIN, AS_STORED)
 
 
 def test_a_multivariate_dataset_has_a_channel_per_variate(scp1: UtsdCorpusReader) -> None:
@@ -144,7 +158,7 @@ def test_the_checksum_covers_the_dataset_s_records_in_canonical_order(
             table.column("item_id").to_pylist(), table.column("target").to_pylist(), strict=True
         ):
             rows[item] = values
-    chunks = []
+    chunks = [AS_STORED.tag()]
     for series in (139, 219, 458):
         for variate in range(SCP1_VARIATES):
             name = f"{SCP1.prefix}_{series}_{variate}"
@@ -181,16 +195,20 @@ def test_a_value_stored_as_not_a_number_is_no_observation(tmp_path: Path) -> Non
         tmp_path,
         {
             "data.arrow": [
-                [record(SCP1, 1, 0, [1.0, math.nan, 3.0]), record(SCP1, 1, 1, [math.nan])]
+                [
+                    record(SCP1, 1, 0, [1.0, math.nan, 3.0]),
+                    record(SCP1, 1, 1, [math.nan]),
+                    *OTHER_SERIES,
+                ]
             ]
         },
     )
-    reader = UtsdCorpusReader(root, SCP1)
+    reader = UtsdCorpusReader(root, SCP1, AS_STORED)
 
-    (unit,) = reader.read_units()
+    unit, _ = reader.read_units()
 
     assert unit.extent == TimeExtent(0.0, 3.0)
-    assert reader.describe().content.observation_count == 2
+    assert reader.describe().content.observation_count == 2 + 2
     assert list(reader.read_observations(unit.key)) == [
         Observation("variate_000", 0.0, 1.0),
         Observation("variate_000", 2.0, 3.0),
@@ -199,11 +217,16 @@ def test_a_value_stored_as_not_a_number_is_no_observation(tmp_path: Path) -> Non
 
 def test_variates_of_unequal_length_walk_index_by_index(tmp_path: Path) -> None:
     root = shards(
-        tmp_path, {"data.arrow": [[record(SCP1, 4, 1, [1.0, 2.0]), record(SCP1, 4, 0, [5.0])]]}
+        tmp_path,
+        {
+            "data.arrow": [
+                [record(SCP1, 4, 1, [1.0, 2.0]), record(SCP1, 4, 0, [5.0]), *OTHER_SERIES]
+            ]
+        },
     )
-    reader = UtsdCorpusReader(root, SCP1)
+    reader = UtsdCorpusReader(root, SCP1, AS_STORED)
 
-    (unit,) = reader.read_units()
+    unit, _ = reader.read_units()
 
     assert unit.extent == TimeExtent(0.0, 2.0)
     assert list(reader.read_observations(unit.key)) == [
@@ -223,15 +246,23 @@ def test_records_of_other_datasets_are_passed_over_even_when_their_names_extend_
             "data.arrow": [
                 [
                     record(SCP1, 1, 0, [1.0]),
+                    record(SCP1, 2, 0, [1.0]),
                     record(longer, 1, 0, [2.0]),
+                    record(longer, 3, 0, [2.0]),
                     record(RAIN, 0, 7, [3.0]),
                 ]
             ]
         },
     )
 
-    assert [str(unit.key) for unit in UtsdCorpusReader(root, SCP1).read_units()] == ["series_1"]
-    assert [str(unit.key) for unit in UtsdCorpusReader(root, longer).read_units()] == ["series_1"]
+    assert [str(unit.key) for unit in UtsdCorpusReader(root, SCP1).read_units()] == [
+        "series_1",
+        "series_2",
+    ]
+    assert [str(unit.key) for unit in UtsdCorpusReader(root, longer).read_units()] == [
+        "series_1",
+        "series_3",
+    ]
 
 
 def test_a_collection_names_a_unit_by_both_numbers_however_the_publisher_used_them(
@@ -249,7 +280,7 @@ def test_a_collection_names_a_unit_by_both_numbers_however_the_publisher_used_th
             ]
         },
     )
-    reader = UtsdCorpusReader(root, RAIN)
+    reader = UtsdCorpusReader(root, RAIN, AS_STORED)
 
     units = list(reader.read_units())
 
@@ -289,15 +320,15 @@ def test_a_variate_carried_twice_by_one_series_is_malformed(tmp_path: Path) -> N
         },
     )
 
-    with pytest.raises(MalformedCorpusDataError, match="variate 0 twice"):
+    with pytest.raises(MalformedCorpusDataError, match="stored twice"):
         UtsdCorpusReader(root, SCP1).describe()
 
 
 @pytest.mark.parametrize(
     ("item", "reason"),
     [
-        (f"{SCP1.prefix}_7", "does not name a series and a variate"),
-        (f"{SCP1.prefix}_x_1", "does not name a series and a variate"),
+        (f"{SCP1.prefix}_7", "does not name a dataset and two numbers"),
+        (f"{SCP1.prefix}_x_1", "does not name a dataset and two numbers"),
     ],
 )
 def test_a_record_of_the_dataset_without_two_numbers_is_malformed(
@@ -394,9 +425,119 @@ def test_every_dataset_the_shards_hold_is_declared_and_describes_as_it_streams()
             for item in batch.column("item_id").to_pylist():
                 held.add(item.rsplit("_", 2)[0])
 
-    assert held == {dataset.prefix for dataset in UtsdCorpusReader.DATASETS}
+    declared = {dataset.prefix for dataset in UtsdCorpusReader.DATASETS}
+    assert held == declared | set(UtsdCorpusReader.EXCLUDED)
     smallest = UtsdCorpusReader(root, SCP1)
     described = smallest.describe().content
     assert described.observation_count == sum(
         1 for unit in smallest.read_units() for _ in smallest.read_observations(unit.key)
+    )
+
+
+ERA5 = UtsdCorpusReader.dataset_named("utsd/ERA5_pressure")
+
+
+def replace_reading(**changed: Any) -> UtsdReading:
+    """The stored scale with the given knobs changed."""
+    return UtsdReading(**{"scale": UtsdScale.AS_PUBLISHED, **changed})
+
+
+def test_variates_of_series_number_the_variate_first_and_the_series_second(
+    tmp_path: Path,
+) -> None:
+    root = shards(
+        tmp_path,
+        {
+            "data.arrow": [
+                [
+                    record(ERA5, 0, 0, [1.0]),
+                    record(ERA5, 0, 1, [2.0]),
+                    record(ERA5, 1, 0, [3.0]),
+                    record(ERA5, 1, 1, [4.0]),
+                ]
+            ]
+        },
+    )
+    reader = UtsdCorpusReader(root, ERA5, AS_STORED)
+
+    assert [str(unit.key) for unit in reader.read_units()] == ["series_0", "series_1"]
+    assert reader.describe().channel_schema.names == ("variate_000", "variate_001")
+    assert list(reader.read_observations(UnitKey("series_1"))) == [
+        Observation("variate_000", 0.0, 2.0),
+        Observation("variate_001", 0.0, 4.0),
+    ]
+
+
+def test_channels_read_independently_make_every_record_a_unit_on_one_channel(
+    scp1: UtsdCorpusReader,
+) -> None:
+    independent = UtsdCorpusReader(SAMPLE, SCP1, replace_reading(independent_channels=True))
+
+    units = list(independent.read_units())
+
+    assert len(units) == len(SCP1_UNITS) * SCP1_VARIATES
+    assert str(units[0].key) == "series_139_0"
+    assert independent.describe().channel_schema.names == ("value",)
+    assert next(iter(independent.read_observations(UnitKey("series_139_0")))) == Observation(
+        "value", 0.0, 100.75
+    )
+    described = independent.describe().content
+    assert described.observation_count == scp1.describe().content.observation_count
+    assert described.checksum != scp1.describe().content.checksum
+
+
+def test_a_series_is_read_on_its_own_scale_unless_the_stored_one_is_asked_for(
+    tmp_path: Path,
+) -> None:
+    root = shards(
+        tmp_path,
+        {
+            "data.arrow": [
+                [
+                    record(RAIN, 0, 1, [10.0, math.nan, 30.0]),
+                    record(RAIN, 0, 2, [5.0, 5.0]),
+                ]
+            ]
+        },
+    )
+    own = UtsdCorpusReader(root, RAIN)
+    stored = UtsdCorpusReader(root, RAIN, AS_STORED)
+
+    assert list(own.read_observations(UnitKey("series_0_1"))) == [
+        Observation("value", 0.0, -1.0),
+        Observation("value", 2.0, 1.0),
+    ]
+    # A series that never varies is centred, not divided by a spread of nothing.
+    assert [o.value for o in own.read_observations(UnitKey("series_0_2"))] == [0.0, 0.0]
+    assert [o.value for o in stored.read_observations(UnitKey("series_0_1"))] == [10.0, 30.0]
+    assert own.describe().content.checksum != stored.describe().content.checksum
+    assert own.describe().content.observation_count == stored.describe().content.observation_count
+
+
+def test_a_reading_that_leaves_one_unit_is_refused_and_independent_channels_divide_it(
+    tmp_path: Path,
+) -> None:
+    benzene = UtsdCorpusReader.dataset_named("utsd/Environment_BenzeneConcentration")
+    root = shards(
+        tmp_path,
+        {"data.arrow": [[record(benzene, 0, variate, [1.0, 2.0]) for variate in range(3)]]},
+    )
+
+    with pytest.raises(IndivisibleReadingError, match="read its channels independently"):
+        UtsdCorpusReader(root, benzene).describe()
+    divided = UtsdCorpusReader(root, benzene, UtsdReading(independent_channels=True))
+    assert divided.describe().content.unit_count == 3
+
+
+def test_a_dataset_is_declared_or_excluded_with_a_reason_and_never_both() -> None:
+    declared = {dataset.prefix for dataset in UtsdCorpusReader.DATASETS}
+
+    assert declared.isdisjoint(UtsdCorpusReader.EXCLUDED)
+    assert all(reason for reason in UtsdCorpusReader.EXCLUDED.values())
+
+
+def test_the_reading_is_named_in_the_bytes_a_checksum_begins_with() -> None:
+    assert UtsdReading().tag() == b"reading:channels=as_laid_out;scale=within_unit\0"
+    assert replace_reading(independent_channels=True).tag() == (
+        b"reading:channels=independent;scale=as_published\0"
     )
