@@ -1,0 +1,46 @@
+# The mixture of four in the shape of 512 by 8 at half the rate, everything else the file of
+# backbone-mixed4-512x8-m.toml to the step. At 1e-3 the larger shape ended its training loss above
+# today's shape's (0.063 against 0.055 at the eighth epoch) and its validation rose twice between
+# epochs, the marks of a rate too high for the width rather than of too little capacity; halving
+# the rate as the width doubles is the scaling that keeps an update's size per feature (muP).
+name = "backbone-mixed4-512x8-m-5e-4"
+tier = "M"
+corpora = ["cmapss", "skab", "esa_ad", "physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[shape]
+width = 512
+heads = 8
+layers = 8
+feedforward_width = 2048
+time_frequencies = 12
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation: the satellite corpus is learnt under that reading and not
+# under the square, and the stays' channels have heavy tails too.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+# Eight passes over every window, the epoch kept the one whose mean relative validation over the
+# corpora is lowest: thirteen passes bought a better pretext loss and a worse task
+# (backbone-mixed5-nosmd-m-13.toml). Eight windows a micro-batch, four to a step, for the
+# memory backbone-mixed4-512x8-m.toml gives; a quarter of the first epoch warming up.
+[budget]
+epochs = 8
+batch_size = 8
+accumulation_steps = 4
+learning_rate = 5e-4
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000
