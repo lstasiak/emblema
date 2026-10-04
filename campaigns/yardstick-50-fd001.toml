@@ -1,0 +1,45 @@
+# The curve over the scale of pretraining read at one point on FD001, at 50 windows: the probe
+# solved in closed form against the network from nothing, with full fine-tuning, the trained
+# probe and the same probe over the encoder at its initialisation beside it.
+#
+# Every candidate at the recipe registered for the curve (docs/preregistration.md, "The scale of
+# pretraining"): the settings in force at 50 windows, pooled over the tail's fifth, and full
+# fine-tuning starting its head solved in closed form. Seeds 1 to 10 scored on the validation
+# engines, the same engines and draws under every backbone. Defined once under each backbone the
+# point is read under.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "yardstick-50-fd001"
+purpose = "tuning"
+tier = "M"
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2",
+    "frozen_ridge@pooling=tail,tail_share=0.2",
+    "frozen_probe@learning_rate=0.03,pooling=tail,tail_share=0.2",
+    "full_fine_tuning@head_start=solved,learning_rate=0.000333,pooling=tail,tail_share=0.2",
+    "untrained_ridge@pooling=tail,tail_share=0.2",
+]
+control = "from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2"
+endpoint = "frozen_ridge@pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["50"]
+endpoint = "50"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# The turbofan's registered rules.
+minimum_relative_reduction = 0.1
+floor_share = 0.03
+alpha = 0.05
+correction = "holm"
+# Four contenders at one budget, less the endpoint.
+secondary_family_size = 3
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
