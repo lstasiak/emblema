@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from emblema.catalog.adapters.readers.utsd import UtsdReading
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 
 
@@ -16,6 +17,7 @@ class PublishCorpusInvocation:
         per_condition: Whether each sensor is read as a channel per operating condition.
         excluded_units: Units cut from the corpus, by the names the corpus gives their files; a
             downstream task's frozen side.
+        reading: How a dataset of the time-series collection is read; nothing else reads it.
     """
 
     command: PublishCorpusCommand
@@ -24,3 +26,4 @@ class PublishCorpusInvocation:
     subsets: tuple[str, ...]
     per_condition: bool = False
     excluded_units: tuple[str, ...] = ()
+    reading: UtsdReading = field(default_factory=UtsdReading)

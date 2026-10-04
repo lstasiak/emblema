@@ -10,7 +10,7 @@ from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusRe
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.readers.tep import TennesseeEastmanCorpusReader
-from emblema.catalog.adapters.readers.utsd import UtsdCorpusReader
+from emblema.catalog.adapters.readers.utsd import UtsdCorpusReader, UtsdReading
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
@@ -61,6 +61,7 @@ class CompositionRoot:
         subsets: tuple[str, ...] = (),
         per_condition: bool = False,
         excluded_units: tuple[str, ...] = (),
+        reading: UtsdReading | None = None,
         corpora: CorpusRepository | None = None,
         reader: CorpusReader | None = None,
         store: ArtifactStore | None = None,
@@ -82,6 +83,9 @@ class CompositionRoot:
                 operating condition, which only a corpus flown at several conditions offers.
             excluded_units: Units cut from the named corpus by name, a downstream task's frozen
                 side, which only a corpus whose publisher drew no test set offers.
+            reading: How a dataset of the time-series collection is read, its channels
+                independent or on the scale it is stored at; its own reading unless given, and
+                refused for any other corpus.
             corpora: Repository of corpora; the configured metadata database unless given.
             reader: Reader of the raw corpus; the adapter of the named corpus unless given.
                 One of the two has to be stated.
@@ -103,7 +107,9 @@ class CompositionRoot:
                 else corpora
             ),
             reader=(
-                self._corpus_reader(corpus, corpus_root, subsets, per_condition, excluded_units)
+                self._corpus_reader(
+                    corpus, corpus_root, subsets, per_condition, excluded_units, reading
+                )
                 if reader is None
                 else reader
             ),
@@ -126,6 +132,7 @@ class CompositionRoot:
         subsets: tuple[str, ...] = (),
         per_condition: bool = False,
         excluded_units: tuple[str, ...] = (),
+        reading: UtsdReading | None = None,
         reader: CorpusReader | None = None,
         clock: Clock | None = None,
         ids: IdGenerator | None = None,
@@ -143,6 +150,7 @@ class CompositionRoot:
             subsets=subsets,
             per_condition=per_condition,
             excluded_units=excluded_units,
+            reading=reading,
             corpora=corpora,
             reader=reader,
             store=store,
@@ -185,6 +193,7 @@ class CompositionRoot:
         subsets: tuple[str, ...],
         per_condition: bool = False,
         excluded_units: tuple[str, ...] = (),
+        reading: UtsdReading | None = None,
     ) -> CorpusReader:
         """Which adapter reads which corpus, and what it takes from the process to do it.
 
@@ -196,7 +205,7 @@ class CompositionRoot:
         Raises:
             ValueError: If no corpus was named, none of that name has an adapter, or the corpus
                 was asked for what it does not offer: a reading per condition, an exclusion, a
-                selection of subsets.
+                selection of subsets, a reading of the time-series collection.
         """
         if per_condition and corpus != "cmapss":
             raise ValueError(
@@ -206,7 +215,12 @@ class CompositionRoot:
             raise ValueError(
                 f"only the physionet2019 corpus has units to exclude by name, not {corpus!r}"
             )
-        if subsets and corpus is not None and corpus.startswith(UtsdCorpusReader.CORPUS_PREFIX):
+        collected = corpus is not None and corpus.startswith(UtsdCorpusReader.CORPUS_PREFIX)
+        if reading is not None and reading != UtsdReading() and not collected:
+            raise ValueError(
+                f"only a dataset of the time-series collection is read otherwise, not {corpus!r}"
+            )
+        if subsets and collected:
             raise ValueError(
                 f"a dataset of the collection has no subsets to select, got {subsets!r}"
             )
@@ -234,7 +248,7 @@ class CompositionRoot:
                     root, subsets or TennesseeEastmanCorpusReader.SUBSETS
                 )
             case dataset if dataset.startswith(UtsdCorpusReader.CORPUS_PREFIX):
-                return UtsdCorpusReader(root, UtsdCorpusReader.dataset_named(dataset))
+                return UtsdCorpusReader(root, UtsdCorpusReader.dataset_named(dataset), reading)
             case generated if generated in LAYOUTS:
                 return SyntheticCorpusReader(CONTROL_PROCESS, LAYOUTS[generated])
             case _:

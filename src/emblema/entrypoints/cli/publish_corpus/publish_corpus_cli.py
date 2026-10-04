@@ -2,6 +2,7 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
+from emblema.catalog.adapters.readers.utsd import UtsdReading, UtsdScale
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.tokenisation.split_policy import (
@@ -86,6 +87,12 @@ class PublishCorpusCli:
             subsets=tuple(arguments.subset or ()),
             per_condition=arguments.per_operating_condition,
             excluded_units=self._excluded_units(arguments.exclude_units),
+            reading=UtsdReading(
+                independent_channels=arguments.channels_independent,
+                scale=UtsdScale.AS_PUBLISHED
+                if arguments.scale_as_published
+                else UtsdScale.WITHIN_UNIT,
+            ),
         )
 
     @staticmethod
@@ -112,6 +119,7 @@ class PublishCorpusCli:
             subsets=invocation.subsets,
             per_condition=invocation.per_condition,
             excluded_units=invocation.excluded_units,
+            reading=invocation.reading,
         )
         ref = root.services.publish_corpus(invocation.command)
         print(f"{ref.key}\n{ref.checksum}")
@@ -141,6 +149,18 @@ class PublishCorpusCli:
             help="file naming units to cut from the corpus, one name per line as the corpus "
             "names its files (p000015, not training_setA/p000015): a downstream task's frozen "
             "side; only a corpus whose publisher drew no test set has a reader for it",
+        )
+        parser.add_argument(
+            "--channels-independent",
+            action="store_true",
+            help="read every series of a dataset of the time-series collection as a unit of its "
+            "own on one channel, whatever its layout; only that collection has a reader for it",
+        )
+        parser.add_argument(
+            "--scale-as-published",
+            action="store_true",
+            help="read a dataset of the time-series collection on the scale it is stored at, "
+            "rather than each series on its own; only that collection has a reader for it",
         )
         parser.add_argument("--window", type=float, required=True, help="window length, in time")
         parser.add_argument("--stride", type=float, required=True, help="stride between windows")

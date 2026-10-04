@@ -15,6 +15,7 @@ from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusR
 from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
+from emblema.catalog.adapters.readers.utsd import UtsdReading, UtsdScale
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.exceptions import InvalidUnitSplitError
@@ -399,6 +400,45 @@ def test_selecting_subsets_of_a_dataset_of_the_collection_is_refused(tmp_path: P
             workspace=tmp_path / "workspace",
             subsets=("UTSD-4G",),
         )
+
+
+def test_a_reading_of_the_collection_reaches_the_reader_of_the_dataset_named(
+    tmp_path: Path,
+) -> None:
+    reading = UtsdReading(independent_channels=True, scale=UtsdScale.AS_PUBLISHED)
+    root = CompositionRoot.over(
+        corpora=InMemoryCorpusRepository(),
+        store=InMemoryArtifactStore(),
+        corpus="utsd/Health_SelfRegulationSCP1",
+        corpus_root=sample("utsd") / "UTSD-12G",
+        workspace=tmp_path / "workspace",
+        reading=reading,
+    )
+
+    assert root.adapters.reader.describe().channel_schema.names == ("value",)
+
+
+def test_a_reading_of_the_collection_asked_of_another_corpus_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="only a dataset of the time-series collection"):
+        CompositionRoot.over(
+            corpora=InMemoryCorpusRepository(),
+            store=InMemoryArtifactStore(),
+            corpus="skab",
+            corpus_root=tmp_path / "raw",
+            workspace=tmp_path / "workspace",
+            reading=UtsdReading(independent_channels=True),
+        )
+
+
+def test_the_command_line_reads_the_collection_as_asked_and_on_each_series_scale_by_default() -> (
+    None
+):
+    plain = PublishCorpusCli().parse(ARGUMENTS)
+    asked = PublishCorpusCli().parse([*ARGUMENTS, "--channels-independent", "--scale-as-published"])
+
+    assert plain.reading == UtsdReading()
+    assert plain.reading.scale is UtsdScale.WITHIN_UNIT
+    assert asked.reading == UtsdReading(independent_channels=True, scale=UtsdScale.AS_PUBLISHED)
 
 
 @pytest.mark.parametrize(
