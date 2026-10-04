@@ -1,0 +1,37 @@
+# The mixture of four again at a second seed, everything else the file of backbone-mixed4-m.toml
+# to the step. A step of the curve over the scale of pretraining counts as a rise only past the
+# difference between two pretrainings of one mixture, and this pair measures it.
+name = "backbone-mixed4-m-seed2"
+tier = "M"
+corpora = ["cmapss", "skab", "esa_ad", "physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation: the satellite corpus is learnt under that reading and not
+# under the square, and the stays' channels have heavy tails too.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+# Eight passes over every window, the epoch kept the one whose mean relative validation over the
+# corpora is lowest: thirteen passes bought a better pretext loss and a worse task
+# (backbone-mixed5-nosmd-m-13.toml). Sixteen windows a micro-batch, two to a step, as every
+# mixture before; a quarter of the first epoch warming up.
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 2
+
+[checkpoint]
+every_steps = 2000
