@@ -646,12 +646,21 @@ channels = 1
 series_length = 3450
 basis = "Volume 12G: 289,560 records of about a billion values in all; a record is a univariate series, a unit where a dataset is a collection of series and a channel of one where it is multivariate, so the count of units is an upper bound and of channels a lower one"
 
+# About a thousand tokens a window, as the other corpora's windows hold, and no overlap: a stride
+# shorter than the window repeats values an epoch already reads. A multivariate dataset read with
+# its variates as channels takes a window of 1024 over its variates in samples.
+[[corpora.utsd.windows]]
+name = "w1024s1024"
+unit = "samples"
+length = 1024
+stride = 1024
+default = true
+
 [[corpora.utsd.windows]]
 name = "w96s48"
 unit = "samples"
 length = 96
 stride = 48
-default = true
 
 [[corpora.utsd.windows]]
 name = "w200s40"
