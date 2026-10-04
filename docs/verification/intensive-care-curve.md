@@ -1830,3 +1830,91 @@ its standard error.
   no earlier reading to check against.
 - The small shape's cells repeat to the stay on one GPU and differ by 0.004 between a T4 and a
   G4, so a difference of that size between campaigns run on different cards is the card's.
+
+## 2026-10-04 — declared before the run: the recipe at 20, 50 and 200 stays and at 50 windows, and the seeds' spread under it
+
+**Question.** The curve over the scale of pretraining (`docs/preregistration.md`, "The scale of
+pretraining"; ADR-0049) reads every point under one recipe of adaptation, chosen on the tuning
+side before the first point is read on the validation side. Does solving the head before the
+first step, or a stop whose patience is counted in steps past the warm-up and whose held-out
+stays hold both outcomes (ADR-0050), replace each arm's setting in force at the curve's budgets?
+And how far does one seed move the area of the network from nothing and of the probe solved in
+closed form under that recipe, which sets the least gain and the floor's fixed part?
+
+**Design.** Four campaigns under the mixture of four (`backbone-mixed4-m`, weights
+`sha256:0d81c01e…`), scored on the fifth held out by seed 101 over seeds 1 to 10, the validation
+side unread. The intensive-care task is `a6a9c653…`, FD001 `be30c0ac…`, both over the
+publications the backbone was pretrained on.
+
+| Campaign file | Budget | Each arm from | Knobs turned |
+|---|---|---|---|
+| `campaigns/recipe-20-physionet2012.toml` | 20 stays | its setting at 50 | the head solved first |
+| `campaigns/recipe-50-physionet2012.toml` | 50 stays | its setting at 50 | the head solved first; the stop; both |
+| `campaigns/recipe-200-physionet2012.toml` | 200 stays | its setting at 200 | the head solved first; the stop; both |
+| `campaigns/recipe-50-fd001.toml` | 50 windows | its setting at 50 | the head solved first; the stop by engine; both |
+
+Each campaign also holds the probe solved in closed form (`frozen_ridge`) and the same probe
+over the encoder at the control's initialisation (`untrained_ridge`), the first and zeroth
+points of the curve. The stop holds a fifth of the labelled units out, within each outcome on
+the intensive-care task, and waits 500 steps past the warm-up: a stopped run at 50 or 200 is
+capped at about 1,500 steps, its warm-up about 150, and 500 steps is the patience the stop gained
+under at 1,000 stays (2026-10-03, ten epochs of 50 steps). Twenty stays hold two or three deaths, so no stop runs
+there: it would score one death and leave the solved head one to learn from. The settings in
+force are the selections' choices on the earlier publication, `selection-scratch-*` and
+`selection-fine-tuning-*`, since a selection on another task cannot be named as a tuned choice.
+
+**Reading, declared beforehand.** By `scripts/campaign_pairs_report.py`, within each campaign
+and arm, every variant against the arm's setting in force, paired over the scored units and
+pooled over the seeds.
+
+- A variant *replaces* the setting where its paired 95 % interval lies above zero (a gain in area
+  on the intensive-care task, a reduction in RMSE on FD001) and its mean over seeds exceeds twice
+  its standard error, the rule of 2026-10-03. Among the variants that replace it, the one with
+  the largest mean gain is chosen; where none does, the setting in force stands. Each arm is
+  chosen on its own: the comparison holds the knobs on offer equal, and the control is not held
+  below its best.
+- The choice per arm and budget is registered as variants before the first point of the curve
+  is read on the validation side.
+- *Least gain*, at each of 20, 50 and 200 stays: the larger of the two standard deviations over
+  the ten seeds, of the network from nothing at its chosen variant and of `frozen_ridge`, rounded
+  up to 0.005. *Floor's fixed part*: the smallest standard deviation of the network from nothing
+  at its chosen variant over the three budgets, rounded down to 0.005 and not below 0.01. The
+  reading of 2026-09-29, under the recipe. FD001 keeps its registered relative rule.
+- `untrained_ridge` against `frozen_ridge` and against the network from nothing is reported as
+  measured and chooses nothing.
+
+**Predictions.**
+
+1. The checks hold: the network from nothing at its setting lands within 0.02 of 0.623 at 50
+   stays and within 0.015 of 0.66 at 200 (the same fifth, the earlier publication of the same
+   stays).
+2. The head solved first replaces full fine-tuning's setting at 50 stays, by 0.01 to 0.03, and
+   on FD001 at 50 windows; at 200 stays it gains under 0.01 and does not replace. It replaces
+   nothing for the network from nothing at any budget: a head solved over states of an encoder
+   at its initialisation is forgotten in the first hundred steps.
+3. The stop replaces the network from nothing's setting at 200 stays, by 0.01 to 0.03: the
+   stop that fired inside the warm-up there gained +0.012 without replacing, and a patience
+   that begins after the warm-up removes that cause. At 50 stays it replaces nothing: eleven
+   held-out stays with two deaths read an epoch to about 0.2.
+4. Both knobs together replace no arm by more than the better of the two alone.
+5. `untrained_ridge` lands below the network from nothing at 50 stays, between 0.55 and 0.62,
+   and `frozen_ridge` above `untrained_ridge` by at least 0.03.
+6. At 50 stays one seed moves the network from nothing by 0.04 to 0.06 and `frozen_ridge` by
+   0.02 to 0.04, so the least gain at 50 lies between 0.04 and 0.06.
+
+**What follows.** The chosen variants and the thresholds enter `docs/preregistration.md` by one
+row before any campaign of the curve reads the validation side. If the stop replaces at 200 or
+50 stays, it is the recipe there for the curve only; the registered grids' recipe is unchanged.
+If the head solved first replaces full fine-tuning's setting, the trained probe is read beside
+it under its setting in force. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- One share and one patience; a patience of 300 or 800 steps is not read.
+- The settings in force were chosen on the earlier publication of the same stays; a rate that
+  suits the new one better is not searched.
+- The standard deviation of the chosen variant is read on the cells that chose it; the choice
+  goes by the mean, not the spread, but the two are not independent.
+- Ten seeds read a difference to about 0.016 at 50 stays and 0.013 at 200.
+- The stays scored are a fifth of the tuning side the earlier selections and the stop's reading
+  of 2026-10-03 were also scored on.
