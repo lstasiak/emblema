@@ -1,9 +1,10 @@
 # Preregistration: what counts as success in the label-efficiency comparison
 
 - Registered: 2026-09-16, commit `e5ffafb`
-- Rules in force as of: 2026-09-29, the last row of the register
+- Rules in force as of: 2026-10-04, the last row of the register
 - Applies to: the label-efficiency curve on the turbofan task, its single test run, the
-  transfer leg of the synthetic control, and the protocol of the intensive-care task
+  transfer leg of the synthetic control, the protocol of the intensive-care task, and the
+  curve of the gain over the scale of pretraining
 
 A curve read after it is drawn can be made to say almost anything: a threshold is chosen, a metric
 is swapped, a budget is called the interesting one. This document fixes, before the numbers it
@@ -334,6 +335,56 @@ endpoint over ten seeds on one fixed fifth of the tuning side (`verdict-statisti
 | Selection | Every candidate is selected at each budget before the grid, under each backbone it runs on: one stay in five held out of the tuning side per repeat, three repeats, one minus the area under the rule of one standard error, and the edge rule. A network departs from its default — the turbofan's registered peak of its mode as the rate (the patch model at the schedule's 1e-3), pooled by the mean — by a third and three times the rate, the tail of a fifth or of half the window, and attention; the probe solved in closed form turns the two tails alone, having no query to train. A tail departs from the mean by two knobs, attention by one. The peaks are where the search starts, not a choice: a default is kept only on a tie. The classical baselines turn the knobs their turbofan selections turned. |
 | Final run | A stay of set C with no measurement is answered with the prevalence of the task's own sample the candidate learnt from, the answer of a predictor that has seen nothing; none is dropped. Every candidate answers those stays alike, so the paired comparison is unmoved except through the ties the constant answer makes with each candidate's other answers; the areas and Brier scores reported move by the same stays. The harness does not answer such a stay yet: it is built and tested before the final run, and this row is amended with the commit. |
 
+## The scale of pretraining
+
+Whether the gain grows with the data a backbone is pretrained on (ADR-0049). Registered on
+2026-10-04, before any run of the stage; the least gain and the floor's fixed part follow by the
+reading below, before the first cell is read on the validation side.
+
+**The claim, narrowed.** An encoder pretrained without labels on a mixture of at least 10⁹
+observed values from at least thirty corpora lowers the error of a task at about one or two per
+cent of its labels or fewer — 20 and 50 stays on the intensive-care task (0.5 and 1.25 % of the
+tuning side), 50 windows on FD001 (2 %), 40 and 400 patients on the sepsis task — against the
+same network trained from nothing under the same recipe, read by the probe and by full
+fine-tuning. The claim says nothing at 200 labels and above; those cells are secondary. The
+claim above this section stands as registered; this one is read beside it.
+
+| | |
+|---|---|
+| Points of the curve | Point zero: the encoder at its initialisation, pretrained on nothing. Then mixtures of about 10⁸ observed values (the mixture of four, `backbone-mixed4-m`), about 3·10⁸, about 10⁹, and about 3·10⁹ under the rule below. The axis is the count of observed values in the mixture's training units, overlapping windows counted once, as `docs/verification/data-spike.md` counts them; the epochs a backbone ran are reported beside it. Each point is pretrained at seed 1, its best epoch kept by the pretext's validation loss, as at 10⁸; the mixture of four in today's shape is pretrained again at seed 2. |
+| Exposure | Every corpus a task reads (the stays, C-MAPSS, PhysioNet 2019 once published) is planned at the same exposure at every point: epochs times passes equal to the mixture of four's eight. The other corpora's passes and fractions are free. A larger mixture therefore adds data beside the task's corpus and does not read it less often. |
+| Shapes | Today's (width 256, six layers, 4.8M parameters) at every point, and one step up (width 512, eight layers, about 20M) at point zero, 10⁸, 10⁹ and, if run, 3·10⁹. |
+| Tasks and budgets | The intensive-care task over the publication continuing the turbofan vocabulary (`a6a9c653-…`) at 20, 50 and 200 stays; FD001 at 50 windows; a sepsis task over PhysioNet 2019 at 40, 400 and 4,000 patients and every patient, its protocol registered here before its first campaign. Seeds 1 to 10 in every cell. |
+| Primary measure | The gain in area of the probe solved in closed form over the network trained from nothing, at 50 stays, as a function of the observed values of the mixture, for each shape. The trained probe and full fine-tuning under the recipe are read beside it. |
+| Endpoint | The closed-form probe against the network from nothing at 50 stays, under the mixture of about 10⁹ observed values in today's shape; one comparison, carrying no correction, confirmed as the intensive-care endpoint is: a gain of at least the least gain, the whole interval above zero, and a gain the floor does not swallow. 20 stays are read descriptively: no confirmation is read there. Every other cell of the stage is secondary, its family stated in its campaign's file. FD001 has its own endpoint, the same comparison at 50 windows under the same mixture and shape, confirmed by the turbofan endpoint's three conditions; the sepsis task's is registered with its protocol. |
+| Recipe | One recipe of adaptation reads every point: a probe phase on the frozen encoder before full fine-tuning, and patience counted in steps from the end of the warm-up, each chosen by the replacement rule on the tuning side and written here as variants before the first point is read on the validation side. |
+| Thresholds | By the reading registered for the intensive-care task on 2026-09-29, at each of 20, 50 and 200 stays: one seed's spread over ten seeds on one fixed fifth of the tuning side, under the recipe, for the network from nothing and the closed-form probe; the least gain at a budget is the larger of the two standard deviations there, rounded up to 0.005, and the floor's fixed part the smallest standard deviation of the network from nothing over the three budgets, rounded down to 0.005 and not below 0.01. The run is declared before it runs and reads nothing on the validation side. |
+| Interval | As for the intensive-care task: paired bootstrap over units in the two strata of the outcome, 10,000 resamples, 95 %, the ten seeds pooled by the mean of their areas over the same resample. A step of the curve is the paired difference between two backbones' probes on the same draws and units. |
+| The slope | The curve rises when, at 50 stays in a shape, the paired interval of the closed-form probe under the mixture of about 10⁹ values less the probe under the mixture of about 10⁸ lies above zero and the difference exceeds the difference between the two pretraining seeds at 10⁸; it is flat when the interval lies within the floor at 50 stays on either side of zero; otherwise it is not settled. The difference between seeds read in today's shape bounds both shapes. |
+| Regimes | Adaptation without labels (the target corpus's tuning side in the mixture) and zero-shot (the mixture without the target corpus) are read separately at every point and never pooled. |
+| The largest point | Run when, at 20 or 50 stays in either shape, the closed-form probe under the mixture of about 10⁹ values has its paired interval above zero against the network from nothing, or against the probe under the mixture of about 10⁸ values; or when a variant of the pretext has replaced the current one by the replacement rule on the tuning side. Not run when neither holds. Eight comparisons enter this rule uncorrected: it is a liberal rule for spending compute, not a test, since running the point needlessly costs time and not running it could miss a curve that rises. A fourth order of magnitude is not run under any outcome. |
+| After the stage | The transfer matrix is computed once, on the backbones of the largest point run, under the recipe. |
+| What the curve does not separate | Data and diversity grow together: each larger mixture adds domains as well as values. The epoch kept is chosen by the pretext's loss, which has not ordered backbones on these tasks, because the point at 10⁸ was chosen so. How a zero-shot backbone treats the channels of the corpus it left out is decided, and recorded in an ADR, before the first zero-shot reading. |
+
+**Predictions, declared before the first point is read.**
+
+1. At point zero the closed-form probe's interval against the network from nothing at 50 stays
+   holds zero or lies below it.
+2. Under the mixture of about 10⁸ values the closed-form probe's interval against the network
+   from nothing holds zero at 20, 50 and 200 stays.
+3. At about 3·10⁸ values the probe's gain at 50 stays lies within 0.01 of its gain at 10⁸, and
+   the two seeds at 10⁸ differ by less than 0.01.
+4. At about 10⁹ values in today's shape the gain at 50 stays lies between +0.01 and +0.03 in
+   area; the endpoint is not confirmed.
+5. At about 10⁹ values the larger shape gains at most 0.01 over today's at 50 stays; at 10⁸ it
+   gains nothing over it.
+6. At about 3·10⁹ values, if run, the gain at 50 stays lies between +0.02 and +0.04: the curve
+   rises, and rises slowly.
+7. On FD001 at 50 windows no point shows a gain whose interval excludes zero.
+8. At 200 stays the interval holds zero at every point of the curve, which are all mixtures; a
+   backbone over the stays alone is not a point of it.
+9. At every point the zero-shot regime gains no more than adaptation without labels.
+
 ## The test set
 
 The official test engines are frozen when the task is created and are used **once**, at the end,
@@ -359,6 +410,7 @@ them.
   mixed backbone: full fine-tuning 0.024 in area above the arm from nothing at 200 stays, below
   the floor of 0.040 and the least gain of 0.045
   (`docs/verification/intensive-care-curve.md`, `docs/findings.md`).
+- The scale of pretraining: registered, no point read.
 - The single test run: not made.
 
 ## Register of amendments
@@ -422,3 +474,4 @@ title" resolves to a row here and to the commit the row names, where the full te
 | 2026-09-29 | `933425f` | configuration | after every selection, before either grid runs; nothing on the validation side | *the intensive-care grids.* `campaigns/curve-physionet2012-mixed5.toml` and `campaigns/curve-physionet2012-stays.toml`: every candidate at its selection's choice per budget, seeds 1 to 5, the thresholds above; the campaign under the stays alone holds the backbone's four ways and the control. |
 | 2026-10-03 | `e8aad4e` | criterion | after the diagnosis of the network from nothing on the intensive-care task, read on a fifth of the tuning side; nothing on the validation side; no registered verdict changes | *the stop, at the budget of every labelled unit.* Every arm of the backbone keeps the weights of its best epoch on a fifth of its labels held out by unit, patience ten, the schedule's epochs as a cap; smaller budgets and the patch model unchanged. `intensive-care-curve.md`, 2026-10-03; ADR-0047. |
 | 2026-10-03 | `3eec184a` | configuration | after the mixture without SMD was read on a fifth of the tuning side (`intensive-care-curve.md`, 2026-10-02); nothing on the validation side; no registered verdict changes | *the stays republished continuing the turbofan vocabulary read per operating condition, and the task defined over them.* SKAB, the satellite telemetry and the stays are published again continuing `durable/sha256/d63f8e1b…` (channels 127–134, 135–151 and 152–195), the same data and the same held-out units; the stays' window is 48 hours and a minute, as the protocol states, so the 928 readings stamped 48:00 enter it. The task over that publication is `a6a9c653-…`; the backbones of the mixture of four and its leave-one-corpus-out variants are pretrained on it and read under it, the earlier backbones under the earlier publication and task. `manual-handoff.md`, 2026-10-03. |
+| 2026-10-04 | — | configuration, criterion | before any run of the stage; the probe and the network from nothing at 50 and 200 stays already read on the validation side under the mixture of five and the stays alone (grids of 2026-09-30), and the seeds' spread at those budgets on a fixed fifth (`verdict-statistics.md`, 2026-09-29); nothing read under the recipe, the new publication or any backbone of the curve | *the scale of pretraining: a narrowed claim, a curve of the probe's gain over the mixture's data, and when its largest point runs.* A new section; the claim above unchanged. The least gain and floor at 20, 50 and 200 stays follow by the registered reading, under the recipe, before the first validation reading. ADR-0049. |
