@@ -6,8 +6,11 @@ from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCor
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
+from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
+from emblema.catalog.adapters.readers.tep import TennesseeEastmanCorpusReader
+from emblema.catalog.adapters.readers.utsd import UtsdCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
@@ -57,6 +60,7 @@ class CompositionRoot:
         workspace: Path,
         subsets: tuple[str, ...] = (),
         per_condition: bool = False,
+        excluded_units: tuple[str, ...] = (),
         corpora: CorpusRepository | None = None,
         reader: CorpusReader | None = None,
         store: ArtifactStore | None = None,
@@ -76,6 +80,8 @@ class CompositionRoot:
             subsets: Subsets of the corpus to read; all of them where empty.
             per_condition: Whether the named corpus is read with a channel per sensor and
                 operating condition, which only a corpus flown at several conditions offers.
+            excluded_units: Units cut from the named corpus by name, a downstream task's frozen
+                side, which only a corpus whose publisher drew no test set offers.
             corpora: Repository of corpora; the configured metadata database unless given.
             reader: Reader of the raw corpus; the adapter of the named corpus unless given.
                 One of the two has to be stated.
@@ -87,7 +93,7 @@ class CompositionRoot:
         Raises:
             ValueError: If the store or the repository is left to the root without settings to
                 build it from, or the reader is left to it without a corpus it has an adapter for,
-                or with a reading per condition its corpus does not offer.
+                or with a reading per condition or an exclusion its corpus does not offer.
         """
         chosen_store = configured_store(settings_for(settings, "store")) if store is None else store
         self.adapters = Adapters(
@@ -97,7 +103,7 @@ class CompositionRoot:
                 else corpora
             ),
             reader=(
-                self._corpus_reader(corpus, corpus_root, subsets, per_condition)
+                self._corpus_reader(corpus, corpus_root, subsets, per_condition, excluded_units)
                 if reader is None
                 else reader
             ),
@@ -119,6 +125,7 @@ class CompositionRoot:
         workspace: Path,
         subsets: tuple[str, ...] = (),
         per_condition: bool = False,
+        excluded_units: tuple[str, ...] = (),
         reader: CorpusReader | None = None,
         clock: Clock | None = None,
         ids: IdGenerator | None = None,
@@ -135,6 +142,7 @@ class CompositionRoot:
             workspace=workspace,
             subsets=subsets,
             per_condition=per_condition,
+            excluded_units=excluded_units,
             corpora=corpora,
             reader=reader,
             store=store,
@@ -172,7 +180,11 @@ class CompositionRoot:
 
     @staticmethod
     def _corpus_reader(
-        corpus: str | None, root: Path, subsets: tuple[str, ...], per_condition: bool = False
+        corpus: str | None,
+        root: Path,
+        subsets: tuple[str, ...],
+        per_condition: bool = False,
+        excluded_units: tuple[str, ...] = (),
     ) -> CorpusReader:
         """Which adapter reads which corpus, and what it takes from the process to do it.
 
@@ -182,12 +194,21 @@ class CompositionRoot:
         adapters' business, and a caller that had to know would be choosing the adapter itself.
 
         Raises:
-            ValueError: If no corpus was named, none of that name has an adapter, or a reading
-                per condition was asked of a corpus that was not flown at several.
+            ValueError: If no corpus was named, none of that name has an adapter, or the corpus
+                was asked for what it does not offer: a reading per condition, an exclusion, a
+                selection of subsets.
         """
         if per_condition and corpus != "cmapss":
             raise ValueError(
                 f"only the cmapss corpus is read per operating condition, not {corpus!r}"
+            )
+        if excluded_units and corpus != "physionet2019":
+            raise ValueError(
+                f"only the physionet2019 corpus has units to exclude by name, not {corpus!r}"
+            )
+        if subsets and corpus is not None and corpus.startswith(UtsdCorpusReader.CORPUS_PREFIX):
+            raise ValueError(
+                f"a dataset of the collection has no subsets to select, got {subsets!r}"
             )
         match corpus:
             case None:
@@ -204,6 +225,16 @@ class CompositionRoot:
                 return EsaAdCorpusReader(root, subsets or EsaAdCorpusReader.SUBSETS)
             case "physionet2012":
                 return Physionet2012CorpusReader(root, subsets or Physionet2012CorpusReader.SUBSETS)
+            case "physionet2019":
+                return Physionet2019CorpusReader(
+                    root, subsets or Physionet2019CorpusReader.SUBSETS, excluded=excluded_units
+                )
+            case "tep":
+                return TennesseeEastmanCorpusReader(
+                    root, subsets or TennesseeEastmanCorpusReader.SUBSETS
+                )
+            case dataset if dataset.startswith(UtsdCorpusReader.CORPUS_PREFIX):
+                return UtsdCorpusReader(root, UtsdCorpusReader.dataset_named(dataset))
             case generated if generated in LAYOUTS:
                 return SyntheticCorpusReader(CONTROL_PROCESS, LAYOUTS[generated])
             case _:

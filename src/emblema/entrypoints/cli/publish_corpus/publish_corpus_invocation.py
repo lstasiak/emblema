@@ -14,6 +14,8 @@ class PublishCorpusInvocation:
         workspace: Directory blocks pass through on their way to the store.
         subsets: Subsets of the corpus to read.
         per_condition: Whether each sensor is read as a channel per operating condition.
+        excluded_units: Units cut from the corpus, by the names the corpus gives their files; a
+            downstream task's frozen side.
     """
 
     command: PublishCorpusCommand
@@ -21,3 +23,4 @@ class PublishCorpusInvocation:
     workspace: Path
     subsets: tuple[str, ...]
     per_condition: bool = False
+    excluded_units: tuple[str, ...] = ()

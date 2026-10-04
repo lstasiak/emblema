@@ -26,8 +26,11 @@ from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReade
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
+from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
+from emblema.catalog.adapters.readers.tep import TennesseeEastmanCorpusReader
+from emblema.catalog.adapters.readers.utsd import UtsdCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.domain.exceptions import UnknownUnitError
 from emblema.catalog.domain.identifiers import UnitKey
@@ -204,6 +207,88 @@ def physionet2012(tmp_path: Path) -> Harness:
     return Harness(Physionet2012CorpusReader(root, subsets=subsets), change_one_value)
 
 
+def physionet2019(tmp_path: Path) -> Harness:
+    root = tmp_path / "physionet2019"
+    shutil.copytree(sample("physionet2019"), root)
+    subsets = ("training_setA", "training_setB")
+    long_stay = root / "training_setA" / "p000001.psv"
+    # Blank lines the released files do not have: a line that carries nothing must not end a
+    # stay early, and only counting what comes out shows that it does not.
+    long_stay.write_bytes(long_stay.read_bytes().replace(b"\n", b"\n\n"))
+    late_start = root / "training_setA" / "p000022.psv"
+    # The released files end their lines with a line feed alone; a file written on Windows would
+    # not, and the carriage return belongs to the ending rather than to the label.
+    late_start.write_bytes(late_start.read_bytes().replace(b"\n", b"\r\n"))
+    # A stay of one hour that measures nothing, which the format allows and the sample lacks; and
+    # the septic stay cut out by name, as a task's frozen side is.
+    header = long_stay.read_bytes().split(b"\n")[0]
+    (root / "training_setB" / "p100007.psv").write_bytes(
+        header
+        + b"\n"
+        + b"|".join([b"NaN"] * 34 + [b"61", b"1", b"NaN", b"NaN", b"-1", b"3", b"0"])
+        + b"\n"
+    )
+    excluded = ("p000015",)
+
+    def change_one_value() -> CorpusReader:
+        long_stay.write_bytes(long_stay.read_bytes().replace(b"|97|", b"|98|", 1))
+        return Physionet2019CorpusReader(root, subsets=subsets, excluded=excluded)
+
+    return Harness(
+        Physionet2019CorpusReader(root, subsets=subsets, excluded=excluded), change_one_value
+    )
+
+
+def tep(tmp_path: Path) -> Harness:
+    rdata = pytest.importorskip("rdata")
+    root = tmp_path / "tep"
+    shutil.copytree(sample("tep"), root)
+    subsets = TennesseeEastmanCorpusReader.SUBSETS
+    path = root / f"{subsets[0]}.RData"
+
+    def rewrite(edit: Callable[[Any], Any]) -> None:
+        ((name, frame),) = rdata.read_rda(path).items()
+        rdata.write_rda(path, {name: edit(frame)})
+
+    # A run of a single sample, which the format allows and the sample lacks.
+    rewrite(lambda frame: frame[(frame["simulationRun"] != 2) | (frame["sample"] == 1)])
+
+    def change_one_value() -> CorpusReader:
+        def nudge(frame: Any) -> Any:
+            frame.loc[frame.index[0], "xmeas_1"] += 1
+            return frame
+
+        rewrite(nudge)
+        return TennesseeEastmanCorpusReader(root, subsets=subsets)
+
+    return Harness(TennesseeEastmanCorpusReader(root, subsets=subsets), change_one_value)
+
+
+def utsd(tmp_path: Path) -> Harness:
+    pa = pytest.importorskip("pyarrow")
+    ipc = pytest.importorskip("pyarrow.ipc")
+    root = tmp_path / "utsd"
+    shutil.copytree(sample("utsd") / "UTSD-12G", root)
+    dataset = UtsdCorpusReader.dataset_named("utsd/Health_SelfRegulationSCP1")
+    shard = root / "data-00000-of-00002.arrow"
+
+    def rewrite(edit: Callable[[Any], Any]) -> None:
+        table = edit(ipc.open_stream(pa.memory_map(str(shard))).read_all())
+        with pa.OSFile(str(shard), "wb") as sink, ipc.new_stream(sink, table.schema) as writer:
+            writer.write_table(table)
+
+    def change_one_value() -> CorpusReader:
+        def nudge(table: Any) -> Any:
+            rows = table.to_pylist()
+            rows[0]["target"][0] += 1.0
+            return pa.Table.from_pylist(rows, schema=table.schema)
+
+        rewrite(nudge)
+        return UtsdCorpusReader(root, dataset)
+
+    return Harness(UtsdCorpusReader(root, dataset), change_one_value)
+
+
 def synthetic(tmp_path: Path) -> Harness:
     def change_the_specification() -> CorpusReader:
         noisier = HOSTILE.with_dials(noise=HOSTILE.noise * 2)
@@ -220,6 +305,9 @@ ADAPTERS: dict[str, Callable[[Path], Harness]] = {
     "smd": smd,
     "esa_ad": esa_ad,
     "physionet2012": physionet2012,
+    "physionet2019": physionet2019,
+    "tep": tep,
+    "utsd": utsd,
     "synthetic": synthetic,
 }
 

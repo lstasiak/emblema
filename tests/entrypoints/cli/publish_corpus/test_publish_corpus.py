@@ -14,6 +14,7 @@ from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReade
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.exceptions import InvalidUnitSplitError
@@ -30,7 +31,7 @@ from emblema.shared.adapters.storage.s3 import S3ArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from tests.catalog.domain.support import SCHEMA, description, measured_units
-from tests.support.corpora import SAMPLE
+from tests.support.corpora import SAMPLE, sample
 from tests.support.settings import unreachable_store
 
 DATA = b"records"
@@ -333,3 +334,82 @@ def test_a_command_line_that_says_nothing_of_the_split_draws_the_usual_share() -
     assert PublishCorpusCli().parse(ARGUMENTS).command.split == SeededSplit(
         VALIDATION_FRACTION, SEED
     )
+
+
+def test_the_units_excluded_by_name_reach_the_reader_of_the_corpus_named(tmp_path: Path) -> None:
+    root = CompositionRoot.over(
+        corpora=InMemoryCorpusRepository(),
+        store=InMemoryArtifactStore(),
+        corpus="physionet2019",
+        corpus_root=sample("physionet2019"),
+        workspace=tmp_path / "workspace",
+        excluded_units=("p000015",),
+    )
+
+    assert isinstance(root.adapters.reader, Physionet2019CorpusReader)
+    assert [unit.key.name for unit in root.adapters.reader.read_units()] == [
+        "p000001",
+        "p000022",
+        "p100006",
+    ]
+
+
+def test_excluding_units_of_a_corpus_whose_publisher_drew_the_test_set_is_refused(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="only the physionet2019 corpus has units to exclude"):
+        CompositionRoot.over(
+            corpora=InMemoryCorpusRepository(),
+            store=InMemoryArtifactStore(),
+            corpus="physionet2012",
+            corpus_root=tmp_path / "raw",
+            workspace=tmp_path / "workspace",
+            excluded_units=("132539",),
+        )
+
+
+def test_the_command_line_reads_the_excluded_units_from_the_file_named(tmp_path: Path) -> None:
+    listed = tmp_path / "frozen.txt"
+    listed.write_text("p000015\n\n  p000022 \n", encoding="utf-8")
+
+    invocation = PublishCorpusCli().parse(
+        ["--corpus", "physionet2019", "--exclude-units", str(listed), *ARGUMENTS[2:]]
+    )
+
+    assert invocation.excluded_units == ("p000015", "p000022")
+    assert PublishCorpusCli().parse(ARGUMENTS).excluded_units == ()
+
+
+def test_a_file_of_excluded_units_that_does_not_exist_is_refused_by_the_command_line(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(SystemExit):
+        PublishCorpusCli().parse(
+            ["--exclude-units", str(tmp_path / "nowhere.txt"), *ARGUMENTS],
+        )
+
+
+def test_selecting_subsets_of_a_dataset_of_the_collection_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="no subsets to select"):
+        CompositionRoot.over(
+            corpora=InMemoryCorpusRepository(),
+            store=InMemoryArtifactStore(),
+            corpus="utsd/Health_SelfRegulationSCP1",
+            corpus_root=tmp_path / "raw",
+            workspace=tmp_path / "workspace",
+            subsets=("UTSD-4G",),
+        )
+
+
+@pytest.mark.parametrize(
+    ("corpus", "directory"),
+    [
+        ("cmapss", "cmapss"),
+        ("physionet2019", "physionet2019/training"),
+        ("utsd/Health_SelfRegulationSCP1", "utsd/UTSD-12G"),
+    ],
+)
+def test_a_corpus_is_looked_for_where_the_fetch_script_lays_it(corpus: str, directory: str) -> None:
+    invocation = PublishCorpusCli().parse(["--corpus", corpus, *ARGUMENTS[4:]])
+
+    assert invocation.corpus_root == Path("data/raw") / directory
