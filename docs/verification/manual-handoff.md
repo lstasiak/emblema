@@ -561,6 +561,64 @@ What the runs say:
   (2026-10-03), so the pretext loss again says nothing about the task until it is read there.
 - One run per backbone; the spread of a pretraining run is still unmeasured.
 
+### 2026-10-04 — Kaggle, Tesla T4 x2, fp16, against Cloudflare R2: the mixture of four at a second seed and in the shape of 512 by 8
+
+The first point of the curve over the scale of pretraining (`docs/preregistration.md`, "The
+scale of pretraining") needs the mixture of four pretrained at a second seed, whose difference a
+step of the curve must exceed, and in the larger shape, so that shape has a slope too. Ordered
+here from `f00c82cf`, fulfilled on Kaggle in one session of two T4s, and accepted here.
+
+|  |  |
+| --- | --- |
+| Experiments | `experiments/backbone-mixed4-m-seed2.toml` (seed 2, nothing else changed), `experiments/backbone-mixed4-512x8-m.toml` (width 512, 8 heads, 8 blocks, feed-forward 2,048; micro-batch 8, four to a step, the same 32 windows a step) |
+| Parameters | 4,796,416 and 25,334,784 over 195 channels |
+| Budget | as the mixture of four: 8 epochs, peak 1e-3, a quarter of an epoch of warm-up, cosine to 1 %, Huber at one deviation; the kept epoch is the best by the mean relative validation |
+| Cost | 945 s an epoch (2.1 h) and 2,360 s an epoch (5.2 h), on one T4 each; the larger shape took 2.5 times today's, under the 4.7 its arithmetic per token gives |
+
+Validation loss as a share of the trivial predictor's, at the kept epoch. Every number is
+validation, not test.
+
+| Experiment | Backbone | Weights | Epoch | cmapss | skab | esa_ad | physionet2012 | Mean | Training loss |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-mixed4-m` (seed 1, above) | `2aaca0ba-…` | `sha256:0d81c01e…` | 8 | 0.311 | 0.273 | 0.272 | 0.490 | 0.3366 | 0.05521 |
+| `backbone-mixed4-m-seed2` | `3d0c4468-…` | `sha256:94f00d72…` | 8 | 0.313 | 0.269 | 0.271 | 0.503 | 0.3392 | 0.05576 |
+| `backbone-mixed4-512x8-m` | `1def13c0-…` | `sha256:d047a2d0…` | 7 | 0.322 | 0.284 | 0.303 | 0.557 | 0.3664 | 0.06518 |
+
+Epoch by epoch: `scripts/pretraining_curve_report.py --report-only data/report/pretraining/l1-seed2`
+and `…/l1-wide`.
+
+What the runs say:
+
+- **A second seed moves the pretext by 0.003 on the mean**, 0.013 on the stays and at most
+  0.004 elsewhere. The spread a step of the curve has to exceed is read on the task, not here.
+- **The larger shape learns the pretext worse than today's**: 0.3664 against 0.3366, every corpus
+  higher, and a higher training loss as well (0.063 against 0.055 at the eighth epoch), with
+  the validation rising between epochs 2 and 3 and again at 8. More parameters over the same
+  data should fit the training side at least as well; that this one does not points at its
+  optimisation, the rate first, rather than at its capacity.
+- A correction to the section above: leaving a corpus out moved the stays by up to 0.015 (0.490
+  to 0.505), not 0.01; the reading does not change.
+
+### 2026-10-04 — declared before the run: the larger shape at half the rate
+
+**Question.** Does the larger shape's poorer pretext come from a rate of 1e-3 being too high for
+its width? `experiments/backbone-mixed4-512x8-m-5e-4.toml` is the same run at 5e-4, the rate
+that halving with each doubling of width gives, and nothing else changed.
+
+**Predictions.**
+
+1. The training loss at the eighth epoch lies below 1e-3's 0.063, and at or below today's
+   shape's 0.055.
+2. The mean relative validation lies below 0.3664, and within 0.01 of today's shape's 0.3366 or
+   below it.
+3. The validation loss falls at every epoch after the second.
+
+**Reading, declared beforehand.** The pretext decides nothing about which rate the larger shape
+keeps: that is read on the task, by the closed-form probe at 50 stays under both runs, paired
+over the same stays and seeds, the run whose probe is higher by the paired interval kept for
+the curve, and 1e-3 kept where neither is. If the half rate wins on the task, the larger shape
+at about 10⁹ values runs at it.
+
 ### Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when
