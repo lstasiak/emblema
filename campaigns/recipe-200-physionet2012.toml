@@ -1,0 +1,63 @@
+# Which recipe the network from nothing and full fine-tuning read the curve over the scale of
+# pretraining under at 200 stays, and how far one seed moves the area there, on stays held
+# out of the tuning side; the validation side is not read.
+#
+# Each arm at its setting chosen at 200 stays (the network from nothing at three times the rate
+# in force, both pooled by the mean), alone and with two knobs, one at a time and together: the
+# head solved in closed form before the first step, and a stop that holds a fifth of the stays
+# out within each outcome and waits 500 steps past the warm-up. A run here is about 1,540 steps, the warm-up 154; 500 is the patience the
+# stop gained under at 1,000 stays, where ten epochs came to 500 steps. The probe solved in
+# closed form, under the backbone and over the encoder at its initialisation, reads the seeds'
+# spread the thresholds are set from.
+#
+# Every cell is scored on the fifth held out by seed 101 over seeds 1 to 10, so candidates pair
+# by stay and seed. A campaign divided this way chooses nothing; the reading is the pairs
+# declared in docs/verification/intensive-care-curve.md, 2026-10-04. Defined under the worker
+# settings of the registered grids, with the mixture of four, sha256:0d81c01e…, as the backbone.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "recipe-200-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.003",
+    "from_scratch@head_start=solved,learning_rate=0.003",
+    "from_scratch@learning_rate=0.003,patience_steps=500,stop_division=outcomes,stop_share=0.2",
+    "from_scratch@head_start=solved,learning_rate=0.003,patience_steps=500,stop_division=outcomes,stop_share=0.2",
+    "full_fine_tuning",
+    "full_fine_tuning@head_start=solved",
+    "full_fine_tuning@patience_steps=500,stop_division=outcomes,stop_share=0.2",
+    "full_fine_tuning@head_start=solved,patience_steps=500,stop_division=outcomes,stop_share=0.2",
+    "frozen_ridge",
+    "untrained_ridge",
+]
+control = "from_scratch@learning_rate=0.003"
+endpoint = "frozen_ridge"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+# Ten seeds: one seed moved the area by about 0.04 at 200 stays on this fifth, so the difference
+# of two candidates is read to about 0.013.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# Nine contenders at one budget, less the endpoint.
+secondary_family_size = 8
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

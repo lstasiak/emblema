@@ -1,0 +1,56 @@
+# Which recipe the network from nothing and full fine-tuning read the curve over the scale of
+# pretraining under at 20 stays, and how far one seed moves the area there, on stays held
+# out of the tuning side; the validation side is not read.
+#
+# Each arm at its setting chosen at 50 stays (the rate in force, pooled by the mean), alone and
+# with the head solved in closed form before the first step. No stop: twenty stays hold two or
+# three deaths, so a stop would score one of them and the head solved on the rest would see one.
+# The probe solved in closed form, under the backbone and over the encoder at its
+# initialisation, reads the seeds' spread the thresholds are set from.
+#
+# Every cell is scored on the fifth held out by seed 101 over seeds 1 to 10, so candidates pair
+# by stay and seed. A campaign divided this way chooses nothing; the reading is the pairs
+# declared in docs/verification/intensive-care-curve.md, 2026-10-04. Defined under the worker
+# settings of the registered grids, with the mixture of four, sha256:0d81c01e…, as the backbone.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "recipe-20-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch",
+    "from_scratch@head_start=solved",
+    "full_fine_tuning",
+    "full_fine_tuning@head_start=solved",
+    "frozen_ridge",
+    "untrained_ridge",
+]
+control = "from_scratch"
+endpoint = "frozen_ridge"
+
+[budgets]
+labels = ["20"]
+endpoint = "20"
+# Ten seeds, as at the other budgets; the spread at twenty stays has not been read.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.045
+absolute_floor = 0.01
+alpha = 0.05
+# Five contenders at one budget, less the endpoint.
+secondary_family_size = 4
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
