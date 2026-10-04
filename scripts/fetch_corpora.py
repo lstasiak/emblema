@@ -15,17 +15,19 @@ No mirrors: the source of record carries the licence and version; GitHub sources
 
 import argparse
 import hashlib
+import html.parser
 import json
 import struct
 import sys
 import tarfile
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 import zlib
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TypedDict
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data" / "raw"
@@ -50,13 +52,32 @@ class Archive:
 
     Attributes:
         url: Direct download URL at the source of record.
-        filename: Local name under ``data/raw/<corpus>/``.
-        md5: Publisher's checksum, when one is published; verified after download.
+        filename: Local name under ``data/raw/<corpus>/``; may sit in a subdirectory.
+        md5: Publisher's checksum, when one is published as MD5; verified after download.
+        sha256: Publisher's checksum, when one is published as SHA-256; verified after download.
     """
 
     url: str
     filename: str
     md5: str | None = None
+    sha256: str | None = None
+
+
+@dataclass(frozen=True)
+class Listing:
+    """A directory of files at the source of record, served as index pages rather than an archive.
+
+    Every file the index names is downloaded under ``directory``, and the index pages it names are
+    followed. The publisher states no checksum per file, so the listing is reported as one row:
+    its size is the files' sizes summed, its digest the digest of every file's name and digest.
+
+    Attributes:
+        url: Index page at the source of record, ending in a slash.
+        directory: Local directory under ``data/raw/<corpus>/`` the files land in.
+    """
+
+    url: str
+    directory: str
 
 
 @dataclass(frozen=True)
@@ -66,19 +87,41 @@ class Corpus:
     Attributes:
         key: Directory name under ``data/raw/`` and the command-line selector.
         title: Human-readable name with the publisher.
-        archives: Files to download, in order.
+        archives: Files or listings to download, in order.
     """
 
     key: str
     title: str
-    archives: tuple[Archive, ...]
+    archives: tuple[Archive | Listing, ...]
 
 
 # master of each repository on 2026-09-11; the archive URL below is immutable for a commit.
 SKAB_COMMIT = "b2c0d46c2971dcbfe71e26087b6d231998bb91c2"
 OMNIANOMALY_COMMIT = "7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4"
 PHYSIONET = "https://physionet.org/files/challenge-2012/1.0.0"
+PHYSIONET_2019 = "https://physionet.org/files/challenge-2019/1.0.0/training/"
 ZENODO_ESA_AD_V2 = "https://zenodo.org/api/records/15237121/files"
+DATAVERSE = "https://dataverse.harvard.edu/api/access/datafile"
+# The collection's repository on 2025-06-19; a file resolved at a revision is immutable.
+UTSD_REVISION = "7326ff5f4578da73d843fd675d760c6c6054017f"
+UTSD = f"https://huggingface.co/datasets/thuml/UTSD/resolve/{UTSD_REVISION}"
+# The shards of the volume read here with the digests the repository stores them under, in the
+# format of `sha256sum`; a dash stands for a file the repository keeps outside its object store.
+# The smaller volume waits for digests taken from downloaded files: the repository reports one
+# digest for two of its shards of different sizes, so its listing cannot be trusted as published.
+UTSD_SHARDS = Path(__file__).resolve().parent / "utsd_shards.sha256"
+
+
+def utsd_archives(listing: Path = UTSD_SHARDS) -> tuple[Archive, ...]:
+    """The collection's files, one archive per line of the pinned listing."""
+    archives = []
+    for line in listing.read_text(encoding="utf-8").splitlines():
+        digest, _, path = line.partition("  ")
+        archives.append(
+            Archive(url=f"{UTSD}/{path}", filename=path, sha256=None if digest == "-" else digest)
+        )
+    return tuple(archives)
+
 
 CORPORA: tuple[Corpus, ...] = (
     Corpus(
@@ -127,6 +170,33 @@ CORPORA: tuple[Corpus, ...] = (
         ),
     ),
     Corpus(
+        key="physionet2019",
+        title="PhysioNet/CinC Challenge 2019 (physionet.org)",
+        archives=(Listing(url=PHYSIONET_2019, directory="training"),),
+    ),
+    Corpus(
+        key="tep",
+        title="Tennessee Eastman process simulation data (Harvard Dataverse 10.7910/DVN/6C3JR1)",
+        # The training files alone: the testing files are the benchmark's evaluation data.
+        archives=(
+            Archive(
+                url=f"{DATAVERSE}/3031241",
+                filename="TEP_FaultFree_Training.RData",
+                md5="ec126484534331f85001d8c4ebce6d17",
+            ),
+            Archive(
+                url=f"{DATAVERSE}/3031242",
+                filename="TEP_Faulty_Training.RData",
+                md5="c5f594d54c47e620ff877feb58407fda",
+            ),
+        ),
+    ),
+    Corpus(
+        key="utsd",
+        title="UTSD, Unified Time Series Dataset, volume 12G (Hugging Face thuml/UTSD)",
+        archives=utsd_archives(),
+    ),
+    Corpus(
         key="esa_ad",
         title="ESA Anomaly Dataset v2 (Zenodo 10.5281/zenodo.15237121)",
         archives=(
@@ -159,7 +229,7 @@ class Fetched:
         filename: Local name under ``data/raw/<corpus>/``.
         size: Bytes on disk, 0 for an archive that never arrived.
         sha256: Digest of the file, empty for an archive that never arrived.
-        md5_status: Verdict against the publisher's checksum.
+        verdict: Verdict against the publisher's checksum.
         error: Why the archive is missing, when it is; None once it is on disk.
     """
 
@@ -167,16 +237,16 @@ class Fetched:
     filename: str
     size: int
     sha256: str
-    md5_status: str
+    verdict: str
     error: str | None = None
 
     @property
     def ok(self) -> bool:
-        return self.error is None and not self.md5_status.startswith("MISMATCH")
+        return self.error is None and not self.verdict.startswith("MISMATCH")
 
     @property
     def problem(self) -> str:
-        return self.error or self.md5_status
+        return self.error or self.verdict
 
 
 class Digests(TypedDict):
@@ -189,11 +259,13 @@ def note(message: str) -> None:
     sys.stderr.write(f"{message}\n")
 
 
-def download(url: str, target: Path) -> None:
+def download(url: str, target: Path, *, quiet: bool = False) -> None:
     """Download ``url`` to ``target``, resuming a partial file if one is left over."""
     if target.exists():
-        note(f"{target.name}: already downloaded")
+        if not quiet:
+            note(f"{target.name}: already downloaded")
         return
+    target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_suffix(target.suffix + ".part")
     offset = partial.stat().st_size if partial.exists() else 0
     request = urllib.request.Request(url, headers={"User-Agent": "emblema-fetch-corpora"})
@@ -285,6 +357,42 @@ def checksum_status(published: str | None, actual: str) -> str:
     return "ok" if actual == published else f"MISMATCH (got {actual})"
 
 
+class _IndexLinks(html.parser.HTMLParser):
+    """The targets of the anchors of an index page, as the page lists them."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "a":
+            for name, value in attrs:
+                if name == "href" and value:
+                    self.links.append(value)
+
+
+def listed(url: str) -> Iterator[str]:
+    """Every file an index page names, as a path relative to it, following the pages it names.
+
+    A link that leaves the directory — upwards, to a query, to another host — names no file of it.
+    """
+    request = urllib.request.Request(url, headers={"User-Agent": "emblema-fetch-corpora"})
+    with urllib.request.urlopen(request) as response:
+        page = b"".join(iter(lambda: response.read(CHUNK), b"")).decode("utf-8", errors="replace")
+    parser = _IndexLinks()
+    parser.feed(page)
+    for link in parser.links:
+        if link.startswith(("?", "#")) or "://" in link:
+            continue
+        parts = PurePosixPath(urllib.parse.unquote(link)).parts
+        if not parts or parts[0] in ("/", ".") or ".." in parts:
+            continue
+        if link.endswith("/"):
+            yield from (f"{link}{name}" for name in listed(urllib.parse.urljoin(url, link)))
+        else:
+            yield "/".join(parts)
+
+
 def unpack(archive: Path, into: Path) -> None:
     """Extract an archive once, then the zips inside a thin wrapper (NASA ships a zip in a zip).
 
@@ -371,13 +479,39 @@ def fetch(corpus: Corpus, *, recheck: bool = False) -> Iterator[Fetched]:
     directory = DATA_ROOT / corpus.key
     directory.mkdir(parents=True, exist_ok=True)
     for archive in corpus.archives:
+        name = archive.filename if isinstance(archive, Archive) else archive.directory
         try:
-            yield fetch_archive(corpus, archive, directory, recheck=recheck)
+            if isinstance(archive, Listing):
+                yield fetch_listing(corpus, archive, directory, recheck=recheck)
+            else:
+                yield fetch_archive(corpus, archive, directory, recheck=recheck)
         except Exception as error:
             # One archive is one file of one corpus. The rest of the run is still worth doing, and
             # the checksums of what did arrive are still worth reporting.
-            note(f"{archive.filename}: FAILED, {error}")
-            yield Fetched(corpus.key, archive.filename, 0, "", "not verified", f"{error}")
+            note(f"{name}: FAILED, {error}")
+            yield Fetched(corpus.key, name, 0, "", "not verified", f"{error}")
+
+
+def fetch_listing(corpus: Corpus, listing: Listing, directory: Path, *, recheck: bool) -> Fetched:
+    """Download every file of the listing; report the listing as one row.
+
+    The files of a listing are small and many, so each is hashed as it is checked rather than
+    remembered: the note of digests is kept for archives of gigabytes, and rewriting it once per
+    file would cost more than hashing a few kilobytes.
+    """
+    root = directory / listing.directory
+    paths = sorted(listed(listing.url))
+    present = sum(1 for path in paths if (root / path).exists())
+    note(f"{listing.directory}: {len(paths):,} files, {present:,} already downloaded")
+    size = 0
+    digest = hashlib.sha256()
+    for path in paths:
+        target = root / path
+        download(urllib.parse.urljoin(listing.url, path), target, quiet=True)
+        sha256, _ = digests(target)
+        size += target.stat().st_size
+        digest.update(f"{sha256}  {path}\n".encode())
+    return Fetched(corpus.key, listing.directory, size, digest.hexdigest(), "none published")
 
 
 def fetch_archive(corpus: Corpus, archive: Archive, directory: Path, *, recheck: bool) -> Fetched:
@@ -389,7 +523,9 @@ def fetch_archive(corpus: Corpus, archive: Archive, directory: Path, *, recheck:
         archive.filename,
         target.stat().st_size,
         sha256,
-        checksum_status(archive.md5, md5),
+        checksum_status(archive.md5, md5)
+        if archive.sha256 is None
+        else checksum_status(archive.sha256, sha256),
     )
     if not row.ok:
         forget(target)
@@ -401,11 +537,11 @@ def fetch_archive(corpus: Corpus, archive: Archive, directory: Path, *, recheck:
 
 def report(rows: Iterable[Fetched]) -> str:
     lines = [
-        "| Corpus | File | Bytes | SHA-256 | Publisher MD5 |",
+        "| Corpus | File | Bytes | SHA-256 | Publisher checksum |",
         "|---|---|---:|---|---|",
     ]
     lines.extend(
-        f"| {row.corpus} | {row.filename} | {row.size:,} | `{row.sha256}` | {row.md5_status} |"
+        f"| {row.corpus} | {row.filename} | {row.size:,} | `{row.sha256}` | {row.verdict} |"
         for row in rows
         if row.error is None
     )
@@ -442,7 +578,7 @@ def main() -> None:
         for corpus in CORPORA:
             print(f"{corpus.key:14} {corpus.title}")
             for archive in corpus.archives:
-                print(f"{'':14} {archive.url}")
+                print(f"{'':14} {archive.url}")  # a listing's one index page, a file's address
         return
     rows = [row for corpus in select(args.corpora) for row in fetch(corpus, recheck=args.recheck)]
     print(f"\nData root: {DATA_ROOT}\n")

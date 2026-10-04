@@ -25,7 +25,7 @@ experiment — and the shape of a note: its CSV, its tables, its figures.
 | --- | --- | --- | --- |
 | `smoke.sh` | tooling | run by the CI job `compose` | — |
 | `bootstrap-bucket.sh` | tooling | run by the compose service `bootstrap` | — |
-| `fetch_corpora.py` | tooling | archive checksums for a note | — |
+| `fetch_corpora.py`, `utsd_shards.sha256` | tooling | archive checksums for a note; the shard listing pins the collection's revision | — |
 | `corpus_facts.py` | measurement | counts pasted into `corpus_budget.toml` | — |
 | `corpus_budget_report.py`, `corpus_budget.toml` | measurement | budget tables per tier | — |
 | `budget_file.py` | shared | reads corpus facts from `corpus_budget.toml` for the other scripts | — |
