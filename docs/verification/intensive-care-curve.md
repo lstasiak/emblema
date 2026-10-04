@@ -2017,3 +2017,72 @@ against the arm's setting.
 - The spread of the network from nothing is read on the cells that also chose its setting.
 - One share and one patience of the stop; the probe phase is the closed form only.
 - Ten seeds read a difference to about 0.015; at 20 stays the draw holds two or three deaths.
+
+## 2026-10-04 — declared before the run: the first point of the curve over the scale of pretraining
+
+**Question.** At the curve's first point, the mixture of four of about 10⁸ values, how far does
+the probe solved in closed form stand from the network from nothing at 20, 50 and 200 stays and
+at 50 windows of FD001, how far apart do two pretrainings of the mixture put it, and does the
+larger shape, at either rate, move it? The claim, the points and the rules are in
+`docs/preregistration.md`, "The scale of pretraining"; the recipe and thresholds were registered
+on 2026-10-04.
+
+**Design.** Three campaign files, each defined under every backbone of the point, scored on the
+validation side over seeds 1 to 10, the same stays, engines and draws under every backbone.
+
+| Campaign file | Budgets | Candidates |
+|---|---|---|
+| `campaigns/yardstick-low-physionet2012.toml` | 20, 50 stays | network from nothing; `frozen_ridge`; trained probe; full fine-tuning; `untrained_ridge` |
+| `campaigns/yardstick-200-physionet2012.toml` | 200 stays | the same, the network from nothing at 0.003 |
+| `campaigns/yardstick-50-fd001.toml` | 50 windows | the same at the turbofan's settings, full fine-tuning starting its head solved |
+
+| Backbone | Weights | Shape |
+|---|---|---|
+| `backbone-mixed4-m` (seed 1) | `sha256:0d81c01e…` | 4.8M |
+| `backbone-mixed4-m-seed2` | `sha256:94f00d72…` | 4.8M |
+| `backbone-mixed4-512x8-m` (1e-3) | `sha256:d047a2d0…` | 25.3M |
+| `backbone-mixed4-512x8-m-5e-4` | when accepted (`manual-handoff.md`, 2026-10-04) | 25.3M |
+
+The network from nothing and `untrained_ridge` take each backbone's shape, so under the two
+4.8M backbones they run twice; the second run checks that a cell repeats on the accelerator and
+is not read otherwise.
+
+**Reading, declared beforehand.** By `scripts/campaign_pairs_report.py`, pairs over the scored
+units, pooled over the seeds.
+
+- *Under each backbone*, at every budget: `frozen_ridge`, the trained probe and full fine-tuning
+  against the network from nothing, read by the registered rules (the least gain 0.055, 0.060 and
+  0.050 in area, 10 % in RMSE on FD001; the floor; Holm over the campaign's family); and
+  `frozen_ridge` against `untrained_ridge`, pretraining's share over the probe's form.
+- *The seeds' difference*, the bound a step of the curve must exceed: `frozen_ridge` under seed 2
+  less under seed 1 at 50 stays, paired; its absolute mean is the difference the registered rule
+  of the slope names. Reported at 20 and 200 stays and on FD001 beside it.
+- *The shape*: `frozen_ridge` under the larger shape against today's at 50 stays, at the rate the
+  pretraining note's rule keeps for the larger shape (`manual-handoff.md`, 2026-10-04: the half
+  rate where its probe is higher by the paired interval, 1e-3 otherwise).
+- The first point of each shape's curve is the one read here; the curve itself is read when the
+  next point is.
+
+**Predictions** — those registered for the stage, made specific to this point:
+
+1. Under each 4.8M backbone the interval of `frozen_ridge` against the network from nothing holds
+   zero at 50 and 200 stays. At 20 stays it lies below zero, as on the tuning side (−0.033),
+   where the registered prediction has it hold zero; the registered one is the one judged.
+2. `untrained_ridge` lies below the network from nothing at 50 stays by the interval, and below
+   `frozen_ridge` by 0.02 to 0.05.
+3. The two seeds' `frozen_ridge` differ by less than 0.01 at 50 stays.
+4. The larger shape's `frozen_ridge` gains no more than 0.01 over today's at 50 stays, at either
+   rate.
+5. On FD001 `frozen_ridge` lies above the network from nothing in RMSE under every backbone, and
+   above `untrained_ridge`, as on the tuning side (23.9 against 18.8).
+6. Full fine-tuning gains over the network from nothing at 200 stays by the interval, 0.03 to
+   0.05, as on the tuning side (+0.046), and is read as secondary.
+
+**Limitations.**
+
+- One point of the curve: no slope is read here.
+- The validation side has been read before under the mixture of five and the stays alone at 50
+  and 200 stays (grids of 2026-09-30); the backbones and publication are new, the stays are not.
+- 20 stays hold two or three deaths in a draw; their cells are read descriptively.
+- One pretraining run per backbone beyond the pair of seeds; the larger shape's seed spread is
+  assumed to be today's shape's.
