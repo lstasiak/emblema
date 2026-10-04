@@ -7,6 +7,7 @@ from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
 from emblema.pretraining.adapters.experiments.experiment_file import ExperimentFile
 from emblema.pretraining.domain.exceptions import (
+    InvalidCorpusPassesError,
     InvalidMaskingStrategyError,
     InvalidObjectiveLossError,
     InvalidTrainingBudgetError,
@@ -154,3 +155,26 @@ def test_a_knee_the_stated_reading_does_not_read_is_refused(tmp_path: Path) -> N
 
     with pytest.raises(InvalidObjectiveLossError, match="no knee"):
         ExperimentFile.load(written(text, tmp_path)).configuration()
+
+
+def test_a_file_states_how_many_times_an_epoch_reads_a_corpus(tmp_path: Path) -> None:
+    weighted = STATED.replace('corpora = ["control-a"]', 'corpora = ["control-a", "control-b"]')
+    weighted += "\n[passes]\ncontrol-b = 4\n"
+
+    stated = ExperimentFile.load(written(weighted, tmp_path)).configuration()
+
+    assert stated.passes_of("control-b") == 4
+    assert stated.passes_of("control-a") == 1
+    assert ExperimentFile.load(written(STATED, tmp_path)).configuration().passes == ()
+
+
+def test_passes_for_a_corpus_the_run_does_not_read_are_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="does not read"):
+        ExperimentFile.load(written(STATED + "\n[passes]\ncontrol-b = 4\n", tmp_path))
+
+
+def test_a_corpus_stated_to_be_read_once_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(InvalidCorpusPassesError):
+        ExperimentFile.load(
+            written(STATED + "\n[passes]\ncontrol-a = 1\n", tmp_path)
+        ).configuration()

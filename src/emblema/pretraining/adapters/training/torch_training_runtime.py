@@ -119,7 +119,8 @@ class TorchTrainingRuntime:
     Each corpus of the mixture is batched on its own and the batches are interleaved in the order
     the seed gives, in turns of as many batches as a step accumulates, so a batch pads to its own
     corpus's windows, a step is taken over one corpus, and the run weighs a corpus by its share
-    of the steps. Every epoch scores each corpus's held-out side apart; an epoch whose mean
+    of the steps — grown by whole passes where the configuration reads it more than once an
+    epoch. Every epoch scores each corpus's held-out side apart; an epoch whose mean
     relative loss over the corpora is the lowest so far writes its weights durably, and the
     backbone the run ends with is that epoch's, whatever the last epoch did.
 
@@ -212,15 +213,20 @@ class TorchTrainingRuntime:
             dropout=configuration.dropout,
         ).to(self._device)
         loss = ReconstructionLoss(configuration.loss)
+        # A corpus read more than once an epoch is that many loaders over its windows, each turn
+        # in its own order, so its share of the steps grows by whole passes and the interleaving
+        # treats a pass as it treats a corpus.
         training = InterleavedLoader(
             [
                 WindowLoader(
                     corpus.training,
                     batch_size=budget.batch_size,
                     seed=budget.seed,
+                    turn=turn,
                     num_workers=self._num_workers,
                 )
                 for corpus in mixture.corpora
+                for turn in range(configuration.passes_of(corpus.name))
             ],
             seed=budget.seed,
             group=budget.accumulation_steps,

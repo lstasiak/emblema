@@ -508,6 +508,59 @@ What the runs say:
   the twelfth, not the last. What the two backbones do on the intensive-care task is in
   `intensive-care-curve.md` (2026-10-02): B's fine-tuning loses 0.057 to A's.
 
+### 2026-10-04 — Kaggle, Tesla T4 x2, fp16, against Cloudflare R2: the mixture of four and its leave-one-corpus-out variants
+
+Seven backbones for the transfer matrix, on a vocabulary chained anew from C-MAPSS read per
+operating condition (`durable/sha256/d63f8e1b…`): SKAB (`3e9c8450…`, channels 127–134), the
+satellite telemetry (`77350303…`, 135–151) and the intensive-care stays (`717bc832…`, 152–195,
+one window of 48 hours and a minute per stay). SMD is left out, since it taught the task nothing
+(2026-10-02). Ordered here from `a3633a54`, fulfilled on Kaggle in one session of two T4s, and
+accepted here the next morning.
+
+|  |  |
+| --- | --- |
+| Experiments | `experiments/backbone-mixed4-m.toml` (the four corpora), `backbone-mixed4-without-{cmapss,skab,esa_ad,physionet2012}-m.toml` (the same publications with one left out), `backbone-mixed4-stays-x4-m.toml` (the stays read four times an epoch, `[passes]`), `backbone-stays-small-m.toml` (64 wide, 16 heads, 2 blocks, feed-forward 128, the stays alone) |
+| Code | `a3633a54`; new since the mixture's run: a corpus read more than once an epoch, each pass in its own order |
+| Parameters | 4,796,416 over 195 channels; 4,785,152 without the stays (151 channels); 81,408 for the small shape |
+| Budget | 8 epochs, micro-batch 16, two to a step, peak 1e-3, a quarter of an epoch of warm-up, cosine to 1 %, Huber at one deviation, seed 1; the kept epoch is the best by the mean relative validation |
+| Platform | Kaggle, two T4s, three or four runs in sequence on each |
+| Cost | 0.33 s a step throughout: the mixture 881 s an epoch (2.0 h), the stays read four times 962 s (2.1 h), without C-MAPSS 726 s (1.6 h), without SKAB 861 s (1.9 h), without the satellite corpus 222 s (0.5 h), without the stays 899 s (2.0 h), the small shape 71 s (10 min); `accept` 5–8 s a run |
+
+Validation loss as a share of the trivial predictor's, at the kept epoch (the eighth in every run).
+Every number is validation, not test.
+
+| Experiment | Backbone | Weights | cmapss | skab | esa_ad | physionet2012 | Mean | Training loss |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-mixed4-m` | `2aaca0ba-…` | `durable/sha256/0d81c01e…` | 0.311 | 0.273 | 0.272 | 0.490 | 0.3366 | 0.05521 |
+| `backbone-mixed4-stays-x4-m` | `78c27106-…` | `durable/sha256/8b202cf2…` | 0.311 | 0.276 | 0.255 | **0.455** | 0.3241 | 0.06056 |
+| `backbone-mixed4-without-cmapss-m` | `6f2aaf27-…` | `durable/sha256/274c719f…` | — | 0.277 | 0.270 | 0.505 | 0.3508 | 0.04881 |
+| `backbone-mixed4-without-skab-m` | `066ed3d8-…` | `durable/sha256/bf13ecd5…` | 0.310 | — | 0.279 | 0.498 | 0.3620 | 0.05380 |
+| `backbone-mixed4-without-esa_ad-m` | `6fb484fd-…` | `durable/sha256/12691b5c…` | 0.302 | 0.265 | — | 0.489 | 0.3521 | 0.08588 |
+| `backbone-mixed4-without-physionet2012-m` | `bda16abf-…` | `durable/sha256/f7e1e088…` | 0.311 | 0.274 | 0.277 | — | 0.2874 | 0.05432 |
+| `backbone-stays-small-m` | `46a20b5a-…` | `durable/sha256/221c5206…` | — | — | — | 0.638 | 0.6377 | 0.22397 |
+| `backbone-mixed5-nosmd-m` (2026-10-02, the earlier chain), for comparison | `1c1c57c6-…` | `durable/sha256/994d1642…` | 0.006 | 0.266 | 0.294 | 0.489 | 0.2639 | 0.03550 |
+
+Epoch by epoch: `scripts/pretraining_curve_report.py --report-only data/report/pretraining/<backbone>`.
+
+What the runs say:
+
+- **Read per operating condition, C-MAPSS is no longer a solved pretext.** 0.311 of the trivial
+  predictor's loss against 0.006 under the global reading, and 0.322 for the backbone over
+  C-MAPSS alone read per condition (2026-09-22). The mean over the corpora is therefore not
+  comparable with the earlier mixtures'; the other three corpora end where they ended.
+- **Four passes over the stays buy them 0.035**: 0.455 against 0.490, between eight passes alone
+  (0.489) and the thirty-two the stays-alone backbone of the task had (0.415). The satellite
+  corpus also ends lower (0.255 against 0.272), under 12 % more steps and a longer decay. What
+  this does on the task is for the matrix.
+- **Leaving one corpus out moves the others by at most 0.01**: C-MAPSS 0.302–0.311, SKAB
+  0.265–0.277, the satellite corpus 0.270–0.279, the stays 0.489–0.505 across the five mixtures.
+  On the pretext the corpora learn beside one another rather than from one another; whether a
+  backbone that never saw a corpus still helps its task is the matrix's question, not this one.
+- **The small shape learns a third less of the pretext**: 0.638 on the stays against 0.490 for the
+  large shape in the mixture; on the task the same shape from nothing was the better network
+  (2026-10-03), so the pretext loss again says nothing about the task until it is read there.
+- One run per backbone; the spread of a pretraining run is still unmeasured.
+
 ### Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when

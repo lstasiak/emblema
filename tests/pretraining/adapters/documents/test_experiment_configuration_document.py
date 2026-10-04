@@ -5,6 +5,7 @@ import pytest
 from emblema.pretraining.adapters.documents.experiment_configuration_document import (
     ExperimentConfigurationDocument,
 )
+from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from tests.support.experiments import budget, configuration
@@ -53,6 +54,8 @@ def test_the_document_is_plain_json_with_the_shape_stated_outright() -> None:
         ({"objective": {"kind": "mae", "huber_delta": 0.0}}, "mae"),
         ({"objective": {"kind": "mse", "huber_delta": 1.0}}, "no knee"),
         ({"architecture": None}, "architecture"),
+        ({"passes": {"control-a": 1}}, "at least 2"),
+        ({"passes": {"control-a": "4"}}, "control-a"),
     ],
 )
 def test_a_document_that_states_no_configuration_is_refused(
@@ -62,3 +65,21 @@ def test_a_document_that_states_no_configuration_is_refused(
 
     with pytest.raises(ValueError, match=message):
         CODEC.decode(document)
+
+
+def test_the_passes_of_a_corpus_travel_by_its_name() -> None:
+    weighted = configuration(
+        passes=(CorpusPasses(corpus="stays", passes=4), CorpusPasses(corpus="engines", passes=2))
+    )
+
+    document = CODEC.encode(weighted)
+
+    assert document["passes"] == {"stays": 4, "engines": 2}
+    assert CODEC.decode(document) == weighted
+
+
+def test_a_document_written_before_passes_existed_reads_every_corpus_once() -> None:
+    document = dict(CODEC.encode(configuration()))
+    del document["passes"]
+
+    assert CODEC.decode(document) == configuration()

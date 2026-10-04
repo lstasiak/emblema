@@ -32,6 +32,7 @@ class WindowLoader:
         batch_size: int,
         seed: int,
         shuffle: bool = True,
+        turn: int = 0,
         drop_last: bool = False,
         num_workers: int = 0,
     ) -> None:
@@ -44,6 +45,8 @@ class WindowLoader:
             seed: The run's seed, which with the epoch fixes the order.
             shuffle: Whether the order depends on the seed and the epoch at all. A pass that only
                 reads, such as validation, keeps the order the windows arrive in.
+            turn: Which pass over the same windows within one epoch this loader is, where a run
+                reads them more than once an epoch; each turn shuffles in an order of its own.
             drop_last: Whether to leave out a final batch that holds fewer windows.
             num_workers: How many processes collate batches; zero collates in the training process.
                 A worker is handed the whole dataset when it starts, which is cheap for a memory
@@ -53,7 +56,7 @@ class WindowLoader:
             ValueError: If no window is given.
         """
         dataset = WindowDataset(windows)
-        self._order = SeededShuffleSampler(len(dataset), seed=seed) if shuffle else None
+        self._order = SeededShuffleSampler(len(dataset), seed=seed, turn=turn) if shuffle else None
         self._batches = DataLoader(
             dataset,
             batch_size=batch_size,

@@ -143,6 +143,48 @@ def windows(count: int, *, seed: int, steps: int = 4) -> list[TokenWindow]:
     ]
 
 
+def irregular(
+    *, name: str, seed: int, training: int = 8, validation: int = 4, channels: int = 2
+) -> TrainingCorpus:
+    """A corpus of irregular windows published after the test corpus, continuing its vocabulary.
+
+    Each window observes each of its channels at its own instants, drawn and sorted, and the
+    windows differ in how many tokens they hold: the regime the intensive-care stays and the
+    satellite telemetry are read under, beside the regular one the test corpus has.
+    """
+    names = CHANNEL_NAMES + tuple(f"{name}/{index}" for index in range(channels))
+    training_windows = irregular_windows(training, seed=seed, channels=len(names))
+    validation_windows = irregular_windows(validation, seed=seed + 1, channels=len(names))
+    return TrainingCorpus(
+        name=name,
+        checksum=checksum_of(training_windows + validation_windows),
+        training=training_windows,
+        validation=validation_windows,
+        channels=names,
+    )
+
+
+def irregular_windows(count: int, *, seed: int, channels: int) -> list[TokenWindow]:
+    """``count`` windows whose channels are observed at drawn instants, a drawn number of times."""
+    draws = random.Random(seed)
+    windows = []
+    for _ in range(count):
+        tokens: list[Token] = []
+        for channel in range(1, channels + 1):
+            times = sorted(draws.random() for _ in range(draws.randint(1, 5)))
+            tokens.extend(
+                Token(
+                    channel_id=channel,
+                    value=draws.gauss(0.0, 1.0),
+                    time=time,
+                    gap=time if index == 0 else time - times[index - 1],
+                )
+                for index, time in enumerate(times)
+            )
+        windows.append(TokenWindow.of(tokens))
+    return windows
+
+
 WEIGHTS = ArtifactRef("durable/weights", Checksum.of_bytes(b"weights"))
 
 

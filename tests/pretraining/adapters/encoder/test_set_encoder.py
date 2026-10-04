@@ -64,6 +64,35 @@ def test_one_batch_holds_windows_of_different_channel_counts_and_token_counts(
     torch.testing.assert_close(states[0, : len(few_channels)], alone[0], **TOLERANCE)
 
 
+def test_one_batch_holds_windows_of_both_sampling_regimes(encoder: SetEncoder) -> None:
+    regular = TokenWindow.of(
+        Token(channel_id=channel, value=0.1 * channel, time=step / 4, gap=0.25 if step else 0.0)
+        for channel in (1, 2, 3)
+        for step in range(4)
+    )
+    # Each channel at its own instants, unevenly spaced and differently many: a stay or a month
+    # of telemetry rather than a grid.
+    instants = {4: (0.02, 0.03, 0.71), 5: (0.5,), 6: (0.0, 0.1, 0.35, 0.36, 0.9, 0.99)}
+    irregular = TokenWindow.of(
+        Token(
+            channel_id=channel,
+            value=float(index),
+            time=time,
+            gap=time if index == 0 else time - times[index - 1],
+        )
+        for channel, times in instants.items()
+        for index, time in enumerate(times)
+    )
+    batch = TokenTensors.from_windows([regular, irregular])
+
+    states = encoder(*batch.args)
+
+    assert states.shape == (2, len(regular), SMALL.width)
+    assert torch.isfinite(states).all()
+    alone = encoder(*TokenTensors.from_windows([irregular]).args)
+    torch.testing.assert_close(states[1, : len(irregular)], alone[0], **TOLERANCE)
+
+
 def test_permuting_the_tokens_permutes_their_states(encoder: SetEncoder) -> None:
     batch = random_batch(2, 64, seed=11)
     order = permutation(batch, seed=3)

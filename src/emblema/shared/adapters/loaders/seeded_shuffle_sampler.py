@@ -20,20 +20,26 @@ class SeededShuffleSampler(Sampler[int]):
     already being read is unaffected by the next one being set.
     """
 
-    def __init__(self, size: int, *, seed: int) -> None:
+    def __init__(self, size: int, *, seed: int, turn: int = 0) -> None:
         """Order ``size`` positions under ``seed``.
 
         Args:
             size: How many positions to order; positive.
             seed: The run's seed.
+            turn: Which pass over the same positions within one epoch this is, where a run reads
+                them more than once an epoch; each turn is an order of its own. The first turn
+                ranks as every run before turns existed, so their orders replay unchanged.
 
         Raises:
-            ValueError: If ``size`` is not positive.
+            ValueError: If ``size`` is not positive, or the turn is negative.
         """
         if size <= 0:
             raise ValueError(f"a sampler needs at least one position, got {size}")
+        if turn < 0:
+            raise ValueError(f"a turn counts from zero, got {turn}")
         self._size = size
         self._seed = seed
+        self._turn = turn
         self._epoch = 0
 
     def set_epoch(self, epoch: int) -> None:
@@ -47,4 +53,6 @@ class SeededShuffleSampler(Sampler[int]):
         return iter(sorted(range(self._size), key=self._rank))
 
     def _rank(self, position: int) -> bytes:
-        return seeded_rank(self._seed, self._epoch, position)
+        if self._turn == 0:
+            return seeded_rank(self._seed, self._epoch, position)
+        return seeded_rank(self._seed, self._epoch, position, "turn", self._turn)

@@ -4,6 +4,7 @@ import pytest
 
 from emblema.pretraining.adapters.experiments.experiment_file import ExperimentFile
 from emblema.pretraining.domain.exceptions import InvalidRunSignatureError
+from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.pretraining.domain.training.training_corpus_shape import TrainingCorpusShape
 from emblema.pretraining.domain.training.training_mixture_shape import TrainingMixtureShape
@@ -92,3 +93,11 @@ def test_a_mixture_signs_by_every_corpus_in_order() -> None:
 def test_a_signature_without_a_digest_is_refused() -> None:
     with pytest.raises(InvalidRunSignatureError):
         RunSignature("")
+
+
+def test_a_corpus_read_more_than_once_an_epoch_is_another_run() -> None:
+    windows = mixture(corpus(), continued(name="second", seed=2))
+    weighted = configuration(passes=(CorpusPasses(corpus="second", passes=2),))
+
+    assert RunSignature.of(weighted, windows) != RunSignature.of(configuration(), windows)
+    assert RunSignature.of(weighted, windows) == RunSignature.of(weighted, windows)

@@ -7,6 +7,7 @@ from emblema.pretraining.domain.exceptions import (
     PretrainingOrderRejectedError,
 )
 from emblema.pretraining.domain.handoff.pretraining_order import PretrainingOrder
+from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
@@ -102,3 +103,11 @@ def test_corpora_whose_vocabularies_were_not_chained_are_refused() -> None:
         machines.order()(
             order_command(corpora=((CORPUS.name, MANIFEST), ("apart", SECOND_MANIFEST)))
         )
+
+
+def test_passes_for_a_corpus_the_order_does_not_read_are_refused() -> None:
+    machines = InMemoryHandoff()
+    weighted = replace(CONFIGURATION, passes=(CorpusPasses(corpus="stays", passes=4),))
+
+    with pytest.raises(PretrainingOrderRejectedError, match="does not read: \\['stays'\\]"):
+        machines.order()(order_command(configuration=weighted))

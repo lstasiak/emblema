@@ -47,3 +47,21 @@ def test_the_sampler_reports_how_many_positions_it_orders() -> None:
 def test_a_sampler_needs_a_position_to_order(size: int) -> None:
     with pytest.raises(ValueError, match="at least one position"):
         SeededShuffleSampler(size, seed=1)
+
+
+def test_a_later_turn_over_the_same_positions_is_another_order() -> None:
+    first = SeededShuffleSampler(64, seed=1, turn=0)
+    second = SeededShuffleSampler(64, seed=1, turn=1)
+
+    assert list(first) != list(second)
+    assert sorted(second) == list(range(64))
+    assert list(second) == list(SeededShuffleSampler(64, seed=1, turn=1))
+
+
+def test_the_first_turn_is_the_order_runs_before_turns_replay() -> None:
+    assert list(SeededShuffleSampler(8, seed=1, turn=0)) == order(8, seed=1)
+
+
+def test_a_negative_turn_is_refused() -> None:
+    with pytest.raises(ValueError, match="turn"):
+        SeededShuffleSampler(8, seed=1, turn=-1)

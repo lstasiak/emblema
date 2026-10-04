@@ -62,7 +62,7 @@ sessions end at 12 hours, with no tracking server.
 
 ## Revisit when
 
-- A corpus rises while the mean falls → a weight per corpus.
+- ~~A corpus rises while the mean falls → a weight per corpus.~~ Done 2026-10-03: `[passes]` in the experiment (`backbone-mixed4-stays-x4-m.toml`).
 - The mean still falls at epoch 8 → more epochs before a larger shape.
 - A corpus is published outside the chain → a vocabulary mapping.
 

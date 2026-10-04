@@ -1,0 +1,46 @@
+# The mixed backbone over four corpora at the published tier: C-MAPSS read per operating
+# condition, SKAB, the satellite telemetry and the intensive-care stays, published one after
+# another into one vocabulary. SMD is left out: at three quarters of the mixture's attention it
+# taught the intensive-care task nothing (backbone-mixed5-nosmd-m.toml against
+# backbone-mixed5-m.toml), and C-MAPSS is read per condition because that is the publication the
+# turbofan task reads, so a task and its backbone share one channel table.
+#
+# Every optimiser step is taken over micro-batches of one corpus and the steps are interleaved,
+# so a corpus weighs its share of the steps: about 69 % the satellite corpus, 23 % C-MAPSS, 4 %
+# SKAB and 4 % the stays, of about 2,800 steps an epoch. The backbones that leave one corpus out
+# (backbone-mixed4-without-*.toml) read the same publications with one fewer, and nothing else
+# changes, so a task on the corpus left out reads a backbone that never saw it.
+name = "backbone-mixed4-m"
+tier = "M"
+corpora = ["cmapss", "skab", "esa_ad", "physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation: the satellite corpus is learnt under that reading and not
+# under the square, and the stays' channels have heavy tails too.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+# Eight passes over every window, the epoch kept the one whose mean relative validation over the
+# corpora is lowest: thirteen passes bought a better pretext loss and a worse task
+# (backbone-mixed5-nosmd-m-13.toml). Sixteen windows a micro-batch, two to a step, as every
+# mixture before; a quarter of the first epoch warming up.
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000
