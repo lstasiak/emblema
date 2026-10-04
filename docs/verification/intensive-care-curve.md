@@ -1918,3 +1918,102 @@ it under its setting in force. No verdict of the registered grids changes.
 - Ten seeds read a difference to about 0.016 at 50 stays and 0.013 at 200.
 - The stays scored are a fifth of the tuning side the earlier selections and the stop's reading
   of 2026-10-03 were also scored on.
+
+## 2026-10-04 — Colab G4: the recipe at 20, 50 and 200 stays and at 50 windows, and the seeds' spread under it
+
+**Question.** Does the head solved first, or the stop counted in steps and divided by outcome,
+replace an arm's setting at the curve's budgets, and how far does one seed move the area? The
+design, the reading and the predictions are in the section declared on 2026-10-04 for the
+recipe.
+
+**Conditions.** Commit `4b07dc94`; campaigns `da27c29a…` (20 stays), `5098676c…` (50),
+`e4ef8d16…` (200), `b9dc55a7…` (FD001, 50 windows), under the mixture of four
+(`sha256:0d81c01e…`); one order each, four processes on one Colab G4, the longest order in
+5,198 s. Scored on the fifth held out by seed 101, seeds 1 to 10: 800 stays, or 16 engines and
+523 windows. Read with `data/report/l1/recipe-pairs.sh` (`scripts/campaign_pairs_report.py`);
+CSV under `data/report/l1/recipe/`.
+
+**Area under the ROC curve**, pooled over the ten seeds, and its standard deviation over them.
+*Head* is the head solved first; *stop* the stop of 500 steps past the warm-up, divided by
+outcome. The network from nothing runs at 0.003 at 200 stays and at the rate in force below.
+
+| Candidate | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| network from nothing | 0.589 (0.038) | 0.625 (0.049) | 0.643 (0.047) |
+| from nothing, head | 0.600 (0.057) | 0.630 (0.054) | 0.636 (0.060) |
+| from nothing, stop | — | 0.622 (0.059) | 0.646 (0.063) |
+| from nothing, head and stop | — | 0.629 (0.063) | 0.648 (0.070) |
+| full fine-tuning | 0.573 (0.054) | 0.616 (0.032) | 0.689 (0.040) |
+| fine-tuning, head | 0.550 (0.059) | 0.616 (0.047) | 0.672 (0.043) |
+| fine-tuning, stop | — | 0.575 (0.035) | 0.663 (0.031) |
+| fine-tuning, head and stop | — | 0.609 (0.050) | 0.653 (0.041) |
+| probe in closed form (`frozen_ridge`) | 0.557 (0.054) | 0.603 (0.056) | 0.657 (0.033) |
+| the same probe at initialisation | 0.541 (0.037) | 0.571 (0.045) | 0.606 (0.044) |
+
+**Gain in area against the arm's setting**, paired over stays (95 % interval), and seed by seed
+(mean ± standard error). A variant *replaces* where the interval lies above zero and the mean
+exceeds twice its standard error.
+
+| Budget | Variant | Paired gain | Seed by seed | Replaces |
+|---|---|---|---|---|
+| 20 | from nothing, head | +0.010 [−0.011; +0.032] | +0.010 ± 0.013 | no |
+| 20 | fine-tuning, head | **−0.023 [−0.038; −0.008]** | −0.023 ± 0.016 | no, loses |
+| 50 | from nothing, head / stop / both | +0.005 / −0.003 / +0.005, each interval across zero | ≤ 0.6 SE | no |
+| 50 | fine-tuning, head | +0.000 [−0.016; +0.016] | +0.000 ± 0.015 | no |
+| 50 | fine-tuning, stop | **−0.042 [−0.065; −0.019]** | −0.042 ± 0.014 | no, loses |
+| 50 | fine-tuning, both | −0.007 [−0.029; +0.015] | −0.007 ± 0.015 | no |
+| 200 | from nothing, head / stop / both | −0.006 / +0.004 / +0.005, each interval across zero | ≤ 0.4 SE | no |
+| 200 | fine-tuning, head | **−0.017 [−0.033; −0.002]** | −0.017 ± 0.013 | no, loses |
+| 200 | fine-tuning, stop | **−0.026 [−0.042; −0.009]** | −0.026 ± 0.012 | no, loses |
+| 200 | fine-tuning, both | **−0.036 [−0.058; −0.014]** | −0.036 ± 0.013 | no, loses |
+
+The probes, as measured: `frozen_ridge` against the network from nothing −0.033 [−0.059;
+−0.007] at 20, −0.022 [−0.053; +0.010] at 50, +0.015 [−0.017; +0.045] at 200; against the same
+probe at initialisation +0.016 [−0.005; +0.037], **+0.032 [+0.007; +0.057]** and **+0.051
+[+0.016; +0.085]**.
+
+**FD001 at 50 windows**, RMSE pooled over the ten seeds (standard deviation), and the reduction
+against the arm's setting.
+
+| Candidate | RMSE | Reduction | Seed by seed | Replaces |
+|---|---|---|---|---|
+| network from nothing | 16.2 (1.0) | | | |
+| from nothing, head | 17.1 (1.5) | −0.91 [−1.39; −0.42] | −0.88 ± 0.47 | no, loses |
+| from nothing, stop | 20.7 (6.3) | −4.50 [−6.71; −2.47] | −3.65 ± 1.94 | no, loses |
+| from nothing, head and stop | 19.3 (2.7) | −3.10 [−4.12; −2.10] | −2.96 ± 0.82 | no, loses |
+| full fine-tuning | 22.7 (1.6) | | | |
+| fine-tuning, head | 21.9 (2.2) | **+0.84 [+0.21; +1.46]** | +0.89 ± 0.42 | **yes** |
+| fine-tuning, stop | 22.9 (1.5) | −0.21 [−0.90; +0.44] | −0.21 ± 0.47 | no |
+| fine-tuning, head and stop | 22.8 (3.1) | −0.03 [−1.09; +0.94] | +0.11 ± 1.07 | no |
+| probe in closed form | 23.9 (4.6) | −7.74 against from nothing | | |
+| the same probe at initialisation | 18.8 (1.9) | −2.65 against from nothing; +5.09 against the probe under the backbone | | |
+
+**Conclusions.**
+
+1. On the intensive-care task no variant replaces any arm's setting at any budget: the settings
+   in force stand for the network from nothing and full fine-tuning at 20, 50 and 200 stays.
+   Five variants of full fine-tuning lose by the interval; the stop costs it most (−0.042 at 50).
+   On FD001 the head solved first replaces full fine-tuning's setting (−0.84 RMSE, 3.7 %), and
+   every stop loses for the network from nothing.
+2. Predictions: 1 holds at 50 (0.625) and misses by 0.002 at 200 (0.643); 2 holds on FD001 only;
+   3 fails, the stop gains the network from nothing nothing at 200 (+0.004); 4 holds; 5 holds,
+   the probe at initialisation at 0.571 and pretraining adding 0.032 to it at 50; 6 holds for the
+   network from nothing (0.049) and fails for the probe, which spreads by 0.056, not 0.02–0.04.
+3. By the reading declared beforehand the least gain is 0.055 at 20 stays, 0.060 at 50 and 0.050
+   at 200 (the probe's spread at 20 and 50, the network's at 200), and the floor's fixed part
+   0.035 (the network's 0.038 at 20, rounded down).
+4. At the curve's first point the probe under the backbone does not beat the network from
+   nothing at any budget, and beats the same probe at initialisation by 0.03 to 0.05 from 50
+   stays up. On FD001 it is worse than the probe at initialisation by 5.1 RMSE: the mixture's
+   states serve a linear reading of the remaining life worse than an untrained encoder's.
+5. A head solved in closed form does not carry over to fine-tuning on the stays: the solved
+   head is the probe's (0.603 at 50), and fine-tuning from it lands where fine-tuning from a
+   drawn head does.
+
+**Limitations.**
+
+- The settings in force were chosen on the earlier publication of the same stays; no rate was
+  searched again.
+- The spread of the network from nothing is read on the cells that also chose its setting.
+- One share and one patience of the stop; the probe phase is the closed form only.
+- Ten seeds read a difference to about 0.015; at 20 stays the draw holds two or three deaths.
