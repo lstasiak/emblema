@@ -199,14 +199,12 @@ def test_a_variant_of_an_arm_is_the_arm_under_a_turned_schedule_on_the_same_budg
     assert ARMS.arm_of(CONTENDER).schedule == adaptation_schedule()
 
 
-def test_an_arm_names_penalties_exactly_where_its_head_is_solved_in_closed_form() -> None:
+def test_an_arm_whose_mode_solves_its_head_names_penalties() -> None:
     solved = arm(
         CandidateRef("frozen_ridge"), TransferMode.FROZEN_RIDGE, backbone=WEIGHTS, lora=None
     )
     with pytest.raises(InvalidBackboneArmError, match="names no penalties"):
         replace(solved, ridge=None)
-    with pytest.raises(InvalidBackboneArmError, match="trains its head and names penalties"):
-        replace(ARMS.arm_of(CONTENDER), ridge=PENALTIES)
     described = BackboneArmCatalogue((solved,)).describe(solved.ref)
     stated = {parameter.name: parameter.value for parameter in described.method.parameters}
     assert stated["ridge_penalties"] == "0.1 1 10"
@@ -475,3 +473,79 @@ def test_a_regime_is_refused_where_the_probe_states_every_window_once() -> None:
     # Under a learnt pooling the encoder is in the loop, and the channels can be withheld.
     learnt = probes.arm_of(CandidateRef("frozen_probe@channel_dropout=0.2,pooling=attention"))
     assert learnt.regime.channel_dropout == 0.2
+
+
+HOLDING = BackboneArmCatalogue(
+    (
+        arm(CONTENDER, TransferMode.FULL_FINE_TUNING, backbone=WEIGHTS, lora=None, ridge=PENALTIES),
+        arm(CandidateRef("from_scratch"), TransferMode.FROM_SCRATCH, backbone=None, lora=None),
+    )
+)
+
+
+def test_penalties_an_arm_holds_for_a_head_solved_first_leave_its_description_as_it_was() -> None:
+    # A campaign stored before the head could start solved checks its cells against this
+    # description, whole, so penalties held for a variant must not reach the base arm's.
+    held = {p.name: p.value for p in HOLDING.describe(CONTENDER).method.parameters}
+    plain = {
+        p.name: p.value
+        for p in BackboneArmCatalogue(
+            (arm(CONTENDER, TransferMode.FULL_FINE_TUNING, backbone=WEIGHTS, lora=None),)
+        )
+        .describe(CONTENDER)
+        .method.parameters
+    }
+
+    assert held == plain
+    assert HOLDING.arm_of(CONTENDER).solved_under is None
+
+
+def test_a_variant_solves_the_head_first_and_is_described_by_its_penalties_and_the_knob() -> None:
+    base = {p.name: p.value for p in HOLDING.describe(CONTENDER).method.parameters}
+    variant = HOLDING.describe(CandidateRef("full_fine_tuning@head_start=solved"))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    assert {name: stated[name] for name in stated.keys() - base.keys()} == {
+        "head_start": "solved",
+        "ridge_penalties": "0.1 1 10",
+    }
+    assert variant.budget == HOLDING.describe(CONTENDER).budget
+    assert HOLDING.arm_of(variant.ref).solved_under == PENALTIES
+
+
+def test_a_head_solved_first_is_refused_without_penalties_or_under_a_learnt_pooling() -> None:
+    with pytest.raises(UnknownCandidateError, match="no penalties to solve its head among"):
+        BOTH_ARMS.describe(CandidateRef("from_scratch@head_start=solved"))
+    with pytest.raises(UnknownCandidateError, match="cannot learn a attention pooling"):
+        HOLDING.describe(CandidateRef("full_fine_tuning@head_start=solved,pooling=attention"))
+
+
+def test_a_stop_in_steps_divided_by_outcome_is_a_variant_and_a_division_alone_is_refused() -> None:
+    variant = HOLDING.describe(
+        CandidateRef("from_scratch@patience_steps=40,stop_division=outcomes,stop_share=0.2")
+    )
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    assert stated["patience_steps"] == "40"
+    assert stated["stop_division"] == "outcomes"
+    assert "patience" not in stated
+    with pytest.raises(UnknownCandidateError, match="a division only with both"):
+        HOLDING.describe(CandidateRef("from_scratch@stop_division=outcomes"))
+
+
+def test_a_probe_over_the_encoder_at_its_initialisation_names_the_model_it_is_shaped_like() -> None:
+    untrained = BackboneArmCatalogue(
+        (
+            arm(
+                CandidateRef("untrained_ridge"),
+                TransferMode.FROZEN_RIDGE,
+                backbone=None,
+                lora=None,
+            ),
+        )
+    ).describe(CandidateRef("untrained_ridge"))
+
+    stated = {p.name: p.value for p in untrained.method.parameters}
+    assert untrained.starts_from is None
+    assert stated["architecture_of"] == f"{WEIGHTS.key}@{WEIGHTS.checksum}"
+    assert stated["ridge_penalties"] == "0.1 1 10"

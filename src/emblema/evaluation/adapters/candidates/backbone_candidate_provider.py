@@ -49,7 +49,7 @@ class BackboneCandidateProvider:
                     lora=arm.lora,
                     seed=cell.seed,
                     pooling=arm.pooling,
-                    ridge=arm.ridge,
+                    ridge=arm.solved_under,
                     encoder=arm.encoder,
                     regime=arm.regime,
                 ),

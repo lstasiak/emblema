@@ -152,15 +152,21 @@ def test_a_process_left_to_build_candidates_without_what_they_are_built_over_is_
         )
 
 
-def test_the_arms_are_the_five_modes_over_the_backbone_the_process_serves() -> None:
+def test_the_arms_are_the_five_modes_and_a_probe_over_the_encoder_at_initialisation() -> None:
     arms = KnownArms.over(WEIGHTS, LORA, SCHEDULE, PENALTIES)
 
     assert [str(arm.ref) for arm in arms] == [str(ref) for ref in KnownArms.refs()]
-    assert arms[0].backbone is None
-    assert all(arm.backbone == WEIGHTS for arm in arms[1:])
-    assert arms[2].ridge == PENALTIES
-    assert arms[3].lora == LORA
-    assert [arm.ridge for arm in arms if arm.ref != KnownArms.FROZEN_RIDGE] == [None] * 4
+    by_ref = {arm.ref: arm for arm in arms}
+    assert [ref for ref, arm in by_ref.items() if arm.backbone is None] == [
+        KnownArms.FROM_SCRATCH,
+        KnownArms.UNTRAINED_RIDGE,
+    ]
+    assert by_ref[KnownArms.LORA].lora == LORA
+    assert all(arm.ridge == PENALTIES for arm in arms)
+    assert [ref for ref, arm in by_ref.items() if arm.solved_under is not None] == [
+        KnownArms.FROZEN_RIDGE,
+        KnownArms.UNTRAINED_RIDGE,
+    ]
 
 
 def test_the_frozen_side_is_opened_through_the_publisher_the_process_holds(

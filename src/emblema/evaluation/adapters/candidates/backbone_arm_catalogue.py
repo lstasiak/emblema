@@ -76,7 +76,7 @@ class BackboneArmCatalogue:
                 f"{turned.pooling.pooling} pooling encodes every window once, so a dropout "
                 "would change nothing"
             )
-        if turned.encoder.builds_its_own_encoder and turned.mode.starts_from_pretrained_weights:
+        if turned.encoder.builds_its_own_encoder and turned.backbone is not None:
             raise UnknownCandidateError(
                 f"{variant.ref} names no variant: {turned.mode} starts from pretrained weights, "
                 "which fix its encoder's build"
@@ -97,9 +97,20 @@ class BackboneArmCatalogue:
         if turned.regime.stop_partly_stated:
             raise UnknownCandidateError(
                 f"{variant.ref} names no variant: a stop states both the share it holds out "
-                "and the patience it waits"
+                "and the patience it waits, and a division only with both"
             )
         closed_form = turned.mode.solves_the_head_in_closed_form
+        if turned.regime.solves_the_head_first and not closed_form:
+            if turned.ridge is None:
+                raise UnknownCandidateError(
+                    f"{variant.ref} names no variant: the campaign gave {turned.mode} no "
+                    "penalties to solve its head among"
+                )
+            if turned.pooling.pooling.learns_weights:
+                raise UnknownCandidateError(
+                    f"{variant.ref} names no variant: a head solved in closed form cannot "
+                    f"learn a {turned.pooling.pooling} pooling"
+                )
         if turned.regime != TrainingRegime.standard() and closed_form:
             raise UnknownCandidateError(
                 f"{variant.ref} names no variant: {turned.mode} solves its head in closed form "
@@ -133,8 +144,8 @@ class BackboneArmCatalogue:
         }
         if arm.backbone is None:
             stated["architecture_of"] = f"{arm.architecture.key}@{arm.architecture.checksum}"
-        if arm.ridge is not None:
-            stated["ridge_penalties"] = str(arm.ridge)
+        if arm.solved_under is not None:
+            stated["ridge_penalties"] = str(arm.solved_under)
         if arm.lora is not None:
             stated["lora_rank"] = arm.lora.rank
             stated["lora_alpha"] = arm.lora.alpha

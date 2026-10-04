@@ -5,19 +5,25 @@ from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 
 
 @pytest.mark.parametrize(
-    ("mode", "pretrained", "trains_backbone", "low_rank", "closed_form"),
+    ("mode", "takes", "needs", "trains_backbone", "low_rank", "closed_form"),
     [
-        (TransferMode.FROM_SCRATCH, False, True, False, False),
-        (TransferMode.FROZEN_PROBE, True, False, False, False),
-        (TransferMode.FROZEN_RIDGE, True, False, False, True),
-        (TransferMode.LORA, True, False, True, False),
-        (TransferMode.FULL_FINE_TUNING, True, True, False, False),
+        (TransferMode.FROM_SCRATCH, False, False, True, False, False),
+        (TransferMode.FROZEN_PROBE, True, False, False, False, False),
+        (TransferMode.FROZEN_RIDGE, True, False, False, False, True),
+        (TransferMode.LORA, True, True, False, True, False),
+        (TransferMode.FULL_FINE_TUNING, True, True, True, False, False),
     ],
 )
-def test_each_mode_says_where_it_starts_and_what_it_trains(
-    mode: TransferMode, pretrained: bool, trains_backbone: bool, low_rank: bool, closed_form: bool
+def test_each_mode_says_where_it_may_start_and_what_it_trains(
+    mode: TransferMode,
+    takes: bool,
+    needs: bool,
+    trains_backbone: bool,
+    low_rank: bool,
+    closed_form: bool,
 ) -> None:
-    assert mode.starts_from_pretrained_weights is pretrained
+    assert mode.takes_pretrained_weights is takes
+    assert mode.needs_pretrained_weights is needs
     assert mode.trains_backbone_weights is trains_backbone
     assert mode.adds_low_rank_updates is low_rank
     assert mode.solves_the_head_in_closed_form is closed_form

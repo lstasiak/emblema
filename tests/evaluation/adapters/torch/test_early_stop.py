@@ -59,3 +59,29 @@ def test_a_model_never_scored_is_left_alone() -> None:
     EarlyStop(patience=1).restore(model)
 
     assert torch.equal(model.weight, before)
+
+
+def test_a_patience_in_steps_is_counted_from_the_end_of_the_warmup() -> None:
+    # Three steps an epoch, the warmup over at step ten, the best epoch the first: the wait
+    # begins at ten, not at three, so six steps run out at the epoch ending at step eighteen.
+    model = nn.Linear(1, 1)
+    stop = EarlyStop(6, steps_per_epoch=3, counted_from=10)
+
+    assert stop.observe(0, 0.9, model) is False
+    assert [stop.observe(epoch, 0.1, model) for epoch in range(1, 6)] == [
+        False,
+        False,
+        False,
+        False,
+        True,
+    ]
+    assert stop.best_epoch == 0
+
+
+def test_a_patience_in_steps_after_the_warmup_counts_from_the_best_epoch() -> None:
+    model = nn.Linear(1, 1)
+    stop = EarlyStop(6, steps_per_epoch=3, counted_from=4)
+
+    assert stop.observe(0, 0.1, model) is False
+    assert stop.observe(1, 0.9, model) is False
+    assert [stop.observe(epoch, 0.1, model) for epoch in (2, 3)] == [False, True]

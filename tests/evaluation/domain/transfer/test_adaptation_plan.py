@@ -6,7 +6,11 @@ from emblema.evaluation.domain.exceptions import (
 )
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
-from emblema.evaluation.domain.transfer.training_regime import ClassWeight, TrainingRegime
+from emblema.evaluation.domain.transfer.training_regime import (
+    ClassWeight,
+    HeadStart,
+    TrainingRegime,
+)
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from tests.evaluation.support import LORA, PENALTIES, WEIGHTS, plan
 
@@ -15,7 +19,7 @@ from tests.evaluation.support import LORA, PENALTIES, WEIGHTS, plan
 def test_a_plan_of_every_mode_holds_together(mode: TransferMode) -> None:
     stated = plan(mode)
 
-    assert (stated.backbone is not None) is mode.starts_from_pretrained_weights
+    assert (stated.backbone is not None) is mode.takes_pretrained_weights
     assert (stated.lora is not None) is mode.adds_low_rank_updates
     assert (stated.ridge is not None) is mode.solves_the_head_in_closed_form
 
@@ -25,18 +29,17 @@ def test_the_control_arm_names_no_weights() -> None:
         plan(TransferMode.FROM_SCRATCH, backbone=WEIGHTS)
 
 
-@pytest.mark.parametrize(
-    "mode",
-    [
-        TransferMode.FROZEN_PROBE,
-        TransferMode.FROZEN_RIDGE,
-        TransferMode.LORA,
-        TransferMode.FULL_FINE_TUNING,
-    ],
-)
-def test_a_transfer_mode_needs_the_pretrained_weights(mode: TransferMode) -> None:
-    with pytest.raises(InvalidAdaptationPlanError, match="names none"):
+@pytest.mark.parametrize("mode", [TransferMode.LORA, TransferMode.FULL_FINE_TUNING])
+def test_a_mode_that_adapts_the_weights_needs_pretrained_ones(mode: TransferMode) -> None:
+    with pytest.raises(
+        InvalidAdaptationPlanError, match="adapts pretrained weights and names none"
+    ):
         plan(mode, backbone=None)
+
+
+@pytest.mark.parametrize("mode", [TransferMode.FROZEN_PROBE, TransferMode.FROZEN_RIDGE])
+def test_a_frozen_mode_reads_an_encoder_at_its_initialisation_too(mode: TransferMode) -> None:
+    assert plan(mode, backbone=None).backbone is None
 
 
 def test_low_rank_updates_are_specified_exactly_where_the_mode_adds_them() -> None:
@@ -181,3 +184,33 @@ def test_withholding_channels_is_refused_where_the_encoder_states_every_window_o
     with pytest.raises(InvalidAdaptationPlanError, match="withholding channels"):
         plan(TransferMode.FROZEN_PROBE, regime=TrainingRegime(channel_dropout=0.2))
     assert plan(TransferMode.FROM_SCRATCH, regime=TrainingRegime(channel_dropout=0.2)).regime
+
+
+def test_a_head_solved_first_names_penalties_and_pools_under_no_learnt_weights() -> None:
+    solved = TrainingRegime(head_start=HeadStart.SOLVED)
+    for mode in (TransferMode.FROM_SCRATCH, TransferMode.FULL_FINE_TUNING):
+        started = plan(mode, regime=solved, ridge=PENALTIES)
+        assert started.solves_a_head
+        assert started.parameters()["head_start"] == "solved"
+    with pytest.raises(InvalidAdaptationPlanError, match="names no penalties"):
+        plan(TransferMode.FULL_FINE_TUNING, regime=solved)
+    with pytest.raises(InvalidAdaptationPlanError, match="cannot learn a attention pooling"):
+        plan(
+            TransferMode.FULL_FINE_TUNING,
+            regime=solved,
+            ridge=PENALTIES,
+            pooling=HeadPooling(pooling=PoolingScheme.ATTENTION),
+        )
+
+
+def test_a_head_the_mode_solves_is_not_solved_first_as_well() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="no step to start it for"):
+        plan(TransferMode.FROZEN_RIDGE, regime=TrainingRegime(head_start=HeadStart.SOLVED))
+
+
+def test_a_stop_waits_in_steps_as_it_waits_in_epochs() -> None:
+    stopped = plan(
+        TransferMode.FULL_FINE_TUNING, regime=TrainingRegime(stop_share=0.2, patience_steps=40)
+    )
+    assert stopped.regime.stops
+    assert stopped.parameters()["patience_steps"] == 40

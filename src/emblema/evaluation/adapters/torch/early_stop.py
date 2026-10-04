@@ -13,21 +13,27 @@ class EarlyStop:
 
     Scored after every epoch on windows the run does not learn from; a score that betters the
     best so far is kept with a copy of the model's weights on the host, and the run is told to
-    stop once ``patience`` epochs pass without one. The score is the sum of the areas under the
-    ROC and the precision-recall curves for an outcome, as the published network stops on, and
-    the negative mean squared error for a quantity; higher is better in both.
+    stop once ``patience`` epochs pass without one. Where the patience is counted in optimiser
+    steps, each epoch ends ``steps_per_epoch`` steps after the last, and the wait starts no
+    earlier than ``counted_from``, the end of the warmup: a run is never stopped while its rate
+    is still climbing, though a best epoch inside the warmup is kept like any other. The score
+    is the sum of the areas under the ROC and the precision-recall curves for an outcome, as the
+    published network stops on, and the negative mean squared error for a quantity; higher is
+    better in both.
 
     Attributes:
-        patience: Epochs without a better score before the run stops.
+        patience: Epochs, or steps, without a better score before the run stops.
         best: The best score seen; minus infinity before the first.
         best_epoch: Index of the epoch that scored it; ``None`` before the first.
     """
 
-    def __init__(self, patience: int) -> None:
+    def __init__(self, patience: int, *, steps_per_epoch: int = 1, counted_from: int = 0) -> None:
         self.patience = patience
         self.best = float("-inf")
         self.best_epoch: int | None = None
-        self._since_best = 0
+        self._steps_per_epoch = steps_per_epoch
+        self._counted_from = counted_from
+        self._best_at = 0
         self._weights: dict[str, Any] | None = None  # a state dict: torch's own mapping
 
     @staticmethod
@@ -48,12 +54,11 @@ class EarlyStop:
 
     def observe(self, epoch: int, score: float, model: nn.Module) -> bool:
         """Record the epoch's score and the weights if it is the best; whether to stop now."""
+        ended_at = (epoch + 1) * self._steps_per_epoch
         if score > self.best:
-            self.best, self.best_epoch, self._since_best = score, epoch, 0
+            self.best, self.best_epoch, self._best_at = score, epoch, ended_at
             self._weights = {k: v.detach().to("cpu").clone() for k, v in model.state_dict().items()}
-        else:
-            self._since_best += 1
-        return self._since_best >= self.patience
+        return ended_at - max(self._best_at, self._counted_from) >= self.patience
 
     def restore(self, model: nn.Module) -> None:
         """Put the best epoch's weights back into ``model``; a model never scored is left alone."""
