@@ -619,6 +619,29 @@ over the same stays and seeds, the run whose probe is higher by the paired inter
 the curve, and 1e-3 kept where neither is. If the half rate wins on the task, the larger shape
 at about 10⁹ values runs at it.
 
+### 2026-10-05 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the larger shape at half the rate
+
+Under the declaration above: `experiments/backbone-mixed4-512x8-m-5e-4.toml`, ordered here from
+`819e82ad`, fulfilled on one Kaggle T4 in 2,613 s an epoch (5.8 h), accepted as backbone
+`4e162eda-…`, weights `sha256:b7553ef5…`. Epoch by epoch:
+`scripts/pretraining_curve_report.py --report-only data/report/pretraining/l1-wide-5e-4`.
+
+| Experiment | Epoch | cmapss | skab | esa_ad | physionet2012 | Mean | Training loss |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-mixed4-m` (4.8M, 1e-3) | 8 | 0.311 | 0.273 | 0.272 | 0.490 | 0.3366 | 0.05521 |
+| `backbone-mixed4-512x8-m` (1e-3) | 7 | 0.322 | 0.284 | 0.303 | 0.557 | 0.3664 | 0.06518 |
+| `backbone-mixed4-512x8-m-5e-4` | 8 | 0.310 | 0.272 | 0.262 | 0.517 | 0.3405 | 0.05594 |
+
+- Prediction 1 fails by a hair: the training loss at the eighth epoch, 0.056, lies below 1e-3's
+  0.063 but not at or below today's shape's 0.055.
+- Prediction 2 holds: the mean, 0.3405, lies 0.004 from today's shape's.
+- Prediction 3 holds: the validation falls at every epoch.
+- At half the rate the larger shape learns the pretext as today's shape does, the satellite
+  corpus a little better (0.262 against 0.272) and the stays worse (0.517 against 0.490); the
+  rate, not the capacity, held it back at 1e-3. On the task, by the rule declared above, it keeps
+  5e-4: its probe at 50 stays is higher by 0.012 [+0.005; +0.019] (`intensive-care-curve.md`,
+  2026-10-05).
+
 ### Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when
