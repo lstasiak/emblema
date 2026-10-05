@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from emblema.pretraining.domain.exceptions import DivergedRunError, UnsupportedPrecisionError
+from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
@@ -85,6 +86,29 @@ def test_the_same_configuration_twice_trains_the_same_weights() -> None:
     one = list(TorchTrainingRuntime(first, device="cpu").train(stated, MIXTURE))
     two = list(TorchTrainingRuntime(second, device="cpu").train(stated, MIXTURE))
 
+    assert one[-1].training_loss == two[-1].training_loss
+    assert one[-1].backbone == two[-1].backbone
+
+
+def test_a_run_that_hides_the_tail_trains_and_repeats_itself() -> None:
+    forecasting = configuration(
+        budget=budget(epochs=1, batch_size=2),
+        masking=MaskingStrategy(
+            channel_rate=0.15,
+            block_rate=0.0,
+            block_span=0.5,
+            token_rate=0.0,
+            horizon_rate=1.0,
+            horizon_min_span=0.15,
+            horizon_max_span=0.5,
+        ),
+    )
+    first, second = InMemoryArtifactStore(), InMemoryArtifactStore()
+
+    one = list(TorchTrainingRuntime(first, device="cpu").train(forecasting, MIXTURE))
+    two = list(TorchTrainingRuntime(second, device="cpu").train(forecasting, MIXTURE))
+
+    assert math.isfinite(one[-1].training_loss)
     assert one[-1].training_loss == two[-1].training_loss
     assert one[-1].backbone == two[-1].backbone
 

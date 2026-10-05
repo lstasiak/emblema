@@ -12,8 +12,11 @@ class MaskKind(Enum):
         BLOCK: A span of the channel's time is hidden; visible tokens of the channel remain on at
             least one side.
         TOKEN: The token is hidden on its own, between visible neighbours of its channel.
+        HORIZON: The token lies in the window's hidden tail, with visible tokens of its channel
+            only before it; it can only be forecast.
     """
 
     CHANNEL = "channel"
     BLOCK = "block"
     TOKEN = "token"
+    HORIZON = "horizon"

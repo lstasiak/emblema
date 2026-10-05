@@ -51,7 +51,7 @@ def test_one_batch_of_control_windows_is_driven_to_nearly_zero_loss(control: Con
         optimiser.step()
         losses.append(step.item())
 
-    assert all(kind.any() for kind in (masks.of_kind(k) for k in MaskKind))
+    assert all(masks.of_kind(kind).any() for kind in MaskKind if MIXTURE.draws(kind))
     # The values are normalised per channel, so the loss of an ignorant model is about one.
     assert losses[0] > 0.3
     assert min(losses[-10:]) < NEARLY_ZERO, losses[::30]

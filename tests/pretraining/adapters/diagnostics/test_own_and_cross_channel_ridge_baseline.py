@@ -32,6 +32,7 @@ def masks(
         channel=nothing,
         block=(block if block is not None else nothing) & ~batch.padding_mask,
         token=(token if token is not None else nothing) & ~batch.padding_mask,
+        horizon=nothing,
     )
 
 
@@ -129,7 +130,9 @@ def test_a_token_of_a_channel_hidden_whole_is_left_to_the_cross_channel_baseline
     baseline = OwnAndCrossChannelRidgeBaseline.fitted(
         [(training, masks(training, block=middle(training, 3)))], vocabulary_size=VOCABULARY
     )
-    prediction = baseline.predict(held_out, TokenMasks(channel=whole, block=nothing, token=nothing))
+    prediction = baseline.predict(
+        held_out, TokenMasks(channel=whole, block=nothing, token=nothing, horizon=nothing)
+    )
 
     assert not prediction.any()
 

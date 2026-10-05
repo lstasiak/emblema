@@ -24,7 +24,7 @@ SCORER = ReconstructionLoss(SQUARED)
 
 def masks_hiding(hidden: Tensor) -> TokenMasks:
     nothing = torch.zeros_like(hidden)
-    return TokenMasks(channel=nothing, block=nothing, token=hidden)
+    return TokenMasks(channel=nothing, block=nothing, token=hidden, horizon=nothing)
 
 
 def test_the_loss_is_the_mean_squared_error_over_the_hidden_observed_tokens() -> None:

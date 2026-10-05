@@ -10,8 +10,10 @@ from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 class LinearInterpolationBaseline:
     """What a hidden token's own channel says about it: a line between its visible neighbours.
 
-    The trivial answer for a token hidden inside a block or on its own. A model that does no
-    better than this on such tokens has learnt to smooth a channel, not to read the window. A
+    The trivial answer for a token hidden inside a block or on its own, and, past the last visible
+    token, for one in the window's hidden tail, where the line carries that value forward. A model
+    that does no better than this on such tokens has learnt to smooth a channel, not to read the
+    window. A
     channel with no visible token left offers no line to draw, and a timeless token has no
     neighbours in time; both predict the channel mean, zero after normalisation, and are the
     business of the cross-channel baseline.

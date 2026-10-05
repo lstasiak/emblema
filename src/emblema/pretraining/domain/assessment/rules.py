@@ -88,13 +88,8 @@ def hidden_share(results: Results) -> Check:
 
 
 def kinds_present(strategy: MaskingStrategy, judged: Sequence[KindSummary]) -> Check:
-    drawn = {
-        MaskKind.CHANNEL: strategy.channel_rate > 0.0,
-        MaskKind.BLOCK: strategy.block_rate > 0.0,
-        MaskKind.TOKEN: strategy.token_rate > 0.0,
-    }
     seen = {summary.kind for summary in judged}
-    missing = [kind.value for kind in MaskKind if drawn[kind] and kind not in seen]
+    missing = [kind.value for kind in MaskKind if strategy.draws(kind) and kind not in seen]
     return Check(
         Rule.KINDS_PRESENT,
         None,
