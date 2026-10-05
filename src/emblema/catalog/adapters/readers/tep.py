@@ -179,6 +179,9 @@ class _Runs:
                 + (f" of {list(frame.columns)}" if hasattr(frame, "columns") else "")
             )
         table = frame.to_numpy(dtype=np.float64, na_value=np.nan)
+        # The parsed frame is as large as the table and is not read again: let it go before the
+        # table is checked and sorted, so the file is held once rather than twice.
+        del frame, objects
         if not np.all(np.isfinite(table)):
             raise MalformedCorpusDataError(f"{name}: non-finite value")
         placing = len(_PLACING)
@@ -187,16 +190,18 @@ class _Runs:
             if np.any(column != np.floor(column)) or np.any(column < 0):
                 raise MalformedCorpusDataError(f"{name}: {label} is not a whole number")
         order = np.lexsort((samples, runs, faults))
+        # The publisher writes the rows in that order already; sorting a copy of every value
+        # would hold the file twice for nothing, so the rows are reordered only where they are not.
+        ordered = bool(np.all(order == np.arange(len(order))))
         faults, runs, samples = (
-            faults[order].astype(np.int64),
-            runs[order].astype(np.int64),
-            samples[order].astype(np.int64),
+            (column if ordered else column[order]).astype(np.int64)
+            for column in (faults, runs, samples)
         )
         return cls(
             subset=subset,
             samples=samples,
             channels=columns[placing:],
-            values=table[order, placing:],
+            values=table[:, placing:] if ordered else table[order, placing:],
             bounds=cls._bounds(name, subset, faults, runs, samples),
         )
 
