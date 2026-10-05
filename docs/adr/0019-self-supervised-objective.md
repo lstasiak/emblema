@@ -65,6 +65,9 @@ per kind, so a kind the model does not beat is known to teach nothing. On the po
 - *Blocks as runs of tokens*: assumes a meaningful step.
 - *Huber loss*: different units from the least-squares baselines (revisited in ADR-0028).
 
+2026-10-05: a fourth draw, the tail (`horizon_*`), is read against this objective as a variant
+(`docs/verification/pretext-variants.md`); absent, nothing changes.
+
 ## Revisit when
 
 - The mixture ablation runs → single-token rate first.
