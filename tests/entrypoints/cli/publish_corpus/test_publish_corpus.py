@@ -405,6 +405,7 @@ def test_selecting_subsets_of_a_dataset_of_the_collection_is_refused(tmp_path: P
 def test_a_reading_of_the_collection_reaches_the_reader_of_the_dataset_named(
     tmp_path: Path,
 ) -> None:
+    pytest.importorskip("pyarrow")
     reading = UtsdReading(independent_channels=True, scale=UtsdScale.AS_PUBLISHED)
     root = CompositionRoot.over(
         corpora=InMemoryCorpusRepository(),
