@@ -2086,3 +2086,107 @@ units, pooled over the seeds.
 - 20 stays hold two or three deaths in a draw; their cells are read descriptively.
 - One pretraining run per backbone beyond the pair of seeds; the larger shape's seed spread is
   assumed to be today's shape's.
+
+## 2026-10-05 — Colab G4: the first point of the curve over the scale of pretraining
+
+**Question.** At the mixture of four, about 10⁸ values, where does the probe solved in closed form
+stand against the network from nothing at 20, 50 and 200 stays and at 50 windows of FD001, how far
+apart do two pretrainings put it, and does the larger shape move it? The design, the reading and
+the predictions are in the section declared on 2026-10-04 for the first point.
+
+**Conditions.** Commit `819e82ad`; twelve campaigns, the three files of the yardstick each under
+the four backbones of `manual-handoff.md`, 2026-10-04 (seed 1 `sha256:0d81c01e…`, seed 2
+`sha256:94f00d72…`, the larger shape at 1e-3 `sha256:d047a2d0…` and at 5e-4 `sha256:b7553ef5…`);
+labels in `data/report/l1/yardstick-campaigns.txt`. One order per campaign on Colab G4 sessions,
+three or four processes under CUDA MPS; the longest order 10,955 s. Scored on the validation side,
+seeds 1 to 10: 3,994 stays, or 21 engines. Read with `data/report/l1/yardstick-pairs.sh`; CSV under
+`data/report/l1/yardstick/`.
+
+**Area under the ROC curve on the intensive-care task**, pooled over the ten seeds. The network
+from nothing and the probe at initialisation take each backbone's shape.
+
+| Backbone | Budget | From nothing | Probe, closed form | Trained probe | Fine-tuning | Probe at initialisation |
+|---|---|---|---|---|---|---|
+| 4.8M, seed 1 | 20 | 0.591 | 0.533 | 0.546 | 0.565 | 0.522 |
+| | 50 | 0.613 | 0.591 | 0.598 | 0.620 | 0.582 |
+| | 200 | 0.664 | 0.639 | 0.641 | 0.700 | 0.627 |
+| 4.8M, seed 2 | 20 | 0.591 | 0.520 | 0.515 | 0.571 | 0.522 |
+| | 50 | 0.611 | 0.595 | 0.596 | 0.626 | 0.582 |
+| | 200 | 0.648 | 0.661 | 0.658 | 0.678 | 0.627 |
+| 25.3M, 1e-3 | 20 | 0.584 | 0.500 | 0.544 | 0.557 | 0.522 |
+| | 50 | 0.604 | 0.575 | 0.596 | 0.595 | 0.579 |
+| | 200 | 0.672 | 0.596 | 0.615 | 0.636 | 0.627 |
+| 25.3M, 5e-4 | 20 | 0.584 | 0.530 | 0.542 | 0.569 | 0.522 |
+| | 50 | 0.621 | 0.587 | 0.586 | 0.607 | 0.579 |
+| | 200 | 0.666 | 0.624 | 0.645 | 0.645 | 0.627 |
+
+**Gain in area of the closed-form probe**, paired over stays (95 % interval); bold where the
+interval excludes zero.
+
+| Comparison | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| against from nothing, seed 1 | **−0.058** [−0.069; −0.048] | **−0.022** [−0.036; −0.007] | **−0.024** [−0.040; −0.009] |
+| against from nothing, seed 2 | **−0.071** [−0.083; −0.058] | **−0.016** [−0.028; −0.003] | +0.013 [−0.001; +0.028] |
+| against the probe at initialisation, seed 1 | +0.011 [−0.003; +0.024] | +0.009 [−0.002; +0.020] | +0.012 [−0.004; +0.028] |
+| against the probe at initialisation, seed 2 | −0.002 [−0.013; +0.009] | **+0.013** [+0.005; +0.021] | **+0.035** [+0.022; +0.047] |
+| seed 2 against seed 1 | **−0.012** [−0.022; −0.002] | +0.004 [−0.004; +0.012] | **+0.022** [+0.010; +0.035] |
+| larger shape at 1e-3 against 4.8M seed 1 | **−0.032** [−0.039; −0.026] | **−0.016** [−0.025; −0.008] | **−0.043** [−0.056; −0.031] |
+| larger shape at 5e-4 against 4.8M seed 1 | −0.003 [−0.009; +0.003] | −0.004 [−0.011; +0.003] | **−0.015** [−0.026; −0.003] |
+| larger shape at 5e-4 against 1e-3 | | **+0.012** [+0.005; +0.019] | |
+
+Full fine-tuning against the network from nothing: **+0.036** [+0.027; +0.046] and **+0.030**
+[+0.020; +0.040] at 200 stays under the two seeds; +0.007 and **+0.016** at 50; **−0.026** and
+**−0.020** at 20. The network from nothing under the two 4.8M backbones repeats to −0.002 [−0.006;
++0.001] at 50 stays. Under the larger shape full fine-tuning loses to its network from nothing at
+200 stays: **−0.035** [−0.045; −0.026] at 1e-3 and **−0.021** [−0.031; −0.012] at 5e-4.
+
+**FD001 at 50 windows**, RMSE pooled over the ten seeds.
+
+| Backbone | From nothing | Probe, closed form | Trained probe | Fine-tuning, head solved | Probe at initialisation |
+|---|---|---|---|---|---|
+| 4.8M, seed 1 | 16.6 | 25.5 | 24.2 | 22.4 | 19.6 |
+| 4.8M, seed 2 | 16.6 | 23.5 | 22.4 | 20.9 | 19.6 |
+| 25.3M, 1e-3 | 23.7 | 29.6 | 23.0 | 24.1 | 17.7 |
+| 25.3M, 5e-4 | 23.6 | 21.7 | 23.3 | 20.1 | 17.7 |
+
+The closed-form probe lies above the same probe at initialisation under every backbone, by 3.9
+to 11.9 RMSE, each by the interval.
+
+**Conclusions.**
+
+1. At the curve's first point pretraining does not carry the probe to the network from nothing on
+   either task. On the stays the closed-form probe under the mixture lies below it at 20 and 50
+   stays under both seeds, by 0.016 to 0.071, and adds 0.009 to 0.013 to the same probe over an
+   untrained encoder at 50 stays (0.012 and 0.035 at 200). On FD001 the mixture's states serve a
+   linear reading of the remaining life worse than an untrained encoder's, by 3.9 to 5.9 RMSE at
+   4.8M.
+2. Two pretrainings of the mixture put the probe 0.004 apart at 50 stays, inside the interval: the
+   difference a step of the curve must exceed is 0.004. At 20 stays they lie 0.012 apart by the
+   interval, where the network from nothing repeats exactly. At 200 stays they lie 0.022 apart, but
+   the same network from nothing lies 0.016 apart between the two campaigns there, so that
+   difference is mostly the accelerator's, not the pretraining's.
+3. The larger shape at 1e-3 loses to today's at every budget; at half the rate it moves to within
+   0.004 of it at 50 stays and its probe is higher than at 1e-3 by the interval, so by the rule
+   declared beforehand the larger shape keeps 5e-4. At this point it gains nothing over today's
+   shape, and at 200 stays it loses 0.015 by the interval.
+4. Full fine-tuning gains over the network from nothing at 200 stays under both 4.8M seeds by the
+   interval (+0.030 and +0.036), a secondary cell, and loses at 20; under the larger shape it loses
+   at 200 too.
+5. Predictions: 1 fails at 50 stays under both seeds and at 200 under seed 1 (the probe lies below,
+   not around zero), and holds at 20 and at 200 under seed 2; the registered prediction, an
+   interval around zero at every budget, fails at 20 and 50 and at 200 under seed 1. 2 holds for
+   the network from nothing and fails for the size of pretraining's share (0.009 and 0.013, not
+   0.02–0.05). 3 holds (0.004). 4 holds at either rate. 5 holds against the probe at initialisation
+   under every backbone and against the network from nothing under three of four, the fourth
+   because the larger network from nothing is itself poor on FD001 (23.6). 6 holds under the 4.8M
+   backbones (+0.030, +0.036) and fails under the larger shape (−0.035, −0.021).
+
+**Limitations.**
+
+- One point: the slope is read when the next point is.
+- A cell trained under one seed does not repeat exactly on the accelerator at 200 stays; between
+  campaigns at that budget a difference of about 0.016 is the card's.
+- The larger shape's seed spread is assumed to be today's shape's, and the recipe, fine-tuning's
+  rate included, was chosen under today's shape.
+- The validation side was read before under other backbones at 50 and 200 stays (2026-09-30).
+- 20 stays hold two or three deaths in a draw; read descriptively.
