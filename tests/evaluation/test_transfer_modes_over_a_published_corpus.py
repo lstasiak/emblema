@@ -154,7 +154,7 @@ def runs(tmp_path_factory: pytest.TempPathFactory) -> Runs:
 def plan_of(mode: TransferMode) -> AdaptationPlan:
     return AdaptationPlan(
         mode=mode,
-        backbone=WEIGHTS if mode.starts_from_pretrained_weights else None,
+        backbone=WEIGHTS if mode.takes_pretrained_weights else None,
         schedule=AdaptationSchedule(
             epochs=EPOCHS,
             min_steps=0,

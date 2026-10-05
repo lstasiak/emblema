@@ -69,3 +69,30 @@ def test_a_run_that_may_stop_reports_fewer_epochs_than_planned_but_never_more_or
         outcome(plan=stopping, training_losses=(0.5, 0.4, 0.3))
     with pytest.raises(InvalidAdaptationOutcomeError, match="at least one epoch"):
         outcome(plan=stopping, training_losses=())
+
+
+def test_a_stopped_run_counts_its_steps_over_the_windows_it_learnt_from() -> None:
+    # Four windows in batches of two, one held out for the stop: three learnt, two steps an
+    # epoch rather than the two of four windows, over three epochs.
+    stopping = plan(
+        schedule=adaptation_schedule(epochs=3, batch_size=2),
+        regime=TrainingRegime(stop_share=0.25, patience=1),
+    )
+    four = outcome(
+        plan=stopping,
+        budget=LabelBudget.of(4),
+        labelled_windows=4,
+        labelled_units=4,
+        training_losses=(0.5, 0.4, 0.3),
+    )
+
+    assert four.optimiser_steps == 6
+    assert replace(four, stop_windows=2).optimiser_steps == 3
+
+
+def test_windows_are_held_out_only_by_a_stop_and_some_are_left_to_learn_from() -> None:
+    with pytest.raises(InvalidAdaptationOutcomeError, match="only by one"):
+        outcome(stop_windows=1)
+    stopping = plan(regime=TrainingRegime(stop_share=0.5, patience=1))
+    with pytest.raises(InvalidAdaptationOutcomeError, match="leaves some to learn from"):
+        outcome(plan=stopping, training_losses=(0.5,), stop_windows=2)

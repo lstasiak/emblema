@@ -152,7 +152,7 @@ def leg(tmp_path_factory: pytest.TempPathFactory) -> Leg:
 def plan_of(mode: TransferMode) -> AdaptationPlan:
     return AdaptationPlan(
         mode=mode,
-        backbone=WEIGHTS if mode.starts_from_pretrained_weights else None,
+        backbone=WEIGHTS if mode.takes_pretrained_weights else None,
         schedule=adaptation_schedule(epochs=2, batch_size=4, learning_rate=1e-2),
         lora=LORA if mode.adds_low_rank_updates else None,
         seed=1,

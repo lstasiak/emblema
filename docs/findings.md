@@ -5,7 +5,7 @@ validation side**: the frozen test side of every task is opened once, at the end
 comparison were registered before the run they judge ([preregistration](preregistration.md)).
 The evidence for each line is in [`docs/verification/`](verification/README.md).
 
-Last updated 2026-09-30.
+Last updated 2026-10-05.
 
 ## The claim
 
@@ -208,6 +208,31 @@ that fifth and are not those of the table in section 6.
   pretext loss, loses 0.057 under fine-tuning to its eight-pass twin. A backbone is chosen on
   the task, never by its pretext loss. The rate and the step floor of fine-tuning at 200 stays
   move it by at most 0.012.
+
+### 8. At about 10⁸ values, pretraining does not carry a probe to the network from nothing
+
+The first point of a curve of the gain over the data a backbone is pretrained on
+([ADR-0049](adr/0049-the-scale-of-pretraining-as-a-stage.md),
+[note](verification/intensive-care-curve.md), 2026-10-05): the mixture of four corpora, about 10⁸
+values, read by the probe solved in closed form against the network from nothing, ten seeds, under
+a recipe chosen on the tuning side beforehand
+([ADR-0050](adr/0050-a-head-solved-first-a-patience-in-steps-and-a-probe-at-initialisation.md)).
+
+| Gain of the probe, in area | 20 stays | 50 stays | 200 stays |
+| --- | --- | --- | --- |
+| against the network from nothing (two pretraining seeds) | −0.058, −0.071 | −0.022, −0.016 | −0.024, +0.013 |
+| against the same probe over an untrained encoder | +0.011, −0.002 | +0.009, +0.013 | +0.012, +0.035 |
+
+- **The probe lies below the network from nothing** at 20 and 50 stays under both pretrainings,
+  by the interval; pretraining adds about 0.01 over an untrained encoder's states.
+- **On FD001 the mixture's states are worse than an untrained encoder's** for a linear reading
+  of the remaining life, by 3.9 to 5.9 RMSE at 50 windows.
+- **Two pretrainings differ by 0.004 at 50 stays**, the step the next point of the curve has to
+  exceed. A shape five times larger gains nothing here, once its rate is halved.
+- Full fine-tuning gains 0.030 and 0.036 over the network from nothing at 200 stays under
+  today's shape, and loses 0.021 under the larger one at its rate.
+
+This is the curve's left end; whether the gain grows with the data is read at the next points.
 
 ## Limitations
 

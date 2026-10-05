@@ -1,6 +1,7 @@
 # ADR-0049: The scale of pretraining as a stage — a curve of the gain over the data, read at one or two per cent of the labels, before the transfer matrix
 
 - Status: accepted (2026-10-04)
+- Addendum (2026-10-04): the shape one step up, width 512 and eight layers, holds 25.3M parameters, not ~20M.
 - Date: 2026-10-04
 
 ## Context

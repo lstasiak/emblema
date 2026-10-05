@@ -18,21 +18,23 @@ class AdaptationPlan:
     One value holds everything a cell of the curve does to the backbone, so two cells can be told
     apart by comparing plans and a run reports the plan it was made under. Which weights it
     starts from is part of the plan rather than of the mode: the control arm starts from none,
-    and every other mode from the artifact of a pretrained backbone, held by reference and
-    checksum as the registry holds it.
+    the modes that adapt the weights from the artifact of a pretrained backbone, held by
+    reference and checksum as the registry holds it, and the frozen modes from either, since
+    reading an encoder at its initialisation is how a curve over pretraining starts.
 
-    Invariants: weights are named exactly when the mode starts from pretrained ones; low-rank
-    updates are specified exactly when the mode adds them; penalties are named exactly when the
-    mode solves its head in closed form, and that mode pools under no learnt weights, since a
-    closed form has nothing to train them with; the encoder drops activations only where it runs
+    Invariants: the control arm names no weights and the modes that adapt them name some;
+    low-rank updates are specified exactly when the mode adds them; penalties are named exactly
+    when a head is solved in closed form, by the mode or before a trained head's first step, and
+    a head so solved pools under no learnt weights, since a closed form has nothing to train
+    them with; the encoder drops activations only where it runs
     inside the optimiser's loop, since elsewhere the dropout would change nothing; the encoder is
     built otherwise than its backbone (its own shape, its own value embedding) only where it starts
     from no weights, and its own shape is stated whole.
 
     Attributes:
         mode: What the backbone's weights do while the task is learnt.
-        backbone: Artifact of the pretrained weights the run starts from; ``None`` for the
-            control arm.
+        backbone: Artifact of the pretrained weights the run starts from; ``None`` for an
+            encoder at its initialisation.
         schedule: How long the task is learnt, in how large a step, under what decay.
         lora: The low-rank updates, where the mode adds them; ``None`` otherwise.
         seed: Seed of everything the run draws: the head, fresh backbone weights, the low-rank
@@ -40,8 +42,8 @@ class AdaptationPlan:
             schedule: another seed is a repeat of the same schedule over the same labels.
         pooling: How the states of a window become the one state the head reads; the mean
             over the window unless a variant turns it.
-        ridge: The penalties a closed-form head chooses among, where the mode solves one;
-            ``None`` otherwise.
+        ridge: The penalties a closed-form head chooses among, where one is solved; ``None``
+            otherwise.
         encoder: What the encoder drops while it learns and which readings it is given; the
             standard setting unless a variant turns it.
         regime: How the run is stopped, weighted and perturbed inside its schedule; the
@@ -59,15 +61,12 @@ class AdaptationPlan:
     regime: TrainingRegime = field(default_factory=TrainingRegime.standard)
 
     def __post_init__(self) -> None:
-        if (self.backbone is None) == self.mode.starts_from_pretrained_weights:
+        if self.backbone is None and self.mode.needs_pretrained_weights:
             raise InvalidAdaptationPlanError(
-                f"{self.mode} "
-                + (
-                    "starts from pretrained weights and names none"
-                    if self.backbone is None
-                    else "starts from no weights and names some"
-                )
+                f"{self.mode} adapts pretrained weights and names none"
             )
+        if self.backbone is not None and not self.mode.takes_pretrained_weights:
+            raise InvalidAdaptationPlanError(f"{self.mode} starts from no weights and names some")
         if (self.lora is None) == self.mode.adds_low_rank_updates:
             raise InvalidAdaptationPlanError(
                 f"{self.mode} "
@@ -77,7 +76,11 @@ class AdaptationPlan:
                     else "adds no low-rank updates and specifies some"
                 )
             )
-        if (self.ridge is None) == self.mode.solves_the_head_in_closed_form:
+        if self.regime.solves_the_head_first and self.mode.solves_the_head_in_closed_form:
+            raise InvalidAdaptationPlanError(
+                f"{self.mode} solves its head in closed form and takes no step to start it for"
+            )
+        if (self.ridge is None) == self.solves_a_head:
             raise InvalidAdaptationPlanError(
                 f"{self.mode} "
                 + (
@@ -86,7 +89,7 @@ class AdaptationPlan:
                     else "trains its head and names penalties"
                 )
             )
-        if self.mode.solves_the_head_in_closed_form and self.pooling.pooling.learns_weights:
+        if self.solves_a_head and self.pooling.pooling.learns_weights:
             raise InvalidAdaptationPlanError(
                 f"{self.mode} solves its head in closed form and cannot learn a "
                 f"{self.pooling.pooling} pooling"
@@ -113,13 +116,19 @@ class AdaptationPlan:
             )
         if self.regime.stop_partly_stated:
             raise InvalidAdaptationPlanError(
-                "a stop states both the share it holds out and the patience it waits"
+                "a stop states both the share it holds out and the patience it waits, and a "
+                "division only with both"
             )
         if self.regime != TrainingRegime.standard() and self.mode.solves_the_head_in_closed_form:
             raise InvalidAdaptationPlanError(
                 f"{self.mode} solves its head in closed form and takes no step a regime could "
                 "stop, weight or perturb"
             )
+
+    @property
+    def solves_a_head(self) -> bool:
+        """Whether a head is solved in closed form: as the mode's answer or as a run's start."""
+        return self.mode.solves_the_head_in_closed_form or self.regime.solves_the_head_first
 
     @property
     def encodes_in_the_loop(self) -> bool:

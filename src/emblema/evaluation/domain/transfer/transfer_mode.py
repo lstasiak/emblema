@@ -14,10 +14,10 @@ class TransferMode(StrEnum):
     Attributes:
         FROM_SCRATCH: The architecture randomly initialised, every weight trained. The control
             arm: what the labels teach on their own.
-        FROZEN_PROBE: The pretrained weights held fixed and a linear head trained over the pooled
-            states. What the representation carries as it stands.
-        FROZEN_RIDGE: The pretrained weights held fixed and the linear head solved in closed
-            form over the pooled states, its penalty chosen by leave-one-out error. What the
+        FROZEN_PROBE: The weights held fixed and a linear head trained over the pooled states.
+            What the representation carries as it stands.
+        FROZEN_RIDGE: The weights held fixed and the linear head solved in closed form over
+            the pooled states, its penalty chosen by leave-one-out error. What the
             representation carries, read without an optimiser between it and the answer: the
             head trained under the schedule sits several cycles behind this one on the same
             states.
@@ -34,8 +34,20 @@ class TransferMode(StrEnum):
     FULL_FINE_TUNING = "full_fine_tuning"
 
     @property
-    def starts_from_pretrained_weights(self) -> bool:
+    def takes_pretrained_weights(self) -> bool:
+        """Whether the mode may start from pretrained weights; the control arm never does."""
         return self is not TransferMode.FROM_SCRATCH
+
+    @property
+    def needs_pretrained_weights(self) -> bool:
+        """Whether the mode is meaningless without them.
+
+        Adapting every weight of an encoder that was never pretrained is the control arm, and
+        low-rank updates to one are a smaller control; a frozen encoder read at its
+        initialisation is a reading of its own, of what the architecture carries before any
+        data has shaped it.
+        """
+        return self in (TransferMode.LORA, TransferMode.FULL_FINE_TUNING)
 
     @property
     def trains_backbone_weights(self) -> bool:

@@ -24,6 +24,7 @@ from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
 from emblema.evaluation.adapters.torch.ridge_solution import RidgeSolution  # noqa: E402
+from emblema.evaluation.adapters.torch.scheduled_training import ScheduledTraining  # noqa: E402
 from emblema.evaluation.adapters.torch.target_link import TargetLink  # noqa: E402
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import (  # noqa: E402
     TorchAdaptationRuntime,
@@ -51,11 +52,14 @@ from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  #
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting  # noqa: E402
 from emblema.evaluation.domain.transfer.training_regime import (  # noqa: E402
     ClassWeight,
+    HeadStart,
+    StopDivision,
     TrainingRegime,
 )
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
+from emblema.shared.kernel.ordering import seeded_rank  # noqa: E402
 from tests.evaluation.support import (  # noqa: E402
     LORA,
     OUTCOME,
@@ -508,6 +512,11 @@ def test_a_run_that_stops_learns_from_the_units_left_and_ends_within_its_patienc
 
     assert 1 <= len(outcome.training_losses) <= 6
     assert all(torch.isfinite(torch.tensor(outcome.training_losses)))
+    # One window of the held-out unit or two of the other: one step an epoch either way here,
+    # but the count runs over the windows learnt from, not the three given.
+    assert outcome.stop_windows in (1, 2)
+    learnt = len(SAMPLE.windows) - outcome.stop_windows
+    assert outcome.optimiser_steps == len(outcome.training_losses) * -(-learnt // 2)
     assert len(outcome.predictions) == len(VALIDATION)
 
 
@@ -540,3 +549,127 @@ def test_a_class_weight_is_refused_for_a_quantity(published: Published) -> None:
 
     with pytest.raises(InvalidTrainingRegimeError, match="no classes"):
         adapt(published, weighted)
+
+
+def test_a_head_solved_first_starts_the_steps_from_the_solution_over_the_untouched_encoder(
+    published: Published, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The probe phase changes the head alone, and the encoder moves only under the steps after
+    # it: what the loop receives is read at the moment it is called, before its first step.
+    stated = plan(regime=TrainingRegime(head_start=HeadStart.SOLVED), ridge=PENALTIES)
+    received: dict[str, Tensor] = {}
+    losses = ScheduledTraining.losses
+
+    def spied(self: ScheduledTraining, model: nn.Module, *args: object, **kwargs: object) -> object:
+        received.update({k: v.detach().clone() for k, v in model.state_dict().items()})
+        return losses(self, model, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ScheduledTraining, "losses", spied)
+
+    adapt(published, stated)
+
+    (encoder,) = published.backbones.built
+    before = pretrained_weights()
+    assert all(torch.equal(received[f"encoder.{name}"], before[name]) for name in before)
+    candidate = AdaptedBackbone.under(
+        stated, published.backbones, vocabulary_size=len(CHANNELS), starting_at=0.0
+    )
+    candidate.encoder.load_state_dict(before)
+    manifest = published.runtime._blocks.manifest_of(published.task.manifest)
+    tuning = published.runtime._blocks.block_of(manifest).at(
+        [labelled.window.position for labelled in SAMPLE.windows]
+    )
+    candidate.eval()
+    with torch.no_grad():
+        states = candidate.embed(TokenTensors.from_windows(list(tuning)))
+    targets = torch.tensor([w.target / CEILING for w in SAMPLE.windows])
+    RidgeSolution.fitted(states, targets, PENALTIES).applied_to(candidate.head)
+    assert torch.allclose(received["head.linear.weight"], candidate.head.linear.weight, atol=1e-5)
+    assert any(not torch.equal(encoder.state_dict()[name], before[name]) for name in before)
+
+
+def test_a_head_solved_first_starts_the_control_arm_too(published: Published) -> None:
+    started = plan(
+        TransferMode.FROM_SCRATCH,
+        regime=TrainingRegime(head_start=HeadStart.SOLVED),
+        ridge=PENALTIES,
+    )
+
+    outcome = adapt(published, started)
+
+    assert published.backbones.requested == []
+    assert outcome.optimiser_steps > 0
+    assert outcome.plan.parameters()["ridge_penalties"] == "0.1 1 10"
+
+
+def test_the_closed_form_probe_reads_an_encoder_at_its_initialisation(
+    published: Published,
+) -> None:
+    outcome = adapt(published, plan(TransferMode.FROZEN_RIDGE, backbone=None))
+
+    assert published.backbones.requested == []
+    assert outcome.optimiser_steps == 0
+    assert outcome.plan.parameters()["backbone"] == ""
+    assert len(outcome.predictions) == len(VALIDATION)
+
+
+def test_a_patience_in_steps_waits_out_the_warmup_before_it_may_stop(
+    published: Published,
+) -> None:
+    # Every epoch takes as many steps as the next, so a warmup over half the run ends half-way,
+    # and a patience of one step cannot end the run before the epoch after that.
+    schedule = adaptation_schedule(epochs=6, batch_size=1, warmup_fraction=0.5)
+    in_steps = adapt(
+        published, plan(schedule=schedule, regime=TrainingRegime(stop_share=0.5, patience_steps=1))
+    )
+
+    assert len(in_steps.training_losses) >= 4
+
+
+OUTCOME_SAMPLE = LabelSample(
+    task=TASK,
+    windows=(
+        labelled("a", 0, 10.0, 1.0),
+        labelled("b", 1, 15.0, 1.0),
+        labelled("c", 2, 10.0, 0.0),
+        labelled("d", 3, 10.0, 0.0),
+        labelled("e", 3, 12.0, 0.0),
+        labelled("f", 2, 12.0, 0.0),
+    ),
+    budget=LabelBudget.of(6),
+    seed=7,
+)
+
+
+@pytest.mark.parametrize("seed", range(1, 21))
+def test_a_stop_divided_by_outcome_holds_out_and_learns_from_each_outcome(seed: int) -> None:
+    stopping = plan(
+        seed=seed,
+        regime=TrainingRegime(stop_share=0.25, patience=1, stop_division=StopDivision.OUTCOMES),
+    )
+
+    learnt, stopped = TorchAdaptationRuntime._divided(OUTCOME_SAMPLE, stopping, TargetKind.BINARY)
+
+    assert sorted(labelled.target for labelled in stopped) == [0.0, 1.0]
+    assert {labelled.target for labelled in learnt} == {0.0, 1.0}
+    assert {w.window.unit for w in learnt}.isdisjoint({w.window.unit for w in stopped})
+
+
+def test_a_stop_divided_by_units_is_the_division_it_always_was() -> None:
+    # The stop registered at every stay ran under this division; a seed draws the same units.
+    stopping = plan(seed=3, regime=TrainingRegime(stop_share=0.25, patience=1))
+
+    _, stopped = TorchAdaptationRuntime._divided(OUTCOME_SAMPLE, stopping, TargetKind.BINARY)
+
+    units = sorted({str(w.window.unit) for w in OUTCOME_SAMPLE.windows})
+    ranked = sorted(units, key=lambda unit: seeded_rank(3, "stop", unit))
+    assert {str(w.window.unit) for w in stopped} == set(ranked[:2])
+
+
+def test_a_division_by_outcome_is_refused_for_a_quantity() -> None:
+    stopping = plan(
+        regime=TrainingRegime(stop_share=0.25, patience=1, stop_division=StopDivision.OUTCOMES)
+    )
+
+    with pytest.raises(InvalidTrainingRegimeError, match="only an outcome"):
+        TorchAdaptationRuntime._divided(SAMPLE, stopping, TargetKind.CONTINUOUS)

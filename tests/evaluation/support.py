@@ -230,7 +230,7 @@ def plan(mode: TransferMode = TransferMode.FULL_FINE_TUNING, **overrides: Any) -
     """A plan of ``mode`` that holds together; anything named is replaced afterwards."""
     stated = AdaptationPlan(
         mode=mode,
-        backbone=WEIGHTS if mode.starts_from_pretrained_weights else None,
+        backbone=WEIGHTS if mode.takes_pretrained_weights else None,
         schedule=adaptation_schedule(),
         lora=LORA if mode.adds_low_rank_updates else None,
         seed=1,

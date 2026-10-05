@@ -1,0 +1,47 @@
+# The curve over the scale of pretraining read at one point, at 20 and 50 stays: the probe solved
+# in closed form against the network from nothing, the primary measure, with full fine-tuning,
+# the trained probe and the same probe over the encoder at its initialisation beside it.
+#
+# Every candidate at the recipe registered for the curve (docs/preregistration.md, "The scale of
+# pretraining"): the settings in force at 50 stays, which 20 stays share. Seeds 1 to 10 scored on
+# the validation side, the same stays and draws under every backbone, so two points of the curve
+# pair by stay and seed. Defined once under each backbone the point is read under; the network
+# from nothing and the probe at initialisation take that backbone's shape.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "yardstick-low-physionet2012"
+purpose = "tuning"
+tier = "M"
+measure = "auroc_shortfall"
+
+[candidates]
+competing = [
+    "from_scratch",
+    "frozen_ridge",
+    "frozen_probe@learning_rate=0.03",
+    "full_fine_tuning",
+    "untrained_ridge",
+]
+control = "from_scratch"
+endpoint = "frozen_ridge"
+
+[budgets]
+labels = ["20", "50"]
+endpoint = "50"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# In area: the least gain at 50 stays and the floor's fixed part registered for the curve; the
+# least gain at 20 stays, 0.055, is read in the note, since 20 stays are read descriptively.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+correction = "holm"
+# Four contenders at two budgets, less the endpoint.
+secondary_family_size = 7
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

@@ -1830,3 +1830,363 @@ its standard error.
   no earlier reading to check against.
 - The small shape's cells repeat to the stay on one GPU and differ by 0.004 between a T4 and a
   G4, so a difference of that size between campaigns run on different cards is the card's.
+
+## 2026-10-04 — declared before the run: the recipe at 20, 50 and 200 stays and at 50 windows, and the seeds' spread under it
+
+**Question.** The curve over the scale of pretraining (`docs/preregistration.md`, "The scale of
+pretraining"; ADR-0049) reads every point under one recipe of adaptation, chosen on the tuning
+side before the first point is read on the validation side. Does solving the head before the
+first step, or a stop whose patience is counted in steps past the warm-up and whose held-out
+stays hold both outcomes (ADR-0050), replace each arm's setting in force at the curve's budgets?
+And how far does one seed move the area of the network from nothing and of the probe solved in
+closed form under that recipe, which sets the least gain and the floor's fixed part?
+
+**Design.** Four campaigns under the mixture of four (`backbone-mixed4-m`, weights
+`sha256:0d81c01e…`), scored on the fifth held out by seed 101 over seeds 1 to 10, the validation
+side unread. The intensive-care task is `a6a9c653…`, FD001 `be30c0ac…`, both over the
+publications the backbone was pretrained on.
+
+| Campaign file | Budget | Each arm from | Knobs turned |
+|---|---|---|---|
+| `campaigns/recipe-20-physionet2012.toml` | 20 stays | its setting at 50 | the head solved first |
+| `campaigns/recipe-50-physionet2012.toml` | 50 stays | its setting at 50 | the head solved first; the stop; both |
+| `campaigns/recipe-200-physionet2012.toml` | 200 stays | its setting at 200 | the head solved first; the stop; both |
+| `campaigns/recipe-50-fd001.toml` | 50 windows | its setting at 50 | the head solved first; the stop by engine; both |
+
+Each campaign also holds the probe solved in closed form (`frozen_ridge`) and the same probe
+over the encoder at the control's initialisation (`untrained_ridge`), the first and zeroth
+points of the curve. The stop holds a fifth of the labelled units out, within each outcome on
+the intensive-care task, and waits 500 steps past the warm-up: a stopped run at 50 or 200 is
+capped at about 1,500 steps, its warm-up about 150, and 500 steps is the patience the stop gained
+under at 1,000 stays (2026-10-03, ten epochs of 50 steps). Twenty stays hold two or three deaths, so no stop runs
+there: it would score one death and leave the solved head one to learn from. The settings in
+force are the selections' choices on the earlier publication, `selection-scratch-*` and
+`selection-fine-tuning-*`, since a selection on another task cannot be named as a tuned choice.
+
+**Reading, declared beforehand.** By `scripts/campaign_pairs_report.py`, within each campaign
+and arm, every variant against the arm's setting in force, paired over the scored units and
+pooled over the seeds.
+
+- A variant *replaces* the setting where its paired 95 % interval lies above zero (a gain in area
+  on the intensive-care task, a reduction in RMSE on FD001) and its mean over seeds exceeds twice
+  its standard error, the rule of 2026-10-03. Among the variants that replace it, the one with
+  the largest mean gain is chosen; where none does, the setting in force stands. Each arm is
+  chosen on its own: the comparison holds the knobs on offer equal, and the control is not held
+  below its best.
+- The choice per arm and budget is registered as variants before the first point of the curve
+  is read on the validation side.
+- *Least gain*, at each of 20, 50 and 200 stays: the larger of the two standard deviations over
+  the ten seeds, of the network from nothing at its chosen variant and of `frozen_ridge`, rounded
+  up to 0.005. *Floor's fixed part*: the smallest standard deviation of the network from nothing
+  at its chosen variant over the three budgets, rounded down to 0.005 and not below 0.01. The
+  reading of 2026-09-29, under the recipe. FD001 keeps its registered relative rule.
+- `untrained_ridge` against `frozen_ridge` and against the network from nothing is reported as
+  measured and chooses nothing.
+
+**Predictions.**
+
+1. The checks hold: the network from nothing at its setting lands within 0.02 of 0.623 at 50
+   stays and within 0.015 of 0.66 at 200 (the same fifth, the earlier publication of the same
+   stays).
+2. The head solved first replaces full fine-tuning's setting at 50 stays, by 0.01 to 0.03, and
+   on FD001 at 50 windows; at 200 stays it gains under 0.01 and does not replace. It replaces
+   nothing for the network from nothing at any budget: a head solved over states of an encoder
+   at its initialisation is forgotten in the first hundred steps.
+3. The stop replaces the network from nothing's setting at 200 stays, by 0.01 to 0.03: the
+   stop that fired inside the warm-up there gained +0.012 without replacing, and a patience
+   that begins after the warm-up removes that cause. At 50 stays it replaces nothing: eleven
+   held-out stays with two deaths read an epoch to about 0.2.
+4. Both knobs together replace no arm by more than the better of the two alone.
+5. `untrained_ridge` lands below the network from nothing at 50 stays, between 0.55 and 0.62,
+   and `frozen_ridge` above `untrained_ridge` by at least 0.03.
+6. At 50 stays one seed moves the network from nothing by 0.04 to 0.06 and `frozen_ridge` by
+   0.02 to 0.04, so the least gain at 50 lies between 0.04 and 0.06.
+
+**What follows.** The chosen variants and the thresholds enter `docs/preregistration.md` by one
+row before any campaign of the curve reads the validation side. If the stop replaces at 200 or
+50 stays, it is the recipe there for the curve only; the registered grids' recipe is unchanged.
+If the head solved first replaces full fine-tuning's setting, the trained probe is read beside
+it under its setting in force. No verdict of the registered grids changes.
+
+**Limitations.**
+
+- One share and one patience; a patience of 300 or 800 steps is not read.
+- The settings in force were chosen on the earlier publication of the same stays; a rate that
+  suits the new one better is not searched.
+- The standard deviation of the chosen variant is read on the cells that chose it; the choice
+  goes by the mean, not the spread, but the two are not independent.
+- Ten seeds read a difference to about 0.016 at 50 stays and 0.013 at 200.
+- The stays scored are a fifth of the tuning side the earlier selections and the stop's reading
+  of 2026-10-03 were also scored on.
+
+## 2026-10-04 — Colab G4: the recipe at 20, 50 and 200 stays and at 50 windows, and the seeds' spread under it
+
+**Question.** Does the head solved first, or the stop counted in steps and divided by outcome,
+replace an arm's setting at the curve's budgets, and how far does one seed move the area? The
+design, the reading and the predictions are in the section declared on 2026-10-04 for the
+recipe.
+
+**Conditions.** Commit `4b07dc94`; campaigns `da27c29a…` (20 stays), `5098676c…` (50),
+`e4ef8d16…` (200), `b9dc55a7…` (FD001, 50 windows), under the mixture of four
+(`sha256:0d81c01e…`); one order each, four processes on one Colab G4, the longest order in
+5,198 s. Scored on the fifth held out by seed 101, seeds 1 to 10: 800 stays, or 16 engines and
+523 windows. Read with `data/report/l1/recipe-pairs.sh` (`scripts/campaign_pairs_report.py`);
+CSV under `data/report/l1/recipe/`.
+
+**Area under the ROC curve**, pooled over the ten seeds, and its standard deviation over them.
+*Head* is the head solved first; *stop* the stop of 500 steps past the warm-up, divided by
+outcome. The network from nothing runs at 0.003 at 200 stays and at the rate in force below.
+
+| Candidate | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| network from nothing | 0.589 (0.038) | 0.625 (0.049) | 0.643 (0.047) |
+| from nothing, head | 0.600 (0.057) | 0.630 (0.054) | 0.636 (0.060) |
+| from nothing, stop | — | 0.622 (0.059) | 0.646 (0.063) |
+| from nothing, head and stop | — | 0.629 (0.063) | 0.648 (0.070) |
+| full fine-tuning | 0.573 (0.054) | 0.616 (0.032) | 0.689 (0.040) |
+| fine-tuning, head | 0.550 (0.059) | 0.616 (0.047) | 0.672 (0.043) |
+| fine-tuning, stop | — | 0.575 (0.035) | 0.663 (0.031) |
+| fine-tuning, head and stop | — | 0.609 (0.050) | 0.653 (0.041) |
+| probe in closed form (`frozen_ridge`) | 0.557 (0.054) | 0.603 (0.056) | 0.657 (0.033) |
+| the same probe at initialisation | 0.541 (0.037) | 0.571 (0.045) | 0.606 (0.044) |
+
+**Gain in area against the arm's setting**, paired over stays (95 % interval), and seed by seed
+(mean ± standard error). A variant *replaces* where the interval lies above zero and the mean
+exceeds twice its standard error.
+
+| Budget | Variant | Paired gain | Seed by seed | Replaces |
+|---|---|---|---|---|
+| 20 | from nothing, head | +0.010 [−0.011; +0.032] | +0.010 ± 0.013 | no |
+| 20 | fine-tuning, head | **−0.023 [−0.038; −0.008]** | −0.023 ± 0.016 | no, loses |
+| 50 | from nothing, head / stop / both | +0.005 / −0.003 / +0.005, each interval across zero | ≤ 0.6 SE | no |
+| 50 | fine-tuning, head | +0.000 [−0.016; +0.016] | +0.000 ± 0.015 | no |
+| 50 | fine-tuning, stop | **−0.042 [−0.065; −0.019]** | −0.042 ± 0.014 | no, loses |
+| 50 | fine-tuning, both | −0.007 [−0.029; +0.015] | −0.007 ± 0.015 | no |
+| 200 | from nothing, head / stop / both | −0.006 / +0.004 / +0.005, each interval across zero | ≤ 0.4 SE | no |
+| 200 | fine-tuning, head | **−0.017 [−0.033; −0.002]** | −0.017 ± 0.013 | no, loses |
+| 200 | fine-tuning, stop | **−0.026 [−0.042; −0.009]** | −0.026 ± 0.012 | no, loses |
+| 200 | fine-tuning, both | **−0.036 [−0.058; −0.014]** | −0.036 ± 0.013 | no, loses |
+
+The probes, as measured: `frozen_ridge` against the network from nothing −0.033 [−0.059;
+−0.007] at 20, −0.022 [−0.053; +0.010] at 50, +0.015 [−0.017; +0.045] at 200; against the same
+probe at initialisation +0.016 [−0.005; +0.037], **+0.032 [+0.007; +0.057]** and **+0.051
+[+0.016; +0.085]**.
+
+**FD001 at 50 windows**, RMSE pooled over the ten seeds (standard deviation), and the reduction
+against the arm's setting.
+
+| Candidate | RMSE | Reduction | Seed by seed | Replaces |
+|---|---|---|---|---|
+| network from nothing | 16.2 (1.0) | | | |
+| from nothing, head | 17.1 (1.5) | −0.91 [−1.39; −0.42] | −0.88 ± 0.47 | no, loses |
+| from nothing, stop | 20.7 (6.3) | −4.50 [−6.71; −2.47] | −3.65 ± 1.94 | no, loses |
+| from nothing, head and stop | 19.3 (2.7) | −3.10 [−4.12; −2.10] | −2.96 ± 0.82 | no, loses |
+| full fine-tuning | 22.7 (1.6) | | | |
+| fine-tuning, head | 21.9 (2.2) | **+0.84 [+0.21; +1.46]** | +0.89 ± 0.42 | **yes** |
+| fine-tuning, stop | 22.9 (1.5) | −0.21 [−0.90; +0.44] | −0.21 ± 0.47 | no |
+| fine-tuning, head and stop | 22.8 (3.1) | −0.03 [−1.09; +0.94] | +0.11 ± 1.07 | no |
+| probe in closed form | 23.9 (4.6) | −7.74 against from nothing | | |
+| the same probe at initialisation | 18.8 (1.9) | −2.65 against from nothing; +5.09 against the probe under the backbone | | |
+
+**Conclusions.**
+
+1. On the intensive-care task no variant replaces any arm's setting at any budget: the settings
+   in force stand for the network from nothing and full fine-tuning at 20, 50 and 200 stays.
+   Five variants of full fine-tuning lose by the interval; the stop costs it most (−0.042 at 50).
+   On FD001 the head solved first replaces full fine-tuning's setting (−0.84 RMSE, 3.7 %), and
+   every stop loses for the network from nothing.
+2. Predictions: 1 holds at 50 (0.625) and misses by 0.002 at 200 (0.643); 2 holds on FD001 only;
+   3 fails, the stop gains the network from nothing nothing at 200 (+0.004); 4 holds; 5 holds,
+   the probe at initialisation at 0.571 and pretraining adding 0.032 to it at 50; 6 holds for the
+   network from nothing (0.049) and fails for the probe, which spreads by 0.056, not 0.02–0.04.
+3. By the reading declared beforehand the least gain is 0.055 at 20 stays, 0.060 at 50 and 0.050
+   at 200 (the probe's spread at 20 and 50, the network's at 200), and the floor's fixed part
+   0.035 (the network's 0.038 at 20, rounded down).
+4. At the curve's first point the probe under the backbone does not beat the network from
+   nothing at any budget, and beats the same probe at initialisation by 0.03 to 0.05 from 50
+   stays up. On FD001 it is worse than the probe at initialisation by 5.1 RMSE: the mixture's
+   states serve a linear reading of the remaining life worse than an untrained encoder's.
+5. A head solved in closed form does not carry over to fine-tuning on the stays: the solved
+   head is the probe's (0.603 at 50), and fine-tuning from it lands where fine-tuning from a
+   drawn head does.
+
+**Limitations.**
+
+- The settings in force were chosen on the earlier publication of the same stays; no rate was
+  searched again.
+- The spread of the network from nothing is read on the cells that also chose its setting.
+- One share and one patience of the stop; the probe phase is the closed form only.
+- Ten seeds read a difference to about 0.015; at 20 stays the draw holds two or three deaths.
+
+## 2026-10-04 — declared before the run: the first point of the curve over the scale of pretraining
+
+**Question.** At the curve's first point, the mixture of four of about 10⁸ values, how far does
+the probe solved in closed form stand from the network from nothing at 20, 50 and 200 stays and
+at 50 windows of FD001, how far apart do two pretrainings of the mixture put it, and does the
+larger shape, at either rate, move it? The claim, the points and the rules are in
+`docs/preregistration.md`, "The scale of pretraining"; the recipe and thresholds were registered
+on 2026-10-04.
+
+**Design.** Three campaign files, each defined under every backbone of the point, scored on the
+validation side over seeds 1 to 10, the same stays, engines and draws under every backbone.
+
+| Campaign file | Budgets | Candidates |
+|---|---|---|
+| `campaigns/yardstick-low-physionet2012.toml` | 20, 50 stays | network from nothing; `frozen_ridge`; trained probe; full fine-tuning; `untrained_ridge` |
+| `campaigns/yardstick-200-physionet2012.toml` | 200 stays | the same, the network from nothing at 0.003 |
+| `campaigns/yardstick-50-fd001.toml` | 50 windows | the same at the turbofan's settings, full fine-tuning starting its head solved |
+
+| Backbone | Weights | Shape |
+|---|---|---|
+| `backbone-mixed4-m` (seed 1) | `sha256:0d81c01e…` | 4.8M |
+| `backbone-mixed4-m-seed2` | `sha256:94f00d72…` | 4.8M |
+| `backbone-mixed4-512x8-m` (1e-3) | `sha256:d047a2d0…` | 25.3M |
+| `backbone-mixed4-512x8-m-5e-4` | when accepted (`manual-handoff.md`, 2026-10-04) | 25.3M |
+
+The network from nothing and `untrained_ridge` take each backbone's shape, so under the two
+4.8M backbones they run twice; the second run checks that a cell repeats on the accelerator and
+is not read otherwise.
+
+**Reading, declared beforehand.** By `scripts/campaign_pairs_report.py`, pairs over the scored
+units, pooled over the seeds.
+
+- *Under each backbone*, at every budget: `frozen_ridge`, the trained probe and full fine-tuning
+  against the network from nothing, read by the registered rules (the least gain 0.055, 0.060 and
+  0.050 in area, 10 % in RMSE on FD001; the floor; Holm over the campaign's family); and
+  `frozen_ridge` against `untrained_ridge`, pretraining's share over the probe's form.
+- *The seeds' difference*, the bound a step of the curve must exceed: `frozen_ridge` under seed 2
+  less under seed 1 at 50 stays, paired; its absolute mean is the difference the registered rule
+  of the slope names. Reported at 20 and 200 stays and on FD001 beside it.
+- *The shape*: `frozen_ridge` under the larger shape against today's at 50 stays, at the rate the
+  pretraining note's rule keeps for the larger shape (`manual-handoff.md`, 2026-10-04: the half
+  rate where its probe is higher by the paired interval, 1e-3 otherwise).
+- The first point of each shape's curve is the one read here; the curve itself is read when the
+  next point is.
+
+**Predictions** — those registered for the stage, made specific to this point:
+
+1. Under each 4.8M backbone the interval of `frozen_ridge` against the network from nothing holds
+   zero at 50 and 200 stays. At 20 stays it lies below zero, as on the tuning side (−0.033),
+   where the registered prediction has it hold zero; the registered one is the one judged.
+2. `untrained_ridge` lies below the network from nothing at 50 stays by the interval, and below
+   `frozen_ridge` by 0.02 to 0.05.
+3. The two seeds' `frozen_ridge` differ by less than 0.01 at 50 stays.
+4. The larger shape's `frozen_ridge` gains no more than 0.01 over today's at 50 stays, at either
+   rate.
+5. On FD001 `frozen_ridge` lies above the network from nothing in RMSE under every backbone, and
+   above `untrained_ridge`, as on the tuning side (23.9 against 18.8).
+6. Full fine-tuning gains over the network from nothing at 200 stays by the interval, 0.03 to
+   0.05, as on the tuning side (+0.046), and is read as secondary.
+
+**Limitations.**
+
+- One point of the curve: no slope is read here.
+- The validation side has been read before under the mixture of five and the stays alone at 50
+  and 200 stays (grids of 2026-09-30); the backbones and publication are new, the stays are not.
+- 20 stays hold two or three deaths in a draw; their cells are read descriptively.
+- One pretraining run per backbone beyond the pair of seeds; the larger shape's seed spread is
+  assumed to be today's shape's.
+
+## 2026-10-05 — Colab G4: the first point of the curve over the scale of pretraining
+
+**Question.** At the mixture of four, about 10⁸ values, where does the probe solved in closed form
+stand against the network from nothing at 20, 50 and 200 stays and at 50 windows of FD001, how far
+apart do two pretrainings put it, and does the larger shape move it? The design, the reading and
+the predictions are in the section declared on 2026-10-04 for the first point.
+
+**Conditions.** Commit `819e82ad`; twelve campaigns, the three files of the yardstick each under
+the four backbones of `manual-handoff.md`, 2026-10-04 (seed 1 `sha256:0d81c01e…`, seed 2
+`sha256:94f00d72…`, the larger shape at 1e-3 `sha256:d047a2d0…` and at 5e-4 `sha256:b7553ef5…`);
+labels in `data/report/l1/yardstick-campaigns.txt`. One order per campaign on Colab G4 sessions,
+three or four processes under CUDA MPS; the longest order 10,955 s. Scored on the validation side,
+seeds 1 to 10: 3,994 stays, or 21 engines. Read with `data/report/l1/yardstick-pairs.sh`; CSV under
+`data/report/l1/yardstick/`.
+
+**Area under the ROC curve on the intensive-care task**, pooled over the ten seeds. The network
+from nothing and the probe at initialisation take each backbone's shape.
+
+| Backbone | Budget | From nothing | Probe, closed form | Trained probe | Fine-tuning | Probe at initialisation |
+|---|---|---|---|---|---|---|
+| 4.8M, seed 1 | 20 | 0.591 | 0.533 | 0.546 | 0.565 | 0.522 |
+| | 50 | 0.613 | 0.591 | 0.598 | 0.620 | 0.582 |
+| | 200 | 0.664 | 0.639 | 0.641 | 0.700 | 0.627 |
+| 4.8M, seed 2 | 20 | 0.591 | 0.520 | 0.515 | 0.571 | 0.522 |
+| | 50 | 0.611 | 0.595 | 0.596 | 0.626 | 0.582 |
+| | 200 | 0.648 | 0.661 | 0.658 | 0.678 | 0.627 |
+| 25.3M, 1e-3 | 20 | 0.584 | 0.500 | 0.544 | 0.557 | 0.522 |
+| | 50 | 0.604 | 0.575 | 0.596 | 0.595 | 0.579 |
+| | 200 | 0.672 | 0.596 | 0.615 | 0.636 | 0.627 |
+| 25.3M, 5e-4 | 20 | 0.584 | 0.530 | 0.542 | 0.569 | 0.522 |
+| | 50 | 0.621 | 0.587 | 0.586 | 0.607 | 0.579 |
+| | 200 | 0.666 | 0.624 | 0.645 | 0.645 | 0.627 |
+
+**Gain in area of the closed-form probe**, paired over stays (95 % interval); bold where the
+interval excludes zero.
+
+| Comparison | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| against from nothing, seed 1 | **−0.058** [−0.069; −0.048] | **−0.022** [−0.036; −0.007] | **−0.024** [−0.040; −0.009] |
+| against from nothing, seed 2 | **−0.071** [−0.083; −0.058] | **−0.016** [−0.028; −0.003] | +0.013 [−0.001; +0.028] |
+| against the probe at initialisation, seed 1 | +0.011 [−0.003; +0.024] | +0.009 [−0.002; +0.020] | +0.012 [−0.004; +0.028] |
+| against the probe at initialisation, seed 2 | −0.002 [−0.013; +0.009] | **+0.013** [+0.005; +0.021] | **+0.035** [+0.022; +0.047] |
+| seed 2 against seed 1 | **−0.012** [−0.022; −0.002] | +0.004 [−0.004; +0.012] | **+0.022** [+0.010; +0.035] |
+| larger shape at 1e-3 against 4.8M seed 1 | **−0.032** [−0.039; −0.026] | **−0.016** [−0.025; −0.008] | **−0.043** [−0.056; −0.031] |
+| larger shape at 5e-4 against 4.8M seed 1 | −0.003 [−0.009; +0.003] | −0.004 [−0.011; +0.003] | **−0.015** [−0.026; −0.003] |
+| larger shape at 5e-4 against 1e-3 | | **+0.012** [+0.005; +0.019] | |
+
+Full fine-tuning against the network from nothing: **+0.036** [+0.027; +0.046] and **+0.030**
+[+0.020; +0.040] at 200 stays under the two seeds; +0.007 and **+0.016** at 50; **−0.026** and
+**−0.020** at 20. The network from nothing under the two 4.8M backbones repeats to −0.002 [−0.006;
++0.001] at 50 stays. Under the larger shape full fine-tuning loses to its network from nothing at
+200 stays: **−0.035** [−0.045; −0.026] at 1e-3 and **−0.021** [−0.031; −0.012] at 5e-4.
+
+**FD001 at 50 windows**, RMSE pooled over the ten seeds.
+
+| Backbone | From nothing | Probe, closed form | Trained probe | Fine-tuning, head solved | Probe at initialisation |
+|---|---|---|---|---|---|
+| 4.8M, seed 1 | 16.6 | 25.5 | 24.2 | 22.4 | 19.6 |
+| 4.8M, seed 2 | 16.6 | 23.5 | 22.4 | 20.9 | 19.6 |
+| 25.3M, 1e-3 | 23.7 | 29.6 | 23.0 | 24.1 | 17.7 |
+| 25.3M, 5e-4 | 23.6 | 21.7 | 23.3 | 20.1 | 17.7 |
+
+The closed-form probe lies above the same probe at initialisation under every backbone, by 3.9
+to 11.9 RMSE, each by the interval.
+
+**Conclusions.**
+
+1. At the curve's first point pretraining does not carry the probe to the network from nothing on
+   either task. On the stays the closed-form probe under the mixture lies below it at 20 and 50
+   stays under both seeds, by 0.016 to 0.071, and adds 0.009 to 0.013 to the same probe over an
+   untrained encoder at 50 stays (0.012 and 0.035 at 200). On FD001 the mixture's states serve a
+   linear reading of the remaining life worse than an untrained encoder's, by 3.9 to 5.9 RMSE at
+   4.8M.
+2. Two pretrainings of the mixture put the probe 0.004 apart at 50 stays, inside the interval: the
+   difference a step of the curve must exceed is 0.004. At 20 stays they lie 0.012 apart by the
+   interval, where the network from nothing repeats exactly. At 200 stays they lie 0.022 apart, but
+   the same network from nothing lies 0.016 apart between the two campaigns there, so that
+   difference is mostly the accelerator's, not the pretraining's.
+3. The larger shape at 1e-3 loses to today's at every budget; at half the rate it moves to within
+   0.004 of it at 50 stays and its probe is higher than at 1e-3 by the interval, so by the rule
+   declared beforehand the larger shape keeps 5e-4. At this point it gains nothing over today's
+   shape, and at 200 stays it loses 0.015 by the interval.
+4. Full fine-tuning gains over the network from nothing at 200 stays under both 4.8M seeds by the
+   interval (+0.030 and +0.036), a secondary cell, and loses at 20; under the larger shape it loses
+   at 200 too.
+5. Predictions: 1 fails at 50 stays under both seeds and at 200 under seed 1 (the probe lies below,
+   not around zero), and holds at 20 and at 200 under seed 2; the registered prediction, an
+   interval around zero at every budget, fails at 20 and 50 and at 200 under seed 1. 2 holds for
+   the network from nothing and fails for the size of pretraining's share (0.009 and 0.013, not
+   0.02–0.05). 3 holds (0.004). 4 holds at either rate. 5 holds against the probe at initialisation
+   under every backbone and against the network from nothing under three of four, the fourth
+   because the larger network from nothing is itself poor on FD001 (23.6). 6 holds under the 4.8M
+   backbones (+0.030, +0.036) and fails under the larger shape (−0.035, −0.021).
+
+**Limitations.**
+
+- One point: the slope is read when the next point is.
+- A cell trained under one seed does not repeat exactly on the accelerator at 200 stays; between
+  campaigns at that budget a difference of about 0.016 is the card's.
+- The larger shape's seed spread is assumed to be today's shape's, and the recipe, fine-tuning's
+  rate included, was chosen under today's shape.
+- The validation side was read before under other backbones at 50 and 200 stays (2026-09-30).
+- 20 stays hold two or three deaths in a draw; read descriptively.

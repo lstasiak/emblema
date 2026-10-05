@@ -24,21 +24,23 @@ class BackboneArm:
     the arms of one campaign still spend one budget, which the design checks off the schedules
     rather than trusting.
 
-    Invariants: penalties are named exactly when the mode solves its head in closed form, so an
-    arm a campaign is declared against is one its plan can be made from.
+    Invariants: an arm whose mode solves its head in closed form names penalties, so an arm a
+    campaign is declared against is one its plan can be made from. An arm that trains its head
+    may hold the campaign's penalties too, for a variant that solves the head before the first
+    step; they reach its plan only then.
 
     Attributes:
         ref: What the campaign calls this arm.
         mode: What the backbone's weights do while the task is learnt.
         architecture: Artifact of the model whose shape the arm has, whether it starts from its
             weights or draws them anew; what pins the control arm's size to the campaign.
-        backbone: Artifact of the pretrained weights; ``None`` for the arm that starts from
-            none.
+        backbone: Artifact of the pretrained weights; ``None`` for an arm that starts from its
+            architecture's initialisation.
         lora: The low-rank updates, where the mode adds them; ``None`` otherwise.
         schedule: How long and how fast the arm learns the task.
         pooling: How the states of a window become the one state the arm's head reads.
-        ridge: The penalties a head solved in closed form chooses among, where the mode
-            solves one; ``None`` otherwise.
+        ridge: The penalties a head solved in closed form chooses among; ``None`` where the arm
+            never solves one.
         encoder: What the encoder drops while it learns and which readings it is given.
         regime: How the arm's run is stopped, weighted and perturbed inside its schedule.
     """
@@ -55,15 +57,21 @@ class BackboneArm:
     regime: TrainingRegime = field(default_factory=TrainingRegime.standard)
 
     def __post_init__(self) -> None:
-        if (self.ridge is None) == self.mode.solves_the_head_in_closed_form:
+        if self.ridge is None and self.mode.solves_the_head_in_closed_form:
             raise InvalidBackboneArmError(
-                f"{self.ref} under {self.mode} "
-                + (
-                    "solves its head in closed form and names no penalties"
-                    if self.ridge is None
-                    else "trains its head and names penalties"
-                )
+                f"{self.ref} under {self.mode} solves its head in closed form and names no "
+                "penalties"
             )
+
+    @property
+    def solves_a_head(self) -> bool:
+        """Whether a head is solved in closed form: as the mode's answer or as a run's start."""
+        return self.mode.solves_the_head_in_closed_form or self.regime.solves_the_head_first
+
+    @property
+    def solved_under(self) -> RidgePenalties | None:
+        """The penalties a solved head chooses among; ``None`` where no head is solved."""
+        return self.ridge if self.solves_a_head else None
 
     def tuned(self, knob: str, value: str) -> Self:
         """This arm with ``knob`` turned to ``value``, on the pooling, the encoder or the schedule.

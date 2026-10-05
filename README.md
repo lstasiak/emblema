@@ -102,8 +102,16 @@ using the mixed backbone beats the network trained from scratch, and the classic
 lead.
 A diagnosis against a published network on the same stays found the deficit in the training,
 not the data: kept at its best epoch on held-out labels and shrunk to two blocks, the network
-trained from scratch lands within noise of the published one. Transfer is measured next under
-that recipe, and across corpora, where a fresh encoder has nothing to learn from.
+trained from scratch lands within noise of the published one. After pretraining on about 10⁸
+values, under an adaptation recipe chosen beforehand, a linear probe on the encoder still trails
+the network trained from scratch at 20 and 50 labelled stays, and gains about 0.01 in area over
+the same probe on an untrained encoder.
+
+**In progress:** whether that gain grows with the data. The encoder is pretrained on mixtures
+about three and ten times larger (thirty, if a registered rule calls for it), adding public
+collections (UTSD, PhysioNet 2019, Tennessee Eastman), and every point is read by the same
+yardstick under rules registered before the runs
+([ADR-0049](docs/adr/0049-the-scale-of-pretraining-as-a-stage.md)).
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
