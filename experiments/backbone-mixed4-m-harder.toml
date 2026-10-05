@@ -1,0 +1,46 @@
+# The mixture of four under harder masks: three quarters of a window hidden instead of under a
+# half, everything else the file of backbone-mixed4-m.toml to the step. The diagnostic of that
+# backbone on its own corpora (docs/verification/pretext-variants.md, 2026-10-05) found every
+# kind of mask learnt beyond its trivial baseline on the intensive-care stays, so no kind is
+# switched off; instead the survival of every draw is raised to one power, which brings the
+# expected hidden share to 0.75, where point-level masking of time series has been reported to
+# work best (Li et al., 2023). A block keeps a span of half the window and is drawn for every
+# channel; the remainder of its share lengthens the span.
+#
+# Whether these masks or the mixture's serve the intensive-care task better is read by the
+# closed-form probe at 50 stays on a fifth of the tuning side, not by this run's loss: a loss
+# under other masks does not compare.
+name = "backbone-mixed4-m-harder"
+tier = "M"
+corpora = ["cmapss", "skab", "esa_ad", "physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.3028
+block_rate = 1.0
+block_span = 0.5469
+token_rate = 0.2085
+
+# Bounded at one standard deviation: the satellite corpus is learnt under that reading and not
+# under the square, and the stays' channels have heavy tails too.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+# Eight passes over every window, the epoch kept the one whose mean relative validation over the
+# corpora is lowest: thirteen passes bought a better pretext loss and a worse task
+# (backbone-mixed5-nosmd-m-13.toml). Sixteen windows a micro-batch, two to a step, as every
+# mixture before; a quarter of the first epoch warming up.
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000
