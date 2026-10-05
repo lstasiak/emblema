@@ -4,6 +4,7 @@ from emblema.pretraining.domain.exceptions import (
     InvalidCorpusShareError,
     InvalidExperimentConfigurationError,
 )
+from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
@@ -185,3 +186,30 @@ def test_a_fraction_stated_on_one_side_only_is_a_named_difference() -> None:
 
     assert mixed.differences_from(configuration()) == ("fraction.meters",)
     assert configuration().differences_from(mixed) == ("fraction.meters",)
+
+
+def test_the_tail_is_rendered_beside_the_other_draws_and_only_where_it_is_drawn() -> None:
+    forecasting = configuration(
+        masking=MaskingStrategy(
+            channel_rate=0.15,
+            block_rate=0.0,
+            block_span=0.5,
+            token_rate=0.0,
+            horizon_rate=1.0,
+            horizon_min_span=0.15,
+            horizon_max_span=0.5,
+        )
+    )
+
+    parameters = list(forecasting.parameters())
+
+    assert not any(key.startswith("horizon") for key in configuration().parameters())
+    tail = parameters.index("token_rate") + 1
+    assert parameters[tail : tail + 4] == [
+        "horizon_rate",
+        "horizon_min_span",
+        "horizon_max_span",
+        "expected_hidden_ratio",
+    ]
+    assert forecasting.parameters()["expected_hidden_ratio"] == pytest.approx(0.42625)
+    assert "horizon_rate" in forecasting.differences_from(configuration())

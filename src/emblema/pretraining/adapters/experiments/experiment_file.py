@@ -59,10 +59,15 @@ class _Shape(_Section):
 
 
 class _Masking(_Section):
+    """What the objective hides; a file that says nothing of a tail hides none."""
+
     channel_rate: float
     block_rate: float
     block_span: float
     token_rate: float
+    horizon_rate: float = 0.0
+    horizon_min_span: float = 0.0
+    horizon_max_span: float = 0.0
 
     def strategy(self) -> MaskingStrategy:
         return MaskingStrategy(
@@ -70,6 +75,9 @@ class _Masking(_Section):
             block_rate=self.block_rate,
             block_span=self.block_span,
             token_rate=self.token_rate,
+            horizon_rate=self.horizon_rate,
+            horizon_min_span=self.horizon_min_span,
+            horizon_max_span=self.horizon_max_span,
         )
 
 

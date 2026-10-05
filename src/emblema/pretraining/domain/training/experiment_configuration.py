@@ -131,7 +131,8 @@ class ExperimentConfiguration:
         whatever they were built as: an integer zero and a float zero are one configuration and
         must digest to one signature. Passes and fractions are rendered last, by corpus name,
         and only where stated: a run that reads every corpus once, at the mixture's share,
-        renders as it did before either knob existed.
+        renders as it did before either knob existed. The tail is rendered only where it is
+        drawn, for the same reason.
         """
         passes = {
             f"passes.{stated.corpus}": stated.passes
@@ -141,6 +142,16 @@ class ExperimentConfiguration:
             f"fraction.{stated.corpus}": float(stated.fraction)
             for stated in sorted(self.fractions, key=lambda stated: stated.corpus)
         }
+        masking = self.masking
+        horizon = (
+            {
+                "horizon_rate": float(masking.horizon_rate),
+                "horizon_min_span": float(masking.horizon_min_span),
+                "horizon_max_span": float(masking.horizon_max_span),
+            }
+            if masking.has_horizon
+            else {}
+        )
         return {
             "name": self.name,
             "tier": str(self.tier),
@@ -152,11 +163,12 @@ class ExperimentConfiguration:
             "time_frequencies": self.architecture.time_frequencies,
             "dropout": float(self.dropout),
             "decoder_layers": self.decoder_layers,
-            "channel_rate": float(self.masking.channel_rate),
-            "block_rate": float(self.masking.block_rate),
-            "block_span": float(self.masking.block_span),
-            "token_rate": float(self.masking.token_rate),
-            "expected_hidden_ratio": float(self.masking.expected_ratio),
+            "channel_rate": float(masking.channel_rate),
+            "block_rate": float(masking.block_rate),
+            "block_span": float(masking.block_span),
+            "token_rate": float(masking.token_rate),
+            **horizon,
+            "expected_hidden_ratio": float(masking.expected_ratio),
             "loss": str(self.loss.kind),
             "huber_delta": float(self.loss.huber_delta),
             "epochs": self.budget.epochs,
