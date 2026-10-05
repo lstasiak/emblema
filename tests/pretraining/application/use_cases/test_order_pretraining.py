@@ -7,6 +7,7 @@ from emblema.pretraining.domain.exceptions import (
     PretrainingOrderRejectedError,
 )
 from emblema.pretraining.domain.handoff.pretraining_order import PretrainingOrder
+from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -103,6 +104,38 @@ def test_corpora_whose_vocabularies_were_not_chained_are_refused() -> None:
         machines.order()(
             order_command(corpora=((CORPUS.name, MANIFEST), ("apart", SECOND_MANIFEST)))
         )
+
+
+def test_a_corpus_with_a_fraction_of_its_own_is_read_at_it_and_the_rest_at_the_mixture_s() -> None:
+    machines = InMemoryHandoff()
+    second = ArtifactRef("durable/second", Checksum.of_bytes(b"second"))
+    other = continued(name="other", seed=5)
+    machines.reader.publish(second, described(corpus="other", manifest=second), other)
+    mixed = replace(
+        CONFIGURATION,
+        corpus_fraction=0.5,
+        fractions=(CorpusFraction(corpus="other", fraction=0.25),),
+    )
+
+    placed = machines.order()(
+        order_command(configuration=mixed, corpora=((CORPUS.name, MANIFEST), ("other", second)))
+    )
+
+    half = machines.reader.read(MANIFEST, mixed.corpus_share)
+    quarter = machines.reader.read(second, mixed.corpus_share_of("other"))
+    assert len(half.training) == len(CORPUS.training) // 2
+    assert len(quarter.training) == len(other.training) // 4
+    assert machines.backbones.get(placed.backbone).signature == RunSignature.of(
+        mixed, mixture(half, quarter)
+    )
+
+
+def test_a_fraction_for_a_corpus_the_order_does_not_read_is_refused() -> None:
+    machines = InMemoryHandoff()
+    mixed = replace(CONFIGURATION, fractions=(CorpusFraction(corpus="meters", fraction=0.1),))
+
+    with pytest.raises(PretrainingOrderRejectedError, match=r"fractions for corpora .*meters"):
+        machines.order()(order_command(configuration=mixed))
 
 
 def test_passes_for_a_corpus_the_order_does_not_read_are_refused() -> None:

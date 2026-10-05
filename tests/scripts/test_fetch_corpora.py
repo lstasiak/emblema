@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import re
@@ -19,18 +20,22 @@ from scripts.corpus_budget_report import DEFAULT_CONFIG, Budget
 from scripts.fetch_corpora import (
     CORPORA,
     DEFLATE64,
+    UTSD,
     Archive,
     Corpus,
     Fetched,
+    Listing,
     checksum_status,
     checksums,
     download,
     extract,
     fetch,
+    listed,
     problems,
     report,
     select,
     unpack,
+    utsd_archives,
 )
 
 LOCAL_HEADER = "<4sHHHHHIIIHH"
@@ -311,7 +316,7 @@ def test_fetch_unpacks_a_file_whose_checksum_matches(
 
     (row,) = fetch(corpus)
 
-    assert (row.ok, row.md5_status) == (True, "none published")
+    assert (row.ok, row.verdict) == (True, "none published")
     assert (tmp_path / "x" / "file.txt").read_bytes() == b"x"
 
 
@@ -471,3 +476,131 @@ def test_the_report_holds_what_arrived_and_the_problems_what_did_not():
     assert "- x/b.zip: connection reset" in listing
     assert "- x/c.zip: MISMATCH (got def)" in listing
     assert "a.zip" not in listing
+
+
+def test_download_lays_a_file_in_a_directory_that_does_not_exist_yet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    target = tmp_path / "UTSD-12G" / "data-00000-of-00080.arrow"
+    serve(monkeypatch, FakeResponse(200, b"shard"))
+
+    download("https://example.org/data-00000-of-00080.arrow", target)
+
+    assert target.read_bytes() == b"shard"
+
+
+def test_the_pinned_listing_names_every_shard_of_the_collection_at_one_revision():
+    archives = utsd_archives()
+
+    assert len(archives) == 82
+    assert all(archive.url == f"{UTSD}/{archive.filename}" for archive in archives)
+    assert {archive.filename.split("/")[0] for archive in archives} == {"UTSD-12G"}
+    shards = [archive for archive in archives if archive.filename.endswith(".arrow")]
+    assert len(shards) == 80
+    digests = [archive.sha256 for archive in shards]
+    assert all(digest and len(digest) == 64 for digest in digests)
+    # Two shards of different sizes cannot hash equal; a digest listed twice was copied wrong.
+    assert len(set(digests)) == len(digests)
+    # The repository keeps its two small JSON files outside the object store: no digest to check.
+    assert all(archive.sha256 is None for archive in archives if archive.filename.endswith(".json"))
+
+
+def test_a_listing_is_read_from_a_file_of_digests_and_paths(tmp_path: Path):
+    listing = tmp_path / "shards.sha256"
+    listing.write_text("abc  V/a.arrow\n-  V/state.json\n", encoding="utf-8")
+
+    assert utsd_archives(listing) == (
+        Archive(url=f"{UTSD}/V/a.arrow", filename="V/a.arrow", sha256="abc"),
+        Archive(url=f"{UTSD}/V/state.json", filename="V/state.json"),
+    )
+
+
+def test_fetch_verifies_a_published_sha256_and_sets_a_mismatch_aside(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(fetch_corpora, "DATA_ROOT", tmp_path)
+    monkeypatch.setattr(fetch_corpora, "download", lambda url, target: target.write_bytes(b"data"))
+    right = hashlib.sha256(b"data").hexdigest()
+    corpus = Corpus(
+        key="x",
+        title="x",
+        archives=(
+            Archive(url="https://example.org/a.arrow", filename="a.arrow", sha256=right),
+            Archive(url="https://example.org/b.arrow", filename="b.arrow", sha256="0" * 64),
+        ),
+    )
+
+    ok, bad = fetch(corpus)
+
+    assert (ok.ok, ok.verdict) == (True, "ok")
+    assert (bad.ok, bad.verdict.startswith("MISMATCH")) == (False, True)
+    assert (tmp_path / "x" / "b.arrow.bad").exists()
+
+
+PAGES = {
+    "https://example.org/training/": (
+        '<a href="../">../</a><a href="?C=N;O=D">Name</a><a href="/">root</a>'
+        '<a href="training_setA/">training_setA/</a><a href="training_setB/">training_setB/</a>'
+        '<a href="https://example.org/elsewhere">away</a><a href="x/../escape.psv">escape</a>'
+    ),
+    "https://example.org/training/training_setA/": (
+        '<a href="../">../</a><a href="p1.psv">p1</a><a href="p%204.psv">p 4</a>'
+    ),
+    "https://example.org/training/training_setB/": '<a href="p2.psv">p2</a><a href="p3.psv">p3</a>',
+}
+
+
+def test_an_index_page_lists_its_files_and_follows_the_pages_it_names(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def urlopen(request: urllib.request.Request) -> FakeResponse:
+        return FakeResponse(200, PAGES[request.full_url].encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+
+    assert sorted(listed("https://example.org/training/")) == [
+        "training_setA/p 4.psv",
+        "training_setA/p1.psv",
+        "training_setB/p2.psv",
+        "training_setB/p3.psv",
+    ]
+
+
+def test_fetch_downloads_every_file_of_a_listing_and_reports_it_as_one_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(fetch_corpora, "DATA_ROOT", tmp_path)
+    monkeypatch.setattr(
+        fetch_corpora, "listed", lambda url: iter(["training_setB/p2.psv", "training_setA/p1.psv"])
+    )
+    fetched: list[str] = []
+
+    def download(url: str, target: Path, *, quiet: bool = False) -> None:
+        fetched.append(url)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(url.encode())
+
+    monkeypatch.setattr(fetch_corpora, "download", download)
+    remembered = tmp_path / "x" / "training" / "training_setA" / ".digests.json"
+    corpus = Corpus(
+        key="x",
+        title="x",
+        archives=(Listing(url="https://example.org/training/", directory="training"),),
+    )
+
+    (row,) = fetch(corpus)
+
+    assert fetched == [
+        "https://example.org/training/training_setA/p1.psv",
+        "https://example.org/training/training_setB/p2.psv",
+    ]
+    assert (tmp_path / "x" / "training" / "training_setA" / "p1.psv").exists()
+    # Small files are hashed, not remembered: no note of digests beside them.
+    assert not remembered.exists()
+    assert (row.filename, row.verdict, row.ok) == ("training", "none published", True)
+    assert row.size == sum(len(url) for url in fetched)
+    digest = hashlib.sha256()
+    for path in ("training_setA/p1.psv", "training_setB/p2.psv"):
+        content = f"https://example.org/training/{path}".encode()
+        digest.update(f"{hashlib.sha256(content).hexdigest()}  {path}\n".encode())
+    assert row.sha256 == digest.hexdigest()

@@ -5,6 +5,7 @@ from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.exceptions import InvalidExperimentConfigurationError
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
@@ -26,14 +27,16 @@ class ExperimentConfiguration:
 
     Invariants: the name is non-empty and carries no surrounding whitespace; dropout lies in
     ``[0, 1)``, since a run that drops everything learns nothing; the decoder has at least one
-    layer; the corpus fraction is a share a run could read; no corpus has its passes stated twice.
+    layer; the corpus fraction is a share a run could read; no corpus has its passes or its
+    fraction stated twice.
 
     Attributes:
         name: What the experiment is called, and what its runs are grouped under.
         tier: Hardware class the run declares, which the reported result is signed with.
-        corpus_fraction: Share of the corpus's training units the run reads; the validation side
-            is read whole whatever it is. A parameter of scale like the shape, so a run over a
-            tenth of the corpus says so wherever the configuration is reported.
+        corpus_fraction: Share of each corpus's training units the run reads, unless a corpus
+            has a fraction of its own; the validation side is read whole whatever it is. A
+            parameter of scale like the shape, so a run over a tenth of the corpus says so
+            wherever the configuration is reported.
         architecture: Shape of the encoder being pretrained.
         dropout: Dropout of the encoder and the decoder; a run parameter, not part of the shape.
         decoder_layers: Blocks of the decoder that is thrown away when the run ends.
@@ -46,6 +49,9 @@ class ExperimentConfiguration:
         checkpoint: How often resumable state is written.
         passes: The corpora of the mixture an epoch reads more than once, and how many times;
             empty where every corpus is read once, which is every run before the knob existed.
+        fractions: The corpora of the mixture read at a share of their own rather than the
+            mixture's; empty where every corpus is read at ``corpus_fraction``, which is every
+            run before the knob existed.
     """
 
     name: str
@@ -60,13 +66,15 @@ class ExperimentConfiguration:
     precision: Precision
     checkpoint: CheckpointPolicy
     passes: tuple[CorpusPasses, ...] = ()
+    fractions: tuple[CorpusFraction, ...] = ()
 
     def __post_init__(self) -> None:
-        corpora = [stated.corpus for stated in self.passes]
-        if len(set(corpora)) != len(corpora):
-            raise InvalidExperimentConfigurationError(
-                f"a corpus has its passes stated twice: {corpora}"
-            )
+        for knob, stated_for in (("passes", self.passes), ("fraction", self.fractions)):
+            corpora = [stated.corpus for stated in stated_for]
+            if len(set(corpora)) != len(corpora):
+                raise InvalidExperimentConfigurationError(
+                    f"a corpus has its {knob} stated twice: {corpora}"
+                )
         if not self.name or self.name != self.name.strip():
             raise InvalidExperimentConfigurationError(
                 "name must be non-empty without surrounding whitespace"
@@ -84,12 +92,23 @@ class ExperimentConfiguration:
 
     @property
     def corpus_share(self) -> CorpusShare:
-        """Which part of the corpus a run reads: the fraction, ranked by the run's seed.
+        """Which part of a corpus a run reads unless told otherwise: the fraction, by the seed.
 
         Raises:
             InvalidCorpusShareError: If the fraction does not lie in ``(0, 1]``.
         """
         return CorpusShare(fraction=self.corpus_fraction, seed=self.budget.seed)
+
+    def corpus_share_of(self, corpus: str) -> CorpusShare:
+        """Which part of ``corpus`` a run reads: its own fraction where stated, else the mixture's.
+
+        Raises:
+            InvalidCorpusShareError: If the mixture's fraction does not lie in ``(0, 1]``.
+        """
+        for stated in self.fractions:
+            if stated.corpus == corpus:
+                return CorpusShare(fraction=stated.fraction, seed=self.budget.seed)
+        return self.corpus_share
 
     def passes_of(self, corpus: str) -> int:
         """How many times an epoch reads ``corpus``: once unless the configuration says more."""
@@ -110,12 +129,17 @@ class ExperimentConfiguration:
         for a run whose parameters differ. Nested values are prefixed by what they belong to, so
         two configurations differing anywhere differ in this mapping. Rates are rendered as floats
         whatever they were built as: an integer zero and a float zero are one configuration and
-        must digest to one signature. Passes are rendered last, by corpus name, and only where
-        stated: a run that reads every corpus once renders as it did before the knob existed.
+        must digest to one signature. Passes and fractions are rendered last, by corpus name,
+        and only where stated: a run that reads every corpus once, at the mixture's share,
+        renders as it did before either knob existed.
         """
         passes = {
             f"passes.{stated.corpus}": stated.passes
             for stated in sorted(self.passes, key=lambda stated: stated.corpus)
+        }
+        fractions = {
+            f"fraction.{stated.corpus}": float(stated.fraction)
+            for stated in sorted(self.fractions, key=lambda stated: stated.corpus)
         }
         return {
             "name": self.name,
@@ -146,13 +170,14 @@ class ExperimentConfiguration:
             "precision": str(self.precision),
             "checkpoint_every_steps": self.checkpoint.every_steps,
             **passes,
+            **fractions,
         }
 
     def differences_from(self, other: Self) -> tuple[str, ...]:
         """Names of the parameters on which this configuration differs from ``other``.
 
-        A parameter one configuration states and the other does not, such as the passes of a
-        corpus, is a difference as much as one they value differently.
+        A parameter one configuration states and the other does not, such as the passes or the
+        fraction of a corpus, is a difference as much as one they value differently.
         """
         stated, expected = self.parameters(), other.parameters()
         keys = list(expected) + [key for key in stated if key not in expected]

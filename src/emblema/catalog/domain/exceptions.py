@@ -146,6 +146,10 @@ class UnknownUnitError(CorpusReadError):
     pass
 
 
+class IndivisibleReadingError(CorpusReadError):
+    pass
+
+
 class TokenisationError(CatalogError):
     pass
 

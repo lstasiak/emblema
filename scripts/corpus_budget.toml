@@ -446,7 +446,7 @@ name = "Tennessee Eastman (Rieth et al.)"
 role = "substitute for the multivariate-telemetry role: simulated chemical process, regular, 52 variables"
 regime = "regular"
 publisher = "Harvard Dataverse (Rieth, Amsel, Tran, Cook)"
-source = "https://doi.org/10.7910/DVN/6C3JR1"
+source = "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/6C3JR1"
 download_size = "1.4 GB (four RData files)"
 epochs = 5
 pretraining_split = "the training files (fault-free and faulty, 500 runs per condition); the testing files stay out"
@@ -578,3 +578,92 @@ heads = 8
 layers = 8
 feedforward_width = 2048
 time_frequencies = 12
+
+[corpora.physionet2019]
+name = "PhysioNet 2019"
+role = "irregular: hourly clinical stream with most cells empty, ten times the stays of 2012; hosts the sepsis task"
+regime = "irregular"
+publisher = "PhysioNet (Reyna et al.)"
+source = "https://physionet.org/files/challenge-2019/1.0.0/training/"
+download_size = "about 220 MB (40,336 pipe-separated files in two directories, no archive)"
+epochs = 8
+pretraining_split = "training sets A and B less the stays cut out by name as the sepsis task's frozen side; the challenge published no labelled test set"
+verdict = "pretraining"
+decision = "The second clinical corpus on the irregular axis, with ten times the units of 2012 and hourly rows rather than minutes; its stays also carry the sepsis task."
+
+[corpora.physionet2019.licence]
+terms = "Creative Commons Attribution 4.0 International: share and adapt with attribution; open access, no credentialing."
+url = "https://physionet.org/content/challenge-2019/1.0.0/"
+checked_on = 2026-10-04
+publish_results = "yes"
+sample_in_repo = "yes"
+derivatives = "yes"
+
+[corpora.physionet2019.estimate]
+units = 40336
+channels = 34
+series_length = 38
+observations_per_unit = 380
+timeless_tokens_per_unit = 4
+basis = "Reyna et al. 2020: 40,336 stays of 8 to 336 hourly rows, about 38 on average; 34 clinical variables with most cells empty, about 15 million recorded values in all; age, gender, admission offset and one ward flag per stay"
+
+[[corpora.physionet2019.windows]]
+name = "h24s12"
+unit = "hours"
+length = 24
+stride = 12
+default = true
+
+[[corpora.physionet2019.windows]]
+name = "h48s48"
+unit = "hours"
+length = 48
+stride = 48
+
+[corpora.utsd]
+name = "UTSD (Liu et al.)"
+role = "scale: a billion values of regular series across seven domains, a corpus per dataset"
+regime = "regular"
+publisher = "THUML, Tsinghua University (Liu et al.)"
+source = "https://huggingface.co/datasets/thuml/UTSD/tree/7326ff5f4578da73d843fd675d760c6c6054017f"
+download_size = "3.9 GB (volume 12G, 80 Arrow shards)"
+epochs = 2
+pretraining_split = "every record of a dataset, a fifth of its units held out; the collection publishes no test side"
+verdict = "pretraining"
+decision = "The one source that puts a billion values in one format with one licence, and so the first rung of the scale; its datasets are unrelated and are published as corpora of their own."
+
+[corpora.utsd.licence]
+terms = "Apache License 2.0 on the collection; the records are drawn from public benchmarks and real-world machine logs."
+url = "https://huggingface.co/datasets/thuml/UTSD"
+checked_on = 2026-10-04
+publish_results = "yes"
+sample_in_repo = "yes"
+derivatives = "yes"
+
+[corpora.utsd.estimate]
+units = 289560
+channels = 1
+series_length = 3450
+basis = "Volume 12G: 289,560 records of about a billion values in all; a record is a univariate series, a unit where a dataset is a collection of series and a channel of one where it is multivariate, so the count of units is an upper bound and of channels a lower one"
+
+# About a thousand tokens a window, as the other corpora's windows hold, and no overlap: a stride
+# shorter than the window repeats values an epoch already reads. A multivariate dataset read with
+# its variates as channels takes a window of 1024 over its variates in samples.
+[[corpora.utsd.windows]]
+name = "w1024s1024"
+unit = "samples"
+length = 1024
+stride = 1024
+default = true
+
+[[corpora.utsd.windows]]
+name = "w96s48"
+unit = "samples"
+length = 96
+stride = 48
+
+[[corpora.utsd.windows]]
+name = "w200s40"
+unit = "samples"
+length = 200
+stride = 40

@@ -7,6 +7,7 @@ corpus, shallowly. What a published corpus has to hold is asserted deeply for on
 ``test_publishing_the_sample``.
 """
 
+from dataclasses import replace
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from emblema.catalog.domain.tokenisation.split_policy import NamedSplit, PartSpl
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
+from emblema.shared.kernel.artifacts import ArtifactRef
 from tests.support.corpora import DRAWN, SAMPLE_WINDOW, publish_command, sample
 from tests.support.settings import unreachable_store
 
@@ -52,13 +54,74 @@ CORPORA = [
         WindowSpec(length=48.0, stride=48.0),
         NamedSplit.of([UnitKey("set-a/132539"), UnitKey("set-a/140501")]),
     ),
+    # The 2019 stays differ in length, so they are windowed by the half day rather than whole;
+    # the split names the one stay whose every channel the other three measure too, since a
+    # channel measured only on the held-out side has no statistics to be normalised by.
+    (
+        "physionet2019",
+        ("training_setA", "training_setB"),
+        4,
+        39,
+        WindowSpec(length=12.0, stride=12.0),
+        NamedSplit.of([UnitKey("training_setA/p000001")]),
+    ),
+    pytest.param(
+        "tep",
+        ("TEP_FaultFree_Training", "TEP_Faulty_Training"),
+        4,
+        52,
+        WindowSpec(length=10.0, stride=5.0),
+        DRAWN,
+        marks=pytest.mark.skipif(
+            find_spec("rdata") is None, reason="the corpora extra is not installed"
+        ),
+    ),
+    pytest.param(
+        "utsd/Health_SelfRegulationSCP1",
+        (),
+        3,
+        6,
+        WindowSpec(length=16.0, stride=8.0),
+        DRAWN,
+        marks=pytest.mark.skipif(
+            find_spec("pyarrow") is None, reason="the corpora extra is not installed"
+        ),
+    ),
+    pytest.param(
+        "utsd/Nature_temperature_rain_dataset_without_missing_values",
+        (),
+        5,
+        1,
+        WindowSpec(length=10.0, stride=5.0),
+        DRAWN,
+        marks=pytest.mark.skipif(
+            find_spec("pyarrow") is None, reason="the corpora extra is not installed"
+        ),
+    ),
 ]
+
+
+def corpus_root(corpus: str) -> Path:
+    """Where a corpus's sample sits: a dataset of the collection sits under its volume."""
+    if corpus.startswith("utsd/"):
+        return sample("utsd") / "UTSD-12G"
+    return sample(corpus)
 
 
 @pytest.mark.parametrize(
     ("corpus", "subsets", "units", "channels", "window", "split"),
     CORPORA,
-    ids=["cmapss", "skab", "smd", "esa_ad", "physionet2012"],
+    ids=[
+        "cmapss",
+        "skab",
+        "smd",
+        "esa_ad",
+        "physionet2012",
+        "physionet2019",
+        "tep",
+        "utsd-scp1",
+        "utsd-rain",
+    ],
 )
 def test_a_sample_of_each_corpus_publishes_through_one_process(
     tmp_path: Path,
@@ -72,7 +135,7 @@ def test_a_sample_of_each_corpus_publishes_through_one_process(
     process = CompositionRoot(
         unreachable_store(),
         corpus=corpus,
-        corpus_root=sample(corpus),
+        corpus_root=corpus_root(corpus),
         workspace=tmp_path / "blocks",
         subsets=subsets,
         corpora=InMemoryCorpusRepository(),
@@ -156,3 +219,53 @@ def test_holding_out_a_part_that_measures_a_channel_the_rest_does_not_is_refused
                 split=PartSplit("set-b"),
             )
         )
+
+
+@pytest.mark.skipif(find_spec("pyarrow") is None, reason="the corpora extra is not installed")
+def test_two_datasets_of_the_collection_publish_as_two_corpora_of_one_vocabulary(
+    tmp_path: Path,
+) -> None:
+    """A block and a manifest per dataset, the second continuing the first's vocabulary.
+
+    The collection's shards hold every dataset together, and a block of the whole would not fit
+    a machine; a corpus per dataset cuts the publication where the data is cut, and the chain of
+    manifests is what a run reads them together through.
+    """
+    store = LocalDirectoryArtifactStore(tmp_path / "store")
+    corpora = InMemoryCorpusRepository()
+    first, second = (
+        "utsd/Health_SelfRegulationSCP1",
+        "utsd/Nature_temperature_rain_dataset_without_missing_values",
+    )
+
+    def published(corpus: str, vocabulary_from: ArtifactRef | None) -> ArtifactRef:
+        process = CompositionRoot(
+            unreachable_store(),
+            corpus=corpus,
+            corpus_root=corpus_root(corpus),
+            workspace=tmp_path / "blocks",
+            corpora=corpora,
+            store=store,
+        )
+        command = publish_command(corpus=corpus, window=WindowSpec(10.0, 5.0), split=DRAWN)
+        return process.services.publish_corpus(replace(command, vocabulary_from=vocabulary_from))
+
+    first_ref = published(first, None)
+    second_ref = published(second, first_ref)
+
+    archive = CompositionRoot(
+        unreachable_store(),
+        corpus=first,
+        corpus_root=corpus_root(first),
+        workspace=tmp_path / "blocks",
+        corpora=corpora,
+        store=store,
+    ).adapters.archive
+    opening, continuing = archive.read_manifest(first_ref), archive.read_manifest(second_ref)
+    assert (opening.corpus, continuing.corpus) == (first, second)
+    assert opening.archived.block.checksum != continuing.archived.block.checksum
+    assert opening.corpus_checksum != continuing.corpus_checksum
+    assert continuing.scheme.vocabulary.entries[: len(opening.scheme.vocabulary)] == (
+        opening.scheme.vocabulary.entries
+    )
+    assert len(continuing.scheme.vocabulary.entries_of(second)) == 1

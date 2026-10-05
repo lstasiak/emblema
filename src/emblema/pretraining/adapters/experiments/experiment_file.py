@@ -16,6 +16,7 @@ from emblema.pretraining.adapters.encoder.tier_architecture import architecture_
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
@@ -125,13 +126,15 @@ class ExperimentFile(_Section):
         corpora: The published corpora the run reads, in the order their vocabulary was chained;
             one for a run over one corpus.
         corpus_fraction: Share of each corpus's training units the run reads; the tier's unless
-            stated.
+            stated, and a corpus's own where ``fraction`` names it.
         precision: What the forward and backward pass are computed at.
         dropout: Dropout of the encoder and the decoder.
         decoder_layers: Blocks of the decoder thrown away when the run ends.
         shape: What the run overrides of the tier's shape, where it does.
         passes: The corpora an epoch reads more than once, by name, and how many times; each
             one of ``corpora``. A corpus left out is read once.
+        fraction: The corpora read at a share of their own, by name, and that share; each one
+            of ``corpora``. A corpus left out is read at ``corpus_fraction``.
         masking: What the objective hides.
         objective: What it counts a miss as; the squared error unless the file says otherwise,
             which is what every run before the reading existed was scored by.
@@ -148,16 +151,18 @@ class ExperimentFile(_Section):
     decoder_layers: int
     shape: _Shape | None = None
     passes: dict[str, int] = {}
+    fraction: dict[str, float] = {}
     masking: _Masking
     objective: _Objective = _Objective()
     budget: _Budget
     checkpoint: _Checkpoint
 
     @model_validator(mode="after")
-    def _passes_name_corpora_of_the_run(self) -> Self:
-        unknown = [corpus for corpus in self.passes if corpus not in self.corpora]
-        if unknown:
-            raise ValueError(f"passes are stated for corpora the run does not read: {unknown}")
+    def _knobs_name_corpora_of_the_run(self) -> Self:
+        for knob, stated in (("passes", self.passes), ("fraction", self.fraction)):
+            unknown = [corpus for corpus in stated if corpus not in self.corpora]
+            if unknown:
+                raise ValueError(f"{knob} is stated for corpora the run does not read: {unknown}")
         return self
 
     @classmethod
@@ -179,6 +184,7 @@ class ExperimentFile(_Section):
             InvalidExperimentConfigurationError: If what the file states is not a configuration.
             InvalidCorpusShareError: If the share of the corpus is not one a run could read.
             InvalidCorpusPassesError: If a corpus is stated to be read fewer than twice.
+            InvalidCorpusFractionError: If a corpus's own share is not one a run could read.
             InvalidEncoderArchitectureError: If the shape it states is not an architecture.
             InvalidMaskingStrategyError: If the strategy hides everything or nothing.
             InvalidObjectiveLossError: If the reading states a knee it does not read, or none.
@@ -203,5 +209,9 @@ class ExperimentFile(_Section):
             checkpoint=self.checkpoint.policy(),
             passes=tuple(
                 CorpusPasses(corpus=corpus, passes=passes) for corpus, passes in self.passes.items()
+            ),
+            fractions=tuple(
+                CorpusFraction(corpus=corpus, fraction=fraction)
+                for corpus, fraction in self.fraction.items()
             ),
         )

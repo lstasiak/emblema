@@ -3,14 +3,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from emblema.catalog.adapters.readers.subsets import chosen_subsets
 from emblema.catalog.adapters.readers.text import fields_of, finite_floats, numbered_lines
+from emblema.catalog.adapters.readers.unit_files import UnitFiles
 from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
-from emblema.catalog.domain.exceptions import (
-    CorpusDataNotFoundError,
-    MalformedCorpusDataError,
-    UnknownUnitError,
-)
+from emblema.catalog.domain.exceptions import MalformedCorpusDataError
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
@@ -57,8 +53,8 @@ class Physionet2012CorpusReader:
     the unit's key and nothing else.
 
     Only sets A and B are read. Set C is the challenge's test set and a downstream task's frozen
-    side, which never enters a corpus a backbone is pretrained on. The checksum covers the selected
-    sets' files in set order and, within a set, in file-name order.
+    side, which never enters a corpus a backbone is pretrained on. The checksum covers the files
+    read, in the order ``UnitFiles`` visits them.
     """
 
     SUBSETS: ClassVar[tuple[str, ...]] = ("set-a", "set-b")
@@ -125,14 +121,15 @@ class Physionet2012CorpusReader:
     _VARIABLES: ClassVar[frozenset[str]] = frozenset(channel.name for channel in SERIES)
 
     def __init__(self, root: Path, subsets: Iterable[str] = SUBSETS) -> None:
-        self._root = root
-        self._subsets = chosen_subsets(subsets, self.SUBSETS, "PhysioNet set")
+        self._files = UnitFiles(
+            root, subsets, self.SUBSETS, ".txt", what="stay", part="PhysioNet set"
+        )
 
     def describe(self) -> CorpusDescription:
         counts: list[int] = []
 
         def contents() -> Iterator[bytes]:
-            for path in self._paths():
+            for path in self._files.paths():
                 content = path.read_bytes()
                 counts.append(len(self._stay_of(path, content).observations))
                 yield content
@@ -148,41 +145,13 @@ class Physionet2012CorpusReader:
         )
 
     def read_units(self) -> Iterator[CorpusUnit]:
-        for path in self._paths():
+        for path in self._files.paths():
             stay = self._stay_of(path, path.read_bytes())
-            yield CorpusUnit(self._key_of(path), _STAY, stay.static_features)
+            yield CorpusUnit(self._files.key_of(path), _STAY, stay.static_features)
 
     def read_observations(self, unit: UnitKey) -> Iterator[Observation]:
-        path = self._locate(unit)
+        path = self._files.locate(unit)
         return iter(self._stay_of(path, path.read_bytes()).observations)
-
-    def _paths(self) -> Iterator[Path]:
-        """The selected files in canonical order: sets as declared, stays by name within one."""
-        for subset in self._subsets:
-            folder = self._root / subset
-            if not folder.is_dir():
-                raise CorpusDataNotFoundError(f"{folder} is missing")
-            files = sorted(folder.glob("*.txt"), key=lambda path: path.name)
-            if not files:
-                raise CorpusDataNotFoundError(f"{folder} holds no stay")
-            yield from files
-
-    def _key_of(self, path: Path) -> UnitKey:
-        return UnitKey.within(path.parent.name, path.stem)
-
-    def _locate(self, unit: UnitKey) -> Path:
-        subset = unit.part
-        if subset is None or subset not in self._subsets:
-            raise UnknownUnitError(f"{unit} is not a stay of a selected set")
-        folder = self._root / subset
-        if not folder.is_dir():
-            raise CorpusDataNotFoundError(f"{folder} is missing")
-        path = folder / f"{unit.name}.txt"
-        # A key naming anything but a file of the set — a nested path, a step upwards — names no
-        # stay, however the file system would resolve it.
-        if path.parent != folder or not path.is_file():
-            raise UnknownUnitError(f"{folder} has no stay {unit.name}")
-        return path
 
     @classmethod
     def _stay_of(cls, path: Path, content: bytes) -> _Stay:

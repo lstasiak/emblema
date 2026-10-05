@@ -8,7 +8,9 @@ license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Łukasz Stasiak" }]
 # Lower bound = Python of the free GPU platforms the package is installed on (Kaggle and Colab
 # ship 3.12). Local development uses 3.14 (see .python-version); code must stay 3.12-compatible.
-requires-python = ">=3.12"
+# Upper bound = the newest Python the compiled dependencies (torch, onnxruntime) ship wheels for;
+# the lock must resolve for every required environment, and it cannot for a Python no wheel exists on.
+requires-python = ">=3.12,<3.15"
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
@@ -86,9 +88,11 @@ api = [
     "opentelemetry-instrumentation-logging>=0.51b0",
 ]
 
-# Reading the raw corpora whose publisher ships pandas pickles (the satellite telemetry). Its own
-# extra: only the process that publishes a corpus reads raw files, and a run or a server never does.
-corpora = ["pandas>=2.2"]
+# Reading the raw corpora whose publishers ship something other than text: pandas pickles (the
+# satellite telemetry), Arrow shards (the time-series collection) and R data frames (the chemical
+# process). Its own extra: only the process that publishes a corpus reads raw files, and a run or a
+# server never does.
+corpora = ["pandas>=2.2", "pyarrow>=17", "rdata>=1.1"]
 
 [project.urls]
 Repository = "https://github.com/lstasiak/emblema"
@@ -235,6 +239,8 @@ module = [
     "onnxruntime", "onnxruntime.*", "google.protobuf", "google.protobuf.*", "pandas", "pandas.*",
     "celery", "celery.*", "kombu", "kombu.*",
     "sklearn", "sklearn.*", "joblib", "joblib.*", "threadpoolctl", "scipy", "scipy.*",
+    # The raw-corpus formats of the scale corpora: Arrow ships no stubs, rdata no type information.
+    "pyarrow", "pyarrow.*", "rdata", "rdata.*",
     "opentelemetry.instrumentation.*", "opentelemetry.exporter.*", "prometheus_client",
     # The reference a report checks MiniRocket against; run under it, never installed.
     "aeon", "aeon.*",
@@ -322,7 +328,7 @@ source_modules = [
     "emblema.*.domain", "emblema.*.ports", "emblema.*.application", "emblema.*.contracts",
 ]
 forbidden_modules = [
-    "torch", "numpy", "pandas", "onnx", "onnxruntime", "onnxscript",
+    "torch", "numpy", "pandas", "pyarrow", "rdata", "onnx", "onnxruntime", "onnxscript",
     "xgboost", "sklearn", "joblib",
     "sqlalchemy", "alembic",
     "fastapi", "starlette", "pydantic", "pydantic_settings", "uvicorn", "httpx",

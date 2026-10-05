@@ -70,7 +70,9 @@ class AcceptPretrainingResult:
         result.require_delivery_for(backbone)
         mixture = TrainingMixture(
             corpora=tuple(
-                self._reader.read(read.manifest, backbone.configuration.corpus_share)
+                self._reader.read(
+                    read.manifest, backbone.configuration.corpus_share_of(read.corpus)
+                )
                 for read in backbone.inputs
             )
         )

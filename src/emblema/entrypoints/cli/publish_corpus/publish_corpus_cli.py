@@ -2,6 +2,7 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
+from emblema.catalog.adapters.readers.utsd import UtsdReading, UtsdScale
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.tokenisation.split_policy import (
@@ -58,6 +59,8 @@ class PublishCorpusCli:
                 "--hold-out and --hold-out-subset say which units are held out, so there is "
                 "nothing for --validation-fraction or --seed to draw"
             )
+        if arguments.exclude_units is not None and not arguments.exclude_units.is_file():
+            parser.error(f"--exclude-units {arguments.exclude_units} is not a file")
         if (
             arguments.hold_out_subset
             and arguments.subset
@@ -79,10 +82,17 @@ class PublishCorpusCli:
                 split=self._split(arguments),
                 vocabulary_from=self._vocabulary_from(arguments.vocabulary_from),
             ),
-            corpus_root=arguments.root or RAW / known.name,
+            corpus_root=arguments.root or RAW / known.raw_directory,
             workspace=arguments.workspace,
             subsets=tuple(arguments.subset or ()),
             per_condition=arguments.per_operating_condition,
+            excluded_units=self._excluded_units(arguments.exclude_units),
+            reading=UtsdReading(
+                independent_channels=arguments.channels_independent,
+                scale=UtsdScale.AS_PUBLISHED
+                if arguments.scale_as_published
+                else UtsdScale.WITHIN_UNIT,
+            ),
         )
 
     @staticmethod
@@ -108,6 +118,8 @@ class PublishCorpusCli:
             workspace=invocation.workspace,
             subsets=invocation.subsets,
             per_condition=invocation.per_condition,
+            excluded_units=invocation.excluded_units,
+            reading=invocation.reading,
         )
         ref = root.services.publish_corpus(invocation.command)
         print(f"{ref.key}\n{ref.checksum}")
@@ -118,8 +130,8 @@ class PublishCorpusCli:
         parser.add_argument(
             "--root",
             type=Path,
-            help=f"directory of the raw corpus; {RAW}/<corpus> unless given, and unused by a "
-            "corpus that is generated rather than downloaded",
+            help=f"directory of the raw corpus; where the fetch script lays it under {RAW} unless "
+            "given, and unused by a corpus that is generated rather than downloaded",
         )
         parser.add_argument(
             "--subset", action="append", help="subset to read; repeatable, all of them unless given"
@@ -129,6 +141,26 @@ class PublishCorpusCli:
             action="store_true",
             help="read each sensor as a channel per operating condition, scaled within it; only "
             "a corpus flown at several conditions has a reader for it",
+        )
+        parser.add_argument(
+            "--exclude-units",
+            type=Path,
+            metavar="FILE",
+            help="file naming units to cut from the corpus, one name per line as the corpus "
+            "names its files (p000015, not training_setA/p000015): a downstream task's frozen "
+            "side; only a corpus whose publisher drew no test set has a reader for it",
+        )
+        parser.add_argument(
+            "--channels-independent",
+            action="store_true",
+            help="read every series of a dataset of the time-series collection as a unit of its "
+            "own on one channel, whatever its layout; only that collection has a reader for it",
+        )
+        parser.add_argument(
+            "--scale-as-published",
+            action="store_true",
+            help="read a dataset of the time-series collection on the scale it is stored at, "
+            "rather than each series on its own; only that collection has a reader for it",
         )
         parser.add_argument("--window", type=float, required=True, help="window length, in time")
         parser.add_argument("--stride", type=float, required=True, help="stride between windows")
@@ -173,6 +205,15 @@ class PublishCorpusCli:
             help="where blocks pass through on their way to the store",
         )
         return parser
+
+    @staticmethod
+    def _excluded_units(path: Path | None) -> tuple[str, ...]:
+        """The unit names the file lists, one per line; blank lines carry nothing."""
+        if path is None:
+            return ()
+        return tuple(
+            line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+        )
 
     @staticmethod
     def _vocabulary_from(pair: Sequence[str] | None) -> ArtifactRef | None:

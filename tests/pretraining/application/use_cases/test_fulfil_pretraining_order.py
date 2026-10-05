@@ -1,11 +1,14 @@
+from dataclasses import replace
+
 import pytest
 
 from emblema.pretraining.application.use_cases.fulfil_pretraining_order import (
     FulfilPretrainingOrderCommand,
 )
 from emblema.pretraining.domain.exceptions import PretrainingOrderRejectedError
-from tests.support.experiments import corpus
-from tests.support.handoff import COMMIT, CONFIGURATION, MANIFEST, MIXTURE, OTHER_COMMIT
+from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
+from tests.support.experiments import corpus, mixture
+from tests.support.handoff import COMMIT, CONFIGURATION, CORPUS, MANIFEST, MIXTURE, OTHER_COMMIT
 from tests.support.handoff import pretraining_input as described
 from tests.support.handoff_process import InMemoryHandoff, order_command
 
@@ -76,3 +79,17 @@ def test_a_corpus_that_is_not_the_one_ordered_stops_the_run_before_it_trains() -
         machines.fulfil()(FulfilPretrainingOrderCommand(order=placed.order, git_commit=COMMIT))
 
     assert machines.trackers[0].configuration is None
+
+
+def test_the_trainer_reads_a_corpus_at_the_fraction_of_its_own_the_order_states() -> None:
+    machines = InMemoryHandoff()
+    mixed = replace(CONFIGURATION, fractions=(CorpusFraction(corpus=CORPUS.name, fraction=0.5),))
+    placed = machines.order()(order_command(configuration=mixed))
+
+    reported = machines.fulfil()(
+        FulfilPretrainingOrderCommand(order=placed.order, git_commit=COMMIT)
+    )
+
+    read = machines.reader.read(MANIFEST, mixed.corpus_share_of(CORPUS.name))
+    assert len(read.training) == len(CORPUS.training) // 2
+    assert machines.exchange.read_result(reported).mixture == mixture(read).shape
