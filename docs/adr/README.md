@@ -65,3 +65,4 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0048](0048-authentication-at-the-edge-authorisation-in-the-use-case.md) | Authentication at the edge, authorisation in the use case: a shared identity port consumed by the driving side, a policy per context, an allowance per caller on the open routes | accepted |
 | [0049](0049-the-scale-of-pretraining-as-a-stage.md) | The scale of pretraining as a stage: a curve of the gain over the data, read at one or two per cent of the labels, before the transfer matrix | accepted |
 | [0050](0050-a-head-solved-first-a-patience-in-steps-and-a-probe-at-initialisation.md) | A head solved first, a patience in steps and a probe at initialisation: the knobs of the adaptation recipe at one or two per cent of the labels | accepted |
+| [0051](0051-reading-the-scale-corpora.md) | Reading the scale corpora: one corpus per UTSD dataset read on each series' scale, sepsis stays cut by name | proposed |

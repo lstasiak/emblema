@@ -4,6 +4,7 @@ from emblema.pretraining.adapters.documents.fields import Document, Fields
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
@@ -26,6 +27,13 @@ class ExperimentConfigurationDocument:
             configuration.architecture,
             configuration.masking,
             configuration.budget,
+        )
+        # Written only where stated: a document of a run that reads every corpus at the mixture's
+        # share stays the document it was before a corpus could have a share of its own.
+        fraction: Document = (
+            {"fraction": {stated.corpus: stated.fraction for stated in configuration.fractions}}
+            if configuration.fractions
+            else {}
         )
         return {
             "name": configuration.name,
@@ -62,6 +70,7 @@ class ExperimentConfigurationDocument:
             "precision": str(configuration.precision),
             "checkpoint": {"every_steps": configuration.checkpoint.every_steps},
             "passes": {stated.corpus: stated.passes for stated in configuration.passes},
+            **fraction,
         }
 
     def decode(self, document: Mapping[str, object]) -> ExperimentConfiguration:
@@ -81,6 +90,7 @@ class ExperimentConfigurationDocument:
         # Absent from every document written before a corpus could be read more than once an
         # epoch, and those runs read each corpus once.
         passes = fields.optional_fields("passes")
+        fraction = fields.optional_fields("fraction")
         return ExperimentConfiguration(
             name=fields.text("name"),
             tier=ComputeTier(fields.text("tier")),
@@ -122,5 +132,11 @@ class ExperimentConfigurationDocument:
             else tuple(
                 CorpusPasses(corpus=corpus, passes=passes.integer(corpus))
                 for corpus in fields.mapping("passes")
+            ),
+            fractions=()
+            if fraction is None
+            else tuple(
+                CorpusFraction(corpus=corpus, fraction=fraction.number(corpus))
+                for corpus in fields.mapping("fraction")
             ),
         )

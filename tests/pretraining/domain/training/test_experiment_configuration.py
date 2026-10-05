@@ -4,6 +4,7 @@ from emblema.pretraining.domain.exceptions import (
     InvalidCorpusShareError,
     InvalidExperimentConfigurationError,
 )
+from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
@@ -134,3 +135,53 @@ def test_passes_stated_on_one_side_only_are_a_named_difference() -> None:
     assert weighted.differences_from(configuration()) == ("passes.stays",)
     assert configuration().differences_from(weighted) == ("passes.stays",)
     assert weighted.differences_from(weighted) == ()
+
+
+def test_a_corpus_is_read_at_the_mixture_s_share_unless_its_own_fraction_is_stated() -> None:
+    mixed = configuration(
+        corpus_fraction=0.5, fractions=(CorpusFraction(corpus="meters", fraction=0.1),)
+    )
+
+    assert mixed.corpus_share_of("meters") == CorpusShare(fraction=0.1, seed=mixed.budget.seed)
+    assert mixed.corpus_share_of("stays") == mixed.corpus_share
+    assert mixed.corpus_share == CorpusShare(fraction=0.5, seed=mixed.budget.seed)
+
+
+def test_fractions_render_last_by_corpus_name_and_only_where_stated() -> None:
+    mixed = configuration(
+        passes=(CorpusPasses(corpus="stays", passes=4),),
+        fractions=(
+            CorpusFraction(corpus="meters", fraction=0.1),
+            CorpusFraction(corpus="engines", fraction=1),
+        ),
+    )
+
+    parameters = mixed.parameters()
+
+    assert not any(key.startswith("fraction.") for key in configuration().parameters())
+    assert list(parameters)[-3:] == ["passes.stays", "fraction.engines", "fraction.meters"]
+    assert (parameters["fraction.engines"], parameters["fraction.meters"]) == (1.0, 0.1)
+    assert isinstance(parameters["fraction.engines"], float)
+    assert (
+        parameters
+        == configuration(
+            passes=mixed.passes, fractions=tuple(reversed(mixed.fractions))
+        ).parameters()
+    )
+
+
+def test_a_corpus_whose_fraction_is_stated_more_than_once_is_refused() -> None:
+    with pytest.raises(InvalidExperimentConfigurationError, match="fraction stated twice"):
+        configuration(
+            fractions=(
+                CorpusFraction(corpus="meters", fraction=0.1),
+                CorpusFraction(corpus="meters", fraction=0.2),
+            )
+        )
+
+
+def test_a_fraction_stated_on_one_side_only_is_a_named_difference() -> None:
+    mixed = configuration(fractions=(CorpusFraction(corpus="meters", fraction=0.1),))
+
+    assert mixed.differences_from(configuration()) == ("fraction.meters",)
+    assert configuration().differences_from(mixed) == ("fraction.meters",)

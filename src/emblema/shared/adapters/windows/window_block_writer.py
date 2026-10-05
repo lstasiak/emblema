@@ -1,6 +1,7 @@
 import shutil
 import struct
 import tempfile
+from array import array
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 from types import TracebackType
@@ -49,11 +50,11 @@ class WindowBlockWriter:
     """Writes token windows into one block file, holding no more of them than a buffer at a time.
 
     Token columns spill to scratch files beside the block as they fill and are copied into it at
-    the end, so memory does not grow with the corpus; the scratch never goes to the system's
-    temporary directory, which inside a container may be memory. Every window is checked in the
-    form it reads back in, cast to the stored width, so a window that precision would spoil is
-    refused here rather than by the run that reads it. As a context manager the writer leaves
-    nothing behind on an error.
+    the end, so memory grows with the corpus by a few machine words per window and no more; the
+    scratch never goes to the system's temporary directory, which inside a container may be
+    memory. Every window is checked in the form it reads back in, cast to the stored width, so a
+    window that precision would spoil is refused here rather than by the run that reads it. As a
+    context manager the writer leaves nothing behind on an error.
     """
 
     def __init__(
@@ -85,10 +86,11 @@ class WindowBlockWriter:
             _ScratchColumn(scratch_root / GAP_COLUMN, measurement_dtype),
             _ScratchColumn(scratch_root / TIMELESS_COLUMN, TIMELESS_DTYPE),
         )
-        self._units: list[int] = []
-        self._starts: list[float] = []
-        self._ends: list[float] = []
-        self._offsets: list[int] = [0]
+        # Typed arrays, not lists: tens of millions of windows at a few bytes each, not objects.
+        self._units = array("i")
+        self._starts = array("d")
+        self._ends = array("d")
+        self._offsets = array("q", [0])
         self._closed = False
 
     def __enter__(self) -> Self:

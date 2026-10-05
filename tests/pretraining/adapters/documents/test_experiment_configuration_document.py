@@ -5,6 +5,7 @@ import pytest
 from emblema.pretraining.adapters.documents.experiment_configuration_document import (
     ExperimentConfigurationDocument,
 )
+from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
@@ -83,3 +84,20 @@ def test_a_document_written_before_passes_existed_reads_every_corpus_once() -> N
     del document["passes"]
 
     assert CODEC.decode(document) == configuration()
+
+
+def test_the_fraction_of_a_corpus_travels_by_its_name_and_only_where_stated() -> None:
+    mixed = configuration(
+        fractions=(
+            CorpusFraction(corpus="meters", fraction=0.1),
+            CorpusFraction(corpus="engines", fraction=1.0),
+        )
+    )
+
+    document = CODEC.encode(mixed)
+
+    assert document["fraction"] == {"meters": 0.1, "engines": 1.0}
+    assert CODEC.decode(document) == mixed
+    # A run at the mixture's share writes the document it wrote before the knob existed.
+    assert "fraction" not in CODEC.encode(configuration())
+    assert CODEC.decode(CODEC.encode(configuration())) == configuration()

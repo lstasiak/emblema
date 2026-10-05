@@ -53,6 +53,10 @@ class InvalidCorpusPassesError(PretrainingError, ValueError):
     pass
 
 
+class InvalidCorpusFractionError(PretrainingError, ValueError):
+    pass
+
+
 class InvalidObjectiveLossError(PretrainingError, ValueError):
     pass
 

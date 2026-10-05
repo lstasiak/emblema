@@ -7,6 +7,7 @@ from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
 from emblema.pretraining.adapters.experiments.experiment_file import ExperimentFile
 from emblema.pretraining.domain.exceptions import (
+    InvalidCorpusFractionError,
     InvalidCorpusPassesError,
     InvalidMaskingStrategyError,
     InvalidObjectiveLossError,
@@ -177,4 +178,28 @@ def test_a_corpus_stated_to_be_read_once_is_refused(tmp_path: Path) -> None:
     with pytest.raises(InvalidCorpusPassesError):
         ExperimentFile.load(
             written(STATED + "\n[passes]\ncontrol-a = 1\n", tmp_path)
+        ).configuration()
+
+
+def test_a_file_states_the_share_a_corpus_of_its_own_is_read_at(tmp_path: Path) -> None:
+    mixed = STATED.replace('corpora = ["control-a"]', 'corpora = ["control-a", "control-b"]')
+    mixed = mixed.replace("decoder_layers = 2", "decoder_layers = 2\ncorpus_fraction = 0.5")
+    mixed += "\n[fraction]\ncontrol-b = 0.1\n"
+
+    stated = ExperimentFile.load(written(mixed, tmp_path)).configuration()
+
+    assert stated.corpus_share_of("control-b").fraction == 0.1
+    assert stated.corpus_share_of("control-a").fraction == 0.5
+    assert ExperimentFile.load(written(STATED, tmp_path)).configuration().fractions == ()
+
+
+def test_a_fraction_for_a_corpus_the_run_does_not_read_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="fraction is stated for corpora the run does not"):
+        ExperimentFile.load(written(STATED + "\n[fraction]\ncontrol-b = 0.1\n", tmp_path))
+
+
+def test_a_fraction_no_run_could_read_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(InvalidCorpusFractionError):
+        ExperimentFile.load(
+            written(STATED + "\n[fraction]\ncontrol-a = 1.5\n", tmp_path)
         ).configuration()
