@@ -40,6 +40,7 @@ kept as recorded.
 | [encoder.md](encoder.md) | Exact self-attention fits the default window of every corpus at the published tier; exact parameter counts per tier. |
 | [synthetic-control.md](synthetic-control.md) | The coupled control pair shares structure and the null pair does not, by a margin fixed beforehand; checksums agree on arm64 and x86. |
 | [masked-reconstruction.md](masked-reconstruction.md) | On the positive control every mask kind is learnt against its trivial baseline with an interval, at the published tier. |
+| [pretext-variants.md](pretext-variants.md) | On its real corpora the mixture's backbone learns every kind of mask beyond its trivial baseline on the intensive-care stays, so the harder variant of the pretext hides three quarters of a window at the same proportions; the forecast tail is learnt on every corpus, though under it the stays' hidden channels are read worse than by a regression on the others. Which pretext the curve runs under is read by the probe. |
 
 ## Evaluation
 

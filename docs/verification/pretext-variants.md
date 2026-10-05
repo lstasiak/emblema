@@ -124,3 +124,81 @@ computed with `scripts/campaign_pairs_report.py`, over stays and seeds.
 - The fifth was also used to choose the recipe; the validation side stays unread.
 - The probe alone chooses. A pretext that helps fine-tuning but not a linear reading would be
   missed.
+
+## 2026-10-05 — M1 Pro, MPS: the kinds of mask read off the diagnostic, and the harder masks set
+
+**Question.** Which kinds of mask does the mixture of four's backbone learn beyond their trivial
+baselines on its real corpora, which row of the table above do the stays choose for (a), and is
+the forecast tail of (b) learnt on the stays, so that (b′) stays unrun?
+
+**Conditions.** Commit `f5c4d502`; `scripts/pretext_triviality_report.py --backbone <id>` on
+the M1 Pro (MPS, fp32, torch 2.14). Per corpus: 2,000 validation windows spaced evenly (SKAB
+has 768), the model scored under its own masks drawn at seed 1; the regression baselines fitted
+on 2,000 training windows under masks drawn at seed 2; 2,000 bootstrap resamples over
+validation units, 95 %. Errors are the run's reading of the loss (Huber at one deviation) on
+hidden tokens, in normalised units. Channels reported apart (timeless, constant) are left out
+here. CSV under `data/report/pretext/<backbone id>/`; 1.5 to 3.5 minutes a backbone.
+
+**`backbone-mixed4-m` (`2aaca0ba-…`) under today's masks.** Excess = the matched baseline's
+error less the model's; bold where learnt.
+
+| Corpus | Kind | Tokens | Units | Model | Matched | Excess [95 %] | Beyond linear [95 %] |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| C-MAPSS | channel | 254,140 | 141 | 0.105 | ridge 0.137 | **+0.031** [+0.013; +0.057] | — |
+| | block | 409,001 | 141 | 0.099 | interpolation 0.167 | **+0.068** [+0.065; +0.071] | **[+0.011; +0.032]** |
+| | token | 94,965 | 141 | 0.100 | interpolation 0.160 | **+0.060** [+0.056; +0.064] | **[+0.020; +0.027]** |
+| SKAB | channel | 85,175 | 7 | 0.157 | ridge 0.205 | **+0.048** [+0.022; +0.078] | — |
+| | block | 142,405 | 7 | 0.123 | interpolation 0.178 | **+0.054** [+0.047; +0.064] | [−0.001; +0.002] |
+| | token | 33,995 | 7 | 0.121 | interpolation 0.159 | **+0.038** [+0.036; +0.041] | [−0.004; −0.001] |
+| Satellite telemetry | channel | 261,680 | 21 | 0.119 | ridge 0.307 | **+0.188** [+0.058; +0.408] | — |
+| | block | 418,391 | 21 | 0.079 | interpolation 0.157 | **+0.078** [+0.006; +0.140] | **[+0.056; +0.112]** |
+| | token | 98,433 | 21 | 0.075 | interpolation 0.061 | −0.014 [−0.084; +0.036] | [−0.032; +0.031] |
+| Intensive-care stays | channel | 133,182 | 1,979 | 0.240 | ridge 0.258 | **+0.019** [+0.013; +0.025] | — |
+| | block | 207,806 | 1,998 | 0.144 | interpolation 0.228 | **+0.085** [+0.079; +0.090] | **[+0.023; +0.031]** |
+| | token | 50,565 | 1,989 | 0.122 | interpolation 0.145 | **+0.023** [+0.019; +0.027] | **[+0.001; +0.006]** |
+
+**`backbone-mixed4-m-forecast` (`4ae060e1-…`) under its own masks.** The tail's matched
+baseline is the channel's last visible value carried forward.
+
+| Corpus | Kind | Tokens | Units | Model | Matched | Excess [95 %] | Beyond linear [95 %] |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| C-MAPSS | channel | 248,385 | 141 | 0.107 | ridge 0.159 | **+0.052** [+0.015; +0.114] | — |
+| | tail | 428,573 | 141 | 0.106 | last value 0.196 | **+0.090** [+0.086; +0.093] | **[+0.016; +0.057]** |
+| SKAB | channel | 85,175 | 7 | 0.156 | ridge 0.203 | **+0.046** [+0.022; +0.075] | — |
+| | tail | 153,552 | 7 | 0.128 | last value 0.207 | **+0.079** [+0.073; +0.085] | **[+0.000; +0.004]** |
+| Satellite telemetry | channel | 261,680 | 21 | 0.133 | ridge 0.285 | **+0.153** [+0.037; +0.349] | — |
+| | tail | 461,088 | 21 | 0.094 | last value 0.216 | **+0.122** [+0.021; +0.209] | **[+0.076; +0.128]** |
+| Intensive-care stays | channel | 132,178 | 1,963 | 0.275 | ridge 0.263 | −0.012 [−0.018; −0.005] | — |
+| | tail | 205,800 | 1,986 | 0.181 | last value 0.239 | **+0.057** [+0.052; +0.064] | **[+0.021; +0.027]** |
+
+**Conclusions.**
+
+1. On the stays today's backbone learns every kind: the channel kind by 0.019, the block kind by
+   0.085 and the token kind by 0.023, each by the interval and each beyond the linear answer on
+   the same sources. By the rule above, **(a) is the amount branch**: channel 0.3028, block 1.0
+   over 0.5469 of the window, token 0.2085, expected hidden share 0.75
+   (`experiments/backbone-mixed4-m-harder.toml`). No kind is switched off.
+2. On the other corpora the same holds except the satellite telemetry's token kind, which the
+   model matches but does not beat (−0.014 [−0.084; +0.036]) over its 21 months, and SKAB's
+   block and token kinds, which the model beats the matched baseline on but not the linear
+   answer that reads the other channels too.
+3. The forecast tail is learnt on every corpus, on the stays by 0.057 [+0.052; +0.064] over the
+   last value and beyond the linear answer. **(b′) is not run.**
+4. Under the forecast tail the backbone reads the stays' hidden channels *worse* than the
+   cross-channel regression (−0.012 [−0.018; −0.005]), where today's backbone reads them better
+   by 0.019. A pretext that asks for the future has not taught the stays' channels about one
+   another; what that does to the task is the probes' question.
+5. The channel kind's intervals on C-MAPSS and the satellite telemetry are wide (a few units
+   carry most of the error); the token kind on the satellite corpus is the one case the mixture's
+   masks ask for something the model does not learn.
+
+**Limitations.**
+
+- One draw of the masks per backbone; the intervals hold the variation between units under it.
+- SKAB has seven validation units, the satellite telemetry twenty-one months; their intervals
+  are wide and their verdicts coarse.
+- The baselines are fitted on 2,000 training windows, not the training side; a ridge fitted on
+  more could be a little stronger.
+- Forward passes in fp32 on MPS, not the run's fp16 on the T4; the loss the run reports is not
+  reproduced here and is not what is compared.
+
