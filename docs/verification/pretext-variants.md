@@ -253,3 +253,82 @@ two tables.
   telemetry, baselines fitted on 2,000 windows, fp32 on MPS.
 - The two backbones are diagnosed under different masks, so "learnt by less" compares each to
   its own baseline on its own hidden tokens, not the two models on one set of tokens.
+
+## 2026-10-06 — M1 Pro, MPS: the probes under the four backbones, read by the rule
+
+**Question.** The one declared on 2026-10-05: does the closed-form probe at 50 stays gain more
+under the forecast tail (b) or the harder masks (a) than under the mixture's masks, past the
+mixture's own difference between two pretraining seeds?
+
+**Conditions.** Commit `7d641c16`; `campaigns/pretext-physionet2012.toml` and
+`campaigns/pretext-50-fd001.toml` defined under four backbones — `backbone-mixed4-m` at seed 1
+(`2aaca0ba-…`, weights `0d81c01e…`) and seed 2 (`3d0c4468-…`, `94f00d72…`), (b)
+(`4ae060e1-…`, `345ade99…`) and (a) (`7092e656-…`, `8937743e…`) — eight campaigns in all,
+ordered here and fulfilled on this machine's accelerator one after another (MPS, fp32;
+about 15 minutes for 90 cells on the stays and 5 minutes for 30 on FD001, 80 minutes in all).
+Every cell is scored on the fifth of the tuning side held out by seed 101, 800 stays or 16
+engines, over seeds 1 to 10, so the backbones pair by stay and seed; the validation side is
+unread. Pairs by `scripts/campaign_pairs_report.py` (10,000 resamples, 95 %), CSV under
+`data/report/l2/pairs/`. Gains are reductions of 1 − AUROC on the stays and of RMSE in cycles
+on FD001; positive favours the candidate.
+
+**The rule's comparison: `frozen_ridge` under a variant against `frozen_ridge` under seed 1.**
+
+| Candidate | 20 stays | 50 stays | 200 stays | FD001 at 50 |
+| --- | --- | --- | --- | --- |
+| seed 2 | −0.021 [−0.039; −0.003] | −0.008 [−0.028; +0.011], −0.008 ± 0.007 | +0.005 [−0.019; +0.030] | +0.4 [−0.6; +1.4] |
+| (b) forecast tail | −0.027 [−0.042; −0.012] | −0.017 [−0.038; +0.005], −0.017 ± 0.012 | −0.038 [−0.064; −0.011] | **+4.1 [+3.0; +5.3]** |
+| (a) harder masks | −0.012 [−0.033; +0.008] | −0.015 [−0.030; +0.000], −0.015 ± 0.008 | +0.000 [−0.023; +0.024] | +1.4 [+0.3; +2.6] |
+
+At 50 stays the second number is the mean over seeds with its standard error. The trained
+probe (`frozen_probe@learning_rate=0.03`) reads the same way: seed 2 −0.004, (b) −0.029
+[−0.051; −0.008], (a) −0.013 [−0.032; +0.006] at 50 stays.
+
+**What pretraining adds: `frozen_ridge` against `untrained_ridge` under each backbone.**
+
+| Backbone | 20 stays | 50 stays | 200 stays | FD001 at 50 (RMSE) |
+| --- | --- | --- | --- | --- |
+| seed 1 | +0.016 [−0.005; +0.037] | **+0.032** [+0.007; +0.057] | **+0.051** [+0.016; +0.085] | −5.1 [−6.2; −4.0] |
+| seed 2 | −0.005 [−0.023; +0.013] | **+0.024** [+0.003; +0.045] | **+0.056** [+0.028; +0.084] | −4.7 [−5.7; −3.8] |
+| (b) forecast tail | −0.011 [−0.030; +0.007] | +0.015 [−0.014; +0.044] | +0.013 [−0.024; +0.048] | −1.0 [−1.6; −0.3] |
+| (a) harder masks | +0.004 [−0.019; +0.026] | +0.018 [−0.009; +0.043] | **+0.051** [+0.019; +0.082] | −3.7 [−4.5; −2.8] |
+
+The probe over the untrained encoder scores 0.459, 0.429 and 0.394 at 20, 50 and 200 stays
+and 18.8 RMSE on FD001; it is the same cell under every backbone.
+
+**Conclusions.**
+
+1. **Neither variant replaces the mixture's masks.** At 50 stays both lie below the probe under
+   seed 1, (b) by 0.017 and (a) by 0.015, and neither interval lies above zero; the first
+   condition fails and the other two are not reached. The curve over the scale of pretraining
+   continues under today's masks, as the rule provides.
+2. Both predictions hold. The mixture's two seeds differ by 0.008 at 50 stays, under the 0.012
+   predicted from the validation side; each variant's gain lies within ±0.021 of seed 1.
+3. **The forecast tail unlearns the stays for the probe.** Under (b) pretraining adds nothing
+   over an untrained encoder at any budget (+0.015 [−0.014; +0.044] at 50 stays, +0.013 at
+   200), where the mixture's masks add 0.032 and 0.051. This is the diagnostic's reading made
+   concrete: a backbone that read the stays' hidden channels worse than a regression on the
+   others gives the probe states no better than untrained ones.
+4. **The harder masks keep the gain at 200 stays and lose it below.** Under (a) the probe gains
+   0.051 at 200, as under seed 1, but 0.018 at 50 and 0.004 at 20, where the mixture's masks
+   give 0.032 and 0.016.
+5. **On FD001 every pretext hurts the linear reading of the remaining life, (b) least.** The
+   probe over the untrained encoder scores 18.8; the mixture's states 23.9 and 23.5 (two
+   seeds), (a)'s 22.5 and (b)'s 19.8. The tail is 4.1 [+3.0; +5.3] RMSE better than seed 1
+   and (a) 1.4 [+0.3; +2.6]; both are read descriptively and neither reaches the untrained
+   encoder.
+6. At 20 stays seed 2 lies 0.021 [−0.039; −0.003] below seed 1: the budget where a
+   pretraining seed moves the probe by the interval, and where no variant is read.
+
+**Limitations.**
+
+- One pretraining seed per variant, so a variant's own seed spread is unknown; the seed
+  condition uses the mixture's.
+- The fifth is the one the recipe was chosen on. The validation side stays unread.
+- The probe alone is read; fine-tuning under either variant was not run and could order them
+  otherwise.
+- (b) hides less than today's masks on every corpus, so its deficit is pretext and amount
+  together; (a) hides more at the same proportions, so its deficit at small budgets is amount
+  alone.
+- Forward passes on MPS in fp32, the first orders of the ml pool fulfilled on this machine; the
+  cells are deterministic under their seeds.
