@@ -450,8 +450,8 @@ source = "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/D
 download_size = "1.4 GB (four RData files)"
 epochs = 5
 pretraining_split = "the training files (fault-free and faulty, 500 runs per condition); the testing files stay out"
-verdict = "candidate"
-decision = "Public domain and an order of magnitude more tokens than SMD; simulated like C-MAPSS, so its runs are trajectories of one process model, not independent machines."
+verdict = "ingredient"
+decision = "Enters the mixtures of the scale curve, never a backbone of its own: public domain and an order of magnitude more values than SMD, but simulated like C-MAPSS, so its runs are trajectories of one process model, not independent machines."
 
 [corpora.tep.licence]
 terms = "Public domain dedication with disclaimer (CC0-equivalent) on Harvard Dataverse."
