@@ -29,7 +29,7 @@ kept as recorded.
 
 | Note | Conclusion |
 | --- | --- |
-| [data-spike.md](data-spike.md) | Licences, units, windows and tokens counted from the raw corpora; the classical corpora are small and ESA-AD makes the reference model legitimate. |
+| [data-spike.md](data-spike.md) | Licences, units, windows and tokens counted from the raw corpora; the classical corpora are small and ESA-AD makes the reference model legitimate; the published chain for the curve over the scale of pretraining holds 1.04 billion observed training values over 30 corpora, 0.30 billion at the quarter the smaller point reads, against 0.056 billion in the mixture of four. |
 | [window-sanity.md](window-sanity.md) | Raw windows and their token reconstructions agree to 1e-14 on every corpus; per-channel shapes and tails are recorded. |
 | [corpus-saturation.md](corpus-saturation.md) | C-MAPSS saturates from a quarter of its engines; SMD and SKAB are data-limited; ESA-AD is data-limited once its loss is bounded and its split names its excursion months. |
 

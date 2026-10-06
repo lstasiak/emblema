@@ -5,6 +5,7 @@ cause it is replayed in an interpreter of its own, which a crash would end with 
 than with this test process.
 """
 
+import os
 import subprocess
 import sys
 from importlib.util import find_spec
@@ -31,6 +32,8 @@ print("answered")
 
 
 def replay(*, without_torch: bool) -> subprocess.CompletedProcess[str]:
+    # Python 3.14 colours a traceback wherever FORCE_COLOR is set, and the escape codes would
+    # split the message the assertion looks for.
     return subprocess.run(
         [sys.executable, "-c", XGBOOST_FIRST.format(without_torch=without_torch)],
         cwd=ROOT,
@@ -38,6 +41,7 @@ def replay(*, without_torch: bool) -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=300,
         check=False,
+        env={**os.environ, "PYTHON_COLORS": "0"},
     )
 
 

@@ -1,0 +1,37 @@
+# A backbone over a tenth of the London smart-meter readings at the tier a laptop runs, for one
+# purpose: to carry a published dataset of the time-series collection — the largest block of the
+# chain, fetched from the bucket and mapped — through the pretraining process end to end before
+# the mixtures over the chain are ordered on a GPU. Its weights are not a result, and nothing
+# measured with it is cited.
+#
+# One epoch over a tenth of the units is the shortest run that fetches the block, trains over
+# it and scores the validation side; the masks and the schedule's shape are the mixtures'.
+name = "smoke-utsd-london-s"
+tier = "S"
+corpora = ["utsd/Energy_london_smart_meters_dataset_without_missing_values"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+corpus_fraction = 0.1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 1
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 500

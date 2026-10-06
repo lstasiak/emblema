@@ -1,0 +1,105 @@
+# The point of about 3·10⁸ observed values on the curve over the scale of pretraining, in today's
+# shape. The chain continues the mixture of four (backbone-mixed4-m.toml): C-MAPSS read per
+# operating condition, SKAB, the satellite telemetry and the intensive-care stays, then the
+# Tennessee Eastman runs and the 25 datasets of UTSD-12G, each a corpus of its own in one
+# vocabulary.
+#
+# The new corpora are read at a quarter of their training units each, so this point and the next
+# (backbone-scale-1e9-m.toml) share one publication and one composition and differ in the amount of
+# data alone: the units a quarter takes are chosen by the run's seed and lie inside the whole. The
+# corpora a task reads keep the exposure of the mixture of four: four epochs times two passes over
+# C-MAPSS and the stays are the eight reads of that backbone, so a larger mixture adds data beside
+# a task's corpus and does not read it less often. Four epochs, the best kept by the pretext's
+# validation loss, as at every point.
+name = "backbone-scale-3e8-m"
+tier = "M"
+corpora = [
+    "cmapss",
+    "skab",
+    "esa_ad",
+    "physionet2012",
+    "tep",
+    "utsd/ERA5_pressure",
+    "utsd/ERA5_surface",
+    "utsd/Energy_australian_electricity_demand_dataset",
+    "utsd/Energy_london_smart_meters_dataset_without_missing_values",
+    "utsd/Environment_AustraliaRainfall",
+    "utsd/Environment_BeijingPM25Quality",
+    "utsd/Environment_BenzeneConcentration",
+    "utsd/Health_AtrialFibrillation",
+    "utsd/Health_BIDMC32HR",
+    "utsd/Health_IEEEPPG",
+    "utsd/Health_MotorImagery",
+    "utsd/Health_PigArtPressure",
+    "utsd/Health_PigCVP",
+    "utsd/Health_SelfRegulationSCP1",
+    "utsd/Health_SelfRegulationSCP2",
+    "utsd/Health_TDBrain_csv",
+    "utsd/IoT_baian",
+    "utsd/Nature_EigenWorms",
+    "utsd/Nature_Phoneme",
+    "utsd/Nature_StarLightCurves",
+    "utsd/Nature_Worms",
+    "utsd/Nature_kdd_cup_2018_dataset_without_missing_values",
+    "utsd/Nature_temperature_rain_dataset_without_missing_values",
+    "utsd/Transport_pedestrian_counts_dataset",
+    "utsd/Web_kaggle_web_traffic_dataset_without_missing_values",
+]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[passes]
+cmapss = 2
+physionet2012 = 2
+
+[fraction]
+"tep" = 0.25
+"utsd/ERA5_pressure" = 0.25
+"utsd/ERA5_surface" = 0.25
+"utsd/Energy_australian_electricity_demand_dataset" = 0.25
+"utsd/Energy_london_smart_meters_dataset_without_missing_values" = 0.25
+"utsd/Environment_AustraliaRainfall" = 0.25
+"utsd/Environment_BeijingPM25Quality" = 0.25
+"utsd/Environment_BenzeneConcentration" = 0.25
+"utsd/Health_AtrialFibrillation" = 0.25
+"utsd/Health_BIDMC32HR" = 0.25
+"utsd/Health_IEEEPPG" = 0.25
+"utsd/Health_MotorImagery" = 0.25
+"utsd/Health_PigArtPressure" = 0.25
+"utsd/Health_PigCVP" = 0.25
+"utsd/Health_SelfRegulationSCP1" = 0.25
+"utsd/Health_SelfRegulationSCP2" = 0.25
+"utsd/Health_TDBrain_csv" = 0.25
+"utsd/IoT_baian" = 0.25
+"utsd/Nature_EigenWorms" = 0.25
+"utsd/Nature_Phoneme" = 0.25
+"utsd/Nature_StarLightCurves" = 0.25
+"utsd/Nature_Worms" = 0.25
+"utsd/Nature_kdd_cup_2018_dataset_without_missing_values" = 0.25
+"utsd/Nature_temperature_rain_dataset_without_missing_values" = 0.25
+"utsd/Transport_pedestrian_counts_dataset" = 0.25
+"utsd/Web_kaggle_web_traffic_dataset_without_missing_values" = 0.25
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as every mixture since the satellite corpus was read so.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 4
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000
