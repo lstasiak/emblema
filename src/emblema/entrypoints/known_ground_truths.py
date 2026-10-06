@@ -5,6 +5,9 @@ from emblema.evaluation.adapters.readers.corpus_ground_truths import CorpusGroun
 from emblema.evaluation.adapters.readers.physionet2012_ground_truth import (
     Physionet2012GroundTruth,
 )
+from emblema.evaluation.adapters.readers.physionet2019_ground_truth import (
+    Physionet2019GroundTruth,
+)
 from emblema.evaluation.domain.labels.outcome_scheme import OutcomeScheme
 
 
@@ -20,10 +23,12 @@ class KnownGroundTruths:
     the process was given is part of the same fact, so a reader is bound to the directory its
     marker file is found in rather than to one an operator would have to know.
 
-    The turbofans and the intensive-care stays are here. The other corpora are published without
-    answers this context knows how to read, and a task defined over one of them is refused by
-    name rather than answered by whichever reader happened to be registered first. The stays
-    answer one outcome, named here once for the reader and for the task that asks it.
+    The turbofans and the intensive-care stays of 2012 and 2019 are here. The other corpora are
+    published without answers this context knows how to read, and a task defined over one of
+    them is refused by name rather than answered by whichever reader happened to be registered
+    first. Each set of stays answers one outcome, named here once for the reader and for the task
+    that asks it; the sepsis stays answer it at the end of their first day, and the length of that
+    day is named here too, since the reader refuses every other window.
     """
 
     CMAPSS = "cmapss"
@@ -31,6 +36,10 @@ class KnownGroundTruths:
     PHYSIONET = "physionet2012"
     OUTCOMES_MARKER = "Outcomes-a.txt"
     IN_HOSPITAL_DEATH = OutcomeScheme("In-hospital_death")
+    PHYSIONET2019 = "physionet2019"
+    STAYS_MARKER = "training_setA"
+    SEPSIS = OutcomeScheme("SepsisLabel")
+    FIRST_DAY_HOURS = 24.0
 
     @classmethod
     def under(cls, corpora: Path) -> CorpusGroundTruths:
@@ -41,6 +50,11 @@ class KnownGroundTruths:
                 cls.PHYSIONET: Physionet2012GroundTruth(
                     cls._found_under(corpora, cls.PHYSIONET, cls.OUTCOMES_MARKER),
                     cls.IN_HOSPITAL_DEATH,
+                ),
+                cls.PHYSIONET2019: Physionet2019GroundTruth(
+                    cls._found_under(corpora, cls.PHYSIONET2019, cls.STAYS_MARKER),
+                    cls.SEPSIS,
+                    cls.FIRST_DAY_HOURS,
                 ),
             }
         )
@@ -57,7 +71,11 @@ class KnownGroundTruths:
 
     @staticmethod
     def _found_under(corpora: Path, corpus: str, marker: str) -> Path:
-        """The directory under ``corpora/corpus`` holding ``marker``, or where it would be."""
+        """The directory under ``corpora/corpus`` holding ``marker``, or where it would be.
+
+        The marker is a file the corpus ships, or the first of its sets where it ships one file per
+        unit, since a set is what the reader is bound to the parent of.
+        """
         root = corpora / corpus
         found = sorted(root.rglob(marker)) if root.is_dir() else []
         return found[0].parent if found else root

@@ -6,8 +6,15 @@ from sqlalchemy import create_engine
 from emblema.catalog.adapters.persistence.corpus_record import CorpusRecord
 from emblema.config.settings import Settings
 
-# Imported so that the task's tables register on the Evaluation metadata: a campaign and a
-# task are separate aggregates, so neither record module reaches the other.
+# Imported so that the task's tables and the cells' register on the Evaluation metadata: a
+# campaign, its cells and a task are kept by separate record modules, and none of them reaches
+# the others.
+from emblema.evaluation.adapters.persistence.campaign_cell_record import (  # noqa: F401
+    CampaignCellRecord,
+)
+from emblema.evaluation.adapters.persistence.campaign_unit_error_record import (  # noqa: F401
+    CampaignUnitErrorRecord,
+)
 from emblema.evaluation.adapters.persistence.downstream_task_record import (  # noqa: F401
     DownstreamTaskRecord,
 )

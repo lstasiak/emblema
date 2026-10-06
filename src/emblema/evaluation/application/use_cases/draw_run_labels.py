@@ -90,7 +90,7 @@ class DrawRunLabels:
                 task=command.task, budget=command.budget, seed=command.seed, within=fitted
             )
         )
-        windows = self._corpus.windows_of(task.manifest, scored_units)
+        windows = task.read_windows(self._corpus.windows_of(task.manifest, scored_units))
         scored = task.labelled(windows, self._truth.truths_of(task.corpus, windows))
         return RunLabels(task=task, sample=sample, scored=scored)
 

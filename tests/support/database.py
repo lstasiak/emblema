@@ -21,6 +21,18 @@ from sqlalchemy import Engine, MetaData, create_engine, text
 from emblema.catalog.adapters.persistence.corpus_record import CorpusRecord
 from emblema.config.database_settings import DatabaseSettings
 from emblema.config.settings import Settings
+
+# Imported so that emptying Evaluation empties the tasks and the cells too, and emptying Serving
+# the served models, whichever records the test that asks for it happened to import.
+from emblema.evaluation.adapters.persistence.campaign_cell_record import (  # noqa: F401
+    CampaignCellRecord,
+)
+from emblema.evaluation.adapters.persistence.campaign_unit_error_record import (  # noqa: F401
+    CampaignUnitErrorRecord,
+)
+from emblema.evaluation.adapters.persistence.downstream_task_record import (  # noqa: F401
+    DownstreamTaskRecord,
+)
 from emblema.evaluation.adapters.persistence.evaluation_campaign_record import (
     EvaluationCampaignRecord,
 )
@@ -28,9 +40,6 @@ from emblema.pretraining.adapters.persistence.backbone_record import BackboneRec
 from emblema.serving.adapters.persistence.promotable_artifact_record import (
     PromotableArtifactRecord,
 )
-
-# Imported so that emptying Serving empties the served models too, whichever records the test
-# that asks for it happened to import.
 from emblema.serving.adapters.persistence.served_model_record import (  # noqa: F401
     ServedModelRecord,
 )

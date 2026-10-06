@@ -26,6 +26,7 @@ from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtoco
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.task.task_split import TaskSplit
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.shared.kernel.artifacts import ArtifactRef
 
 
@@ -55,6 +56,8 @@ class DownstreamTask:
             ``None`` where the protocol spends no labels.
         strata: How a budget is spread over the pool; ``None`` where the protocol spends no
             labels.
+        windows: Which of a unit's windows the task reads; every one unless the question is
+            asked at one moment of the unit.
     """
 
     task_id: TaskId
@@ -64,6 +67,7 @@ class DownstreamTask:
     split: TaskSplit
     labels: LabelScheme | None
     strata: Stratification | None
+    windows: TaskWindows = TaskWindows.EVERY
 
     def __post_init__(self) -> None:
         for named, part in (("label scheme", self.labels), ("stratification", self.strata)):
@@ -86,6 +90,14 @@ class DownstreamTask:
     def validation_units(self) -> frozenset[UnitKey]:
         """Units every number reported before the final run is measured on."""
         return self.split.validation
+
+    def read_windows(self, windows: Iterable[TaskWindow]) -> tuple[TaskWindow, ...]:
+        """The windows the task reads among those its units hold, in the order given.
+
+        A budget is drawn from and a run is scored on these alone, so both read the unit at the
+        same moment.
+        """
+        return self.windows.chosen_from(windows)
 
     def label_scheme(self) -> LabelScheme:
         """How this task's targets are read.
@@ -115,7 +127,7 @@ class DownstreamTask:
         Raises:
             ProtocolMismatchError: If the protocol spends no labels.
             UnknownGroundTruthError: If ``truths`` says nothing about one of the windows.
-            UnlabelledWindowError: If a window reaches past the failure of its unit.
+            UnlabelledWindowError: If a window carries no label under the scheme.
         """
         scheme = self.label_scheme()
         return tuple(self._labelled(scheme, window, truths) for window in windows)

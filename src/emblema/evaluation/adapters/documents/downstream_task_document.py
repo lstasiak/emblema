@@ -13,6 +13,7 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.evaluation.domain.task.task_split import TaskSplit
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
 
@@ -24,11 +25,12 @@ class DownstreamTaskDocument:
     side travels as the units it names and nothing more: the machine that runs a tuning order
     has to know which units it may not read, not what they hold. The strata travel as the count
     of a quantity's bins; a task over outcomes is spread over its outcomes, which has nothing to
-    count, and its scheme says so.
+    count, and its scheme says so. Which windows the task reads travels only when it is not every
+    window, so a task written before the choice existed is written as it always was.
     """
 
     def encode(self, task: DownstreamTask) -> dict[str, Any]:
-        return {
+        encoded: dict[str, Any] = {
             "task_id": str(task.task_id),
             "corpus": task.corpus,
             "manifest": {
@@ -43,6 +45,9 @@ class DownstreamTaskDocument:
             "labels": self._labels(task.labels),
             "strata": task.strata.count if isinstance(task.strata, TargetBins) else None,
         }
+        if task.windows is not TaskWindows.EVERY:
+            encoded["windows"] = str(task.windows)
+        return encoded
 
     def decode(self, document: dict[str, Any]) -> DownstreamTask:
         """The task that document holds.
@@ -69,6 +74,7 @@ class DownstreamTaskDocument:
             ),
             labels=self._scheme(labels),
             strata=self._strata(document["strata"], labels),
+            windows=TaskWindows(document.get("windows", TaskWindows.EVERY)),
         )
 
     @staticmethod

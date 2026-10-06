@@ -56,6 +56,7 @@ from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.task.task_split import TaskSplit
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
 from emblema.evaluation.domain.transfer.lora_spec import LoraSpec
@@ -104,6 +105,7 @@ def task(
     labels: LabelScheme | None = SCHEME,
     protocol: EvaluationProtocol = EvaluationProtocol.LABEL_BUDGET,
     strata: Stratification | None = STRATA,
+    windows: TaskWindows = TaskWindows.EVERY,
 ) -> DownstreamTask:
     return DownstreamTask(
         task_id=TASK,
@@ -113,6 +115,7 @@ def task(
         protocol=protocol,
         labels=labels,
         strata=strata,
+        windows=windows,
     )
 
 

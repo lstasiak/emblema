@@ -1,7 +1,7 @@
 from typing import Self
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, Float, Integer, Text, Uuid
+from sqlalchemy import CheckConstraint, Float, Integer, Text, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from emblema.evaluation.adapters.persistence.orm import Base
@@ -24,6 +24,7 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.evaluation.domain.task.task_split import TaskSplit
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
 
@@ -39,6 +40,8 @@ class DownstreamTaskRecord(Base):
     carries no scheme at all, and the constraints say that too, so the invariant the aggregate
     holds is held by the database as well. A task over outcomes is spread over its two outcomes,
     which has no parameter to store: the number of strata is kept for a quantity's bins only.
+    Which windows a task reads defaults to every one in the database too, so the tasks stored
+    before the choice existed read as they always did.
     """
 
     __tablename__ = "downstream_task"
@@ -78,6 +81,10 @@ class DownstreamTaskRecord(Base):
             f"(label_scheme = '{OUTCOME}') = (label_outcome IS NOT NULL)",
             name="outcome_has_name",
         ),
+        CheckConstraint(
+            f"windows IN ('{TaskWindows.EVERY}', '{TaskWindows.FIRST}')",
+            name="windows_known",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -93,6 +100,7 @@ class DownstreamTaskRecord(Base):
     label_horizon: Mapped[float | None] = mapped_column(Float)
     label_outcome: Mapped[str | None] = mapped_column(Text)
     strata: Mapped[int | None] = mapped_column(Integer)
+    windows: Mapped[str] = mapped_column(Text, server_default=text(f"'{TaskWindows.EVERY}'"))
     units: Mapped[list[TaskUnitRecord]] = relationship(
         cascade="all, delete-orphan", lazy="selectin", order_by=TaskUnitRecord.unit
     )
@@ -114,6 +122,7 @@ class DownstreamTaskRecord(Base):
             label_horizon=labels.horizon if isinstance(labels, ForecastScheme) else None,
             label_outcome=labels.outcome if isinstance(labels, OutcomeScheme) else None,
             strata=task.strata.count if isinstance(task.strata, TargetBins) else None,
+            windows=str(task.windows),
             units=[
                 TaskUnitRecord.of(task.task_id, unit, side)
                 for side, keys in (
@@ -142,6 +151,7 @@ class DownstreamTaskRecord(Base):
             ),
             labels=self._labels(),
             strata=self._strata(),
+            windows=TaskWindows(self.windows),
         )
 
     def _side(self, side: str) -> frozenset[UnitKey]:

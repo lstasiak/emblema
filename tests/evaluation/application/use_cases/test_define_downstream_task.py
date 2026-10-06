@@ -9,9 +9,14 @@ from emblema.evaluation.application.use_cases.define_downstream_task import (
     DefineDownstreamTaskCommand,
 )
 from emblema.evaluation.contracts.identifiers import TaskId
-from emblema.evaluation.domain.exceptions import InvalidTaskSplitError, UnknownTaskUnitsError
+from emblema.evaluation.domain.exceptions import (
+    InvalidTaskSplitError,
+    PretrainedTestUnitsError,
+    UnknownTaskUnitsError,
+)
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from tests.evaluation.support import MANIFEST, SCHEME, STRATA, TEST_SIDE, sides, units
 
@@ -20,6 +25,8 @@ PUBLISHED = sides(training=units("a", "b", "x"), validation=units("c", "y"))
 
 def define(
     covering: frozenset = units("a", "b", "c"),
+    test: FrozenTestSplit = TEST_SIDE,
+    windows: TaskWindows = TaskWindows.EVERY,
 ) -> tuple[InMemoryDownstreamTaskRepository, TaskId]:
     tasks = InMemoryDownstreamTaskRepository()
     use_case = DefineDownstreamTask(
@@ -29,10 +36,11 @@ def define(
         DefineDownstreamTaskCommand(
             manifest=MANIFEST,
             units=covering,
-            test=TEST_SIDE,
+            test=test,
             protocol=EvaluationProtocol.LABEL_BUDGET,
             labels=SCHEME,
             strata=STRATA,
+            windows=windows,
         )
     )
     return tasks, task_id
@@ -69,21 +77,24 @@ def test_a_task_with_nothing_to_validate_on_is_refused() -> None:
         define(covering=units("a", "b"))
 
 
-def test_a_task_whose_frozen_units_also_tune_it_is_refused() -> None:
-    tasks = InMemoryDownstreamTaskRepository()
-    use_case = DefineDownstreamTask(
-        tasks, InMemoryCorpusWindows(PUBLISHED, {}), SequentialIdGenerator()
-    )
-    held = FrozenTestSplit(units=units("a"), source="turbofans/test")
+def test_a_frozen_unit_the_corpus_trains_on_is_refused_before_anything_is_stored() -> None:
+    # "x" is on the corpus's training side without being one of the task's units: the backbone
+    # has read it all the same.
+    held = FrozenTestSplit(units=units("x"), source="turbofans/test")
 
-    with pytest.raises(InvalidTaskSplitError, match="tuning and test"):
-        use_case(
-            DefineDownstreamTaskCommand(
-                manifest=MANIFEST,
-                units=units("a", "b", "c"),
-                test=held,
-                protocol=EvaluationProtocol.LABEL_BUDGET,
-                labels=SCHEME,
-                strata=STRATA,
-            )
-        )
+    with pytest.raises(PretrainedTestUnitsError, match=r"frozen side: \['x'\]"):
+        define(test=held)
+
+
+def test_a_frozen_side_cut_from_the_corpus_s_held_out_units_is_kept() -> None:
+    held = FrozenTestSplit(units=units("y"), source="control/held-out")
+
+    tasks, task_id = define(test=held)
+
+    assert tasks.get(task_id).split.test == held
+
+
+def test_the_task_reads_the_windows_it_was_defined_to_read() -> None:
+    tasks, task_id = define(windows=TaskWindows.FIRST)
+
+    assert tasks.get(task_id).windows is TaskWindows.FIRST
