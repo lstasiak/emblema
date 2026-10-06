@@ -4,7 +4,9 @@ The turbofan sample in the repository holds engines 39 and 91 of the first subse
 128 and 135 cycles. The corpus times a unit from cycle one to one past its last, so those engines
 fail at 129 and 136 — the numbers a window's end is compared against. The generated corpus is
 asked about the first sensor of its first two units. The intensive-care sample records one death
-in hospital, stay 132551 of set A, and survivals for the others.
+in hospital, stay 132551 of set A, and survivals for the others. The sepsis sample's two long
+stays never turn septic; their first days end at hours 25 and 30, since one starts at hour 1 and
+the other at hour 6.
 """
 
 from collections.abc import Mapping
@@ -18,9 +20,13 @@ from emblema.evaluation.adapters.readers.corpus_ground_truths import CorpusGroun
 from emblema.evaluation.adapters.readers.physionet2012_ground_truth import (
     Physionet2012GroundTruth,
 )
+from emblema.evaluation.adapters.readers.physionet2019_ground_truth import (
+    Physionet2019GroundTruth,
+)
 from emblema.evaluation.adapters.synthetic.synthetic_ground_truth import SyntheticGroundTruth
 from emblema.evaluation.domain.exceptions import (
     UnknownGroundTruthError,
+    UnlabelledWindowError,
     UnreadableGroundTruthError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
@@ -49,6 +55,8 @@ STAYS = (
     window("set-a/132539", 1, 48.0),
     window("set-b/149509", 2, 48.0),
 )
+SEPSIS = OutcomeScheme("SepsisLabel")
+FIRST_DAYS = (window("training_setA/p000001", 0, 25.0), window("training_setB/p100006", 1, 30.0))
 
 
 class Case:
@@ -67,7 +75,9 @@ class Case:
         return self.truth.truths_of(self.corpus, windows)
 
 
-@pytest.fixture(params=["in memory", "C-MAPSS", "synthetic", "by corpus", "PhysioNet"])
+@pytest.fixture(
+    params=["in memory", "C-MAPSS", "synthetic", "by corpus", "PhysioNet", "PhysioNet 2019"]
+)
 def case(request: pytest.FixtureRequest) -> Case:
     if request.param == "in memory":
         return Case(InMemoryGroundTruth(FAILURES), WINDOWS, window("FD001/999", 3, 10.0))
@@ -76,6 +86,10 @@ def case(request: pytest.FixtureRequest) -> Case:
     if request.param == "PhysioNet":
         stays = Physionet2012GroundTruth(sample("physionet2012"), DEATH)
         return Case(stays, STAYS, window("set-a/999999", 3, 48.0), "physionet2012")
+    if request.param == "PhysioNet 2019":
+        sepsis = Physionet2019GroundTruth(sample("physionet2019"), SEPSIS, 24.0)
+        unknown = window("training_setA/p999999", 2, 25.0)
+        return Case(sepsis, FIRST_DAYS, unknown, "physionet2019")
     if request.param == "by corpus":
         registered = CorpusGroundTruths({"cmapss": CmapssGroundTruth(sample("cmapss"))})
         return Case(registered, WINDOWS, window("FD001/999", 3, 10.0))
@@ -208,3 +222,89 @@ def test_an_outcome_file_that_is_not_one_is_refused(
         Physionet2012GroundTruth(tmp_path, DEATH).truths_of(
             "physionet2012", [window("set-a/1", 0, 48.0)]
         )
+
+
+def sepsis(root: Path, unit: str, ends_at: float) -> float:
+    return Physionet2019GroundTruth(root, SEPSIS, 24.0).truths_of(
+        "physionet2019", [window(unit, 0, ends_at)]
+    )[window(unit, 0, ends_at)]
+
+
+def stay(root: Path, name: str, rows: list[tuple[int, int]], subset: str = "training_setA") -> str:
+    """A stay of the challenge's columns that matter here, an hour and a label per row."""
+    (root / subset).mkdir(exist_ok=True)
+    lines = ["HR|ICULOS|SepsisLabel", *(f"80|{hour}|{label}" for hour, label in rows)]
+    (root / subset / f"{name}.psv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return f"{subset}/{name}"
+
+
+def test_a_stay_that_never_turns_septic_answers_its_first_day_with_zero() -> None:
+    answered = Physionet2019GroundTruth(sample("physionet2019"), SEPSIS, 24.0).truths_of(
+        "physionet2019", FIRST_DAYS
+    )
+
+    assert answered == {FIRST_DAYS[0]: 0.0, FIRST_DAYS[1]: 0.0}
+
+
+def test_a_stay_whose_label_turns_after_its_first_day_answers_it_with_one(tmp_path: Path) -> None:
+    unit = stay(tmp_path, "p1", [(hour, int(hour >= 30)) for hour in range(3, 40)])
+
+    assert sepsis(tmp_path, unit, 27.0) == 1.0
+
+
+def test_a_label_turning_at_the_hour_the_first_day_ends_is_after_it(tmp_path: Path) -> None:
+    unit = stay(tmp_path, "p1", [(hour, int(hour >= 25)) for hour in range(1, 40)])
+
+    assert sepsis(tmp_path, unit, 25.0) == 1.0
+
+
+def test_a_first_day_in_which_the_label_has_turned_is_refused() -> None:
+    # p000015 is labelled from hour 6 of a stay that starts at hour 1.
+    with pytest.raises(UnlabelledWindowError, match="turns at hour 6"):
+        sepsis(sample("physionet2019"), "training_setA/p000015", 25.0)
+
+
+def test_a_label_turning_in_the_last_hour_of_the_first_day_is_inside_it(tmp_path: Path) -> None:
+    unit = stay(tmp_path, "p1", [(hour, int(hour >= 24)) for hour in range(1, 40)])
+
+    with pytest.raises(UnlabelledWindowError, match="turns at hour 24"):
+        sepsis(tmp_path, unit, 25.0)
+
+
+@pytest.mark.parametrize("ends_at", [24.0, 26.0, 37.0])
+def test_a_window_other_than_the_first_day_from_the_first_row_is_refused(ends_at: float) -> None:
+    # p100006 starts at hour 6, so its first day ends at hour 30, not one day after admission.
+    with pytest.raises(UnlabelledWindowError, match="not the stay's first 24 hours from hour 6"):
+        sepsis(sample("physionet2019"), "training_setB/p100006", ends_at)
+
+
+@pytest.mark.parametrize(
+    "name", ["p000001", "set-a/p000001", "training_setA/", "training_setA/a/b"]
+)
+def test_a_unit_not_named_by_training_set_and_stay_is_refused(name: str) -> None:
+    with pytest.raises(UnknownGroundTruthError, match="named"):
+        sepsis(sample("physionet2019"), name, 25.0)
+
+
+def test_a_set_whose_files_are_not_there_says_so(tmp_path: Path) -> None:
+    with pytest.raises(UnreadableGroundTruthError, match="cannot read"):
+        sepsis(tmp_path, "training_setA/p000001", 25.0)
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ("", "is empty"),
+        ("HR|ICULOS\n80|1\n", "no column SepsisLabel"),
+        ("HR|ICULOS|SepsisLabel\n80|1\n", "2 fields"),
+        ("HR|ICULOS|SepsisLabel\n80|x|0\n", "hour 'x'"),
+        ("HR|ICULOS|SepsisLabel\n80|1|NaN\n", "SepsisLabel 'NaN'"),
+        ("HR|ICULOS|SepsisLabel\n", "no row"),
+    ],
+)
+def test_a_stay_file_that_is_not_one_is_refused(tmp_path: Path, content: str, message: str) -> None:
+    (tmp_path / "training_setA").mkdir()
+    (tmp_path / "training_setA" / "p1.psv").write_text(content, encoding="utf-8")
+
+    with pytest.raises(UnreadableGroundTruthError, match=message):
+        sepsis(tmp_path, "training_setA/p1", 25.0)

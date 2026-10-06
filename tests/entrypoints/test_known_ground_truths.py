@@ -69,3 +69,18 @@ def test_the_stays_are_answered_with_the_outcome_the_task_asks_from_the_files_be
     truths = KnownGroundTruths.under(tmp_path)
 
     assert truths.truths_of(KnownGroundTruths.PHYSIONET, [stay]) == {stay: 1.0}
+
+
+def test_the_sepsis_stays_are_answered_at_the_end_of_their_first_day_from_the_sets_beside_them(
+    tmp_path: Path,
+) -> None:
+    # The challenge's sets sit one level down, under ``training``, as the download leaves them.
+    stays = tmp_path / "physionet2019" / "training" / "training_setA"
+    stays.mkdir(parents=True)
+    rows = "\n".join(f"80|{hour}|{int(hour >= 40)}" for hour in range(1, 50))
+    (stays / "p000009.psv").write_text(f"HR|ICULOS|SepsisLabel\n{rows}\n", encoding="utf-8")
+    first_day = TaskWindow(unit=UnitKey("training_setA/p000009"), position=0, ends_at=25.0)
+
+    truths = KnownGroundTruths.under(tmp_path)
+
+    assert truths.truths_of(KnownGroundTruths.PHYSIONET2019, [first_day]) == {first_day: 1.0}
