@@ -316,3 +316,88 @@ Mixed corpus (every eligible corpus, default windows): 96.7M unique observed val
 | 320 × 8 | 5 × 1280 | 9.91M | 10 | **no** | 39 | yes | 505 | 18.8 h |
 | 384 × 10 | 6 × 1536 | 17.8M | 5 | **no** | 22 | yes | 281 | 30.7 h |
 | 512 × 8 | 8 × 2048 | 25.3M | 4 | **no** | 15 | **no** | 198 | 38.0 h |
+
+## 2026-10-06 — the scale chain published (macOS arm64, M1 Pro)
+
+**Question.** What does the chain of corpora for the curve over the scale of pretraining hold once
+published: how many units, windows, tokens and observed training values per corpus, where the
+registered points of the curve land on that axis, and what the publication costs on this machine.
+
+**Conditions.** Code of `83c685f7` (main after the readers of the scale corpora were merged); the
+publication script, its per-dataset plan and the manifests' facts are kept beside the run
+(`data/report/l4/publish-chain.sh`, `publication-plan.md`, `chain-facts.csv`). Every corpus
+continues the channel vocabulary of the one before, from the end of the chain of 2026-10-03
+(C-MAPSS per operating condition → SKAB → ESA-AD → the intensive-care stays, 195 channels) through
+the Tennessee Eastman runs to the 25 datasets of UTSD-12G; PhysioNet 2019 follows once the sepsis
+task has drawn its frozen side. Written to the remote bucket and the local registry, 13:50 to
+15:49. Windows: about 1,024 tokens and a stride equal to the window, so an epoch reads a value
+once. TE takes 50 samples over its 52 variables. A UTSD dataset takes 1,024 samples over a unit's
+channels, 1,024/V where V variates are its channels, and a dataset whose series all have one
+length L takes L divided by the fewest windows of at most that size, so the series is tiled whole
+(803 for the web traffic, 725 for the temperature and rain, 1,000 for the heart rates); datasets of
+more than 16 variates and the three that are one multivariate series are read with every series a
+unit of its own on one channel. A fifth of the units is held out by seed 1, a third for the
+three-unit rainfall. Observed training values are counted by the channel statistics before
+windowing, on the training side, which is the axis the preregistration names.
+
+| Corpus | Units (train / held out / empty) | Channels (cumulative) | Window | Windows | Tokens | Observed training values | Publication |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| tep | 10,500 (8,400 / 2,100 / 0) | 247 | 50 | 105,000 | 273,000,000 | 218,400,000 | 27.4 min |
+| UTSD ERA5_pressure | 500 (400 / 100 / 0) | 249 | 510 | 114,500 | 116,790,000 | 93,504,000 | 11.8 min |
+| UTSD ERA5_surface | 500 (400 / 100 / 0) | 250 | 1016 | 57,500 | 58,420,000 | 46,752,000 | 5.7 min |
+| UTSD Energy_australian_electricity_demand_dataset | 5 (4 / 1 / 0) | 251 | 1024 | 1,126 | 1,153,024 | 924,480 | 0.2 min |
+| UTSD Energy_london_smart_meters_dataset_without_missing_values | 5,556 (4,448 / 1,112 / 4) | 252 | 1024 | 159,887 | 163,724,288 | 132,949,632 | 15.8 min |
+| UTSD Environment_AustraliaRainfall | 3 (2 / 1 / 0) | 253 | 1023 | 11,277 | 11,536,371 | 7,692,816 | 1.2 min |
+| UTSD Environment_BeijingPM25Quality | 9 (8 / 1 / 0) | 254 | 1023 | 3,582 | 3,664,386 | 3,257,472 | 0.5 min |
+| UTSD Environment_BenzeneConcentration | 8 (7 / 1 / 0) | 255 | 1024 | 15,960 | 16,343,040 | 14,300,160 | 1.7 min |
+| UTSD Health_AtrialFibrillation | 30 (24 / 6 / 0) | 257 | 320 | 60 | 38,400 | 30,720 | 0.1 min |
+| UTSD Health_BIDMC32HR | 15,898 (12,719 / 3,179 / 0) | 258 | 1000 | 63,592 | 63,592,000 | 50,876,000 | 6.1 min |
+| UTSD Health_IEEEPPG | 15,480 (12,384 / 3,096 / 0) | 259 | 1000 | 15,480 | 15,480,000 | 12,384,000 | 1.6 min |
+| UTSD Health_MotorImagery | 24,192 (19,354 / 4,838 / 0) | 260 | 1000 | 72,576 | 72,576,000 | 58,062,000 | 7.1 min |
+| UTSD Health_PigArtPressure | 312 (250 / 62 / 0) | 261 | 1000 | 624 | 624,000 | 500,000 | 0.2 min |
+| UTSD Health_PigCVP | 312 (250 / 62 / 0) | 262 | 1000 | 624 | 624,000 | 500,000 | 0.2 min |
+| UTSD Health_SelfRegulationSCP1 | 561 (449 / 112 / 0) | 268 | 149 | 3,366 | 3,009,204 | 2,413,824 | 0.4 min |
+| UTSD Health_SelfRegulationSCP2 | 380 (304 / 76 / 0) | 275 | 144 | 3,040 | 3,064,320 | 2,451,456 | 0.4 min |
+| UTSD Health_TDBrain_csv | 28,644 (22,916 / 5,728 / 0) | 276 | 853 | 85,932 | 73,299,996 | 58,642,044 | 7.0 min |
+| UTSD IoT_baian | 918 (735 / 183 / 0) | 277 | 1024 | 160,650 | 164,505,600 | 132,397,055 | 14.5 min |
+| UTSD Nature_EigenWorms | 259 (208 / 51 / 0) | 283 | 169 | 27,454 | 27,838,356 | 22,444,032 | 2.7 min |
+| UTSD Nature_Phoneme | 2,110 (1,688 / 422 / 0) | 284 | 1024 | 2,110 | 2,160,640 | 1,728,512 | 0.3 min |
+| UTSD Nature_StarLightCurves | 9,236 (7,389 / 1,847 / 0) | 285 | 1024 | 9,236 | 9,457,664 | 7,566,336 | 0.9 min |
+| UTSD Nature_Worms | 258 (207 / 51 / 0) | 286 | 900 | 258 | 232,200 | 186,300 | 0.1 min |
+| UTSD Nature_kdd_cup_2018_dataset_without_missing_values | 270 (216 / 54 / 0) | 287 | 1024 | 2,699 | 2,763,776 | 2,353,520 | 0.4 min |
+| UTSD Nature_temperature_rain_dataset_without_missing_values | 32,072 (25,658 / 6,414 / 0) | 288 | 725 | 32,072 | 23,252,200 | 18,602,050 | 2.1 min |
+| UTSD Transport_pedestrian_counts_dataset | 65 (53 / 13 / 1) | 289 | 1024 | 3,023 | 3,095,552 | 2,231,966 | 0.4 min |
+| UTSD Web_kaggle_web_traffic_dataset_without_missing_values | 145,063 (116,051 / 29,012 / 0) | 290 | 803 | 145,063 | 116,485,589 | 93,188,953 | 10.3 min |
+
+The four earlier corpora hold 56,204,389 observed training values (C-MAPSS 2,678,949; SKAB 312,800;
+ESA-AD 51,460,883; the stays 1,751,757). The corpora added here hold 984,339,328, the whole chain
+1,040,543,717. The publication took 119 minutes in all: TE 27 min, the 25 datasets 92 min, the
+London smart meters longest at 16 min; 1.23 billion values read at about 172,000 values a second
+whatever the layout. The bucket grew by 20.9 GB over 52 objects (26 blocks and 26 manifests), 17
+bytes a token as the block format lays them; it holds 379 objects and 35.4 GB after the run. The
+registry holds 42 corpus versions.
+
+**Conclusions.**
+
+1. The axis of the curve reads 0.056 · 10⁹ at the mixture of four, 0.30 · 10⁹ at a quarter of the
+   added corpora' training units (`backbone-scale-3e8-m.toml`) and 1.04 · 10⁹ at the whole
+   (`backbone-scale-1e9-m.toml`): steps of 5.4× and 3.4×, a little over half an order of
+   magnitude each. The point the preregistration calls "about 10⁸" is 0.56 · 10⁸.
+2. The two larger points share one publication and one composition; they differ in the amount
+   of data alone, and the units a quarter takes lie inside the whole.
+3. Tiling kept the short collections whole: 5 of 293,000 units yielded no window (4 smart meters
+   and 1 pedestrian counter shorter than 1,024 samples), where a fixed window of 1,024 would have
+   dropped 145,000 web-traffic series, 32,000 temperature series and 258 worms, 140M values.
+4. One machine publishes a billion values in two hours; the cost is a reading pass, not the
+   bucket or the registry.
+5. The vocabulary grows from 195 to 290 channels: 52 for TE and 43 for UTSD, whose datasets are
+   mostly one channel each.
+
+**Smoke.** The largest block of the chain was carried through the pretraining process on this machine before any mixture was ordered: one epoch over a tenth of the London smart meters at the laptop tier (`smoke-utsd-london-s.toml`, 395 steps of 32 windows on MPS, fp32, 0.73 s a step, 524 s with the validation side), ordered, run and accepted as backbone `9f01dd4b-…`; training loss 0.293, validation 0.285, 0.92 of the trivial predictor's after one epoch over a tenth of the units. Its weights are not a result.
+
+**Limitations.** The chain does not yet hold PhysioNet 2019 (15M values, a per cent of the whole);
+the smaller point will be ordered without it. The validation sides are a fifth of each dataset, so
+a run scores about 190M values an epoch beside the training; ERA5's units are grid points of one
+reanalysis and the TE runs trajectories of one simulator, so neither counts as independent units
+the way the stays or the engines do. The manifests do not record a block's size; the bytes above
+are the bucket's listing by date.
