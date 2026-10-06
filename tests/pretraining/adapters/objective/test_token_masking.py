@@ -1,3 +1,6 @@
+import hashlib
+from dataclasses import replace
+
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -174,17 +177,117 @@ def test_the_channel_kind_is_read_off_the_outcome_not_the_draw() -> None:
             assert masks.channel[row, tokens].all() == emptied
 
 
-def test_the_kinds_partition_the_hidden_tokens(strategy: MaskingStrategy) -> None:
+@pytest.mark.parametrize("with_tail", [False, True])
+def test_the_kinds_partition_the_hidden_tokens(strategy: MaskingStrategy, with_tail: bool) -> None:
+    if with_tail:
+        strategy = replace(strategy, horizon_rate=0.5, horizon_min_span=0.15, horizon_max_span=0.5)
     batch = grid_batch(64, CHANNELS, STEPS, seed=12)
 
     masks = draw(strategy, batch)
 
-    kinds = [masks.of_kind(kind) for kind in MaskKind]
-    assert torch.equal(kinds[0] | kinds[1] | kinds[2], masks.hidden)
-    assert not (kinds[0] & kinds[1]).any()
-    assert not (kinds[0] & kinds[2]).any()
-    assert not (kinds[1] & kinds[2]).any()
-    assert all(kind.any() for kind in kinds)
+    kinds = {kind: masks.of_kind(kind) for kind in MaskKind}
+    union = torch.zeros_like(masks.hidden)
+    for kind, tokens in kinds.items():
+        assert not (union & tokens).any(), kind
+        union |= tokens
+    assert torch.equal(union, masks.hidden)
+    assert {kind for kind, tokens in kinds.items() if tokens.any()} == {
+        kind for kind in MaskKind if strategy.draws(kind)
+    }
+
+
+def test_a_strategy_without_a_tail_draws_the_masks_it_drew_before_the_tail_existed(
+    strategy: MaskingStrategy,
+) -> None:
+    digest = hashlib.sha256()
+    for batch in (grid_batch(16, 8, 32, seed=21), random_batch(16, 40, seed=22, padding=5)):
+        masks = draw(strategy, batch, seed=7)
+        for mask in (masks.channel, masks.block, masks.token):
+            digest.update(mask.numpy().tobytes())
+        assert not masks.horizon.any()
+
+    # Drawn by the code before the tail was added; a change here changes every run's masks.
+    assert digest.hexdigest() == (
+        "d35c160afc6a6def41e117c017a306b1b92b0b910724784b3e9ecc1ff1e548eb"
+    )
+
+
+def tail_only(*, rate: float = 1.0, shortest: float = 0.2, longest: float = 0.4) -> MaskingStrategy:
+    return MaskingStrategy(
+        channel_rate=0.0,
+        block_rate=0.0,
+        block_span=0.5,
+        token_rate=0.0,
+        horizon_rate=rate,
+        horizon_min_span=shortest,
+        horizon_max_span=longest,
+    )
+
+
+def test_the_tail_hides_every_channel_from_one_instant_to_the_end_of_the_window() -> None:
+    batch = grid_batch(256, CHANNELS, STEPS, seed=31)
+    timed = ~batch.timeless
+
+    masks = draw(tail_only(), batch)
+
+    for row in range(batch.batch_size):
+        hidden = masks.horizon[row] & timed[row]
+        times = batch.timestamps[row]
+        start = float(times[hidden].min())
+        assert torch.equal(hidden, timed[row] & (times >= start))
+        assert 1.0 - 0.4 - 1e-6 <= start <= 1.0 - 0.2 + 1.0 / (STEPS - 1)
+
+
+def test_the_tail_spans_the_lengths_it_declares_uniformly() -> None:
+    batch = grid_batch(2048, CHANNELS, STEPS, seed=32)
+    timed = ~batch.timeless
+
+    masks = draw(tail_only(), batch)
+
+    assert fraction(masks.hidden, timed) == pytest.approx(tail_only().expected_ratio, abs=0.02)
+    starts = torch.stack(
+        [batch.timestamps[row][masks.horizon[row]].min() for row in range(batch.batch_size)]
+    )
+    assert float(starts.min()) < 0.65
+    assert float(starts.max()) > 0.75
+
+
+def test_a_tail_drawn_at_a_rate_is_lost_by_that_share_of_windows() -> None:
+    batch = grid_batch(2048, CHANNELS, STEPS, seed=33)
+
+    masks = draw(tail_only(rate=0.3), batch)
+
+    assert float(masks.horizon.any(dim=1).float().mean()) == pytest.approx(0.3, abs=0.03)
+
+
+def test_the_tail_never_reaches_a_timeless_token_or_padding() -> None:
+    batch = random_batch(64, 40, seed=34, padding=10)
+
+    masks = draw(tail_only(shortest=0.9, longest=0.95), batch)
+
+    assert masks.horizon.any()
+    assert not (masks.horizon & batch.timeless).any()
+    assert not (masks.horizon & batch.padding_mask).any()
+
+
+def test_a_token_in_the_tail_is_of_the_tail_unless_its_channel_is_gone() -> None:
+    batch = grid_batch(256, CHANNELS, STEPS, seed=35)
+    strategy = MaskingStrategy(
+        channel_rate=0.2,
+        block_rate=0.6,
+        block_span=0.5,
+        token_rate=0.3,
+        horizon_rate=1.0,
+        horizon_min_span=0.15,
+        horizon_max_span=0.5,
+    )
+
+    masks = draw(strategy, batch)
+
+    assert torch.equal(masks.of_kind(MaskKind.HORIZON), masks.horizon & ~masks.channel)
+    assert (masks.horizon & masks.token).any()
+    assert not (masks.of_kind(MaskKind.TOKEN) & masks.horizon).any()
+    assert not (masks.of_kind(MaskKind.BLOCK) & masks.horizon).any()
 
 
 def test_the_same_seed_draws_the_same_masks(strategy: MaskingStrategy) -> None:

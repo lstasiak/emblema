@@ -5,6 +5,7 @@ import pytest
 from emblema.pretraining.adapters.documents.experiment_configuration_document import (
     ExperimentConfigurationDocument,
 )
+from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
@@ -101,3 +102,27 @@ def test_the_fraction_of_a_corpus_travels_by_its_name_and_only_where_stated() ->
     # A run at the mixture's share writes the document it wrote before the knob existed.
     assert "fraction" not in CODEC.encode(configuration())
     assert CODEC.decode(CODEC.encode(configuration())) == configuration()
+
+
+def test_the_tail_travels_inside_the_masking_and_only_where_it_is_drawn() -> None:
+    forecasting = configuration(
+        masking=MaskingStrategy(
+            channel_rate=0.15,
+            block_rate=0.0,
+            block_span=0.5,
+            token_rate=0.0,
+            horizon_rate=1.0,
+            horizon_min_span=0.15,
+            horizon_max_span=0.5,
+        )
+    )
+
+    document = CODEC.encode(forecasting)
+
+    masking = document["masking"]
+    assert isinstance(masking, dict)
+    assert masking["horizon"] == {"rate": 1.0, "min_span": 0.15, "max_span": 0.5}
+    assert CODEC.decode(json.loads(json.dumps(document))) == forecasting
+    plain = CODEC.encode(configuration())["masking"]
+    assert isinstance(plain, dict)
+    assert "horizon" not in plain

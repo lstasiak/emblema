@@ -203,3 +203,29 @@ def test_a_fraction_no_run_could_read_is_refused(tmp_path: Path) -> None:
         ExperimentFile.load(
             written(STATED + "\n[fraction]\ncontrol-a = 1.5\n", tmp_path)
         ).configuration()
+
+
+def test_a_file_states_the_tail_and_one_that_does_not_hides_none(tmp_path: Path) -> None:
+    forecasting = STATED.replace(
+        "token_rate = 0.1",
+        "token_rate = 0.1\nhorizon_rate = 0.5\nhorizon_min_span = 0.15\nhorizon_max_span = 0.5",
+    )
+
+    stated = ExperimentFile.load(written(forecasting, tmp_path)).configuration().masking
+
+    assert (stated.horizon_rate, stated.horizon_min_span, stated.horizon_max_span) == (
+        0.5,
+        0.15,
+        0.5,
+    )
+    assert not ExperimentFile.load(written(STATED, tmp_path)).configuration().masking.has_horizon
+
+
+def test_a_tail_with_spans_out_of_order_is_refused(tmp_path: Path) -> None:
+    disordered = STATED.replace(
+        "token_rate = 0.1",
+        "token_rate = 0.1\nhorizon_rate = 0.5\nhorizon_min_span = 0.5\nhorizon_max_span = 0.2",
+    )
+
+    with pytest.raises(InvalidMaskingStrategyError, match="horizon spans"):
+        ExperimentFile.load(written(disordered, tmp_path)).configuration()

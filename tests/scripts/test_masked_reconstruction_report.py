@@ -170,7 +170,8 @@ def test_an_example_draws_only_the_tokens_its_kind_hid() -> None:
     # Channel 1 loses a block in the middle and, separately, its first token.
     block = (ids == 1) & (times > 0.3) & (times < 0.7)
     token = (ids == 1) & (times == 0.0)
-    masks = TokenMasks(channel=torch.zeros_like(block), block=block, token=token)
+    nothing = torch.zeros_like(block)
+    masks = TokenMasks(channel=nothing, block=block, token=token, horizon=nothing)
     prediction = torch.zeros_like(batch.features[..., 0])
 
     examples = pick_examples(

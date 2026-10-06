@@ -233,6 +233,10 @@ a recipe chosen on the tuning side beforehand
   today's shape, and loses 0.021 under the larger one at its rate.
 
 This is the curve's left end; whether the gain grows with the data is read at the next points.
+Two variants of the pretext, a forecast tail and masks over three quarters of a window, were
+read by the same probe on a fifth of the tuning side ([note](verification/pretext-variants.md),
+2026-10-06): neither beats the mixture's masks at 50 stays (−0.017 and −0.015 in area, intervals
+crossing zero), so the curve continues under the masks it started with.
 
 ## Limitations
 

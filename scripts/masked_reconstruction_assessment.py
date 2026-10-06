@@ -127,6 +127,11 @@ KINDS = "mask_kinds.csv"
 CHECKS = "checks.csv"
 INDEX = "runs.csv"
 STRATEGY_FIELDS = ("channel_rate", "block_rate", "block_span", "token_rate")
+# Written only where a horizon is drawn, so a run stored before it existed reads as it was.
+HORIZON_FIELDS = ("horizon_rate", "horizon_min_span", "horizon_max_span")
+# The index predates the horizon, and the controls it lists never draw one: a fourth kind would
+# change its header and refuse every index already on disk.
+INDEX_KINDS = (MaskKind.CHANNEL, MaskKind.BLOCK, MaskKind.TOKEN)
 INDEX_FIELDS = (
     "run",
     "corpus",
@@ -142,7 +147,7 @@ INDEX_FIELDS = (
     "last_validation",
     *(
         f"{kind.value}_{column}"
-        for kind in MaskKind
+        for kind in INDEX_KINDS
         for column in ("model", "matched", "excess_low", "excess_high", "verdict")
     ),
     "compared_with_epochs",
@@ -252,6 +257,7 @@ def read(directory: Path) -> Results:
     spectrum = _read_rows(directory / SPECTRUM)
     reserved = {
         *STRATEGY_FIELDS,
+        *HORIZON_FIELDS,
         *BASELINE_FIELDS,
         "realised_ratio",
         "spectrum_fitted",
@@ -264,6 +270,9 @@ def read(directory: Path) -> Results:
             block_rate=float(run["block_rate"]),
             block_span=float(run["block_span"]),
             token_rate=float(run["token_rate"]),
+            horizon_rate=float(run.get("horizon_rate", "0")),
+            horizon_min_span=float(run.get("horizon_min_span", "0")),
+            horizon_max_span=float(run.get("horizon_max_span", "0")),
         ),
         realised_ratio=float(run["realised_ratio"]),
         curve=Curve(
@@ -340,6 +349,15 @@ def _write_measured(results: Results, figures: RunFigures, directory: Path) -> N
         "block_rate": _number(strategy.block_rate),
         "block_span": _number(strategy.block_span),
         "token_rate": _number(strategy.token_rate),
+        **(
+            {
+                "horizon_rate": _number(strategy.horizon_rate),
+                "horizon_min_span": _number(strategy.horizon_min_span),
+                "horizon_max_span": _number(strategy.horizon_max_span),
+            }
+            if strategy.has_horizon
+            else {}
+        ),
         "realised_ratio": _number(results.realised_ratio),
         "spectrum_fitted": str(results.spectrum.fitted),
         "spectrum_skipped": str(results.spectrum.skipped),
@@ -566,7 +584,7 @@ def _append_to_index(assessment: Assessment, name: str, index: Path) -> None:
         "outcome": assessment.decision.outcome.value,
     }
     for summary in assessment.summaries:
-        if summary.apart:
+        if summary.apart or summary.kind not in INDEX_KINDS:
             continue
         prefix = summary.kind.value
         line[f"{prefix}_model"] = f"{summary.model_error:.6g}"

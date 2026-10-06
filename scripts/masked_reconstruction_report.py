@@ -466,6 +466,7 @@ def diagnose(published: Published, trained: Trained, run: Run) -> Diagnosis:
     loss = ReconstructionLoss(run.configuration.loss)
     interpolation_total, ridge_total, hidden, windows = 0.0, 0.0, 0, 0
     examples: list[Example] = []
+    wanted = EXAMPLE_WINDOWS * sum(run.configuration.masking.draws(kind) for kind in MaskKind)
     with torch.no_grad():
         for batch, masks, units in validation_batches(published, run):
             predicted = trained.model(batch.to(run.device), masks.to(run.device)).cpu()
@@ -486,7 +487,7 @@ def diagnose(published: Published, trained: Trained, run: Run) -> Diagnosis:
             interpolation_total += float(loss(interpolated, batch, masks)) * scored
             ridge_total += float(loss(regressed, batch, masks)) * scored
             hidden += scored
-            if len(examples) < EXAMPLE_WINDOWS * len(MaskKind):
+            if len(examples) < wanted:
                 examples += pick_examples(
                     batch,
                     masks,
@@ -503,7 +504,7 @@ def diagnose(published: Published, trained: Trained, run: Run) -> Diagnosis:
         ridge_loss=ridge_total / max(hidden, 1),
         spectrum_of_model=spectrum_of_model,
         spectrum_of_ridge=spectrum_of_ridge,
-        examples=tuple(examples[: EXAMPLE_WINDOWS * len(MaskKind)]),
+        examples=tuple(examples[:wanted]),
         tallies=triviality.tallies(),
     )
 
@@ -672,8 +673,14 @@ def heading(run: Run, published: Published, trained: Trained) -> str:
     strategy = configuration.masking
     masking = (
         f"channel {strategy.channel_rate:g}, block {strategy.block_rate:g} over "
-        f"{strategy.block_span:g} of the window, token {strategy.token_rate:g}; "
-        f"expected {strategy.expected_ratio:.1%}, realised {trained.hidden_ratio:.1%} "
+        f"{strategy.block_span:g} of the window, token {strategy.token_rate:g}"
+        + (
+            f", tail {strategy.horizon_rate:g} over {strategy.horizon_min_span:g} to "
+            f"{strategy.horizon_max_span:g} of the window"
+            if strategy.has_horizon
+            else ""
+        )
+        + f"; expected {strategy.expected_ratio:.1%}, realised {trained.hidden_ratio:.1%} "
         "of observed tokens"
     )
     training = (

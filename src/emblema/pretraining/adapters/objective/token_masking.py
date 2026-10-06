@@ -12,9 +12,10 @@ class TokenMasking:
     A channel-level draw is one number per window and channel, looked up per token by its
     identifier, so a channel is hidden whole or not at all in a few tensor operations. Blocks span
     the window's time, not a count of tokens, as how densely a channel is sampled is what the model
-    may not assume. Every window keeps a visible token: where the draws hide all, the first observed
-    one is uncovered. Numbers are drawn where the generator lives, so a seed gives the same masks on
-    any device.
+    may not assume. The tail is drawn last and only by a strategy that has one, so a strategy
+    without it draws the same numbers, and the same masks, as before the tail existed. Every window
+    keeps a visible token: where the draws hide all, the first observed one is uncovered. Numbers
+    are drawn where the generator lives, so a seed gives the same masks on any device.
     """
 
     def __init__(self, strategy: MaskingStrategy) -> None:
@@ -34,17 +35,29 @@ class TokenMasking:
             drawn = torch.rand(rows, tokens, generator=generator, device=generator.device)
             return drawn.to(ids.device)
 
-        whole = per_channel() < self.strategy.channel_rate
-        blocked = per_channel() < self.strategy.block_rate
-        start = per_channel() * (1.0 - self.strategy.block_span)
+        def per_window() -> Tensor:
+            drawn = torch.rand(rows, 1, generator=generator, device=generator.device)
+            return drawn.to(ids.device)
+
+        strategy = self.strategy
+        whole = per_channel() < strategy.channel_rate
+        blocked = per_channel() < strategy.block_rate
+        start = per_channel() * (1.0 - strategy.block_span)
         block = (
             blocked
             & ~batch.timeless
             & (batch.timestamps >= start)
-            & (batch.timestamps <= start + self.strategy.block_span)
+            & (batch.timestamps <= start + strategy.block_span)
         )
-        token = per_token() < self.strategy.token_rate
-        hidden = (whole | block | token) & observed
+        token = per_token() < strategy.token_rate
+        tail = torch.zeros_like(token)
+        if strategy.has_horizon:
+            losing = per_window() < strategy.horizon_rate
+            span = strategy.horizon_min_span + per_window() * (
+                strategy.horizon_max_span - strategy.horizon_min_span
+            )
+            tail = losing & ~batch.timeless & (batch.timestamps >= 1.0 - span)
+        hidden = (whole | block | token | tail) & observed
 
         visible = observed & ~hidden
         starved = (visible.sum(dim=1) == 0) & observed.any(dim=1)
@@ -58,4 +71,6 @@ class TokenMasking:
             rows, entries, dtype=torch.int64, device=ids.device
         ).scatter_add(1, ids, visible.long())
         channel = hidden & (visible_per_channel.gather(1, ids) == 0)
-        return TokenMasks(channel=channel, block=block & hidden, token=token & hidden)
+        return TokenMasks(
+            channel=channel, block=block & hidden, token=token & hidden, horizon=tail & hidden
+        )

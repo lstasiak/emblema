@@ -35,6 +35,18 @@ class ExperimentConfigurationDocument:
             if configuration.fractions
             else {}
         )
+        # Likewise the tail: a strategy that never hides one writes the masking it always wrote.
+        horizon: Document = (
+            {
+                "horizon": {
+                    "rate": masking.horizon_rate,
+                    "min_span": masking.horizon_min_span,
+                    "max_span": masking.horizon_max_span,
+                }
+            }
+            if masking.has_horizon
+            else {}
+        )
         return {
             "name": configuration.name,
             "tier": str(configuration.tier),
@@ -53,6 +65,7 @@ class ExperimentConfigurationDocument:
                 "block_rate": masking.block_rate,
                 "block_span": masking.block_span,
                 "token_rate": masking.token_rate,
+                **horizon,
             },
             "objective": {
                 "kind": str(configuration.loss.kind),
@@ -91,6 +104,7 @@ class ExperimentConfigurationDocument:
         # epoch, and those runs read each corpus once.
         passes = fields.optional_fields("passes")
         fraction = fields.optional_fields("fraction")
+        horizon = masking.optional_fields("horizon")
         return ExperimentConfiguration(
             name=fields.text("name"),
             tier=ComputeTier(fields.text("tier")),
@@ -109,6 +123,15 @@ class ExperimentConfigurationDocument:
                 block_rate=masking.number("block_rate"),
                 block_span=masking.number("block_span"),
                 token_rate=masking.number("token_rate"),
+                **(
+                    {}
+                    if horizon is None
+                    else {
+                        "horizon_rate": horizon.number("rate"),
+                        "horizon_min_span": horizon.number("min_span"),
+                        "horizon_max_span": horizon.number("max_span"),
+                    }
+                ),
             ),
             loss=ObjectiveLoss(
                 kind=LossKind(objective.text("kind")),

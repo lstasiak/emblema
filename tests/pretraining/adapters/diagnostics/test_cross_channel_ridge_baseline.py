@@ -118,6 +118,7 @@ def test_a_window_with_nothing_hidden_predicts_nothing() -> None:
         channel=only_second.channel & (torch.arange(2)[:, None] == 1),
         block=only_second.block,
         token=only_second.token,
+        horizon=only_second.horizon,
     )
 
     baseline = CrossChannelRidgeBaseline.fitted(training, vocabulary_size=VOCABULARY)

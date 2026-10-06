@@ -107,6 +107,15 @@ def test_a_kind_the_strategy_does_not_draw_is_not_missed() -> None:
     assert undrawn.decision.outcome is Outcome.ACCEPT
 
 
+def test_a_tail_the_strategy_draws_is_missed_when_nothing_was_tallied_for_it() -> None:
+    with_tail = replace(STRATEGY, horizon_rate=1.0, horizon_min_span=0.15, horizon_max_span=0.5)
+
+    found = converged(results(unit_tallies=learnt_everywhere(), strategy=with_tail))
+
+    assert check(found, "kinds-present").status is Status.FAIL
+    assert "horizon" in check(found, "kinds-present").measured
+
+
 def test_one_run_alone_cannot_show_it_stopped_learning() -> None:
     found = assess(results())
 

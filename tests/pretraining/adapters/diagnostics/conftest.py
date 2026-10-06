@@ -54,7 +54,10 @@ def hiding(
     )
     single = where if where is not None else nothing
     return TokenMasks(
-        channel=whole & ~batch.padding_mask, block=nothing, token=single & ~batch.padding_mask
+        channel=whole & ~batch.padding_mask,
+        block=nothing,
+        token=single & ~batch.padding_mask,
+        horizon=nothing,
     )
 
 

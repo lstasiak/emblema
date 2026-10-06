@@ -642,6 +642,62 @@ Under the declaration above: `experiments/backbone-mixed4-512x8-m-5e-4.toml`, or
   5e-4: its probe at 50 stays is higher by 0.012 [+0.005; +0.019] (`intensive-care-curve.md`,
   2026-10-05).
 
+### 2026-10-05 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the mixture of four under the forecast tail
+
+The first variant of the pretext (`pretext-variants.md`, declared 2026-10-05):
+`experiments/backbone-mixed4-m-forecast.toml`, every window losing its tail across every
+channel, drawn between 0.15 and 0.5 of the window, whole channels at 0.15, no blocks and no
+single tokens. Ordered here from `783a5e98`, fulfilled on one Kaggle T4 in 939 s an epoch
+(2.1 h, as the mixture's 881–945 s), accepted as backbone `4ae060e1-…`, weights
+`sha256:345ade99…`. The registry holds the tail inside the run's configuration. Epoch by epoch:
+`scripts/pretraining_curve_report.py --report-only data/report/pretraining/l2-forecast`.
+
+Validation loss as a share of the trivial predictor's under the run's own masks, at the kept
+epoch. **The rows do not compare with one another**: each is measured under other masks, and a
+tail's trivial predictor is the channel mean, not a line between neighbours. What a line
+carrying the last value forward would score on the tail is the diagnostic's question, in
+`pretext-variants.md`.
+
+| Experiment | Epoch | cmapss | skab | esa_ad | physionet2012 | Mean | Training loss |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-mixed4-m` (today's masks) | 8 | 0.311 | 0.273 | 0.272 | 0.490 | 0.3366 | 0.05521 |
+| `backbone-mixed4-m-forecast` | 8 | 0.297 | 0.291 | 0.302 | 0.608 | 0.3746 | 0.05937 |
+
+- The validation falls at every epoch but the fifth (the satellite corpus rose by 0.024 there and
+  fell back), and the eighth epoch is kept.
+- The stays' tail is forecast at 0.61 of the mean's error against 0.29–0.30 on the other three:
+  a stay's future is the hardest part of the pretext, as its interior was under the mixture's
+  masks (0.49), and harder still.
+
+### 2026-10-06 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the mixture of four under the harder masks
+
+The second variant of the pretext (`pretext-variants.md`, set by the rule of 2026-10-05 after
+the diagnostic): `experiments/backbone-mixed4-m-harder.toml`, the mixture's three kinds of mask
+at their proportions with three quarters of a window hidden — whole channels at 0.3028, a block
+in every channel over 0.5469 of the window, single tokens at 0.2085. Ordered from `a406ed0e`,
+fulfilled on one Kaggle T4 in 923–934 s an epoch (2.1 h, as the mixture's 881–945 s), accepted
+as backbone `7092e656-…`, weights `sha256:8937743e…`. The run hid 0.749 of the tokens against
+the mixture's 0.464, as declared. Epoch by epoch:
+`scripts/pretraining_curve_report.py --report-only data/report/pretraining/l2-harder`.
+
+Validation loss as a share of the trivial predictor's under the run's own masks, at the kept
+epoch. The trivial predictor is the channel mean in both rows, so the shares are measured
+against the same yardstick, but over different hidden tokens: the harder run has 1.6 times as
+many, each with fewer visible neighbours. **The rows say how much of the mean's error each run
+removes on its own pretext, not which run read the data better.**
+
+| Experiment | Epoch | cmapss | skab | esa_ad | physionet2012 | Mean | Training loss |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-mixed4-m` (today's masks) | 8 | 0.311 | 0.273 | 0.272 | 0.490 | 0.3366 | 0.05521 |
+| `backbone-mixed4-m-harder` | 8 | 0.318 | 0.291 | 0.306 | 0.629 | 0.3860 | 0.05950 |
+
+- The validation falls at every epoch on every corpus except the satellite corpus at the fifth
+  (+0.002, then it fell back), and the eighth epoch is kept.
+- With three quarters of a window hidden the run removes a smaller share of the mean's error
+  than today's masks on every corpus, the stays most: 0.63 against 0.49. Per hidden token the
+  loss rose by 0.002 on C-MAPSS and by 0.05 on the stays, so the extra hidden tokens cost the
+  stays' interior the most, as the forecast tail did their future.
+
 ### Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when
