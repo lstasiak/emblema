@@ -202,3 +202,54 @@ baseline is the channel's last visible value carried forward.
 - Forward passes in fp32 on MPS, not the run's fp16 on the T4; the loss the run reports is not
   reproduced here and is not what is compared.
 
+
+## 2026-10-06 — M1 Pro, MPS: the harder masks' backbone under its own masks
+
+**Question.** Does the backbone pretrained under (a), three quarters of a window hidden, learn
+each of the three kinds beyond its baseline on the real corpora, as today's backbone does?
+
+**Conditions.** As the section above: commit `a406ed0e`, `scripts/pretext_triviality_report.py
+--backbone 7092e656-…` on the M1 Pro (MPS, fp32), 2,000 windows a side, masks of (a) at seeds
+1 and 2, 2,000 resamples, 95 %; 2.2 minutes. The backbone is the one accepted in
+`manual-handoff.md` (2026-10-06), weights `sha256:8937743e…`. The masks differ from the
+section above, so the errors are read against each backbone's own baselines, not across the
+two tables.
+
+**`backbone-mixed4-m-harder` (`7092e656-…`) under its own masks.**
+
+| Corpus | Kind | Tokens | Units | Model | Matched | Excess [95 %] | Beyond linear [95 %] |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| C-MAPSS | channel | 517,388 | 141 | 0.109 | ridge 0.146 | **+0.037** [+0.021; +0.065] | — |
+| | block | 596,122 | 141 | 0.101 | interpolation 0.172 | **+0.071** [+0.067; +0.075] | **[+0.015; +0.031]** |
+| | token | 102,972 | 141 | 0.102 | interpolation 0.171 | **+0.069** [+0.064; +0.074] | **[+0.025; +0.034]** |
+| SKAB | channel | 173,433 | 7 | 0.171 | ridge 0.244 | **+0.072** [+0.040; +0.105] | — |
+| | block | 215,433 | 7 | 0.126 | interpolation 0.182 | **+0.056** [+0.050; +0.064] | [−0.000; +0.002] |
+| | token | 37,099 | 7 | 0.123 | interpolation 0.165 | **+0.042** [+0.038; +0.047] | [−0.001; +0.001] |
+| Satellite telemetry | channel | 514,222 | 21 | 0.140 | ridge 0.308 | **+0.169** [+0.087; +0.271] | — |
+| | block | 628,273 | 21 | 0.089 | interpolation 0.176 | +0.086 [−0.003; +0.162] | **[+0.079; +0.149]** |
+| | token | 108,460 | 21 | 0.073 | interpolation 0.061 | −0.012 [−0.080; +0.037] | [−0.015; +0.041] |
+| Intensive-care stays | channel | 269,073 | 1,997 | 0.284 | ridge 0.294 | **+0.010** [+0.006; +0.015] | — |
+| | block | 307,832 | 1,998 | 0.189 | interpolation 0.243 | **+0.054** [+0.049; +0.060] | **[+0.008; +0.015]** |
+| | token | 55,869 | 1,986 | 0.167 | interpolation 0.165 | −0.002 [−0.006; +0.003] | [−0.020; −0.014] |
+
+**Conclusions.**
+
+1. Under three quarters of a window hidden, the stays' single tokens are no longer learnt: the
+   model matches the interpolation between neighbours (−0.002 [−0.006; +0.003]) and reads them
+   worse than the linear answer from the other channels (−0.020 to −0.014). Today's backbone
+   learnt them by 0.023 under today's masks. The channel kind is learnt by half of today's
+   margin (0.010 against 0.019), the block kind by two thirds (0.054 against 0.085).
+2. On C-MAPSS and SKAB every kind is learnt, by margins at least those under today's masks.
+   On the satellite telemetry the block kind drops to matched (its interval crosses zero by
+   0.003 over 21 months) and the token kind stays matched.
+3. The run hid what it was asked to hide (0.749 of the tokens) and learnt a pretext of the same
+   kinds, but the harder the window, the more the stays' answer approaches the one a line
+   between neighbours gives. Whether that reading of a stay is worth more or less to the probe
+   is the campaigns' question; nothing here changes the rule.
+
+**Limitations.**
+
+- The same as the section above: one draw of the masks, seven SKAB units, twenty-one months of
+  telemetry, baselines fitted on 2,000 windows, fp32 on MPS.
+- The two backbones are diagnosed under different masks, so "learnt by less" compares each to
+  its own baseline on its own hidden tokens, not the two models on one set of tokens.
