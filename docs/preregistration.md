@@ -301,6 +301,7 @@ Declared now, so that no task's protocol is chosen once its numbers are visible.
 | Anomaly detection, industrial testbed | unsupervised: fitted on normal data, scored on the rest | PR-AUC, F1 at a fixed threshold | no |
 | Anomaly detection, server machines | unsupervised | PR-AUC | no |
 | Binary classification, intensive-care stays | supervised, label budget | AUROC with calibration | yes |
+| Binary classification, sepsis after the first day of a stay | supervised, label budget | AUROC with calibration | yes |
 | Anomaly detection, satellite telemetry | unsupervised, the benchmark's own protocol | the benchmark's metrics | no |
 
 The anomaly-detection tasks measure whether pretraining improves detection, which is a different
@@ -334,6 +335,29 @@ endpoint over ten seeds on one fixed fifth of the tuning side (`verdict-statisti
 | Heads | Every network ends in one linear head read as log-odds, trained by binary cross-entropy from the log-odds of the sample's prevalence, no class weighted; the ridge probe and MiniRocket fit an L2-penalised logistic regression on their grid of penalties, chosen by the mean log-loss of five folds in the sample's proportion of outcomes; trees grow under the logistic objective (ADR-0045). MiniRocket's grid over outcomes is the published ridge grid, 0.001 to 1,000 in ten steps, followed by 4,640, 21,500, 100,000, 464,000 and 2,150,000; the turbofan task keeps the published grid. |
 | Selection | Every candidate is selected at each budget before the grid, under each backbone it runs on: one stay in five held out of the tuning side per repeat, three repeats, one minus the area under the rule of one standard error, and the edge rule. A network departs from its default — the turbofan's registered peak of its mode as the rate (the patch model at the schedule's 1e-3), pooled by the mean — by a third and three times the rate, the tail of a fifth or of half the window, and attention; the probe solved in closed form turns the two tails alone, having no query to train. A tail departs from the mean by two knobs, attention by one. The peaks are where the search starts, not a choice: a default is kept only on a tie. The classical baselines turn the knobs their turbofan selections turned. |
 | Final run | A stay of set C with no measurement is answered with the prevalence of the task's own sample the candidate learnt from, the answer of a predictor that has seen nothing; none is dropped. Every candidate answers those stays alike, so the paired comparison is unmoved except through the ties the constant answer makes with each candidate's other answers; the areas and Brier scores reported move by the same stays. The harness does not answer such a stay yet: it is built and tested before the final run, and this row is amended with the commit. |
+
+## The sepsis task
+
+Whether sepsis follows the first day of a stay in intensive care (PhysioNet/CinC Challenge 2019,
+`physionet2019-sepsis`), asked at the end of that day. Registered before the corpus's
+publication was pretrained on and before any campaign on the task; the least gain and the
+floor's fixed part follow by the reading below, before the first cell is read on the validation
+side.
+
+| | |
+|---|---|
+| Units | Stays; the first day of each, counted from its first recorded row: the first window of 24 hours the corpus publishes for the stay, read alone (ADR-0052). A stay shorter than a day has no such window and is not in the pool. A stay whose first day holds no measurement (2 stays) or whose label turns within it (281) is not in the pool either; every stay the task does not read is named in its listing of ineligible stays. 30,378 of the 40,336 stays answer: 15,645 of hospital A, 14,733 of hospital B. |
+| Label | Whether `SepsisLabel` turns to one after the first day, read from the stay's own file: one if it does, zero if it never does. The challenge sets the label six hours before the onset it dates, so a positive stay's onset falls at least 30 hours after its first row. 1,563 positives, 5.1 % (hospital A 6.1 %, hospital B 4.2 %). |
+| Sides | Frozen: one stay in five of those the task reads, in each hospital and outcome apart, ranked by seed 1 on a stream of its own (so that the publication's draw of the rest by the same seed is independent of it) and rounded up, 6,077 stays (313 septic), named in the task's listing and cut out of the corpus before its publication, so no statistic and no backbone reads them. Validation: the corpus's held-out side, a fifth of the remaining stays drawn by the publication's seed 1, of which the task reads 4,779. Tuning: the corpus's training side, of which it reads 19,522. The publication is `durable/sha256/bf7de2fa…`, continuing the vocabulary of the scale chain (channels 291–329); the tasks over it are `03c3a159-…` and, over hospital B (tuning 9,398, validation 2,388, frozen 2,947), `fa926d86-…`. The corpus's statistics and every backbone's pretraining read the training side only. |
+| Tasks | `physionet2019-sepsis` over both hospitals, and `physionet2019-sepsis-hospital-b` over hospital B alone, on that hospital's stays of the same sides: hospital A is the centre the stays of 2012 come from, so a backbone pretrained on those stays is read on another hospital only in hospital B. |
+| Budgets | 40, 400 and 4,000 patients and every patient of the tuning side. In hospital B alone 400, 4,000 and all: 40 patients hold under two septic stays there. |
+| Draw, measure, interval, heads | As for the intensive-care task: a budget is a count of stays drawn in proportion to the two outcomes; one minus the area under the ROC curve; the paired bootstrap over stays in the two strata of the outcome; one linear head read as log-odds. |
+| Endpoint | The closed-form probe against the network from nothing at 400 patients, under the mixture of about 10⁹ observed values in today's shape; one comparison, carrying no correction, confirmed by the intensive-care endpoint's three conditions. 40 patients are read descriptively; 4,000 and every patient are secondary, as is the task over hospital B. |
+| Thresholds | By the reading registered for the intensive-care task on 2026-09-29, at 40, 400 and 4,000 patients, under the recipe in force, before the first cell is read on the validation side. |
+| Recipe | The intensive-care task's settings in force, unchanged; no setting is selected on this task. |
+| Reported beside | The area per hospital on the same validation side, descriptively. |
+| What the task does not separate | Hospital A and the stays of 2012 come from one centre, and patients common to both cannot be ruled out after anonymisation; hospital B is therefore read beside the whole. The first day is counted from the first recorded row, not from admission: 37 % of hospital A's stays start after their first hour, most within three. A quarter of the stays last less than a day and fewer of them turn septic; the task predicts for patients still in intensive care after a day. |
+| Final run | Every frozen stay has a measurement in its first day by construction. The frozen stays are in no publication; how they are tokenised under the task's publication, with its vocabulary and statistics, is built and tested before the final run, and this row is amended with the commit. |
 
 ## The scale of pretraining
 
@@ -412,6 +436,7 @@ them.
   the floor of 0.040 and the least gain of 0.045
   (`docs/verification/intensive-care-curve.md`, `docs/findings.md`).
 - The scale of pretraining: registered, no point read.
+- Sepsis endpoint: registered, nothing read.
 - The single test run: not made.
 
 ## Register of amendments
@@ -479,3 +504,4 @@ title" resolves to a row here and to the commit the row names, where the full te
 | 2026-10-04 | `b8a3d938` | configuration | by the readings declared beforehand; nothing on the validation side; nothing of the curve read | *the recipe and the thresholds of the scale of pretraining.* No variant replaces a setting on the intensive-care task; on FD001 full fine-tuning starts its head solved. The least gain at 20, 50 and 200 stays and the floor's fixed part are read off the same campaigns. `intensive-care-curve.md`, 2026-10-04. |
 | 2026-10-04 | `4ae30acc` | editorial | after the larger shape's run was ordered, before it was read | *the larger shape's parameters.* Width 512 and eight layers, as registered, hold 25.3M parameters, not about 20M; the shape is unchanged. |
 | 2026-10-05 | `5eb41f36` | criterion | before either variant of the pretext is pretrained; nothing read under a variant; the probe under the mixture's two seeds read on the validation side (`intensive-care-curve.md`, 2026-10-05), not on the fifth | *when a variant of the pretext replaces the mixture's masks.* By the closed-form probe at 50 stays on a fifth of the tuning side, and only past the difference between two pretraining seeds of the mixture. `pretext-variants.md`, 2026-10-05.
+| 2026-10-06 | `PENDING` | configuration | before any campaign on the task; the corpus published and both tasks defined, nothing drawn but a smoke's budgets of 40 and 400 on the tuning side | *the sepsis task.* Its units, sides and protocol over PhysioNet 2019, the endpoint at 400 patients; the least gain and floor follow by the registered reading before the first validation cell. ADR-0052. |
