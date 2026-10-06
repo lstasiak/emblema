@@ -44,6 +44,14 @@ def test_a_checkpoint_comes_back_as_it_went_in() -> None:
     assert torch.equal(read.optimiser["state"][0]["exp_avg"], torch.zeros(2, 3))
 
 
+def test_the_sums_of_the_epoch_so_far_come_back_with_it() -> None:
+    written = checkpoint(epoch_error=12.5, epoch_tokens=40)
+
+    read = TrainingCheckpoint.read(written.to_bytes(), signature=SIGNATURE)
+
+    assert (read.epoch_error, read.epoch_tokens) == (12.5, 40)
+
+
 def test_the_same_state_written_twice_is_the_same_bytes() -> None:
     assert checkpoint().to_bytes() == checkpoint().to_bytes()
 
@@ -73,7 +81,9 @@ def test_bytes_that_are_not_a_checkpoint_are_refused() -> None:
         TrainingCheckpoint.read(b"not a checkpoint at all", signature=SIGNATURE)
 
 
-@pytest.mark.parametrize("field", ["signature", "steps", "model", "masks", "device_seeds"])
+@pytest.mark.parametrize(
+    "field", ["signature", "steps", "model", "masks", "device_seeds", "epoch_error"]
+)
 def test_a_checkpoint_missing_any_of_its_state_is_refused_as_one(field: str) -> None:
     """Every field is read under the guard, so a partial checkpoint is refused, not raised over."""
     written = torch.load(io.BytesIO(checkpoint().to_bytes()), weights_only=True)

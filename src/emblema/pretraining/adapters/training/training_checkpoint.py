@@ -41,6 +41,10 @@ class TrainingCheckpoint:
             that a resumed run keeps its best epoch rather than the best since it resumed;
             ``None`` before any epoch was scored.
         best_weights: The weights of that epoch, as written; ``None`` with ``best_relative``.
+        epoch_error: The error summed over the hidden tokens of the epoch's batches already
+            consumed, so that a run picked up inside an epoch reports the loss of the whole
+            epoch rather than of the batches after the checkpoint.
+        epoch_tokens: The hidden tokens that error is summed over.
     """
 
     signature: RunSignature
@@ -53,6 +57,8 @@ class TrainingCheckpoint:
     device_seeds: Tensor | None = None
     best_relative: float | None = None
     best_weights: ArtifactRef | None = None
+    epoch_error: float = 0.0
+    epoch_tokens: int = 0
 
     def to_bytes(self) -> bytes:
         """The checkpoint as the bytes the artifact store keeps, every tensor on the CPU."""
@@ -75,6 +81,8 @@ class TrainingCheckpoint:
                     if self.best_weights is None
                     else [self.best_weights.key, str(self.best_weights.checksum)]
                 ),
+                "epoch_error": self.epoch_error,
+                "epoch_tokens": self.epoch_tokens,
             },
             buffer,
         )
@@ -114,6 +122,8 @@ class TrainingCheckpoint:
                         stored["best_weights"][0], Checksum.parse(stored["best_weights"][1])
                     )
                 ),
+                epoch_error=stored["epoch_error"],
+                epoch_tokens=stored["epoch_tokens"],
             )
         except UNREADABLE_BYTES as error:
             raise IncompatibleCheckpointError(f"not a checkpoint this can read: {error}") from error

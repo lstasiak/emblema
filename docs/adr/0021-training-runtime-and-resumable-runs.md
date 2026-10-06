@@ -49,7 +49,8 @@ asked for — a later runtime emits a job and waits for its result from another 
 - On MPS runs do not repeat bit for bit; the resume there is held to a tolerance between repeat
   spread and a broken resume (`docs/verification/training-loop.md`).
 - **Known defect**: a resumed run's training loss for the re-entered epoch covers only the batches
-  after the checkpoint. Weights, validation and best-epoch choice are unaffected.
+  after the checkpoint. Weights, validation and best-epoch choice are unaffected. *2026-10-06:
+  closed; the checkpoint carries the epoch's error and hidden tokens so far.*
 
 ## Alternatives considered
 
