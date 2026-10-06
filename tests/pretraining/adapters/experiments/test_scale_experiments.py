@@ -1,6 +1,6 @@
 """The experiment files of the curve over the scale of pretraining keep the rules registered for
-it: a task's corpus is read as often at every point, the two points of one publication differ in
-the amount of data alone, a point without a corpus differs from the whole point in that corpus
+it: a task's corpus is read as often at every point, the points of one publication differ in the
+amount of data alone, a point without a corpus differs from the whole point in that corpus
 alone, and the larger shape differs from today's in the shape, the micro-batch and the rate."""
 
 from pathlib import Path
@@ -15,11 +15,13 @@ from emblema.pretraining.domain.training.experiment_configuration import (
 EXPERIMENTS = Path(__file__).resolve().parents[4] / "experiments"
 CORPORA_OF_THE_TASKS = ("cmapss", "physionet2012", "physionet2019")
 READS_BY_THE_MIXTURE_OF_FOUR = 8
+TENTH_POINT = "backbone-scale-1e8new-m"
 SMALLER_POINT = "backbone-scale-3e8-m"
 WHOLE_POINT = "backbone-scale-1e9-m"
 LARGER_SHAPE = "backbone-scale-1e9-512x8-m"
 LEFT_OUT = ("physionet2012", "cmapss", "physionet2019")
 POINTS = (
+    TENTH_POINT,
     SMALLER_POINT,
     WHOLE_POINT,
     LARGER_SHAPE,
@@ -62,6 +64,17 @@ def test_the_two_points_of_one_publication_differ_in_the_amount_of_data_alone() 
     assert all(
         key in {"name", "epochs"} or key.startswith(("passes.", "fraction."))
         for key in differing(configured(SMALLER_POINT), configured(WHOLE_POINT))
+    )
+
+
+def test_the_tenth_differs_from_the_quarter_in_the_share_of_the_new_corpora_alone() -> None:
+    tenth, quarter = stated(TENTH_POINT), stated(SMALLER_POINT)
+
+    assert tenth.corpora == quarter.corpora
+    assert tenth.fraction == dict.fromkeys(quarter.fraction, 0.1)
+    assert all(
+        key == "name" or key.startswith("fraction.")
+        for key in differing(configured(TENTH_POINT), configured(SMALLER_POINT))
     )
 
 
