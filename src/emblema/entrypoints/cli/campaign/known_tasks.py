@@ -8,7 +8,7 @@ pointing at nothing.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib.resources import files
 from typing import Self
 
@@ -27,8 +27,15 @@ from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.task.corpus_sides import CorpusSides
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.ordering import seeded_rank
+
+
+def _listed(listing: str) -> tuple[str, ...]:
+    """The keys named one per line in ``listing``, a file shipped beside this module."""
+    text = files(__package__).joinpath(listing).read_text(encoding="utf-8")
+    return tuple(line for line in text.splitlines() if line)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -50,8 +57,7 @@ class NamedTestUnits:
         For an official test set whose keys follow no range: the listing is the set as it was
         published, so the frozen side cannot drift from it however the corpus is read.
         """
-        text = files(__package__).joinpath(listing).read_text(encoding="utf-8")
-        return cls(source=source, units=tuple(line for line in text.splitlines() if line))
+        return cls(source=source, units=_listed(listing))
 
     def frozen_split(self, held_out: frozenset[UnitKey]) -> FrozenTestSplit:
         """The named units, whatever the corpus holds out: an official test set is not cut."""
@@ -101,7 +107,11 @@ class KnownTask:
         strata: How a budget is spread over the pool: bins of the target's rank, or the two
             outcomes in proportion.
         units_called: What the task's units are called in prose, engines, units or stays.
-        test: How the frozen test side is made.
+        test: How the frozen test side is made; a task over part of a corpus keeps the frozen
+            units its prefix names.
+        windows: Which of a unit's windows the task reads.
+        ineligible: Keys of units the prefix names that cannot answer the question, such as a
+            stay too short for the window it is asked at or whose label has turned inside it.
     """
 
     name: str
@@ -111,14 +121,24 @@ class KnownTask:
     strata: Stratification
     units_called: str
     test: NamedTestUnits | HeldOutShare
+    windows: TaskWindows = TaskWindows.EVERY
+    ineligible: frozenset[str] = frozenset()
 
     def units_of(self, keys: Sequence[str]) -> frozenset[UnitKey]:
         """The task's units among the keys a published corpus names."""
-        return frozenset(UnitKey(key) for key in keys if key.startswith(self.unit_prefix))
+        return frozenset(
+            UnitKey(key)
+            for key in keys
+            if key.startswith(self.unit_prefix) and key not in self.ineligible
+        )
 
     def frozen_test(self, held_out: frozenset[UnitKey]) -> FrozenTestSplit:
         """The frozen test side, given the task's units the corpus holds out."""
-        return self.test.frozen_split(held_out)
+        split = self.test.frozen_split(held_out)
+        return FrozenTestSplit(
+            units=frozenset(unit for unit in split.units if str(unit).startswith(self.unit_prefix)),
+            source=split.source,
+        )
 
     def defined_over(
         self, manifest: ArtifactRef, sides: CorpusSides
@@ -139,6 +159,7 @@ class KnownTask:
             protocol=EvaluationProtocol.LABEL_BUDGET,
             labels=self.labels,
             strata=self.strata,
+            windows=self.windows,
         )
 
     @property
@@ -152,6 +173,8 @@ class KnownTask:
                     f"the exact reading of {self.labels.channel} "
                     f"{self.labels.horizon:g} time units past the window"
                 )
+            case OutcomeScheme() if self.windows is TaskWindows.FIRST:
+                return f"whether {self.labels.outcome} turned after each unit's first window"
             case OutcomeScheme():
                 return f"the outcome {self.labels.outcome} each unit recorded"
 
@@ -234,6 +257,25 @@ class KnownTasks:
         test=NamedTestUnits.listed("physionet2012/set-c", "physionet2012_set_c.txt"),
     )
 
+    # Sepsis after the first recorded day of a stay in intensive care (PhysioNet/CinC Challenge
+    # 2019), over both hospitals and over the second alone; the second is not the hospital the
+    # stays of 2012 come from. The frozen side was cut from the corpus by a seeded rule
+    # (scripts/sepsis_task_units.py), since the challenge published no labelled test set.
+    PHYSIONET2019_SEPSIS = KnownTask(
+        name="physionet2019-sepsis",
+        corpus=KnownGroundTruths.PHYSIONET2019,
+        unit_prefix="training_set",
+        labels=KnownGroundTruths.SEPSIS,
+        strata=ClassStrata(),
+        units_called="patients",
+        test=NamedTestUnits.listed("physionet2019/sepsis-frozen", "physionet2019_sepsis_test.txt"),
+        windows=TaskWindows.FIRST,
+        ineligible=frozenset(_listed("physionet2019_sepsis_ineligible.txt")),
+    )
+    PHYSIONET2019_SEPSIS_HOSPITAL_B = replace(
+        PHYSIONET2019_SEPSIS, name="physionet2019-sepsis-hospital-b", unit_prefix="training_setB/"
+    )
+
     @classmethod
     def default(cls) -> KnownTask:
         return cls.TURBOFAN_FD001
@@ -248,6 +290,8 @@ class KnownTasks:
             cls.NULL_B_WIDE_FORECAST,
             cls.CONTROL_B_SHARED_FORECAST,
             cls.PHYSIONET_IN_HOSPITAL_DEATH,
+            cls.PHYSIONET2019_SEPSIS,
+            cls.PHYSIONET2019_SEPSIS_HOSPITAL_B,
         )
 
     @classmethod
