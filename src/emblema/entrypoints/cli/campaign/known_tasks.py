@@ -260,7 +260,8 @@ class KnownTasks:
     # Sepsis after the first recorded day of a stay in intensive care (PhysioNet/CinC Challenge
     # 2019), over both hospitals and over the second alone; the second is not the hospital the
     # stays of 2012 come from. The frozen side was cut from the corpus by a seeded rule
-    # (scripts/sepsis_task_units.py), since the challenge published no labelled test set.
+    # (scripts/sepsis_task_units.py at b872996e), since the challenge published no labelled test
+    # set; the listings are the record, and the script was retired once they were published.
     PHYSIONET2019_SEPSIS = KnownTask(
         name="physionet2019-sepsis",
         corpus=KnownGroundTruths.PHYSIONET2019,
