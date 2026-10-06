@@ -3,6 +3,7 @@
 from emblema.evaluation.adapters.documents.cell_result_document import CellResultDocument
 from emblema.evaluation.adapters.documents.downstream_task_document import DownstreamTaskDocument
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from tests.evaluation.support import (
     CONTENDER,
     OUTCOME,
@@ -38,4 +39,20 @@ def test_a_task_over_outcomes_travels_with_its_outcome_and_comes_back_spread_ove
     written = documents.encode(stated)
 
     assert written["labels"] == {"scheme": "outcome", "outcome": "In-hospital_death"}
+    assert documents.decode(written) == stated
+
+
+def test_a_task_reading_every_window_is_written_as_it_was_before_the_choice_existed() -> None:
+    written = DownstreamTaskDocument().encode(task(labels=OUTCOME, strata=OUTCOMES))
+
+    assert "windows" not in written
+
+
+def test_a_task_reading_the_first_window_of_each_unit_travels_with_the_choice() -> None:
+    documents = DownstreamTaskDocument()
+    stated = task(labels=OUTCOME, strata=OUTCOMES, windows=TaskWindows.FIRST)
+
+    written = documents.encode(stated)
+
+    assert written["windows"] == "first"
     assert documents.decode(written) == stated

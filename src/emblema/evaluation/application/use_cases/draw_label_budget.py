@@ -53,7 +53,7 @@ class DrawLabelBudget:
             TaskNotFoundError: If the task is unknown.
             UnknownGroundTruthError: If nothing is known about the task's corpus, or about a
                 tuning window of it.
-            UnlabelledWindowError: If a window reaches past the failure of its unit.
+            UnlabelledWindowError: If a window the task reads carries no label under it.
             InvalidLabelBudgetError: If the tuning side holds fewer windows than asked for.
             InvalidTargetBinsError: If it holds fewer windows than there are strata.
             InvalidInnerHoldoutError: If the draw is confined to units outside the tuning side.
@@ -64,7 +64,7 @@ class DrawLabelBudget:
             raise InvalidInnerHoldoutError(
                 f"a draw from task {task.task_id} is confined to units outside its tuning side"
             )
-        windows = self._corpus.windows_of(task.manifest, units)
+        windows = task.read_windows(self._corpus.windows_of(task.manifest, units))
         pool = task.labelled(windows, self._truth.truths_of(task.corpus, windows))
         return LabelSample.drawn(
             task.task_id, pool, command.budget, task.stratification(), command.seed

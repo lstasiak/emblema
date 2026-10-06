@@ -20,6 +20,7 @@ from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.target_bins import TargetBins
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from tests.evaluation.support import MANIFEST, TASK, sides, task, units
 
 ENDS = {
@@ -111,3 +112,18 @@ def test_drawing_from_a_task_nobody_defined_is_refused() -> None:
 
     with pytest.raises(TaskNotFoundError):
         use_case(DrawLabelBudgetCommand(task=TASK, budget=LabelBudget.of(2), seed=3))
+
+
+def test_a_task_asked_at_the_start_of_a_unit_draws_from_its_first_window_alone() -> None:
+    tasks = InMemoryDownstreamTaskRepository()
+    tasks.save(task(windows=TaskWindows.FIRST))
+    use_case = DrawLabelBudget(
+        tasks, InMemoryCorpusWindows(PUBLISHED, ENDS, MANIFEST), InMemoryGroundTruth(FAILURES)
+    )
+
+    sample = use_case(DrawLabelBudgetCommand(task=TASK, budget=EVERYTHING, seed=3))
+
+    assert sorted((str(w.window.unit), w.window.ends_at) for w in sample.windows) == [
+        ("a", 60.0),
+        ("b", 60.0),
+    ]

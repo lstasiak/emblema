@@ -10,6 +10,7 @@ from emblema.evaluation.adapters.documents.campaign_order_result_json import (
 from emblema.evaluation.domain.exceptions import UnreadableCampaignDocumentError
 from emblema.evaluation.domain.handoff.campaign_order import CampaignOrder
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from tests.evaluation.support import CAMPAIGN, campaign, selection, task
 
 CODEC = CampaignOrderJson()
@@ -84,3 +85,9 @@ def test_an_order_of_a_fixed_division_carries_its_seed_and_one_placed_before_div
 def test_a_result_codec_refuses_an_order() -> None:
     with pytest.raises(UnreadableCampaignDocumentError, match="campaign-order"):
         CampaignOrderResultJson().decode(CODEC.encode(an_order()))
+
+
+def test_an_order_over_a_task_read_at_one_moment_of_its_units_reaches_the_platform_so() -> None:
+    order = replace(an_order(), task=task(windows=TaskWindows.FIRST))
+
+    assert CODEC.decode(CODEC.encode(order)).task.windows is TaskWindows.FIRST

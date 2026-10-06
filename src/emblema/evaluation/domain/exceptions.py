@@ -34,7 +34,12 @@ class MixedTargetKindsError(EvaluationError):
 
 
 class UnlabelledWindowError(EvaluationError, ValueError):
-    """A window ends at or after the moment its unit failed, so it carries no remaining life."""
+    """A window carries no label under its task.
+
+    It ends at or after the moment its unit failed, so it has no remaining life left; or it is
+    not the window the question is asked at, or the outcome it would be labelled with is already
+    in it.
+    """
 
 
 class EmptyLabelSampleError(EvaluationError, ValueError):
@@ -191,6 +196,10 @@ class CandidateMismatchError(EvaluationError):
 
 class UnknownTaskUnitsError(EvaluationError):
     """A task was defined over units the published corpus does not name."""
+
+
+class PretrainedTestUnitsError(EvaluationError):
+    """A task's frozen side names units the corpus fitted its statistics on and pretrains over."""
 
 
 class UnknownGroundTruthError(EvaluationError):

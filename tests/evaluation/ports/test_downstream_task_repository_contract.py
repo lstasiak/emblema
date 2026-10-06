@@ -17,6 +17,7 @@ from emblema.evaluation.adapters.persistence.downstream_task_repository import (
 )
 from emblema.evaluation.domain.exceptions import TaskNotFoundError
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
 from tests.evaluation.support import FORECAST, OUTCOME, OUTCOMES, TASK, task
 from tests.support.database import clear_evaluation, migrated_engine
@@ -109,3 +110,13 @@ def test_a_detection_task_comes_back_reading_no_label_per_window(
 
     assert read == detection
     assert (read.labels, read.strata) == (None, None)
+
+
+def test_a_task_reading_the_first_window_of_each_unit_comes_back_reading_it(
+    tasks: DownstreamTaskRepository,
+) -> None:
+    stated = task(labels=OUTCOME, strata=OUTCOMES, windows=TaskWindows.FIRST)
+
+    tasks.save(stated)
+
+    assert tasks.get(TASK) == stated

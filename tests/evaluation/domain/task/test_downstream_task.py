@@ -16,6 +16,7 @@ from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from tests.evaluation.support import (
     FORECAST,
     OUTCOME,
@@ -129,3 +130,17 @@ def test_a_tuning_run_is_refused_the_frozen_side() -> None:
 
 def test_the_final_run_is_handed_the_frozen_side() -> None:
     assert task().open_test_split(RunPurpose.FINAL) == TEST_SIDE
+
+
+def test_a_task_reads_every_window_of_its_units_unless_told_otherwise() -> None:
+    windows = (window("a", 0, 24.0), window("a", 1, 36.0))
+
+    assert task().read_windows(windows) == windows
+
+
+def test_a_task_asked_at_the_start_of_a_unit_reads_its_first_window_alone() -> None:
+    windows = (window("a", 1, 36.0), window("a", 0, 24.0), window("b", 2, 24.0))
+
+    read = task(windows=TaskWindows.FIRST).read_windows(windows)
+
+    assert read == (window("a", 0, 24.0), window("b", 2, 24.0))

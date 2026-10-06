@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from emblema.evaluation.contracts.identifiers import TaskId
-from emblema.evaluation.domain.exceptions import UnknownTaskUnitsError
+from emblema.evaluation.domain.exceptions import PretrainedTestUnitsError, UnknownTaskUnitsError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.label_scheme import LabelScheme
 from emblema.evaluation.domain.labels.stratification import Stratification
@@ -9,6 +9,7 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.evaluation.domain.task.task_split import TaskSplit
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.evaluation.ports.corpus_windows import CorpusWindows
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -28,6 +29,7 @@ class DefineDownstreamTaskCommand:
         labels: How a window's target is read; ``None`` where the protocol spends no labels.
         strata: How a budget is spread over the pool; ``None`` where the protocol spends no
             labels.
+        windows: Which of a unit's windows the task reads.
     """
 
     manifest: ArtifactRef
@@ -36,6 +38,7 @@ class DefineDownstreamTaskCommand:
     protocol: EvaluationProtocol
     labels: LabelScheme | None
     strata: Stratification | None
+    windows: TaskWindows = TaskWindows.EVERY
 
 
 class DefineDownstreamTask:
@@ -61,8 +64,15 @@ class DefineDownstreamTask:
     def __call__(self, command: DefineDownstreamTaskCommand) -> TaskId:
         """Read the corpus's division, cut the task out of it and store the task.
 
+        A frozen side cut from the corpus's training side is refused: the statistics of every
+        token and every backbone's pretraining read that side, so a test unit there has been
+        learnt from before the final run asks about it. A test set published apart, or cut out
+        of the corpus before publication, never is.
+
         Raises:
             UnknownTaskUnitsError: If the task covers units the corpus does not name.
+            PretrainedTestUnitsError: If the frozen side names a unit of the corpus's training
+                side.
             InvalidTaskSplitError: If either side comes out empty or a unit sits on two sides.
             UnreadableTaskCorpusError: If the manifest is not one the port can read.
             ProtocolMismatchError: If the label scheme and the protocol disagree.
@@ -71,6 +81,11 @@ class DefineDownstreamTask:
         unknown = sorted(str(unit) for unit in command.units - (sides.training | sides.validation))
         if unknown:
             raise UnknownTaskUnitsError(f"corpus {sides.corpus!r} does not name units: {unknown}")
+        learnt = sorted(str(unit) for unit in command.test.units & sides.training)
+        if learnt:
+            raise PretrainedTestUnitsError(
+                f"corpus {sides.corpus!r} trains on units of the frozen side: {learnt}"
+            )
         task = DownstreamTask(
             task_id=self._ids.generate(TaskId),
             corpus=sides.corpus,
@@ -83,6 +98,7 @@ class DefineDownstreamTask:
             protocol=command.protocol,
             labels=command.labels,
             strata=command.strata,
+            windows=command.windows,
         )
         self._tasks.save(task)
         return task.task_id

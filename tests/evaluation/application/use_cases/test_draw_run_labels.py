@@ -33,6 +33,7 @@ from emblema.evaluation.domain.labels.run_labels import RunLabels
 from emblema.evaluation.domain.task.frozen_test_split import FrozenTestSplit
 from emblema.evaluation.domain.task.inner_holdout import InnerHoldout
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
+from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.shared.adapters.in_memory.clock import FixedClock
 from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
 from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
@@ -66,10 +67,11 @@ def drawn(
     purpose: RunPurpose = RunPurpose.TUNING,
     heard: list[FrozenTestSplitOpened] | None = None,
     holdout: InnerHoldout | None = None,
+    windows: TaskWindows = TaskWindows.EVERY,
 ) -> RunLabels:
     tasks = InMemoryDownstreamTaskRepository()
     if save_task:
-        tasks.save(task(test=FROZEN))
+        tasks.save(task(test=FROZEN, windows=windows))
     subscriptions = InMemoryEventSubscriber()
     if heard is not None:
         subscriptions.subscribe(FrozenTestSplitOpened, heard.append)
@@ -103,6 +105,16 @@ def test_a_tuning_run_is_answered_on_the_validation_side_and_opens_nothing() -> 
 
     assert [(str(w.window.unit), w.window.position) for w in labels.scored] == [("c", 8), ("c", 9)]
     assert heard == []
+
+
+def test_a_task_asked_at_the_start_of_a_unit_is_answered_on_its_first_windows_alone() -> None:
+    labels = drawn(budget=LabelBudget.of(2), windows=TaskWindows.FIRST)
+
+    assert [(str(w.window.unit), w.window.ends_at) for w in labels.scored] == [("c", 60.0)]
+    assert sorted((str(w.window.unit), w.window.ends_at) for w in labels.sample.windows) == [
+        ("a", 60.0),
+        ("b", 60.0),
+    ]
 
 
 def test_the_final_run_is_answered_on_the_frozen_side_and_leaves_a_record() -> None:
