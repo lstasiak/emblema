@@ -2190,3 +2190,60 @@ to 11.9 RMSE, each by the interval.
   rate included, was chosen under today's shape.
 - The validation side was read before under other backbones at 50 and 200 stays (2026-09-30).
 - 20 stays hold two or three deaths in a draw; read descriptively.
+
+## 2026-10-07 — Colab G4: full fine-tuning's setting in the larger shape
+
+**Question.** Does half the peak rate, the head solved in closed form first, or both replace full
+fine-tuning's setting in force (peak 0.001) in the larger shape, at 50 and 200 stays, before
+anything is read under a backbone of about 10⁹ values? The rule, the variants and the
+campaigns were registered before the run (`docs/preregistration.md`, the scale of pretraining,
+recipe; commit `cad30ff3`). No predictions were declared.
+
+**Conditions.** Commit `76545474`; campaigns `ed381046…` (50 stays) and `e0b0dd74…` (200),
+under the mixture of four in the larger shape at 5e-4 (`sha256:b7553ef5…`, width 512, eight
+layers, 25.3M parameters); tier M. One order each, on one Colab G4 under CUDA MPS beside the
+larger shape's pretraining, 40 cells each. Scored on the fifth held out by seed 101, seeds 1 to
+10: 800 stays. Read with `data/report/l5/recipe-pairs.sh` (`scripts/campaign_pairs_report.py`);
+CSV under `data/report/l5/recipe/`.
+
+**Area under the ROC curve**, pooled over the ten seeds, and its standard deviation over them.
+
+| Candidate | 50 stays | 200 stays |
+|---|---|---|
+| full fine-tuning (setting in force) | 0.622 (0.026) | 0.644 (0.040) |
+| half the peak (`learning_rate=0.0005`) | 0.639 (0.037) | 0.670 (0.033) |
+| head solved first (`head_start=solved`) | 0.624 (0.055) | 0.667 (0.039) |
+| both | 0.632 (0.047) | 0.671 (0.043) |
+
+**Gain in area against the setting in force**, paired over stays (95 % interval), and seed by
+seed (mean ± standard error). A variant *replaces* where the interval lies above zero and the
+mean exceeds twice its standard error.
+
+| Budget | Variant | Paired gain | Seed by seed | Mean / SE | Replaces |
+|---|---|---|---|---|---|
+| 50 | half the peak | +0.016 [+0.002; +0.030] | +0.016 ± 0.011 | 1.4 | no |
+| 50 | head solved first | +0.002 [−0.015; +0.018] | +0.002 ± 0.019 | 0.1 | no |
+| 50 | both | +0.010 [−0.008; +0.027] | +0.010 ± 0.016 | 0.6 | no |
+| 200 | half the peak | +0.026 [+0.007; +0.044] | +0.026 ± 0.016 | 1.6 | no |
+| 200 | head solved first | +0.023 [+0.007; +0.039] | +0.023 ± 0.017 | 1.4 | no |
+| 200 | both | +0.027 [+0.009; +0.045] | +0.027 ± 0.020 | 1.4 | no |
+
+**Conclusions.**
+
+1. No variant replaces the setting at 50 or 200 stays, so full fine-tuning in the larger shape
+   keeps its setting in force at 20, 50 and 200 stays.
+2. Four of the six variants have a paired interval above zero, and none of them clears the
+   seed-by-seed half of the rule. The closest is half the peak at 200 stays (1.6 standard errors).
+3. At 200 stays all three variants gain 0.023 to 0.027 in the pooled area. The setting in force
+   is likely not the best one in this shape at that budget, but ten seeds do not separate the
+   difference from the spread of one seed.
+
+**Limitations.**
+
+- The larger shape at 200 stays may read under a setting about 0.025 below its best, which would
+  bias the comparison of shapes at that budget against the larger shape. The registered rule
+  decides, not this reading.
+- One backbone (the mixture of four at 5e-4) chose the setting for every backbone of the larger
+  shape.
+- The seed-by-seed difference spreads by about 0.05 per seed, so a gain of 0.025 needs about 20
+  seeds to clear twice its standard error.
