@@ -1,5 +1,6 @@
 import math
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -439,7 +440,7 @@ ERA5 = UtsdCorpusReader.dataset_named("utsd/ERA5_pressure")
 
 def replace_reading(**changed: Any) -> UtsdReading:
     """The stored scale with the given knobs changed."""
-    return UtsdReading(**{"scale": UtsdScale.AS_PUBLISHED, **changed})
+    return replace(UtsdReading(scale=UtsdScale.AS_PUBLISHED), **changed)
 
 
 def test_variates_of_series_number_the_variate_first_and_the_series_second(

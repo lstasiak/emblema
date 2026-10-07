@@ -5,6 +5,7 @@ do not change their values, and the low-rank mode leaves the layers it wraps as 
 encoder a run received is read back through the factory, which keeps every module it hands out.
 """
 
+from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
@@ -24,7 +25,12 @@ from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
 from emblema.evaluation.adapters.torch.ridge_solution import RidgeSolution  # noqa: E402
-from emblema.evaluation.adapters.torch.scheduled_training import ScheduledTraining  # noqa: E402
+from emblema.evaluation.adapters.torch.scheduled_training import (  # noqa: E402
+    AfterEpoch,
+    Forward,
+    Loss,
+    ScheduledTraining,
+)
 from emblema.evaluation.adapters.torch.target_link import TargetLink  # noqa: E402
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import (  # noqa: E402
     TorchAdaptationRuntime,
@@ -560,9 +566,28 @@ def test_a_head_solved_first_starts_the_steps_from_the_solution_over_the_untouch
     received: dict[str, Tensor] = {}
     losses = ScheduledTraining.losses
 
-    def spied(self: ScheduledTraining, model: nn.Module, *args: object, **kwargs: object) -> object:
+    def spied(
+        self: ScheduledTraining,
+        model: nn.Module,
+        trainable: Iterable[nn.Parameter],
+        forward: Forward,
+        targets: Tensor,
+        *,
+        loss: Loss,
+        epochs: int | None = None,
+        after_epoch: AfterEpoch | None = None,
+    ) -> list[float]:
         received.update({k: v.detach().clone() for k, v in model.state_dict().items()})
-        return losses(self, model, *args, **kwargs)  # type: ignore[arg-type]
+        return losses(
+            self,
+            model,
+            trainable,
+            forward,
+            targets,
+            loss=loss,
+            epochs=epochs,
+            after_epoch=after_epoch,
+        )
 
     monkeypatch.setattr(ScheduledTraining, "losses", spied)
 
