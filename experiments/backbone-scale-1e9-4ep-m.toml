@@ -1,0 +1,71 @@
+# The point of about 10⁹ observed values (backbone-scale-1e9-m.toml) trained twice as long: the
+# same publication, shape, masks and schedule, four epochs instead of two. Its pretext loss was
+# still falling by 8 % between its two epochs, so this run asks whether that point was limited by
+# its training rather than by its data. The corpora a task reads keep the exposure of the mixture
+# of four, four epochs times two passes; every other corpus is read four times instead of twice.
+name = "backbone-scale-1e9-4ep-m"
+tier = "M"
+corpora = [
+    "cmapss",
+    "skab",
+    "esa_ad",
+    "physionet2012",
+    "tep",
+    "utsd/ERA5_pressure",
+    "utsd/ERA5_surface",
+    "utsd/Energy_australian_electricity_demand_dataset",
+    "utsd/Energy_london_smart_meters_dataset_without_missing_values",
+    "utsd/Environment_AustraliaRainfall",
+    "utsd/Environment_BeijingPM25Quality",
+    "utsd/Environment_BenzeneConcentration",
+    "utsd/Health_AtrialFibrillation",
+    "utsd/Health_BIDMC32HR",
+    "utsd/Health_IEEEPPG",
+    "utsd/Health_MotorImagery",
+    "utsd/Health_PigArtPressure",
+    "utsd/Health_PigCVP",
+    "utsd/Health_SelfRegulationSCP1",
+    "utsd/Health_SelfRegulationSCP2",
+    "utsd/Health_TDBrain_csv",
+    "utsd/IoT_baian",
+    "utsd/Nature_EigenWorms",
+    "utsd/Nature_Phoneme",
+    "utsd/Nature_StarLightCurves",
+    "utsd/Nature_Worms",
+    "utsd/Nature_kdd_cup_2018_dataset_without_missing_values",
+    "utsd/Nature_temperature_rain_dataset_without_missing_values",
+    "utsd/Transport_pedestrian_counts_dataset",
+    "utsd/Web_kaggle_web_traffic_dataset_without_missing_values",
+    "physionet2019",
+]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[passes]
+cmapss = 2
+physionet2012 = 2
+physionet2019 = 2
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as every mixture since the satellite corpus was read so.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 4
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000
