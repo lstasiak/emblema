@@ -2247,3 +2247,109 @@ mean exceeds twice its standard error.
   shape.
 - The seed-by-seed difference spreads by about 0.05 per seed, so a gain of 0.025 needs about 20
   seeds to clear twice its standard error.
+
+## 2026-10-07 — declared before the run: the curve's points at 1.5·10⁸, 3·10⁸ and 10⁹ values
+
+**Question.** Does more pretraining data carry the probe solved in closed form towards, or past,
+the network from nothing at 20, 50 and 200 stays and at 50 windows of FD001? Is the endpoint at
+about 10⁹ values confirmed, does the curve rise, and is the largest point run? The claim, the
+points and the rules are in `docs/preregistration.md`, "The scale of pretraining". The recipe
+and thresholds were registered on 2026-10-04, and full fine-tuning's setting in the larger shape
+on 2026-10-07.
+
+**Design.** The three campaign files of the first point (2026-10-04), each defined under the four
+backbones below, scored on the validation side over seeds 1 to 10, on the same stays, engines and
+draws as the first point. Labels in `data/report/l5/campaigns.txt`.
+
+| Backbone | Observed values | Weights | Shape |
+|---|---|---|---|
+| `backbone-scale-1e8new-m` (descriptive) | about 1.5·10⁸ | `sha256:74ce5242…` | 4.8M |
+| `backbone-scale-3e8-m` | 3.0·10⁸ | `sha256:5e91669a…` | 4.8M |
+| `backbone-scale-1e9-m` | 1.04·10⁹ | `sha256:8e7fa11d…` | 4.8M |
+| `backbone-scale-1e9-512x8-m` | 1.04·10⁹ | `sha256:bc7eac58…` | 25.3M |
+
+The backbones without a corpus (zero-shot) and the sepsis task are not read here. Zero-shot waits
+for its decision on the channels of the corpus left out. The sepsis task waits for its spread
+over seeds.
+
+**Reading, declared beforehand.** By `scripts/campaign_pairs_report.py`, pairs over the scored
+units, pooled over the seeds.
+
+- *Under each backbone*, at every budget, as at the first point: `frozen_ridge`, the trained
+  probe and full fine-tuning against the network from nothing, by the registered rules; and
+  `frozen_ridge` against `untrained_ridge`.
+- *The endpoint*: `frozen_ridge` against the network from nothing at 50 stays under
+  `backbone-scale-1e9-m`, the verdict of its campaign (least gain 0.060, floor fixed part 0.035,
+  Holm over the campaign's family). FD001's endpoint is the same comparison at 50 windows under
+  the same backbone, by the turbofan's rules.
+- *The slope*, in each shape: `frozen_ridge` under the backbone of about 10⁹ values less under
+  the first point's (today's shape: seed 1, campaign `7101cdda…`; the larger shape: 5e-4,
+  campaign `3d5a76ef…`), at 50 stays. It rises when the interval lies above zero and the
+  difference exceeds 0.004. It is flat when the interval lies within the floor on either side of
+  zero: 0.035, or the first point's probe's spread over seeds where that is larger
+  (`--floor-area 0.035`). Otherwise it is not settled.
+- *The largest point* is run when any of eight intervals lies above zero: at 20 and 50 stays, in
+  each shape, `frozen_ridge` under about 10⁹ values against the network from nothing and against
+  `frozen_ridge` at the first point. No correction is applied, as registered.
+- *The shapes*: `frozen_ridge` under the larger shape against today's at 10⁹, at 50 stays.
+- *Descriptive*: the points at 1.5·10⁸ and 3·10⁸ against the first point and against each other,
+  at 50 stays. 1.5·10⁸, 3·10⁸ and 10⁹ read one set of sources, so they differ in the amount of
+  data alone.
+- *A check on the code*: the network from nothing takes each backbone's shape, so under every
+  4.8M backbone it must repeat the first point's (−0.002 [−0.006; +0.001] at 50 stays between
+  its two campaigns there). A larger difference at 50 stays means the commit moved the cells,
+  and nothing else is read until it is explained.
+- Before any of these is read, the pretext's triviality diagnostic runs under every backbone
+  (`scripts/pretext_triviality_report.py`) and its result is reported with them.
+
+**Measured before the run: the pretext's triviality** under `backbone-scale-1e9-m` and
+`backbone-scale-3e8-m`. A kind is *learnt* where the model's error lies below its trivial
+baseline by the interval, and *beaten* where the baseline lies below the model's.
+
+| Corpora | Channel hidden | Block | Single token |
+|---|---|---|---|
+| The stays and C-MAPSS | learnt, 2 of 2 | learnt, 2 of 2 | learnt, 2 of 2 |
+| SKAB, satellite, Tennessee Eastman, 2019 | learnt, 4 of 4 (2 of 3 at 3·10⁸) | learnt, 3 of 4 (2 of 3) | learnt, 3 of 4 (2 of 3) |
+| The 25 datasets of UTSD | learnt, 2 of 5 | learnt, 24 of 25 (23 at 3·10⁸) | beaten, 21 of 25 (22 at 3·10⁸) |
+
+On the UTSD datasets a single hidden token is answered better by a line through its neighbours
+than by the model, whose error there is small in any case (0.002 to 0.13 of a standard
+deviation). The block is learnt nearly everywhere, so the added data teach the encoder mostly
+through its blocks, not its single tokens. The stays and C-MAPSS learn
+every kind.
+
+**Predictions.** The registered predictions 3, 4, 5, 7 and 8 are judged as registered. Made
+specific to this run, from the first point's intervals at 50 stays (2026-10-05):
+
+1. The step from 10⁸ to 10⁹ in today's shape lies between 0 and +0.02, and its interval holds
+   zero, so the slope is not settled. Source: pretraining's share over an untrained encoder at
+   10⁸, +0.009 [−0.002; +0.020] and +0.013 [+0.005; +0.021]; ten times the data at most doubles
+   it.
+2. Under `backbone-scale-1e9-m` `frozen_ridge` against the network from nothing at 50 stays lies
+   between −0.02 and +0.01, and the endpoint is not confirmed. Source: −0.022 [−0.036; −0.007]
+   and −0.016 [−0.028; −0.003] at 10⁸, moved by the step in 1. This departs from registered
+   prediction 4 (+0.01 to +0.03), made before the first point was read; the registered one is
+   the one judged.
+3. The largest point's rule is not met: none of the eight intervals lies above zero.
+4. At 3·10⁸ the probe at 50 stays lies within 0.01 of 10⁸ (registered prediction 3), and the point
+   at 1.5·10⁸ lies between them.
+5. The larger shape at 10⁹ lies within ±0.01 of today's at 50 stays (registered prediction 5:
+   it gains at most 0.01).
+6. On FD001 `frozen_ridge` stays above the network from nothing in RMSE under every backbone
+   (16.6 against 23.5–25.5 at 10⁸).
+
+**Limitations.**
+
+- One pretraining seed per new point. The seeds' difference at 10⁸ (0.004 at 50 stays) stands
+  for every point and both shapes.
+- Data and diversity grow together, and 80 % of the new values come from seven sources.
+- Measured before the run, from the pretraining runs: the points of about 10⁹ values ran two
+  epochs, and their pretext validation loss fell by 8 % between them (relative error 0.614 to
+  0.563 in today's shape), so neither had converged. A flat step to 10⁹ therefore does not
+  separate too little use of data from too little training.
+- At 1.5·10⁸ and 3·10⁸ values the pretext's relative error on the stays ends at 0.518 and
+  0.523, above the mixture of four's 0.490, at the same eight reads of the stays: in 4.8M
+  parameters the added corpora take capacity from the task's corpus. At 10⁹ it ends at 0.489.
+- The validation side has been read before at 20, 50 and 200 stays under other backbones.
+- 20 stays hold two or three deaths in a draw, so they are read descriptively except in the
+  largest point's rule, as registered.
