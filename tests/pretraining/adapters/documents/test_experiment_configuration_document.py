@@ -71,12 +71,12 @@ def test_a_document_that_states_no_configuration_is_refused(
 
 def test_the_passes_of_a_corpus_travel_by_its_name() -> None:
     weighted = configuration(
-        passes=(CorpusPasses(corpus="stays", passes=4), CorpusPasses(corpus="engines", passes=2))
+        passes=(CorpusPasses(corpus="engines", passes=2), CorpusPasses(corpus="stays", passes=4))
     )
 
     document = CODEC.encode(weighted)
 
-    assert document["passes"] == {"stays": 4, "engines": 2}
+    assert document["passes"] == {"engines": 2, "stays": 4}
     assert CODEC.decode(document) == weighted
 
 
@@ -90,14 +90,14 @@ def test_a_document_written_before_passes_existed_reads_every_corpus_once() -> N
 def test_the_fraction_of_a_corpus_travels_by_its_name_and_only_where_stated() -> None:
     mixed = configuration(
         fractions=(
-            CorpusFraction(corpus="meters", fraction=0.1),
             CorpusFraction(corpus="engines", fraction=1.0),
+            CorpusFraction(corpus="meters", fraction=0.1),
         )
     )
 
     document = CODEC.encode(mixed)
 
-    assert document["fraction"] == {"meters": 0.1, "engines": 1.0}
+    assert document["fraction"] == {"engines": 1.0, "meters": 0.1}
     assert CODEC.decode(document) == mixed
     # A run at the mixture's share writes the document it wrote before the knob existed.
     assert "fraction" not in CODEC.encode(configuration())
@@ -126,3 +126,21 @@ def test_the_tail_travels_inside_the_masking_and_only_where_it_is_drawn() -> Non
     plain = CODEC.encode(configuration())["masking"]
     assert isinstance(plain, dict)
     assert "horizon" not in plain
+
+
+def test_a_document_listing_its_corpora_in_another_order_states_the_same_configuration() -> None:
+    # JSONB keeps the keys of an object shortest first, so the registry hands back the corpora of
+    # a configuration in an order the file that stated them never had.
+    mixed = configuration(
+        passes=(CorpusPasses(corpus="cmapss", passes=2), CorpusPasses(corpus="stays", passes=2)),
+        fractions=(
+            CorpusFraction(corpus="tep", fraction=0.25),
+            CorpusFraction(corpus="utsd/ERA5_surface", fraction=0.25),
+            CorpusFraction(corpus="utsd/IoT_baian", fraction=0.25),
+        ),
+    )
+    document = dict(CODEC.encode(mixed))
+    document["passes"] = {"stays": 2, "cmapss": 2}
+    document["fraction"] = {"tep": 0.25, "utsd/IoT_baian": 0.25, "utsd/ERA5_surface": 0.25}
+
+    assert CODEC.decode(document) == mixed

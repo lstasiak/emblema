@@ -13,6 +13,8 @@ from emblema.pretraining.adapters.persistence.backbone_repository import (
     SqlAlchemyBackboneRepository,
 )
 from emblema.pretraining.domain.exceptions import BackboneNotFoundError
+from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
+from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.ports.backbone_repository import BackboneRepository
 from tests.support.database import clear_pretraining, migrated_engine
 from tests.support.experiments import WEIGHTS, budget, configuration
@@ -54,6 +56,30 @@ def test_an_ordered_backbone_reads_back_whole(backbones: BackboneRepository) -> 
         configuration=configuration(name="stored", budget=budget(seed=3, epochs=4)),
         inputs=(pretraining_input(vocabulary_size=17),),
         run="second",
+    )
+
+    backbones.save(ordered)
+
+    assert backbones.get(ordered.id) == ordered
+
+
+def test_a_configuration_with_corpora_of_its_own_reads_back_whole(
+    backbones: BackboneRepository,
+) -> None:
+    # Names of different lengths: JSONB keeps an object's keys shortest first, which is not the
+    # order of the names.
+    ordered = backbone(
+        configuration=configuration(
+            passes=(
+                CorpusPasses(corpus="cmapss", passes=2),
+                CorpusPasses(corpus="physionet2012", passes=2),
+            ),
+            fractions=(
+                CorpusFraction(corpus="tep", fraction=0.25),
+                CorpusFraction(corpus="utsd/ERA5_surface", fraction=0.25),
+                CorpusFraction(corpus="utsd/IoT_baian", fraction=0.25),
+            ),
+        )
     )
 
     backbones.save(ordered)

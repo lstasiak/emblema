@@ -154,12 +154,12 @@ class ExperimentConfigurationDocument:
             if passes is None
             else tuple(
                 CorpusPasses(corpus=corpus, passes=passes.integer(corpus))
-                for corpus in fields.mapping("passes")
+                for corpus in sorted(fields.mapping("passes"))
             ),
             fractions=()
             if fraction is None
             else tuple(
                 CorpusFraction(corpus=corpus, fraction=fraction.number(corpus))
-                for corpus in fields.mapping("fraction")
+                for corpus in sorted(fields.mapping("fraction"))
             ),
         )

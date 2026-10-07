@@ -216,10 +216,11 @@ class ExperimentFile(_Section):
             precision=self.precision,
             checkpoint=self.checkpoint.policy(),
             passes=tuple(
-                CorpusPasses(corpus=corpus, passes=passes) for corpus, passes in self.passes.items()
+                CorpusPasses(corpus=corpus, passes=passes)
+                for corpus, passes in sorted(self.passes.items())
             ),
             fractions=tuple(
                 CorpusFraction(corpus=corpus, fraction=fraction)
-                for corpus, fraction in self.fraction.items()
+                for corpus, fraction in sorted(self.fraction.items())
             ),
         )

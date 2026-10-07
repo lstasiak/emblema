@@ -28,7 +28,8 @@ class ExperimentConfiguration:
     Invariants: the name is non-empty and carries no surrounding whitespace; dropout lies in
     ``[0, 1)``, since a run that drops everything learns nothing; the decoder has at least one
     layer; the corpus fraction is a share a run could read; no corpus has its passes or its
-    fraction stated twice.
+    fraction stated twice, and both are stated in the order of their corpus names, so that one
+    configuration is one value whatever order a file or a database listed the corpora in.
 
     Attributes:
         name: What the experiment is called, and what its runs are grouped under.
@@ -74,6 +75,10 @@ class ExperimentConfiguration:
             if len(set(corpora)) != len(corpora):
                 raise InvalidExperimentConfigurationError(
                     f"a corpus has its {knob} stated twice: {corpora}"
+                )
+            if corpora != sorted(corpora):
+                raise InvalidExperimentConfigurationError(
+                    f"the {knob} must be stated in the order of the corpus names: {corpora}"
                 )
         if not self.name or self.name != self.name.strip():
             raise InvalidExperimentConfigurationError(
