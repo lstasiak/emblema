@@ -67,7 +67,7 @@
             <a id="nextFileLink" class="nav" href="z_dfde86b93d59db36_artifact_store_handoff_exchange_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-10-06 21:28 +0000
+            created at 2026-10-08 18:51 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -300,13 +300,14 @@
     <p class="run run2"><span class="n"><a id="t216" href="#t216">216</a></span><span class="t">            <span class="nam">precision</span><span class="op">=</span><span class="nam">self</span><span class="op">.</span><span class="nam">precision</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t217" href="#t217">217</a></span><span class="t">            <span class="nam">checkpoint</span><span class="op">=</span><span class="nam">self</span><span class="op">.</span><span class="nam">checkpoint</span><span class="op">.</span><span class="nam">policy</span><span class="op">(</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t218" href="#t218">218</a></span><span class="t">            <span class="nam">passes</span><span class="op">=</span><span class="nam">tuple</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t219" href="#t219">219</a></span><span class="t">                <span class="nam">CorpusPasses</span><span class="op">(</span><span class="nam">corpus</span><span class="op">=</span><span class="nam">corpus</span><span class="op">,</span> <span class="nam">passes</span><span class="op">=</span><span class="nam">passes</span><span class="op">)</span> <span class="key">for</span> <span class="nam">corpus</span><span class="op">,</span> <span class="nam">passes</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">passes</span><span class="op">.</span><span class="nam">items</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t220" href="#t220">220</a></span><span class="t">            <span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t221" href="#t221">221</a></span><span class="t">            <span class="nam">fractions</span><span class="op">=</span><span class="nam">tuple</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t222" href="#t222">222</a></span><span class="t">                <span class="nam">CorpusFraction</span><span class="op">(</span><span class="nam">corpus</span><span class="op">=</span><span class="nam">corpus</span><span class="op">,</span> <span class="nam">fraction</span><span class="op">=</span><span class="nam">fraction</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t223" href="#t223">223</a></span><span class="t">                <span class="key">for</span> <span class="nam">corpus</span><span class="op">,</span> <span class="nam">fraction</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">fraction</span><span class="op">.</span><span class="nam">items</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t224" href="#t224">224</a></span><span class="t">            <span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t219" href="#t219">219</a></span><span class="t">                <span class="nam">CorpusPasses</span><span class="op">(</span><span class="nam">corpus</span><span class="op">=</span><span class="nam">corpus</span><span class="op">,</span> <span class="nam">passes</span><span class="op">=</span><span class="nam">passes</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t220" href="#t220">220</a></span><span class="t">                <span class="key">for</span> <span class="nam">corpus</span><span class="op">,</span> <span class="nam">passes</span> <span class="key">in</span> <span class="nam">sorted</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">passes</span><span class="op">.</span><span class="nam">items</span><span class="op">(</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t221" href="#t221">221</a></span><span class="t">            <span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t222" href="#t222">222</a></span><span class="t">            <span class="nam">fractions</span><span class="op">=</span><span class="nam">tuple</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t223" href="#t223">223</a></span><span class="t">                <span class="nam">CorpusFraction</span><span class="op">(</span><span class="nam">corpus</span><span class="op">=</span><span class="nam">corpus</span><span class="op">,</span> <span class="nam">fraction</span><span class="op">=</span><span class="nam">fraction</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t224" href="#t224">224</a></span><span class="t">                <span class="key">for</span> <span class="nam">corpus</span><span class="op">,</span> <span class="nam">fraction</span> <span class="key">in</span> <span class="nam">sorted</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">fraction</span><span class="op">.</span><span class="nam">items</span><span class="op">(</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">            <span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t226" href="#t226">226</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -316,7 +317,7 @@
             <a class="nav" href="z_dfde86b93d59db36_artifact_store_handoff_exchange_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-10-06 21:28 +0000
+            created at 2026-10-08 18:51 +0000
         </p>
     </div>
 </footer>
