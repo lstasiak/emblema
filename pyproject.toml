@@ -203,6 +203,7 @@ allowed-confusables = ["×"]
 "scripts/strats_reference_data.py" = ["E402"]
 "scripts/strats_reference_answers.py" = ["E402"]
 "scripts/pretext_triviality_report.py" = ["E402"]
+"scripts/comparison_power_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

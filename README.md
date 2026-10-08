@@ -104,8 +104,8 @@ A diagnosis against a published network on the same stays found the deficit in t
 not the data: kept at its best epoch on held-out labels and shrunk to two blocks, the network
 trained from scratch lands within noise of the published one. After pretraining on about 10⁸
 values, under an adaptation recipe chosen beforehand, a linear probe on the encoder still trails
-the network trained from scratch at 20 and 50 labelled stays, and gains about 0.01 in area over
-the same probe on an untrained encoder.
+the network trained from scratch at 20 labelled stays (at 50 within the spread a draw of labels
+makes), and what it gains over the same probe on an untrained encoder cannot be told from zero.
 
 **In progress:** whether that gain grows with the data. The encoder is pretrained on mixtures
 about three and ten times larger (thirty, if a registered rule calls for it), adding public

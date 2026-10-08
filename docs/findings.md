@@ -223,12 +223,15 @@ a recipe chosen on the tuning side beforehand
 | against the network from nothing (two pretraining seeds) | −0.058, −0.071 | −0.022, −0.016 | −0.024, +0.013 |
 | against the same probe over an untrained encoder | +0.011, −0.002 | +0.009, +0.013 | +0.012, +0.035 |
 
-- **The probe lies below the network from nothing** at 20 and 50 stays under both pretrainings,
-  by the interval; pretraining adds about 0.01 over an untrained encoder's states.
+- **The probe lies below the network from nothing at 20 stays** under both pretrainings, past
+  the spread a draw of labels makes; at 50 stays the gap (−0.022, −0.016) is within it. What
+  pretraining adds over an untrained encoder's states at 20 and 50 stays cannot be told from zero
+  ([note](verification/intensive-care-curve.md), 2026-10-08).
 - **On FD001 the mixture's states are worse than an untrained encoder's** for a linear reading
   of the remaining life, by 3.9 to 5.9 RMSE at 50 windows.
-- **Two pretrainings differ by 0.004 at 50 stays**, the step the next point of the curve has to
-  exceed. A shape five times larger gains nothing here, once its rate is halved.
+- **Two pretrainings differ by 0.004 at 50 stays**, within a draw of labels (±0.016), so the
+  gap between pretraining seeds is not measured. A shape five times larger gains nothing
+  here, once its rate is halved.
 - Full fine-tuning gains 0.030 and 0.036 over the network from nothing at 200 stays under
   today's shape, and loses 0.021 under the larger one at its rate.
 

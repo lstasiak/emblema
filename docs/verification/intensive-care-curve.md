@@ -2458,3 +2458,43 @@ initialisation (18.2 to 20.5) under every backbone.
 - The larger shape's network from nothing uses the larger shape too, so "against from nothing"
   compares two 25.3M networks; on FD001 that network is poor.
 - The validation side has been read before at these budgets under other backbones.
+
+## 2026-10-08 — the curve's readings since its first point, read again by the seeds
+
+The sections of 2026-10-05 and 2026-10-07 read several differences by the paired interval alone.
+That interval resamples stays with the seeds held, so it cannot see how far a draw of labels
+moves a difference: about 0.04 at 50 stays between two backbones (`verdict-statistics.md`,
+2026-10-08). Below, the same campaigns' per-seed differences are read by the replacement rule's
+seed condition: the mean over seeds must exceed twice its standard error.
+
+| Comparison, closed-form probe unless named | Stays | Mean ± SE over seeds | Seed condition |
+|---|---|---|---|
+| *First point (2026-10-05)* | | | |
+| probe less the network from nothing, two pretraining seeds | 20 | −0.058 ± 0.026; −0.071 ± 0.029 | holds |
+| the same | 50 | −0.022 ± 0.023; −0.016 ± 0.019 | fails |
+| probe less the probe over an untrained encoder, two seeds | 20, 50 | −0.002 to +0.013, each SE 0.014 to 0.018 | fails |
+| the same | 200 | +0.012 ± 0.022; +0.035 ± 0.014 | fails; holds |
+| pretraining seed 2 less seed 1 | 50 | +0.004 ± 0.016 | fails |
+| full fine-tuning less the network from nothing, two seeds | 200 | +0.036 ± 0.012; +0.030 ± 0.012 | holds |
+| *Points beyond (2026-10-07)* | | | |
+| 25.3M, 10⁹ less 10⁸ | 50 | +0.031 ± 0.012 | holds |
+| 4.8M, 10⁹ over four epochs less two | 50 | +0.038 ± 0.012 | holds |
+| 10⁹, 25.3M less 4.8M | 50 | +0.054 ± 0.015 | holds |
+| 4.8M, 1.5·10⁸ less 10⁸ | 50 | −0.021 ± 0.010 | holds |
+| 4.8M, 10⁹ less 10⁸ | 50 | −0.027 ± 0.018 | fails |
+| 4.8M, 3·10⁸ less 1.5·10⁸; 10⁹ less 3·10⁸ | 50 | +0.015 ± 0.015; −0.021 ± 0.013 | fails |
+| 4.8M at 10⁹, probe less the network from nothing | 50 | −0.043 ± 0.022 | fails |
+
+Every registered verdict stands. The endpoints' least gains come from one seed's spread, and
+the rules for the recipe and the pretext carry the seed condition. The following statements do
+not hold beyond one draw of labels and are withdrawn:
+
+- that the probe lies below the network from nothing at 50 stays (it does at 20);
+- that pretraining adds about 0.01 over an untrained encoder: at 20 and 50 stays it cannot be
+  told from zero;
+- that two pretrainings differ by 0.004 as a measured step. The gap is not measured, so a
+  threshold of 0.004 leaves the rules for the slope and the length of training resting on the
+  interval alone;
+- that fifteen times the data moved the probe down at 50 stays in 4.8M, that it falls by the
+  interval from 10⁸ to 10⁹, and that the steps between points are not monotone. Only the fall at
+  1.5·10⁸ passes.
