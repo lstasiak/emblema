@@ -4,6 +4,7 @@ from torch import Tensor, nn
 
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.clipped_values import ClippedValues
+from emblema.evaluation.adapters.torch.layer_readout import LayerReadout
 from emblema.evaluation.adapters.torch.low_rank_adaptation import LowRankAdaptation
 from emblema.evaluation.adapters.torch.pooling import pooling_module
 from emblema.evaluation.adapters.torch.regression_head import RegressionHead
@@ -22,7 +23,7 @@ class AdaptedBackbone(nn.Module):
 
     Attributes:
         encoder: The backbone, with whatever the mode left trainable; fed bounded values where
-            the plan clips them.
+            the plan clips them, and read at the layer the plan names.
         pooling: One state per window out of the states per token, as the plan named it.
         head: The task's answer out of the pooled state.
     """
@@ -56,9 +57,13 @@ class AdaptedBackbone(nn.Module):
                 serve.
             LoraTargetNotFoundError: If the plan's low-rank updates name a layer the backbone
                 does not have.
+            InvalidLayerReadingError: If the plan reads a layer the encoder does not have.
         """
         shape = plan.encoder.shape
-        width = backbones.width if shape is None else shape.width
+        blocks = backbones.layers if shape is None else shape.layers
+        width = (backbones.width if shape is None else shape.width) * (
+            plan.encoder.layer.width_factor(blocks)
+        )
         head = RegressionHead(width * plan.pooling.width_factor, starting_at=starting_at)
         pooling = pooling_module(plan.pooling, width=width)
         dropout = plan.encoder.dropout
@@ -80,6 +85,8 @@ class AdaptedBackbone(nn.Module):
                     parameter.requires_grad_(True)
         if plan.lora is not None:
             LowRankAdaptation(plan.lora).applied_to(encoder)
+        if not plan.encoder.layer.is_last:
+            encoder = LayerReadout(encoder, plan.encoder.layer, blocks=blocks)
         if plan.encoder.value_clip is not None:
             encoder = ClippedValues(encoder, plan.encoder.value_clip)
         return cls(encoder, pooling, head)

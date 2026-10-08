@@ -252,3 +252,30 @@ def test_a_value_bent_by_the_tanh_does_not_move_its_state_along_one_line() -> No
     cosines = torch.nn.functional.cosine_similarity(steps[:-1], steps[1:], dim=-1)
     assert states.shape == (7, SMALL.width)
     assert cosines.min() < 0.999
+
+
+def test_every_layer_is_answered_the_embedding_first_and_the_last_as_forward_returns_it(
+    encoder: SetEncoder,
+) -> None:
+    batch = random_batch(3, 9, seed=4)
+
+    every = encoder.layer_states(*batch.args)
+
+    assert every.shape == (SMALL.layers + 1, 3, 9, SMALL.width)
+    torch.testing.assert_close(every[-1], encoder(*batch.args), rtol=0.0, atol=0.0)
+
+
+def test_a_layer_below_the_last_is_normalised_as_the_last_is(encoder: SetEncoder) -> None:
+    batch = random_batch(2, 7, seed=5)
+    embedded = (
+        encoder.value_projection(batch.features)
+        + encoder.channel_embedding(batch.channel_ids)
+        + encoder.time_encoding(batch.timestamps, batch.timeless)
+    )
+
+    every = encoder.layer_states(*batch.args)
+
+    torch.testing.assert_close(every[0], encoder.norm(embedded))
+    torch.testing.assert_close(
+        every[1], encoder.norm(encoder.blocks[0](embedded, batch.padding_mask))
+    )

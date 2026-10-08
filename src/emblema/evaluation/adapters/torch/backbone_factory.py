@@ -14,7 +14,8 @@ class BackboneFactory(Protocol):
     which a port may not. Evaluation may not import the context that owns the encoder, so the
     process that composes the adapter implements this. A backbone is any module that takes the
     five tensors of a batch in the order ``TokenTensors.args`` gives them and returns one state
-    per token, ``[batch, tokens, width]``; it is built on the host and moved by the runtime.
+    per token, ``[batch, tokens, width]``; it is built on the host and moved by the runtime. A
+    head that reads another layer asks the same module for ``layer_states`` (``LayeredEncoder``).
 
     Every encoder is asked for over the vocabulary of the task's corpus, because a corpus
     published under a vocabulary that continues the backbone's names channels the backbone never
@@ -28,6 +29,11 @@ class BackboneFactory(Protocol):
     @property
     def width(self) -> int:
         """Size of the state a token comes back as, which sizes the head."""
+        ...
+
+    @property
+    def layers(self) -> int:
+        """Number of blocks, which sizes the head of one reading every block side by side."""
         ...
 
     def pretrained(

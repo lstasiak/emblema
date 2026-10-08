@@ -5,6 +5,7 @@ import pytest
 from emblema.evaluation.domain.exceptions import InvalidEncoderSettingError, UnknownKnobError
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
+from emblema.evaluation.domain.transfer.layer_reading import LayerCombination, LayerReading
 
 
 def test_the_standard_setting_drops_nothing_and_reads_the_raw_readings() -> None:
@@ -45,6 +46,8 @@ def test_both_knobs_turn_from_the_standard_setting() -> None:
         ("width", "0"),
         ("heads", "a few"),
         ("value_embedding", "cubic"),
+        ("layer", "-1"),
+        ("layer", "first"),
     ],
 )
 def test_a_knob_the_encoder_has_not_or_a_value_it_cannot_take_is_refused(
@@ -70,6 +73,7 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
         "encoder_layers": 0,
         "encoder_feedforward_width": 0,
         "value_clip": 0.0,
+        "encoder_layer": "last",
     }
     turned = EncoderSetting(
         dropout=0.2,
@@ -80,6 +84,7 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
         layers=2,
         feedforward_width=128,
         value_clip=5.0,
+        layer=LayerReading(layer=3),
     )
     assert turned.parameters() == {
         "encoder_dropout": 0.2,
@@ -90,6 +95,7 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
         "encoder_layers": 2,
         "encoder_feedforward_width": 128,
         "value_clip": 5.0,
+        "encoder_layer": "3",
     }
 
 
@@ -142,3 +148,26 @@ def test_a_clip_bounds_the_values_fed_and_changes_no_build() -> None:
 def test_a_clip_that_is_not_a_positive_finite_number_is_refused(bound: str) -> None:
     with pytest.raises(UnknownKnobError):
         EncoderSetting.standard().tuned("value_clip", bound)
+
+
+@pytest.mark.parametrize(
+    ("value", "reading"),
+    [
+        ("0", LayerReading(layer=0)),
+        ("4", LayerReading(layer=4)),
+        ("mean", LayerReading(combination=LayerCombination.MEAN)),
+        ("concat", LayerReading(combination=LayerCombination.CONCATENATION)),
+    ],
+)
+def test_the_layer_read_turns_and_is_named_only_when_turned(
+    value: str, reading: LayerReading
+) -> None:
+    turned = EncoderSetting.standard().tuned("layer", value)
+
+    assert turned.layer == reading
+    assert turned.turned_away() == {"encoder_layer": value}
+    assert turned.builds_its_own_encoder is False
+
+
+def test_the_last_layer_named_is_the_standard_setting() -> None:
+    assert EncoderSetting.standard().tuned("layer", "last") == EncoderSetting.standard()

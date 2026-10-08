@@ -56,6 +56,7 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask  # noq
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting  # noqa: E402
+from emblema.evaluation.domain.transfer.layer_reading import LayerReading  # noqa: E402
 from emblema.evaluation.domain.transfer.training_regime import (  # noqa: E402
     ClassWeight,
     HeadStart,
@@ -698,3 +699,15 @@ def test_a_division_by_outcome_is_refused_for_a_quantity() -> None:
 
     with pytest.raises(InvalidTrainingRegimeError, match="only an outcome"):
         TorchAdaptationRuntime._divided(SAMPLE, stopping, TargetKind.CONTINUOUS)
+
+
+@pytest.mark.parametrize("reading", ["0", "mean", "concat"])
+def test_under_the_closed_form_probe_another_layer_answers_the_task_and_is_recorded(
+    published: Published, reading: str
+) -> None:
+    stated = plan(TransferMode.FROZEN_RIDGE, encoder=EncoderSetting(layer=LayerReading.of(reading)))
+
+    outcome = adapt(published, stated)
+
+    assert len(outcome.predictions) == len(VALIDATION)
+    assert outcome.plan.parameters()["encoder_layer"] == reading

@@ -29,7 +29,8 @@ class AdaptationPlan:
     them with; the encoder drops activations only where it runs
     inside the optimiser's loop, since elsewhere the dropout would change nothing; the encoder is
     built otherwise than its backbone (its own shape, its own value embedding) only where it starts
-    from no weights, and its own shape is stated whole.
+    from no weights, and its own shape is stated whole; a head reads below the last layer only
+    where the run leaves the encoder as it is.
 
     Attributes:
         mode: What the backbone's weights do while the task is learnt.
@@ -106,6 +107,11 @@ class AdaptationPlan:
         if self.encoder.shape_partly_stated:
             raise InvalidAdaptationPlanError(
                 "an encoder's own shape states its width, heads, layers and feed-forward width"
+            )
+        if not self.encoder.layer.is_last and self.mode.trains_the_encoder:
+            raise InvalidAdaptationPlanError(
+                f"{self.mode} trains the encoder, and reading layer {self.encoder.layer} would "
+                "change which of its blocks train"
             )
         # A whole shape is judged by its own invariants as it is read.
         _ = self.encoder.shape

@@ -40,6 +40,10 @@ class RestoredBackbones:
     def width(self) -> int:
         return self._trained.architecture.width
 
+    @property
+    def layers(self) -> int:
+        return self._trained.architecture.layers
+
     def pretrained(
         self, weights: ArtifactRef, *, vocabulary_size: int, dropout: float
     ) -> nn.Module:

@@ -6,17 +6,20 @@ torch = pytest.importorskip("torch")
 
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
 from emblema.evaluation.adapters.torch.clipped_values import ClippedValues  # noqa: E402
+from emblema.evaluation.adapters.torch.layer_readout import LayerReadout  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling  # noqa: E402
 from emblema.evaluation.domain.transfer.encoder_setting import (  # noqa: E402
     EncoderSetting,
     ValueEmbedding,
 )
+from emblema.evaluation.domain.transfer.layer_reading import LayerReading  # noqa: E402
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
 from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (  # noqa: E402
     NonlinearValueEmbedding,
 )
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
+from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
 from tests.evaluation.support import WEIGHTS, plan  # noqa: E402
 from tests.support.backbones import SmallBackbones  # noqa: E402
 from tests.support.encoders import SMALL  # noqa: E402
@@ -213,3 +216,34 @@ def test_a_grown_candidate_answers_windows_over_the_tasks_new_channels() -> None
 
     assert answers.shape == (3,)
     assert torch.isfinite(answers).all()
+
+
+@pytest.mark.parametrize(("reading", "factor"), [("1", 1), ("mean", 1), ("concat", SMALL.layers)])
+@pytest.mark.parametrize("backbone", [WEIGHTS, None])
+def test_a_probe_reads_the_layer_its_plan_names_under_a_head_as_wide_as_the_reading(
+    reading: str, factor: int, backbone: ArtifactRef | None
+) -> None:
+    torch.manual_seed(5)
+    built = AdaptedBackbone.under(
+        plan(
+            TransferMode.FROZEN_RIDGE,
+            backbone=backbone,
+            encoder=EncoderSetting(layer=LayerReading.of(reading), value_clip=5.0),
+        ),
+        SmallBackbones(),
+        vocabulary_size=VOCABULARY_SIZE,
+        starting_at=0.0,
+    )
+    batch = random_batch(3, 9, seed=2)
+
+    assert isinstance(built.encoder, ClippedValues)
+    assert isinstance(built.encoder.encoder, LayerReadout)
+    assert built.embed(batch).shape == (3, SMALL.width * factor)
+    assert sum(p.numel() for p in built.trainable_parameters()) == SMALL.width * factor + 1
+    assert torch.isfinite(built(batch)).all()
+
+
+def test_a_probe_at_the_last_layer_holds_the_encoder_as_it_always_did() -> None:
+    built, _ = candidate(TransferMode.FROZEN_RIDGE)
+
+    assert isinstance(built.encoder, SetEncoder)

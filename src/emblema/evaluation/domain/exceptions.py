@@ -114,6 +114,10 @@ class InvalidEncoderSettingError(EvaluationError, ValueError):
     """An encoder drops a share of its activations it cannot, or reads a grid with no steps."""
 
 
+class InvalidLayerReadingError(EvaluationError, ValueError):
+    """A head is to read a layer that is not one, or one layer and a combination at once."""
+
+
 class UnsupportedClassicalMethodError(EvaluationError):
     """A runtime was handed a classical method it has no means of fitting."""
 

@@ -58,6 +58,11 @@ class TransferMode(StrEnum):
         return self is TransferMode.LORA
 
     @property
+    def trains_the_encoder(self) -> bool:
+        """Whether a run changes what the encoder computes: its weights or updates beside them."""
+        return self.trains_backbone_weights or self.adds_low_rank_updates
+
+    @property
     def solves_the_head_in_closed_form(self) -> bool:
         """Whether the head is solved rather than trained, so the run takes no optimiser step."""
         return self is TransferMode.FROZEN_RIDGE
