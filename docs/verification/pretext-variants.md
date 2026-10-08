@@ -332,3 +332,24 @@ and 18.8 RMSE on FD001; it is the same cell under every backbone.
   alone.
 - Forward passes on MPS in fp32, the first orders of the ml pool fulfilled on this machine; the
   cells are deterministic under their seeds.
+
+## 2026-10-08 — the probes under the four backbones, read again by the seeds
+
+The section of 2026-10-06 read its descriptive differences by the paired interval, which holds
+the seeds and cannot see a draw of labels (`verdict-statistics.md`, 2026-10-08). Its rule
+carried the seed condition, so its verdict stands: neither variant replaces the mixture's masks.
+By the seed condition (mean over seeds above twice its standard error), one statement is
+withdrawn and one is narrowed:
+
+| Comparison | Stays | Mean ± SE over seeds | Seed condition |
+|---|---|---|---|
+| closed-form probe, pretraining seed 2 less seed 1 | 20 | −0.021 ± 0.012 | fails |
+| closed-form probe, forecast tail less seed 1 | 50; 200 | −0.017 ± 0.012; −0.038 ± 0.012 | fails; holds |
+| trained probe, forecast tail less seed 1 | 50 | −0.029 ± 0.011 | holds |
+| closed-form probe less the untrained encoder, seed 1; seed 2 | 50 | +0.032 ± 0.012; +0.024 ± 0.012 | holds |
+| the same under the forecast tail | 50; 200 | +0.015 ± 0.014; +0.013 ± 0.015 | fails |
+
+- Withdrawn: that a pretraining seed moves the probe by the interval at 20 stays.
+- Narrowed: the forecast tail lowers the probe at 200 stays and the trained probe at 50, past a
+  draw of labels. That it adds nothing over an untrained encoder holds, but so would a gain
+  smaller than about 0.03.
