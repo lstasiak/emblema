@@ -698,6 +698,45 @@ removes on its own pretext, not which run read the data better.**
   loss rose by 0.002 on C-MAPSS and by 0.05 on the stays, so the extra hidden tokens cost the
   stays' interior the most, as the forecast tail did their future.
 
+### 2026-10-07 — Kaggle T4 and Colab G4, fp16, against Cloudflare R2: the scale of pretraining
+
+The backbones of the curve over the scale of pretraining (`docs/preregistration.md`, "The scale
+of pretraining"), ordered from `3beb04a1` (Kaggle, run `kaggle-l5a`), `76545474` (Colab, run
+`colab-l5b`) and `b162faa4` (the longer run, `colab-l5c`), fulfilled and accepted as the
+handoff describes. The Colab runs shared one G4 under CUDA MPS, five processes at once in the
+first session and the larger shape beside two fine-tuning campaigns in the second; the longer run
+had a G4 to itself. Epoch by epoch, every corpus:
+`scripts/pretraining_curve_report.py --report-only data/report/pretraining/<backbone>`.
+
+Validation loss as a share of the trivial predictor's, at the kept epoch; UTSD is the mean over
+its 25 datasets. Seconds are the wall clock of an epoch, which a shared GPU stretches.
+
+| Experiment | Machine | Epochs | Kept | s / epoch | Stays | C-MAPSS | 2019 | TE | UTSD | Mean |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `backbone-physionet2019-m` | Kaggle T4 | 8 | 8 | 88 | — | — | 0.476 | — | — | 0.476 |
+| `backbone-scale-1e8new-m` | Colab G4, shared | 4 | 4 | 1,017 | 0.518 | 0.324 | — | 0.422 | 0.720 | 0.662 |
+| `backbone-scale-3e8-m` | Kaggle T4 | 4 | 4 | 3,893 | 0.523 | 0.329 | — | 0.412 | 0.684 | 0.632 |
+| `backbone-scale-1e9-m` | Colab G4, shared | 2 | 2 | 3,839 | 0.489 | 0.317 | 0.515 | 0.365 | 0.607 | 0.563 |
+| `backbone-scale-1e9-4ep-m` | Colab G4, alone | 4 | 4 | 1,610 | 0.491 | 0.318 | 0.518 | 0.362 | 0.581 | 0.542 |
+| `backbone-scale-1e9-512x8-m` | Colab G4, shared | 2 | 2 | 6,647 | 0.507 | 0.318 | 0.520 | 0.362 | 0.619 | 0.573 |
+| `…-without-physionet2012-m` | Colab G4, shared | 2 | 2 | 3,802 | — | 0.318 | 0.517 | 0.365 | 0.606 | 0.565 |
+| `…-without-cmapss-m` | Colab G4, shared | 2 | 2 | 3,633 | 0.485 | — | 0.512 | 0.370 | 0.597 | 0.563 |
+| `…-without-physionet2019-m` | Colab G4, shared | 2 | 2 | 3,555 | 0.498 | 0.318 | — | 0.373 | 0.617 | 0.574 |
+
+- Every run kept its last epoch: the validation fell at every epoch, and at 10⁹ values by 8 %
+  between the two.
+- Alone on a G4 an epoch of about 10⁹ values takes 1,610 s in today's shape, against 3,555 to
+  3,839 s shared with four other runs. The four runs of about 10⁹ values in the shared session
+  would take about 12,900 s one after another at the lone rate; shared, they finished in about
+  7,700 s, so sharing the GPU under MPS bought about 1.7 times the throughput.
+- Four epochs instead of two lowered the mean share from 0.563 to 0.542 and left the stays and
+  C-MAPSS where they were (0.489 and 0.491; 0.317 and 0.318).
+- In today's shape the stays' share is higher at 1.5·10⁸ and 3·10⁸ values (0.518, 0.523) than
+  under the mixture of four (0.490) at the same eight reads of the stays.
+- No run needed resuming. The sessions finished their work and then idled until stopped by hand,
+  because the cell's final wait also waited on its GPU logger; the cells now release the logger
+  before waiting.
+
 ### Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when
