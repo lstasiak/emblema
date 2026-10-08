@@ -2353,3 +2353,108 @@ specific to this run, from the first point's intervals at 50 stays (2026-10-05):
 - The validation side has been read before at 20, 50 and 200 stays under other backbones.
 - 20 stays hold two or three deaths in a draw, so they are read descriptively except in the
   largest point's rule, as registered.
+
+## 2026-10-07 — Colab G4: the curve's points at 1.5·10⁸, 3·10⁸ and 10⁹ values
+
+**Question.** Does more pretraining data carry the probe solved in closed form towards the network
+from nothing? Is the endpoint at about 10⁹ values confirmed, does the curve rise, is the largest
+point run, and was the point at 10⁹ limited by its training? The design, the reading and the
+predictions are in the section declared on 2026-10-07; the longer run's rule is registered by
+`00f529dc`.
+
+**Conditions.** Orders from `dea45d03` (twelve campaigns) and `b162faa4` (three, under the longer
+run, `sha256:340f3bf6…`); Colab G4, three or four processes under CUDA MPS, the longest order
+8,596 s. Scored on the validation side, seeds 1 to 10: 3,994 stays, 21 engines. Read with
+`data/report/l5/pairs.sh` (`scripts/campaign_pairs_report.py`, floors 0.035 in area and 3 % of
+RMSE); CSV under `data/report/l5/yardstick/`. The triviality diagnostic ran under all nine
+backbones before the reading; its result under the four not reported in the declared section
+(the larger shape, the tenth, the longer run and the 2019 stays alone) matches it: every kind
+learnt on the stays and C-MAPSS, the single token beaten on 20 to 22 of the 25 UTSD datasets.
+
+**The check on the code** failed as declared and is explained. The network from nothing at 50
+stays differs from the first point's by +0.011 [+0.004; +0.018] under the tenth, +0.013 under
+3·10⁸, −0.006 [−0.013; +0.002] under 10⁹ and −0.013 [−0.021; −0.006] in the larger shape. The
+declared check assumed the network takes only the backbone's shape. It also takes its channel
+vocabulary (`RestoredBackbones.fresh`: the larger of the task's and the backbone's): 195
+channels at the first point, 290 under the tenth and 3·10⁸, 329 under 10⁹. The channel table is
+drawn first, so its size shifts every later weight: under one seed two encoders over 195 channels
+are identical and one over 290 or 329 is not (`set_encoder`, checked directly). Backbones of one
+vocabulary repeat each other (0.624 and 0.626; 0.607 and 0.606), and the only evaluation code
+changed between the commits reads every window as before. The network from nothing is therefore
+one draw of its initialisation per vocabulary, worth about ±0.013 at 50 stays; comparisons inside
+a campaign are unaffected, and probes compared across backbones are unaffected.
+
+**Area under the ROC curve**, pooled over the ten seeds.
+
+| Backbone | Budget | From nothing | Probe, closed form | Trained probe | Fine-tuning | Probe at initialisation |
+|---|---|---|---|---|---|---|
+| 1.5·10⁸, 4.8M | 20 / 50 / 200 | 0.587 / 0.624 / 0.650 | 0.508 / 0.571 / 0.619 | 0.522 / 0.585 / 0.624 | 0.556 / 0.581 / 0.677 | 0.518 / 0.585 / 0.620 |
+| 3·10⁸, 4.8M | 20 / 50 / 200 | 0.587 / 0.626 / 0.664 | 0.523 / 0.585 / 0.614 | 0.536 / 0.593 / 0.620 | 0.539 / 0.590 / 0.640 | 0.518 / 0.585 / 0.620 |
+| 10⁹, 4.8M | 20 / 50 / 200 | 0.589 / 0.607 / 0.665 | 0.524 / 0.564 / 0.596 | 0.544 / 0.595 / 0.626 | 0.568 / 0.605 / 0.671 | 0.524 / 0.586 / 0.622 |
+| 10⁹, 4.8M, four epochs | 20 / 50 / 200 | 0.589 / 0.606 / 0.664 | 0.526 / 0.602 / 0.635 | 0.543 / 0.596 / 0.637 | 0.555 / 0.600 / 0.679 | 0.524 / 0.586 / 0.622 |
+| 10⁹, 25.3M | 20 / 50 / 200 | 0.566 / 0.608 / 0.674 | 0.526 / **0.618** / 0.639 | 0.545 / 0.601 / 0.631 | 0.583 / 0.610 / 0.669 | 0.521 / 0.578 / 0.622 |
+
+The trained probe reads the 4.8M backbones better than the closed form at 20 stays, and under
+10⁹ at every budget (0.595 against 0.564 at 50 stays); it is a secondary candidate, and every
+registered comparison below is the closed form's.
+
+**The registered comparisons at 50 stays**, the closed-form probe, paired over stays (95 %
+interval).
+
+| Comparison | Gain | Rule | Reading |
+|---|---|---|---|
+| Endpoint: probe against from nothing, 10⁹, 4.8M | **−0.043** [−0.053; −0.033] | ≥ 0.060, above zero | not confirmed |
+| Slope, 4.8M: 10⁹ less 10⁸ | **−0.027** [−0.040; −0.014] | within the floor (0.057) | flat; the probe falls by the interval |
+| Slope, 25.3M: 10⁹ less 10⁸ | **+0.031** [+0.018; +0.045] | above zero, > 0.004 | **rises** |
+| Shapes at 10⁹: 25.3M less 4.8M | **+0.054** [+0.038; +0.070] | | the larger shape |
+| Length of training: four epochs less two | **+0.038** [+0.024; +0.052] | above zero, > 0.004 | **limited by its training** |
+| 1.5·10⁸ less 10⁸ / 3·10⁸ less 1.5·10⁸ / 10⁹ less 3·10⁸ | −0.021 / +0.015 / −0.021, each by the interval | | not monotone |
+
+The largest point's eight comparisons: the larger shape's probe at 10⁹ against its probe at 10⁸
+at 50 stays lies above zero; the other seven do not (against from nothing: −0.065 and −0.043 in
+today's shape, −0.040 and +0.010 [−0.006; +0.027] in the larger; against 10⁸: −0.009 and −0.027
+in today's shape, −0.004 at 20 in the larger). **The rule is met: the point of about 3·10⁹ values
+is run.**
+
+At 200 stays the probe lies below the network from nothing under every backbone by the interval
+(−0.029 to −0.068). The pretraining's share over the probe at initialisation at 50 stays is −0.015,
+0.000 and −0.021 under the 4.8M points, +0.016 under the longer run and +0.040 [+0.023; +0.058] in
+the larger shape. Full fine-tuning gains over the network from nothing at 20 stays only in the
+larger shape (+0.017 [+0.003; +0.032]) and at 200 only under the tenth and the longer run (+0.027,
++0.015).
+
+**FD001 at 50 windows.** The closed-form probe lies above the network from nothing in RMSE under
+every backbone, by 1.8 (larger shape, whose network from nothing is itself poor at 21.6) to 7.2;
+FD001's endpoint under 10⁹ is not confirmed (22.6 against 16.8). More data lowers the probe's
+RMSE against the first point (25.5 to 22.6), but the probe stays above the same probe at
+initialisation (18.2 to 20.5) under every backbone.
+
+**Conclusions.**
+
+1. The endpoint is not confirmed: under about 10⁹ values in today's shape the closed-form probe
+   lies 0.043 below the network from nothing at 50 stays. Fifteen times the data moved the probe
+   down, not up.
+2. In today's shape the point at 10⁹ was limited by its training: four epochs instead of two
+   raise its probe by 0.038, back above the first point (0.602 against 0.591). A flat slope
+   there is not read as data that do not help.
+3. The larger shape uses the data: its probe rises by 0.031 from 10⁸ to 10⁹, lies 0.054 above
+   today's shape at 10⁹, and is the first probe of the project to reach the network from nothing
+   at 50 stays (+0.010 [−0.006; +0.027]). The largest point's rule is met through it.
+4. In 4.8M parameters the added corpora take capacity from the task: the stays' pretext error
+   rises at 1.5·10⁸ and 3·10⁸, the probe falls, and only longer training or more parameters
+   recover it.
+5. Predictions: 1 fails (the step is −0.027), 2 holds for the endpoint and fails for its size
+   (−0.043, not −0.02 to +0.01), 3 fails (the rule is met), 4 holds at 3·10⁸ (−0.006) and fails
+   for the tenth (below both), 5 fails (+0.054), 6 holds. Registered predictions: 3 fails (the
+   gain moves by 0.018), 4 fails, 5 fails, 7 holds, 8 fails (every interval at 200 lies below
+   zero).
+
+**Limitations.**
+
+- One pretraining seed per backbone; the seeds' difference at 10⁸ (0.004) stands for every point
+  and both shapes. The network from nothing is one draw of its initialisation per vocabulary.
+- The larger shape ran two epochs too, and its pretext loss was still falling; its longer run
+  waits for compute.
+- The larger shape's network from nothing uses the larger shape too, so "against from nothing"
+  compares two 25.3M networks; on FD001 that network is poor.
+- The validation side has been read before at these budgets under other backbones.
