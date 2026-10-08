@@ -67,3 +67,4 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0050](0050-a-head-solved-first-a-patience-in-steps-and-a-probe-at-initialisation.md) | A head solved first, a patience in steps and a probe at initialisation: the knobs of the adaptation recipe at one or two per cent of the labels | accepted |
 | [0051](0051-reading-the-scale-corpora.md) | Reading the scale corpora: one corpus per UTSD dataset read on each series' scale, sepsis stays cut by name | proposed |
 | [0052](0052-a-task-may-read-each-units-first-window.md) | A task may read each unit's first window: the corpus is published for pretraining, the moment of prediction is the task's | proposed |
+| [0053](0053-reading-the-encoders-states-at-another-layer.md) | Reading the encoder's states at another layer: a knob of the frozen modes, every layer through the final normalisation | proposed |
