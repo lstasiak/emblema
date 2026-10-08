@@ -41,6 +41,7 @@ kept as recorded.
 | [synthetic-control.md](synthetic-control.md) | The coupled control pair shares structure and the null pair does not, by a margin fixed beforehand; checksums agree on arm64 and x86. |
 | [masked-reconstruction.md](masked-reconstruction.md) | On the positive control every mask kind is learnt against its trivial baseline with an interval, at the published tier. |
 | [pretext-variants.md](pretext-variants.md) | On its real corpora the mixture's backbone learns every kind of mask beyond its trivial baseline on the intensive-care stays, so the harder variant of the pretext hides three quarters of a window at the same proportions; the forecast tail is learnt on every corpus, though under it the stays' hidden channels are read worse than by a regression on the others; under the harder masks the stays' single tokens are matched by interpolation, not learnt. Read by the closed-form probe at 50 stays on a fifth of the tuning side, neither variant replaces the mixture's masks: the forecast tail leaves the probe no better than an untrained encoder on the stays, the harder masks keep the gain at 200 stays and lose it below; on FD001 every pretext hurts the linear reading, the tail least. |
+| [layer-readout.md](layer-readout.md) | Declared before the run: whether the probe reads the intensive-care task better below the last block, by every layer, their mean or their concatenation, under three backbones, with the encoder at its initialisation as the width control; and the yardstick's probes under two backbones never read. |
 
 ## Evaluation
 
