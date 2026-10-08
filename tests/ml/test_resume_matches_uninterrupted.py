@@ -83,6 +83,10 @@ def test_a_run_resumed_mid_epoch_ends_exactly_where_the_uninterrupted_one_did(
     )
 
     assert [outcome.epoch for outcome in resumed] == [1, 2]
+    # The re-entered epoch reports its loss over every batch, those before the checkpoint too.
+    assert [outcome.training_loss for outcome in resumed] == [
+        outcome.training_loss for outcome in uninterrupted[1:]
+    ]
     assert (first.training_loss, first.validation_loss) == (
         uninterrupted[0].training_loss,
         uninterrupted[0].validation_loss,
@@ -125,15 +129,13 @@ def test_a_run_resumed_mid_epoch_on_mps_ends_within_what_a_repeat_of_it_would(
     )
 
     assert [outcome.epoch for outcome in resumed] == [1, 2]
-    # The re-entered epoch trained only the batches after the checkpoint, so its training loss is
-    # not the epoch's; its validation loss is what the resume produced, and is compared.
     for picked_up, left_alone in zip([first, *resumed], uninterrupted, strict=True):
         assert picked_up.validation_loss == pytest.approx(
             left_alone.validation_loss, abs=LOSS_TOLERANCE_ON_MPS
         )
-    assert resumed[-1].training_loss == pytest.approx(
-        uninterrupted[-1].training_loss, abs=LOSS_TOLERANCE_ON_MPS
-    )
+        assert picked_up.training_loss == pytest.approx(
+            left_alone.training_loss, abs=LOSS_TOLERANCE_ON_MPS
+        )
     trained, picked_up_weights = weights(whole, uninterrupted[-1]), weights(dropped, resumed[-1])
     for key, value in trained.items():
         assert float((value - picked_up_weights[key]).abs().max()) < WEIGHT_TOLERANCE_ON_MPS, key

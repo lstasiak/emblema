@@ -70,6 +70,10 @@ class _Session:
     position: RunPosition
     started: float
     best: _Best | None = None
+    # The error and hidden tokens of the epoch's batches consumed so far; a checkpoint written
+    # inside an epoch carries them, so a resumed epoch reports its loss over every batch.
+    epoch_error: float = 0.0
+    epoch_tokens: int = 0
 
 
 @dataclass
@@ -297,6 +301,7 @@ class TorchTrainingRuntime:
         session.position = position
         if checkpoint.best_relative is not None and checkpoint.best_weights is not None:
             session.best = _Best(checkpoint.best_relative, checkpoint.best_weights)
+        session.epoch_error, session.epoch_tokens = checkpoint.epoch_error, checkpoint.epoch_tokens
 
     def _epochs(self, session: _Session) -> Iterator[EpochOutcome]:
         budget = session.configuration.budget
@@ -359,7 +364,9 @@ class TorchTrainingRuntime:
         skip = session.position.batches
         checkpoint: ArtifactRef | None = None
         session.model.train()
-        epoch_error, epoch_tokens, group_tokens = 0.0, 0, 0
+        if skip == 0:
+            session.epoch_error, session.epoch_tokens = 0.0, 0
+        group_tokens = 0
         progress = _Progress.at(session, batches)
         for index, on_host in enumerate(session.training.batches_of(session.position.epoch)):
             if index < skip:
@@ -383,8 +390,8 @@ class TorchTrainingRuntime:
             session.scaler.scale(error).backward()
             hidden = int(scored)
             group_tokens += hidden
-            epoch_error += summed
-            epoch_tokens += hidden
+            session.epoch_error += summed
+            session.epoch_tokens += hidden
             progress.tokens += hidden
             stepped = budget.takes_a_step_at(index, batches)
             if stepped:
@@ -410,7 +417,7 @@ class TorchTrainingRuntime:
                 and session.configuration.checkpoint.due_at(session.position.steps)
             ):
                 checkpoint = self._write_checkpoint(session)
-        return epoch_error / max(epoch_tokens, 1), checkpoint
+        return session.epoch_error / max(session.epoch_tokens, 1), checkpoint
 
     @staticmethod
     def _say_progress(session: _Session, progress: _Progress) -> None:
@@ -507,6 +514,8 @@ class TorchTrainingRuntime:
             device_seeds=self._generator.state(),
             best_relative=None if session.best is None else session.best.relative,
             best_weights=None if session.best is None else session.best.weights,
+            epoch_error=session.epoch_error,
+            epoch_tokens=session.epoch_tokens,
         )
         written = self._store.put(checkpoint.to_bytes(), Retention.TRANSIENT)
         logger.info(

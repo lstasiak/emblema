@@ -41,6 +41,9 @@ time_frequencies = 12
 corpus_fraction = 1.0
 window = "default"
 
+# The tier signs the scale a result was computed at, not the machine: runs of tier M's scale on a
+# paid accelerator stay tier M, and the hardware of each run is recorded beside its result. L is
+# tier M's shape with a longer window or more seeds, which nothing has run yet.
 [[tiers]]
 name = "L"
 device = "A100 40 GB, bf16"

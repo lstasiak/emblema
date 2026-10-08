@@ -111,7 +111,7 @@ def test_a_corpus_is_read_once_unless_its_passes_are_stated() -> None:
 
 def test_passes_render_last_by_corpus_name_and_only_where_stated() -> None:
     weighted = configuration(
-        passes=(CorpusPasses(corpus="stays", passes=4), CorpusPasses(corpus="engines", passes=2))
+        passes=(CorpusPasses(corpus="engines", passes=2), CorpusPasses(corpus="stays", passes=4))
     )
 
     parameters = weighted.parameters()
@@ -119,8 +119,26 @@ def test_passes_render_last_by_corpus_name_and_only_where_stated() -> None:
     assert "passes.stays" not in configuration().parameters()
     assert list(parameters)[-2:] == ["passes.engines", "passes.stays"]
     assert (parameters["passes.engines"], parameters["passes.stays"]) == (2, 4)
-    # The order the passes were stated in is not a difference between runs.
-    assert parameters == configuration(passes=tuple(reversed(weighted.passes))).parameters()
+
+
+@pytest.mark.parametrize("knob", ["passes", "fractions"])
+def test_corpora_stated_out_of_the_order_of_their_names_are_refused(knob: str) -> None:
+    # Equality reads the order, so a configuration listed in another order would be another
+    # configuration: a database that keeps its keys in an order of its own would make a run
+    # differ from the one ordered.
+    stated = {
+        "passes": (
+            CorpusPasses(corpus="stays", passes=4),
+            CorpusPasses(corpus="engines", passes=2),
+        ),
+        "fractions": (
+            CorpusFraction(corpus="utsd/IoT_baian", fraction=0.25),
+            CorpusFraction(corpus="utsd/ERA5_surface", fraction=0.25),
+        ),
+    }
+
+    with pytest.raises(InvalidExperimentConfigurationError, match="order of the corpus names"):
+        configuration(**{knob: stated[knob]})
 
 
 def test_a_corpus_stated_more_than_once_is_refused() -> None:
@@ -152,8 +170,8 @@ def test_fractions_render_last_by_corpus_name_and_only_where_stated() -> None:
     mixed = configuration(
         passes=(CorpusPasses(corpus="stays", passes=4),),
         fractions=(
-            CorpusFraction(corpus="meters", fraction=0.1),
             CorpusFraction(corpus="engines", fraction=1),
+            CorpusFraction(corpus="meters", fraction=0.1),
         ),
     )
 
@@ -163,12 +181,6 @@ def test_fractions_render_last_by_corpus_name_and_only_where_stated() -> None:
     assert list(parameters)[-3:] == ["passes.stays", "fraction.engines", "fraction.meters"]
     assert (parameters["fraction.engines"], parameters["fraction.meters"]) == (1.0, 0.1)
     assert isinstance(parameters["fraction.engines"], float)
-    assert (
-        parameters
-        == configuration(
-            passes=mixed.passes, fractions=tuple(reversed(mixed.fractions))
-        ).parameters()
-    )
 
 
 def test_a_corpus_whose_fraction_is_stated_more_than_once_is_refused() -> None:
