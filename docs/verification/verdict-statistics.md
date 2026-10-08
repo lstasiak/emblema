@@ -425,3 +425,113 @@ standard error of 0.0036 to 0.0046.
   spread it carries between backbones is not simulated: no number of seeds or stays removes it.
 - Seeds other than the ten that ran are drawn by the model, whose normal parts are checked only
   against those ten.
+
+## 2026-10-08 — M1 Pro, CPU: the seeds and the stays a comparison at 50 stays needs, measured
+
+**Question.** The one declared above. How often does the replacement rule replace a configuration
+whose true gain is 0.02 at 50 stays? Which numbers of seeds and stays make it do so four times in
+five?
+
+**Conditions.** Commit `176f06eb`. MacBook Pro M1 Pro, CPU, NumPy; 17 minutes. Nine backbones of
+the yardstick: 4.8M at seeds 1 and 2 of the mixture of four, 1.5·10⁸, 3·10⁸, 10⁹ and 10⁹ over
+four epochs; 25.3M at both rates of the mixture of four and at 10⁹. The pairs are 9 of kind A,
+18 of kind B, 9 of kind C and 36 null pairs per budget. CSV under `data/report/l15/`.
+
+    uv run scripts/comparison_power_report.py \
+        --predictions data/report/l5/yardstick/predictions.csv \
+        --predictions data/report/l1/yardstick/predictions.csv \
+        --out data/report/l15 --backbone SHAPE LABEL LOW_ID HIGH_ID ... \
+        --check-predictions data/report/l2/pairs/predictions.csv \
+        --check-comparisons data/report/l2/pairs/area/comparisons.csv
+
+**The placement error.** On the 30 L-2 pairs on the fifth, the placement error over the
+bootstrap's error ranges from 0.993 to 1.024, median 1.010. This is within the 10 % declared, so
+it stands in for the bootstrap.
+
+**Where the noise comes from**, at 50 stays (standard deviations, medians over pairs):
+
+| Kind | Stays | Seed's effect | Stays scored | Interaction | Interval's error |
+|---|---|---|---|---|---|
+| A | 800 | 0.032 | 0.007 | 0.019 | 0.009 |
+| A | 2,000 | 0.032 | 0.005 | 0.012 | 0.006 |
+| B | 800 | 0.041 | 0.009 | 0.024 | 0.012 |
+| B | 2,000 | 0.041 | 0.006 | 0.015 | 0.008 |
+| C | 800 | 0.055 | 0.007 | 0.034 | 0.014 |
+| C | 2,000 | 0.055 | 0.005 | 0.022 | 0.009 |
+
+**Power at 50 stays**: the rule applied to the draws themselves, ten seeds. Medians over pairs;
+kind B with the pretraining seeds' gap at 0.004 (at 0.008 no median moves by more than 0.01).
+
+| Kind | Stays | δ = 0 | 0.02 | 0.03 | 0.04 |
+|---|---|---|---|---|---|
+| A | 800 | 0.00 | 0.39 | 0.74 | 0.92 |
+| A | 2,000 | 0.00 | 0.49 | 0.91 | 0.99 |
+| B | 800 | 0.01 | 0.21 | 0.48 | 0.73 |
+| B | 2,000 | 0.00 | 0.22 | 0.62 | 0.90 |
+| C | 800 | 0.00 | 0.06 | 0.22 | 0.52 |
+| C | 2,000 | 0.00 | 0.02 | 0.19 | 0.64 |
+
+1,000 and 1,333 stays lie between these rows. Below the resolvable gain, more stays can lower the
+power. With the seeds held, a true gain of 0.02 passes the seed condition only on a lucky draw of
+stays, and more stays make lucky draws rarer.
+
+**The model's check fails.** With the seeds' effects held at the ten measured, the normal model
+and the rule applied to the draws agree on the medians over pairs: within 0.03 for kind B at
+50 stays. Pair by pair they differ by up to 0.086, and by more than 0.05 in 76 of 720 cells (56
+with the model low, 20 high). The declaration called for agreement "of the two powers". It also
+defined a kind's power as the median over pairs, so the condition can be read either way. It is
+read pair by pair, for three reasons:
+
+- The difference is not chance or an artefact. The Monte Carlo error is about 0.01. The shift to
+  δ is off by at most 0.0006. The interval's error from the model, from placements and from the
+  spread of the mean over draws agree to the third decimal.
+- It has a cause the model omits. The interaction's spread differs between seeds by a factor of 2
+  to 2.5 (0.012 to 0.027 in one pair), and the model gives every seed one spread. That error
+  sits in the seed condition, which is the condition that decides.
+- The medians agree because errors of both signs cancel. A later reading is one comparison, not a
+  median, so the medians cannot vouch for it.
+
+By the reading declared, only the direct reading at ten seeds is reported. No other number of
+seeds is answered: the model's powers at 20 and 30 seeds in `power.csv` are not read.
+
+**Predictions.**
+
+1. Failed: kind B at ten seeds and 800 stays replaces a gain of 0.02 in 0.21 of draws, below the
+   band of 0.25 to 0.65.
+2. Not answered as stated, and its premise failed. Across the ten seeds that ran, the seed's own
+   effect (0.041) is larger than every part that depends on the stays. The interval's error at 30
+   seeds, 15 % below that at ten (from the parts of the variance), is not checked beyond ten.
+3. Failed: at 2,000 stays and ten seeds kind B replaces a gain of 0.02 in 0.22 of draws. The
+   interval's error is 0.0076, above the band of 0.005 to 0.007.
+4. Held: kind A's seed effect (0.032) lies below kind B's (0.041).
+5. Not settled. With the seeds held, false replacement is at most 0.02 in every design. The
+   model, which draws new seeds but failed its check, gives 0.04 to 0.07. The interval resamples
+   stays only, so it cannot see the seed's effect. With new seeds, only the seed condition keeps
+   the rule's size.
+
+**Decision, by the reading declared.**
+
+- No kind reaches 0.8 at a gain of 0.02 with ten seeds at any number of stays. Each keeps **ten
+  seeds** and takes the largest share, **one tuning stay in two** (`one_in = 2`, about 2,000
+  stays).
+- The gain that design replaces four times in five at 50 stays, bracketed by the grid:
+  - kind A (readouts of one backbone): between 0.02 and 0.03;
+  - kind B (one readout under two backbones): between 0.03 and 0.04;
+  - kind C (networks trained from labels): above 0.04.
+
+  A later reading under that design that does not replace says nothing about gains below these.
+- The pretext rule changes its fifth for the half by one row in `docs/preregistration.md`.
+
+**Elsewhere.** At 20 stays the design resolves less (kind B 0.85 at 0.04, 2,000 stays). At
+200 stays it resolves about as much as at 50 (kind B 0.94 at 0.04). Neither budget chooses
+anything.
+
+**Limitations.**
+
+- The stays are drawn from the validation side. The fifth matches it on the interval's error,
+  checked on the L-2 pairs.
+- A gain is a shift. A variant that changes the spread between seeds moves these powers.
+- Whether more seeds would reach 0.8 at a gain of 0.02 is not known here. Answering it needs a
+  model that gives each seed its own interaction, checked the same way, or campaigns run with more
+  seeds.
+- The pretraining seed's own spread between backbones is not in these numbers.
