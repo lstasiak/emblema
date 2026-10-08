@@ -1,0 +1,43 @@
+# The curve's yardstick on FD001 read by its probes alone, under a backbone that is not a point of
+# the curve: the probe solved in closed form, the trained probe and the same probe over the encoder
+# at its initialisation, at 50 windows, pooled over the tail's fifth. The network from nothing is
+# not run again: its cells under the mixture of four (campaigns/yardstick-50-fd001.toml) were
+# scored on the same engines and draws, so they pair.
+#
+# Seeds 1 to 10 scored on the validation engines, the same engines and draws as the curve's.
+# Defined once under each backbone read. Read descriptively, as declared in
+# docs/verification/layer-readout.md, 2026-10-08.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "yardstick-probes-50-fd001"
+purpose = "tuning"
+tier = "M"
+
+[candidates]
+competing = [
+    "untrained_ridge@pooling=tail,tail_share=0.2",
+    "frozen_ridge@pooling=tail,tail_share=0.2",
+    "frozen_probe@learning_rate=0.03,pooling=tail,tail_share=0.2",
+]
+control = "untrained_ridge@pooling=tail,tail_share=0.2"
+endpoint = "frozen_ridge@pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["50"]
+endpoint = "50"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# The turbofan's registered rules; nothing here is judged.
+minimum_relative_reduction = 0.1
+floor_share = 0.03
+alpha = 0.05
+correction = "holm"
+# Two contenders at one budget, less the endpoint.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

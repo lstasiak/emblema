@@ -1,0 +1,46 @@
+# The curve's yardstick read by its probes alone, under a backbone that is not a point of the
+# curve: the probe solved in closed form, the trained probe and the same probe over the encoder at
+# its initialisation, at 20, 50 and 200 stays. The network from nothing is not run again: its cells
+# under the mixture of four (campaigns/yardstick-low-physionet2012.toml and
+# yardstick-200-physionet2012.toml) were scored on the same stays and draws, so they pair.
+#
+# Every candidate at the recipe registered for the curve (docs/preregistration.md, "The scale of
+# pretraining"). Seeds 1 to 10 scored on the validation side, the same stays and draws as the
+# curve's. Defined once under each backbone read; the probe at initialisation takes that
+# backbone's shape. Read descriptively, as declared in docs/verification/layer-readout.md,
+# 2026-10-08.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "yardstick-probes-physionet2012"
+purpose = "tuning"
+tier = "M"
+measure = "auroc_shortfall"
+
+[candidates]
+competing = [
+    "untrained_ridge",
+    "frozen_ridge",
+    "frozen_probe@learning_rate=0.03",
+]
+control = "untrained_ridge"
+endpoint = "frozen_ridge"
+
+[budgets]
+labels = ["20", "50", "200"]
+endpoint = "50"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is descriptive.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+correction = "holm"
+# Two contenders at three budgets, less the endpoint.
+secondary_family_size = 5
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
