@@ -322,3 +322,106 @@ in 800, 799 and 799 stays.
 difference between the arms is not read here and decides nothing. The spread is of one seed's
 area; a grid pools its seeds per stay, and its floor reads the control's spread over its own
 seeds beside the fixed part.
+
+## 2026-10-08 — declared before the run: the seeds and the stays a comparison at 50 stays needs
+
+**Question.** The next comparisons on the intensive-care task are expected to differ by about
+0.02 in area. They include a readout of other layers, longer training of the larger shape, robust
+normalisation, the weight of the task's data in the mixture, pretraining hyperparameters, a second
+objective and patches. Each is read by the replacement rule on the fifth of the tuning side held
+out by seed 101 (800 stays) over seeds 1 to 10. How often does that rule replace a configuration
+whose true gain is 0.02? Which numbers of seeds and stays scored make it do so four times in five?
+
+**What is run.** Nothing is trained. The run resamples answers already exported:
+
+- `data/report/l1/yardstick/predictions.csv` and `data/report/l5/yardstick/predictions.csv` hold
+  the curve's yardstick on the validation side: 3,994 stays, seeds 1 to 10, nine backbones, at
+  20, 50 and 200 stays. These cells have been read and are read here again only for their
+  spread. No comparison of the claim is made.
+- `data/report/l2/pairs/predictions.csv` holds the pretext campaigns on the fifth itself: 800
+  stays, the same seeds, four backbones. This checks the spread at the size where the rule runs.
+
+**Three kinds of comparison**, each a stand-in for upcoming readings:
+
+| Kind | Pairs | Stands in for |
+|---|---|---|
+| A: two readouts of one backbone | `frozen_ridge` against `frozen_probe@learning_rate=0.03` under each backbone | another layer or several layers read under the same weights |
+| B: one readout under two backbones | `frozen_ridge` under every pair of backbones of the same shape | longer training, normalisation, mixture weights, hyperparameters, objective |
+| C: two networks trained from labels | the network from nothing against full fine-tuning; the network from nothing in one campaign against itself in another | normalisation and patches read without pretraining; the second pair is a null pair |
+
+**Method.**
+
+1. A design is a number of seeds K ∈ {5, 10, 20, 30} and a number of stays scored
+   N ∈ {800, 1,000, 1,333, 2,000}. These are the held-out shares one in five, four, three and
+   two, which the campaign file already offers through `one_in`.
+2. *Resampling the stays.* For each pair and budget, 2,000 draws. Each draw takes N stays from the
+   3,994 with replacement, in the two strata of the outcome at the population's prevalence.
+   For every seed it computes both sides' areas and their difference, and the standard error of
+   the difference pooled over the seeds. That standard error comes from placement values
+   (DeLong), the normal approximation of the stratified bootstrap. It is first checked
+   against the 10,000-resample intervals of `scripts/campaign_pairs_report.py` on the L-2 pairs,
+   and it is used only if the two agree to within 10 %.
+3. *Three parts of the variance* follow from the draws, per pair, budget and N:
+   - the seed's own effect on the difference: the spread between seeds within a draw, less
+     the interaction;
+   - the shared effect of which stays were scored, common to every seed of a draw;
+   - the interaction between seed and stay.
+4. *The rule, simulated.* A seed's difference is δ, the true gain, plus the seed's effect, the
+   shared effect and the interaction, each drawn from a normal distribution with the variance
+   estimated in step 3; 20,000 simulated readings per design. The rule is applied as registered:
+   - the 95 % interval of the difference pooled over seeds lies above zero;
+   - the mean over seeds exceeds twice its standard error;
+   - for kind B only, the mean exceeds the difference between the two pretraining seeds of the
+     mixture, held at 0.004 (validation side) and at 0.008 (fifth).
+5. *The model checked.* The resampled draws cannot draw a new seed: they hold the ten that ran.
+   At K = 10 the model is therefore run once more with the seeds' effects held at the ten
+   measured. It is then compared with applying the rule directly to the resampled draws, shifted
+   so that the expected difference is δ. The model is used if the two powers agree to within
+   0.05 for kind B at 50 stays at every N and δ. Otherwise only the direct reading at K = 10 is
+   reported, and no other K is answered.
+6. Power is the share of simulated readings in which the rule replaces, at
+   δ ∈ {0, 0.01, 0.02, 0.03, 0.04}. At δ = 0 it is the rate of false replacement. Each kind's
+   power is the median over its pairs; the pairs' range is printed beside it.
+
+**Reading, declared beforehand.**
+
+- For each kind at 50 stays, the chosen design is the one with the fewest seeds whose power at
+  δ = 0.02 reaches 0.8. Ties go to fewer stays held out. The number of stays scored costs almost
+  nothing; each seed costs one more cell.
+- If no design in the grid reaches 0.8 for a kind, it keeps 10 seeds and the largest share. The
+  gain that design detects four times in five is then stated as the smallest gain its readings
+  can resolve.
+- The chosen design enters each later declaration of the stage. The pretext rule in
+  `docs/preregistration.md` names the fifth and seeds 1 to 10. If the design changes it, the
+  change is a configuration row in the register, made before any reading under the new design.
+- 20 and 200 stays are reported and choose nothing. FD001 (16 engines on the fifth) is not
+  simulated: its readings are descriptive.
+
+**Predictions.** Their sources are the intervals of the L-2 pairs on the fifth
+(`pretext-variants.md`, 2026-10-06) and of the curve's pairs on the validation side
+(`intensive-care-curve.md`, 2026-10-05). At 50 stays the half-widths on the fifth are 0.015 to
+0.021, a standard error of 0.008 to 0.011. On the validation side they are 0.007 to 0.009, a
+standard error of 0.0036 to 0.0046.
+
+1. *The design in force is underpowered.* For kind B at K = 10 and N = 800, power at δ = 0.02 lies
+   between 0.25 and 0.65 (δ / SE from 1.8 to 2.5, less the interval's 1.96).
+2. *The stays limit it, not the seeds.* For kind B at N = 800, going from 10 to 30 seeds narrows
+   the interval by less than 20 %. Power at δ = 0.02 stays below 0.8 at every K.
+3. *Half the tuning side fixes it.* For kind B at N = 2,000, power at δ = 0.02 lies between 0.6
+   and 0.95 at K = 10 and reaches 0.8 at K ≤ 20. The interval's standard error scales as about
+   1/√N, between 0.005 and 0.007.
+4. *A readout is cheaper to read than a backbone.* Kind A's seed-to-seed spread of the difference
+   at 50 stays lies below kind B's: both sides share the same draw of labels and the same states.
+5. *The rule keeps its size.* The rate of false replacement at δ = 0 is at most 0.03 in every
+   design, and the null pair of kind C falls within the same bound.
+
+**Limitations.**
+
+- The stays are resampled from the validation side. The fifth is a different sample of the same
+  population; the check on the L-2 pairs bounds the difference at N = 800 only.
+- A true gain is modelled as a constant shift of every seed's difference. A real variant can also
+  change the spread.
+- Only one pair of pretraining seeds exists. Its difference enters as a fixed threshold, and the
+  spread it carries between backbones is not simulated: no number of seeds or stays removes it.
+- Seeds other than the ten that ran are drawn by the model, whose normal parts are checked only
+  against those ten.
