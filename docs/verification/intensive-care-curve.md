@@ -2498,3 +2498,65 @@ not hold beyond one draw of labels and are withdrawn:
 - that fifteen times the data moved the probe down at 50 stays in 4.8M, that it falls by the
   interval from 10⁸ to 10⁹, and that the steps between points are not monotone. Only the fall at
   1.5·10⁸ passes.
+
+## 2026-10-09 — declared before the run: the larger shape's longer run
+
+**Question.** Was the point of about 10⁹ values in the larger shape (25.3M) limited by its
+training, as today's shape was? And, read by the probe's reading since 2026-10-09 (the blocks side
+by side), how far does the larger shape's probe lie from the network from nothing at 20 and 50
+stays? The rules are in `docs/preregistration.md`, "The scale of pretraining".
+
+**Design.** `backbone-scale-1e9-512x8-4ep-m`: the publication, shape, masks, rate and schedule of
+`backbone-scale-1e9-512x8-m`, four epochs instead of two, the corpora a task reads at the same
+eight reads. Pretrained on a Colab G4 alone: its 4.8M twin took 1,610 s an epoch there, and on
+the shared G4 this shape took 1.7 times today's (6,647 against 3,839 s), so about 3 to 3.5
+hours. Ordered from a commit that holds this section.
+Every campaign scores the validation side over seeds 1 to 10, on the curve's stays, engines and
+draws.
+
+| Backbone | Campaign files | Machine |
+|---|---|---|
+| `backbone-scale-1e9-512x8-4ep-m` | `yardstick-low-physionet2012.toml`, `yardstick-200-physionet2012.toml`, `yardstick-50-fd001.toml` | Colab G4 |
+| `backbone-scale-1e9-512x8-m`, `backbone-scale-1e9-512x8-4ep-m` | `yardstick-concat-physionet2012.toml` | this machine's accelerator |
+
+**Reading, declared beforehand.** By `scripts/campaign_pairs_report.py`, 10,000 resamples, 95 %.
+
+- *Length of training*, registered: `frozen_ridge@layer=concat` under the longer run less under
+  `backbone-scale-1e9-512x8-m` at 50 stays. The larger shape was limited by its training when the
+  paired interval lies above zero and the mean over seeds exceeds twice the error between
+  backbones on the validation side, its spread read from the mixture's four pretrainings before
+  this reading.
+- *Descriptive*: under each of the two backbones, `frozen_ridge@layer=concat` against the network
+  from nothing of the larger shape's campaigns (`60427171…` at 20 and 50 stays, `13546062…` at
+  200) and against `untrained_ridge@layer=concat`; under the longer run, the yardstick's
+  candidates against the network from nothing as at every point, and FD001 at 50 windows. None
+  of these is an endpoint: the registered endpoint is today's shape's. The larger shape's slope
+  and the largest point's rule, read on 2026-10-07, are not read again.
+- *A check on the code*: the network from nothing under the longer run has the larger shape and
+  the same vocabulary of 329 channels, so it repeats `60427171…` and `13546062…` as backbones of
+  one vocabulary did before (0.607 and 0.606 at 50 stays). A paired interval that excludes zero
+  at any budget stops the reading until it is explained.
+- Before any of these is read, the pretext's triviality diagnostic runs under the longer run.
+
+**Predictions.**
+
+1. The longer run's probe less the two epochs' at 50 stays lies between 0.00 and +0.04, and the
+   rule is not met. Basis: in today's shape the longer run gained +0.018 [+0.000; +0.036] under
+   the blocks side by side on half the tuning side (`layer-readout.md`, 2026-10-09), against
+   +0.038 by the last block; the lower edge is zero.
+2. Under the two epochs, the blocks side by side lie above the network from nothing at 50 stays
+   by +0.02 to +0.07. Basis: the last block lay +0.010 [−0.006; +0.027] from it (2026-10-07),
+   and in this shape the blocks side by side gained +0.036 [+0.027; +0.044] over the last block
+   on half the tuning side.
+3. At 20 stays they lie below the network from nothing, by up to 0.04. Basis: the last block lay
+   0.040 below it, and the blocks side by side gained +0.019 [+0.013; +0.026] there.
+4. On FD001 the closed-form probe under the longer run stays above the network from nothing in
+   RMSE. Basis: under the two epochs it lay 1.8 above the larger shape's network from nothing
+   (21.6), and above it under every backbone so far (2026-10-07).
+
+**Limitations.**
+
+- One pretraining per backbone; the error between backbones carries the spread a pretraining
+  gives, read in today's shape.
+- The validation side has been read before under these and other backbones; predictions 2 and 3
+  were made after the two epochs' last block was read there.
