@@ -101,3 +101,151 @@ nothing. Under the mixture's two seeds, the probes are paired against each other
   The penalty is chosen by leave-one-out among the registered ones, and the control reads the
   same width.
 - Half of the tuning side holds the fifth that the recipe and the pretext variants were read on.
+
+## 2026-10-09 — M1 Pro, MPS: the probe at every layer, and two backbones never read
+
+**Question.** The three declared above.
+
+**Conditions.**
+
+- Orders placed at `8e69f83d` and fulfilled one after another on this machine's accelerator (MPS,
+  fp32), 2026-10-08 21:13 to 2026-10-09 11:49. The two last orders failed at once, because a
+  draft of this section had left the tree uncommitted, and were fulfilled again at 12:06.
+- 4.8M cells took about 28 s each on half of the tuning side and 25.3M cells about 74 s;
+  1,420 cells in all.
+- Pairs by `scripts/campaign_pairs_report.py` (10,000 resamples, 95 %); CSV under
+  `data/report/l8/`.
+- Gains are reductions of 1 − AUROC, positive favouring the candidate. Each cell gives the paired
+  interval, then the mean over seeds ± its standard error.
+
+**The replacement of the last block, at 50 stays on half of the tuning side.**
+
+| Backbone | `layer=mean` | `layer=concat` |
+|---|---|---|
+| 10⁹ values, 4.8M | **+0.027** [+0.019; +0.035], +0.027 ± 0.009 | **+0.030** [+0.021; +0.039], +0.030 ± 0.009 |
+| 10⁹ over four epochs, 4.8M | **+0.015** [+0.004; +0.026], +0.015 ± 0.007 | **+0.020** [+0.009; +0.030], +0.020 ± 0.007 |
+| 10⁹ values, 25.3M | **+0.030** [+0.022; +0.038], +0.030 ± 0.010 | **+0.036** [+0.027; +0.044], +0.036 ± 0.011 |
+
+Both readings meet the rule under all three backbones. The concatenation has the larger mean
+gain (0.029 against 0.024), so **`layer=concat` replaces the last block** as the probe's reading.
+
+**Every layer, at 50 stays**, against the last block:
+
+| Layer | 10⁹, 4.8M | 10⁹ four epochs, 4.8M | 10⁹, 25.3M |
+|---|---|---|---|
+| 0 (embedding) | +0.025 [+0.005; +0.046] | −0.006 [−0.027; +0.016] | +0.018 [−0.000; +0.036] |
+| 1 | +0.047 [+0.031; +0.062] | **+0.030** [+0.015; +0.045] | +0.051 [+0.037; +0.066] |
+| 2 | **+0.049** [+0.033; +0.065] | +0.017 [+0.002; +0.031] | +0.042 [+0.030; +0.055] |
+| 3 | +0.040 [+0.029; +0.052] | +0.011 [−0.003; +0.024] | **+0.053** [+0.040; +0.065] |
+| 4 | +0.017 [+0.009; +0.025] | +0.007 [−0.005; +0.020] | +0.042 [+0.031; +0.052] |
+| 5 | +0.005 [−0.001; +0.011] | +0.008 [−0.002; +0.019] | +0.022 [+0.016; +0.028] |
+| 6 | | | +0.016 [+0.010; +0.021] |
+| 7 | | | +0.004 [+0.003; +0.006] |
+
+The best layer of each backbone is in bold.
+
+**The width control, at 50 stays.**
+
+| | 10⁹, 4.8M | 10⁹ four epochs, 4.8M | 10⁹, 25.3M |
+|---|---|---|---|
+| untrained encoder: `concat` less its last block | −0.002 ± 0.006 | (the same encoder) | +0.001 ± 0.003 |
+| `concat` gain less the control's `concat` gain | +0.032 ± 0.014 | +0.022 ± 0.010 | +0.034 ± 0.010 |
+| last block less the untrained encoder | −0.021 [−0.040; −0.002] | +0.008 [−0.015; +0.031] | −0.011 [−0.031; +0.009] |
+| `concat` less the untrained encoder's `concat` | +0.011 [−0.011; +0.033], +0.011 ± 0.025 | +0.029 [+0.008; +0.050], +0.029 ± 0.020 | +0.023 [+0.001; +0.046], +0.023 ± 0.026 |
+| best layer less the untrained encoder (chosen after the fact) | +0.028 ± 0.019 | +0.038 ± 0.018 | +0.041 ± 0.018 |
+
+**20 and 200 stays**, `concat` against the last block (descriptive):
+
+| Backbone | 20 stays | 200 stays |
+|---|---|---|
+| 10⁹, 4.8M | +0.019 [+0.013; +0.025] | +0.032 [+0.021; +0.043] |
+| 10⁹ four epochs, 4.8M | +0.024 [+0.015; +0.033] | +0.014 [+0.002; +0.027] |
+| 10⁹, 25.3M | +0.019 [+0.013; +0.026] | +0.011 [+0.004; +0.018] |
+
+Every interval lies above zero, but at 20 stays no mean over seeds passes twice its standard
+error (+0.019 ± 0.013, +0.024 ± 0.012, +0.019 ± 0.010); at 200 stays all three do. The mean of
+the blocks gains less at every budget.
+
+**The pretext rule's third condition.** On the half at 50 stays, the closed-form probe under the
+mixture's pretraining seed 2 less seed 1 is −0.003 [−0.017; +0.011], −0.003 ± 0.012. The rule's
+gap on the half is therefore 0.003. At 20 and 200 stays: −0.007 and +0.009. The trained probe
+differs more: +0.012, +0.012 and **+0.029** [+0.008; +0.050] ± 0.010 at 20, 50 and 200 stays,
+the last passing both conditions between two pretrainings of one recipe.
+
+**The two backbones never read, on the validation side.** Each is compared with the same probe
+under the mixture of four at seed 1.
+
+| Probe | Stays | Stays four times as often | The stays alone, 77k |
+|---|---|---|---|
+| closed-form | 20 / 50 / 200 | −0.011 / −0.009 / −0.020 | −0.008 / **−0.031** / −0.009 |
+| trained | 20 / 50 / 200 | −0.006 / −0.008 / −0.005 | −0.011 / +0.023 / **+0.057** |
+| closed-form, against the network from nothing | 50 | −0.030 [−0.045; −0.015] | −0.052 [−0.068; −0.037] |
+
+Bold marks a difference whose mean over seeds passes twice its standard error.
+
+**FD001 at 50 windows** (descriptive), RMSE in cycles, lower is better: the layer campaigns on
+the tuning half (40 engines), part (b) on the 21 validation engines.
+
+| Reading | 10⁹, 4.8M | 10⁹ four epochs, 4.8M | 10⁹, 25.3M |
+|---|---|---|---|
+| untrained encoder, last block | 19.1 | 19.1 | 18.9 |
+| last block | 23.5 | 23.7 | 24.0 |
+| layer 0 (embedding) | 22.2 | 22.1 | **22.1** |
+| best block | **19.9** (block 1) | **19.3** (block 1) | 22.8 (blocks 2 and 3) |
+| `concat` | 22.7 | 21.8 | 23.7 |
+| untrained encoder, `concat` | 19.1 | 19.1 | 18.7 |
+
+On the validation engines, against the mixture of four at seed 1 (25.5 RMSE):
+
+- the probe under the stays four times as often reads 23.6;
+- the probe under the small backbone reads 18.5, level with its own untrained encoder (18.3;
+  −0.2 [−0.7; +0.3]);
+- the network from nothing reads 16.6.
+
+**Conclusions.**
+
+1. **The concatenation of the blocks replaces the last block** by the registered rule. It gains
+   0.020 to 0.036 at 50 stays under every backbone. At 200 stays the gain passes both conditions
+   too; at 20 stays its intervals lie above zero but the seeds do not settle it.
+2. **The task lies early in the encoder.** Under every backbone the best single layer is block 1
+   to 3. It gains 0.030 to 0.053 over the last block, more than the concatenation does, though
+   the best of six or eight layers is chosen after the fact and so lies somewhat high. Above it
+   the blocks read the task broadly less well, down to the last. This is consistent with a
+   pretext that spends the top of the network on reconstruction.
+3. **The gain is not the width's.** The untrained encoder gains nothing from reading every
+   block (−0.002 and +0.001); the pretrained encoders gain 0.022 to 0.034 more from it than
+   their controls do. What it recovers is mostly what the last block lost: read at its last
+   block, each backbone lies from 0.021 below to 0.008 above the untrained encoder; read by the
+   concatenation, 0.011 to 0.029 above it, with no mean over seeds passing twice its standard
+   error. That pretraining helps this probe at 50 stays is still not shown by the rule.
+4. **Longer training lifts the top blocks, so its gain depends on the reading.** Four epochs
+   against two (paired, same half and seeds, descriptive): +0.028 [+0.008; +0.049] ± 0.014 at
+   the last block, +0.018 [+0.000; +0.036] ± 0.017 under the concatenation. Blocks 4, 5 and the
+   last read 0.02 to 0.03 better after the longer run, blocks 2 and 3 no better. The larger
+   shape against 4.8M stays unsettled either way (+0.007 at the last block, +0.013 under the
+   concatenation).
+5. **On FD001 the same shape, weaker, and no layer helps.** Block 1 of the 4.8M backbones reads
+   the remaining life within 0.2 to 0.8 RMSE of the untrained encoder, where the last block lies
+   4.4 to 4.6 above it. The concatenation recovers less than half of that. In 25.3M no layer
+   comes within 3 RMSE of the untrained encoder. No layer of any backbone beats it.
+
+**Predictions.** All six held: `concat` gained 0.020 to 0.036 (1); the best 4.8M layers are 2
+and 1 (2); on FD001 the embedding lies closer to the untrained encoder than the last block (3);
+the controls gained nothing (4); the seeds' gap is −0.003 (5); the stays four times as often lie
+0.009 below the mixture, and below it at every budget by less than the rule detects, while the
+small backbone's closed-form probe lies below it (6).
+
+**What follows.** The stage's later readings take `frozen_ridge@layer=concat` as the closed-form
+probe, by a row in `docs/preregistration.md`; points already read are not read again. A single
+early block reads better still, but the rule did not offer it, and choosing it per backbone
+would be a selection of its own.
+
+**Limitations.**
+
+- One pretraining per backbone.
+- The tuning half holds the fifth on which the recipe and the pretext variants were read.
+- The trained probe was not read at other layers. Under the small backbone it gains at 200
+  stays where the closed-form probe loses at 50, so the two heads read that backbone
+  differently. That is not explored here.
+- At 50 labels the concatenation hands the closed-form probe 1,536 or 4,096 columns, its
+  penalty chosen by leave-one-out; the control reads the same width.
