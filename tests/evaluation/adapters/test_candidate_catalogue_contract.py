@@ -34,6 +34,7 @@ from emblema.evaluation.domain.heads.head_pooling import (
 )
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
+from emblema.evaluation.domain.transfer.layer_reading import LayerReading
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.evaluation.ports.candidate_catalogue import CandidateCatalogue
 from tests.evaluation.support import (
@@ -413,6 +414,30 @@ def test_a_dropout_is_refused_where_the_probe_states_every_window_once() -> None
 )
 def test_an_encoder_setting_no_encoder_can_take_is_refused(name: str) -> None:
     with pytest.raises(UnknownCandidateError, match="names no variant"):
+        BOTH_ARMS.describe(CandidateRef(name))
+
+
+def test_a_probe_reads_another_layer_and_is_described_by_that_alone() -> None:
+    solved = arm(
+        CandidateRef("frozen_ridge"), TransferMode.FROZEN_RIDGE, backbone=WEIGHTS, lora=None
+    )
+    ridges = BackboneArmCatalogue((solved,))
+    base = ridges.describe(solved.ref)
+
+    variant = ridges.describe(CandidateRef("frozen_ridge@layer=concat,pooling=tail"))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    before = {p.name: p.value for p in base.method.parameters}
+    assert {name: stated[name] for name in stated.keys() - before.keys()} == {
+        "encoder_layer": "concat"
+    }
+    assert variant.budget == base.budget
+    assert ridges.arm_of(variant.ref).encoder.layer == LayerReading.of("concat")
+
+
+@pytest.mark.parametrize("name", ["full_fine_tuning@layer=2", "from_scratch@layer=mean"])
+def test_a_layer_below_the_last_is_refused_where_the_run_trains_the_encoder(name: str) -> None:
+    with pytest.raises(UnknownCandidateError, match="trains the encoder"):
         BOTH_ARMS.describe(CandidateRef(name))
 
 

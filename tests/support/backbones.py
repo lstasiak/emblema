@@ -37,6 +37,10 @@ class SmallBackbones:
     def width(self) -> int:
         return SMALL.width
 
+    @property
+    def layers(self) -> int:
+        return SMALL.layers
+
     def pretrained(
         self, weights: ArtifactRef, *, vocabulary_size: int, dropout: float
     ) -> nn.Module:

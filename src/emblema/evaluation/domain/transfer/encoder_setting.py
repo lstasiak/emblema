@@ -1,10 +1,11 @@
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from math import ceil, isfinite
 from typing import ClassVar, Self
 
 from emblema.evaluation.domain.exceptions import InvalidEncoderSettingError, UnknownKnobError
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
+from emblema.evaluation.domain.transfer.layer_reading import LayerReading
 
 
 class ValueEmbedding(StrEnum):
@@ -46,6 +47,10 @@ class EncoderSetting:
     network fed the same tokens lost most of its lead to the readings beyond five standard
     deviations once its value embedding could pass them.
 
+    The layer read chooses which of the encoder's layers the head reads; it changes neither the
+    encoder nor what it is fed. Reading below the last layer leaves the blocks above it out of
+    what a run could train, so the plan takes it only where the encoder's weights do not train.
+
     Invariants: the dropout lies in ``[0, 1)``; a grid has a positive, finite resolution; every
     count of the shape stated is positive; a clip is positive and finite.
 
@@ -60,6 +65,7 @@ class EncoderSetting:
         feedforward_width: The encoder's own feed-forward width; ``None`` for its backbone's.
         value_clip: Bound on a token's value at the input, either side of zero; ``None`` for the
             readings as they are.
+        layer: Which of the encoder's layers the head reads.
     """
 
     dropout: float = 0.0
@@ -70,6 +76,7 @@ class EncoderSetting:
     layers: int | None = None
     feedforward_width: int | None = None
     value_clip: float | None = None
+    layer: LayerReading = field(default_factory=LayerReading.last)
 
     KNOBS: ClassVar[tuple[str, ...]] = (
         "dropout",
@@ -80,6 +87,7 @@ class EncoderSetting:
         "layers",
         "feedforward_width",
         "value_clip",
+        "layer",
     )
     _SHAPE: ClassVar[tuple[str, ...]] = ("width", "heads", "layers", "feedforward_width")
 
@@ -144,8 +152,8 @@ class EncoderSetting:
         """This setting with ``knob`` turned to ``value``.
 
         The dropout, the grid's resolution and the clip are read as numbers, the shape's counts
-        as whole numbers and the value's embedding by its name: a knob left at ``None`` has no
-        value to take its type from.
+        as whole numbers, the value's embedding and the layer read by their names: a knob left at
+        ``None`` has no value to take its type from.
 
         Raises:
             UnknownKnobError: If the setting has no such knob, or it cannot take that value.
@@ -168,6 +176,8 @@ class EncoderSetting:
                     return replace(self, grid_resolution=float(value))
                 case "value_clip":
                     return replace(self, value_clip=float(value))
+                case "layer":
+                    return replace(self, layer=LayerReading.of(value))
                 case _:
                     return replace(self, dropout=float(value))
         except (InvalidEncoderSettingError, ValueError) as error:
@@ -195,6 +205,7 @@ class EncoderSetting:
             "value_embedding": str(self.value_embedding),
             **{f"encoder_{label}": getattr(self, label) or 0 for label in self._SHAPE},
             "value_clip": 0.0 if self.value_clip is None else self.value_clip,
+            "encoder_layer": str(self.layer),
         }
 
     def turned_away(self) -> dict[str, float | int | str]:
@@ -218,4 +229,6 @@ class EncoderSetting:
                 turned[f"encoder_{label}"] = count
         if self.value_clip is not None:
             turned["value_clip"] = self.value_clip
+        if not self.layer.is_last:
+            turned["encoder_layer"] = str(self.layer)
         return turned

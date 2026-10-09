@@ -1,5 +1,6 @@
 from typing import Self
 
+import torch
 from torch import Tensor, nn
 
 from emblema.pretraining.adapters.encoder.encoder_block import EncoderBlock
@@ -100,11 +101,38 @@ class SetEncoder(nn.Module):
         timeless: Tensor,
         padding_mask: Tensor,
     ) -> Tensor:
-        states = (
+        states = self._embedded(features, channel_ids, timestamps, timeless)
+        for block in self.blocks:
+            states = block(states, padding_mask)
+        return self.norm(states)
+
+    def layer_states(
+        self,
+        features: Tensor,
+        channel_ids: Tensor,
+        timestamps: Tensor,
+        timeless: Tensor,
+        padding_mask: Tensor,
+    ) -> Tensor:
+        """Every layer's states, ``[blocks + 1, batch, tokens, width]``, the embedding first.
+
+        Each passes through the final normalisation, as the last always has: the blocks add to a
+        residual stream that is normalised only at the end, so a state read below it is
+        normalised the same way. The last of them is what ``forward`` returns.
+        """
+        states = self._embedded(features, channel_ids, timestamps, timeless)
+        every = [self.norm(states)]
+        for block in self.blocks:
+            states = block(states, padding_mask)
+            every.append(self.norm(states))
+        return torch.stack(every)
+
+    def _embedded(
+        self, features: Tensor, channel_ids: Tensor, timestamps: Tensor, timeless: Tensor
+    ) -> Tensor:
+        embedded: Tensor = (
             self.value_projection(features)
             + self.channel_embedding(channel_ids)
             + self.time_encoding(timestamps, timeless)
         )
-        for block in self.blocks:
-            states = block(states, padding_mask)
-        return self.norm(states)
+        return embedded

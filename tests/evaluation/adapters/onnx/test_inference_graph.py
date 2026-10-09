@@ -22,6 +22,8 @@ from emblema.evaluation.domain.exceptions import (
 )
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling
 from emblema.evaluation.domain.labels.target_kind import TargetKind
+from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
+from emblema.evaluation.domain.transfer.layer_reading import LayerReading
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.tokens import N_FEATURES
@@ -233,5 +235,13 @@ def test_a_graph_that_strays_from_the_measured_answers_is_refused(lora: Exported
 def test_a_network_from_nothing_of_its_own_shape_and_value_embedding_matches_pytorch() -> None:
     # The tanh between the value's two maps and the narrower blocks have to survive the export.
     pair = exported(TransferMode.FROM_SCRATCH, None, OWN_BUILD)
+
+    assert_matches_eager(pair, random_batch(3, 41, seed=41, padding=17))
+
+
+@pytest.mark.parametrize("reading", ["1", "concat"])
+def test_a_probe_read_at_another_layer_matches_pytorch(reading: str) -> None:
+    # The stacked layers and the slice or concatenation of them have to survive the export.
+    pair = exported(TransferMode.FROZEN_RIDGE, None, EncoderSetting(layer=LayerReading.of(reading)))
 
     assert_matches_eager(pair, random_batch(3, 41, seed=41, padding=17))

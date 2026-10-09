@@ -6,12 +6,14 @@ from emblema.evaluation.domain.exceptions import (
 )
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
+from emblema.evaluation.domain.transfer.layer_reading import LayerReading
 from emblema.evaluation.domain.transfer.training_regime import (
     ClassWeight,
     HeadStart,
     TrainingRegime,
 )
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode
+from emblema.shared.kernel.artifacts import ArtifactRef
 from tests.evaluation.support import LORA, PENALTIES, WEIGHTS, plan
 
 
@@ -214,3 +216,25 @@ def test_a_stop_waits_in_steps_as_it_waits_in_epochs() -> None:
     )
     assert stopped.regime.stops
     assert stopped.parameters()["patience_steps"] == 40
+
+
+@pytest.mark.parametrize(
+    "mode", [TransferMode.FROM_SCRATCH, TransferMode.FULL_FINE_TUNING, TransferMode.LORA]
+)
+def test_a_layer_below_the_last_is_refused_where_the_run_trains_the_encoder(
+    mode: TransferMode,
+) -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="trains the encoder"):
+        plan(mode, encoder=EncoderSetting(layer=LayerReading(layer=2)))
+
+
+@pytest.mark.parametrize("mode", [TransferMode.FROZEN_PROBE, TransferMode.FROZEN_RIDGE])
+@pytest.mark.parametrize("backbone", [WEIGHTS, None])
+def test_a_frozen_encoder_is_read_at_any_layer(
+    mode: TransferMode, backbone: ArtifactRef | None
+) -> None:
+    reading = LayerReading.of("concat")
+
+    assert plan(mode, backbone=backbone, encoder=EncoderSetting(layer=reading)).encoder.layer == (
+        reading
+    )

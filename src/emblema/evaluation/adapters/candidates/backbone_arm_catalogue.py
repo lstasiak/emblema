@@ -81,6 +81,11 @@ class BackboneArmCatalogue:
                 f"{variant.ref} names no variant: {turned.mode} starts from pretrained weights, "
                 "which fix its encoder's build"
             )
+        if not turned.encoder.layer.is_last and turned.mode.trains_the_encoder:
+            raise UnknownCandidateError(
+                f"{variant.ref} names no variant: {turned.mode} trains the encoder, and reading "
+                f"layer {turned.encoder.layer} would change which of its blocks train"
+            )
         if turned.encoder.shape_partly_stated:
             raise UnknownCandidateError(
                 f"{variant.ref} names no variant: an encoder's own shape states its width, "
