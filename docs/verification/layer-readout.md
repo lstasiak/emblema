@@ -249,3 +249,51 @@ would be a selection of its own.
   differently. That is not explored here.
 - At 50 labels the concatenation hands the closed-form probe 1,536 or 4,096 columns, its
   penalty chosen by leave-one-out; the control reads the same width.
+
+## 2026-10-09 — declared before the run: the pretraining seeds' difference under the blocks side by side
+
+**Question.** The blocks side by side are now the closed-form probe's reading. How far apart does
+that probe read the mixture of four's two pretraining seeds, on half of the tuning side and on the
+validation side? Every rule that compares backbones by this probe takes that difference as a
+threshold, so it is read before any of them.
+
+**Design.** Only probes, on this machine's accelerator, ordered from a commit that holds this
+section. Under `backbone-mixed4-m` at pretraining seeds 1 and 2, the closed-form probe over the
+blocks side by side (`frozen_ridge@layer=concat`) and the same reading of the encoder at its
+initialisation (`untrained_ridge@layer=concat`), at 20, 50 and 200 stays, seeds 1 to 10.
+
+| Side | Campaign file | Cells |
+|---|---|---|
+| half of the tuning side (seed 101, `one_in = 2`) | `pretext-concat-half-physionet2012.toml` | 2 × 60 |
+| validation | `yardstick-concat-physionet2012.toml` | 2 × 60 |
+
+About 240 cells; from L-8's costs, about two hours.
+
+**Pairs.** `scripts/campaign_pairs_report.py`, 10,000 resamples, 95 %, with the mean over seeds
+and its standard error: seed 2 against seed 1 on each side at each budget; on each side, the
+blocks side by side against the last block under seed 1 (the half's campaigns of 2026-10-08 and
+the yardstick's campaigns score the same stays and draws).
+
+**Reading, declared beforehand.**
+
+- *The pretext rule's third condition* becomes the absolute difference between the two seeds by
+  this probe at 50 stays on the half.
+- *The difference between the pretraining seeds* that the slope and the length of training name
+  becomes the absolute difference between the two seeds by this probe at 50 stays on the
+  validation side (`docs/preregistration.md`, "The scale of pretraining").
+- Everything else is descriptive.
+
+**Predictions.**
+
+1. On the half at 50 stays, seed 2 less seed 1 lies between −0.02 and +0.02. Basis: by the last
+   block, −0.003 [−0.017; +0.011] (2026-10-09 above); a reading of other blocks may move it, so
+   the range is rounded outwards.
+2. On the validation side at 50 stays, it lies between −0.03 and +0.04. Basis: by the last block,
+   +0.004 ± 0.016.
+3. *Judgement.* Under seed 1 the blocks side by side lie above the last block at 50 stays on both
+   sides. Under the three backbones of about 10⁹ values they gained 0.020 to 0.036 on the half.
+
+**Limitations.**
+
+- Two pretrainings give one difference. It is a point with a standard error of about 0.012 to
+  0.016, used as a threshold because the rules are registered that way.
