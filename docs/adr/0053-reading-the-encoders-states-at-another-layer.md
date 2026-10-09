@@ -1,7 +1,8 @@
 # ADR-0053: Reading the encoder's states at another layer — a knob of the frozen modes, every layer through the final normalisation
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-08
+- 2026-10-09: accepted after the reading it was built for; the blocks side by side replaced the last block by the registered rule ([`layer-readout.md`](../verification/layer-readout.md), 2026-10-09).
 
 ## Context
 
