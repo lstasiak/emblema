@@ -1,0 +1,53 @@
+# Which masks the curve over the scale of pretraining is pretrained under, read by the probe's
+# reading since 2026-10-09: the probe solved in closed form over the encoder's blocks side by side,
+# and the same reading of the encoder at its initialisation, on stays held out of the tuning side;
+# the validation side is not read.
+#
+# The probe chooses, at 50 stays: a variant replaces the mixture's masks where its paired interval
+# against the mixture at seed 1 lies above zero, its mean over seeds exceeds twice its standard
+# error and the mean exceeds the difference between the mixture's two seeds here. 20 and 200 stays
+# are read beside it. Only probes run: every cell trains no encoder, so the campaign runs on the
+# machine that orders it.
+#
+# Every cell is scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10
+# (docs/verification/verdict-statistics.md, 2026-10-08). Candidates and backbones pair by stay and
+# seed. A campaign divided this way chooses nothing. Defined first under the mixture of four at its
+# two pretraining seeds, whose difference here is the rule's third condition
+# (docs/verification/layer-readout.md, 2026-10-09), then under each variant read.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "pretext-concat-half-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "untrained_ridge@layer=concat",
+    "frozen_ridge@layer=concat",
+]
+control = "untrained_ridge@layer=concat"
+endpoint = "frozen_ridge@layer=concat"
+
+[budgets]
+labels = ["20", "50", "200"]
+endpoint = "50"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+# One contender at three budgets, less the endpoint.
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
