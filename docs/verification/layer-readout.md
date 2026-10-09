@@ -297,3 +297,80 @@ the yardstick's campaigns score the same stays and draws).
 
 - Two pretrainings give one difference. It is a point with a standard error of about 0.012 to
   0.016, used as a threshold because the rules are registered that way.
+
+## 2026-10-09 — M1 Pro, MPS: the pretraining seeds' difference under the blocks side by side
+
+**Question.** The one declared above.
+
+**Conditions.**
+
+- Orders placed at `36b83bf9` and fulfilled one after another on this machine's accelerator (MPS,
+  fp32), 2026-10-09 18:27 to 21:23. Cells took about 28 s on the half and 53 s on the validation
+  side; 240 cells in all.
+- Pairs by `scripts/campaign_pairs_report.py` (10,000 resamples, 95 %); CSV under
+  `data/report/l9/`. Gains as above: reductions of 1 − AUROC, the paired interval, then the mean
+  over seeds ± its standard error.
+
+**Seed 2 less seed 1, by the blocks side by side.**
+
+| Side | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| half of the tuning side | −0.013 [−0.024; −0.003], −0.013 ± 0.011 | −0.005 [−0.016; +0.006], −0.005 ± 0.008 | +0.018 [+0.004; +0.033], +0.018 ± 0.008 |
+| validation | −0.018 [−0.027; −0.010], −0.018 ± 0.008 | +0.003 [−0.003; +0.010], +0.003 ± 0.008 | +0.015 [+0.005; +0.026], +0.015 ± 0.010 |
+
+The pretext rule's third condition is therefore **0.005**. The difference between the pretraining
+seeds that the slope and the length of training take, read by this probe, is **0.003**.
+
+**The blocks side by side against the last block, under seed 1.**
+
+| Side | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| half of the tuning side | +0.011 [+0.005; +0.018] | +0.011 [+0.006; +0.017], +0.011 ± 0.006 | +0.007 [−0.002; +0.016] |
+| validation | +0.019 [+0.014; +0.023] | +0.016 [+0.012; +0.020], +0.016 ± 0.003 | +0.008 [+0.003; +0.014] |
+
+The untrained encoder's blocks side by side against its last block, on the validation side: −0.003,
+−0.001 and −0.009 at 20, 50 and 200 stays.
+
+**Against the untrained encoder's blocks side by side** (paired after the run, not declared;
+descriptive):
+
+| Side | Seed | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|---|
+| half | 1 | +0.031 ± 0.025 | +0.020 [+0.003; +0.038], ± 0.017 | +0.019 ± 0.013 |
+| half | 2 | +0.018 ± 0.021 | +0.015 [+0.001; +0.030], ± 0.018 | **+0.038** ± 0.013 |
+| validation | 1 | **+0.032** ± 0.013 | **+0.026** [+0.015; +0.036], ± 0.012 | +0.030 ± 0.020 |
+| validation | 2 | +0.013 ± 0.016 | **+0.029** [+0.021; +0.037], ± 0.008 | **+0.045** ± 0.012 |
+
+Bold marks an interval above zero with a mean over seeds above twice its standard error.
+
+**Conclusions.**
+
+1. **The thresholds are small: 0.005 on the half, 0.003 on the validation side.** Both lie inside
+   the predicted ranges.
+2. **At 50 stays the two pretrainings agree more closely than at the other budgets.** At 20 and
+   200 stays they differ by 0.013 to 0.018, with the sign turning between them, and in two of
+   those four cells the difference passes both conditions. Net of the draws of labels and stays,
+   the six differences put the pretraining's own spread of a difference between two backbones at
+   about 0.007 to 0.010 (one standard deviation, from one pair of pretrainings). A threshold read
+   at 50 stays alone is one draw of that spread, and here a small one.
+3. **The blocks side by side read the mixture of four better than its last block**, by 0.011 on
+   the half and 0.016 on the validation side at 50 stays: less than under the backbones of about
+   10⁹ values (0.020 to 0.036), and less at 200 stays.
+4. **Read this way, the mixture of four beats its untrained encoder at 50 stays on the validation
+   side under both pretraining seeds** (+0.026 and +0.029, each passing both conditions and the
+   seeds' difference). It was paired after the run and changes no verdict: points already read
+   are not read again. On the half the same comparison does not pass the seed condition.
+5. **Against the network from nothing** (yardstick cells on the same stays and draws, paired after
+   the run): the blocks side by side lie −0.006 [−0.021; +0.009] and −0.003 [−0.015; +0.010]
+   under the two seeds at 50 stays, where the last block lies −0.022 [−0.036; −0.007]; at 20
+   stays they lie −0.040 and −0.058 below it.
+
+**Predictions.** All three held: −0.005 on the half (1), +0.003 on the validation side (2), and
+the blocks side by side above the last block on both sides (3).
+
+**Limitations.**
+
+- Two pretrainings give one difference per side and budget; the threshold at 50 stays is a
+  point with a standard error of 0.008.
+- The comparisons with the untrained encoder and the network from nothing were chosen after the
+  run; they are leads for a declared reading, not results.
