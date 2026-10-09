@@ -5,10 +5,9 @@
 # campaigns were scored on the same stays and draws, so they pair.
 #
 # Seeds 1 to 10 scored on the validation side, the same stays and draws as the curve's. Defined
-# first under the mixture of four at its two pretraining seeds, whose difference here bounds the
-# rules that compare backbones by this probe (docs/preregistration.md, "The scale of
-# pretraining"; docs/verification/layer-readout.md, 2026-10-09), then under each backbone a rule
-# reads. The probe at initialisation takes that backbone's shape.
+# first under the mixture of four at its pretraining seeds, which give the error between backbones
+# that the rules comparing backbones by this probe read (docs/preregistration.md, "The scale of
+# pretraining"), then under each backbone a rule reads. The probe at initialisation takes that backbone's shape.
 #
 # Committed before the campaign runs, for the reason every campaign file is.
 

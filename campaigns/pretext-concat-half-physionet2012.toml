@@ -4,16 +4,15 @@
 # the validation side is not read.
 #
 # The probe chooses, at 50 stays: a variant replaces the mixture's masks where its paired interval
-# against the mixture at seed 1 lies above zero, its mean over seeds exceeds twice its standard
-# error and the mean exceeds the difference between the mixture's two seeds here. 20 and 200 stays
-# are read beside it. Only probes run: every cell trains no encoder, so the campaign runs on the
+# against the mixture at seed 1 lies above zero and its mean over seeds exceeds twice the error
+# between backbones, which the mixture's pretraining seeds read here give
+# (docs/preregistration.md). 20 and 200 stays are read beside it. Only probes run: every cell trains no encoder, so the campaign runs on the
 # machine that orders it.
 #
 # Every cell is scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10
 # (docs/verification/verdict-statistics.md, 2026-10-08). Candidates and backbones pair by stay and
 # seed. A campaign divided this way chooses nothing. Defined first under the mixture of four at its
-# two pretraining seeds, whose difference here is the rule's third condition
-# (docs/verification/layer-readout.md, 2026-10-09), then under each variant read.
+# pretraining seeds, then under each variant read.
 #
 # Committed before the campaign runs, for the reason every campaign file is.
 
