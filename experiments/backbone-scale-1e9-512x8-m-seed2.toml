@@ -1,0 +1,78 @@
+# The point of about 10⁹ observed values in the shape one step up again at a second seed,
+# everything else the file of backbone-scale-1e9-512x8-m.toml to the step. At seed 1 its probe,
+# read by the encoder's blocks side by side, lay above the network from nothing at 50 stays by
+# about the spread one pretraining gives; this pretraining asks whether that lead is the recipe's
+# or the draw's.
+name = "backbone-scale-1e9-512x8-m-seed2"
+tier = "M"
+corpora = [
+    "cmapss",
+    "skab",
+    "esa_ad",
+    "physionet2012",
+    "tep",
+    "utsd/ERA5_pressure",
+    "utsd/ERA5_surface",
+    "utsd/Energy_australian_electricity_demand_dataset",
+    "utsd/Energy_london_smart_meters_dataset_without_missing_values",
+    "utsd/Environment_AustraliaRainfall",
+    "utsd/Environment_BeijingPM25Quality",
+    "utsd/Environment_BenzeneConcentration",
+    "utsd/Health_AtrialFibrillation",
+    "utsd/Health_BIDMC32HR",
+    "utsd/Health_IEEEPPG",
+    "utsd/Health_MotorImagery",
+    "utsd/Health_PigArtPressure",
+    "utsd/Health_PigCVP",
+    "utsd/Health_SelfRegulationSCP1",
+    "utsd/Health_SelfRegulationSCP2",
+    "utsd/Health_TDBrain_csv",
+    "utsd/IoT_baian",
+    "utsd/Nature_EigenWorms",
+    "utsd/Nature_Phoneme",
+    "utsd/Nature_StarLightCurves",
+    "utsd/Nature_Worms",
+    "utsd/Nature_kdd_cup_2018_dataset_without_missing_values",
+    "utsd/Nature_temperature_rain_dataset_without_missing_values",
+    "utsd/Transport_pedestrian_counts_dataset",
+    "utsd/Web_kaggle_web_traffic_dataset_without_missing_values",
+    "physionet2019",
+]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[shape]
+width = 512
+heads = 8
+layers = 8
+feedforward_width = 2048
+time_frequencies = 12
+
+[passes]
+cmapss = 4
+physionet2012 = 4
+physionet2019 = 4
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as every mixture since the satellite corpus was read so.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 2
+batch_size = 8
+accumulation_steps = 4
+learning_rate = 5e-4
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 2
+
+[checkpoint]
+every_steps = 2000
