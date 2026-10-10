@@ -2560,3 +2560,111 @@ draws.
   gives, read in today's shape.
 - The validation side has been read before under these and other backbones; predictions 2 and 3
   were made after the two epochs' last block was read there.
+
+## 2026-10-10 — Colab G4 and M1 Pro, MPS: the larger shape's longer run
+
+**Question.** The two declared on 2026-10-09: was the larger shape limited by its training, and how
+far does its probe, read by the blocks side by side, lie from the network from nothing?
+
+**Conditions.**
+
+- `backbone-scale-1e9-512x8-4ep-m` pretrained on a Colab G4 alone (order from `6c98ebb7`, run
+  `colab-l9a`), about 3,650 s an epoch; accepted as `e46eb056…`, weights `sha256:daabe69d…`, its
+  last epoch kept. Its stored configuration differs from `backbone-scale-1e9-512x8-m`'s only in
+  the epochs and the passes of the corpora a task reads.
+- The yardstick's three campaigns under it on a Colab G4 under CUDA MPS (`545e7449…`,
+  `eab2615c…`, `0679b8f3…`, the longest 8,033 s); `yardstick-concat` under both larger backbones
+  on this machine's accelerator (`53ecb225…`, `b4c5ea6c…`, about 240 s a cell). Validation side,
+  seeds 1 to 10.
+- Pairs by `scripts/campaign_pairs_report.py`, 10,000 resamples, 95 %; CSV under
+  `data/report/l9/pairs-l9/`. The error between backbones from four pretraining seeds: s = 0.0104
+  on the validation side (`layer-readout.md`, 2026-10-10).
+- The triviality diagnostic under the longer run, before the reading, matches the two epochs':
+  every kind learnt on the stays and C-MAPSS, the single token beaten on 21 of the 25 UTSD
+  datasets; the stays' errors move by less than 0.002.
+- The check on the code holds: the network from nothing repeats the larger shape's earlier cells,
+  +0.000, +0.004 [−0.001; +0.010] and −0.004 [−0.013; +0.005] at 20, 50 and 200 stays.
+
+**The pretext.** Validation loss as a share of the trivial predictor's, at the last epoch.
+
+| Run | Epochs | Training loss | Stays | C-MAPSS | Mean over corpora |
+|---|---|---|---|---|---|
+| `backbone-scale-1e9-512x8-m` | 2 | 0.1761 | 0.507 | 0.318 | 0.573 |
+| `backbone-scale-1e9-512x8-4ep-m` | 4 | 0.1767 | 0.509 | 0.322 | 0.579 |
+
+Nearly twice the steps end at the same training loss and a slightly worse validation: the loss
+falls by 0.005 over the fourth epoch, under a rate already near its floor, and of the corpora the
+satellite telemetry alone improves (0.306 to 0.283; UTSD's mean 0.619 to 0.627, the corpora a
+task reads 0.002 to 0.007 worse). In today's shape the longer run lowered the mean from 0.563 to
+0.542. Because the corpora a task reads keep their eight reads while every other corpus is read
+twice as often, the longer run also halves, roughly, the task corpora's share of the steps.
+
+**The rule, at 50 stays.** `frozen_ridge@layer=concat` under four epochs less under two.
+
+| Budget | Difference | Mean over seeds | Twice √(SE² + s²) | Reading |
+|---|---|---|---|---|
+| 50 | **−0.027** [−0.038; −0.016] | −0.027 ± 0.009 | 0.028 | **not limited by its training** |
+| 20 / 200 (descriptive) | −0.032 [−0.040; −0.024] / −0.040 [−0.055; −0.026] | | | |
+
+By the last block the longer run lies −0.022, −0.046 and −0.048 below the two epochs at 20, 50
+and 200 stays.
+
+**Against the network from nothing** (the larger shape's, `60427171…` and `13546062…`;
+descriptive).
+
+| Probe | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| blocks side by side, two epochs | −0.009 [−0.021; +0.002] | **+0.026** [+0.009; +0.043], ± 0.012 | −0.011 [−0.032; +0.011] |
+| blocks side by side, four epochs | −0.041 [−0.053; −0.029] | −0.001 [−0.018; +0.015] | −0.051 [−0.069; −0.033] |
+| last block, four epochs | −0.062 | −0.041 | −0.079 |
+| trained probe, four epochs | −0.041 | −0.024 | −0.058 |
+| full fine-tuning, four epochs | −0.036 | −0.025 | −0.017 |
+
+Against its own untrained encoder's blocks side by side, the two epochs' probe lies +0.039, +0.056
+[+0.039; +0.073] and +0.024 above at 20, 50 and 200 stays; the four epochs', +0.007, +0.029 and
+−0.016.
+
+**FD001 at 50 windows** (RMSE, lower is better): under the longer run the closed-form probe reads
+22.0 against the network from nothing's 22.1 (+0.06 [−0.60; +0.77] in the probe's favour) and
+the untrained encoder's 18.1; under two epochs it read 23.4.
+
+**Conclusions.**
+
+1. **The larger shape was not limited by its training.** Four epochs read the stays 0.027 worse at
+   50 stays by the blocks side by side and 0.046 worse by the last block, at every budget, while
+   the pretext's loss ends where two epochs left it. The rule is not met, and the difference lies
+   about at the edge of what a second pretraining alone could give (0.028).
+2. **The pretext has reached its floor in this shape, and more steps do not reach the task.**
+   Twice the epochs leave the pretext's loss where two left it, so the larger shape was not short
+   of training; the extra steps went to the other corpora, whose share of the steps doubled, and
+   the probe fell. This is not overfitting in the usual sense: the training loss did not fall
+   below the validation's trend, and the stays were read as often as before. It is consistent
+   with the task lying in the early blocks (`layer-readout.md`, 2026-10-09) and points at what the
+   objective teaches rather than at how long it is trained.
+3. **Under two epochs the larger shape's probe lies above the network from nothing at 50 stays**
+   (+0.026 [+0.009; +0.043]), the first probe of the project to do so with its interval above zero.
+   It is one pretraining: a backbone's own pretraining spread (s/√2 ≈ 0.007) widens the error to
+   about ± 0.014, and +0.026 does not pass twice that; the network from nothing is itself one
+   draw of its initialisation per vocabulary (about ± 0.013, 2026-10-07). Conclusions 1 and 3 rest
+   on the same two-epoch pretraining, so one lucky draw would inflate both. At 20 and 200 stays it
+   does not lead.
+4. **The predictions:** 1 holds for the rule and fails for the range (−0.027, not 0 to +0.04);
+   2 holds (+0.026); 3 holds (−0.009); 4 fails, the probe ties the network from nothing on FD001
+   (22.0 against 22.1).
+
+**What follows.** The point of about 3·10⁹ values keeps two epochs in the larger shape. Whether the
+larger shape's lead over the network from nothing at 50 stays is the pretraining's or one
+pretraining's luck is settled by pretraining it again at a second seed and reading the same pair,
+declared before it runs.
+
+**Limitations.**
+
+- One pretraining per larger backbone; the longer run's drop and the two epochs' lead are each
+  about the size of the spread a second pretraining gives. The drop is at least 0.027 at every
+  budget; pairs of the mixture's four seeds keep one sign across the budgets too, but by 0.004 to
+  0.019 (`layer-readout.md`, 2026-10-10). The budgets and readings share the two pretrainings.
+- In today's shape the longer run raised the probe (+0.038 by the last block); in the larger it
+  lowered it. One run each cannot say whether the shape or the draw decides the sign.
+- The pairs against the network from nothing are descriptive; the registered endpoint is today's
+  shape's.
+- The validation side has now been read many times under the larger shape.
