@@ -2668,3 +2668,42 @@ declared before it runs.
 - The pairs against the network from nothing are descriptive; the registered endpoint is today's
   shape's.
 - The validation side has now been read many times under the larger shape.
+
+## 2026-10-10 — declared before the run: the larger shape at a second pretraining seed
+
+**Question.** Under two epochs the larger shape's probe, read by the blocks side by side, lay
++0.026 [+0.009; +0.043] above the network from nothing at 50 stays, by about the spread one
+pretraining gives (2026-10-10 above). Is that lead the recipe's or the draw's?
+
+**Design.** `backbone-scale-1e9-512x8-m-seed2`: the file of `backbone-scale-1e9-512x8-m` at seed 2,
+nothing else changed. Pretrained on a Colab G4 alone, about two hours (3,650 s an epoch, 2026-10-10
+above). Read by `yardstick-concat-physionet2012.toml` on this machine's accelerator (about four
+hours), on the validation side over seeds 1 to 10. The network from nothing is not run again: it
+takes the larger shape and the vocabulary of 329 channels, so the cells of `60427171…` and
+`13546062…` pair with these, as they paired with seed 1. Ordered from a commit that holds this
+section.
+
+**Reading, declared beforehand.** By `scripts/campaign_pairs_report.py`, 10,000 resamples, 95 %.
+
+- *The lead*, at 50 stays: `frozen_ridge@layer=concat` under seed 2 against the network from
+  nothing. It **replicates** when the paired interval lies above zero and the mean over seeds
+  exceeds twice √(SE² + s²/2), where s²/2 is one backbone's share of the error between backbones
+  (s = 0.0104 on the validation side, `layer-readout.md`, 2026-10-10). Otherwise it does not.
+- *Descriptive*: the same at 20 and 200 stays; seed 2 less seed 1 by the blocks side by side at
+  every budget, the larger shape's own difference between two pretrainings beside s, which was
+  read in today's shape; against the untrained encoder's blocks side by side.
+
+**Predictions.**
+
+1. Under seed 2 the lead at 50 stays lies between −0.005 and +0.043, and it does not replicate.
+   Basis: the interval at seed 1, its lower edge lowered by twice one backbone's pretraining
+   spread (s/√2 ≈ 0.007); a lead found at about that spread is expected to shrink.
+2. Seed 2 less seed 1 lies within ±0.03 at 50 stays. Basis: s = 0.0104 in today's shape, widened
+   because the larger shape's spread has not been read.
+
+**Limitations.**
+
+- The network from nothing is one draw of its initialisation per vocabulary (about ± 0.013,
+  2026-10-07), shared by both pretrainings' comparisons; a second pretraining does not touch it.
+- The validation side has been read many times under the larger shape; this reading adds a
+  pretraining, not a fresh side.
