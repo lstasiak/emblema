@@ -374,3 +374,46 @@ the blocks side by side above the last block on both sides (3).
   point with a standard error of 0.008.
 - The comparisons with the untrained encoder and the network from nothing were chosen after the
   run; they are leads for a declared reading, not results.
+
+## 2026-10-10 — M1 Pro, MPS: the pretraining's spread from four seeds
+
+**Question.** The error between backbones (`docs/preregistration.md`) needs s, the spread a
+difference between two backbones takes from their pretraining alone, read from the mixture of
+four's pretrainings at seeds 1 to 4 before the first reading under it.
+
+**Conditions.** `backbone-mixed4-m-seed3` and `-seed4` pretrained on Kaggle (two T4s, one each,
+ordered from `cbd986c8`) and accepted here; their campaigns under the same files as seeds 1 and 2
+(`pretext-concat-half-physionet2012.toml`, `yardstick-concat-physionet2012.toml`), ordered from
+`6c98ebb7` and fulfilled on this machine's accelerator (MPS, fp32), 2026-10-10 10:23 to 14:30.
+Every pair of seeds at 20, 50 and 200 stays by `scripts/campaign_pairs_report.py`; s by the
+registered formula (`data/report/l9/s.py`).
+
+**The later seed less the earlier, by the blocks side by side** (mean over the draws of labels).
+
+| Seeds | Half, 20 / 50 / 200 stays | Validation, 20 / 50 / 200 stays |
+|---|---|---|
+| 2 − 1 | −0.013 / −0.005 / +0.018 | −0.018 / +0.003 / +0.015 |
+| 3 − 1 | −0.031 / −0.015 / +0.010 | −0.004 / −0.016 / −0.019 |
+| 4 − 1 | −0.006 / −0.001 / +0.002 | −0.008 / +0.003 / +0.010 |
+| 3 − 2 | −0.018 / −0.010 / −0.009 | +0.014 / −0.020 / −0.035 |
+| 4 − 2 | +0.007 / +0.004 / −0.017 | +0.011 / −0.001 / −0.006 |
+| 4 − 3 | +0.024 / +0.014 / −0.008 | −0.003 / +0.019 / +0.029 |
+
+**s = 0.0060 on half the tuning side and 0.0104 on the validation side** (18 pairs and budgets
+each). From seeds 1 and 2 alone the same formula gives 0.0076 and 0.0099; the values first
+registered, 0.0072 and 0.0095, were computed from the rounded table and are corrected here.
+
+**Conclusions.**
+
+1. On the validation side a comparison of two backbones at 50 stays now needs a mean of about
+   0.026 to 0.029 at the standard errors seen there (0.008 to 0.010); on the half, about 0.020.
+2. Seed 3 reads the stays worse than the others at 50 stays on both sides (0.010 to 0.020), and
+   seed 4 lies with seeds 1 and 2: one pretraining in four lands visibly apart, which is what the
+   error between backbones is there to carry.
+3. At 50 stays half the pairs differ by 0.005 or less and the rest by 0.010 to 0.020: a threshold
+   read from one pair, as first registered, lands on either side by chance.
+
+**Limitations.**
+
+- Four pretrainings estimate s with a few degrees of freedom; the budgets are pooled as though the
+  pretraining's effect at each were a fresh draw.
