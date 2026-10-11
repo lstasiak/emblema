@@ -2707,3 +2707,52 @@ section.
   2026-10-07), shared by both pretrainings' comparisons; a second pretraining does not touch it.
 - The validation side has been read many times under the larger shape; this reading adds a
   pretraining, not a fresh side.
+
+## 2026-10-11 — Colab G4 and M1 Pro, MPS: the larger shape at a second pretraining seed
+
+**Question.** The one declared on 2026-10-10: does the larger shape's lead over the network from
+nothing at 50 stays replicate under a second pretraining?
+
+**Conditions.** `backbone-scale-1e9-512x8-m-seed2` pretrained on a Colab G4 alone (order from
+`ac24b09d`, run `colab-l9b`), accepted as `3cb3c9bf…`, weights `sha256:e326bc31…`; its stored
+configuration differs from seed 1's only in the seed. `yardstick-concat` under it on this
+machine's accelerator (`33679eee…`, 2026-10-10 21:50 to 2026-10-11 02:05). Pairs by
+`scripts/campaign_pairs_report.py`, 10,000 resamples, 95 %; CSV under `data/report/l9/pairs-seed2/`.
+
+**The blocks side by side under seed 2.**
+
+| Against | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| the network from nothing | +0.000 [−0.012; +0.011] | **+0.006** [−0.010; +0.021], ± 0.016 | −0.020 [−0.037; −0.002] |
+| seed 1 (seed 2 less seed 1) | +0.009 [−0.000; +0.019] | −0.020 [−0.033; −0.008] | −0.009 [−0.024; +0.006] |
+| its untrained encoder's blocks side by side | +0.048 | +0.036 [+0.022; +0.049], ± 0.014 | +0.015 |
+
+**The lead does not replicate**: at 50 stays the interval holds zero and the mean (+0.006) lies
+below twice √(SE² + s²/2) = 0.034.
+
+**Conclusions.**
+
+1. **The larger shape's probe reaches the network from nothing at 50 stays; it does not pass it.**
+   Under the two pretrainings it lies +0.026 and +0.006 from it, +0.016 on average; at 20 stays
+   level with it, at 200 stays below. The lead read on 2026-10-10 was in large part the first
+   pretraining's draw.
+2. **Pretraining still helps this probe over an untrained encoder**: under seed 2 by +0.036 at 50
+   stays, passing both conditions, as under seed 1 (+0.056).
+3. **The larger shape's two pretrainings differ by 0.020 at 50 stays**, inside the declared ±0.03
+   and about twice s read in today's shape (0.0104): the larger shape may spread more between
+   pretrainings than today's.
+4. **The longer run read again.** Against seed 1 the four epochs lay 0.027 below at 50 stays;
+   against seed 2, by the pooled areas, about 0.007 below (0.393 against 0.386; not paired). The
+   registered verdict stands, since the rule was not met either way, but conclusion 1 of
+   2026-10-10 overstated the drop: most of it was seed 1 lying high, and the longer run is better
+   read as no gain than as a loss. Conclusion 2 of that section keeps its first half (the
+   pretext's loss did not move) and loses its second (that more steps moved the encoder away
+   from the task).
+5. **The predictions held**: the lead lies at +0.006, inside −0.005 to +0.043, and does not
+   replicate (1); seed 2 less seed 1 is −0.020, inside ±0.03 (2).
+
+**Limitations.**
+
+- Two pretrainings of the larger shape; the network from nothing is one draw of its
+  initialisation per vocabulary, shared by both comparisons.
+- The comparison of the longer run with seed 2 is read from pooled areas, not paired.
