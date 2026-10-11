@@ -21,6 +21,9 @@ SMALLER_POINT = "backbone-scale-3e8-m"
 WHOLE_POINT = "backbone-scale-1e9-m"
 LARGER_SHAPE = "backbone-scale-1e9-512x8-m"
 LONGER_TRAINING = "backbone-scale-1e9-4ep-m"
+MIXTURE_OF_FOUR = "backbone-mixed4-m"
+LATENT_OBJECTIVE = "backbone-mixed4-latent-m"
+THE_TARGET = {"target", "target_layers", "momentum", "final_momentum"}
 LEFT_OUT = ("physionet2012", "cmapss", "physionet2019")
 POINTS = (
     TENTH_POINT,
@@ -125,3 +128,21 @@ def test_the_longer_run_differs_from_the_whole_point_in_the_length_of_its_traini
         "epochs",
         *(f"passes.{corpus}" for corpus in CORPORA_OF_THE_TASKS),
     }
+
+
+def test_the_second_objective_differs_from_the_mixture_of_four_in_the_target_alone() -> None:
+    assert differing(configured(MIXTURE_OF_FOUR), configured(LATENT_OBJECTIVE)) == {
+        "name",
+        *THE_TARGET,
+    }
+    assert differing(
+        configured(f"{MIXTURE_OF_FOUR}-seed2"), configured(f"{LATENT_OBJECTIVE}-seed2")
+    ) == {"name", *THE_TARGET}
+    assert differing(configured(LATENT_OBJECTIVE), configured(f"{LATENT_OBJECTIVE}-seed2")) == {
+        "name",
+        "seed",
+    }
+    latent = configured(LATENT_OBJECTIVE)
+    assert latent.target.is_latent
+    assert latent.target.layers == 4
+    assert latent.architecture.layers == 6
