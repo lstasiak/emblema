@@ -1,7 +1,8 @@
 # ADR-0054: Predicting the teacher's states at the hidden tokens — a second objective beside masked reconstruction, chosen by the experiment file
 
-- Status: proposed (accepted or rejected by the reading registered for it, `docs/preregistration.md`, "The pretext")
+- Status: accepted as the design of the second objective; by the registered reading it does not replace masked reconstruction
 - Date: 2026-10-11
+- 2026-10-11: read ([`pretext-variants.md`](../verification/pretext-variants.md)). The objective reads the stays worse than the mixture's masks by 0.03 at 50 stays, past the spread of pretraining, and its targets collapse to 3 to 5 directions of 256; the mixture's masks stay the curve's pretext.
 
 ## Context
 
