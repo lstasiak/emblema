@@ -9,8 +9,9 @@ from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
+from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
-from tests.support.experiments import budget, configuration
+from tests.support.experiments import LATENT, budget, configuration
 
 BOUNDED = ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.0)
 
@@ -225,3 +226,36 @@ def test_the_tail_is_rendered_beside_the_other_draws_and_only_where_it_is_drawn(
     ]
     assert forecasting.parameters()["expected_hidden_ratio"] == pytest.approx(0.42625)
     assert "horizon_rate" in forecasting.differences_from(configuration())
+
+
+def test_the_target_is_rendered_after_the_reading_and_only_where_it_is_a_state() -> None:
+    latent = configuration(target=LATENT)
+
+    parameters = list(latent.parameters())
+
+    assert not any(
+        key.startswith(("target", "momentum", "final_momentum"))
+        for key in configuration().parameters()
+    )
+    knee = parameters.index("huber_delta") + 1
+    assert parameters[knee : knee + 5] == [
+        "target",
+        "target_layers",
+        "momentum",
+        "final_momentum",
+        "epochs",
+    ]
+    rendered = latent.parameters()
+    assert (rendered["target"], rendered["target_layers"]) == ("latent", 1)
+    assert (rendered["momentum"], rendered["final_momentum"]) == (0.996, 1.0)
+    assert latent.differences_from(configuration()) == (
+        "target",
+        "target_layers",
+        "momentum",
+        "final_momentum",
+    )
+
+
+def test_a_target_reading_more_blocks_than_the_encoder_has_is_refused() -> None:
+    with pytest.raises(InvalidExperimentConfigurationError, match="blocks of an encoder"):
+        configuration(target=ObjectiveTarget.latent(layers=2))
