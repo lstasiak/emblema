@@ -73,6 +73,9 @@ per kind, so a kind the model does not beat is known to teach nothing. On the po
 - The mixture ablation runs → single-token rate first.
 - A second objective (contrastive) → the objective becomes a port.
 
+2026-10-11: the second objective predicts the teacher's states rather than values (ADR-0054); it
+did not make the objective a port but a subclass beside this one, for the reasons given there.
+
 ## Sources
 
 He et al. (2022), CVPR; Devlin et al. (2019), NAACL; Clark et al. (2020), ICLR; Zerveas et al.
