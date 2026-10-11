@@ -6,6 +6,9 @@ from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa:
 from emblema.pretraining.adapters.objective.masked_reconstruction import (  # noqa: E402
     MaskedReconstruction,
 )
+from emblema.pretraining.adapters.objective.pretraining_objective import (  # noqa: E402
+    PretrainingObjective,
+)
 from emblema.pretraining.adapters.objective.reconstruction_decoder import (  # noqa: E402
     ReconstructionDecoder,
 )
@@ -142,3 +145,32 @@ def test_the_same_seed_builds_the_same_objective(strategy: MaskingStrategy) -> N
     torch.testing.assert_close(
         objective(seed=3)(batch, masks), objective(seed=3)(batch, masks), rtol=0, atol=0
     )
+
+
+def test_the_score_sums_the_error_and_the_channel_mean_s_over_the_hidden_tokens(
+    strategy: MaskingStrategy,
+) -> None:
+    model = objective()
+    batch = random_batch(3, 40, seed=9, padding=6)
+    masks = masks_over(batch, strategy)
+
+    score = model.score(batch, masks, SCORER.loss)
+
+    error, tokens = SCORER.summed(model(batch, masks), batch, masks.hidden)
+    trivial, _ = SCORER.summed_over_mean(batch, masks.hidden)
+    torch.testing.assert_close(score.error, error)
+    torch.testing.assert_close(score.trivial, trivial)
+    assert int(score.tokens) == int(tokens) == int((masks.hidden & ~batch.padding_mask).sum())
+    assert score.error.requires_grad
+    assert not score.trivial.requires_grad
+
+
+def test_the_objective_keeps_nothing_the_optimiser_does_not_move() -> None:
+    model = objective()
+    before = {name: value.clone() for name, value in model.state_dict().items()}
+
+    model.after_step(3, 10)
+
+    assert isinstance(model, PretrainingObjective)
+    for name, value in model.state_dict().items():
+        torch.testing.assert_close(value, before[name], rtol=0, atol=0)

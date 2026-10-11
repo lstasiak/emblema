@@ -1,13 +1,17 @@
-from torch import Tensor, nn
+from torch import Tensor
 
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
+from emblema.pretraining.adapters.objective.objective_score import ObjectiveScore
+from emblema.pretraining.adapters.objective.pretraining_objective import PretrainingObjective
 from emblema.pretraining.adapters.objective.reconstruction_decoder import ReconstructionDecoder
+from emblema.pretraining.adapters.objective.reconstruction_loss import ReconstructionLoss
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
+from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
 
-class MaskedReconstruction(nn.Module):
-    """The self-supervised objective: hide part of a window, encode the rest, predict the hidden.
+class MaskedReconstruction(PretrainingObjective):
+    """The first objective: hide part of a window, encode the rest, predict the hidden values.
 
     A hidden token is marked as padding for the encoder's call, which for a set encoder is the same
     as never observed, so the encoder meets no placeholder it would not meet at inference. The
@@ -41,3 +45,10 @@ class MaskedReconstruction(nn.Module):
             batch.timestamps, batch.timeless
         )
         return self.decoder(states, hidden, encodings, batch.padding_mask)
+
+    def score(self, batch: TokenTensors, masks: TokenMasks, loss: ObjectiveLoss) -> ObjectiveScore:
+        """The error against the hidden values, and what predicting the channel mean would cost."""
+        scorer = ReconstructionLoss(loss)
+        error, tokens = scorer.summed(self(batch, masks), batch, masks.hidden)
+        trivial, _ = scorer.summed_over_mean(batch, masks.hidden)
+        return ObjectiveScore(error=error, trivial=trivial.detach(), tokens=tokens)

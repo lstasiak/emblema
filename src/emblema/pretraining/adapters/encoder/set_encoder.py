@@ -120,11 +120,28 @@ class SetEncoder(nn.Module):
         residual stream that is normalised only at the end, so a state read below it is
         normalised the same way. The last of them is what ``forward`` returns.
         """
+        stream = self.residual_states(features, channel_ids, timestamps, timeless, padding_mask)
+        return torch.stack([self.norm(states) for states in stream])
+
+    def residual_states(
+        self,
+        features: Tensor,
+        channel_ids: Tensor,
+        timestamps: Tensor,
+        timeless: Tensor,
+        padding_mask: Tensor,
+    ) -> Tensor:
+        """The residual stream after every layer, ``[blocks + 1, batch, tokens, width]``.
+
+        The embedding first, then what each block added to it, none of them normalised: what an
+        objective reads when it wants a state the final normalisation's learnt scale and shift
+        have not touched. ``layer_states`` is this stream through that normalisation.
+        """
         states = self._embedded(features, channel_ids, timestamps, timeless)
-        every = [self.norm(states)]
+        every = [states]
         for block in self.blocks:
             states = block(states, padding_mask)
-            every.append(self.norm(states))
+            every.append(states)
         return torch.stack(every)
 
     def _embedded(
