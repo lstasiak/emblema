@@ -8,6 +8,7 @@ from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
+from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.shared.kernel.compute import ComputeTier
@@ -47,6 +48,19 @@ class ExperimentConfigurationDocument:
             if masking.has_horizon
             else {}
         )
+        # And the target: a run that predicts values writes the objective it always wrote.
+        target: Document = (
+            {
+                "target": {
+                    "kind": str(configuration.target.kind),
+                    "layers": configuration.target.layers,
+                    "momentum": configuration.target.momentum,
+                    "final_momentum": configuration.target.final_momentum,
+                }
+            }
+            if configuration.target.is_latent
+            else {}
+        )
         return {
             "name": configuration.name,
             "tier": str(configuration.tier),
@@ -70,6 +84,7 @@ class ExperimentConfigurationDocument:
             "objective": {
                 "kind": str(configuration.loss.kind),
                 "huber_delta": configuration.loss.huber_delta,
+                **target,
             },
             "budget": {
                 "epochs": budget.epochs,
@@ -105,6 +120,7 @@ class ExperimentConfigurationDocument:
         passes = fields.optional_fields("passes")
         fraction = fields.optional_fields("fraction")
         horizon = masking.optional_fields("horizon")
+        target = objective.optional_fields("target")
         return ExperimentConfiguration(
             name=fields.text("name"),
             tier=ComputeTier(fields.text("tier")),
@@ -136,6 +152,14 @@ class ExperimentConfigurationDocument:
             loss=ObjectiveLoss(
                 kind=LossKind(objective.text("kind")),
                 huber_delta=objective.number("huber_delta"),
+            ),
+            target=ObjectiveTarget.value()
+            if target is None
+            else ObjectiveTarget(
+                kind=TargetKind(target.text("kind")),
+                layers=target.integer("layers"),
+                momentum=target.number("momentum"),
+                final_momentum=target.number("final_momentum"),
             ),
             budget=TrainingBudget(
                 epochs=budget.integer("epochs"),

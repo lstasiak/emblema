@@ -11,9 +11,11 @@ from emblema.pretraining.domain.exceptions import (
     InvalidCorpusPassesError,
     InvalidMaskingStrategyError,
     InvalidObjectiveLossError,
+    InvalidObjectiveTargetError,
     InvalidTrainingBudgetError,
 )
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
+from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.shared.kernel.compute import ComputeTier
 
@@ -229,3 +231,50 @@ def test_a_tail_with_spans_out_of_order_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(InvalidMaskingStrategyError, match="horizon spans"):
         ExperimentFile.load(written(disordered, tmp_path)).configuration()
+
+
+def test_a_file_that_states_no_target_predicts_the_token_s_value(tmp_path: Path) -> None:
+    text = STATED + '\n[objective]\nkind = "huber"\nhuber_delta = 1.0\n'
+
+    assert ExperimentFile.load(written(text, tmp_path)).configuration().target == (
+        ObjectiveTarget.value()
+    )
+
+
+def test_a_file_states_the_latent_target_with_the_teacher_s_momentum(tmp_path: Path) -> None:
+    text = STATED + (
+        '\n[objective]\nkind = "huber"\nhuber_delta = 1.0\ntarget = "latent"\n'
+        "target_layers = 1\nmomentum = 0.996\nfinal_momentum = 1.0\n"
+    )
+
+    target = ExperimentFile.load(written(text, tmp_path)).configuration().target
+
+    assert target == ObjectiveTarget.latent(layers=1, momentum=0.996, final_momentum=1.0)
+
+
+@pytest.mark.parametrize(
+    "stated",
+    [
+        'target = "latent"\ntarget_layers = 1\nmomentum = 0.996\n',
+        'target = "latent"\n',
+        "target_layers = 1\n",
+        "momentum = 0.996\nfinal_momentum = 1.0\n",
+    ],
+)
+def test_a_target_whose_knobs_are_not_stated_together_is_refused(
+    tmp_path: Path, stated: str
+) -> None:
+    text = STATED + "\n[objective]\n" + stated
+
+    with pytest.raises(InvalidObjectiveTargetError):
+        ExperimentFile.load(written(text, tmp_path)).configuration()
+
+
+def test_the_latent_target_s_values_are_the_domain_s_to_refuse(tmp_path: Path) -> None:
+    text = STATED + (
+        '\n[objective]\ntarget = "latent"\ntarget_layers = 0\nmomentum = 0.996\n'
+        "final_momentum = 1.0\n"
+    )
+
+    with pytest.raises(InvalidObjectiveTargetError, match="at least one block"):
+        ExperimentFile.load(written(text, tmp_path)).configuration()

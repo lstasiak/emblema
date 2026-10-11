@@ -20,6 +20,7 @@ from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
+from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.shared.kernel.compute import ComputeTier
@@ -82,13 +83,30 @@ class _Masking(_Section):
 
 
 class _Objective(_Section):
-    """What the objective counts a miss as; a file that says nothing is scored by the square."""
+    """What the objective counts a miss as, and what it compares the prediction with.
+
+    A file that says nothing is scored by the square against the token's value. The knobs of the
+    latent target default to nothing, as the knee does under the square: a value target stating
+    one, or a latent target leaving one out, is refused by the target itself.
+    """
 
     kind: LossKind = LossKind.MSE
     huber_delta: float = 0.0
+    target: TargetKind = TargetKind.VALUE
+    target_layers: int = 0
+    momentum: float = 0.0
+    final_momentum: float = 0.0
 
     def loss(self) -> ObjectiveLoss:
         return ObjectiveLoss(kind=self.kind, huber_delta=self.huber_delta)
+
+    def objective_target(self) -> ObjectiveTarget:
+        return ObjectiveTarget(
+            kind=self.target,
+            layers=self.target_layers,
+            momentum=self.momentum,
+            final_momentum=self.final_momentum,
+        )
 
 
 class _Budget(_Section):
@@ -144,8 +162,9 @@ class ExperimentFile(_Section):
         fraction: The corpora read at a share of their own, by name, and that share; each one
             of ``corpora``. A corpus left out is read at ``corpus_fraction``.
         masking: What the objective hides.
-        objective: What it counts a miss as; the squared error unless the file says otherwise,
-            which is what every run before the reading existed was scored by.
+        objective: What it counts a miss as, and what it predicts: the squared error against the
+            token's value unless the file says otherwise, which is what every run before either
+            knob existed was scored by.
         budget: How long the run trains and in how large a step.
         checkpoint: How often resumable state is written.
     """
@@ -196,6 +215,9 @@ class ExperimentFile(_Section):
             InvalidEncoderArchitectureError: If the shape it states is not an architecture.
             InvalidMaskingStrategyError: If the strategy hides everything or nothing.
             InvalidObjectiveLossError: If the reading states a knee it does not read, or none.
+            InvalidObjectiveTargetError: If the latent target reads no block or its momentum is
+                not one a teacher could trail by, or the value target states a knob of the
+                teacher.
             InvalidTrainingBudgetError: If the budget is not one a run could follow.
             InvalidCheckpointPolicyError: If the interval is not positive.
         """
@@ -212,6 +234,7 @@ class ExperimentFile(_Section):
             decoder_layers=self.decoder_layers,
             masking=self.masking.strategy(),
             loss=self.objective.loss(),
+            target=self.objective.objective_target(),
             budget=self.budget.budget(),
             precision=self.precision,
             checkpoint=self.checkpoint.policy(),
