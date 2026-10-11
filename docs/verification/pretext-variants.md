@@ -445,3 +445,105 @@ orders. Pairs by `scripts/campaign_pairs_report.py`; a side of several campaigns
   (about 0.004) and the draw of labels still decides, so a gain below about 0.02 is not seen.
 - The latent diagnostic's baselines are not the value diagnostic's: a kind learnt under one need
   not be learnt under the other, and the two are not compared.
+
+## 2026-10-11 — Kaggle T4 and M1 Pro, MPS: the objective that predicts states, read by the rule
+
+**Question.** The one declared above.
+
+**Conditions.** Pretraining: `backbone-mixed4-latent-m` (`ff60eb67-…`, weights `d321d1f6…`) and
+`-seed2` (`39cffeb1-…`, `0d548b33…`), commit `589757a9`, Kaggle T4 ×2, fp16, tier M, about
+1,150 s an epoch against the mixture's 935 s (+23 %, the teacher's forward pass). Campaigns on
+the M1 Pro, MPS, fp32 probes, ten campaigns in 3.5 h (`data/report/l13/`); pairs by
+`scripts/campaign_pairs_report.py` with a side of several campaigns joined by `+`
+(`data/report/l13/pairs/group-*/comparisons.csv`, rule read by `data/report/l13/rule.py`).
+Diagnostic by `scripts/latent_prediction_report.py` at `121aff3f`
+(`data/report/pretext-latent/<backbone>/`). A reduction is the control's shortfall less the
+candidate's: positive favours the candidate.
+
+**The runs.** The kept epoch and the pretext's validation, loss over the visible mean state
+(`data/report/pretraining/l13-latent-seed{1,2}/epochs.csv`):
+
+| Backbone | Kept epoch | Mean relative at the kept epoch | Trivial on the stays, epoch 1 → kept |
+| --- | --- | --- | --- |
+| seed 1 | 8 of 8 | 0.616 (epoch 1: 3.18, the predictor worse than the mean) | 0.014 → 0.072 |
+| seed 2 | 2 of 8 | 0.526 (epoch 8: 0.591) | 0.105 → 0.104 |
+
+**The diagnostic.** Every kind of mask is learnt on every corpus beyond the line between the
+neighbours' states, except the stays' single tokens (beaten by the line under both) and the
+satellite telemetry's single tokens under seed 2 (matched). The targets, read over 6,000 tokens
+spread evenly across the validation windows:
+
+| Corpus | Effective rank, teacher at initialisation | Effective rank, trained, seed 1 | seed 2 |
+| --- | --- | --- | --- |
+| C-MAPSS | 11.0 | 5.2 | 3.5 |
+| SKAB | 8.0 | 2.7 | 2.2 |
+| Satellite telemetry | 4.4 | 6.2 | 5.1 |
+| Intensive-care stays | 16.1 | **4.7** | **3.1** |
+
+The targets' variance over tokens fell from 0.61 to 0.68 at initialisation to 0.19 to 0.33.
+The first run of the diagnostic sampled the first 4,096 tokens of each corpus, a few windows,
+and read 2.2 to 4.3 on every corpus; the sample was spread over every window before the reading
+(`121aff3f`) and the floor of 4 on the stays applied to that reading. **Seed 2 reads as
+collapsed by the declared floor and leaves the rule's reading; seed 1 stays, at 4.7.**
+
+**The rule.** `frozen_ridge@layer=concat` at 50 stays on the half, the mixture's four
+pretrainings as one side (s = 0.0060):
+
+| Candidate side | Mean over seeds ± SE | Paired 95 % interval | Threshold | Verdict |
+| --- | --- | --- | --- | --- |
+| seed 1 alone (n_c = 1) | −0.029 ± 0.012 | [−0.042; −0.015] | 0.026 | does not replace |
+| both seeds (n_c = 2, declared before seed 2 left) | −0.034 ± 0.014 | [−0.045; −0.024] | 0.029 | does not replace |
+
+The interval lies below zero and the mean exceeds the threshold on the other side: the objective
+reads the stays **worse** than the mixture's masks, past the spread two pretrainings give.
+
+**Descriptive.** At 20 and 200 stays on the half both sides lie below the mixture by 0.019 to
+0.036 (seed 1) and 0.025 to 0.060 (seed 2), every interval below zero; on the validation side by
+0.025 to 0.036. The eight differences of one pretraining against one at 50 stays run from −0.019
+to −0.045, each interval below zero. Over the untrained encoder's probe at 50 stays: seed 1
+−0.014 [−0.033; +0.005] on the half and +0.004 [−0.008; +0.016] on validation, seed 2 −0.025
+[−0.044; −0.006] and −0.016 [−0.028; −0.005]. Against the network from nothing at 50 stays on
+validation: −0.028 [−0.042; −0.013] and −0.048 [−0.060; −0.036]. FD001 at 50 windows, RMSE, the
+probe over the blocks side by side:
+
+| Backbone | Untrained encoder | Pretrained | Pretrained less untrained |
+| --- | --- | --- | --- |
+| mixture, seeds 1–4 | 19.0 | 20.4 to 22.9 | +1.4 to +3.8 |
+| objective, seed 1 | 19.0 | 28.5 | +9.5 [+8.8; +10.1] |
+| objective, seed 2 | 19.0 | 24.6 | +5.5 [+4.9; +6.2] |
+
+**Conclusions.**
+
+- **Predicting the teacher's states does not replace masked reconstruction**; it reads the stays
+  worse by 0.03 at 50 stays, past the spread of pretraining, and worse at every budget on both
+  sides.
+- **Its probe is no better than an untrained encoder's** on the stays (seed 1) or worse (seed 2),
+  and worse than the network from nothing by 0.03 to 0.05.
+- **The gap on FD001 widens**, from +1.4 to +3.8 RMSE under the mixture to +5.5 and +9.5: the
+  states this objective learns read the remaining life worse, not better.
+- **The targets collapsed in dimension**: from 16 to 18 directions at initialisation to 3 to 5
+  after training on the stays, while the predictor still beat the line along the channel. A
+  teacher trailing by a moving average with targets normalised without parameters was not enough
+  to hold the states apart at this width and depth; the pretext stayed "learnt" because the line
+  through collapsed states is a poor answer too.
+- The mixture's masks stay the pretext of the curve; the largest point's rule is not triggered
+  by this reading.
+
+**Predictions.** 1 held in its verdict and failed in its range: the mean lay at −0.034, below
+−0.02. 2 withdrawn: the gap on FD001 grew. 3 withdrawn: nothing over the untrained encoder.
+4 withdrawn: the targets' rank fell to 3 to 5 of 256, below the floor under seed 2.
+
+**What follows.** The second objective stays in the code as a measured alternative. Its knobs —
+the blocks averaged, the momentum, a variance term in the loss (Bardes et al. 2022) — were not
+tuned here and would each be a declaration of its own; the collapse is the first thing such a
+run would have to prevent. The curve over the scale of pretraining, and any larger point, keep
+the mixture's masks.
+
+**Limitations.**
+
+- One setting of the objective, two pretrainings. A setting that holds the targets apart may
+  read differently; this reading says nothing of it.
+- The collapse floor was declared on a sample of the first tokens and read on a sample spread
+  over windows; the floor itself did not move, and both samples read seed 2 below it.
+- The probe alone chooses; the trained probe and full fine-tuning were not read under this
+  objective.
