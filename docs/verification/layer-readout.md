@@ -249,3 +249,171 @@ would be a selection of its own.
   differently. That is not explored here.
 - At 50 labels the concatenation hands the closed-form probe 1,536 or 4,096 columns, its
   penalty chosen by leave-one-out; the control reads the same width.
+
+## 2026-10-09 — declared before the run: the pretraining seeds' difference under the blocks side by side
+
+**Question.** The blocks side by side are now the closed-form probe's reading. How far apart does
+that probe read the mixture of four's two pretraining seeds, on half of the tuning side and on the
+validation side? Every rule that compares backbones by this probe takes that difference as a
+threshold, so it is read before any of them.
+
+**Design.** Only probes, on this machine's accelerator, ordered from a commit that holds this
+section. Under `backbone-mixed4-m` at pretraining seeds 1 and 2, the closed-form probe over the
+blocks side by side (`frozen_ridge@layer=concat`) and the same reading of the encoder at its
+initialisation (`untrained_ridge@layer=concat`), at 20, 50 and 200 stays, seeds 1 to 10.
+
+| Side | Campaign file | Cells |
+|---|---|---|
+| half of the tuning side (seed 101, `one_in = 2`) | `pretext-concat-half-physionet2012.toml` | 2 × 60 |
+| validation | `yardstick-concat-physionet2012.toml` | 2 × 60 |
+
+About 240 cells; from L-8's costs, about two hours.
+
+**Pairs.** `scripts/campaign_pairs_report.py`, 10,000 resamples, 95 %, with the mean over seeds
+and its standard error: seed 2 against seed 1 on each side at each budget; on each side, the
+blocks side by side against the last block under seed 1 (the half's campaigns of 2026-10-08 and
+the yardstick's campaigns score the same stays and draws).
+
+**Reading, declared beforehand.**
+
+- *The pretext rule's third condition* becomes the absolute difference between the two seeds by
+  this probe at 50 stays on the half.
+- *The difference between the pretraining seeds* that the slope and the length of training name
+  becomes the absolute difference between the two seeds by this probe at 50 stays on the
+  validation side (`docs/preregistration.md`, "The scale of pretraining").
+- Everything else is descriptive.
+
+**Predictions.**
+
+1. On the half at 50 stays, seed 2 less seed 1 lies between −0.02 and +0.02. Basis: by the last
+   block, −0.003 [−0.017; +0.011] (2026-10-09 above); a reading of other blocks may move it, so
+   the range is rounded outwards.
+2. On the validation side at 50 stays, it lies between −0.03 and +0.04. Basis: by the last block,
+   +0.004 ± 0.016.
+3. *Judgement.* Under seed 1 the blocks side by side lie above the last block at 50 stays on both
+   sides. Under the three backbones of about 10⁹ values they gained 0.020 to 0.036 on the half.
+
+**Limitations.**
+
+- Two pretrainings give one difference. It is a point with a standard error of about 0.012 to
+  0.016, used as a threshold because the rules are registered that way.
+
+## 2026-10-09 — M1 Pro, MPS: the pretraining seeds' difference under the blocks side by side
+
+**Question.** The one declared above.
+
+**Conditions.**
+
+- Orders placed at `36b83bf9` and fulfilled one after another on this machine's accelerator (MPS,
+  fp32), 2026-10-09 18:27 to 21:23. Cells took about 28 s on the half and 53 s on the validation
+  side; 240 cells in all.
+- Pairs by `scripts/campaign_pairs_report.py` (10,000 resamples, 95 %); CSV under
+  `data/report/l9/`. Gains as above: reductions of 1 − AUROC, the paired interval, then the mean
+  over seeds ± its standard error.
+
+**Seed 2 less seed 1, by the blocks side by side.**
+
+| Side | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| half of the tuning side | −0.013 [−0.024; −0.003], −0.013 ± 0.011 | −0.005 [−0.016; +0.006], −0.005 ± 0.008 | +0.018 [+0.004; +0.033], +0.018 ± 0.008 |
+| validation | −0.018 [−0.027; −0.010], −0.018 ± 0.008 | +0.003 [−0.003; +0.010], +0.003 ± 0.008 | +0.015 [+0.005; +0.026], +0.015 ± 0.010 |
+
+The pretext rule's third condition is therefore **0.005**. The difference between the pretraining
+seeds that the slope and the length of training take, read by this probe, is **0.003**.
+
+**The blocks side by side against the last block, under seed 1.**
+
+| Side | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| half of the tuning side | +0.011 [+0.005; +0.018] | +0.011 [+0.006; +0.017], +0.011 ± 0.006 | +0.007 [−0.002; +0.016] |
+| validation | +0.019 [+0.014; +0.023] | +0.016 [+0.012; +0.020], +0.016 ± 0.003 | +0.008 [+0.003; +0.014] |
+
+The untrained encoder's blocks side by side against its last block, on the validation side: −0.003,
+−0.001 and −0.009 at 20, 50 and 200 stays.
+
+**Against the untrained encoder's blocks side by side** (paired after the run, not declared;
+descriptive):
+
+| Side | Seed | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|---|
+| half | 1 | +0.031 ± 0.025 | +0.020 [+0.003; +0.038], ± 0.017 | +0.019 ± 0.013 |
+| half | 2 | +0.018 ± 0.021 | +0.015 [+0.001; +0.030], ± 0.018 | **+0.038** ± 0.013 |
+| validation | 1 | **+0.032** ± 0.013 | **+0.026** [+0.015; +0.036], ± 0.012 | +0.030 ± 0.020 |
+| validation | 2 | +0.013 ± 0.016 | **+0.029** [+0.021; +0.037], ± 0.008 | **+0.045** ± 0.012 |
+
+Bold marks an interval above zero with a mean over seeds above twice its standard error.
+
+**Conclusions.**
+
+1. **The thresholds are small: 0.005 on the half, 0.003 on the validation side.** Both lie inside
+   the predicted ranges.
+2. **At 50 stays the two pretrainings agree more closely than at the other budgets.** At 20 and
+   200 stays they differ by 0.013 to 0.018, with the sign turning between them, and in two of
+   those four cells the difference passes both conditions. Net of the draws of labels and stays,
+   the six differences put the pretraining's own spread of a difference between two backbones at
+   about 0.007 to 0.010 (one standard deviation, from one pair of pretrainings). A threshold read
+   at 50 stays alone is one draw of that spread, and here a small one.
+3. **The blocks side by side read the mixture of four better than its last block**, by 0.011 on
+   the half and 0.016 on the validation side at 50 stays: less than under the backbones of about
+   10⁹ values (0.020 to 0.036), and less at 200 stays.
+4. **Read this way, the mixture of four beats its untrained encoder at 50 stays on the validation
+   side under both pretraining seeds** (+0.026 and +0.029, each passing both conditions and the
+   seeds' difference). It was paired after the run and changes no verdict: points already read
+   are not read again. On the half the same comparison does not pass the seed condition.
+5. **Against the network from nothing** (yardstick cells on the same stays and draws, paired after
+   the run): the blocks side by side lie −0.006 [−0.021; +0.009] and −0.003 [−0.015; +0.010]
+   under the two seeds at 50 stays, where the last block lies −0.022 [−0.036; −0.007]; at 20
+   stays they lie −0.040 and −0.058 below it.
+
+**Predictions.** All three held: −0.005 on the half (1), +0.003 on the validation side (2), and
+the blocks side by side above the last block on both sides (3).
+
+**Limitations.**
+
+- Two pretrainings give one difference per side and budget; the threshold at 50 stays is a
+  point with a standard error of 0.008.
+- The comparisons with the untrained encoder and the network from nothing were chosen after the
+  run; they are leads for a declared reading, not results.
+
+## 2026-10-10 — M1 Pro, MPS: the pretraining's spread from four seeds
+
+**Question.** The error between backbones (`docs/preregistration.md`) needs s, the spread a
+difference between two backbones takes from their pretraining alone, read from the mixture of
+four's pretrainings at seeds 1 to 4 before the first reading under it.
+
+**Conditions.** `backbone-mixed4-m-seed3` and `-seed4` pretrained on Kaggle (two T4s, one each,
+ordered from `cbd986c8`) and accepted here; their campaigns under the same files as seeds 1 and 2
+(`pretext-concat-half-physionet2012.toml`, `yardstick-concat-physionet2012.toml`), ordered from
+`6c98ebb7` and fulfilled on this machine's accelerator (MPS, fp32), 2026-10-10 10:23 to 14:30.
+Every pair of seeds at 20, 50 and 200 stays by `scripts/campaign_pairs_report.py`; s by the
+registered formula (`data/report/l9/s.py`).
+
+**The later seed less the earlier, by the blocks side by side** (mean over the draws of labels).
+
+| Seeds | Half, 20 / 50 / 200 stays | Validation, 20 / 50 / 200 stays |
+|---|---|---|
+| 2 − 1 | −0.013 / −0.005 / +0.018 | −0.018 / +0.003 / +0.015 |
+| 3 − 1 | −0.031 / −0.015 / +0.010 | −0.004 / −0.016 / −0.019 |
+| 4 − 1 | −0.006 / −0.001 / +0.002 | −0.008 / +0.003 / +0.010 |
+| 3 − 2 | −0.018 / −0.010 / −0.009 | +0.014 / −0.020 / −0.035 |
+| 4 − 2 | +0.007 / +0.004 / −0.017 | +0.011 / −0.001 / −0.006 |
+| 4 − 3 | +0.024 / +0.014 / −0.008 | −0.003 / +0.019 / +0.029 |
+
+**s = 0.0060 on half the tuning side and 0.0104 on the validation side** (18 pairs and budgets
+each). From seeds 1 and 2 alone the same formula gives 0.0076 and 0.0099; the values first
+registered, 0.0072 and 0.0095, were computed from the rounded table and are corrected here.
+
+**Conclusions.**
+
+1. On the validation side a comparison of two backbones at 50 stays now needs a mean of about
+   0.026 to 0.029 at the standard errors seen there (0.008 to 0.010); on the half, about 0.020.
+2. Seed 3 reads the stays worse than the others at 50 stays on both sides (0.010 to 0.020), and
+   seed 4 lies with seeds 1 and 2: one pretraining in four lands visibly apart, which is what the
+   error between backbones is there to carry.
+3. At 50 stays half the pairs differ by 0.005 or less and the rest by 0.010 to 0.020: a threshold
+   read from one pair, as first registered, lands on either side by chance.
+
+**Limitations.**
+
+- Four pretrainings estimate s with a few degrees of freedom; the budgets are pooled as though the
+  pretraining's effect at each were a fresh draw.
