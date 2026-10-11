@@ -353,3 +353,95 @@ withdrawn and one is narrowed:
 - Narrowed: the forecast tail lowers the probe at 200 stays and the trained probe at 50, past a
   draw of labels. That it adds nothing over an untrained encoder holds, but so would a gain
   smaller than about 0.03.
+
+## 2026-10-11 — declared before the run: the objective, predicting the teacher's states
+
+**Question.** Does a pretext that asks for the *state* of a hidden token rather than its value
+give the closed-form probe at 50 stays more than the mixture's masks under the value objective
+do? Under every backbone so far the probe reads FD001 worse than the same probe over an untrained
+encoder, and on dense channels a hidden value is answered by a line through its neighbours
+(ADR-0054). Does the gap on FD001 close? Is the new pretext learnt beyond its own trivial
+answers, and do its targets keep their spread?
+
+**The variant** (`experiments/backbone-mixed4-latent-m.toml`, `-seed2.toml`). The file of
+`backbone-mixed4-m` to the step — the four corpora, 4.8M parameters, the mixture's masks (channel
+0.15, block 0.6 over half the window, token 0.1), huber at one deviation, eight epochs, 16 × 2
+windows a step, 1e-3 — with one section changed: `[objective] target = "latent"`,
+`target_layers = 4`, `momentum = 0.996`, `final_momentum = 1.0`. The hidden tokens' targets are
+the states a teacher gives them from the whole window: a copy of the encoder trailing it by an
+exponential moving average whose momentum rises linearly from 0.996 to one over the run. The
+target of a token is the mean of the teacher's top four of six blocks, each normalised without
+a learnt scale and shift. The predictor is the decoder's shape with a head as wide as the state;
+the loss is the reading per coordinate averaged over the width. The trivial predictor is the
+mean state of the window's visible tokens; the kept epoch is the one with the lowest loss over
+it, as under the value objective. Everything else the value objective does, this one does.
+
+**Pretraining.** Two seeds, 1 and 2, on Kaggle T4 ×2, one per GPU, from the orders of the
+committed experiment files. About 2.8 h each: the teacher's forward pass adds about a third of a
+step over the mixture's 2.1 h.
+
+**Diagnostic, before the reading.** `scripts/latent_prediction_report.py --backbone <id>` for
+each backbone, on each corpus's validation side under the mixture's masks drawn at seed 1, up to
+2,000 windows per corpus, 2,000 resamples over units. Per kind of mask the predictor's error is
+read against the line between the hidden token's visible neighbours' states (the matched
+baseline), the nearest neighbour's state and the visible mean; a channel hidden whole has no
+neighbours and is read against the mean. A kind is *learnt* where the interval of the line's
+error less the predictor's lies above zero. Beside it, the targets' variance over the observed
+tokens and the effective rank of their covariance. The run's own curve is read off the tracker:
+the trivial loss of each corpus per epoch is `validation_loss_<corpus>` over
+`relative_validation_<corpus>`.
+
+- *Collapse.* A backbone is read as collapsed, and leaves the reading, where on the stays the
+  trivial loss at the kept epoch is below half of its value at epoch 1, or the effective rank of
+  the targets is below 4 of 256. Neither is expected (prediction 4).
+
+**Reading.** The campaigns of the pretext rule, defined under each of the two backbones:
+`campaigns/pretext-concat-half-physionet2012.toml` (20, 50 and 200 stays on the half held out
+by seed 101, seeds 1 to 10) and `campaigns/yardstick-concat-physionet2012.toml` (the validation
+side, read descriptively). FD001 at 50 windows by `campaigns/pretext-concat-50-fd001.toml`, a
+new file — the blocks side by side had not been read on FD001 under the mixture — defined under
+the mixture's four pretraining seeds and the two of the objective. Cells run here on MPS from
+orders. Pairs by `scripts/campaign_pairs_report.py`; a side of several campaigns, joined by
+`+`, is read as the mean over them.
+
+- The objective **replaces** the mixture's masks when, at 50 stays on the half,
+  `frozen_ridge@layer=concat` under the two backbones of the objective, read as one side,
+  against the same probe under the mixture's four, read as one side, has its paired interval
+  above zero and its mean over seeds above twice √(SE² + (s²/2)·(1/2 + 1/4)) with s = 0.0060
+  (`docs/preregistration.md`, "The pretext", 2026-10-11). With SE about 0.01 the threshold is
+  about 0.02 to 0.025.
+- Read descriptively: the eight differences of one pretraining against one; 20 and 200 stays;
+  the validation side; FD001 — the probe less the untrained encoder's probe under each backbone,
+  against the same under the mixture — and the probe against the network from nothing at 50
+  stays on the validation side, whose cells under the mixture are already read.
+
+**Predictions.** Where no earlier interval bears on a prediction, it is marked as a judgement.
+
+1. The objective does not replace the mixture's masks: its mean over seeds at 50 stays on the
+   half lies within [−0.02, +0.03]. Basis: the two variants of the masks lay at −0.017
+   [−0.038; +0.005] and −0.015 [−0.030; 0.000] against seed 1 (2026-10-06), and two pretrainings
+   of one recipe differ by up to 0.02; a gain past the threshold is the first that would.
+2. On FD001 at 50 windows the probe under the objective lies above the untrained encoder's probe
+   by less than 3.9 RMSE under both backbones, the lower edge of 3.9 to 5.9 under the value
+   objective (`intensive-care-curve.md`, 2026-10-05). That the interval of the gap holds zero is
+   a judgement from the question asked, not from an interval.
+3. At 50 stays on the half the probe under the objective gains at least +0.015 over the
+   untrained encoder's probe under both backbones, the lower edge of the mixture's +0.015 and
+   +0.020 (`layer-readout.md`, 2026-10-09). At 20 stays nothing is settled either way
+   (`verdict-statistics.md`).
+4. The pretext is learnt for blocks and whole channels on the stays and C-MAPSS under both
+   backbones, and the targets do not collapse: the trivial loss at the kept epoch is at least
+   half of epoch 1's and the effective rank at least a quarter of the width (64 of 256), far
+   above the floor of 4 that reads as a collapse. A judgement: no latent pretext has been read
+   before.
+
+**Limitations.**
+
+- One set of knobs: the top four blocks, 0.996 to one, the decoder's depth. None is tuned; a
+  worse setting reads as a worse objective.
+- The probe alone chooses, as for the masks. A target that helps fine-tuning but not a linear
+  reading would be missed.
+- Two pretrainings on the candidate's side against four: the threshold's spread term is small
+  (about 0.004) and the draw of labels still decides, so a gain below about 0.02 is not seen.
+- The latent diagnostic's baselines are not the value diagnostic's: a kind learnt under one need
+  not be learnt under the other, and the two are not compared.
