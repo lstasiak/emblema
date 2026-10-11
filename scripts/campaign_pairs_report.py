@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from math import sqrt
 from pathlib import Path
 from statistics import mean, stdev
-from typing import NamedTuple
+from typing import NamedTuple, Self
 
 # Run from anywhere: the sibling script modules live in this directory's package at the repository
 # root. The imports below follow, which is why this file is exempt from the import-order rule in
@@ -156,15 +156,35 @@ class PredictionRow(NamedTuple):
         )
 
 
+# What joins the campaigns of one side in a command line and in the comparisons file.
+GROUPED_BY = "+"
+
+
 class Side(NamedTuple):
-    """One side of a pair: a candidate at a budget of one campaign."""
+    """One side of a pair: a candidate at a budget of one campaign, or of several as one.
+
+    Several campaigns are written as their identifiers joined by ``+``. Such a side stands for
+    one candidate read under several backbones — the same experiment pretrained at several
+    seeds — and is scored as the mean over them: what a comparison of two recipes of pretraining
+    reads, where one pretraining of either would be a draw from the spread pretraining alone
+    gives. It is read by area alone, since errors of several campaigns over one unit are not
+    one unit's error.
+    """
 
     campaign: str
     candidate: str
     budget: str
 
+    @property
+    def campaigns(self) -> tuple[str, ...]:
+        return tuple(self.campaign.split(GROUPED_BY))
+
+    def of_campaign(self, campaign: str) -> Self:
+        return type(self)(campaign, self.candidate, self.budget)
+
     def __str__(self) -> str:
-        return f"{self.candidate} at {self.budget} of {self.campaign[:8]}"
+        named = GROUPED_BY.join(each[:8] for each in self.campaigns)
+        return f"{self.candidate} at {self.budget} of {named}"
 
 
 class Answers:
@@ -386,21 +406,14 @@ def pair(
 
     Raises:
         ValueError: If a side has no cell, the sides were run for different purposes, read by
-            different measures or run on different seeds, a selection to be paired by area scored
-            other units in some repeat, or the units of a repeat do not pair.
+            different measures or run on different seeds, a side of several campaigns is read by
+            an error rather than by area, a selection to be paired by area scored other units in
+            some repeat, or the units of a repeat do not pair.
     """
     control_cells = _cells_of(rows, control)
     candidate_cells = _cells_of(rows, candidate)
     purposes = {row.purpose for row in control_cells} | {row.purpose for row in candidate_cells}
-    if len(purposes) != 1:
-        raise ValueError(f"the sides were run for different purposes: {sorted(purposes)}")
-    measures = {row.measure for row in control_cells} | {row.measure for row in candidate_cells}
-    if len(measures) != 1:
-        raise ValueError(f"the sides were read by different measures: {sorted(measures)}")
-    measure = ErrorMeasure(measures.pop())
-    seeds = sorted({row.seed for row in control_cells})
-    if seeds != sorted({row.seed for row in candidate_cells}):
-        raise ValueError(f"{control} and {candidate} were not run on the same seeds")
+    measure, seeds = _comparable(control, control_cells, candidate, candidate_cells, purposes)
     paired: PairedUnits
     match measure:
         case ErrorMeasure.RMSE:
@@ -423,8 +436,16 @@ def pair(
             found = Answers(()) if answers is None else answers
             try:
                 rankings = PairedUnitRankings(
-                    control=tuple(found.ranking(control, seed) for seed in seeds),
-                    candidate=tuple(found.ranking(candidate, seed) for seed in seeds),
+                    control=tuple(
+                        found.ranking(control.of_campaign(campaign), seed)
+                        for campaign in control.campaigns
+                        for seed in seeds
+                    ),
+                    candidate=tuple(
+                        found.ranking(candidate.of_campaign(campaign), seed)
+                        for campaign in candidate.campaigns
+                        for seed in seeds
+                    ),
                 )
             except InvalidPairedUnitRankingsError as error:
                 if purposes != {RunPurpose.SELECTION.value}:
@@ -435,8 +456,10 @@ def pair(
                     f"models' answers are never ranked together: {error}"
                 ) from error
             paired = rankings
-            control_spread = list(rankings.per_repeat_control())
-            candidate_spread = list(rankings.per_repeat_candidate())
+            # A repeat is a seed: under a side of several campaigns each seed's shortfall is the
+            # mean over them, as the pooled area is, and the spread stays one number per seed.
+            control_spread = [_shortfall_at(found, control, seed) for seed in seeds]
+            candidate_spread = [_shortfall_at(found, candidate, seed) for seed in seeds]
             floor_part, threshold = floor_area, ThresholdKind.ABSOLUTE
     control_error = ErrorOverRepeats.of(paired.error_control, control_spread)
     candidate_error = ErrorOverRepeats.of(paired.error_candidate, candidate_spread)
@@ -460,11 +483,53 @@ def pair(
     )
 
 
+def _comparable(
+    control: Side,
+    control_cells: Sequence[CellRow],
+    candidate: Side,
+    candidate_cells: Sequence[CellRow],
+    purposes: set[str],
+) -> tuple[ErrorMeasure, list[int]]:
+    """The one measure and the seeds two sides share, refusing sides that do not pair.
+
+    Raises:
+        ValueError: If the sides were run for different purposes, read by different measures,
+            run on different seeds in any of their campaigns, or one holds several campaigns and
+            the measure is not the area.
+    """
+    if len(purposes) != 1:
+        raise ValueError(f"the sides were run for different purposes: {sorted(purposes)}")
+    measures = {row.measure for row in control_cells} | {row.measure for row in candidate_cells}
+    if len(measures) != 1:
+        raise ValueError(f"the sides were read by different measures: {sorted(measures)}")
+    measure = ErrorMeasure(measures.pop())
+    seeds = sorted({row.seed for row in control_cells})
+    for side, cells in ((control, control_cells), (candidate, candidate_cells)):
+        for campaign in side.campaigns:
+            if sorted({row.seed for row in cells if row.campaign == campaign}) != seeds:
+                raise ValueError(f"{control} and {candidate} were not run on the same seeds")
+    grouped = len(control.campaigns) > 1 or len(candidate.campaigns) > 1
+    if grouped and measure is not ErrorMeasure.AUROC_SHORTFALL:
+        raise ValueError(
+            f"a side of several campaigns is read by area alone, not by {measure.value}: "
+            f"{control} against {candidate}"
+        )
+    return measure, seeds
+
+
+def _shortfall_at(answers: Answers, side: Side, seed: int) -> float:
+    """One seed's shortfall of a side: the mean over its campaigns of one minus the area."""
+    return mean(
+        1.0 - answers.ranking(side.of_campaign(campaign), seed).auroc for campaign in side.campaigns
+    )
+
+
 def _cells_of(rows: Sequence[CellRow], side: Side) -> list[CellRow]:
     found = [
         row
         for row in rows
-        if (row.campaign, row.candidate, row.budget) == (side.campaign, side.candidate, side.budget)
+        if row.campaign in side.campaigns
+        and (row.candidate, row.budget) == (side.candidate, side.budget)
     ]
     if not found:
         raise ValueError(f"no cell of {side} among the exported cells")
@@ -569,7 +634,10 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         default=[],
         nargs=6,
         metavar=("CONTROL_ID", "CONTROL", "BUDGET", "CANDIDATE_ID", "CANDIDATE", "BUDGET"),
-        help="a candidate at a budget of one campaign against one of another; repeatable",
+        help=(
+            "a candidate at a budget of one campaign against one of another; repeatable. Several "
+            "campaigns joined by '+' are one side read as their mean, by area alone"
+        ),
     )
     parser.add_argument("--resamples", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=1, help="seed of the bootstrap's draws")
