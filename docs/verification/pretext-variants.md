@@ -547,3 +547,92 @@ the mixture's masks.
   over windows; the floor itself did not move, and both samples read seed 2 below it.
 - The probe alone chooses; the trained probe and full fine-tuning were not read under this
   objective.
+
+## 2026-10-12 — M1 Pro, MPS: the objective's states held against the mixture's own
+
+**Question.** The reading above names a collapse of the targets as the mechanism. Is the
+concentration specific to this objective, or does the encoder trained on values concentrate its
+states the same way? And what else the runs' records say about why the probe reads these states
+worse than an untrained encoder's.
+
+**Conditions.** `scripts/state_spread_report.py --backbone <id>` at commit `d30a7951`, M1 Pro,
+MPS, fp32: per corpus 500 validation windows, 4,096 observed tokens spread evenly over them
+(seed 1), the same tokens under every reading. Readings: `top`, the mean of the top four blocks
+each normalised without parameters (the second objective's target, read off any encoder);
+`last`, the encoder's output as a probe of the last block reads it; `teacher`, the objective's
+targets where it has one; the same under the encoder at its initialisation. Of each: the
+variance over tokens, the effective rank of the covariance, and the share of the sum of squares
+that the token's channel accounts for, alone and with the decile of its instant.
+Backbones: the objective's two pretrainings and the mixture of four's seeds 1 to 3
+(`2aaca0ba-…`, `3d0c4468-…`, `2929a139-…`). Files: `data/report/state-spread/<backbone>/`.
+The runs' curves: `data/report/pretraining/l13-latent-seed{1,2}/epochs.csv` and the mixture's.
+
+**The stays (PhysioNet 2012), the `last` reading unless stated.**
+
+| States | Variance | Effective rank | Channel share | Channel and decile share |
+| --- | --- | --- | --- | --- |
+| any encoder at initialisation | 0.75 to 0.76 | 27.7 to 28.7 | 0.77 to 0.79 | 0.80 to 0.84 |
+| objective, seed 1, `teacher` | 0.28 | 5.0 | 0.08 | 0.14 |
+| objective, seed 1 | 0.27 | 5.6 | 0.07 | 0.13 |
+| objective, seed 2, `teacher` | 0.27 | 3.0 | 0.07 | 0.12 |
+| objective, seed 2 | 0.19 | 3.8 | 0.06 | 0.11 |
+| mixture, seed 1 | 0.13 | 7.6 | 0.24 | 0.44 |
+| mixture, seed 2 | 0.26 | 7.4 | 0.60 | 0.73 |
+| mixture, seed 3 | 0.14 | 7.6 | 0.24 | 0.36 |
+
+**The other corpora, effective rank of the `last` reading.**
+
+| Corpus | Initialisation | Objective, seeds 1 and 2 | Mixture, seeds 1 to 3 |
+| --- | --- | --- | --- |
+| C-MAPSS | 25.3 to 25.7 | 6.6, 4.3 | 7.1, 3.7, 6.2 |
+| SKAB | 9.3 to 9.7 | 3.5, 2.4 | 5.6, 5.9, 4.0 |
+| Satellite telemetry | 4.8 to 5.1 | 7.5, 5.8 | 6.6, 6.6, 8.9 |
+
+**The runs.** The pretext's validation at the kept epoch, loss over the trivial predictor (the
+channel mean for the mixture, the visible mean state for the objective):
+
+| Corpus | Objective, seed 1 (epoch 8 of 8) | Objective, seed 2 (epoch 2 of 8) | Mixture, seed 1 (epoch 8) |
+| --- | --- | --- | --- |
+| C-MAPSS | 0.57 | 0.47 | 0.31 |
+| SKAB | 0.50 | 0.52 | 0.27 |
+| Satellite telemetry | 0.53 | 0.41 | 0.27 |
+| Intensive-care stays | 0.86 | 0.70 | 0.49 |
+
+Under the objective the trivial predictor's loss on the stays was 0.014 after the first epoch
+(seed 1) against a variance of the initial teacher's targets over tokens of 0.75: the targets had
+narrowed before the first validation, and rose to 0.07 by the end. The declared collapse check
+read the trivial loss against epoch 1, so it could not see this. The kept epoch is the lowest
+loss over trivial, a rule written for a fixed baseline: under a teacher that moves, seed 2's
+baseline grew faster than its loss fell and the run kept its second epoch.
+
+**Conclusions.**
+
+- **The concentration is about half the mixture's own rank on the stays, not a collapse**: 3.8
+  and 5.6 directions against 7.4 to 7.6 under three pretrainings of the mixture. On the other
+  corpora the mixture spans the same range (3.7 to 8.9), so the rank alone does not mark this
+  objective's failure. The earlier conclusion of a collapse is narrowed to this.
+- **What the states lose is their channel and instant.** At initialisation the channel and the
+  decile account for 0.80 to 0.84 of the spread; the mixture keeps 0.36 to 0.73 of it, the
+  objective 0.11 to 0.14. A probe that pools tokens then cannot tell which channel a value came
+  from, which is consistent with its reading at or below an untrained encoder's.
+- **The pretext was barely learnt on the stays**: 0.86 and 0.70 of the trivial predictor's loss
+  against the mixture's 0.49 of its own, and 0.41 to 0.57 against 0.27 to 0.31 on the other
+  corpora.
+- **The two pretrainings are not two repetitions of one training**: one kept its eighth epoch, the
+  other its second. The rule's verdict stands, since each alone lies below the mixture by more
+  than its threshold (−0.029 and −0.040 at 50 stays, thresholds 0.026), but the mean over the
+  two averages two lengths of training.
+- **Three weaknesses of this design**, for any successor rather than for this reading: the
+  target carries the embedding through the residual stream, so at initialisation it is mostly
+  the channel the predictor is handed; the kept epoch is chosen over a baseline that moves with
+  the teacher; the collapse check compared with epoch 1, after the targets had narrowed. None is
+  changed in the code here: a change to the targets would alter what the stored artefacts
+  predict, and a change to the epoch rule needs a run to read it.
+
+**Limitations.**
+
+- 500 windows a corpus and one draw of tokens; the shares are descriptive, without intervals.
+- The mixture's three pretrainings differ among themselves (channel share 0.24 to 0.60 on the
+  stays); what a value objective's states are made of is not one number either.
+- Whether a target no line can answer teaches better features is not settled by this
+  objective's one setting; the reading says what this design did, not what the idea does.
