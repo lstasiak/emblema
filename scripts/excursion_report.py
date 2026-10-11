@@ -495,7 +495,13 @@ def restored(store: ArtifactStore, run: StoredRun) -> MaskedReconstruction:
     """
     if run.backbone is None:
         raise ValueError(f"{run.directory} kept no backbone: the run has not ended")
-    return TrainedModel.read(store.get(run.backbone)).build()
+    model = TrainedModel.read(store.get(run.backbone)).build()
+    if not isinstance(model, MaskedReconstruction):
+        raise ValueError(
+            f"{run.directory} kept a backbone pretrained to predict states, not values, whose "
+            "predictions this report cannot score against the baselines of a value"
+        )
+    return model
 
 
 @dataclass(frozen=True)

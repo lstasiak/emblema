@@ -669,6 +669,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     store = configured_store(Settings())
     configuration = backbone.configuration
     model = TrainedModel.read(store.get(backbone.artifact)).build()
+    if not isinstance(model, MaskedReconstruction):
+        raise SystemExit(
+            f"backbone {backbone.id} was pretrained to predict states, not values; its "
+            "predictions are not scored against the baselines of a value — see "
+            "scripts/latent_prediction_report.py"
+        )
     directory = arguments.out or WORKSPACE / str(backbone.id)
     strategy = configuration.masking
     write_settings(

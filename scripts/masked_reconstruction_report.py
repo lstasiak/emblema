@@ -439,8 +439,13 @@ def train(
             run=name,
         )
     )
+    model = runtime.restore(outcome.backbone)
+    if not isinstance(model, MaskedReconstruction):
+        raise SystemExit(
+            f"{run.configuration.name} predicts states, not values; this report draws values"
+        )
     return Trained(
-        model=runtime.restore(outcome.backbone).to(run.device),
+        model=model.to(run.device),
         epochs=outcome.epochs,
         hidden_ratio=outcome.hidden_ratio,
         name=name,

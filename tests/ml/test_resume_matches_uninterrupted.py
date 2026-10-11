@@ -20,12 +20,13 @@ from emblema.pretraining.adapters.training.trained_model import TrainedModel
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
+from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from tests.support.control_corpus import Control
 from tests.support.encoders import SMALL
-from tests.support.experiments import budget, configuration
+from tests.support.experiments import LATENT, budget, configuration
 
 pytestmark = pytest.mark.ml
 
@@ -54,12 +55,15 @@ def corpus(control: Control) -> TrainingMixture:
     )
 
 
-@pytest.fixture(scope="module")
-def stated() -> ExperimentConfiguration:
+@pytest.fixture(scope="module", params=[ObjectiveTarget.value(), LATENT], ids=["value", "latent"])
+def stated(request: pytest.FixtureRequest) -> ExperimentConfiguration:
+    """The run under either objective: what is resumed is the runtime, whichever it trains."""
+    target: ObjectiveTarget = request.param
     return configuration(
         architecture=SMALL,
         budget=budget(epochs=3, batch_size=2),
         checkpoint=CheckpointPolicy(every_steps=CHECKPOINT_EVERY),
+        target=target,
     )
 
 

@@ -7,9 +7,8 @@ from typing import Self
 
 import torch
 
-from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
-from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
-from emblema.pretraining.adapters.objective.reconstruction_loss import ReconstructionLoss
+from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape
+from emblema.pretraining.adapters.objective.pretraining_objective import PretrainingObjective
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.adapters.training.device_generator import DeviceGenerator
 from emblema.pretraining.adapters.training.devices import available_device
@@ -20,6 +19,7 @@ from emblema.pretraining.domain.exceptions import DivergedRunError, Incompatible
 from emblema.pretraining.domain.training.corpus_validation import CorpusValidation
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
+from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
 from emblema.pretraining.domain.training.run_position import RunPosition
 from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
@@ -58,8 +58,8 @@ class _Session:
     mixture: TrainingMixture
     signature: RunSignature
     precision: TorchPrecision
-    model: MaskedReconstruction
-    loss: ReconstructionLoss
+    model: PretrainingObjective
+    loss: ObjectiveLoss
     optimiser: torch.optim.Optimizer
     scheduler: torch.optim.lr_scheduler.LRScheduler
     scaler: torch.amp.GradScaler
@@ -186,7 +186,7 @@ class TorchTrainingRuntime:
         """
         return self._epochs(self._assemble(configuration, mixture, resume_from))
 
-    def restore(self, ref: ArtifactRef) -> MaskedReconstruction:
+    def restore(self, ref: ArtifactRef) -> PretrainingObjective:
         """The model stored under ``ref``, rebuilt on the host in evaluation mode.
 
         What a run produced is read back through the store rather than kept in memory, so
@@ -209,14 +209,11 @@ class TorchTrainingRuntime:
         # Built on the host from the run's seed, so the same seed gives the same initial weights
         # whatever the device, and moved afterwards.
         torch.manual_seed(budget.seed)
-        model = MaskedReconstruction(
-            SetEncoder.for_vocabulary(
-                configuration.architecture, mixture.vocabulary_size, dropout=configuration.dropout
-            ),
-            decoder_layers=configuration.decoder_layers,
-            dropout=configuration.dropout,
-        ).to(self._device)
-        loss = ReconstructionLoss(configuration.loss)
+        model = (
+            ObjectiveShape.of(configuration, mixture.vocabulary_size)
+            .build(dropout=configuration.dropout)
+            .to(self._device)
+        )
         # A corpus read more than once an epoch is that many loaders over its windows, each turn
         # in its own order, so its share of the steps grows by whole passes and the interleaving
         # treats a pass as it treats a corpus.
@@ -246,14 +243,20 @@ class TorchTrainingRuntime:
         )
         # No weight decay, said rather than inherited: a regularisation nobody chose should not be
         # one a reader has to look up. The day it varies it becomes a field of the experiment.
-        optimiser = torch.optim.Adam(model.parameters(), lr=budget.learning_rate, weight_decay=0.0)
+        # Only what takes a gradient is stepped: an objective's trailing copy of the encoder moves
+        # by its own rule, not by the optimiser.
+        optimiser = torch.optim.Adam(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=budget.learning_rate,
+            weight_decay=0.0,
+        )
         session = _Session(
             configuration=configuration,
             mixture=mixture,
             signature=signature,
             precision=precision,
             model=model,
-            loss=loss,
+            loss=configuration.loss,
             optimiser=optimiser,
             scheduler=torch.optim.lr_scheduler.LambdaLR(
                 optimiser, configuration.schedule(len(training)).factor
@@ -374,9 +377,8 @@ class TorchTrainingRuntime:
             masks = session.masking.draw(on_host, session.draws)
             batch, drawn = on_host.to(self._device), masks.to(self._device)
             with session.precision.autocast():
-                error, scored = session.loss.summed(
-                    session.model(batch, drawn), batch, drawn.hidden
-                )
+                score = session.model.score(batch, drawn, session.loss)
+            error, scored = score.error, score.tokens
             summed = float(error.detach())
             if not math.isfinite(summed):
                 raise DivergedRunError(
@@ -408,6 +410,7 @@ class TorchTrainingRuntime:
                 group_tokens = 0
             session.position = session.position.after_batch(stepped=stepped)
             if stepped:
+                session.model.after_step(session.position.steps, progress.steps_in_run)
                 progress.stepped += 1
                 if self._progress_every and progress.stepped % self._progress_every == 0:
                     self._say_progress(session, progress)
@@ -463,11 +466,15 @@ class TorchTrainingRuntime:
         """What each corpus's held-out side cost this epoch, and the share of tokens scored.
 
         The masks are drawn per batch from a generator the seed fixes, so every epoch is scored
-        under the same hidden tokens: what moves between epochs is the model. The channel-mean
-        predictor is scored over the same tokens in the same pass, so that what a corpus is worth
-        against nothing learnt is measured rather than looked up. Each corpus is scored on its
-        own loader and reported on its own: a single number over the mixture would be the
+        under the same hidden tokens: what moves between epochs is the model. The objective's
+        trivial predictor is scored over the same tokens in the same pass, so that what a corpus
+        is worth against nothing learnt is measured rather than looked up. Each corpus is scored
+        on its own loader and reported on its own: a single number over the mixture would be the
         largest corpus's.
+
+        Raises:
+            DivergedRunError: If a corpus's trivial predictor costs nothing, which under a target
+                the objective itself moves means the targets have collapsed onto one point.
         """
         session.model.eval()
         scored_corpora: list[CorpusValidation] = []
@@ -482,14 +489,18 @@ class TorchTrainingRuntime:
                     masks = session.masking.draw(on_host, draws)
                     batch, drawn = on_host.to(self._device), masks.to(self._device)
                     with session.precision.autocast():
-                        predicted = session.model(batch, drawn)
-                    error, counted = session.loss.summed(predicted, batch, drawn.hidden)
-                    nothing_learnt, _ = session.loss.summed_over_mean(batch, drawn.hidden)
-                    scored = int(counted)
-                    total += float(error)
-                    trivial += float(nothing_learnt)
+                        score = session.model.score(batch, drawn, session.loss)
+                    scored = int(score.tokens)
+                    total += float(score.error)
+                    trivial += float(score.trivial)
                     hidden_tokens += scored
                     observed_in_all += int((~batch.padding_mask).sum())
+                if hidden_tokens > 0 and trivial <= 0.0:
+                    raise DivergedRunError(
+                        f"the targets of {corpus.name} have collapsed: the trivial predictor "
+                        f"costs nothing over {hidden_tokens} hidden tokens after "
+                        f"{session.position.steps} steps"
+                    )
                 hidden_tokens_in_all += hidden_tokens
                 scored_corpora.append(
                     CorpusValidation(
