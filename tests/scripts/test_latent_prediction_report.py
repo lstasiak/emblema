@@ -105,7 +105,7 @@ def totals(tallies: tuple[MaskKindTally, ...]) -> dict[MaskKind, MaskKindTally]:
 def test_every_drawn_kind_is_tallied_against_the_line_the_nearest_and_the_visible_mean(
     control: Control,
 ) -> None:
-    tallies, spread = diagnose(
+    tallies, spreads = diagnose(
         toy(control), WITH_TAIL, SQUARED, corpus_of(control), device="cpu", batch_size=4
     )
 
@@ -125,14 +125,16 @@ def test_every_drawn_kind_is_tallied_against_the_line_the_nearest_and_the_visibl
     assert channel.matched == pytest.approx(channel.mean)
     assert channel.linear == pytest.approx(channel.mean)
     assert {tally.group for tally in tallies} == {f"unit-{index}" for index in range(4)}
-    assert spread.corpus == "control-a"
+    assert [spread.corpus for spread in spreads] == ["control-a"]
+    assert [spread.encoder for spread in spreads] == ["trained"]
 
 
 def test_the_targets_of_an_untrained_teacher_fill_many_directions(control: Control) -> None:
-    _, spread = diagnose(
+    _, spreads = diagnose(
         toy(control), WITH_TAIL, SQUARED, corpus_of(control), device="cpu", batch_size=4
     )
 
+    (spread,) = spreads
     assert spread.tokens > 100
     assert np.isfinite(spread.variance)
     assert spread.variance > 0
@@ -140,9 +142,32 @@ def test_the_targets_of_an_untrained_teacher_fill_many_directions(control: Contr
     assert spread.effective_rank > TOY.width / 4
 
 
+def test_the_spread_is_read_over_every_window_and_under_the_initial_teacher_too(
+    control: Control,
+) -> None:
+    corpus = corpus_of(control)
+
+    _, spreads = diagnose(
+        toy(control),
+        WITH_TAIL,
+        SQUARED,
+        corpus,
+        device="cpu",
+        initial=toy(control, seed=2),
+        batch_size=4,
+        spread_tokens=16,
+    )
+
+    trained, initial = spreads
+    assert (trained.encoder, initial.encoder) == ("trained", "initial")
+    # Sixteen tokens over eight windows: two of each, so every window is in the sample.
+    assert trained.tokens == initial.tokens == 2 * len(corpus.validation)
+    assert trained.effective_rank != initial.effective_rank
+
+
 def test_targets_drawn_onto_one_point_have_no_variance_and_a_rank_of_one() -> None:
-    collapsed = TargetSpread.of("flat", np.ones((50, 8)))
-    along_a_line = TargetSpread.of("line", np.outer(np.arange(50.0), np.ones(8)))
+    collapsed = TargetSpread.of("flat", "trained", np.ones((50, 8)))
+    along_a_line = TargetSpread.of("line", "trained", np.outer(np.arange(50.0), np.ones(8)))
 
     assert (collapsed.variance, collapsed.effective_rank) == (0.0, 1.0)
     assert along_a_line.effective_rank == pytest.approx(1.0)
@@ -163,7 +188,9 @@ def test_the_same_seeds_tally_the_same_numbers(control: Control) -> None:
 
 def test_what_is_written_reads_back_and_renders(control: Control, tmp_path: Path) -> None:
     corpus = corpus_of(control)
-    tallies, spread = diagnose(toy(control), WITH_TAIL, SQUARED, corpus, device="cpu", batch_size=4)
+    tallies, spreads = diagnose(
+        toy(control), WITH_TAIL, SQUARED, corpus, device="cpu", batch_size=4
+    )
     named = [("control-a", tally) for tally in tallies]
     rows = kinds_of(named, resamples=50)
     write_settings(
@@ -185,12 +212,12 @@ def test_what_is_written_reads_back_and_renders(control: Control, tmp_path: Path
     )
     write_tallies(tmp_path, named)
     write_corpora(tmp_path, [CorpusRow.of(corpus, 1.0)])
-    write_targets(tmp_path, [spread])
+    write_targets(tmp_path, spreads)
     write_kinds(tmp_path, rows)
 
     assert read_tallies(tmp_path) == named
     assert read_kinds(tmp_path) == rows
-    assert read_targets(tmp_path) == [TargetSpread.parse(spread.record())]
+    assert read_targets(tmp_path) == [TargetSpread.parse(spread.record()) for spread in spreads]
     rendered = render(tmp_path)
     assert "toy-latent" in rendered
     assert "Beyond nearest" in rendered

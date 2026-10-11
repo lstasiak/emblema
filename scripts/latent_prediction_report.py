@@ -11,7 +11,9 @@ learnt where the whole interval of the line's error less the predictor's lies ab
 
 Beside the tallies, what the teacher's targets are like: their variance over tokens and the
 effective rank of their covariance, which is where a collapse shows — targets drawn onto one
-point or into a few directions make every predictor look good at nothing.
+point or into a few directions make every predictor look good at nothing. Both are read over
+tokens spread evenly across every validation window, and again under the teacher at its
+initialisation, so that what the run did to the targets is told apart from what the shape gives.
 
 Measuring and reporting are two steps: the tallies per unit, the summaries per kind and the
 targets' spread are written as CSV, and the tables are rendered from those files.
@@ -51,6 +53,7 @@ from emblema.pretraining.adapters.diagnostics.latent_nearest_baseline import Lat
 from emblema.pretraining.adapters.diagnostics.triviality_diagnostic import TrivialityDiagnostic
 from emblema.pretraining.adapters.objective.latent_prediction import LatentPrediction
 from emblema.pretraining.adapters.objective.latent_prediction_loss import LatentPredictionLoss
+from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.adapters.training.devices import available_device
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
@@ -75,6 +78,7 @@ from scripts.pretext_triviality_report import (
     _registry,
     corpora_of,
     corpora_table,
+    evenly_spaced,
     read_corpora,
     read_rows,
     read_settings,
@@ -88,9 +92,11 @@ from scripts.reporting import machine, table
 
 WORKSPACE = REPO_ROOT / "data" / "report" / "pretext-latent"
 KINDS, TARGETS = "kinds.csv", "targets.csv"
-# Observed tokens whose targets the spread is read from, per corpus: enough for a covariance of a
-# few hundred coordinates, few enough to hold.
+# Observed tokens whose targets the spread is read from, per corpus, spread evenly over the
+# validation windows: enough for a covariance of a few hundred coordinates, few enough to hold.
 SPREAD_TOKENS = 4_096
+# What the targets' spread is read under: the teacher the run left, and the one it started from.
+TRAINED, INITIAL = "trained", "initial"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -100,10 +106,11 @@ SPREAD_TOKENS = 4_096
 
 @dataclass(frozen=True)
 class TargetSpread:
-    """How the teacher's targets are spread over the observed tokens of one corpus.
+    """How a teacher's targets are spread over the observed tokens of one corpus.
 
     Attributes:
         corpus: Name the corpus is registered under.
+        encoder: Whose targets: the teacher the run left, or the one at its initialisation.
         tokens: Observed tokens the spread was read from.
         variance: Mean over the coordinates of the variance across tokens.
         effective_rank: Exponential of the entropy of the covariance's normalised eigenvalues:
@@ -111,14 +118,15 @@ class TargetSpread:
     """
 
     corpus: str
+    encoder: str
     tokens: int
     variance: float
     effective_rank: float
 
-    FIELDS = ("corpus", "tokens", "variance", "effective_rank")
+    FIELDS = ("corpus", "encoder", "tokens", "variance", "effective_rank")
 
     @classmethod
-    def of(cls, corpus: str, targets: NDArray[np.float64]) -> Self:
+    def of(cls, corpus: str, encoder: str, targets: NDArray[np.float64]) -> Self:
         """The spread of these targets, ``[tokens, width]``, over their tokens."""
         centred = targets - targets.mean(axis=0, keepdims=True)
         variance = float(centred.var(axis=0, ddof=0).mean()) if len(targets) > 1 else 0.0
@@ -126,13 +134,15 @@ class TargetSpread:
         eigenvalues = np.clip(np.linalg.eigvalsh(covariance), 0.0, None)
         total = float(eigenvalues.sum())
         if total <= 0.0:
-            return cls(corpus, len(targets), variance, 1.0)
+            return cls(corpus, encoder, len(targets), variance, 1.0)
         shares = eigenvalues[eigenvalues > 0.0] / total
-        return cls(corpus, len(targets), variance, float(np.exp(-(shares * np.log(shares)).sum())))
+        rank = float(np.exp(-(shares * np.log(shares)).sum()))
+        return cls(corpus, encoder, len(targets), variance, rank)
 
     def record(self) -> dict[str, str]:
         return {
             "corpus": self.corpus,
+            "encoder": self.encoder,
             "tokens": str(self.tokens),
             "variance": _number(self.variance),
             "effective_rank": _number(self.effective_rank),
@@ -142,6 +152,7 @@ class TargetSpread:
     def parse(cls, record: dict[str, str]) -> Self:
         return cls(
             record["corpus"],
+            record["encoder"],
             int(record["tokens"]),
             float(record["variance"]),
             float(record["effective_rank"]),
@@ -155,15 +166,19 @@ def diagnose(
     corpus: CorpusWindows,
     *,
     device: str,
+    initial: LatentPrediction | None = None,
     batch_size: int = BATCH_SIZE,
     validation_seed: int = VALIDATION_SEED,
     spread_tokens: int = SPREAD_TOKENS,
-) -> tuple[tuple[MaskKindTally, ...], TargetSpread]:
+) -> tuple[tuple[MaskKindTally, ...], tuple[TargetSpread, ...]]:
     """Tally the predictor against the trivial answers on the validation windows, per unit.
 
     The masks are the strategy's, drawn on the host once per batch from a seed, as the run drew
     its own; the targets and the prediction are brought back to the host before they are widened
     and scored. The baselines need no fitting: each reads the teacher's targets of the window.
+    The targets' spread is read over the same few observed tokens of every window — spread evenly
+    over each window, so that the sample spans the corpus rather than its first windows — under
+    the run's teacher and, where ``initial`` is given, under the teacher at its initialisation.
     """
     diagnostic = TrivialityDiagnostic(loss, channels_apart=corpus.channels_apart)
     scorer = LatentPredictionLoss(loss)
@@ -173,9 +188,12 @@ def diagnose(
         corpus.validation, batch_size=batch_size, seed=validation_seed, shuffle=False
     )
     model = model.to(device).eval()
+    teachers = {TRAINED: model}
+    if initial is not None:
+        teachers[INITIAL] = initial.to(device).eval()
+    per_window = max(1, -(-spread_tokens // max(len(corpus.validation), 1)))
     offset = 0
-    sampled: list[NDArray[np.float64]] = []
-    kept = 0
+    sampled: dict[str, list[NDArray[np.float64]]] = {name: [] for name in teachers}
     with torch.no_grad():
         for index, batch in enumerate(loader.batches_of(0)):
             units = corpus.validation_units[offset : offset + batch.batch_size]
@@ -205,14 +223,31 @@ def diagnose(
                 linear=dict.fromkeys(MaskKind, errors["nearest"]),
                 mean=errors["mean"],
             )
-            if kept < spread_tokens:
-                taken = targets[observed].numpy()[: spread_tokens - kept]
-                sampled.append(taken)
-                kept += len(taken)
-    stacked = (
-        np.concatenate(sampled) if sampled else np.zeros((0, model.encoder.architecture.width))
+            picks = _spread_over_windows(observed, per_window)
+            for name, teacher in teachers.items():
+                read = targets if name == TRAINED else teacher.targets(on_device).to("cpu")
+                sampled[name].append(read.to(torch.float64)[picks].numpy())
+    width = model.encoder.architecture.width
+    return diagnostic.tallies(), tuple(
+        TargetSpread.of(
+            corpus.corpus,
+            name,
+            np.concatenate(taken) if taken else np.zeros((0, width)),
+        )
+        for name, taken in sampled.items()
     )
-    return diagnostic.tallies(), TargetSpread.of(corpus.corpus, stacked)
+
+
+def _spread_over_windows(observed: torch.Tensor, per_window: int) -> torch.Tensor:
+    """Up to ``per_window`` observed positions of each window, spaced evenly, as a boolean mask."""
+    picks = torch.zeros_like(observed)
+    for row in range(observed.shape[0]):
+        positions = torch.nonzero(observed[row]).flatten()
+        if len(positions) == 0:
+            continue
+        chosen = torch.tensor(evenly_spaced(len(positions), per_window), dtype=torch.long)
+        picks[row, positions[chosen]] = True
+    return picks
 
 
 # ------------------------------------------------------------------------------------------------
@@ -362,9 +397,15 @@ def kinds_table(rows: Sequence[LatentKindRow]) -> str:
 
 def targets_table(rows: Sequence[TargetSpread]) -> str:
     return table(
-        ("Corpus", "Tokens", "Variance", "Effective rank"),
+        ("Corpus", "Teacher", "Tokens", "Variance", "Effective rank"),
         (
-            (row.corpus, f"{row.tokens:,}", f"{row.variance:.4f}", f"{row.effective_rank:.1f}")
+            (
+                row.corpus,
+                row.encoder,
+                f"{row.tokens:,}",
+                f"{row.variance:.4f}",
+                f"{row.effective_rank:.1f}",
+            )
             for row in rows
         ),
     )
@@ -395,9 +436,10 @@ def render(directory: Path) -> str:
             "error less the model's lies above zero. A channel hidden whole has no line and no "
             "nearest neighbour: both read as the visible mean, so its verdict is against that.",
             targets_table(read_targets(directory)),
-            "The variance is over the observed tokens' targets, the effective rank the number of "
-            "directions they fill; targets that collapse show as a variance near zero or a rank "
-            "near one.",
+            "The variance is over the targets of observed tokens spread evenly across every "
+            "validation window, the effective rank the number of directions they fill; targets "
+            "that collapse show as a variance near zero or a rank near one. The teacher at its "
+            "initialisation, under the same tokens, says what the shape gives before training.",
             "Learnt: " + (", ".join(learnt) if learnt else "none") + ".",
         )
     )
@@ -454,6 +496,11 @@ def main(argv: Sequence[str] | None = None) -> None:
             "scored against the baselines of a value by scripts/pretext_triviality_report.py"
         )
     directory = arguments.out or WORKSPACE / str(backbone.id)
+    # The teacher at its initialisation: the objective drawn as the run drew it, before a step.
+    torch.manual_seed(configuration.budget.seed)
+    initial = ObjectiveShape.of(
+        configuration, max(stated.vocabulary_size for stated in backbone.inputs)
+    ).build()
     write_settings(
         directory,
         {
@@ -482,7 +529,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         },
     )
     tallies: list[tuple[str, MaskKindTally]] = []
-    rows, spreads = [], []
+    rows: list[CorpusRow] = []
+    spreads: list[TargetSpread] = []
     for corpus in corpora_of(
         backbone,
         store,
@@ -497,11 +545,12 @@ def main(argv: Sequence[str] | None = None) -> None:
             configuration.loss,
             corpus,
             device=arguments.device,
+            initial=initial if isinstance(initial, LatentPrediction) else None,
             batch_size=arguments.batch_size,
         )
         tallies += [(corpus.corpus, tally) for tally in found]
         rows.append(CorpusRow.of(corpus, time.perf_counter() - started))
-        spreads.append(spread)
+        spreads.extend(spread)
         print(f"{corpus.corpus}: {len(found)} tallies in {rows[-1].seconds:.0f} s", file=sys.stderr)
         write_tallies(directory, tallies)
         write_corpora(directory, rows)
