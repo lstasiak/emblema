@@ -1,11 +1,13 @@
 """How often the replacement rule replaces a configuration whose true gain is known.
 
-A comparison on the intensive-care task is read by three conditions: the paired interval of the
-difference in area, pooled over seeds, lies above zero; the mean over seeds exceeds twice its
-standard error; and, between backbones, the mean exceeds the difference two pretraining seeds
-made. How often that rule fires at a true gain depends on how many seeds ran and how many stays
-were scored. This script measures the noise each of those carries from answers already exported
-by ``campaign_pairs_report.py`` and simulates the rule over designs of seeds and stays.
+A comparison on the intensive-care task is read by two conditions: the paired interval of the
+difference in area, pooled over seeds, lies above zero, and the mean over seeds exceeds twice its
+standard error — which, between backbones, is widened by the spread s that pretraining alone
+gives a difference, to twice the root of SE² + s². How often that rule fires at a true gain
+depends on how many seeds ran and how many stays were scored. This script measures the noise
+each of those carries from answers already exported by ``campaign_pairs_report.py`` and
+simulates the rule over designs of seeds and stays, for the pairs it is given, at every budget
+both sides of a pair hold.
 
 The stays a design scores are drawn from the exported ones, with replacement, in the two strata of
 the outcome. Every draw gives each seed's difference in area and the standard error of the
@@ -15,11 +17,20 @@ read — a seed's own effect, the shared effect of which stays were scored, and 
 and a normal model of them answers for any number of seeds. At the seeds that ran, the model is
 checked against applying the rule to the draws themselves.
 
-    uv run scripts/comparison_power_report.py --predictions CSV [--predictions CSV] --out DIR
-        --backbone SHAPE LABEL LOW_CAMPAIGN HIGH_CAMPAIGN [--backbone ...]
-        [--check-predictions CSV --check-comparisons CSV]
+Where every seed of both sides scored the same labels, as at the budget of every labelled unit,
+the seeds of a closed-form reading do not differ at all. The seed condition then has nothing to
+read and is left out: the rule is the interval and the threshold, and the components say so with
+a seed effect of zero.
 
-``LOW_CAMPAIGN`` holds the budgets of 20 and 50 stays, ``HIGH_CAMPAIGN`` that of 200. Writes
+    uv run scripts/comparison_power_report.py --predictions CSV [--predictions CSV] --out DIR
+        --pair KIND LABEL CONTROL_CAMPAIGN CONTROL CANDIDATE_CAMPAIGN CANDIDATE [--pair ...]
+        [--budgets B ...] [--stays N ...] [--gains G ...] [--seeds K ...]
+        [--seed-gap KIND VALUE ...] [--check-predictions CSV --check-comparisons CSV]
+
+A pair is read at every budget both of its sides were exported at, or at ``--budgets`` alone.
+``--stays`` defaults to every stay the budget scored; ``--seed-gap`` names, per kind of pair, the
+spread s between backbones the seed condition is widened by for that kind, at every budget as
+``VALUE`` or at one as ``BUDGET=VALUE``. Writes
 ``components.csv``, ``power.csv`` and, with the check, ``check.csv``, and prints the tables a
 note pastes.
 """
@@ -28,10 +39,9 @@ import argparse
 import csv
 import statistics
 import sys
-from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass
-from itertools import combinations
-from math import sqrt
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, field
+from math import inf, sqrt
 from pathlib import Path
 from typing import NamedTuple
 
@@ -48,22 +58,8 @@ from scripts.reporting import table
 
 COMPONENTS, POWER, CHECK = "components.csv", "power.csv", "check.csv"
 
-# The yardstick's candidates, by the budgets they ran at; the network from nothing runs at its
-# own rate at 200 stays, so its name differs there.
-RIDGE, PROBE, FINE_TUNING = "frozen_ridge", "frozen_probe@learning_rate=0.03", "full_fine_tuning"
-FROM_NOTHING = {
-    "20": "from_scratch",
-    "50": "from_scratch",
-    "200": "from_scratch@learning_rate=0.003",
-}
-BUDGETS = ("20", "50", "200")
-
 SEEDS = (5, 10, 20, 30)
-STAYS = (800, 1_000, 1_333, 2_000)
-GAINS = (0.0, 0.01, 0.02, 0.03, 0.04)
-# The difference between the mixture's two pretraining seeds, on the validation side and on the
-# fifth; a comparison between backbones has to exceed it.
-PRETRAINING_SEED_GAPS = (0.004, 0.008)
+GAINS = (0.0, 0.005, 0.01, 0.015, 0.02, 0.03)
 Z_95 = 1.959963984540054
 
 Floats = NDArray[np.float64]
@@ -93,6 +89,17 @@ class Answers:
     units: tuple[str, ...]
 
 
+class PairSpec(NamedTuple):
+    """A candidate against a control, as the command line names them, read at every budget."""
+
+    kind: str
+    name: str
+    control_campaign: str
+    control: str
+    candidate_campaign: str
+    candidate: str
+
+
 class Pair(NamedTuple):
     """A candidate against a control, read on the same stays and seeds; positive favours it."""
 
@@ -101,17 +108,6 @@ class Pair(NamedTuple):
     budget: str
     control: SideKey
     candidate: SideKey
-
-
-@dataclass(frozen=True)
-class Backbone:
-    shape: str
-    label: str
-    low: str
-    high: str
-
-    def campaign(self, budget: str) -> str:
-        return self.high if budget == "200" else self.low
 
 
 def read_answers(paths: Sequence[Path], campaigns: set[str]) -> dict[SideKey, Answers]:
@@ -161,51 +157,50 @@ def _read_file(
                 raise ValueError(f"the exported answers disagree on the outcome of {unit}")
 
 
-def pairs_of(backbones: Sequence[Backbone]) -> list[Pair]:
-    """The three kinds of comparison the note declares, at every budget.
+def pairs_of(
+    specs: Sequence[PairSpec], answers: Mapping[SideKey, Answers], budgets: Sequence[str] = ()
+) -> list[Pair]:
+    """Each named pair at every budget both of its sides hold, or at ``budgets`` alone.
 
-    A: the trained probe against the closed-form probe under one backbone. B: the closed-form
-    probe under one backbone against another of the same shape. C: full fine-tuning against the
-    network from nothing in one campaign, and the network from nothing in one campaign against
-    itself in another (a null pair).
+    Raises:
+        ValueError: If a named budget is one a side was not exported at, or a pair shares no
+            budget at all.
     """
     found = []
-    for budget in BUDGETS:
-        for b in backbones:
-            c = b.campaign(budget)
-            found.append(
-                Pair("A", b.label, budget, SideKey(c, RIDGE, budget), SideKey(c, PROBE, budget))
-            )
-            found.append(
-                Pair(
-                    "C",
-                    f"{b.label} fine-tuning",
-                    budget,
-                    SideKey(c, FROM_NOTHING[budget], budget),
-                    SideKey(c, FINE_TUNING, budget),
-                )
-            )
-        for first, second in combinations(backbones, 2):
-            if first.shape == second.shape:
-                found.append(
-                    Pair(
-                        "B",
-                        f"{second.label} / {first.label}",
-                        budget,
-                        SideKey(first.campaign(budget), RIDGE, budget),
-                        SideKey(second.campaign(budget), RIDGE, budget),
-                    )
-                )
+    for spec in specs:
+        held = {
+            key.budget
+            for key in answers
+            if (key.campaign, key.candidate) == (spec.control_campaign, spec.control)
+        } & {
+            key.budget
+            for key in answers
+            if (key.campaign, key.candidate) == (spec.candidate_campaign, spec.candidate)
+        }
+        wanted = budgets or sorted(held, key=budget_order)
+        for budget in wanted:
+            if budget not in held:
+                raise ValueError(f"{spec.name} was not exported at {budget} on both sides")
             found.append(
                 Pair(
-                    "C0",
-                    f"{second.label} / {first.label} from nothing",
+                    spec.kind,
+                    spec.name,
                     budget,
-                    SideKey(first.campaign(budget), FROM_NOTHING[budget], budget),
-                    SideKey(second.campaign(budget), FROM_NOTHING[budget], budget),
+                    SideKey(spec.control_campaign, spec.control, budget),
+                    SideKey(spec.candidate_campaign, spec.candidate, budget),
                 )
             )
+        if not wanted:
+            raise ValueError(f"{spec.name} shares no budget between its sides")
     return found
+
+
+def budget_order(budget: str) -> float:
+    """Budgets in the order of their size, the budget of every labelled unit last."""
+    try:
+        return float(budget)
+    except ValueError:
+        return inf
 
 
 class StayDraws:
@@ -296,8 +291,11 @@ class Components:
         seed: Standard deviation of a seed's own effect, the same on every set of stays.
         stays: Standard deviation of the effect of which stays were scored, shared by every seed.
         interaction: Standard deviation of what a seed and the stays scored make together.
-        effects: The ten seeds' own effects as measured, about their mean.
+        effects: The seeds' own effects as measured, about their mean.
         gap: The difference over every exported stay and seed.
+        seed_error: The standard error of the mean over seeds, as a reading of the seeds that
+            ran would state it: the seeds' spread within a draw over the root of their count,
+            averaged over the draws.
     """
 
     seed: float
@@ -305,6 +303,7 @@ class Components:
     interaction: float
     effects: Floats
     gap: float
+    seed_error: float
 
     @classmethod
     def of(cls, differences: Floats, gap: float) -> "Components":
@@ -320,6 +319,7 @@ class Components:
             interaction=sqrt(interaction),
             effects=effects,
             gap=gap,
+            seed_error=float((differences.std(axis=1, ddof=1) / sqrt(seeds)).mean()),
         )
 
     def interval_error(self, seeds: int) -> float:
@@ -329,13 +329,21 @@ class Components:
 def replaces(
     differences: Floats, interval_error: Floats | float, threshold: float | None
 ) -> NDArray[np.bool_]:
-    """The rule, applied to ``[readings, seeds]`` differences with each reading's interval error."""
+    """The rule, applied to ``[readings, seeds]`` differences with each reading's interval error.
+
+    ``threshold`` is the spread s between backbones, which widens the seed condition to twice the
+    root of SE² + s²; ``None`` for a comparison within one backbone. A reading whose seeds do not
+    differ at all has no seed condition of its own to meet: its seeds scored the same labels and
+    answered alike, so their spread says nothing of a draw of labels, and only s remains.
+    """
     seeds = differences.shape[1]
     mean = differences.mean(axis=1)
     seed_error = differences.std(axis=1, ddof=1) / sqrt(seeds)
-    fires = (mean - Z_95 * np.asarray(interval_error) > 0) & (mean > 2 * seed_error)
-    if threshold is not None:
-        fires &= mean > threshold
+    spread = 0.0 if threshold is None else threshold
+    widened = np.sqrt(seed_error**2 + spread**2)
+    fires: NDArray[np.bool_] = (mean - Z_95 * np.asarray(interval_error) > 0) & (
+        (widened == 0.0) | (mean > 2 * widened)
+    )
     return fires
 
 
@@ -351,8 +359,8 @@ def modelled(
 ) -> float:
     """The share of normal readings in which the rule replaces.
 
-    With ``measured_seeds`` the seeds' own effects are the ten measured rather than drawn, as the
-    draws of stays hold them.
+    With ``measured_seeds`` the seeds' own effects are the ones measured rather than drawn, as
+    the draws of stays hold them.
     """
     if measured_seeds:
         effects = np.broadcast_to(components.effects, (readings, len(components.effects)))
@@ -397,19 +405,48 @@ class ComponentRow(NamedTuple):
     stays_part: float
     interaction: float
     mean_interval_error: float
+    seed_error: float
 
 
-def thresholds_of(kind: str) -> tuple[float | None, ...]:
-    return PRETRAINING_SEED_GAPS if kind == "B" else (None,)
+@dataclass(frozen=True)
+class Design:
+    """What the simulation runs over: stays scored, seeds modelled, gains and thresholds.
+
+    Attributes:
+        stays: Counts of stays a design scores; empty for every stay the budget scored.
+        seeds: Counts of seeds the normal model answers for.
+        gains: True gains the rule is read at; zero is the rate of false replacement.
+        seed_gaps: Per kind of pair, the spreads s between backbones its seed condition is
+            widened by, each at one budget or, named by ``None``, at every budget; a kind not
+            named compares within one backbone.
+    """
+
+    stays: tuple[int, ...] = ()
+    seeds: tuple[int, ...] = SEEDS
+    gains: tuple[float, ...] = GAINS
+    seed_gaps: Mapping[str, tuple[tuple[str | None, float], ...]] = field(default_factory=dict)
+
+    def thresholds_of(self, kind: str, budget: str) -> tuple[float | None, ...]:
+        found = tuple(
+            value for at, value in self.seed_gaps.get(kind, ()) if at is None or at == budget
+        )
+        return found or (None,)
+
+    def stays_of(self, scored: int) -> tuple[int, ...]:
+        return self.stays or (scored,)
+
+
+DEFAULT_DESIGN = Design()
 
 
 def simulate(
-    answers: dict[SideKey, Answers],
+    answers: Mapping[SideKey, Answers],
     pairs: Sequence[Pair],
     *,
     draws: int,
     readings: int,
     seed: int,
+    design: Design = DEFAULT_DESIGN,
 ) -> tuple[list[ComponentRow], list[PowerRow]]:
     """Components and power for every pair at every number of stays and seeds.
 
@@ -419,17 +456,16 @@ def simulate(
     components: list[ComponentRow] = []
     power: list[PowerRow] = []
     rng = np.random.default_rng(seed)
-    for budget in BUDGETS:
+    budgets = sorted({p.budget for p in pairs}, key=budget_order)
+    for index, budget in enumerate(budgets):
         at_budget = [p for p in pairs if p.budget == budget]
-        if not at_budget:
-            continue
         first = answers[at_budget[0].control]
         for side in {side for p in at_budget for side in (p.control, p.candidate)}:
             if answers[side].units != first.units:
                 raise ValueError(f"{side} scored other stays than {at_budget[0].control}")
         outcome = first.outcome
-        for stays in STAYS:
-            drawn = StayDraws(outcome, stays, draws, seed=seed + stays + int(budget))
+        for stays in design.stays_of(len(outcome)):
+            drawn = StayDraws(outcome, stays, draws, seed=seed + stays + 7919 * index)
             read = _read_pairs(answers, at_budget, drawn.counts, outcome)
             for p in at_budget:
                 differences, errors = read[p]
@@ -446,10 +482,11 @@ def simulate(
                         parts.stays,
                         parts.interaction,
                         float(errors.mean()),
+                        parts.seed_error,
                     )
                 )
-                for threshold in thresholds_of(p.kind):
-                    for gain in GAINS:
+                for threshold in design.thresholds_of(p.kind, budget):
+                    for gain in design.gains:
                         row = (p.kind, p.name, budget, stays)
                         power.append(
                             PowerRow(
@@ -473,7 +510,7 @@ def simulate(
                                 ),
                             )
                         )
-                        for count in SEEDS:
+                        for count in design.seeds:
                             power.append(
                                 PowerRow(
                                     *row,
@@ -493,7 +530,7 @@ CHUNK = 250
 
 
 def _read_pairs(
-    answers: dict[SideKey, Answers],
+    answers: Mapping[SideKey, Answers],
     pairs: Sequence[Pair],
     counts: Counts,
     outcome: NDArray[np.bool_],
@@ -590,7 +627,10 @@ def median_power(
 
 
 def render(
-    components: Sequence[ComponentRow], power: Sequence[PowerRow], checked: Sequence[CheckRow]
+    components: Sequence[ComponentRow],
+    power: Sequence[PowerRow],
+    checked: Sequence[CheckRow],
+    design: Design = DEFAULT_DESIGN,
 ) -> str:
     sections: list[str] = []
     if checked:
@@ -600,17 +640,19 @@ def render(
             f"{statistics.median(ratios):.3f}, range {min(ratios):.3f} to {max(ratios):.3f}"
         )
     sections.append(table(*_components_table(components)))
-    for budget in BUDGETS:
-        for kind in ("A", "B", "C", "C0"):
-            for threshold in thresholds_of(kind):
-                rows = list(_power_rows(power, kind, budget, threshold))
+    budgets = sorted({r.budget for r in power}, key=budget_order)
+    kinds = sorted({r.kind for r in power})
+    for budget in budgets:
+        for kind in kinds:
+            for threshold in design.thresholds_of(kind, budget):
+                rows = list(_power_rows(power, kind, budget, threshold, design))
                 if rows:
-                    note = "" if threshold is None else f", pretraining-seed gap {threshold}"
+                    note = "" if threshold is None else f", spread between backbones {threshold}"
                     sections.append(
                         f"Kind {kind} at {budget} stays{note}: median power over pairs [range]"
                     )
                     sections.append(
-                        table(("stays", "source", "seeds", *(f"δ={g}" for g in GAINS)), rows)
+                        table(("stays", "source", "seeds", *(f"δ={g}" for g in design.gains)), rows)
                     )
     return "\n\n".join(sections)
 
@@ -627,6 +669,7 @@ def _components_table(
         "stays part",
         "interaction",
         "interval SE",
+        "seed SE",
     )
     keys = sorted({(c.kind, c.budget, c.stays) for c in components}, key=_order)
 
@@ -642,24 +685,32 @@ def _components_table(
                 f"{statistics.median(c.stays_part for c in group):.4f}",
                 f"{statistics.median(c.interaction for c in group):.4f}",
                 f"{statistics.median(c.mean_interval_error for c in group):.4f}",
+                f"{statistics.median(c.seed_error for c in group):.4f}",
             )
 
     return header, rows()
 
 
-def _order(key: tuple[str, str, int]) -> tuple[str, int, int]:
+def _order(key: tuple[str, str, int]) -> tuple[str, float, int]:
     kind, budget, stays = key
-    return kind, int(budget), stays
+    return kind, budget_order(budget), stays
 
 
 def _power_rows(
-    power: Sequence[PowerRow], kind: str, budget: str, threshold: float | None
+    power: Sequence[PowerRow], kind: str, budget: str, threshold: float | None, design: Design
 ) -> Iterator[tuple[str, ...]]:
-    for stays in STAYS:
-        designs = [("direct", 10), ("measured seeds", 10), *(("model", k) for k in SEEDS)]
+    counts = sorted({r.stays for r in power if (r.kind, r.budget) == (kind, budget)})
+    ran = {r.seeds for r in power if r.source == "direct"}
+    for stays in counts:
+        designs = [
+            *(("direct", k) for k in sorted(ran)),
+            *(("measured seeds", k) for k in sorted(ran)),
+            *(("model", k) for k in design.seeds),
+        ]
         for source, seeds in designs:
             cells = [
-                median_power(power, kind, budget, stays, seeds, g, source, threshold) for g in GAINS
+                median_power(power, kind, budget, stays, seeds, g, source, threshold)
+                for g in design.gains
             ]
             if all(c is None for c in cells):
                 continue
@@ -676,11 +727,25 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--predictions", type=Path, action="append", required=True, metavar="CSV")
     parser.add_argument("--out", type=Path, required=True, metavar="DIR")
     parser.add_argument(
-        "--backbone",
-        nargs=4,
+        "--pair",
+        nargs=6,
         action="append",
         default=[],
-        metavar=("SHAPE", "LABEL", "LOW_CAMPAIGN", "HIGH_CAMPAIGN"),
+        metavar=(
+            "KIND",
+            "LABEL",
+            "CONTROL_CAMPAIGN",
+            "CONTROL",
+            "CANDIDATE_CAMPAIGN",
+            "CANDIDATE",
+        ),
+    )
+    parser.add_argument("--budgets", nargs="+", default=[], metavar="BUDGET")
+    parser.add_argument("--stays", nargs="+", type=int, default=[], metavar="N")
+    parser.add_argument("--gains", nargs="+", type=float, default=list(GAINS), metavar="GAIN")
+    parser.add_argument("--seeds", nargs="+", type=int, default=list(SEEDS), metavar="K")
+    parser.add_argument(
+        "--seed-gap", nargs=2, action="append", default=[], metavar=("KIND", "VALUE")
     )
     parser.add_argument("--check-predictions", type=Path, metavar="CSV")
     parser.add_argument("--check-comparisons", type=Path, metavar="CSV")
@@ -690,9 +755,22 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     arguments = parser.parse_args(argv)
     if (arguments.check_predictions is None) != (arguments.check_comparisons is None):
         parser.error("--check-predictions and --check-comparisons go together")
-    if not arguments.backbone:
-        parser.error("name at least one --backbone")
+    if not arguments.pair:
+        parser.error("name at least one --pair")
     return arguments
+
+
+def design_of(arguments: argparse.Namespace) -> Design:
+    gaps: dict[str, tuple[tuple[str | None, float], ...]] = {}
+    for kind, value in arguments.seed_gap:
+        at, _, spread = value.rpartition("=")
+        gaps[kind] = (*gaps.get(kind, ()), (at or None, float(spread)))
+    return Design(
+        stays=tuple(arguments.stays),
+        seeds=tuple(arguments.seeds),
+        gains=tuple(arguments.gains),
+        seed_gaps=gaps,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -707,16 +785,22 @@ def main(argv: Sequence[str] | None = None) -> None:
             (*CheckRow._fields, "ratio"),
             ((*c, c.ratio) for c in checked),
         )
-    backbones = [Backbone(*each) for each in arguments.backbone]
-    campaigns = {b.low for b in backbones} | {b.high for b in backbones}
+    specs = [PairSpec(*each) for each in arguments.pair]
+    campaigns = {s.control_campaign for s in specs} | {s.candidate_campaign for s in specs}
     answers = read_answers(arguments.predictions, campaigns)
-    pairs = [p for p in pairs_of(backbones) if p.control in answers and p.candidate in answers]
+    pairs = pairs_of(specs, answers, arguments.budgets)
+    design = design_of(arguments)
     components, power = simulate(
-        answers, pairs, draws=arguments.draws, readings=arguments.readings, seed=arguments.seed
+        answers,
+        pairs,
+        draws=arguments.draws,
+        readings=arguments.readings,
+        seed=arguments.seed,
+        design=design,
     )
     write(out / COMPONENTS, ComponentRow._fields, components)
     write(out / POWER, PowerRow._fields, power)
-    print(render(components, power, checked))
+    print(render(components, power, checked, design))
 
 
 if __name__ == "__main__":

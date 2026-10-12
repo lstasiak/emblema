@@ -13,9 +13,10 @@ from scripts.comparison_power_report import (
     COMPONENTS,
     POWER,
     Answers,
-    Backbone,
     Components,
+    Design,
     Pair,
+    PairSpec,
     SideKey,
     StayDraws,
     drawn_side,
@@ -119,6 +120,7 @@ def test_components_recover_known_parts() -> None:
     assert parts.interaction == pytest.approx(0.01, rel=0.05)
     assert parts.seed == pytest.approx(float(np.std(effects, ddof=1)), rel=0.05)
     assert parts.interval_error(4) == pytest.approx(sqrt(0.02**2 + 0.01**2 / 4), rel=0.05)
+    assert parts.seed_error == pytest.approx(sqrt(0.03**2 + 0.01**2) / sqrt(10), rel=0.2)
 
 
 @pytest.mark.parametrize(
@@ -127,7 +129,10 @@ def test_components_recover_known_parts() -> None:
         ([0.05, 0.06, 0.04], 0.01, None, True),
         ([0.05, 0.06, 0.04], 0.03, None, False),  # the interval holds zero
         ([0.30, -0.10, -0.05], 0.01, None, False),  # the seeds disagree
-        ([0.05, 0.06, 0.04], 0.01, 0.06, False),  # below the pretraining seeds' gap
+        ([0.05, 0.06, 0.04], 0.01, 0.03, False),  # within twice the spread between backbones
+        ([0.05, 0.06, 0.04], 0.01, 0.01, True),  # past it: 2·√(0.0058² + 0.01²) is 0.023
+        ([0.03, 0.03, 0.03], 0.01, None, True),  # seeds that do not differ have no condition
+        ([0.03, 0.03, 0.03], 0.01, 0.02, False),  # but the spread between backbones still holds
     ],
 )
 def test_the_rule_needs_every_condition(
@@ -137,7 +142,9 @@ def test_the_rule_needs_every_condition(
 
 
 def test_the_model_replaces_rarely_without_a_gain_and_always_with_a_large_one() -> None:
-    parts = Components(seed=0.02, stays=0.01, interaction=0.01, effects=np.zeros(10), gap=0.0)
+    parts = Components(
+        seed=0.02, stays=0.01, interaction=0.01, effects=np.zeros(10), gap=0.0, seed_error=0.007
+    )
     rng = np.random.default_rng(5)
     assert modelled(parts, 10, 0.0, None, 20_000, rng) < 0.06
     assert modelled(parts, 10, 0.2, None, 2_000, rng) == 1.0
@@ -146,19 +153,40 @@ def test_the_model_replaces_rarely_without_a_gain_and_always_with_a_large_one() 
     )
 
 
-def test_pairs_compare_backbones_only_within_a_shape() -> None:
-    backbones = [Backbone("small", "a", "a1", "a2"), Backbone("small", "b", "b1", "b2")]
-    backbones.append(Backbone("large", "c", "c1", "c2"))
-    found = pairs_of(backbones)
-    between = [p for p in found if p.kind == "B"]
-    assert {(p.control.campaign, p.candidate.campaign) for p in between} == {
-        ("a1", "b1"),
-        ("a2", "b2"),
-    }
-    assert len([p for p in found if p.kind == "C0"]) == 3 * 3
-    assert {p.candidate.candidate for p in found if p.kind == "A"} == {
-        "frozen_probe@learning_rate=0.03"
-    }
+def sides(*keys: tuple[str, str, str]) -> dict[SideKey, Answers]:
+    return {SideKey(*key): answers(stays=10, seed=i) for i, key in enumerate(keys)}
+
+
+def test_pairs_are_read_at_every_budget_both_sides_hold_in_the_order_of_their_size() -> None:
+    held = sides(
+        ("a", "frozen_ridge", "all"),
+        ("a", "frozen_ridge", "200"),
+        ("a", "frozen_ridge", "1000"),
+        ("b", "frozen_ridge", "200"),
+        ("b", "frozen_ridge", "all"),
+        ("b", "frozen_ridge", "500"),
+    )
+    spec = PairSpec("B", "b / a", "a", "frozen_ridge", "b", "frozen_ridge")
+
+    found = pairs_of([spec], held)
+
+    assert [(p.kind, p.name, p.budget) for p in found] == [
+        ("B", "b / a", "200"),
+        ("B", "b / a", "all"),
+    ]
+    assert found[0].control == SideKey("a", "frozen_ridge", "200")
+    assert found[0].candidate == SideKey("b", "frozen_ridge", "200")
+    assert pairs_of([spec], held, ["all"]) == found[1:]
+
+
+def test_a_budget_one_side_was_not_exported_at_is_refused() -> None:
+    held = sides(("a", "frozen_ridge", "200"), ("b", "frozen_ridge", "500"))
+    spec = PairSpec("B", "b / a", "a", "frozen_ridge", "b", "frozen_ridge")
+
+    with pytest.raises(ValueError, match="not exported at 500"):
+        pairs_of([spec], held, ["500"])
+    with pytest.raises(ValueError, match="shares no budget"):
+        pairs_of([spec], held)
 
 
 def write_predictions(path: Path, rows: list[tuple[object, ...]]) -> None:
@@ -212,13 +240,38 @@ def test_sides_that_scored_other_stays_are_not_paired() -> None:
         )
 
 
+def test_seeds_that_answered_alike_leave_a_seed_error_of_zero_and_the_rule_still_reads() -> None:
+    control, candidate = answers(seeds=1, stays=40), answers(seeds=1, stays=40, seed=1)
+    alike = {
+        SideKey("a", "frozen_ridge", "all"): Answers(
+            np.repeat(control.scores, 3, axis=0), control.outcome, control.units
+        ),
+        SideKey("b", "frozen_ridge", "all"): Answers(
+            np.repeat(candidate.scores, 3, axis=0), candidate.outcome, candidate.units
+        ),
+    }
+    pair = Pair("B", "b / a", "all", *alike)
+
+    components, power = simulate(
+        alike, [pair], draws=8, readings=10, seed=1, design=Design(gains=(0.0, 0.5))
+    )
+
+    assert components[0].seed == 0.0
+    assert components[0].seed_error == 0.0
+    assert components[0].stays == 40
+    direct = [r.power for r in power if r.source == "direct"]
+    assert direct[0] < 1.0
+    assert direct[1] == 1.0
+
+
 def test_a_run_writes_every_table(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     rows: list[tuple[object, ...]] = []
-    candidates = ("frozen_ridge", "frozen_probe@learning_rate=0.03", "full_fine_tuning")
-    for index, campaign in enumerate(("low-a", "low-b")):
-        for offset, candidate in enumerate((*candidates, "from_scratch")):
-            side = answers(stays=80, seed=10 * index + offset)
-            rows += rows_of(campaign, candidate, "50", side)
+    candidates = ("frozen_ridge", "untrained_ridge", "full_fine_tuning", "from_scratch")
+    for index, campaign in enumerate(("mix-a", "mix-b")):
+        for offset, candidate in enumerate(candidates):
+            for budget in ("200", "500"):
+                side = answers(stays=80, seed=10 * index + offset)
+                rows += rows_of(campaign, candidate, budget, side)
     write_predictions(tmp_path / "p.csv", rows)
     with (tmp_path / "comparisons.csv").open("w", newline="") as stream:
         writer = csv.writer(stream)
@@ -235,7 +288,7 @@ def test_a_run_writes_every_table(tmp_path: Path, capsys: pytest.CaptureFixture[
             )
         )
         writer.writerow(
-            ("low-a", "frozen_ridge", "low-b", "frozen_ridge", "50", -0.1, 0.1, "auroc_shortfall")
+            ("mix-a", "frozen_ridge", "mix-b", "frozen_ridge", "200", -0.1, 0.1, "auroc_shortfall")
         )
     out = tmp_path / "out"
     main(
@@ -244,16 +297,14 @@ def test_a_run_writes_every_table(tmp_path: Path, capsys: pytest.CaptureFixture[
             str(tmp_path / "p.csv"),
             "--out",
             str(out),
-            "--backbone",
-            "small",
-            "a",
-            "low-a",
-            "high-a",
-            "--backbone",
-            "small",
-            "b",
-            "low-b",
-            "high-b",
+            *("--pair", "A", "a", "mix-a", "untrained_ridge", "mix-a", "frozen_ridge"),
+            *("--pair", "B", "b / a", "mix-a", "frozen_ridge", "mix-b", "frozen_ridge"),
+            *("--pair", "C", "a", "mix-a", "from_scratch", "mix-a", "full_fine_tuning"),
+            *("--pair", "C0", "b / a", "mix-a", "from_scratch", "mix-b", "from_scratch"),
+            *("--seed-gap", "B", "0.004", "--seed-gap", "B", "500=0.006"),
+            *("--stays", "40", "80"),
+            *("--gains", "0", "0.02"),
+            *("--seeds", "5", "20"),
             "--check-predictions",
             str(tmp_path / "p.csv"),
             "--check-comparisons",
@@ -265,13 +316,22 @@ def test_a_run_writes_every_table(tmp_path: Path, capsys: pytest.CaptureFixture[
         ]
     )
     with (out / COMPONENTS).open() as stream:
-        kinds = {row["kind"] for row in csv.DictReader(stream)}
-    assert kinds == {"A", "B", "C", "C0"}
+        components = list(csv.DictReader(stream))
+    assert {row["kind"] for row in components} == {"A", "B", "C", "C0"}
+    assert {row["budget"] for row in components} == {"200", "500"}
+    assert {row["stays"] for row in components} == {"40", "80"}
+    assert all(row["seed_error"] for row in components)
     with (out / POWER).open() as stream:
-        sources = {row["source"] for row in csv.DictReader(stream)}
-    assert sources == {"direct", "measured seeds", "model"}
+        power = list(csv.DictReader(stream))
+    assert {row["source"] for row in power} == {"direct", "measured seeds", "model"}
+    assert {row["seeds"] for row in power if row["source"] == "model"} == {"5", "20"}
+    thresholds = {(row["budget"], row["threshold"]) for row in power if row["kind"] == "B"}
+    assert thresholds == {("200", "0.004"), ("500", "0.004"), ("500", "0.006")}
+    assert {row["threshold"] for row in power if row["kind"] == "A"} == {""}
     assert (out / CHECK).exists()
-    assert "Kind B at 50 stays" in capsys.readouterr().out
+    printed = capsys.readouterr().out
+    assert "Kind B at 500 stays, spread between backbones 0.004" in printed
+    assert "δ=0.02" in printed
 
 
 def test_a_check_needs_both_files(tmp_path: Path) -> None:
@@ -282,11 +342,7 @@ def test_a_check_needs_both_files(tmp_path: Path) -> None:
                 str(tmp_path / "p.csv"),
                 "--out",
                 str(tmp_path),
-                "--backbone",
-                "s",
-                "a",
-                "l",
-                "h",
+                *("--pair", "B", "b / a", "a", "frozen_ridge", "b", "frozen_ridge"),
                 "--check-predictions",
                 str(tmp_path / "p.csv"),
             ]
