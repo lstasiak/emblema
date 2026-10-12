@@ -61,6 +61,10 @@ class InvalidObjectiveLossError(PretrainingError, ValueError):
     pass
 
 
+class InvalidObjectiveTargetError(PretrainingError, ValueError):
+    pass
+
+
 class IncomparableFloorError(PretrainingError, ValueError):
     pass
 

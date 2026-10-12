@@ -22,6 +22,7 @@ from scripts.campaign_pairs_report import (
     CELLS,
     COMPARISON_COLUMNS,
     COMPARISONS,
+    GROUPED_BY,
     PREDICTIONS,
     Answers,
     Comparison,
@@ -515,3 +516,79 @@ def test_main_exports_the_answers_of_campaigns_read_by_area_and_pairs_them(
     assert written["measure"] == "auroc_shortfall"
     assert float(written["floor"]) == pytest.approx(0.02)
     assert "per seed, mean ± SE" in printed
+
+
+def grouped(*campaign_ids: CampaignId, ref: CandidateRef) -> Side:
+    return Side(GROUPED_BY.join(str(each) for each in campaign_ids), str(ref), "200")
+
+
+def test_a_side_of_several_campaigns_is_read_as_their_mean_pooled_and_seed_by_seed() -> None:
+    """The contender of one campaign gains nothing, of the other a quarter: together an eighth."""
+    first, second = by_area(BY_AREA, CONTROL_ANSWERS), by_area(BY_AREA_TOO, PERFECT_ANSWERS)
+
+    read = paired_by_area(
+        [first, second], side(BY_AREA, CONTROL), grouped(BY_AREA, BY_AREA_TOO, ref=CONTENDER)
+    )
+
+    assert read.pairing == "area-pooled"
+    assert (read.repeats, read.units) == (3, 6)
+    assert read.control_error.pooled == pytest.approx(0.25)
+    assert read.candidate_error.pooled == pytest.approx(0.125)
+    assert read.difference.reduction == pytest.approx(0.125)
+    assert read.per_seed == pytest.approx((0.125, 0.125, 0.125))
+    assert read.seed_se == pytest.approx(0.0)
+    assert str(read.candidate).endswith(f"{str(BY_AREA)[:8]}+{str(BY_AREA_TOO)[:8]}")
+    named = dict(zip(COMPARISON_COLUMNS, read.row(), strict=True))
+    assert named["candidate_campaign"] == f"{BY_AREA}+{BY_AREA_TOO}"
+
+
+def test_a_side_of_one_campaign_grouped_with_nothing_reads_as_it_always_did() -> None:
+    first, second = by_area(BY_AREA, CONTROL_ANSWERS), by_area(BY_AREA_TOO, PERFECT_ANSWERS)
+
+    alone = paired_by_area([first, second], side(BY_AREA, CONTENDER), side(BY_AREA_TOO, CONTENDER))
+    as_group = paired_by_area(
+        [first, second], grouped(BY_AREA, ref=CONTENDER), grouped(BY_AREA_TOO, ref=CONTENDER)
+    )
+
+    assert as_group.difference.reduction == alone.difference.reduction
+    assert as_group.per_seed == alone.per_seed
+    assert as_group.row() == alone.row()
+
+
+def test_a_grouped_side_whose_campaigns_ran_on_other_seeds_is_refused() -> None:
+    first, second = by_area(BY_AREA, CONTROL_ANSWERS), by_area(BY_AREA_TOO, PERFECT_ANSWERS)
+    rows = [
+        row
+        for row in export([first, second])
+        if not (row.campaign == str(BY_AREA_TOO) and row.seed == 3)
+    ]
+
+    with pytest.raises(ValueError, match="same seeds"):
+        pair(
+            rows,
+            side(BY_AREA, CONTROL),
+            grouped(BY_AREA, BY_AREA_TOO, ref=CONTENDER),
+            bootstrap=BOOTSTRAP,
+            floor_share=0.02,
+            floor_area=0.01,
+            answers=Answers(export_predictions([first, second])),
+        )
+
+
+def test_a_grouped_side_is_read_by_area_alone() -> None:
+    rows = export(
+        [
+            selection(FLOOR, {CONTROL: (6.0, 8.0, 10.0), CONTENDER: (5.0, 7.0, 9.0)}),
+            selection(DOUBLED, {CONTROL: (6.0, 8.0, 10.0), CONTENDER: (5.0, 7.0, 9.0)}),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="by area alone"):
+        pair(
+            rows,
+            side(FLOOR, CONTROL),
+            grouped(FLOOR, DOUBLED, ref=CONTENDER),
+            bootstrap=BOOTSTRAP,
+            floor_share=0.02,
+            floor_area=0.01,
+        )

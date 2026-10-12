@@ -10,7 +10,7 @@ from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
-from tests.support.experiments import budget, configuration
+from tests.support.experiments import LATENT, budget, configuration
 
 CODEC = ExperimentConfigurationDocument()
 
@@ -144,3 +144,24 @@ def test_a_document_listing_its_corpora_in_another_order_states_the_same_configu
     document["fraction"] = {"tep": 0.25, "utsd/IoT_baian": 0.25, "utsd/ERA5_surface": 0.25}
 
     assert CODEC.decode(document) == mixed
+
+
+def test_the_target_travels_inside_the_objective_and_only_where_it_is_a_state() -> None:
+    latent = configuration(target=LATENT)
+
+    document = CODEC.encode(latent)
+
+    assert document["objective"] == {
+        "kind": "mse",
+        "huber_delta": 0.0,
+        "target": {"kind": "latent", "layers": 1, "momentum": 0.996, "final_momentum": 1.0},
+    }
+    assert CODEC.decode(json.loads(json.dumps(document))) == latent
+    assert CODEC.encode(configuration())["objective"] == {"kind": "mse", "huber_delta": 0.0}
+
+
+def test_a_document_written_before_a_target_existed_predicts_the_token_s_value() -> None:
+    document = CODEC.encode(configuration())
+    assert document["objective"] == {"kind": "mse", "huber_delta": 0.0}
+
+    assert CODEC.decode(document) == configuration()

@@ -5,7 +5,7 @@ validation side**: the frozen test side of every task is opened once, at the end
 comparison were registered before the run they judge ([preregistration](preregistration.md)).
 The evidence for each line is in [`docs/verification/`](verification/README.md).
 
-Last updated 2026-10-05.
+Last updated 2026-10-12.
 
 ## The claim
 
@@ -239,7 +239,17 @@ This is the curve's left end; whether the gain grows with the data is read at th
 Two variants of the pretext, a forecast tail and masks over three quarters of a window, were
 read by the same probe on a fifth of the tuning side ([note](verification/pretext-variants.md),
 2026-10-06): neither beats the mixture's masks at 50 stays (−0.017 and −0.015 in area, intervals
-crossing zero), so the curve continues under the masks it started with.
+crossing zero), so the curve continues under the masks it started with. A second objective, which
+predicts a trailing teacher's states at the hidden tokens rather than their values
+([ADR-0054](adr/0054-predicting-the-teachers-states-at-the-hidden-tokens.md),
+[note](verification/pretext-variants.md), 2026-10-11), was pretrained twice and read by the
+probe over the blocks side by side: it is worse than the mixture's masks by 0.03 at 50 stays past
+the spread of pretraining, no better than an untrained encoder, and worse on FD001 by 5.5 and
+9.5 RMSE. Read again (2026-10-12), its states on the stays fill 4 to 6 directions of 256 against
+7 to 8 under the mixture's masks measured the same way, and lose most of their channel and time
+identity; the pretext is barely learnt there beyond the window's mean state, and the second
+pretraining kept its second epoch of eight by a rule that assumes a fixed baseline. One design of this
+objective failed; whether a target no line can answer teaches better features is still open.
 
 ## Limitations
 

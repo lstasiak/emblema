@@ -63,13 +63,7 @@ class ReconstructionLoss(nn.Module):
         read in double keeps its double.
         """
         dtype = losses_dtype(prediction)
-        prediction = prediction.to(dtype)
-        target = batch.features[..., 0].to(dtype)
-        if self.loss.kind is LossKind.MSE:
-            return functional.mse_loss(prediction, target, reduction="none")
-        return functional.huber_loss(
-            prediction, target, reduction="none", delta=self.loss.huber_delta
-        )
+        return elementwise(self.loss, prediction.to(dtype), batch.features[..., 0].to(dtype))
 
     def summed_over_mean(self, batch: TokenTensors, positions: Tensor) -> tuple[Tensor, Tensor]:
         """What predicting the channel mean costs over those positions, and how many were scored.
@@ -84,3 +78,15 @@ class ReconstructionLoss(nn.Module):
 def losses_dtype(prediction: Tensor) -> torch.dtype:
     """The precision the losses are read in: the prediction's, widened to single at least."""
     return torch.promote_types(prediction.dtype, torch.float32)
+
+
+def elementwise(loss: ObjectiveLoss, prediction: Tensor, target: Tensor) -> Tensor:
+    """What the reading makes of each element's distance from its target, element by element.
+
+    The one definition both scorers compute — a value against a value, a state against a state
+    coordinate by coordinate — so that a token predicted either way is read by the same
+    arithmetic, and ``ObjectiveLoss.of_error`` is what each element is held to.
+    """
+    if loss.kind is LossKind.MSE:
+        return functional.mse_loss(prediction, target, reduction="none")
+    return functional.huber_loss(prediction, target, reduction="none", delta=loss.huber_delta)

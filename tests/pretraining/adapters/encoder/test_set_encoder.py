@@ -279,3 +279,24 @@ def test_a_layer_below_the_last_is_normalised_as_the_last_is(encoder: SetEncoder
     torch.testing.assert_close(
         every[1], encoder.norm(encoder.blocks[0](embedded, batch.padding_mask))
     )
+
+
+def test_the_residual_stream_is_what_the_layers_are_before_the_final_normalisation(
+    encoder: SetEncoder,
+) -> None:
+    batch = random_batch(2, 7, seed=6)
+
+    stream = encoder.residual_states(*batch.args)
+    every = encoder.layer_states(*batch.args)
+
+    assert stream.shape == every.shape
+    torch.testing.assert_close(
+        torch.stack([encoder.norm(s) for s in stream]), every, rtol=0, atol=0
+    )
+    assert not torch.allclose(stream[-1], every[-1])
+    torch.testing.assert_close(
+        stream[0],
+        encoder.value_projection(batch.features)
+        + encoder.channel_embedding(batch.channel_ids)
+        + encoder.time_encoding(batch.timestamps, batch.timeless),
+    )

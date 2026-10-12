@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Self
 
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
@@ -9,6 +9,7 @@ from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
+from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.shared.kernel.compute import ComputeTier
@@ -29,7 +30,8 @@ class ExperimentConfiguration:
     ``[0, 1)``, since a run that drops everything learns nothing; the decoder has at least one
     layer; the corpus fraction is a share a run could read; no corpus has its passes or its
     fraction stated twice, and both are stated in the order of their corpus names, so that one
-    configuration is one value whatever order a file or a database listed the corpora in.
+    configuration is one value whatever order a file or a database listed the corpora in; a
+    latent target reads no more blocks than the encoder has.
 
     Attributes:
         name: What the experiment is called, and what its runs are grouped under.
@@ -45,6 +47,9 @@ class ExperimentConfiguration:
         loss: What the objective counts a miss as. A parameter of the method like the shape: a
             loss that bounds what one excursion costs is a different run over the same data, and
             two readings give losses that do not compare.
+        target: What the prediction at a hidden token is compared with: the token's value, as
+            every run before the knob existed, or the state a trailing copy of the encoder gives
+            it. Another parameter of the method: the two are different runs over the same data.
         budget: How long the run trains and in how large a step.
         precision: What the forward and backward pass are computed at.
         checkpoint: How often resumable state is written.
@@ -66,6 +71,7 @@ class ExperimentConfiguration:
     budget: TrainingBudget
     precision: Precision
     checkpoint: CheckpointPolicy
+    target: ObjectiveTarget = field(default_factory=ObjectiveTarget.value)
     passes: tuple[CorpusPasses, ...] = ()
     fractions: tuple[CorpusFraction, ...] = ()
 
@@ -91,6 +97,11 @@ class ExperimentConfiguration:
         if self.decoder_layers < 1:
             raise InvalidExperimentConfigurationError(
                 f"decoder_layers must be positive, got {self.decoder_layers}"
+            )
+        if self.target.layers > self.architecture.layers:
+            raise InvalidExperimentConfigurationError(
+                f"the target reads {self.target.layers} blocks of an encoder of "
+                f"{self.architecture.layers}"
             )
         # Building the share runs its invariant: a fraction no run could read is no configuration.
         _ = self.corpus_share
@@ -137,7 +148,7 @@ class ExperimentConfiguration:
         must digest to one signature. Passes and fractions are rendered last, by corpus name,
         and only where stated: a run that reads every corpus once, at the mixture's share,
         renders as it did before either knob existed. The tail is rendered only where it is
-        drawn, for the same reason.
+        drawn, and the target only where it is a state, for the same reason.
         """
         passes = {
             f"passes.{stated.corpus}": stated.passes
@@ -155,6 +166,16 @@ class ExperimentConfiguration:
                 "horizon_max_span": float(masking.horizon_max_span),
             }
             if masking.has_horizon
+            else {}
+        )
+        target: dict[str, str | int | float] = (
+            {
+                "target": str(self.target.kind),
+                "target_layers": self.target.layers,
+                "momentum": float(self.target.momentum),
+                "final_momentum": float(self.target.final_momentum),
+            }
+            if self.target.is_latent
             else {}
         )
         return {
@@ -176,6 +197,7 @@ class ExperimentConfiguration:
             "expected_hidden_ratio": float(masking.expected_ratio),
             "loss": str(self.loss.kind),
             "huber_delta": float(self.loss.huber_delta),
+            **target,
             "epochs": self.budget.epochs,
             "batch_size": self.budget.batch_size,
             "accumulation_steps": self.budget.accumulation_steps,

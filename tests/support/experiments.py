@@ -22,6 +22,7 @@ from emblema.pretraining.domain.training.corpus_validation import CorpusValidati
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
+from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
@@ -33,6 +34,8 @@ from emblema.shared.kernel.tokens import Token, TokenWindow
 
 TINY = EncoderArchitecture(width=16, heads=2, layers=1, feedforward_width=32, time_frequencies=4)
 MIXTURE = MaskingStrategy(channel_rate=0.15, block_rate=0.6, block_span=0.5, token_rate=0.1)
+# The latent target at the test's scale: the tiny encoder has one block, so one is all it reads.
+LATENT = ObjectiveTarget.latent(layers=1)
 CHANNELS = 3
 CHANNEL_NAMES = ("invented/a", "invented/b", "invented/c")
 
@@ -51,6 +54,7 @@ def configuration(**overrides: Any) -> ExperimentConfiguration:
         budget=budget(),
         precision=Precision.FP32,
         checkpoint=CheckpointPolicy(every_steps=2),
+        target=ObjectiveTarget.value(),
     )
     return replace(stated, **overrides)
 

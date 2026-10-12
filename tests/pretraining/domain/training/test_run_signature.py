@@ -9,7 +9,7 @@ from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.pretraining.domain.training.training_corpus_shape import TrainingCorpusShape
 from emblema.pretraining.domain.training.training_mixture_shape import TrainingMixtureShape
 from emblema.shared.kernel.checksums import Checksum
-from tests.support.experiments import budget, configuration, continued, corpus, mixture
+from tests.support.experiments import LATENT, budget, configuration, continued, corpus, mixture
 
 # The control experiment at tier S over the control corpus as it was published (window 32,
 # stride 12, a quarter held out), as the registry and the result documents sign it. The digest
@@ -101,3 +101,11 @@ def test_a_corpus_read_more_than_once_an_epoch_is_another_run() -> None:
 
     assert RunSignature.of(weighted, windows) != RunSignature.of(configuration(), windows)
     assert RunSignature.of(weighted, windows) == RunSignature.of(weighted, windows)
+
+
+def test_a_run_that_predicts_states_signs_as_another_run() -> None:
+    windows = mixture()
+    latent = configuration(target=LATENT)
+
+    assert RunSignature.of(latent, windows) != RunSignature.of(configuration(), windows)
+    assert RunSignature.of(latent, windows) == RunSignature.of(latent, windows)

@@ -15,6 +15,7 @@ from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
+from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.pretraining.domain.training.training_mixture import TrainingMixture
@@ -24,6 +25,7 @@ from emblema.shared.kernel.retention import Retention
 from emblema.shared.kernel.tokens import Token, TokenWindow
 from tests.support.experiments import (
     CHANNEL_NAMES,
+    LATENT,
     budget,
     checksum_of,
     configuration,
@@ -35,9 +37,14 @@ from tests.support.experiments import (
 
 torch = pytest.importorskip("torch")
 
-from emblema.pretraining.adapters.objective.reconstruction_loss import (  # noqa: E402
-    ReconstructionLoss,
+from emblema.pretraining.adapters.objective.latent_prediction import (  # noqa: E402
+    LatentPrediction,
 )
+from emblema.pretraining.adapters.objective.masked_reconstruction import (  # noqa: E402
+    MaskedReconstruction,
+)
+from emblema.pretraining.adapters.objective.objective_score import ObjectiveScore  # noqa: E402
+from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape  # noqa: E402
 from emblema.pretraining.adapters.training.torch_training_runtime import (  # noqa: E402
     TorchTrainingRuntime,
     _duration,
@@ -52,6 +59,9 @@ pytestmark = pytest.mark.ml
 
 CORPUS = corpus(training=8, validation=4)
 MIXTURE = mixture(CORPUS)
+# What a run may predict at its hidden tokens; what the runtime does is the same under either.
+TARGETS = [ObjectiveTarget.value(), LATENT]
+TARGET_IDS = ["value", "latent"]
 
 
 class RecordingStore(InMemoryArtifactStore):
@@ -79,8 +89,9 @@ def checkpoint_at(
     return TrainingCheckpoint.read(store.get(ref), signature=signature)
 
 
-def test_the_same_configuration_twice_trains_the_same_weights() -> None:
-    stated = configuration(budget=budget(epochs=1, batch_size=2))
+@pytest.mark.parametrize("target", TARGETS, ids=TARGET_IDS)
+def test_the_same_configuration_twice_trains_the_same_weights(target: ObjectiveTarget) -> None:
+    stated = configuration(budget=budget(epochs=1, batch_size=2), target=target)
     first, second = InMemoryArtifactStore(), InMemoryArtifactStore()
 
     one = list(TorchTrainingRuntime(first, device="cpu").train(stated, MIXTURE))
@@ -133,9 +144,12 @@ def test_accumulated_micro_batches_make_one_step_between_them() -> None:
     assert (written.position.batches, written.position.steps) == (4, 2)
 
 
-def test_a_resumed_run_ends_where_the_uninterrupted_one_did() -> None:
+@pytest.mark.parametrize("target", TARGETS, ids=TARGET_IDS)
+def test_a_resumed_run_ends_where_the_uninterrupted_one_did(target: ObjectiveTarget) -> None:
     stated = configuration(
-        budget=budget(epochs=2, batch_size=2), checkpoint=CheckpointPolicy(every_steps=3)
+        budget=budget(epochs=2, batch_size=2),
+        checkpoint=CheckpointPolicy(every_steps=3),
+        target=target,
     )
     whole, halved = InMemoryArtifactStore(), InMemoryArtifactStore()
 
@@ -152,6 +166,9 @@ def test_a_resumed_run_ends_where_the_uninterrupted_one_did() -> None:
     picked_up = weights_of(halved, resumed[-1].backbone)
     for key, value in trained.items():
         assert torch.equal(value, picked_up[key]), key
+    # The trailing copy of the encoder is state the optimiser does not hold, so it is checked by
+    # name: a resume that rebuilt it rather than restored it would still agree on the encoder.
+    assert any(key.startswith("teacher.") for key in trained) == target.is_latent
 
 
 def test_a_checkpoint_records_where_the_run_stood() -> None:
@@ -166,8 +183,9 @@ def test_a_checkpoint_records_where_the_run_stood() -> None:
     assert (written.position.epoch, written.position.batches, written.position.steps) == (0, 3, 3)
 
 
-def test_what_a_run_stored_is_what_it_trained() -> None:
-    stated = configuration(budget=budget(epochs=1, batch_size=2))
+@pytest.mark.parametrize("target", TARGETS, ids=TARGET_IDS)
+def test_what_a_run_stored_is_what_it_trained(target: ObjectiveTarget) -> None:
+    stated = configuration(budget=budget(epochs=1, batch_size=2), target=target)
     store = InMemoryArtifactStore()
     runtime = TorchTrainingRuntime(store, device="cpu")
 
@@ -178,6 +196,7 @@ def test_what_a_run_stored_is_what_it_trained() -> None:
     restored = runtime.restore(kept)
     assert restored.encoder.architecture == stated.architecture
     assert not restored.training
+    assert isinstance(restored, LatentPrediction if target.is_latent else MaskedReconstruction)
 
 
 def test_a_precision_this_device_cannot_run_is_refused_before_anything_is_trained() -> None:
@@ -219,13 +238,15 @@ def test_an_epoch_whose_masks_hid_nothing_leaves_the_weights_finite() -> None:
 def test_a_loss_that_is_not_finite_stops_the_run_before_anything_is_stepped_or_kept(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    summed = ReconstructionLoss.summed
+    score = MaskedReconstruction.score
 
-    def not_finite(*arguments: Any) -> Any:
-        error, scored = summed(*arguments)
-        return error * math.nan, scored
+    def not_finite(*arguments: Any) -> ObjectiveScore:
+        scored = score(*arguments)
+        return ObjectiveScore(
+            error=scored.error * math.nan, trivial=scored.trivial, tokens=scored.tokens
+        )
 
-    monkeypatch.setattr(ReconstructionLoss, "summed", not_finite)
+    monkeypatch.setattr(MaskedReconstruction, "score", not_finite)
     store = RecordingStore()
 
     with pytest.raises(DivergedRunError, match="the loss of batch 0 in epoch 0 is nan"):
@@ -241,14 +262,14 @@ def test_gradients_that_are_not_finite_stop_the_run_before_their_step_is_taken(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The loss stays finite and only the gradient overflows, as half precision without a scaler."""
-    summed = ReconstructionLoss.summed
+    score = MaskedReconstruction.score
 
-    def overflowing(*arguments: Any) -> Any:
-        error, scored = summed(*arguments)
-        error.register_hook(lambda gradient: gradient * math.inf)
-        return error, scored
+    def overflowing(*arguments: Any) -> ObjectiveScore:
+        scored = score(*arguments)
+        scored.error.register_hook(lambda gradient: gradient * math.inf)
+        return scored
 
-    monkeypatch.setattr(ReconstructionLoss, "summed", overflowing)
+    monkeypatch.setattr(MaskedReconstruction, "score", overflowing)
     store = RecordingStore()
 
     with pytest.raises(DivergedRunError, match="a gradient is not finite at step 1 of epoch 0"):
@@ -295,6 +316,78 @@ def test_an_epoch_reports_the_corpus_it_validated_against_nothing_learnt() -> No
     assert scored[0].trivial == pytest.approx(1.0, abs=0.6)
     assert scored[0].relative == pytest.approx(scored[0].loss / scored[0].trivial)
     assert 0 < scored[0].tokens <= sum(len(window.values) for window in CORPUS.validation)
+
+
+def test_a_run_that_predicts_states_is_validated_against_the_visible_mean_state() -> None:
+    outcomes = list(
+        TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(
+            configuration(budget=budget(epochs=1), target=LATENT), MIXTURE
+        )
+    )
+
+    scored = outcomes[-1].validation
+    assert [entry.corpus for entry in scored] == [CORPUS.name]
+    assert scored[0].loss == outcomes[-1].validation_loss
+    # The targets are normalised states, so predicting their mean costs their spread, which is
+    # positive and finite, and what the model costs is read against it.
+    assert math.isfinite(scored[0].trivial)
+    assert scored[0].trivial > 0
+    assert scored[0].relative == pytest.approx(scored[0].loss / scored[0].trivial)
+    assert 0 < outcomes[-1].hidden_ratio < 1
+
+
+def test_a_run_whose_targets_collapse_is_refused_rather_than_scored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    score = LatentPrediction.score
+
+    def collapsed(*arguments: Any) -> ObjectiveScore:
+        scored = score(*arguments)
+        return ObjectiveScore(
+            error=scored.error, trivial=torch.zeros_like(scored.trivial), tokens=scored.tokens
+        )
+
+    monkeypatch.setattr(LatentPrediction, "score", collapsed)
+    store = RecordingStore()
+
+    with pytest.raises(DivergedRunError, match="have collapsed"):
+        list(
+            TorchTrainingRuntime(store, device="cpu").train(
+                configuration(budget=budget(epochs=1), target=LATENT), MIXTURE
+            )
+        )
+    assert Retention.DURABLE not in store.kept
+
+
+def test_the_teacher_trails_the_encoder_it_is_trained_beside() -> None:
+    """After a run the teacher is neither the encoder it started as nor the one trained."""
+    stated = configuration(
+        budget=budget(epochs=1, batch_size=2),
+        target=ObjectiveTarget.latent(layers=1, momentum=0.5, final_momentum=0.5),
+    )
+    torch.manual_seed(stated.budget.seed)
+    initial = {
+        key: value.clone()
+        for key, value in ObjectiveShape.of(stated, MIXTURE.vocabulary_size)
+        .build()
+        .encoder.state_dict()
+        .items()
+    }
+    store = InMemoryArtifactStore()
+
+    outcomes = list(TorchTrainingRuntime(store, device="cpu").train(stated, MIXTURE))
+
+    trained = weights_of(store, outcomes[-1].backbone)
+    encoder = {
+        k.removeprefix("encoder."): v for k, v in trained.items() if k.startswith("encoder.")
+    }
+    teacher = {
+        k.removeprefix("teacher."): v for k, v in trained.items() if k.startswith("teacher.")
+    }
+    assert encoder.keys() == teacher.keys() == initial.keys()
+    weights = [key for key in encoder if encoder[key].is_floating_point()]
+    assert any(not torch.equal(teacher[key], initial[key]) for key in weights)
+    assert any(not torch.equal(teacher[key], encoder[key]) for key in weights)
 
 
 def test_the_backbone_is_the_best_epoch_s_weights_not_the_last_epoch_s() -> None:

@@ -79,15 +79,6 @@ class TrivialityDiagnostic:
             ValueError: If ``groups`` does not name one group per window, or a channel of the
                 batch has no noise variance.
         """
-        if len(groups) != batch.batch_size:
-            raise ValueError(
-                f"groups must name one group per window: {len(groups)} for {batch.batch_size}"
-            )
-        ids = batch.channel_ids
-        apart = torch.isin(
-            ids, torch.tensor(sorted(self.channels_apart), dtype=torch.int64, device=ids.device)
-        )
-        floor = self._floor_of(ids)
         scorer = ReconstructionLoss(self.loss)
         errors = {
             name: scorer.of_tokens(prediction.to(torch.float64), batch)
@@ -99,20 +90,70 @@ class TrivialityDiagnostic:
                 ("mean", torch.zeros_like(model, dtype=torch.float64)),
             )
         }
+        channel = {MaskKind.CHANNEL}
+        return self.observe_errors(
+            batch,
+            masks,
+            groups,
+            model=errors["model"],
+            matched={
+                kind: errors["ridge" if kind in channel else "interpolation"] for kind in MaskKind
+            },
+            linear={kind: errors["ridge" if kind in channel else "combined"] for kind in MaskKind},
+            mean=errors["mean"],
+        )
+
+    def observe_errors(
+        self,
+        batch: TokenTensors,
+        masks: TokenMasks,
+        groups: Sequence[str],
+        *,
+        model: Tensor,
+        matched: Mapping[MaskKind, Tensor],
+        linear: Mapping[MaskKind, Tensor],
+        mean: Tensor,
+    ) -> Self:
+        """The diagnostic with ``batch`` tallied in, given every predictor's error per token.
+
+        What ``observe`` tallies once it has scored the predictions of values; an objective whose
+        predictions are not values scores them its own way and tallies them here, under the same
+        rule: per kind, the model against the baseline matched to the kind, the strongest one on
+        the same sources, and the trivial one.
+
+        Args:
+            batch: The windows.
+            masks: What was hidden, the same for the model and every baseline.
+            groups: The group each window of the batch belongs to, in row order.
+            model: The model's error per position, ``[batch, tokens]`` in double precision.
+            matched: Per kind, the error of the baseline matched to it.
+            linear: Per kind, the error of the strongest baseline on the same sources.
+            mean: The error of the trivial predictor.
+
+        Raises:
+            ValueError: If ``groups`` does not name one group per window, or a channel of the
+                batch has no noise variance.
+        """
+        if len(groups) != batch.batch_size:
+            raise ValueError(
+                f"groups must name one group per window: {len(groups)} for {batch.batch_size}"
+            )
+        ids = batch.channel_ids
+        apart = torch.isin(
+            ids, torch.tensor(sorted(self.channels_apart), dtype=torch.int64, device=ids.device)
+        )
+        floor = self._floor_of(ids)
         sums = dict(self.sums)
         for kind in MaskKind:
-            channel = kind is MaskKind.CHANNEL
-            matched = errors["ridge" if channel else "interpolation"]
-            linear = errors["ridge" if channel else "combined"]
             for side in (False, True):
                 positions = (masks.of_kind(kind) & ~batch.padding_mask & (apart == side)).to(
                     torch.float64
                 )
                 tokens = positions.sum(dim=1).to(torch.int64).tolist()
-                model_sums = _per_window(errors["model"], positions)
-                mean_sums = _per_window(errors["mean"], positions)
-                matched_sums = _per_window(matched, positions)
-                linear_sums = _per_window(linear, positions)
+                model_sums = _per_window(model, positions)
+                mean_sums = _per_window(mean, positions)
+                matched_sums = _per_window(matched[kind], positions)
+                linear_sums = _per_window(linear[kind], positions)
                 floor_sums = None if floor is None else _per_window(floor, positions)
                 for row, group in enumerate(groups):
                     if tokens[row] == 0:

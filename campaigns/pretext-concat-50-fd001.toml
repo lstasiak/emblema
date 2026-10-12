@@ -1,0 +1,47 @@
+# The closed-form probe over the encoder's blocks side by side at 50 windows of FD001, and the
+# same reading of the encoder at its initialisation, under a backbone of today's shape: what a
+# pretext leaves the linear reading of the remaining life, beside the intensive-care task the
+# pretext rule reads. Under every pretext read so far the pretrained probe lies above the untrained
+# one here (docs/verification/intensive-care-curve.md, 2026-10-05; layer-readout.md, 2026-10-09).
+#
+# Scored on half of the tuning engines held out by seed 101 over seeds 1 to 10, so readings pair by
+# engine and seed; the validation side is not read. A campaign divided this way chooses nothing:
+# the reading is the pairs declared in docs/verification/pretext-variants.md. Only probes run, so
+# the campaign runs on the machine that orders it. Defined under the mixture of four at its
+# pretraining seeds, then under each variant of the objective read.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "pretext-concat-50-fd001"
+purpose = "selection"
+tier = "M"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "untrained_ridge@layer=concat,pooling=tail,tail_share=0.2",
+    "frozen_ridge@layer=concat,pooling=tail,tail_share=0.2",
+]
+control = "untrained_ridge@layer=concat,pooling=tail,tail_share=0.2"
+endpoint = "frozen_ridge@layer=concat,pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["50"]
+endpoint = "50"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_relative_reduction = 0.1
+floor_share = 0.03
+alpha = 0.05
+# One contender at one budget, the endpoint itself: the family holds that one cell.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
