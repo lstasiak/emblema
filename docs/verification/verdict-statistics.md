@@ -535,3 +535,120 @@ anything.
   model that gives each seed its own interaction, checked the same way, or campaigns run with more
   seeds.
 - The pretraining seed's own spread between backbones is not in these numbers.
+
+## 2026-10-12 — declared before the run: the reader of the stage
+
+**Question.** Every comparison of the stage so far was read by the closed-form probe at 50
+stays on half the tuning side, where ten seeds replace a true gain of 0.02 between backbones in
+about one reading in five (2026-10-08), while published gains of pretraining on clinical series
+are 0.01 to 0.02 at thousands of labels. At which budget does the registered rule see a gain of
+0.01 to 0.02, and by which reading, the probe or full fine-tuning? Beside it: what the three
+arms score on the half at 200, 500, 1,000 and every stay, which no cell has measured there, and
+which recipe the networks run under at 500 and 1,000 stays, where none is registered.
+
+**What is run.** Every campaign is a selection on the half of the tuning stays held out by seed
+101 (`one_in = 2`) over seeds 1 to 10; nothing reads the validation side. The budget of 2,000
+stays named for this reading coincides with every stay: the half leaves 1,998 to learn from.
+
+| File | Candidates | Budgets | Under | Cells, machine |
+|---|---|---|---|---|
+| `reader-probes-physionet2012.toml` | `frozen_ridge@layer=concat`, `untrained_ridge@layer=concat` | 200, 500, 1,000, all | the mixture of four at seeds 1 to 4; descriptively, `backbone-scale-1e9-m` (4.8M at about 10⁹ values) | 400, this machine (MPS) |
+| `reader-200-physionet2012.toml` | `from_scratch@learning_rate=0.003`, `full_fine_tuning` (the settings in force) | 200 | seeds 1 and 2 | 40, Kaggle T4 |
+| `reader-500-physionet2012.toml` | `from_scratch` (at the schedule's peak, 0.001, between the grid's rates at 200 and 1,000: a judgement), `full_fine_tuning`, each also under `patience=10,stop_share=0.2` | 500 | seeds 1 and 2 | 80, Kaggle T4 |
+| `reader-1000-physionet2012.toml` | `from_scratch@learning_rate=0.000333` (the grid's rate there), `full_fine_tuning`, each also under the stop | 1,000 | seeds 1 and 2 | 80, Kaggle T4 |
+| `reader-all-physionet2012.toml` | both arms under the stop registered at every stay, the network from nothing at 0.000333 | all | seeds 1 and 2 | 40, Kaggle T4 |
+| `reader-probes-fd001.toml` | the same probes over the tail of the window | 200, 500, all | seeds 1 to 4 | 240, this machine |
+| `reader-networks-fd001.toml` | the two arms at their settings in force at 50 windows | 200, 500, all | seed 1 | 60, Kaggle T4 |
+
+Fine-tuning runs under two pretrainings so that one recipe under two backbones exists for it
+as for the probe; the network from nothing, which reads no weights, thereby runs twice, a pair
+that should differ by nothing but the card. At every stay the ten seeds draw the same labels:
+a closed-form probe answers alike under every seed, and the networks differ by their
+initialisation, their batches and the fifth the stop holds out.
+
+**Reading, declared beforehand.** Pairs by `scripts/campaign_pairs_report.py` (10,000
+resamples) from the exported answers, at every budget both sides hold:
+
+| Kind | Pairs | Stands in for |
+|---|---|---|
+| A | the probe less the probe at initialisation, under each of the four pretrainings | what pretraining adds to a linear reading |
+| B | the probe under seed j less under seed i, the six pairs | one readout under two backbones: a variant of the pretext, the objective, the data or the hyperparameters |
+| B′ | fine-tuning under seed 2 less under seed 1, each regime apart | the same, read by fine-tuning |
+| C | fine-tuning less the network from nothing, under each pretraining | whether pretraining helps a network trained on labels |
+| C0 | the network from nothing of the campaign under seed 2 less that under seed 1 | a null pair: the card's own spread |
+| R | the stop less fixed epochs at 500 and 1,000, for each arm in both of its campaigns | the recipe at the budgets where none is registered |
+
+1. *The recipe at 500 and 1,000 stays.* The stop replaces fixed epochs for an arm at a budget
+   where its paired interval lies above zero and its mean over seeds exceeds twice its standard
+   error in both campaigns of that arm; otherwise fixed epochs stand. The recipe chosen is
+   registered by a row and the reader reads under it: a selection on the tuning side, as the
+   recipe's was.
+2. *s at each budget.* From the six pairs of kind B at the budget, by the registered formula,
+   not pooled over budgets: at every stay the seeds' term is zero by construction and s is the
+   mean squared difference less the interval's noise, floored at zero.
+3. *Power.* `scripts/comparison_power_report.py` over the exported answers, the stays scored as
+   exported, ten seeds, true gains of 0, 0.005, 0.01, 0.015, 0.02 and 0.03, the rule as
+   registered: the interval above zero and the mean over seeds above twice √(SE² + s²), s the
+   budget's own for kinds B and B′ and zero within one backbone. At every stay the seed
+   condition of the probe is s alone. Only the reading directly off the draws at ten seeds is
+   read, as on 2026-10-08.
+4. *The budget of the stage.* The smallest budget at which (i) the network from nothing's mean
+   area over the ten seeds and both campaigns is at least 0.70, and (ii) over the six pairs of
+   kind B the median standard error of the mean over seeds and the median error of the interval
+   are both below 0.01. If no budget meets both, the budget is every stay, and the gain the
+   reader replaces four times in five is stated as the stage's resolution.
+5. *The reader of the stage.* At that budget, the probe (kind B) or fine-tuning under its chosen
+   recipe (kind B′), whichever replaces a true gain of 0.01 more often; within 0.05 of each
+   other, the probe, which runs on this machine. One register row names both: a variant of the
+   pretext, the objective, the data or the hyperparameters is read at that budget by that
+   reader, under the error between backbones read there; the claim and the endpoint at 50
+   stays stand, and 20, 50 and 200 stays are read beside, descriptively.
+6. *Descriptive.* The curves of every arm; kinds C and C0; FD001 on 40 engines, not simulated
+   (2026-10-08); the probes at 200 stays against the same cells read on 2026-10-10; the probe
+   under the point of about 10⁹ values against the mixture's four at every budget, and over its
+   untrained encoder: whether the budget chosen reads the larger scale the same way.
+
+**Predictions.** Each from an interval or a spread read before, or marked a judgement.
+
+1. *The network from nothing on the half*: 0.64 to 0.68 at 200 stays (0.643 to 0.668 on a fifth,
+   2026-10-03 and 2026-10-04; 0.664 on the validation side, 2026-10-05); 0.74 to 0.78 at 1,000
+   (0.750 and 0.769 on a fifth, 2026-10-03); 0.78 to 0.81 at every stay (0.810 on a fifth from
+   about 3,200 stays; 0.775 at 1,000 and 0.809 at every stay on the earlier publication,
+   2026-09-30). At 500, 0.70 to 0.74 by interpolation, a judgement. The budget of the stage is
+   500 or 1,000.
+2. *The probe*: 0.65 to 0.68 at 200 stays (0.654 and 0.673 on the half, 2026-10-10); below the
+   network from nothing by 0.02 to 0.05 at 1,000 and every stay (0.75 against 0.775 at 1,000 on
+   the earlier publication, 2026-09-30).
+3. *Fine-tuning against the network from nothing*: +0.00 to +0.04 at 200 stays (0.700 against
+   0.664 on the validation side, 2026-10-05); an interval holding zero at 1,000 and every stay
+   (no gain at or above 1,000 on the earlier publication, 2026-09-30).
+4. *The noise*: the network from nothing's spread over seeds falls from about 0.047 at 200 to
+   0.02 to 0.03 at 1,000 and about 0.01 at every stay (2026-10-03 and 2026-10-04); kind B's seed
+   standard error from 0.008 at 200 (2026-10-10) to at most 0.006 at 1,000 and zero at every
+   stay by construction; the interval's error from 0.006 to 0.008 at 200 to 0.004 to 0.006 from
+   1,000 up, by 1/√N over the deaths drawn. Kind B replaces a true gain of 0.01 in half the
+   readings at 1,000 stays and four times in five at every stay: a judgement from those errors.
+5. *The recipe*: at 1,000 stays the stop replaces fixed epochs for the network from nothing by
+   the interval (+0.00 to +0.03, from +0.018 [+0.003; +0.033] on a fifth, 2026-10-03), the seed
+   condition unsettled; for fine-tuning at 500 and 1,000 it does not replace, a judgement from
+   the −0.026 to −0.042 it cost fine-tuning at 50 and 200 stays (2026-10-04).
+6. *The null pair*: kind C0 lies within ±0.01 at every budget (two cards differ by 0.004, and a
+   mean of ten seeds drifts by up to 0.018 on one card, 2026-10-03).
+7. *The point of about 10⁹ values*: its probe lies within ±0.02 of the mixture's four at every
+   budget, a judgement from a slope at 50 stays that was not settled on the validation side
+   (2026-10-07) and from the spread between pretrainings of the mixture.
+8. *FD001*, descriptively: the network from nothing's error falls with the budget; at 200
+   windows fine-tuning with its head solved first is no better than the network from nothing
+   (21.9 against 16.2 at 50 windows, 2026-10-04); the probe lies above the probe at
+   initialisation at no budget (22.7 against 19.1 at 50 windows, 2026-10-09).
+
+**Limitations.**
+
+- Six pairs read s at each budget and one pair reads kind B′: fine-tuning's spread between
+  backbones is a single difference, and its power stands on it.
+- At every stay the probe's rule is the interval and s alone; its size on new seeds is unchecked.
+- One share and one patience of the stop, the ones registered at every stay; the stop in steps
+  past the warm-up (2026-10-04) is not run. The network from nothing at 500 stays runs at a rate
+  nobody selected.
+- The networks run on a T4 and the probes here; a network against a probe pairs two cards, as
+  the yardstick's did.
