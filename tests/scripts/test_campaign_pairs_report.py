@@ -2,6 +2,7 @@
 
 import csv
 from dataclasses import replace
+from math import sqrt
 from pathlib import Path
 from uuid import UUID
 
@@ -24,18 +25,22 @@ from scripts.campaign_pairs_report import (
     COMPARISONS,
     GROUPED_BY,
     PREDICTIONS,
+    SCORES,
     Answers,
     Comparison,
     Side,
     export,
     export_predictions,
+    export_scores,
     main,
     pair,
     read_cells,
     read_predictions,
+    read_scores,
     render,
     write_cells,
     write_predictions,
+    write_scores,
 )
 from tests.evaluation.support import (
     CONTENDER,
@@ -592,3 +597,27 @@ def test_a_grouped_side_is_read_by_area_alone() -> None:
             floor_share=0.02,
             floor_area=0.01,
         )
+
+
+def test_every_cell_is_scored_whole_in_its_measure_and_reads_back(tmp_path: Path) -> None:
+    rows = export_scores(
+        [
+            by_area(BY_AREA, PERFECT_ANSWERS),
+            selection(FLOOR, {CONTROL: (6.0, 8.0, 10.0), CONTENDER: (3.0, 4.0, 5.0)}),
+        ]
+    )
+
+    areas = [row for row in rows if row.campaign == str(BY_AREA)]
+    errors = [row for row in rows if row.campaign == str(FLOOR)]
+    assert len(areas) == 2 * 3
+    assert len(errors) == 2 * 3
+    assert {row.measure for row in areas} == {"auroc_shortfall"}
+    assert {row.score for row in areas if row.candidate == str(CONTROL)} == {0.75}
+    assert {row.score for row in areas if row.candidate == str(CONTENDER)} == {1.0}
+    assert {row.units for row in areas} == {6}
+    assert {row.purpose for row in errors} == {"selection"}
+    assert [row.score for row in errors if row.candidate == str(CONTENDER)] == pytest.approx(
+        [sqrt((9.0 + 16.0 + 25.0) / 3)] * 3
+    )
+    write_scores(tmp_path / SCORES, rows)
+    assert read_scores(tmp_path / SCORES) == rows

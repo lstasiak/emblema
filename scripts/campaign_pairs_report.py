@@ -25,9 +25,11 @@ models' answers are never ranked together.
     uv run scripts/campaign_pairs_report.py --out DIR
         --pair CONTROL_ID CONTROL_CANDIDATE BUDGET CANDIDATE_ID CANDIDATE BUDGET [--pair ...]
 
-The first form writes ``cells.csv``, and ``predictions.csv`` for campaigns read by area; the
-second reads them, writes ``comparisons.csv`` and prints the table a note pastes. Both may be
-given at once.
+The first form writes ``cells.csv``, ``predictions.csv`` for campaigns read by area, and
+``scores.csv``, one row per cell with what it scored in its measure's own terms (the area under
+the ROC curve, or the error in the task's unit), for whoever draws a curve over the cells; the
+second reads the first two, writes ``comparisons.csv`` and prints the table a note pastes. Both
+may be given at once.
 """
 
 import argparse
@@ -68,6 +70,18 @@ from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCa
 from scripts.reporting import table
 
 CELLS, PREDICTIONS, COMPARISONS = "cells.csv", "predictions.csv", "comparisons.csv"
+SCORES = "scores.csv"
+SCORE_COLUMNS = (
+    "campaign",
+    "purpose",
+    "measure",
+    "candidate",
+    "budget",
+    "seed",
+    "units",
+    "score",
+    "seconds",
+)
 CELL_COLUMNS = (
     "campaign",
     "purpose",
@@ -154,6 +168,20 @@ class PredictionRow(NamedTuple):
             target=self.target,
             predicted=self.predicted,
         )
+
+
+class ScoreRow(NamedTuple):
+    """One cell as a whole, as the CSV holds it: the area for a ranking, the error otherwise."""
+
+    campaign: str
+    purpose: str
+    measure: str
+    candidate: str
+    budget: str
+    seed: int
+    units: int
+    score: float
+    seconds: float
 
 
 # What joins the campaigns of one side in a command line and in the comparisons file.
@@ -321,6 +349,62 @@ def export_predictions(readings: Iterable[CampaignReading]) -> list[PredictionRo
         for result in reading.results
         for prediction in result.predictions
     ]
+
+
+def export_scores(readings: Iterable[CampaignReading]) -> list[ScoreRow]:
+    """Every recorded cell of ``readings`` scored whole, as its campaign's measure scores it.
+
+    A cell read by area is its ranking's area over every window it answered; any other is the
+    root of its mean squared error over the windows of its units.
+    """
+    found = []
+    for reading in readings:
+        measure = reading.campaign.design.measure
+        for result in reading.results:
+            if measure is ErrorMeasure.AUROC_SHORTFALL:
+                score = WindowRanking.of(result.predictions).auroc
+            else:
+                score = _rmse(result.errors)
+            found.append(
+                ScoreRow(
+                    campaign=str(reading.campaign.campaign_id),
+                    purpose=reading.campaign.purpose.value,
+                    measure=measure.value,
+                    candidate=str(result.cell.candidate),
+                    budget=result.cell.budget.text(),
+                    seed=result.cell.seed,
+                    units=len({error.unit for error in result.errors}),
+                    score=score,
+                    seconds=result.seconds,
+                )
+            )
+    return found
+
+
+def write_scores(path: Path, rows: Sequence[ScoreRow]) -> None:
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(SCORE_COLUMNS)
+        for row in rows:
+            writer.writerow((*row[:7], repr(row.score), repr(row.seconds)))
+
+
+def read_scores(path: Path) -> list[ScoreRow]:
+    with path.open(newline="") as handle:
+        return [
+            ScoreRow(
+                campaign=line["campaign"],
+                purpose=line["purpose"],
+                measure=line["measure"],
+                candidate=line["candidate"],
+                budget=line["budget"],
+                seed=int(line["seed"]),
+                units=int(line["units"]),
+                score=float(line["score"]),
+                seconds=float(line["seconds"]),
+            )
+            for line in csv.DictReader(handle)
+        ]
 
 
 def write_cells(path: Path, rows: Sequence[CellRow]) -> None:
@@ -679,6 +763,9 @@ def main(
         answers = export_predictions(readings)
         write_predictions(out / PREDICTIONS, answers)
         print(f"{len(answers)} answers of the campaigns read by area in {out / PREDICTIONS}")
+        scores = export_scores(readings)
+        write_scores(out / SCORES, scores)
+        print(f"{len(scores)} cells scored whole in {out / SCORES}")
     if arguments.pair:
         rows = read_cells(out / CELLS)
         found = Answers(read_predictions(out / PREDICTIONS))
