@@ -652,3 +652,159 @@ resamples) from the exported answers, at every budget both sides hold:
   nobody selected.
 - The networks run on a T4 and the probes here; a network against a probe pairs two cards, as
   the yardstick's did.
+
+## 2026-10-13 — M1 Pro, MPS, and Kaggle T4: the reader of the stage, measured
+
+**Question.** The one declared on 2026-10-12: at which budget of labels the registered rule
+sees a gain of 0.01 to 0.02, by which reading, and under which recipe at 500 and 1,000 stays.
+
+**Conditions.** Commit `08a764f5`; eighteen campaigns defined and ordered from it. The probes
+(under the mixture's four pretrainings and `backbone-scale-1e9-m`) ran on this machine (MPS,
+fp32), 640 cells in about six hours, 37 s a cell on the stays. The networks of the stays ran
+on Kaggle, two T4s, 240 cells in eleven hours: 390 to 400 s a cell at fixed epochs, 110 to
+230 s under the stop, 350 to 460 s at every stay. FD001's networks took a second session on
+the same cards (the first ended at 5 of 60 cells): 55 cells in eight hours, 750 to 790 s a
+cell at 200 and 500 windows and 950 s at every window. Pairs by
+`scripts/campaign_pairs_report.py`, s by the registered formula per budget, power by
+`scripts/comparison_power_report.py`, the figures by `scripts/stage_reader_figures.py`; CSV
+under `data/report/l16/`.
+
+![The recipes' curve over the budgets on half the tuning side](figures/stage-reader-curve.png)
+
+**Area on the 2,000 stays held out**, mean over seeds 1 to 10 (the seeds' standard deviation);
+the networks under both pretrainings, the probes under the four, the point of about 10⁹ values
+beside them.
+
+| Budget | from nothing, fixed | from nothing, stop | fine-tuning, fixed | fine-tuning, stop | probe, mixture s1 to s4 | probe, 10⁹ | probe at initialisation |
+|---|---|---|---|---|---|---|---|
+| 200 | 0.652, 0.654 (0.04–0.06) | — | 0.685, 0.687 (0.03) | — | 0.654–0.673 (0.02–0.03) | 0.644 | 0.635 (0.04) |
+| 500 | 0.709, 0.712 (0.02–0.04) | **0.750, 0.748** (0.03) | 0.704, 0.709 (0.02) | 0.733, 0.737 (0.03) | 0.692–0.710 (0.01–0.02) | 0.673 | 0.693 (0.03) |
+| 1,000 | 0.756, 0.759 (0.03) | **0.784, 0.789** (0.01) | 0.723, 0.735 (0.02) | 0.752, 0.763 (0.02) | 0.717–0.740 (0.01) | 0.694 | 0.750 (0.01) |
+| all | — | 0.790, 0.796 (0.02) | — | 0.786, 0.791 (0.01) | 0.738–0.755 (0) | 0.714 | 0.779 (0.005) |
+
+**The pairs**, paired over stays (95 % interval) and seed by seed (mean ± standard error).
+
+| Kind | Budget | Reading |
+|---|---|---|
+| R, from nothing | 500 | the stop +0.041 [+0.030; +0.051] ± 0.010 and +0.036 [+0.025; +0.048] ± 0.014 |
+| R, fine-tuning | 500 | +0.030 [+0.019; +0.040] ± 0.010 and +0.028 [+0.016; +0.039] ± 0.011 |
+| R, from nothing | 1,000 | +0.028 [+0.017; +0.039] ± 0.009 and +0.030 [+0.020; +0.041] ± 0.008 |
+| R, fine-tuning | 1,000 | +0.029 [+0.018; +0.039] ± 0.009 and +0.028 [+0.017; +0.040] ± 0.010 |
+| A, probe less probe at initialisation | 200 | +0.019 to +0.038, three of four intervals above zero |
+| A | 500 | −0.001 to +0.017, every interval across zero |
+| A | 1,000 | **−0.033 to −0.010**, three of four intervals below zero |
+| A | all | **−0.040 to −0.023**, every interval below zero |
+| B, probe under seed j less seed i | 200 / 500 / 1,000 / all | s = 0.0049 / 0.0057 / 0.0107 / 0 (by construction) |
+| B′, fine-tuning s2 less s1 | 200 / 500 / 1,000 / all | +0.002 / +0.005, +0.003 / +0.012, +0.011 / +0.004 |
+| C, fine-tuning less from nothing, each under the recipe chosen | 200 | **+0.032 [+0.018; +0.046] ± 0.016 and +0.033 [+0.019; +0.047] ± 0.011** |
+| C | 500 | −0.017 [−0.028; −0.006] ± 0.014 and −0.011 [−0.024; +0.001] ± 0.010 |
+| C | 1,000 | **−0.032 [−0.043; −0.021] ± 0.007 and −0.026 [−0.036; −0.016] ± 0.010** |
+| C | all | −0.004 [−0.014; +0.006] and −0.005 [−0.014; +0.004] |
+| C0, from nothing twice | every budget | +0.001 to +0.005, the largest interval [+0.001; +0.010] |
+| probe less from nothing, paired against fixed epochs where they ran | 200 / 500 / 1,000 / all | +0.002, +0.019 / −0.017, −0.002 / −0.039, −0.019 / −0.036, −0.040; against the stop at 500 and 1,000, as a difference of means, −0.058, −0.038 / −0.067, −0.049 |
+| 10⁹ less each mixture seed, probe | 200 / 500 / 1,000 / all | −0.011 to −0.029 / −0.019 to −0.036 / −0.023 to −0.046 / −0.024 to −0.041 |
+
+**FD001, descriptively.** Root-mean-square error on the 40 engines held out, mean over seeds
+1 to 10 (the seeds' standard deviation); the networks under the mixture's first pretraining,
+the probes under the four.
+
+| Budget | from nothing | fine-tuning, head solved first | probe, mixture s1 to s4 | probe at initialisation |
+|---|---|---|---|---|
+| 200 | 14.7 (0.4) | 19.3 (0.3) | 16.7–17.7 (0.4–0.5) | 16.2 (0.5) |
+| 500 | 13.8 (0.3) | 18.6 (0.6) | 15.2–16.4 (0.2–0.6) | 15.1 (0.3) |
+| all | 13.6 (1.2) | 15.6 (0.2) | 14.5–15.4 (0) | 14.9 (0.2) |
+
+Paired over engines under the first pretraining, fine-tuning is worse than the network from
+nothing by 4.6, 4.8 and 2.0 RMSE at the three budgets (every interval below zero, seed by seed
+± 0.2 to 0.4), the mixture's probe by 3.0, 2.6 and 1.8, the probe at initialisation by 1.5,
+1.3 and 1.3. At every window the network from nothing reads 13.0 to 13.6 on nine seeds and
+17.0 on seed 6.
+
+**The recipe at 500 and 1,000 stays.** The stop replaces fixed epochs for both arms at both
+budgets, in both campaigns, by both conditions, by 0.028 to 0.041; its cells end after a quarter
+to a half of the fixed run's steps, so the fixed 63 and 32 epochs overfit. From here the recipe
+of every arm at 500 stays and above is `patience=10,stop_share=0.2`.
+
+![The rule's power over the budgets](figures/stage-reader-power.png)
+
+**Power at ten seeds**, read directly off the draws (medians over pairs), the rule as
+registered with s at the budget for kinds B and B′.
+
+| Kind | Budget | seed SE | interval SE | δ = 0.01 | 0.02 | 0.03 |
+|---|---|---|---|---|---|---|
+| B, the probe | 200 | 0.009 | 0.007 | 0.06 | 0.49 | 0.93 |
+| B | **500** | 0.005 | 0.009 | **0.19** | **0.58** | **0.91** |
+| B | 1,000 | 0.004 | 0.011 | 0.11 | 0.38 | 0.74 |
+| B | all | 0 | 0.013 | 0.11 | 0.33 | 0.61 |
+| B′, fine-tuning under the stop | 500 | 0.011 | 0.006 | 0.01 | 0.15 | 0.77 |
+| B′ | 1,000 | 0.009 | 0.006 | 0.00 | 0.10 | 0.62 |
+| B′ | all | 0.005 | 0.005 | **0.43** | **0.94** | 1.00 |
+| A, pretraining's share | 500 | 0.012 | 0.010 | 0.08 | 0.35 | 0.73 |
+| C, fine-tuning less from nothing | 500 | 0.011 | 0.006 | 0.05 | 0.39 | 0.85 |
+| C | 1,000 | 0.009 | 0.006 | 0.12 | 0.60 | 0.95 |
+| C | all | 0.008 | 0.005 | 0.15 | 0.80 | 1.00 |
+
+**Decision, by the reading declared.**
+
+- *The budget of the stage is 500 stays.* The network from nothing reaches 0.709 at fixed
+  epochs and 0.750 under the stop; the probe's seed error (0.005) and interval error (0.009)
+  both lie below 0.01. At 1,000 stays and every stay the interval error rises to 0.011 and
+  0.013: the seeds converge to one model, so pooling over them no longer averages the draw of
+  labels, and the 289 deaths among the stays scored set the floor.
+- *The reader is the closed-form probe over the blocks side by side*, at 500 stays: it replaces
+  a true gain of 0.01 in 0.19 of readings against fine-tuning's 0.01, and 0.02 in 0.58 against
+  0.15. Fine-tuning carries the training's own spread (0.03 over seeds against the probe's 0.014).
+- The gain the reader replaces four times in five is between 0.02 and 0.03, against 0.03 to
+  0.04 at 50 stays (2026-10-08). A gain of 0.01 is not seen by this design: the ceiling is the
+  stays scored, not the seeds, and lifting it needs more units than the half holds.
+
+**Predictions.** 1 held at 200, 1,000 and every stay, and at 500 for fixed epochs (0.709,
+0.712); the stop lands above the band at 500 and 1,000. 2 held against fixed epochs, which its
+source compared: 0.02 to 0.04 below at 1,000 and 0.04 at every stay; under the stop the gap is
+0.04 to 0.07. 3 held at 200 and every stay and failed at 1,000,
+where fine-tuning *loses* 0.026 to 0.032 by the interval. 4 held for the spreads and the seed
+errors, which fall as stated, and failed for the interval error, which rises with the budget,
+and in its judgement: kind B at 1,000 stays replaces 0.01 in 0.11 of readings. 5 held for the network
+from nothing and failed for fine-tuning, where the stop replaces by 0.028 to 0.030. 6 held: C0
+within ±0.005. 7 failed from 500 up, where the point of about 10⁹ values lies 0.02 to 0.05
+below every mixture seed; at 200 it lies 0.01 to 0.03 below. 8 held in every part: on FD001 the network from nothing's error falls
+with the budget, fine-tuning with its head solved first is worse than it by 4.6 RMSE at 200
+windows, and the untrained encoder's probe is better than the mixture's by 0.5 to 1.6 RMSE at
+200 and 500 windows and ties at every window.
+
+**Conclusions.**
+
+1. The reader of the stage is the closed-form probe at 500 stays on the half, read under the
+   error between backbones s = 0.0057 there; it resolves 0.02 to 0.03, one and a half times
+   finer than at 50 stays. Nothing on this side of the data resolves 0.01 four times in five;
+   fine-tuning under the stop at every stay comes closest, in one pair (0.43, and 0.94 at
+   0.02), because its ten seeds differ and pooling them averages the stays' noise that the
+   probe's identical seeds there cannot.
+2. Pretraining's share of a linear reading reverses with the budget: +0.02 to +0.04 at 200
+   stays, nothing at 500, and from 1,000 stays up the encoder at its initialisation reads the
+   stays better than the mixture by 0.01 to 0.04, and better than the point of about 10⁹ values
+   by 0.055 to 0.064. The pretext removes what a linear head would use once labels are plentiful.
+3. Fine-tuning helps only at 200 stays (+0.032); at 500 and 1,000 it costs 0.01 to 0.03 under
+   the stop, and at every stay it ties; on FD001 it is worse than the network from nothing by
+   2 to 5 RMSE at every budget. The pretrained weights are a worse starting point than a draw
+   for a network that has 500 labels or more.
+4. The stop is the recipe at 500 stays and above for both arms, by 0.03 to 0.04 over the fixed
+   epochs the schedule's floor of steps imposes there.
+5. At every stay the ten seeds draw the same labels: the probe's seed condition is empty and
+   the interval over stays is the whole of the noise.
+
+**Limitations.**
+
+- The budget of 2,000 stays named for this reading is every stay of the half: 2,000 units,
+  1,997 of them with a window (the declaration miscounted 1,998); the curve above 1,000 is one
+  point.
+- s at 1,000 stays rests on seed 2, which reads 0.02 above the other three; from four
+  pretrainings one such seed moves s from 0.006 to 0.011.
+- FD001 is descriptive: 40 engines, the networks under one pretraining; its 60 network cells
+  came from two Kaggle sessions, 5 and 55.
+- The networks ran on a T4 and the probes here, so the probe against the network from
+  nothing pairs two cards; the recipe was chosen from one share and one patience.
+- The rule fixed the budget first, by the probe's errors, and chose the reader there.
+  Fine-tuning under the stop at every stay, outside that budget, reads sharper than any probe
+  (B′ above, one pair): a lead for a sharper reader, at 20 cells of 350 to 460 s on a T4 per
+  backbone against the probe's ten cells of 37 s here.
