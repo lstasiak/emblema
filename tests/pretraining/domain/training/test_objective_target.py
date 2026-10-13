@@ -20,7 +20,7 @@ def test_the_value_target_states_no_layers_and_no_momentum() -> None:
 )
 def test_the_value_target_is_refused_a_knob_nobody_would_read(knobs: dict[str, object]) -> None:
     with pytest.raises(InvalidObjectiveTargetError, match="value target"):
-        ObjectiveTarget(kind=TargetKind.VALUE, **knobs)  # type: ignore[arg-type]
+        ObjectiveTarget(kind=TargetKind.VALUE, **knobs)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
 
 
 def test_the_latent_target_trails_by_default_from_a_momentum_near_one_to_one() -> None:

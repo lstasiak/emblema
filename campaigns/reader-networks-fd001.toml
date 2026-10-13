@@ -1,0 +1,48 @@
+# The network from nothing and full fine-tuning at 200, 500 and every window of half the tuning
+# engines of FD001, under the settings in force at 50 windows (docs/preregistration.md, "Recipe":
+# the network from nothing at 0.003 over the tail of the window, full fine-tuning at 0.000333 with
+# its head solved first): the networks' curve over the budgets beside the intensive-care task's,
+# read descriptively while that task chooses the budget and the reading of the stage
+# (docs/verification/verdict-statistics.md, 2026-10-12). Neither network had run on the half
+# before, and no setting is registered above 50 windows under the recipe.
+#
+# Scored on half of the tuning engines held out by seed 101 over seeds 1 to 10, so the cells pair
+# by engine and seed with the probes' campaign at the same budgets; the validation side is not
+# read. A campaign divided this way chooses nothing. Defined under the mixture of four at its
+# first pretraining seed.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "reader-networks-fd001"
+purpose = "selection"
+tier = "M"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2",
+    "full_fine_tuning@head_start=solved,learning_rate=0.000333,pooling=tail,tail_share=0.2",
+]
+control = "from_scratch@learning_rate=0.003,pooling=tail,tail_share=0.2"
+endpoint = "full_fine_tuning@head_start=solved,learning_rate=0.000333,pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["200", "500", "all"]
+endpoint = "500"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_relative_reduction = 0.1
+floor_share = 0.03
+alpha = 0.05
+# One contender at three budgets, less the endpoint.
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

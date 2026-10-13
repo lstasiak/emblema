@@ -1,0 +1,50 @@
+# The network from nothing and full fine-tuning at every stay of half the tuning side, both under
+# the stop on labels held out by outcome registered at that budget for every arm (patience ten
+# epochs, a fifth held out; docs/preregistration.md, the row of 2026-10-03), the network from
+# nothing at 0.000333 as the registered grid chose: the last point of the networks' curve over the
+# budgets where published results learn from, read to choose the budget and the reading every
+# later comparison of the stage is made at (docs/verification/verdict-statistics.md, 2026-10-12).
+# Full fine-tuning under the stop had not been read before.
+#
+# Scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10, so the cells
+# pair by stay and seed with the probes' campaign at the same budget; the ten seeds learn from the
+# same stays and differ in their initialisation, their batches and the fifth the stop holds out. A
+# campaign divided this way chooses nothing. Defined under the mixture of four at two of its
+# pretraining seeds.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "reader-all-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2",
+    "full_fine_tuning@patience=10,stop_share=0.2",
+]
+control = "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2"
+endpoint = "full_fine_tuning@patience=10,stop_share=0.2"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+# One contender at one budget, the endpoint itself: the family holds that one cell.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

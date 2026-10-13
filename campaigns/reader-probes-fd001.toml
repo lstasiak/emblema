@@ -1,0 +1,48 @@
+# The closed-form probe over the encoder's blocks side by side, and the same reading of the encoder
+# at its initialisation, at 200, 500 and every window of half the tuning engines of FD001: the
+# probe's curve over the budgets beside the intensive-care task's, read descriptively while that
+# task chooses the budget and the reading of the stage (docs/verification/verdict-statistics.md,
+# 2026-10-12). Under every pretext read so far the pretrained probe lies above the untrained one
+# at 50 windows (docs/verification/layer-readout.md, 2026-10-09). Only probes run, so the campaign
+# runs on the machine that orders it.
+#
+# Scored on half of the tuning engines held out by seed 101 over seeds 1 to 10, so readings pair
+# by engine and seed with the networks' campaign at the same budgets; the validation side is not
+# read. A campaign divided this way chooses nothing. Defined under each of the mixture of four's
+# four pretraining seeds.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "reader-probes-fd001"
+purpose = "selection"
+tier = "M"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "untrained_ridge@layer=concat,pooling=tail,tail_share=0.2",
+    "frozen_ridge@layer=concat,pooling=tail,tail_share=0.2",
+]
+control = "untrained_ridge@layer=concat,pooling=tail,tail_share=0.2"
+endpoint = "frozen_ridge@layer=concat,pooling=tail,tail_share=0.2"
+
+[budgets]
+labels = ["200", "500", "all"]
+endpoint = "500"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_relative_reduction = 0.1
+floor_share = 0.03
+alpha = 0.05
+# One contender at three budgets, less the endpoint.
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
