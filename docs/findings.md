@@ -251,6 +251,41 @@ identity; the pretext is barely learnt there beyond the window's mean state, and
 pretraining kept its second epoch of eight by a rule that assumes a fixed baseline. One design of this
 objective failed; whether a target no line can answer teaches better features is still open.
 
+### 9. Read at 500 stays and above, pretraining's share turns negative
+
+Over 200, 500, 1,000 and every stay of half the tuning side, ten seeds: the probe over the blocks
+side by side under the mixture's four pretrainings, the networks under two
+([note](verification/verdict-statistics.md), 2026-10-13).
+
+| Area on the 2,000 stays held out | 200 | 500 | 1,000 | all (2,000) |
+| --- | --- | --- | --- | --- |
+| network from nothing (the stop from 500 up) | 0.65 | 0.75 | 0.79 | 0.79 |
+| full fine-tuning (the stop from 500 up) | 0.69 | 0.74 | 0.76 | 0.79 |
+| probe, the mixture of four | 0.65–0.67 | 0.69–0.71 | 0.72–0.74 | 0.74–0.76 |
+| probe, about 10⁹ values | 0.64 | 0.67 | 0.69 | 0.71 |
+| probe at initialisation | 0.64 | 0.69 | 0.75 | 0.78 |
+
+- **The sign of pretraining's share reverses with the budget.** Over an untrained encoder the
+  probe gains 0.02 to 0.04 at 200 stays, nothing at 500, and loses 0.01 to 0.04 from 1,000 up,
+  every interval below zero at every stay.
+- **More pretraining reads worse.** The point of about 10⁹ values lies below every pretraining
+  of the 10⁸ mixture at every budget, by 0.02 to 0.05 from 500 up, and 0.06 below its own
+  untrained encoder at 1,000 stays and above.
+- **The pretrained weights are a worse start than a draw.** Full fine-tuning beats the network
+  from nothing at 200 stays (+0.032) and loses at 500 and 1,000 (−0.01 to −0.03); on FD001 it
+  is worse at every budget, by 2 to 5 RMSE, and both probes stay behind the network from
+  nothing there.
+- **Not the card, not the recipe, not the labels.** The network from nothing run twice under
+  two campaigns differs by at most 0.005; the stop was chosen for both arms at 500 stays and
+  above (+0.03 to +0.04) before this reading; the gain does not grow with labels, it vanishes.
+
+What remains as a cause is the pretext. Reconstructing masked values over the mixture leaves
+states that a linear head, or a network with hundreds of labels, reads worse than the encoder's
+initialisation, and more of it leaves less. Earlier readings saw pieces of this without the dose:
+the task sits in the early blocks ([note](verification/layer-readout.md), 2026-10-09), and the
+second objective's states concentrate (section 8). Here the loss grows with the data pretrained
+on and with the labels learnt from.
+
 ## Limitations
 
 - **Validation only.** Every configuration choice (window, normalisation, corpus, backbone, peaks)
@@ -271,18 +306,29 @@ objective failed; whether a target no line can answer teaches better features is
 - **One pretraining corpus for the turbofan task.** Its backbone was pretrained on C-MAPSS itself;
   a fresh encoder has the same data to learn the task from. The mixture backbone is read on the
   intensive-care task only, where it is the weaker of the two.
+- **The instrument's resolution.** Read over 200 to every stay of half the tuning side, the
+  replacement rule between backbones sees most at 500 stays, where the closed-form probe
+  replaces a true gain of 0.02 to 0.03 four times in five and fine-tuning less. No reading of
+  the half sees 0.01 four times in five: the 2,000 stays scored and their 289 deaths, not the
+  seeds, set the floor, and fine-tuning under the stop at every stay comes closest
+  ([note](verification/verdict-statistics.md), 2026-10-13). Comparisons of backbones from here
+  on are read at 500 stays; a gain of 0.01 needs a task with more units, not more seeds.
 - The patch model ran as published, under the mean, since no selection turned its pooling.
 - The pretrained arms' spread over seeds is largest at 50 labels (LoRA 2.2) and at every window
   (full fine-tuning 1.65).
 
 ## Next
 
-1. Measure transfer on the intensive-care task again under the stop at every stay, with
+1. Test the pretext as the cause before scaling it: the probe block by block under the point of
+   about 10⁹ values against its initialisation, read at 500 stays, and one objective that does
+   not reconstruct values. The larger scale waits on this, since more of today's pretext reads
+   worse.
+2. Measure transfer on the intensive-care task again under the stop at every stay, with
    backbones of eight passes over a mixture without SMD, in the control's shape and in two
    blocks on the stays alone; the stop for the pretrained arms is declared with a prediction
    before the first campaign.
-2. Weigh the corpora that remain in the mixture, now that one of them is known to teach the
+3. Weigh the corpora that remain in the mixture, now that one of them is known to teach the
    task nothing.
-3. Measure transfer across corpora and to unseen sensor layouts, where a fresh encoder has
+4. Measure transfer across corpora and to unseen sensor layouts, where a fresh encoder has
    nothing of the target to learn from and the pretrained one has everything else.
-4. Open the frozen test side once.
+5. Open the frozen test side once.
