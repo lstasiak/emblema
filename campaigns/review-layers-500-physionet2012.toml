@@ -1,0 +1,60 @@
+# The probe solved in closed form at every layer of a backbone of 4.8M parameters (six blocks),
+# and the same probe at every layer of the encoder at its initialisation, at 500 stays: where in
+# the stack pretraining adds to a linear reading of the stays and where it takes away, under the
+# point of about 10⁹ values and under two pretrainings of the mixture of four. The encoder at its
+# initialisation depends on the backbone's shape, its vocabulary included, so it is read under
+# each backbone, not once.
+#
+# Scored on half of the tuning stays over seeds 1 to 10, so readings pair by stay and seed with
+# the reader's campaigns at 500 stays; the validation side is not read. A campaign divided this
+# way chooses nothing; the reading is the pairs declared in docs/verification/layer-readout.md,
+# 2026-10-13. Only probes run, so the campaign runs on the machine that orders it.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "review-layers-500-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "untrained_ridge",
+    "untrained_ridge@layer=0",
+    "untrained_ridge@layer=1",
+    "untrained_ridge@layer=2",
+    "untrained_ridge@layer=3",
+    "untrained_ridge@layer=4",
+    "untrained_ridge@layer=5",
+    "frozen_ridge",
+    "frozen_ridge@layer=0",
+    "frozen_ridge@layer=1",
+    "frozen_ridge@layer=2",
+    "frozen_ridge@layer=3",
+    "frozen_ridge@layer=4",
+    "frozen_ridge@layer=5",
+]
+control = "untrained_ridge"
+endpoint = "frozen_ridge"
+
+[budgets]
+labels = ["500"]
+endpoint = "500"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+# Every contender at one budget, less the endpoint.
+secondary_family_size = 12
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
