@@ -14,7 +14,7 @@ against.
 
     uv run scripts/stage_reader_figures.py --scores CSV [--scores CSV ...]
         --campaign TASK LABEL CAMPAIGN_ID [--campaign ...] [--everything TASK N ...]
-        [--power CSV] [--out DIR]
+        [--power CSV [--kinds KIND ...]] [--out DIR]
 
 ``--everything`` places the budget of every labelled unit on a task's axis: the count it resolved
 to, which the scores do not hold.
@@ -301,16 +301,27 @@ def direct_power(rows: Sequence[PowerRow]) -> dict[tuple[str, str, float], list[
     return found
 
 
-def draw_power(rows: Sequence[PowerRow], path: Path, everything: int | None = None) -> Path:
+def draw_power(
+    rows: Sequence[PowerRow],
+    path: Path,
+    everything: int | None = None,
+    kinds: Sequence[str] = (),
+) -> Path:
     """One panel per gain drawn: the median power over a kind's pairs at each budget.
 
+    ``kinds`` names the kinds drawn, in the order of their slots; every kind otherwise.
+
     Raises:
-        SystemExit: If no power was read directly off the draws.
+        SystemExit: If no power was read directly off the draws, or a named kind has none.
     """
     found = direct_power(rows)
     if not found:
         raise SystemExit("no power read directly off the draws; nothing to draw")
-    kinds = sorted({kind for kind, _, _ in found})
+    present = sorted({kind for kind, _, _ in found})
+    missing = [kind for kind in kinds if kind not in present]
+    if missing:
+        raise SystemExit(f"no power read for kinds {missing}; the file holds {present}")
+    drawn = list(kinds) or present
     budgets = sorted({budget for _, budget, _ in found}, key=budget_order)
     figure, axes = plt.subplots(
         1, len(GAINS_DRAWN), figsize=(5.0 * len(GAINS_DRAWN), 4.2), sharey=True, squeeze=False
@@ -318,7 +329,7 @@ def draw_power(rows: Sequence[PowerRow], path: Path, everything: int | None = No
     positions = list(range(len(budgets)))
     for gain, axis in zip(GAINS_DRAWN, axes[0], strict=True):
         _quiet(axis)
-        for slot, kind in enumerate(kinds):
+        for slot, kind in enumerate(drawn):
             medians = [
                 median(found[(kind, budget, gain)]) if (kind, budget, gain) in found else None
                 for budget in budgets
@@ -351,7 +362,7 @@ def draw_power(rows: Sequence[PowerRow], path: Path, everything: int | None = No
     axes[0][0].legend(
         handles=[
             Line2D([], [], color=KIND_COLOURS[slot % len(KIND_COLOURS)], linewidth=2, label=kind)
-            for slot, kind in enumerate(kinds)
+            for slot, kind in enumerate(drawn)
         ],
         fontsize=8,
         frameon=False,
@@ -397,6 +408,7 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--everything", nargs=2, action="append", default=[], metavar=("TASK", "N"))
     parser.add_argument("--power", type=Path, default=None, metavar="CSV")
+    parser.add_argument("--kinds", nargs="+", default=[], metavar="KIND")
     parser.add_argument(
         "--out", type=Path, default=REPO_ROOT / "docs" / "verification" / "figures", metavar="DIR"
     )
@@ -421,7 +433,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(drawn)
     if arguments.power is not None:
         drawn = draw_power(
-            read_power(arguments.power), out / POWER, next(iter(everything.values()), None)
+            read_power(arguments.power),
+            out / POWER,
+            next(iter(everything.values()), None),
+            arguments.kinds,
         )
         print(drawn)
 

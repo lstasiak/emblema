@@ -13,6 +13,7 @@ from scripts.stage_reader_figures import (
     Recipe,
     direct_power,
     draw_curve,
+    draw_power,
     main,
     panels_of,
 )
@@ -144,6 +145,7 @@ def test_both_figures_are_drawn_from_the_files(
             *("--everything", "FD001", "1270"),
             "--power",
             str(tmp_path / POWER),
+            *("--kinds", "B", "A"),
             "--out",
             str(tmp_path / "figures"),
         ]
@@ -152,6 +154,11 @@ def test_both_figures_are_drawn_from_the_files(
     assert (tmp_path / "figures" / CURVE).stat().st_size > 10_000
     assert (tmp_path / "figures" / "stage-reader-power.png").stat().st_size > 10_000
     assert capsys.readouterr().out.count("stage-reader") == 2
+
+
+def test_a_kind_the_power_file_lacks_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="no power read for kinds \\['Z'\\]"):
+        draw_power(power(), tmp_path / "p.png", kinds=["A", "Z"])
 
 
 def test_a_curve_needs_a_panel_and_the_arguments_go_together(tmp_path: Path) -> None:
