@@ -636,3 +636,101 @@ baseline grew faster than its loss fell and the run kept its second epoch.
   stays); what a value objective's states are made of is not one number either.
 - Whether a target no line can answer teaches better features is not settled by this
   objective's one setting; the reading says what this design did, not what the idea does.
+
+## 2026-10-14 — declared before the run: a decoder of four blocks, and the intensive-care corpora alone
+
+**Question.** Read at 500 stays, the point of about 10⁹ values loses most in the encoder's top
+blocks and nothing in its first three, and the one backbone above the mixture of four is the
+PhysioNet 2019 stays alone, pretrained on half the mixture's steps and a tenth of its tokens
+(`layer-readout.md`, 2026-10-14). Does a decoder deep enough to take the reconstruction back from
+the encoder's top blocks read the stays better? Do the two intensive-care corpora alone, at the
+mixture's number of steps, read them better than the mixture does?
+
+**The variants.** Each is the file of `backbone-mixed4-m` to the step but for one change, at
+seeds 1 and 2.
+
+| Variant | Files | The change | Steps | Tokens |
+|---|---|---|---|---|
+| a decoder of four blocks | `backbone-mixed4-m-decoder4`, `-seed2` | `decoder_layers` 1 → 4 | 22,312 | 617 M |
+| the intensive-care corpora | `backbone-clinical-m`, `-seed2` | PhysioNet 2012 and 2019 instead of the four corpora; 14 epochs; warm-up 0.45 of an epoch | 21,952 | 134 M |
+
+The clinical windows are short (169 tokens a 2019 window, 438 a 2012 one, against 750 to 1,050
+in the mixture's other corpora), so equal steps hold fewer tokens; tokens could not be matched
+short of 65 epochs. Fourteen epochs repeat the data well past the four after which repetition
+stops paying (Muennighoff et al., 2023); the kept epoch is the one whose mean relative validation
+is lowest, so the mixture's number of steps is a limit. The warm-up matches the mixture's in
+steps (about 706 against 697). Counts from the manifests and blocks the runs read
+(`data/report/l12/corpus_steps.py`).
+
+**Pilot, before any order** (2026-10-14, this machine, MPS, fp32; the M shape at a tenth of each
+corpus, one epoch; registered as `pilot-l12-*`, read by nothing else). All three trained; the
+clinical run took 159 steps an epoch, about a tenth of the 1,568 counted. A step of the four-block
+decoder cost 1.42 times the one-block's. The encoder's states (`scripts/state_spread_report.py`,
+mean of its top four blocks, on 2012's validation windows):
+
+| Pilot | Effective rank of 256 | Channel share | At initialisation |
+|---|---|---|---|
+| decoder of one block | 2.2 | 0.08 | 27.7, 0.79 |
+| decoder of four blocks | 11.0 | 0.38 | 27.7, 0.79 |
+| the intensive-care corpora | 2.7 | 0.68 | 27.8, 0.78 |
+
+After one short epoch under a one-block decoder the top blocks fill two directions and lose the
+token's channel; under four blocks they keep five times the rank. This is a mechanism after one
+epoch over a tenth of each corpus, not a reading of the task.
+
+**Pretraining.** Kaggle T4 ×2 in one session from orders of the committed files: on each GPU the
+clinical run (about 0.8 h), then the decoder's (about 3 h, the mixture's 2.1 h times 1.42).
+
+**Diagnostics, before the reading.** `scripts/pretext_triviality_report.py` and
+`scripts/state_spread_report.py` under each backbone.
+
+**Reading.** Under each of the four backbones, `campaigns/reader-probes-physionet2012.toml` (the
+blocks side by side at 200, 500, 1,000 and every stay of the half, seeds 1 to 10); under the
+decoder's two, `campaigns/review-layers-500-physionet2012.toml` too (each block at 500 stays).
+Cells on this machine's accelerator from orders. Pairs by `scripts/campaign_pairs_report.py`,
+10,000 resamples, 95 %.
+
+- *The rule* (`docs/preregistration.md`, "The pretext", amended before this run). A variant
+  **replaces** the mixture's recipe when, at 500 stays, the probe under its two pretrainings
+  against the probe under the mixture's four (`reader-probes` under `backbone-mixed4-m` at seeds
+  1 to 4), each side read as one, has its paired interval above zero and its mean over seeds
+  above twice √(SE² + (s²/2)·(1/2 + 1/4)), s = 0.0057 — about 0.012 to 0.018 for SE 0.005 to
+  0.008. Where both replace, the larger mean gain is chosen; the two together are a new variant.
+- *Descriptively.* 200, 1,000 and every stay. The pooled s of 0.0079 beside the registered one.
+  Each block under the decoder less its initialisation, and less the same block under the
+  mixture's two pretrainings read block by block (`layer-readout.md`, 2026-10-14). The clinical
+  pair against `backbone-physionet2019-m`. Each probe less its untrained encoder's.
+- *Faults, read first.* The decoder changes nothing the untrained encoder is built from, so its
+  untrained cells are the mixture's to the bit; the clinical backbone's vocabulary is the 2019
+  publication's, so its untrained cells are those under `backbone-physionet2019-m`. Any other
+  outcome stops the reading.
+
+**Predictions.** From an earlier interval where one bears on it, its lower edge for a gain;
+otherwise marked a judgement.
+
+1. *The decoder at 500 stays*: the mean gain over the mixture lies within −0.01 to +0.02 and does
+   not replace it. Basis: under the mixture the top blocks lose little to their initialisation
+   (blocks 4, 5 and the last, −0.020 to +0.013 under either pretraining, `layer-readout.md`,
+   2026-10-14), so a decoder that only gives the top blocks back has little to recover there; a
+   gain past the threshold would need the lower blocks to gain too. A judgement on how much.
+2. *The decoder block by block*: blocks 4, 5 and the last at or above their initialisation less
+   0.01 under the mean of the two pretrainings. A judgement from the pilot's rank.
+3. *The clinical corpora at 500 stays*: the mean gain over the mixture lies within +0.003 to
+   +0.038, the interval of the 2019 stays alone against the mixture
+   (+0.020 [+0.003; +0.038], one pretraining); whether it replaces is a judgement, and the
+   judgement is that it does.
+4. *The clinical corpora against the 2019 stays alone*: within ±0.02, a judgement.
+5. *1,000 stays and every stay*: neither variant lies below the mixture by more than 0.01. The
+   mixture there loses 0.01 to 0.04 to its own untrained encoder (`verdict-statistics.md`,
+   2026-10-13); a judgement.
+6. *States*: the top blocks under the decoder fill more directions on the stays than the
+   mixture's 7.4 to 7.6 of 256 (2026-10-12, above). A judgement from the pilot.
+
+**Limitations.**
+
+- One deeper decoder (four blocks, the encoder's width), not a sweep; MAE's best linear probe
+  came from eight narrower blocks.
+- The clinical recipe changes corpora and tokens together: at equal steps it reads a fifth of the
+  mixture's tokens, and repeats them fourteen times.
+- Two pretrainings a variant against four: a gain below about 0.015 at 500 stays is not seen.
+- The probe alone decides; fine-tuning is not read.
