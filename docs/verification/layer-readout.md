@@ -417,3 +417,236 @@ registered, 0.0072 and 0.0095, were computed from the rounded table and are corr
 
 - Four pretrainings estimate s with a few degrees of freedom; the budgets are pooled as though the
   pretraining's effect at each were a fresh draw.
+
+## 2026-10-13 — declared before the run: the stage's backbones by the reader at 500 stays, and the point of about 10⁹ values block by block
+
+**Question.** Read at 500 stays and above, pretraining's share of the probe turns negative, and
+the point of about 10⁹ values reads the stays worse than the mixture of four
+([`verdict-statistics.md`](verdict-statistics.md), 2026-10-13). Where in the stack is that loss:
+in every block, or in the blocks the pretext trains last? And what do the backbones read before
+only at 20, 50 and 200 stays, or never, show under the reader of the stage? The reading is
+descriptive: it changes no rule and no verdict.
+
+**Design.** Only probes, on this machine's accelerator, ordered from a commit that holds this
+section; half of the tuning side (seed 101, `one_in = 2`), 500 stays, seeds 1 to 10.
+
+| Campaign file | Candidates | Under | Cells |
+|---|---|---|---|
+| `review-layers-500-physionet2012.toml` | `frozen_ridge` and `untrained_ridge` at layers 0 to 5 and the last | `backbone-scale-1e9-m`; `backbone-mixed4-m` at pretraining seeds 1 and 2 | 3 × 140 |
+| `review-concat-500-physionet2012.toml` | `frozen_ridge@layer=concat`, `untrained_ridge@layer=concat` | the eighteen backbones below | 18 × 20 |
+
+| Group | Backbones | Read before |
+|---|---|---|
+| the curve's points, 4.8M | `backbone-scale-1e8new-m`, `backbone-scale-3e8-m` | last block, 20 / 50 / 200 |
+| length of training | `backbone-scale-1e9-4ep-m`; `backbone-scale-1e9-512x8-4ep-m` | last block and `concat`, 50 |
+| the larger shape | `backbone-mixed4-512x8-m-5e-4`; `backbone-scale-1e9-512x8-m` at seeds 1 and 2 | last block, 20 / 50 / 200; at 10⁹ `concat`, 50 |
+| corpora left out | `backbone-scale-1e9-without-{physionet2012,cmapss,physionet2019}-m`, `backbone-physionet2019-m`, `backbone-mixed4-without-physionet2012-m` | never by a probe |
+| the stays' weight | `backbone-mixed4-stays-x4-m`, `backbone-stays-small-m` (81k) | validation side, 20 / 50 / 200 |
+| pretext and objective | `backbone-mixed4-m-forecast`, `backbone-mixed4-m-harder`; `backbone-mixed4-latent-m` at seeds 1 and 2 | last block or `concat`, 50 |
+
+780 cells. At 28 s a cell at 500 stays in 4.8M (2026-10-13), and about three times that in 25.3M, about
+seven hours. The reader's campaigns under `backbone-mixed4-m` at seeds 1 to 4 and
+`backbone-scale-1e9-m` (`reader-probes-physionet2012.toml`) score the same stays and draws, and
+stand in for the mixture and the point of about 10⁹ values here.
+
+The encoder at its initialisation depends on the backbone's shape, its vocabulary included:
+under the mixture's four pretrainings its cells are identical, under `backbone-scale-1e9-m` they
+are not (0.693 against 0.681 at 500 stays, 2026-10-13). So each backbone is read against the
+initialisation of its own shape, and the backbones fall into seven shapes.
+
+**Pairs.** `scripts/campaign_pairs_report.py`, 10,000 resamples, 95 %, with the mean over seeds
+and its standard error.
+
+| Kind | Pairs | Stands in for |
+|---|---|---|
+| L | each layer under a backbone less the same layer at its initialisation | where pretraining adds or takes away |
+| L′ | each layer less the last, under each backbone and at initialisation | where the task sits |
+| D | the point of about 10⁹ values less the mixture, layer by layer, as a difference of means over the mixture's two pretrainings | where more pretraining takes away |
+| A | each backbone of the second campaign by `concat` less its own initialisation | its share of pretraining |
+| B | each backbone by `concat` less the mixture's four pretrainings, as a difference of means | the stage's comparison |
+| B″ | the named pairs within a group: four epochs less two; 25.3M less 4.8M at 10⁸ and at 10⁹; each corpus left out less `backbone-scale-1e9-m`; the stays alone less `backbone-scale-1e9-m` | comparisons read earlier at 50 stays and left unsettled |
+| I | the initialisation's `concat` across the seven shapes | the spread of a draw of initial weights |
+
+**Reading, declared beforehand.** Every pair is descriptive. Kinds B and B″ are set against the
+stage's threshold, twice √(SE² + (s²/2)(1/n_c + 1/n_r)), s = 0.0057, n the pretrainings on each
+side, and reported as *over* or *within* it; none is a verdict, and none enters
+`docs/preregistration.md`. Kind A is reported beside B wherever the two sides differ in shape,
+since there a difference in the initialisation enters B and not A. Identical shapes give
+identical cells at initialisation; any difference there is a fault in the run, read before
+anything else.
+
+**Predictions.** Each from an interval read before, or marked a judgement.
+
+1. *Kind L under the point of about 10⁹ values*: blocks 1 to 3 within ±0.02 of their
+   initialisation, blocks 4, 5 and the last below it by 0.01 to 0.05. Basis: at 50 stays blocks 1
+   to 3 lay 0.040 to 0.049 above the last block, which lay 0.021 [−0.040; −0.002] below its
+   initialisation (2026-10-09); `concat` lost 0.007 to its initialisation at 500 stays
+   (2026-10-13). A judgement for the split between blocks.
+2. *Kind L under the mixture*: blocks 1 to 3 at or above their initialisation (0 to +0.03), the
+   last block within −0.03 to +0.01. A judgement from `concat` at 500 stays, −0.000 and +0.017
+   under seeds 1 and 2.
+3. *Kind D*: the point of about 10⁹ values lies below the mixture at every layer, by most in the
+   top blocks. Basis: −0.019 to −0.036 by `concat` (2026-10-13); the top blocks a judgement.
+4. *The curve's points*, kind B: `backbone-scale-1e8new-m` and `backbone-scale-3e8-m` between
+   the point of about 10⁹ values and the mixture, −0.04 to 0.00. A judgement: at 50 stays the
+   points were not monotone (−0.021, +0.015, −0.021).
+5. *Length of training*, kind B″: four epochs less two in 4.8M, 0.00 to +0.03 (by `concat` at 50
+   stays +0.018 [+0.000; +0.036], 2026-10-09, from its lower edge); in 25.3M −0.03 to +0.01
+   (−0.027 [−0.038; −0.016] against the first pretraining at 50 stays,
+   [`intensive-care-curve.md`](intensive-care-curve.md), 2026-10-10; the second pretraining did
+   not replicate the first's lead, 2026-10-11).
+6. *The larger shape*, kind B″: 25.3M less 4.8M at 10⁹ within ±0.02, within the threshold; at 10⁸
+   within ±0.02. Basis: +0.007 at the last block and +0.013 by `concat` at 50 stays (2026-10-09),
+   and the 0.020 between the larger shape's two pretrainings (2026-10-11).
+7. *The pretext and the objective*, kind B: each of the forecast tail, the harder masks and the
+   objective of states below the mixture, by 0 to 0.04, none over the threshold for a gain. Basis:
+   −0.017 [−0.038; +0.005] and −0.015 [−0.030; +0.000] at 50 stays on a fifth by the last block,
+   and the objective of states −0.034 ± 0.014 by `concat`
+   ([`pretext-variants.md`](pretext-variants.md), 2026-10-06 and 2026-10-11).
+8. *Corpora left out* and *the stays' weight*: a judgement only, none read before at any budget
+   by `concat` or none above 200 stays. The stays four times as often within ±0.02 of the mixture
+   (−0.009 and −0.020 at 50 and 200 stays on the validation side, 2026-10-09).
+9. *Kind I*: the seven initialisations spread by 0.005 to 0.015 in mean area. A judgement from
+   one pair, 0.012.
+
+**Limitations.**
+
+- Block by block, two pretrainings of the mixture against one of the point of about 10⁹ values;
+  the spread of pretraining at each layer is not measured, only by `concat`.
+- Most groups hold one pretraining per backbone; kind B carries s from the mixture, which a
+  larger shape exceeds (0.020 between its two pretrainings at 50 stays).
+- 500 stays resolve 0.02 to 0.03 between backbones four times in five; a difference of 0.01
+  stays unseen.
+- The reading follows the stage's reader and nothing else; FD001 is not run.
+
+## 2026-10-14 — M1 Pro, MPS: the stage's backbones by the reader at 500 stays
+
+**Question.** The two declared above.
+
+**Conditions.**
+
+- Orders placed at `288931fc` and fulfilled one after another on this machine's accelerator
+  (MPS, fp32), 2026-10-13 23:40 to 2026-10-14 09:22; 780 cells, all 21 campaigns complete.
+- About 30 s a cell in 4.8M, 175 s in 25.3M and 21 s in the 81k shape.
+- Pairs by `scripts/campaign_pairs_report.py` (10,000 resamples, 95 %); CSV under
+  `data/report/l19/`. Gains are reductions of 1 − AUROC, positive favouring the candidate; each
+  cell gives the paired interval or the mean over seeds ± its standard error.
+
+**The initialisation.** Equal parameter counts gave identical cells for the untrained encoder in
+all 26 campaigns, those of the reader's campaigns included, so every campaign scored the same
+stays and draws. There are six initialisations, not seven: the encoder without weights is built
+over the larger of the task's and the backbone's vocabularies, and the task's vocabulary under
+`backbone-mixed4-without-physionet2012-m` grows to exactly the mixture's size. The six differ by
+up to 0.024 in area (kind I: −0.018 to +0.005 against the mixture's).
+
+**Block by block** (kinds L and D), the mean over seeds ± its standard error:
+
+| Layer | 10⁹ less its initialisation | mixture s1 less its initialisation | mixture s2 less its initialisation | 10⁹ less the mixture's two |
+|---|---|---|---|---|
+| 0 (embedding) | **+0.008** ± 0.004 | **−0.025** ± 0.011 | **−0.022** ± 0.010 | **+0.034** ± 0.009 |
+| 1 | +0.007 ± 0.008 | +0.000 ± 0.010 | **+0.030** ± 0.012 | −0.009 ± 0.004 |
+| 2 | −0.008 ± 0.010 | −0.005 ± 0.013 | **+0.022** ± 0.013 | **−0.018** ± 0.003 |
+| 3 | −0.021 ± 0.004 | −0.018 ± 0.013 | +0.009 ± 0.013 | −0.005 ± 0.004 |
+| 4 | **−0.032** ± 0.004 | +0.013 ± 0.013 | +0.008 ± 0.014 | **−0.031** ± 0.004 |
+| 5 | **−0.037** ± 0.006 | −0.007 ± 0.006 | +0.004 ± 0.007 | **−0.037** ± 0.004 |
+| last | **−0.049** ± 0.007 | −0.020 ± 0.008 | +0.004 ± 0.008 | **−0.044** ± 0.006 |
+
+Bold marks a paired interval that excludes zero. Under the mixture the two pretrainings differ
+at single blocks by 0.025 to 0.030, as much as either differs from its initialisation.
+
+**Side by side** (kinds A and B), at 500 stays. *Declared* sets B against the threshold with
+s = 0.0057; *pooled s* with 0.0079, see below.
+
+| Backbone | Shape | A: less its initialisation | B: less the mixture's four | Declared | Pooled s |
+|---|---|---|---|---|---|
+| `backbone-physionet2019-m` | 4.8M | +0.037 [+0.015; +0.059] | +0.020 ± 0.005 | over | over |
+| `backbone-mixed4-stays-x4-m` | 4.8M | +0.016 [−0.002; +0.035] | +0.012 ± 0.003 | over | within |
+| `backbone-stays-small-m` | 81k | +0.033 [+0.018; +0.048] | +0.010 ± 0.005 | within | within |
+| `backbone-mixed4-m-harder` | 4.8M | +0.013 [−0.007; +0.033] | +0.008 ± 0.005 | within | within |
+| `backbone-scale-1e9-512x8-m-seed2` | 25.3M | +0.003 [−0.021; +0.028] | +0.004 ± 0.003 | within | within |
+| `backbone-scale-1e9-without-physionet2019-m` | 4.8M | +0.006 [−0.016; +0.028] | +0.001 ± 0.003 | within | within |
+| `backbone-mixed4-512x8-m-5e-4` | 25.3M | −0.003 [−0.026; +0.020] | −0.003 ± 0.004 | within | within |
+| `backbone-scale-1e9-without-cmapss-m` | 4.8M | +0.013 [−0.009; +0.036] | −0.004 ± 0.005 | within | within |
+| `backbone-scale-1e9-4ep-m` | 4.8M | +0.007 [−0.019; +0.033] | −0.010 ± 0.004 | within | within |
+| `backbone-mixed4-without-physionet2012-m` | 4.8M | −0.011 [−0.032; +0.011] | −0.015 ± 0.006 | over | within |
+| `backbone-scale-1e8new-m` | 4.8M | −0.013 [−0.036; +0.009] | −0.018 ± 0.006 | over | over |
+| `backbone-mixed4-m-forecast` | 4.8M | −0.015 [−0.036; +0.007] | −0.019 ± 0.005 | over | over |
+| `backbone-scale-3e8-m` | 4.8M | −0.016 [−0.042; +0.010] | −0.021 ± 0.004 | over | over |
+| `backbone-scale-1e9-512x8-m` | 25.3M | −0.022 [−0.051; +0.007] | −0.021 ± 0.005 | over | over |
+| `backbone-scale-1e9-512x8-4ep-m` | 25.3M | −0.033 [−0.060; −0.006] | −0.032 ± 0.005 | over | over |
+| `backbone-scale-1e9-without-physionet2012-m` | 4.8M | −0.015 [−0.038; +0.008] | −0.032 ± 0.004 | over | over |
+| `backbone-mixed4-latent-m` | 4.8M | −0.050 [−0.079; −0.022] | −0.055 ± 0.006 | over | over |
+| `backbone-mixed4-latent-m-seed2` | 4.8M | −0.051 [−0.078; −0.025] | −0.055 ± 0.007 | over | over |
+
+**Named pairs** (kind B″):
+
+| Pair | Gain | Declared | Pooled s |
+|---|---|---|---|
+| four epochs less two, 4.8M at 10⁹ | +0.015 ± 0.004 | over | within |
+| four epochs less two, 25.3M at 10⁹ (against both seeds) | −0.024 ± 0.004 | over | over |
+| 25.3M less 4.8M, the mixture | −0.003 ± 0.004 | within | within |
+| 25.3M (both seeds) less 4.8M, at 10⁹ | +0.016 ± 0.001 | over | over |
+| without PhysioNet 2012, less 10⁹ | −0.008 ± 0.003 | within | within |
+| without C-MAPSS, less 10⁹ | +0.020 ± 0.004 | over | over |
+| without PhysioNet 2019, less 10⁹ | +0.026 ± 0.003 | over | over |
+| PhysioNet 2019 alone, less 10⁹ | +0.045 ± 0.005 | over | over |
+| the stays alone (81k), less 10⁹ | +0.035 ± 0.004 | over | over |
+
+**Read after the run.** Three points of the declaration do not hold, and the reading above
+carries them beside it:
+
+- *s.* By the registered formula the mixture's four seeds give s = 0.0057 again at 500 stays.
+  The mixture is not every recipe: over all eight pairs of pretrainings of one recipe read here,
+  s is 0.0079; 25.3M's two seeds alone give 0.023 (one pair), and the mixture's two seeds give
+  0.022 to 0.029 at its last block and blocks 1 to 3. The declared column stands; the pooled one
+  shows which labels depend on the recipe's spread. Against 25.3M's own spread its pairs lie
+  within.
+- *A and B.* The declaration held that a difference in initialisation enters B and not A. The
+  reverse holds: the untrained encoder is not the draw a pretraining started from (the mixture's
+  four seeds share one), so A's control is one draw per shape, and A across shapes carries the
+  draws' spread (about 0.01). B compares trained encoders alone and is the cleaner comparison
+  across shapes.
+- *Seven shapes.* Six initialisations, as above.
+
+**Predictions.**
+
+| # | Outcome |
+|---|---|
+| 1 | Held: blocks 1 and 2 within ±0.02, block 3 just outside (−0.021); blocks 4 to last −0.032 to −0.049 |
+| 2 | Missed under seed 1 (blocks 2 and 3 below zero), held under seed 2; the last block held under both |
+| 3 | Missed at the embedding (+0.034); held for the top blocks, where the loss is largest |
+| 4 | Held (−0.018, −0.021) |
+| 5 | Held in both shapes (+0.015; −0.024) |
+| 6 | Values held; at 10⁹ over both thresholds, within 25.3M's own spread (0.023) |
+| 7 | Missed: the harder masks lie above the mixture; the objective of states lies below the range (−0.055) |
+| 8 | Held for the stays four times as often (+0.012) |
+| 9 | Missed: the initialisations spread by 0.024 |
+
+**Conclusions.**
+
+1. One backbone reads the stays better than the mixture of four over both thresholds:
+   PhysioNet 2019 alone, +0.020 ± 0.005, from one pretraining. The stays four times as often
+   (+0.012) pass the declared threshold only; no other gain over the mixture passes either.
+2. More pretraining does not help this recipe: the points of the curve, the point of about 10⁹
+   values, the larger shape and four epochs in it all lie at or below the mixture, the last by
+   0.032.
+3. Under the point of about 10⁹ values the loss sits in the top blocks and grows to the last
+   (−0.049); blocks 0 to 2 read as the initialisation does. Top blocks serving a one-block
+   decoder's reconstruction would do this.
+4. The objective of states loses 0.055 to the mixture under both its seeds, the largest loss
+   read here.
+5. Against the point of about 10⁹ values, leaving out C-MAPSS or PhysioNet 2019 gains alike
+   (+0.020, +0.026), so these pairs say more about that single pretraining's place in its
+   spread than about the corpora left out.
+
+**Limitations.**
+
+- One pretraining per backbone outside the mixture, 25.3M at 10⁹ and the objective of states;
+  a recipe's spread is known only where it was pretrained twice, and ranges from 0 to 0.023.
+- PhysioNet 2019 alone and the stays alone pretrained one corpus for eight epochs against 31
+  corpora for two; corpus and amount of pretraining are not separated. The 81k shape differs in
+  depth and width, and the larger shape's mixture used a learning rate of 5 × 10⁻⁴.
+- Block by block, one pretraining of the point of about 10⁹ values; the mixture's two differ at
+  single blocks as much as the effects read.
+- Probes only, one budget, one task. The ridge's penalty, chosen by leave-one-out error, is not
+  checked against the readings' different widths.

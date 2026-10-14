@@ -5,7 +5,7 @@ validation side**: the frozen test side of every task is opened once, at the end
 comparison were registered before the run they judge ([preregistration](preregistration.md)).
 The evidence for each line is in [`docs/verification/`](verification/README.md).
 
-Last updated 2026-10-12.
+Last updated 2026-10-14.
 
 ## The claim
 
@@ -286,6 +286,36 @@ the task sits in the early blocks ([note](verification/layer-readout.md), 2026-1
 second objective's states concentrate (section 8). Here the loss grows with the data pretrained
 on and with the labels learnt from.
 
+### 10. At 500 stays the loss sits in the top blocks, and no larger recipe beats the mixture
+
+The probe at every block under the point of about 10⁹ values and the mixture's two pretrainings,
+and over the blocks side by side under eighteen other backbones, ten seeds, half the tuning side
+([note](verification/layer-readout.md), 2026-10-14).
+
+| At 500 stays, gain in area | Gain | Read against |
+| --- | --- | --- |
+| about 10⁹ values: blocks 0 to 2 | −0.008 to +0.008 | its initialisation |
+| about 10⁹ values: block 4, block 5, last block | −0.032, −0.037, −0.049 | its initialisation |
+| the mixture by blocks side by side | about +0.005 | its initialisation |
+| PhysioNet 2019 alone (one pretraining) | **+0.020** ± 0.005 | the mixture's four |
+| the stays four times as often | +0.012 ± 0.003 | the mixture's four |
+| 10⁸ and 3·10⁸ points of the data curve | **−0.018**, **−0.021** | the mixture's four |
+| 25.3M at about 10⁹ values: two epochs (two seeds), four epochs | **−0.021** and +0.004, **−0.032** | the mixture's four |
+| the objective of states (two seeds) | **−0.055**, **−0.055** | the mixture's four |
+
+Bold passes the threshold between backbones under both the mixture's spread and the spread
+pooled over every recipe pretrained twice.
+
+- **The loss is in the top blocks.** Under the point of about 10⁹ values the early blocks read
+  as the initialisation does and the loss grows block by block to the last. A one-block decoder
+  that leaves reconstruction to the encoder's top blocks would do this.
+- **No larger recipe beats the mixture.** More data, the larger shape and longer training lie at
+  or below it; 25.3M's two pretrainings differ by 0.025.
+- **One corpus alone reads the stays better.** PhysioNet 2019, pretrained alone for eight epochs,
+  is the only backbone above the mixture over both thresholds, from one pretraining; how much of
+  that is the corpus and how much the epochs is not separated.
+- **The objective of states is the worst reading of all**, under both seeds.
+
 ## Limitations
 
 - **Validation only.** Every configuration choice (window, normalisation, corpus, backbone, peaks)
@@ -319,16 +349,16 @@ on and with the labels learnt from.
 
 ## Next
 
-1. Test the pretext as the cause before scaling it: the probe block by block under the point of
-   about 10⁹ values against its initialisation, read at 500 stays, and one objective that does
-   not reconstruct values. The larger scale waits on this, since more of today's pretext reads
-   worse.
+1. Change the pretext before scaling it: a deeper decoder first, read block by block at 500
+   stays under two pretrainings, then an objective that does not reconstruct values. The larger
+   scale waits on this, since more of today's pretext reads worse.
 2. Measure transfer on the intensive-care task again under the stop at every stay, with
    backbones of eight passes over a mixture without SMD, in the control's shape and in two
    blocks on the stays alone; the stop for the pretrained arms is declared with a prediction
    before the first campaign.
 3. Weigh the corpora that remain in the mixture, now that one of them is known to teach the
-   task nothing.
+   task nothing: the two intensive-care corpora alone, at the mixture's number of steps and
+   under two pretrainings, separate the corpus from the epochs.
 4. Measure transfer across corpora and to unseen sensor layouts, where a fresh encoder has
    nothing of the target to learn from and the pretrained one has everything else.
 5. Open the frozen test side once.

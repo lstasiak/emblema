@@ -1,0 +1,49 @@
+# The reader of the stage, the probe solved in closed form over the encoder's blocks side by side
+# at 500 stays, under backbones read before only at 20, 50 and 200 stays or never: the points of
+# the curve over the scale of pretraining, the longer runs, the larger shape, the corpora left
+# out, the stays' weight in the mixture, and the variants of the pretext and of the objective.
+# The same reading of the encoder at its initialisation, which depends on the backbone's shape,
+# its vocabulary included, tells each backbone's own share of pretraining.
+#
+# Scored on half of the tuning stays over seeds 1 to 10, so readings pair by stay and seed with
+# the reader's campaigns under the mixture of four at 500 stays; the validation side is not read.
+# A campaign divided this way chooses nothing; the reading is descriptive and declared in
+# docs/verification/layer-readout.md, 2026-10-13. Only probes run, so the campaign runs on the
+# machine that orders it.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "review-concat-500-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "untrained_ridge@layer=concat",
+    "frozen_ridge@layer=concat",
+]
+control = "untrained_ridge@layer=concat"
+endpoint = "frozen_ridge@layer=concat"
+
+[budgets]
+labels = ["500"]
+endpoint = "500"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+# The family needs a member; one contender at one budget has none to correct for.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
