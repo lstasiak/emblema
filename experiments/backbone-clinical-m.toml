@@ -1,0 +1,46 @@
+# The two intensive-care corpora alone at the published tier: the stays of PhysioNet 2012, read
+# by the in-hospital-death task, and the stays of PhysioNet 2019, another hospital's stream read
+# hourly. Read at 500 stays, the 2019 stays alone are the one backbone over the mixture of four
+# (docs/verification/layer-readout.md, 2026-10-14), and they had half the mixture's steps and a
+# tenth of its tokens, so less training did not carry that lead. This backbone asks whether the
+# corpora do: the mixture's masks, loss, shape and schedule, and its number of steps.
+#
+# Every optimiser step is taken over micro-batches of one corpus and the steps are interleaved:
+# about 1,443 steps an epoch of the 2019 stays and 125 of 2012's, 8 % of them the task's own.
+# Fourteen epochs are 21,952 steps against the mixture's 22,312 (eight of about 2,789); the
+# clinical windows are short, so they hold 134 million tokens against the mixture's 617 million.
+# Fourteen passes repeat the data past the four after which repetition stops paying (Muennighoff
+# et al., 2023); the epoch kept is the one whose mean relative validation is lowest, so the
+# mixture's number of steps is a limit, not a count.
+#
+# The warm-up is the mixture's in steps: a quarter of its epoch is about 697 steps, 0.45 of this
+# one about 706.
+name = "backbone-clinical-m"
+tier = "M"
+corpora = ["physionet2012", "physionet2019"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as every mixture since the satellite corpus was read so.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 14
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.45
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000
