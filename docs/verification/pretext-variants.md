@@ -893,3 +893,99 @@ recipes pretrained twice each gave one pair near 0.025.
 **Limitations.** Four pretrainings bound the clinical side's spread as they bound the mixture's;
 a gain below about 0.013 at 500 stays is not seen. The recipe still changes corpora and tokens
 together.
+
+## 2026-10-15 — Kaggle T4 and M1 Pro, MPS: the intensive-care corpora four pretrainings against four, read by the rule
+
+**Question.** The one declared above.
+
+**Conditions.** Pretraining from orders at `eb52192c`, Kaggle T4 ×2, fp16, tier M, one session:
+`backbone-clinical-m-seed3` (`c9479369-…`, weights `af179566…`) and `-seed4` (`3ff0dfb7-…`,
+`31cf75ba…`), 14 epochs of about 105 s. Both kept their last epoch, both curves fell without a
+non-finite value; the pretext's relative validation is 0.456 and 0.448 against 0.460 and 0.449
+under seeds 1 and 2. Diagnostics and two `reader-probes` campaigns on the M1 Pro, MPS, fp32
+probes, from orders at `eb52192c` (`data/report/l12/`, files ending `-34`); seeds 1 and 2 and
+the mixture's four campaigns are those read above. Pairs as above; each side of four campaigns
+read as one.
+
+**Faults, read first.** Every untrained cell under seeds 3 and 4 equals seed 1's to the bit
+(20,000 unit errors a budget, 200 to every stay). The reading proceeds.
+
+**The diagnostics.** As above, on 2012's validation windows:
+
+| Backbone | Channel | Block | Token | Effective rank of 256 | Channel share |
+| --- | --- | --- | --- | --- | --- |
+| clinical, seed 1 | +0.036 | +0.098 | +0.042 | 12.5 | 0.58 |
+| clinical, seed 2 | +0.042 | +0.104 | +0.048 | 12.3 | 0.63 |
+| clinical, seed 3 | +0.041 | +0.097 | +0.038 | 12.4 | 0.59 |
+| clinical, seed 4 | +0.044 | +0.104 | +0.047 | 11.3 | 0.67 |
+
+Every kind is learnt beyond its baseline under all four; the masks far from any observation are
+beaten or matched.
+
+**The rule.** `frozen_ridge@layer=concat` at 500 stays on the half, the clinical four against
+the mixture's four. The clinical four's own spread by the registered formula is 0.020, above the
+floor of 0.011, so s = 0.020:
+
+| Candidate side | Gain over the mixture ± SE | Paired 95 % interval | Threshold | Verdict |
+| --- | --- | --- | --- | --- |
+| the intensive-care corpora, four pretrainings | +0.015 ± 0.004 | [+0.005; +0.025] | 0.022 | does not replace |
+
+Under the floor alone the threshold would be 0.013, and the corpora would replace the mixture.
+
+**Descriptive.** Area under each pretraining, means over seeds 1 to 10:
+
+| Backbone | 200 | 500 | 1,000 | all (2,000) |
+| --- | --- | --- | --- | --- |
+| mixture, seeds 1–4 | 0.654–0.673 | 0.692–0.710 | 0.717–0.740 | 0.738–0.755 |
+| clinical, seeds 1–4 | 0.654–0.699 | 0.693–0.729 | 0.729–0.757 | 0.755–0.774 |
+| untrained, the mixture's vocabulary | 0.635 | 0.693 | 0.750 | 0.779 |
+| untrained, the clinical vocabulary | 0.633 | 0.681 | 0.749 | 0.779 |
+
+- Four against four at 200, 1,000 and every stay: +0.010 [+0.001; +0.020], +0.019 [+0.006;
+  +0.032] and +0.021 [+0.006; +0.035]; every interval above zero.
+- One pretraining against the mixture's four at 500: seeds 1 to 4 at −0.004, +0.022, +0.009
+  [−0.006; +0.024] and +0.032 [+0.016; +0.047]. They rank as the pretext's relative validation
+  does, 0.460, 0.456, 0.449 and 0.448 for seeds 1, 3, 2 and 4: a match chance gives once in 24.
+- The spread of pretraining over the six clinical pairs:
+
+| Stays | 200 | 500 | 1,000 | all |
+| --- | --- | --- | --- | --- |
+| s, clinical four | 0.027 | 0.020 | 0.012 | 0.002 |
+
+  At 500 the pairs differ by −0.013 to +0.036. Pooled at 500 over every pair of pretrainings of
+  one recipe, now fifteen, s is 0.014.
+- The clinical four over their untrained encoder: +0.039, +0.032, −0.006 [−0.019; +0.007] and
+  −0.011 [−0.025; +0.003] at the four budgets. The clinical vocabulary's untrained encoder reads
+  0.012 below the mixture's at 500; at 1,000 and every stay the two are equal.
+
+**Conclusions.**
+
+- **The intensive-care corpora read the stays above the mixture at every budget, and do not
+  replace it.** Four against four the gain is +0.010 to +0.021 with every interval above zero;
+  at 500 the mean of +0.015 lies under the threshold their own spread sets.
+- **Their recipe is unsteady across pretrainings.** s is 0.020 at 500, 3.5 times the mixture's
+  0.0057; one pretraining lies under the mixture and another 0.032 above it. Resolving +0.015
+  under this spread would take about a dozen pretrainings a side.
+- **The spread falls as labels grow**, from 0.027 at 200 stays to 0.002 at every stay: the
+  pretraining changes what a few hundred labels can read, much less what all of them reach.
+- **At 1,000 stays and above they still gain nothing over their untrained encoder.** Read over
+  four pretrainings the loss of 0.014 seen over two shrinks to −0.006 and −0.011, both intervals
+  across zero; the sign found on 2026-10-13 is not reversed.
+
+**Predictions.** 1 held: +0.015, inside −0.002 to +0.020; it does not replace. 2 held: +0.021
+at every stay. 3 held: 12.4 and 11.3 directions.
+
+**What follows.** The mixture's recipe stays the one later variants are read against. The
+intensive-care corpora are not pursued further by more seeds; the work turns to an objective
+that does not reconstruct values. The registered s of 0.0057 describes the mixture's four alone;
+a new recipe brings its own spread, here 0.020.
+
+**Limitations.**
+
+- The recipe still changes the corpora and the tokens together.
+- s from four pretrainings is itself uncertain: six pairs that share their members.
+- At every stay the seeds share their labels, so the error over seeds is zero there and the
+  interval carries all the noise.
+- The match between the reading and the relative validation is four points, not a selection
+  rule.
+- The probe alone decides; fine-tuning was not read.
