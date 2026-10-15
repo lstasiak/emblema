@@ -855,3 +855,41 @@ the one lead; two more pretrainings would read them four against four.
   times; how much of its reading is the corpus is not separated.
 - Each spread of pretraining here is one pair; the mixture's four give six.
 - The probe alone decides; fine-tuning was not read under either variant.
+
+## 2026-10-15 — declared before the run: the intensive-care corpora, four pretrainings against four
+
+**Question.** Read two pretrainings against four, the intensive-care corpora lie +0.009
+[−0.002; +0.020] above the mixture at 500 stays, and their two pretrainings differ by 0.026
+(above). Read four against four, do they replace the mixture?
+
+**The runs.** `backbone-clinical-m-seed3` and `-seed4`: the file of `backbone-clinical-m` to the
+step but for the seed. Kaggle T4 ×2, one run a GPU, about 0.8 h. The same diagnostics as above
+under each, then `campaigns/reader-probes-physionet2012.toml` under each on this machine.
+
+**The rule** (`docs/preregistration.md`, "The pretext", amended before this run). The clinical
+corpora's four pretrainings against the mixture's four at 500 stays, each side read as one: the
+paired interval above zero and the mean over seeds above twice √(SE² + (s²/2)·(1/4 + 1/4)). s is
+the larger of 0.011 and the value the clinical four give by the registered formula
+(`data/report/l16/s.py`). 0.011 is pooled at 500 stays over the ten pairs of pretrainings of one
+recipe read there: the mixture's six, 25.3M's, the objective of states', the clinical pair's and
+the decoder's (`data/report/l19/pairs/S/`, `data/report/l12/pairs/S/`). The threshold is about
+0.013 to 0.015 for SE 0.003 to 0.005. The mixture's s of 0.0057 rests on its four alone, and two
+recipes pretrained twice each gave one pair near 0.025.
+
+- *Descriptively.* 200, 1,000 and every stay; seeds 3 and 4 each against the mixture's four;
+  the six pairs of clinical pretrainings.
+- *Faults, read first.* The untrained cells under seeds 3 and 4 equal those under seeds 1 and 2 to
+  the bit; any other outcome stops the reading.
+
+**Predictions.** From the interval two against four, its lower edge for a gain.
+
+1. *At 500 stays*: the mean gain lies within −0.002 to +0.020 and does not replace the mixture.
+   The interval above; that it does not replace is a judgement, the point at +0.009 lying under
+   the threshold.
+2. *At every stay*: the mean gain lies at or above +0.002, the lower edge two against four.
+3. *The states*: seeds 3 and 4 fill 10 to 15 directions of 256 on 2012's stays, as seeds 1 and
+   2 (12.3, 12.5); a judgement.
+
+**Limitations.** Four pretrainings bound the clinical side's spread as they bound the mixture's;
+a gain below about 0.013 at 500 stays is not seen. The recipe still changes corpora and tokens
+together.
