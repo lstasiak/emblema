@@ -1,0 +1,32 @@
+# The two intensive-care corpora again at seed 3, everything else the file of
+# backbone-clinical-m.toml to the step: with seeds 1 and 2 the recipe is read as the mean of four
+# pretrainings against the mixture's four.
+name = "backbone-clinical-m-seed3"
+tier = "M"
+corpora = ["physionet2012", "physionet2019"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as every mixture since the satellite corpus was read so.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 14
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.45
+final_lr_fraction = 0.01
+seed = 3
+
+[checkpoint]
+every_steps = 2000
