@@ -5,7 +5,7 @@ validation side**: the frozen test side of every task is opened once, at the end
 comparison were registered before the run they judge ([preregistration](preregistration.md)).
 The evidence for each line is in [`docs/verification/`](verification/README.md).
 
-Last updated 2026-10-14.
+Last updated 2026-10-15.
 
 ## The claim
 
@@ -316,6 +316,33 @@ pooled over every recipe pretrained twice.
   that is the corpus and how much the epochs is not separated.
 - **The objective of states is the worst reading of all**, under both seeds.
 
+### 11. Neither a deeper decoder nor the intensive-care corpora alone replace the mixture
+
+Two variants of the mixture's recipe, each pretrained twice, read by the probe over the blocks
+side by side at 500 stays against the mixture's four pretrainings
+([note](verification/pretext-variants.md), 2026-10-15).
+
+| Gain in area over the mixture | 200 | 500 | 1,000 | all (2,000) |
+| --- | --- | --- | --- | --- |
+| a decoder of four blocks | **−0.025** | **−0.037** | **−0.044** | **−0.022** |
+| the two intensive-care corpora, at the mixture's steps | +0.006 | +0.009 | +0.011 | +0.018 |
+
+Bold: the interval lies below zero. At 500, the rule's budget, the intensive-care corpora's
+interval is [−0.002; +0.020] against a threshold of 0.010; at every stay it is [+0.002; +0.034].
+
+- **The deeper decoder makes the encoder worse, not freer.** It reads worse at every budget and
+  in every block, and leaves the encoder's states 2 to 3 directions wide of 256 against the
+  mixture's 8, while reconstructing the stays no better. Depth of the decoder is not the cause of
+  the loss in the top blocks (section 10).
+- **The intensive-care corpora alone are at least as good as the mixture, and not shown better.**
+  Their states are the richest read so far and their reconstruction of the stays the best; the
+  gain at 500 stays sits inside that of the 2019 stays alone.
+- **Two pretrainings do not resolve 0.01.** Two pretrainings of one recipe differ by up to 0.026
+  at 500 stays, and one of the mixture's four leads the others by 0.015 to 0.017; the registered
+  spread of 0.0057 understates what a new recipe brings.
+- **From 1,000 stays up every backbone still loses to its untrained encoder** (section 9): the
+  corpora move the reading by about 0.01, not past zero.
+
 ## Limitations
 
 - **Validation only.** Every configuration choice (window, normalisation, corpus, backbone, peaks)
@@ -349,16 +376,16 @@ pooled over every recipe pretrained twice.
 
 ## Next
 
-1. Change the pretext before scaling it: a deeper decoder first, read block by block at 500
-   stays under two pretrainings, then an objective that does not reconstruct values. The larger
-   scale waits on this, since more of today's pretext reads worse.
+1. Change the pretext before scaling it. A deeper decoder is ruled out (section 11); next an
+   objective that does not reconstruct values, chosen to keep the encoder's states wide. The
+   larger scale waits on this, since more of today's pretext reads worse.
 2. Measure transfer on the intensive-care task again under the stop at every stay, with
    backbones of eight passes over a mixture without SMD, in the control's shape and in two
    blocks on the stays alone; the stop for the pretrained arms is declared with a prediction
    before the first campaign.
-3. Weigh the corpora that remain in the mixture, now that one of them is known to teach the
-   task nothing: the two intensive-care corpora alone, at the mixture's number of steps and
-   under two pretrainings, separate the corpus from the epochs.
+3. Read the intensive-care corpora alone four pretrainings against four, the one variant of
+   the corpora that is not below the mixture; the threshold between them is declared from the
+   spread of pretraining measured over every recipe pretrained twice, not the mixture's alone.
 4. Measure transfer across corpora and to unseen sensor layouts, where a fresh encoder has
    nothing of the target to learn from and the pretrained one has everything else.
 5. Open the frozen test side once.
