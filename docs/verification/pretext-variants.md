@@ -636,3 +636,356 @@ baseline grew faster than its loss fell and the run kept its second epoch.
   stays); what a value objective's states are made of is not one number either.
 - Whether a target no line can answer teaches better features is not settled by this
   objective's one setting; the reading says what this design did, not what the idea does.
+
+## 2026-10-14 — declared before the run: a decoder of four blocks, and the intensive-care corpora alone
+
+**Question.** Read at 500 stays, the point of about 10⁹ values loses most in the encoder's top
+blocks and nothing in its first three, and the one backbone above the mixture of four is the
+PhysioNet 2019 stays alone, pretrained on half the mixture's steps and a tenth of its tokens
+(`layer-readout.md`, 2026-10-14). Does a decoder deep enough to take the reconstruction back from
+the encoder's top blocks read the stays better? Do the two intensive-care corpora alone, at the
+mixture's number of steps, read them better than the mixture does?
+
+**The variants.** Each is the file of `backbone-mixed4-m` to the step but for one change, at
+seeds 1 and 2.
+
+| Variant | Files | The change | Steps | Tokens |
+|---|---|---|---|---|
+| a decoder of four blocks | `backbone-mixed4-m-decoder4`, `-seed2` | `decoder_layers` 1 → 4 | 22,312 | 617 M |
+| the intensive-care corpora | `backbone-clinical-m`, `-seed2` | PhysioNet 2012 and 2019 instead of the four corpora; 14 epochs; warm-up 0.45 of an epoch | 21,952 | 134 M |
+
+The clinical windows are short (169 tokens a 2019 window, 438 a 2012 one, against 750 to 1,050
+in the mixture's other corpora), so equal steps hold fewer tokens; tokens could not be matched
+short of 65 epochs. Fourteen epochs repeat the data well past the four after which repetition
+stops paying (Muennighoff et al., 2023); the kept epoch is the one whose mean relative validation
+is lowest, so the mixture's number of steps is a limit. The warm-up matches the mixture's in
+steps (about 706 against 697). Counts from the manifests and blocks the runs read
+(`data/report/l12/corpus_steps.py`).
+
+**Pilot, before any order** (2026-10-14, this machine, MPS, fp32; the M shape at a tenth of each
+corpus, one epoch; registered as `pilot-l12-*`, read by nothing else). All three trained; the
+clinical run took 159 steps an epoch, about a tenth of the 1,568 counted. A step of the four-block
+decoder cost 1.42 times the one-block's. The encoder's states (`scripts/state_spread_report.py`,
+mean of its top four blocks, on 2012's validation windows):
+
+| Pilot | Effective rank of 256 | Channel share | At initialisation |
+|---|---|---|---|
+| decoder of one block | 2.2 | 0.08 | 27.7, 0.79 |
+| decoder of four blocks | 11.0 | 0.38 | 27.7, 0.79 |
+| the intensive-care corpora | 2.7 | 0.68 | 27.8, 0.78 |
+
+After one short epoch under a one-block decoder the top blocks fill two directions and lose the
+token's channel; under four blocks they keep five times the rank. This is a mechanism after one
+epoch over a tenth of each corpus, not a reading of the task.
+
+**Pretraining.** Kaggle T4 ×2 in one session from orders of the committed files: on each GPU the
+clinical run (about 0.8 h), then the decoder's (about 3 h, the mixture's 2.1 h times 1.42).
+
+**Diagnostics, before the reading.** `scripts/pretext_triviality_report.py` and
+`scripts/state_spread_report.py` under each backbone.
+
+**Reading.** Under each of the four backbones, `campaigns/reader-probes-physionet2012.toml` (the
+blocks side by side at 200, 500, 1,000 and every stay of the half, seeds 1 to 10); under the
+decoder's two, `campaigns/review-layers-500-physionet2012.toml` too (each block at 500 stays).
+Cells on this machine's accelerator from orders. Pairs by `scripts/campaign_pairs_report.py`,
+10,000 resamples, 95 %.
+
+- *The rule* (`docs/preregistration.md`, "The pretext", amended before this run). A variant
+  **replaces** the mixture's recipe when, at 500 stays, the probe under its two pretrainings
+  against the probe under the mixture's four (`reader-probes` under `backbone-mixed4-m` at seeds
+  1 to 4), each side read as one, has its paired interval above zero and its mean over seeds
+  above twice √(SE² + (s²/2)·(1/2 + 1/4)), s = 0.0057 — about 0.012 to 0.018 for SE 0.005 to
+  0.008. Where both replace, the larger mean gain is chosen; the two together are a new variant.
+- *Descriptively.* 200, 1,000 and every stay. The pooled s of 0.0079 beside the registered one.
+  Each block under the decoder less its initialisation, and less the same block under the
+  mixture's two pretrainings read block by block (`layer-readout.md`, 2026-10-14). The clinical
+  pair against `backbone-physionet2019-m`. Each probe less its untrained encoder's.
+- *Faults, read first.* The decoder changes nothing the untrained encoder is built from, so its
+  untrained cells are the mixture's to the bit; the clinical backbone's vocabulary is the 2019
+  publication's, so its untrained cells are those under `backbone-physionet2019-m`. Any other
+  outcome stops the reading.
+
+**Predictions.** From an earlier interval where one bears on it, its lower edge for a gain;
+otherwise marked a judgement.
+
+1. *The decoder at 500 stays*: the mean gain over the mixture lies within −0.01 to +0.02 and does
+   not replace it. Basis: under the mixture the top blocks lose little to their initialisation
+   (blocks 4, 5 and the last, −0.020 to +0.013 under either pretraining, `layer-readout.md`,
+   2026-10-14), so a decoder that only gives the top blocks back has little to recover there; a
+   gain past the threshold would need the lower blocks to gain too. A judgement on how much.
+2. *The decoder block by block*: blocks 4, 5 and the last at or above their initialisation less
+   0.01 under the mean of the two pretrainings. A judgement from the pilot's rank.
+3. *The clinical corpora at 500 stays*: the mean gain over the mixture lies within +0.003 to
+   +0.038, the interval of the 2019 stays alone against the mixture
+   (+0.020 [+0.003; +0.038], one pretraining); whether it replaces is a judgement, and the
+   judgement is that it does.
+4. *The clinical corpora against the 2019 stays alone*: within ±0.02, a judgement.
+5. *1,000 stays and every stay*: neither variant lies below the mixture by more than 0.01. The
+   mixture there loses 0.01 to 0.04 to its own untrained encoder (`verdict-statistics.md`,
+   2026-10-13); a judgement.
+6. *States*: the top blocks under the decoder fill more directions on the stays than the
+   mixture's 7.4 to 7.6 of 256 (2026-10-12, above). A judgement from the pilot.
+
+**Limitations.**
+
+- One deeper decoder (four blocks, the encoder's width), not a sweep; MAE's best linear probe
+  came from eight narrower blocks.
+- The clinical recipe changes corpora and tokens together: at equal steps it reads a fifth of the
+  mixture's tokens, and repeats them fourteen times.
+- Two pretrainings a variant against four: a gain below about 0.015 at 500 stays is not seen.
+- The probe alone decides; fine-tuning is not read.
+
+## 2026-10-15 — Kaggle T4 and M1 Pro, MPS: the decoder of four blocks and the intensive-care corpora, read by the rule
+
+**Question.** The one declared above.
+
+**Conditions.** Pretraining from orders at `a90a0643`, Kaggle T4 ×2, fp16, tier M, one session:
+`backbone-clinical-m` (`1fa0ef3a-…`, weights `e2daa1b5…`) and `-seed2` (`7dbd7131-…`,
+`1b43da19…`), 14 epochs of about 116 s; `backbone-mixed4-m-decoder4` (`8f5914e9-…`, `9bba238f…`)
+and `-seed2` (`220d1136-…`, `07fac23a…`), 8 epochs of about 1,290 s against the mixture's 935 s.
+Every run kept its last epoch, every curve fell without a non-finite value. Diagnostics and six
+campaigns on the M1 Pro, MPS, fp32 probes, from orders at `a90a0643` (`data/report/l12/`); the
+mixture's four `reader-probes` campaigns, its two per-block campaigns and the 2019 stays' concat
+campaign are those of 2026-10-13 and 2026-10-14. Pairs by `scripts/campaign_pairs_report.py`,
+10,000 resamples, 95 %; a side of several campaigns joined by `+`. A gain is the candidate's area
+less the control's.
+
+**Faults, read first.** Every untrained cell under the decoder equals the mixture's to the bit
+(20,000 unit errors a budget, 200 to every stay, and each block at 500); every untrained cell
+under the clinical backbones equals that under `backbone-physionet2019-m` at 500 and the other
+clinical backbone's at every budget. The reading proceeds.
+
+**The diagnostics.** On 2012's validation windows; the triviality columns are the learnt loss's
+gain over the trivial baseline of each kind of mask (`scripts/pretext_triviality_report.py`),
+the states the mean of the top four blocks (`scripts/state_spread_report.py`):
+
+| Backbone | Channel | Block | Token | Effective rank of 256 | Channel share |
+| --- | --- | --- | --- | --- | --- |
+| mixture, seed 1 (2026-10-05, 2026-10-12) | +0.019 | +0.085 | +0.023 | 7.8 | 0.26 |
+| decoder, seed 1 | +0.007 | +0.070 | +0.008 | **2.4** | 0.05 |
+| decoder, seed 2 | +0.023 | +0.085 | +0.022 | **3.0** | 0.13 |
+| clinical, seed 1 | +0.036 | +0.098 | +0.042 | 12.5 | 0.58 |
+| clinical, seed 2 | +0.042 | +0.104 | +0.048 | 12.3 | 0.63 |
+
+At initialisation every encoder fills 27.7 to 28.4 directions. On the stays every kind is learnt
+beyond its baseline under all four; the masks far from any observation are beaten or matched under
+all four, as under the mixture. The pretext's relative validation on 2012 is 0.49 and 0.53 under
+the decoder, 0.49 to 0.51 under the mixture's four, 0.43 and 0.45 under the clinical corpora.
+
+**The rule.** `frozen_ridge@layer=concat` at 500 stays on the half, each variant's two
+pretrainings against the mixture's four, s = 0.0057:
+
+| Candidate side | Gain over the mixture ± SE | Paired 95 % interval | Threshold | Verdict |
+| --- | --- | --- | --- | --- |
+| the intensive-care corpora | +0.009 ± 0.004 | [−0.002; +0.020] | 0.010 | does not replace |
+| the decoder of four blocks | **−0.037** ± 0.005 | [−0.052; −0.022] | 0.012 | does not replace |
+
+**Descriptive.** Area under each pretraining, means over seeds 1 to 10:
+
+| Backbone | 200 | 500 | 1,000 | all (2,000) |
+| --- | --- | --- | --- | --- |
+| mixture, seeds 1–4 | 0.654–0.673 | 0.692–0.710 | 0.717–0.740 | 0.738–0.755 |
+| clinical, seeds 1, 2 | 0.658, 0.677 | 0.693, 0.719 | 0.729, 0.741 | 0.774, 0.755 |
+| decoder, seeds 1, 2 | 0.635, 0.639 | 0.654, 0.668 | 0.674, 0.686 | 0.713, 0.737 |
+| untrained, the mixture's vocabulary | 0.635 | 0.693 | 0.750 | 0.779 |
+| untrained, the clinical vocabulary | 0.633 | 0.681 | 0.749 | 0.779 |
+
+- Over the mixture at 200, 1,000 and every stay: clinical +0.006, +0.011 [−0.002; +0.025] and
+  +0.018 [+0.002; +0.034]; decoder −0.025, −0.044 and −0.022, every interval below zero.
+- One pretraining against the mixture's four at 500: clinical −0.004 and +0.022 [+0.007;
+  +0.037]; decoder −0.044 and −0.030.
+- The clinical corpora against the 2019 stays alone (one pretraining, half the steps): −0.011
+  [−0.029; +0.006].
+- Each probe over its own untrained encoder: clinical +0.034, +0.026, −0.014, −0.014 at the four
+  budgets; decoder +0.002, −0.032, −0.070, −0.054. The clinical vocabulary's untrained encoder
+  reads 0.012 below the mixture's at 500, so against one reference the clinical gain at 500 is
+  about +0.013, not +0.026.
+- The decoder block by block at 500, mean of its two pretrainings:
+
+| Block | 0 | 1 | 2 | 3 | 4 | 5 | last |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| less its initialisation | −0.028 | +0.003 | −0.018 | −0.026 | −0.030 | −0.043 | −0.044 |
+| less the mixture's same block | −0.004 | −0.012 | **−0.027** | −0.021 | **−0.040** | **−0.041** | **−0.036** |
+
+Bold: the whole interval below −0.01.
+
+- The spread of pretraining by the registered formula (`data/report/l16/s.py`), from one pair a
+  recipe: clinical 0.025 at 500 stays, the decoder 0.009; pooled over both and every budget
+  0.011. The clinical pair changes sign with the budget (seed 2 ahead by 0.026 at 500, seed 1 by
+  0.019 at every stay), and among the mixture's four one pretraining leads the other three by
+  0.015 to 0.017 at 500; one pair is one degree of freedom.
+
+**Conclusions.**
+
+- **A decoder of four blocks does not give the top blocks back; it takes the encoder's states
+  away.** It reads the stays worse than the mixture at every budget, under both pretrainings, in
+  every block, most from the third up; the states fill 2 to 3 directions and barely carry the
+  token's channel. Its reconstruction on the stays is no better than the mixture's. A plausible
+  reading, not tested: the deeper decoder answers the masks from the hidden tokens' channel and
+  time and from little context, so the encoder is not asked to carry more.
+- **The pilot misled.** After one epoch over a tenth of each corpus the four-block decoder kept
+  five times the rank; after eight epochs it kept less than the one-block mixture. A short pilot
+  predicts nothing of the states after full training.
+- **The intensive-care corpora alone are at least as good as the mixture, and not shown better.**
+  The mean gain at 500 is +0.009, inside the interval of the 2019 stays alone; at every stay the
+  interval lies above zero, descriptively. Their states are the richest read so far, and their
+  reconstruction on the stays the best.
+- **Two pretrainings a side do not resolve a gain of 0.01.** The spread between two pretrainings
+  of one recipe reaches 0.015 to 0.026 here and in the mixture's four; the registered s of 0.0057
+  comes from the mixture alone, and the pooled figures of 0.008 to 0.011 put the threshold for
+  two against four nearer 0.02.
+- **From 1,000 stays up every backbone still loses to its untrained encoder**, the clinical by
+  0.014, the decoder by 0.05 to 0.07: the change of corpus moves the reading by about 0.01; it
+  does not reverse the sign found on 2026-10-13.
+
+**Predictions.** 1 failed: the decoder lay at −0.037, below −0.01; it does not replace, as
+predicted. 2 failed: blocks 4, 5 and the last lie 0.030 to 0.044 below their initialisation.
+3 held in its range (+0.009) and failed in its judgement: the corpora do not replace. 4 held:
+−0.011. 5 held for the clinical corpora and failed for the decoder (−0.044 at 1,000 stays).
+6 failed: 2.4 and 3.0 against 7.4 to 7.6.
+
+**What follows.** The mixture's recipe stays the one later variants are read against. Depth of
+the decoder is closed as the cause of the loss in the top blocks. The intensive-care corpora are
+the one lead; two more pretrainings would read them four against four.
+
+**Limitations.**
+
+- One deeper decoder: four blocks at the encoder's width, not MAE's eight narrower ones.
+- The clinical recipe changes the corpora and the tokens together, and repeats each window 14
+  times; how much of its reading is the corpus is not separated.
+- Each spread of pretraining here is one pair; the mixture's four give six.
+- The probe alone decides; fine-tuning was not read under either variant.
+
+## 2026-10-15 — declared before the run: the intensive-care corpora, four pretrainings against four
+
+**Question.** Read two pretrainings against four, the intensive-care corpora lie +0.009
+[−0.002; +0.020] above the mixture at 500 stays, and their two pretrainings differ by 0.026
+(above). Read four against four, do they replace the mixture?
+
+**The runs.** `backbone-clinical-m-seed3` and `-seed4`: the file of `backbone-clinical-m` to the
+step but for the seed. Kaggle T4 ×2, one run a GPU, about 0.8 h. The same diagnostics as above
+under each, then `campaigns/reader-probes-physionet2012.toml` under each on this machine.
+
+**The rule** (`docs/preregistration.md`, "The pretext", amended before this run). The clinical
+corpora's four pretrainings against the mixture's four at 500 stays, each side read as one: the
+paired interval above zero and the mean over seeds above twice √(SE² + (s²/2)·(1/4 + 1/4)). s is
+the larger of 0.011 and the value the clinical four give by the registered formula
+(`data/report/l16/s.py`). 0.011 is pooled at 500 stays over the ten pairs of pretrainings of one
+recipe read there: the mixture's six, 25.3M's, the objective of states', the clinical pair's and
+the decoder's (`data/report/l19/pairs/S/`, `data/report/l12/pairs/S/`). The threshold is about
+0.013 to 0.015 for SE 0.003 to 0.005. The mixture's s of 0.0057 rests on its four alone, and two
+recipes pretrained twice each gave one pair near 0.025.
+
+- *Descriptively.* 200, 1,000 and every stay; seeds 3 and 4 each against the mixture's four;
+  the six pairs of clinical pretrainings.
+- *Faults, read first.* The untrained cells under seeds 3 and 4 equal those under seeds 1 and 2 to
+  the bit; any other outcome stops the reading.
+
+**Predictions.** From the interval two against four, its lower edge for a gain.
+
+1. *At 500 stays*: the mean gain lies within −0.002 to +0.020 and does not replace the mixture.
+   The interval above; that it does not replace is a judgement, the point at +0.009 lying under
+   the threshold.
+2. *At every stay*: the mean gain lies at or above +0.002, the lower edge two against four.
+3. *The states*: seeds 3 and 4 fill 10 to 15 directions of 256 on 2012's stays, as seeds 1 and
+   2 (12.3, 12.5); a judgement.
+
+**Limitations.** Four pretrainings bound the clinical side's spread as they bound the mixture's;
+a gain below about 0.013 at 500 stays is not seen. The recipe still changes corpora and tokens
+together.
+
+## 2026-10-15 — Kaggle T4 and M1 Pro, MPS: the intensive-care corpora four pretrainings against four, read by the rule
+
+**Question.** The one declared above.
+
+**Conditions.** Pretraining from orders at `eb52192c`, Kaggle T4 ×2, fp16, tier M, one session:
+`backbone-clinical-m-seed3` (`c9479369-…`, weights `af179566…`) and `-seed4` (`3ff0dfb7-…`,
+`31cf75ba…`), 14 epochs of about 105 s. Both kept their last epoch, both curves fell without a
+non-finite value; the pretext's relative validation is 0.456 and 0.448 against 0.460 and 0.449
+under seeds 1 and 2. Diagnostics and two `reader-probes` campaigns on the M1 Pro, MPS, fp32
+probes, from orders at `eb52192c` (`data/report/l12/`, files ending `-34`); seeds 1 and 2 and
+the mixture's four campaigns are those read above. Pairs as above; each side of four campaigns
+read as one.
+
+**Faults, read first.** Every untrained cell under seeds 3 and 4 equals seed 1's to the bit
+(20,000 unit errors a budget, 200 to every stay). The reading proceeds.
+
+**The diagnostics.** As above, on 2012's validation windows:
+
+| Backbone | Channel | Block | Token | Effective rank of 256 | Channel share |
+| --- | --- | --- | --- | --- | --- |
+| clinical, seed 1 | +0.036 | +0.098 | +0.042 | 12.5 | 0.58 |
+| clinical, seed 2 | +0.042 | +0.104 | +0.048 | 12.3 | 0.63 |
+| clinical, seed 3 | +0.041 | +0.097 | +0.038 | 12.4 | 0.59 |
+| clinical, seed 4 | +0.044 | +0.104 | +0.047 | 11.3 | 0.67 |
+
+Every kind is learnt beyond its baseline under all four; the masks far from any observation are
+beaten or matched.
+
+**The rule.** `frozen_ridge@layer=concat` at 500 stays on the half, the clinical four against
+the mixture's four. The clinical four's own spread by the registered formula is 0.020, above the
+floor of 0.011, so s = 0.020:
+
+| Candidate side | Gain over the mixture ± SE | Paired 95 % interval | Threshold | Verdict |
+| --- | --- | --- | --- | --- |
+| the intensive-care corpora, four pretrainings | +0.015 ± 0.004 | [+0.005; +0.025] | 0.022 | does not replace |
+
+Under the floor alone the threshold would be 0.013, and the corpora would replace the mixture.
+
+**Descriptive.** Area under each pretraining, means over seeds 1 to 10:
+
+| Backbone | 200 | 500 | 1,000 | all (2,000) |
+| --- | --- | --- | --- | --- |
+| mixture, seeds 1–4 | 0.654–0.673 | 0.692–0.710 | 0.717–0.740 | 0.738–0.755 |
+| clinical, seeds 1–4 | 0.654–0.699 | 0.693–0.729 | 0.729–0.757 | 0.755–0.774 |
+| untrained, the mixture's vocabulary | 0.635 | 0.693 | 0.750 | 0.779 |
+| untrained, the clinical vocabulary | 0.633 | 0.681 | 0.749 | 0.779 |
+
+- Four against four at 200, 1,000 and every stay: +0.010 [+0.001; +0.020], +0.019 [+0.006;
+  +0.032] and +0.021 [+0.006; +0.035]; every interval above zero.
+- One pretraining against the mixture's four at 500: seeds 1 to 4 at −0.004, +0.022, +0.009
+  [−0.006; +0.024] and +0.032 [+0.016; +0.047]. They rank as the pretext's relative validation
+  does, 0.460, 0.456, 0.449 and 0.448 for seeds 1, 3, 2 and 4: a match chance gives once in 24.
+- The spread of pretraining over the six clinical pairs:
+
+| Stays | 200 | 500 | 1,000 | all |
+| --- | --- | --- | --- | --- |
+| s, clinical four | 0.027 | 0.020 | 0.012 | 0.002 |
+
+  At 500 the pairs differ by −0.013 to +0.036. Pooled at 500 over every pair of pretrainings of
+  one recipe, now fifteen, s is 0.014.
+- The clinical four over their untrained encoder: +0.039, +0.032, −0.006 [−0.019; +0.007] and
+  −0.011 [−0.025; +0.003] at the four budgets. The clinical vocabulary's untrained encoder reads
+  0.012 below the mixture's at 500; at 1,000 and every stay the two are equal.
+
+**Conclusions.**
+
+- **The intensive-care corpora read the stays above the mixture at every budget, and do not
+  replace it.** Four against four the gain is +0.010 to +0.021 with every interval above zero;
+  at 500 the mean of +0.015 lies under the threshold their own spread sets.
+- **Their recipe is unsteady across pretrainings.** s is 0.020 at 500, 3.5 times the mixture's
+  0.0057; one pretraining lies under the mixture and another 0.032 above it. Resolving +0.015
+  under this spread would take about a dozen pretrainings a side.
+- **The spread falls as labels grow**, from 0.027 at 200 stays to 0.002 at every stay: the
+  pretraining changes what a few hundred labels can read, much less what all of them reach.
+- **At 1,000 stays and above they still gain nothing over their untrained encoder.** Read over
+  four pretrainings the loss of 0.014 seen over two shrinks to −0.006 and −0.011, both intervals
+  across zero; the sign found on 2026-10-13 is not reversed.
+
+**Predictions.** 1 held: +0.015, inside −0.002 to +0.020; it does not replace. 2 held: +0.021
+at every stay. 3 held: 12.4 and 11.3 directions.
+
+**What follows.** The mixture's recipe stays the one later variants are read against. The
+intensive-care corpora are not pursued further by more seeds; the work turns to an objective
+that does not reconstruct values. The registered s of 0.0057 describes the mixture's four alone;
+a new recipe brings its own spread, here 0.020.
+
+**Limitations.**
+
+- The recipe still changes the corpora and the tokens together.
+- s from four pretrainings is itself uncertain: six pairs that share their members.
+- At every stay the seeds share their labels, so the error over seeds is zero there and the
+  interval carries all the noise.
+- The match between the reading and the relative validation is four points, not a selection
+  rule.
+- The probe alone decides; fine-tuning was not read.
