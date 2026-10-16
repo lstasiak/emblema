@@ -75,3 +75,93 @@ slowed fine-tuning at 500 still trail the network from nothing?
   0.0057 at 500 stays bounds what a replacement means for the recipe, not for this backbone.
 - The budgets are the reader's; the few-shot budgets the literature places the gain at are
   read only after the recipe is settled.
+
+## 2026-10-16 — Colab, one GPU: the encoder's share of the rate at 200 and 500 stays, measured
+
+**Question.** The one declared above: does fine-tuning with the encoder slowed to a tenth or a
+hundredth of the rate, the head drawn or solved first, replace fine-tuning's setting at 200 or
+500 stays, and does it still trail the network from nothing at 500?
+
+**Conditions.** Commit `be36f421`; four campaigns defined and ordered from it, run on Colab on
+one GPU as four concurrent processes under CUDA MPS (`data/report/l22/colab-cell.sh`). Wall
+clock of an order of 60 cells: 1,963 and 2,288 s at 500 stays, 4,101 and 4,134 s at 200. A cell
+took 17 to 52 s under the stop at 500 and 86 to 98 s at 200 while four processes shared the
+GPU, 46 to 52 s once the 500 campaigns had ended. The first cell of the first order was the
+trial. Accepted by `data/report/l22/accept.sh`; pairs by `data/report/l22/pairs.sh`
+(`scripts/campaign_pairs_report.py`, 10,000 resamples); CSV under `data/report/l22/pairs/`.
+
+**Area on the 2,000 stays held out**, mean over seeds 1 to 10 (the seeds' standard
+deviation), under the first and the second pretraining.
+
+| Budget | from nothing | fine-tuning's setting | encoder 0.1 | encoder 0.01 | 0.1, head solved | 0.01, head solved |
+|---|---|---|---|---|---|---|
+| 200 | 0.670, 0.660 (0.04, 0.03) | 0.682, 0.688 (0.02, 0.03) | 0.620, 0.673 (0.03) | 0.594, 0.680 (0.02, 0.03) | 0.632, 0.681 (0.04) | 0.623, 0.682 (0.04, 0.03) |
+| 500 | 0.747, 0.745 (0.03) | 0.724, 0.733 (0.04, 0.02) | 0.663, 0.718 (0.04, 0.03) | 0.614, 0.626 (0.04, 0.08) | 0.685, 0.732 (0.02, 0.01) | 0.690, 0.716 (0.02) |
+
+**The pairs**, paired over stays (95 % interval) and seed by seed (± standard error), under
+the first and the second pretraining. A variant replaces where the interval lies above zero and
+the mean exceeds twice its error under both.
+
+| Kind | Budget | Variant | First pretraining | Second pretraining |
+|---|---|---|---|---|
+| R, less fine-tuning's setting | 200 | 0.1 | −0.062 [−0.079; −0.045] ± 0.009 | −0.014 [−0.028; −0.001] ± 0.012 |
+| R | 200 | 0.01 | −0.088 [−0.111; −0.065] ± 0.008 | −0.007 [−0.025; +0.010] ± 0.013 |
+| R | 200 | 0.1, solved | −0.050 [−0.069; −0.031] ± 0.009 | −0.007 [−0.020; +0.006] ± 0.013 |
+| R | 200 | 0.01, solved | −0.059 [−0.082; −0.036] ± 0.010 | −0.005 [−0.020; +0.009] ± 0.012 |
+| R | 500 | 0.1 | −0.061 [−0.076; −0.046] ± 0.019 | −0.015 [−0.026; −0.004] ± 0.011 |
+| R | 500 | 0.01 | −0.110 [−0.132; −0.087] ± 0.021 | −0.107 [−0.129; −0.086] ± 0.023 |
+| R | 500 | 0.1, solved | −0.038 [−0.056; −0.020] ± 0.012 | −0.001 [−0.015; +0.013] ± 0.006 |
+| R | 500 | 0.01, solved | −0.033 [−0.054; −0.013] ± 0.010 | −0.018 [−0.034; −0.001] ± 0.008 |
+| C, less the network from nothing | 200 | 0.1 / 0.01 | −0.050 / −0.076 | +0.014 / +0.021 |
+| C | 200 | 0.1 / 0.01, solved | −0.038 / −0.047 | +0.021 [+0.004; +0.039] / +0.023 [+0.003; +0.042] |
+| C | 500 | 0.1 / 0.01 | −0.084 / −0.133 | −0.027 / −0.119 |
+| C | 500 | 0.1 / 0.01, solved | −0.061 / −0.056 | −0.013 [−0.030; +0.003] / −0.030 |
+| C0, fine-tuning's setting less the network from nothing | 200 | | +0.012 [−0.001; +0.026] ± 0.012 | +0.028 [+0.013; +0.043] ± 0.010 |
+| C0 | 500 | | −0.023 [−0.033; −0.013] ± 0.017 | −0.012 [−0.023; −0.000] ± 0.012 |
+
+**The predictions.**
+
+1. *At 200 stays no variant replaces fine-tuning's setting*: holds, every interval of R lies at
+   or below zero. *The gains lie within ±0.02*: holds under the second pretraining (−0.005 to
+   −0.014) and fails under the first (−0.050 to −0.088).
+2. *At 500 stays the encoder at 0.1 with the head solved first replaces fine-tuning's setting by
+   0.01 to 0.03*: fails. It trails by 0.038 [0.020; 0.056] under the first pretraining and
+   ties under the second (−0.001 [−0.015; +0.013]). Its pair against the network from nothing
+   crosses zero under the second pretraining only (−0.013 [−0.030; +0.003]); under the first it
+   lies at −0.061.
+3. *The encoder at 0.01 reads below the encoder at 0.1*: holds with the head drawn at 500, by
+   0.05 and 0.09, and at 200 under the first pretraining; with the head solved the two shares
+   lie within 0.02 of each other everywhere, and at 200 under the second pretraining all four
+   variants lie within 0.01 of one another.
+
+**Conclusions.**
+
+- No variant replaces fine-tuning's setting at either budget under either pretraining; the
+  setting in force stands, and the reading of the few-shot budgets under a slowed variant does
+  not run.
+- A slowed encoder keeps the pretraining's features, and keeps the pretrainings apart: under
+  the first pretraining every variant lies below the same variant under the second, by 0.05
+  to 0.09 in six of eight cells and by 0.01 and 0.03 for the encoder at 0.01 at 500, while fine-tuning at the whole rate under the two lies within 0.01 (0.682 and 0.688
+  at 200; 0.724 and 0.733 at 500). Fine-tuning's gain at 200 and its loss from 500 up are
+  therefore not made by the recipe moving the encoder too far; the whole rate moves it away
+  from features that read the stays worse than the ones the labels build from nothing.
+- The head solved first halves the loss of a slowed encoder (at 500, 0.1: −0.061 to −0.038
+  under the first pretraining, −0.015 to −0.001 under the second) and holds the seeds' spread
+  there at 0.01 to 0.02 against 0.03 to 0.08 under a drawn head: the linear-probe half of the recipe
+  does what Kumar et al. describe, the slowed fine-tuning half adds nothing that full
+  fine-tuning does not.
+- The check C0 repeats the reader's reading of 2026-10-13 within 0.02 on another GPU and under
+  four concurrent processes (+0.012 and +0.028 at 200 against +0.032 and +0.033; −0.023 and
+  −0.012 at 500 against −0.017 and −0.011).
+- What follows, as declared: the encoder's rate is not the cause of the loss from 500 stays
+  up, and the next step changes what the encoder learns or the corpora it learns from, not the
+  recipe that adapts it.
+
+**Limitations.**
+
+- The stop judges after the first epoch, so the head solved before any step is not a state it
+  can restore; a solved variant can end below the closed-form probe it started from.
+- Two pretrainings of one recipe; the gap between them under a slowed encoder (up to 0.09)
+  is itself read on two points.
+- The variants' cells at 200 stays ran at lower contention than the settings' cells; the
+  time of a cell, not its reading, depends on that.
