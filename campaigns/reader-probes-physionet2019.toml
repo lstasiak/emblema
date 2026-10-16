@@ -1,0 +1,50 @@
+# The closed-form probe over the encoder's blocks side by side, and the same reading of the encoder
+# at its initialisation, on the sepsis task at 400 and 4,000 patients and every patient of half
+# the tuning side: how far a reading moves between stays and between seeds there, read to learn
+# whether this task resolves a smaller gain than the intensive-care task does
+# (docs/verification/sepsis-reader.md, 2026-10-16). Only probes run: every cell trains no
+# encoder, so the campaign runs on the machine that orders it.
+#
+# Every cell is scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10,
+# as the intensive-care reader is, so readings pair by stay and seed between backbones. At every
+# patient the ten seeds draw the same labels, and a probe solved in closed form answers them
+# alike. A campaign divided this way chooses nothing. Defined under each backbone whose
+# vocabulary holds PhysioNet 2019's channels: the point of about 10⁹ values, the four
+# pretrainings of the intensive-care corpora, and PhysioNet 2019 alone.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "reader-probes-physionet2019"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "untrained_ridge@layer=concat",
+    "frozen_ridge@layer=concat",
+]
+control = "untrained_ridge@layer=concat"
+endpoint = "frozen_ridge@layer=concat"
+
+[budgets]
+labels = ["400", "4000", "all"]
+endpoint = "4000"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+# One contender at three budgets, less the endpoint.
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
