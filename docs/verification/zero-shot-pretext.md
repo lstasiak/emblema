@@ -170,9 +170,10 @@ baseline's error less the model's, 95 % interval over units).
    model unable to tell the corpus's channels apart). The failure is the identity, not the
    draw; on C-MAPSS the mean row reads 0.04 to 0.05 better than the rows as set.
 3. *Carried something, and little*: the direction holds, the size does not. Zero-shot lies
-   below the initialisation by 0.07 to 0.18 on 2012 and 0.07 to 0.09 on C-MAPSS (on 2019 by
-   0.01, 0.08 and 0.13), not by 0.02 to 0.08; and the part carried is a fifth to a half of
-   the untrained encoder's gap to the matched baseline (2012's token: 0.181 of 0.342), not
+   below the initialisation by 0.07 to 0.18 on 2012 and 0.07 to 0.09 on C-MAPSS (on 2019 the
+   block and token by 0.08 and 0.13, the channel 0.01 above it), not by 0.02 to 0.08; and the
+   part carried is up to a half of the untrained encoder's gap to the matched baseline (2012's
+   token: 0.181 of 0.342; a quarter to a half elsewhere, nothing on 2019's channel kind), not
    under a tenth. What stands is the second half of the prediction: the zero-shot reading lies
    above the matched baseline by 0.12 to 0.21, more than the whole excess (0.015 to 0.086) of
    the backbone that read the corpus.
@@ -184,8 +185,8 @@ baseline's error less the model's, 95 % interval over units).
   every kind of mask the zero-shot reading loses to a line through the channel's own visible
   tokens, and to the cross-channel regression, by 0.12 to 0.21, where the backbone that read
   the corpus beats them by 0.02 to 0.09. The predicted value sits at the prior.
-- The pretraining does carry something past an untrained encoder — a fifth to a half of the
-  way to the baseline — so the encoder's machinery is not empty; what is missing is what the
+- The pretraining does carry something past an untrained encoder — a quarter to a half of
+  the way to the baseline, except for a channel hidden whole on 2019, where nothing — so the encoder's machinery is not empty; what is missing is what the
   corpus's channels are. The row the channel passes through decides little: drawn, at the
   pretraining's initialisation, or at the mean of the learnt rows, the reading stays beaten
   by more than 0.1.
