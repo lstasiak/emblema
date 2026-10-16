@@ -129,6 +129,26 @@ def test_a_dropout_is_taken_where_the_encoder_runs_in_the_loop(
     assert dropped.parameters()["encoder_dropout"] == 0.2
 
 
+@pytest.mark.parametrize(
+    "mode", [TransferMode.FROZEN_PROBE, TransferMode.FROZEN_RIDGE, TransferMode.LORA]
+)
+def test_a_slowed_encoder_is_refused_where_the_backbones_weights_do_not_train(
+    mode: TransferMode,
+) -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match=r"would change nothing|takes no step"):
+        plan(mode, regime=TrainingRegime(encoder_rate=0.1))
+
+
+@pytest.mark.parametrize("mode", [TransferMode.FROM_SCRATCH, TransferMode.FULL_FINE_TUNING])
+def test_a_slowed_encoder_is_taken_where_the_backbones_weights_train_and_is_recorded(
+    mode: TransferMode,
+) -> None:
+    slowed = plan(mode, regime=TrainingRegime(encoder_rate=0.1))
+
+    assert slowed.parameters()["encoder_rate"] == 0.1
+    assert plan(mode).parameters()["encoder_rate"] == 1.0
+
+
 def test_a_grid_is_taken_under_every_mode_and_recorded_with_the_run() -> None:
     for mode in TransferMode:
         gridded = plan(mode, encoder=EncoderSetting(grid_resolution=1.0))

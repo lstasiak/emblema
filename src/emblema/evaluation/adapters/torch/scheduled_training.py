@@ -1,8 +1,9 @@
 import math
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 
 import torch
 from torch import Tensor, nn
+from torch.optim.optimizer import ParamsT
 
 from emblema.evaluation.domain.exceptions import DivergedAdaptationError
 from emblema.evaluation.domain.transfer.adaptation_schedule import AdaptationSchedule
@@ -22,8 +23,10 @@ class ScheduledTraining:
     One loop rather than one per network, because a compute budget shared between candidates is
     only shared if they spend it the same way: the same optimiser, the same shape of rate, the
     same seeded order of windows and the same refusal of a loss that stops being finite. What a
-    candidate is made of reaches the loop as the parameters it may change and a function that
-    answers a batch; what the task's target is reaches it as the loss the answers descend.
+    candidate is made of reaches the loop as the parameters it may change, plain or in groups
+    each at its own rate, and a function that answers a batch; what the task's target is
+    reaches it as the loss the answers descend. A group's rate follows the schedule's shape as
+    the plain rate does, scaled by the same factor at every step.
     """
 
     def __init__(self, schedule: AdaptationSchedule, seed: int) -> None:
@@ -33,7 +36,7 @@ class ScheduledTraining:
     def losses(
         self,
         model: nn.Module,
-        trainable: Iterable[nn.Parameter],
+        trainable: ParamsT,
         forward: Forward,
         targets: Tensor,
         *,

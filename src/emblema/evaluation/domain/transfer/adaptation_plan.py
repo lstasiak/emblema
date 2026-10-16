@@ -30,7 +30,8 @@ class AdaptationPlan:
     inside the optimiser's loop, since elsewhere the dropout would change nothing; the encoder is
     built otherwise than its backbone (its own shape, its own value embedding) only where it starts
     from no weights, and its own shape is stated whole; a head reads below the last layer only
-    where the run leaves the encoder as it is.
+    where the run leaves the encoder as it is; the encoder's weights learn at less than the
+    head's rate only where the mode trains them.
 
     Attributes:
         mode: What the backbone's weights do while the task is learnt.
@@ -129,6 +130,11 @@ class AdaptationPlan:
             raise InvalidAdaptationPlanError(
                 f"{self.mode} solves its head in closed form and takes no step a regime could "
                 "stop, weight or perturb"
+            )
+        if self.regime.slows_the_encoder and not self.mode.trains_backbone_weights:
+            raise InvalidAdaptationPlanError(
+                f"{self.mode} trains none of the backbone's weights, so the encoder's rate "
+                "would change nothing"
             )
 
     @property
