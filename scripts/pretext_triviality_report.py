@@ -590,18 +590,24 @@ def corpora_of(
     *,
     training_windows: int,
     validation_windows: int,
+    corpus: str | None = None,
 ) -> list[CorpusWindows]:
     """Every corpus the backbone read, cut to the diagnostic's windows, from the blocks it names.
 
     The registry records each input as the manifest the run was pointed at and the checksum of
     the block it read; the block each manifest points at now is held against that checksum.
+    Named, ``corpus`` is the one input read.
 
     Raises:
-        ValueError: If a manifest's block is not the block the backbone was pretrained over.
+        ValueError: If a manifest's block is not the block the backbone was pretrained over, or
+            if the backbone did not read the corpus named.
     """
+    inputs = [stated for stated in backbone.inputs if corpus in (None, stated.corpus)]
+    if not inputs:
+        raise ValueError(f"backbone {backbone.id} did not read {corpus}")
     corpora = []
     codec = PublishedCorpusManifestJson()
-    for stated in backbone.inputs:
+    for stated in inputs:
         manifest = codec.decode(store.get(stated.manifest))
         if manifest.block.checksum != stated.block_checksum:
             raise ValueError(

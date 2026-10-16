@@ -277,6 +277,41 @@ def test_the_backbone_s_inputs_are_read_from_the_blocks_their_manifests_name(
     assert len(corpora[0].validation) == 1
 
 
+def test_one_named_corpus_of_the_backbone_s_inputs_is_read_alone(tmp_path: Path) -> None:
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "publisher")
+    another = pretraining_input(
+        corpus="another", manifest=published.manifest, block_checksum=published.block.checksum
+    )
+    stated = backbone(inputs=(published.described, another))
+
+    corpora = corpora_of(
+        stated,
+        store,
+        tmp_path / "blocks",
+        training_windows=10,
+        validation_windows=10,
+        corpus=CORPUS,
+    )
+
+    assert [corpus.corpus for corpus in corpora] == [CORPUS]
+
+
+def test_a_corpus_the_backbone_did_not_read_is_refused(tmp_path: Path) -> None:
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "publisher")
+
+    with pytest.raises(ValueError, match="did not read other"):
+        corpora_of(
+            backbone(inputs=(published.described,)),
+            store,
+            tmp_path / "blocks",
+            training_windows=10,
+            validation_windows=10,
+            corpus="other",
+        )
+
+
 def test_a_manifest_whose_block_is_not_the_one_the_backbone_read_is_refused(
     tmp_path: Path,
 ) -> None:
