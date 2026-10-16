@@ -71,3 +71,82 @@ the standard error of an area in two strata.
   and division; the validation side stays unread, as it has since 2026-10-08.
 - Hospital A of 2019 is the centre the stays of 2012 come from; the task over hospital B alone
   is not read here.
+
+## 2026-10-16 — M1 Pro, MPS: how far the probe's reading moves on the sepsis task, measured
+
+**Question.** The one declared above: how far the probe's area moves between stays and
+between seeds on half the tuning side of the sepsis task at 400 and 4,000 patients and at every
+patient, and whether any budget resolves 0.01 four times in five by the registered rule.
+
+**Conditions.** Commit `e4824b7d`, the declaration; six campaigns defined and ordered from it
+(`data/report/l21/define.sh`, `orders.sh`). The campaign under the point of about 10⁹ values
+(`e986265f-…`) ran on this machine, MPS, fp32, torch 2.14.0: 60 cells in 83 min, 32 s a cell at
+400 patients, 48 s at 4,000 and 74 s at every patient, all accepted (`run.sh`). The other five
+campaigns are ordered and not yet run. Pairs by `scripts/campaign_pairs_report.py`
+(`pairs.sh`, 9,761 stays, 10,000 resamples), power by `scripts/comparison_power_report.py`
+(`power.sh`); CSV under `data/report/l21/pairs/` and `power/`.
+
+**Area on the 9,761 stays held out**, mean over seeds 1 to 10 (the seeds' standard deviation),
+under the point of about 10⁹ values.
+
+| Budget | probe | probe at initialisation | probe less initialisation, paired over stays | seed by seed |
+|---|---|---|---|---|
+| 400 | 0.582 (0.029) | 0.647 (0.017) | **−0.065 [−0.080; −0.051]** | −0.065 ± 0.012 |
+| 4,000 | 0.680 (0.008) | 0.728 (0.005) | **−0.047 [−0.064; −0.030]** | −0.047 ± 0.003 |
+| all | 0.701 (0) | 0.743 (0.003) | **−0.042 [−0.060; −0.024]** | −0.042 ± 0.001 |
+
+The half-width of the paired interval: 0.015 at 400, 0.017 at 4,000, 0.018 at every patient.
+At every patient the probe's seeds draw the same labels, so its spread is zero; the encoder at
+its initialisation is drawn under each seed, so its spread there is the draw's.
+
+**Power of the registered rule** for a gain δ read as the probe less its untrained encoder,
+from the measured components (the stays' part, the seeds' part and their interaction), 10
+seeds, 9,761 stays; the intensive-care reader at 500 stays beside it from
+`verdict-statistics.md`, 2026-10-13.
+
+| Budget | δ = 0.01 | δ = 0.015 | δ = 0.02 | δ = 0.03 |
+|---|---|---|---|---|
+| 400 | 0.04 | 0.11 | 0.28 | 0.73 |
+| 4,000 | 0.23 | 0.44 | 0.68 | 0.94 |
+| all | 0.19 | 0.39 | 0.60 | 0.93 |
+| intensive care, 500 stays, kind A | 0.08 | 0.18 | 0.35 | 0.73 |
+
+**Predictions.**
+
+1. *The interval*: held. At every patient the half-width is 0.018, within 0.014 to 0.020.
+2. *The seeds*: held. The probe spreads by 0.029 at 400 patients, 0.008 at 4,000, zero at every
+   patient.
+3. *The resolution*: held in its first part, failed in its second. No budget resolves 0.01 four
+   times in five (0.23 at best, at 4,000); every patient resolves 0.02 three times in five
+   (0.60), not four, and 4,000 patients 0.68. Both resolve 0.03.
+
+**Read after the run, beside the declared readings.** Under the point of about 10⁹ values the
+probe reads the sepsis task worse than the same encoder at its initialisation at every budget,
+by 0.042 to 0.065, every interval below zero and every seed agreeing. On the intensive-care task
+the initialisation leads only from 1,000 stays up (by 0.01 to 0.04); on sepsis it leads already
+at 400 patients. One backbone, descriptive.
+
+**Conclusions.**
+
+1. For a reading under one backbone the sepsis task is a finer instrument by about twice the
+   power, not a fine one: at 4,000 patients the rule sees 0.02 two times in three (0.68 against
+   0.35 at 500 stays of the intensive-care task) and 0.03 nineteen times in twenty (0.94 against
+   0.73), and 0.01 at best one time in four. The interval narrows by a quarter only, from 0.023
+   to 0.018, because the positives set its width, as the declaration said; the gain in power
+   comes from the seeds' part, which 4,000 labels shrink to 0.008.
+2. Whether it is finer between backbones waits for the error between pretrainings s on this
+   task, which the four intensive-care pretrainings give. Until then the reader of the stage
+   stays the intensive-care probe at 500 stays, and the positive control of transfer planned
+   next is designed for a resolution of 0.03, or 0.02 under a reading pooled over both tasks.
+3. Under this backbone pretraining removes what a linear head would use on the sepsis task at
+   every budget. The pretrained weights read the first day of a stay worse than a draw does.
+4. The run costs what the trial said: 60 cells in 83 min against about two hours predicted,
+   under the trial's 28 s for 2,000 windows.
+
+**Limitations.**
+
+- One backbone. The error between pretrainings s on this task waits for the four intensive-care
+  pretrainings, ordered and not run; their reading adds to this section when they are.
+- The power at 400 patients is read from a seed spread of 0.029 with about twenty septic labels
+  a draw; the budget is below any reading the stage would make.
+- The task over hospital B alone is not read.
