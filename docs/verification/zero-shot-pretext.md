@@ -209,3 +209,82 @@ baseline's error less the model's, 95 % interval over units).
 - The reading is of the pretext's predictions, not of the states; a linear probe reads a
   corpus never seen at 0.665 AUROC on 2012 (`state-rank.md`), so the states carry more than
   the predictions show.
+
+## 2026-10-16 — declared before the run: the rows alone, fitted on the corpus never read
+
+**Question.** The reading above left the backbone's machinery and the identity of the
+corpus's channels entangled: the pretext failed zero-shot, but the pretraining carried up to
+half of an untrained encoder's gap. If the rows of the corpus's own channels, and nothing
+else, are fitted on the corpus's unlabelled training windows under the pretext, does the
+backbone that never read the corpus reach the baselines, and the backbone that read it? And
+does the encoder at its initialisation, given the same fit, not?
+
+**The data.**
+
+- *The fit.* `--fit-rows 1000`: Adam at 0.01 over the two channel tables' weights with the
+  gradient of every row outside the corpus's own channels zeroed before each step, every
+  other weight frozen; batches of 64 of the 2,000 training windows in an order seed 2
+  decides, the strategy's masks drawn per step from the same seed, the loss on hidden
+  tokens as the pretraining scores it. The losses of the steps go to `fit.csv`. The reading
+  afterwards is the one of the section above, on the same 2,000 validation windows.
+- *The backbones.* The three that left a corpus out, each on it, through the 10⁹ backbone's
+  windows; beside each, the encoder at its initialisation (`--at-initialisation`) given the
+  same fit, the control that tells the machinery from the rows. The seen readings of the
+  section above are the comparison and are not run again. `data/report/l25c/run.sh`.
+- *The trial, seen before this was written*, from `data/report/l25c/trial.sh` and
+  `trial2.sh`, their output directories listed and their settings checked for the options:
+  the backbone without 2019 on PhysioNet 2019, rows fitted 300 steps (4:02) and 1,000 steps
+  (9:05), and the initialisation fitted 1,000 steps (9:21). The predictions are made for the
+  other two corpora from it.
+- *What is read.* Per corpus and kind as above; the fit's loss over its steps; a kind is
+  *learnt* where the whole interval of the excess lies above zero.
+
+**What the trial showed on PhysioNet 2019** (channel / block / token; the matched baselines
+0.288 / 0.226 / 0.157, the 10⁹ backbone that read it 0.271 / 0.162 / 0.125, the same backbone
+zero-shot 0.469 / 0.404 / 0.359): rows fitted 300 steps 0.302 / 0.194 / 0.161; 1,000 steps
+0.292 / 0.180 / 0.145 — the block and the token learnt (+0.046 [+0.041; +0.051] and +0.012
+[+0.007; +0.017]), the channel matched (−0.005 [−0.009; +0.000]), every kind beyond the
+strongest linear answer or matched to it, 0.02 from the backbone that read the corpus. The
+initialisation fitted 1,000 steps: 0.371 / 0.396 / 0.400, beaten by 0.08 to 0.24. The fit's
+loss on 2019 fell from 0.27 over the first 200 steps to 0.217 over steps 600 to 1,000, and
+the initialisation's from 0.40 to 0.38.
+
+**Predictions**, for PhysioNet 2012 and C-MAPSS, from the trial and the section above (2012:
+zero-shot 0.404 / 0.348 / 0.306, the backbone that read it 0.243 / 0.142 / 0.113, baselines
+0.258 / 0.228 / 0.145; C-MAPSS: zero-shot 0.344 / 0.332 / 0.330, read 0.110 / 0.100 / 0.101,
+baselines 0.137 / 0.167 / 0.160).
+
+1. *The block and the token are learnt after the fit on both corpora*: the excess over
+   interpolation has its whole interval above zero (2019: +0.046 and +0.012).
+2. *The fitted backbone reads within 0.03 of the backbone that read the corpus on the block
+   and the token* (2019: 0.018 and 0.020 behind), *and within 0.05 on a channel hidden whole*
+   (2019: 0.021).
+3. *The encoder at its initialisation, given the same fit, stays beaten on every kind by more
+   than 0.05* (2019: 0.08 to 0.24): the rows alone do not carry it, the machinery does.
+4. *The fit converges within the steps given*: the mean loss over the last 400 steps lies
+   within 0.01 of the mean over steps 400 to 600 (2019: 0.217 and 0.219).
+
+**What follows.**
+
+- If predictions 1 to 3 hold on both corpora: the encoder's machinery transfers to a corpus it
+  never read once the corpus's channels have identities fitted without labels — the first
+  reading on this backbone where a corpus never seen is read better than its own baselines.
+  The few-shot forecasting task reopens with the rows' fit as its adaptation, and the identity
+  of channels across corpora becomes the direction: what the fitted rows are, against the
+  rows the backbone learnt for like channels, is the next reading. For the evaluation, a
+  frozen probe on a corpus the backbone never read should fit its grown rows the same way
+  first; whether that moves the probe at 500 stays is a declared reading of its own.
+- If prediction 1 or 2 fails on a corpus: what transfers is bound to that corpus's kind of
+  structure, and the claim narrows to the corpora on which it holds.
+- If prediction 3 fails (the initialisation reaches the baselines too): the rows alone do
+  it, and nothing is claimed of the machinery.
+- If prediction 4 fails: the steps were too few, the reading stands as a lower bound, and
+  the fit is run longer before anything is claimed about the gap to the seen backbone.
+
+**Limitations.**
+
+- One seed of the fit, one rate and one number of steps; the trial chose them on 2019.
+- The fit sees the corpus's training windows without labels, as unsupervised adaptation in
+  the target domain does; it is not zero-shot, and the section above is.
+- PhysioNet 2019 was seen before the predictions were written; the test is on the two other
+  corpora.
