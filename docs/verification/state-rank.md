@@ -192,3 +192,44 @@ left out.
 - The channel row is one of three things a state is made of, with the value and the instant,
   and the blocks are trained; the rank may fall well below the initialisation's and still lie
   above 12.5.
+
+## 2026-10-16 — measured: the three backbones that never read 2012
+
+**Question.** The one declared above: does each of the three fill more than 12.5 directions on
+2012, towards the initialisation, because its 2012 channels pass through rows no pretraining set?
+
+**Conditions.** Commit `765936c2`, the declaration; MacBook Pro M1 Pro, MPS, fp32, torch
+2.14.0. The command as declared, one backbone after another (`data/report/l20/spread-2012.sh`),
+25 s each; every report holds 4,500 tokens over 38 channels of 2012 and records the backbone
+whose windows it read. The descriptive reading over the thirteen first listed is
+`data/report/l20/reading_thirteen.py`.
+
+| Backbone | Rank, top | Rank, last | Initialisation, top | Own corpora, top | Area at 500 |
+| --- | ---: | ---: | ---: | --- | ---: |
+| 10⁹ without PhysioNet 2012 | 9.5 | 10.0 | 27.8 | C-MAPSS 4.9, ESA-AD 7.1, 2019 5.5 | 0.665 |
+| PhysioNet 2019 alone | 10.8 | 12.8 | 27.8 | 2019 10.3 | 0.718 |
+| mixture of four without 2012 | 6.6 | 6.5 | 28.1 | C-MAPSS 8.2, ESA-AD 8.4 | 0.682 |
+
+Over the thirteen first listed, the ten of the test with these three, Spearman +0.423, one-sided
+p 0.076 from 100,000 permutations: read after the test, descriptive.
+
+**Conclusions.**
+
+1. The prediction fails: the three fill 6.6 to 10.8 directions, inside the 2.0 to 12.5 of the
+   backbones that read 2012 and far from the initialisation's 27.7 to 28.1. Rows no pretraining
+   set do not widen the states; the trained blocks give 2012's tokens states as narrow as those
+   of the corpora the backbone read.
+2. So the three could have been read by the first declaration, and only the report's limit kept
+   them out. The fault was of the list, not of the population, as the limitation above says.
+3. Beside the ten, the thirteen order no better: ρ falls to +0.42. The point without 2012 fills
+   9.5 directions and reads worst of the thirteen, 2019 alone fills 10.8 and reads best. The test
+   stays the ten and failed; nothing is claimed from the thirteen.
+4. What follows is as declared for a failure of either prediction: the rank is not a screen,
+   and the instrument is read next, fine-tuning against the frozen probe at 500 stays.
+
+**Limitations.**
+
+- Three points. The rows grown are one draw, for the mixture without 2012 only; the other two
+  hold their rows at the initialisation.
+- The last block of 2019 alone fills 12.8 directions, above the range; only the top reading was
+  declared and read.
