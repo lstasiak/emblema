@@ -25,7 +25,6 @@ from scripts.state_spread_report import (  # noqa: E402
     TOP,
     StateSpread,
     explained_share,
-    grown,
     read_spread,
     readers_of,
     render,
@@ -146,27 +145,6 @@ def test_the_same_seed_reads_the_same_spread(control: Control) -> None:
     )
 
     assert first == second
-
-
-def test_a_model_grown_for_a_corpus_it_never_read_keeps_its_learnt_rows(control: Control) -> None:
-    model = MaskedReconstruction(encoder(control, seed=1), decoder_layers=1)
-    before = spread_of(readers_of(model, None, layers=2), corpus_of(control), device="cpu")
-
-    torch.manual_seed(5)
-    grown(model, control.vocabulary_size + 40)
-
-    assert model.encoder.channel_embedding.vocabulary_size == control.vocabulary_size + 40
-    # The control's channels all lie in the learnt table, so their states do not move.
-    assert spread_of(readers_of(model, None, layers=2), corpus_of(control), device="cpu") == before
-
-
-def test_an_objective_that_predicts_states_is_not_grown(control: Control) -> None:
-    model = LatentPrediction(
-        encoder(control, seed=1), predictor_layers=1, target=ObjectiveTarget.latent(layers=2)
-    )
-
-    with pytest.raises(ValueError, match="own corpora only"):
-        grown(model, control.vocabulary_size + 1)
 
 
 def test_a_reading_through_another_backbone_s_windows_says_so(tmp_path: Path) -> None:

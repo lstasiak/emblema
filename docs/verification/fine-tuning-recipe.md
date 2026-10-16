@@ -83,7 +83,7 @@ hundredth of the rate, the head drawn or solved first, replace fine-tuning's set
 500 stays, and does it still trail the network from nothing at 500?
 
 **Conditions.** Commit `be36f421`; four campaigns defined and ordered from it, run on Colab on
-one GPU as four concurrent processes under CUDA MPS (`data/report/l22/colab-cell.sh`). Wall
+one G4 GPU as four concurrent processes under CUDA MPS (`data/report/l22/colab-cell.sh`). Wall
 clock of an order of 60 cells: 1,963 and 2,288 s at 500 stays, 4,101 and 4,134 s at 200. A cell
 took 17 to 52 s under the stop at 500 and 86 to 98 s at 200 while four processes shared the
 GPU, 46 to 52 s once the 500 campaigns had ended. The first cell of the first order was the
