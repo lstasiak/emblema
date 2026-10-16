@@ -12,9 +12,12 @@ the decile of its instant. A state that is mostly its channel and instant is a s
 predictor was handed; a state that is neither is what the window made of the token.
 
 Measuring and reporting are two steps: the spread is written as CSV and the table is rendered
-from the file.
+from the file. A corpus the backbone never read is read through the windows another backbone
+read, with the channels past its table in rows no pretraining set, as the evaluation gives them.
 
     uv run --env-file .env.r2 scripts/state_spread_report.py --backbone <id>
+    uv run --env-file .env.r2 scripts/state_spread_report.py --backbone <id>
+        --corpus physionet2012 --windows-of <another id>
     uv run scripts/state_spread_report.py --report-only data/report/state-spread/<backbone>
 """
 
@@ -209,6 +212,22 @@ def last_block(encoder: SetEncoder, batch: TokenTensors) -> Tensor:
     return states
 
 
+def grown(model: PretrainingObjective, vocabulary_size: int) -> PretrainingObjective:
+    """The model over a vocabulary that continues its own, for a corpus it never read.
+
+    The rows its table learnt stay as they are; a channel past them gets a row drawn from
+    torch's generator here, which no pretraining set, as the evaluation gives it. An objective
+    that predicts states is refused: its teacher reads the same table and would not be grown.
+
+    Raises:
+        ValueError: If the objective predicts states.
+    """
+    if isinstance(model, LatentPrediction):
+        raise ValueError("an objective that predicts states is read on its own corpora only")
+    model.encoder.grown_to(vocabulary_size)
+    return model
+
+
 def readers_of(
     model: PretrainingObjective, initial: PretrainingObjective | None, *, layers: int
 ) -> dict[str, Reader]:
@@ -306,7 +325,14 @@ def render(directory: Path) -> str:
             f"mean of the top {settings['layers']} blocks each normalised without parameters, "
             f"`last` the encoder's output, `teacher` the objective's targets where it has one, "
             f"`initial-*` the same under the encoder at its initialisation; {settings['device']}, "
-            f"{settings['machine']}, torch {settings['torch']}, commit {settings['revision']}.",
+            f"{settings['machine']}, torch {settings['torch']}, commit {settings['revision']}."
+            + (
+                f" The windows of `{settings['corpus']}` are the ones backbone "
+                f"`{settings['windows_of'][:8]}-…` read; this backbone never read it, and its "
+                "channels past the learnt table pass through rows no pretraining set."
+                if "windows_of" in settings
+                else ""
+            ),
             spread_table(read_spread(directory)),
             "The variance is the mean over coordinates of the variance across tokens, the "
             "effective rank the number of directions the states fill. The shares say how much of "
@@ -330,6 +356,12 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         type=int,
         help="blocks averaged into the top reading; the objective's own where it predicts states",
     )
+    parser.add_argument("--corpus", metavar="NAME", help="read this one corpus only")
+    parser.add_argument(
+        "--windows-of",
+        metavar="ID",
+        help="a backbone whose inputs supply --corpus when this backbone never read it",
+    )
     parser.add_argument("--device", choices=DEVICES, default=available_device())
     parser.add_argument("--validation-windows", type=int, default=VALIDATION_WINDOWS)
     parser.add_argument("--spread-tokens", type=int, default=SPREAD_TOKENS)
@@ -338,6 +370,13 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         "--blocks", type=Path, default=BLOCKS, help="where blocks are fetched to and mapped from"
     )
     return parser.parse_args(argv)
+
+
+def _backbone_id(text: str, option: str) -> BackboneId:
+    try:
+        return BackboneId(UUID(text))
+    except ValueError as error:
+        raise SystemExit(f"{option} must be a backbone's id: {error}") from error
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -349,13 +388,16 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise SystemExit("--backbone is needed to read anything")
     if not device_available(arguments.device):
         raise SystemExit(f"device {arguments.device} is not available on this machine")
-    try:
-        backbone_id = BackboneId(UUID(arguments.backbone))
-    except ValueError as error:
-        raise SystemExit(f"--backbone must be a backbone's id: {error}") from error
-    backbone = _registry().get(backbone_id)
+    registry = _registry()
+    backbone = registry.get(_backbone_id(arguments.backbone, "--backbone"))
     if backbone.artifact is None:
         raise SystemExit(f"backbone {backbone.id} is not ready: it has no weights")
+    # The windows come from this backbone's own inputs unless another's are asked for.
+    source = backbone
+    if arguments.windows_of is not None:
+        if arguments.corpus is None:
+            raise SystemExit("--windows-of needs --corpus, the corpus that backbone supplies")
+        source = registry.get(_backbone_id(arguments.windows_of, "--windows-of"))
     store = configured_store(Settings())
     configuration = backbone.configuration
     layers = arguments.layers or (
@@ -365,43 +407,54 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise SystemExit(
             f"--layers must lie in 1 to {configuration.architecture.layers}, got {layers}"
         )
-    model = TrainedModel.read(store.get(backbone.artifact)).build().to(arguments.device).eval()
+    model = TrainedModel.read(store.get(backbone.artifact)).build()
     # The encoder at its initialisation: the objective drawn as the run drew it, before a step.
     torch.manual_seed(configuration.budget.seed)
-    initial = (
-        ObjectiveShape.of(configuration, max(stated.vocabulary_size for stated in backbone.inputs))
-        .build()
-        .to(arguments.device)
-        .eval()
-    )
+    initial = ObjectiveShape.of(
+        configuration, max(stated.vocabulary_size for stated in backbone.inputs)
+    ).build()
+    if source is not backbone:
+        supplied = [stated for stated in source.inputs if stated.corpus == arguments.corpus]
+        if not supplied:
+            raise SystemExit(f"backbone {source.id} did not read {arguments.corpus}")
+        vocabulary = max(stated.vocabulary_size for stated in supplied)
+        try:
+            model, initial = grown(model, vocabulary), grown(initial, vocabulary)
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
+    model = model.to(arguments.device).eval()
+    initial = initial.to(arguments.device).eval()
     directory = arguments.out or WORKSPACE / str(backbone.id)
-    write_settings(
-        directory,
-        {
-            "backbone": str(backbone.id),
-            "weights": backbone.artifact.checksum.digest,
-            "experiment": configuration.name,
-            "target": str(configuration.target.kind),
-            "layers": str(layers),
-            "validation_windows": str(arguments.validation_windows),
-            "spread_tokens": str(arguments.spread_tokens),
-            "batch_size": str(arguments.batch_size),
-            "validation_seed": str(VALIDATION_SEED),
-            "device": arguments.device,
-            "machine": machine(),
-            "torch": version("torch"),
-            "revision": SourceRevision().current(),
-            "started": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
-        },
-    )
+    settings = {
+        "backbone": str(backbone.id),
+        "weights": backbone.artifact.checksum.digest,
+        "experiment": configuration.name,
+        "target": str(configuration.target.kind),
+        "layers": str(layers),
+        "validation_windows": str(arguments.validation_windows),
+        "spread_tokens": str(arguments.spread_tokens),
+        "batch_size": str(arguments.batch_size),
+        "validation_seed": str(VALIDATION_SEED),
+        "device": arguments.device,
+        "machine": machine(),
+        "torch": version("torch"),
+        "revision": SourceRevision().current(),
+        "started": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+    }
+    if arguments.corpus is not None:
+        settings["corpus"] = arguments.corpus
+    if source is not backbone:
+        settings["windows_of"] = str(source.id)
+    write_settings(directory, settings)
     readers = readers_of(model, initial, layers=layers)
     rows: list[StateSpread] = []
     for corpus in corpora_of(
-        backbone,
+        source,
         store,
         arguments.blocks,
         training_windows=1,
         validation_windows=arguments.validation_windows,
+        corpus=arguments.corpus,
     ):
         rows.extend(
             spread_of(
