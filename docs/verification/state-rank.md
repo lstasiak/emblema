@@ -151,3 +151,44 @@ The seen, rank and area: decoder of four blocks 2.4 (0.654), 3.0 (0.668); object
   same reading and stays out of every set but the descriptive.
 - The declaration's limitations stand: an order across backbones is not a cause, the order does
   not hold within a recipe, and the rank is of the top states while the probe reads every block.
+
+## 2026-10-16 — declared before the run: the three backbones that never read 2012
+
+**Question.** Is the rank on 2012 of a backbone that never read 2012 a reading of the same kind
+as the others'? Such a backbone embeds 2012's channels, identifiers 152 to 194 of the shared
+vocabulary, through rows no pretraining set: the point of about 10⁹ without 2012 and PhysioNet
+2019 alone hold those rows at their initialisation in a table of 329, and the mixture of four
+without 2012 has a table that ends at 151, grown by rows drawn when the model is built, as the
+evaluation grows it for the task. If those rows alone widen the states, the rank measures the
+absence of 2012 from the pretraining, not what the pretraining made of it, and the three cannot
+enter a test of the order.
+
+**The data.** `scripts/state_spread_report.py --backbone <id> --corpus physionet2012
+--windows-of aa67ca05-5548-4392-905f-cf493f5e0308 --device mps`: the 2012 input of the mixture
+of four, the same publication every report above read, 500 validation windows, 4,500 tokens. The
+rows grown are drawn under the backbone's own seed, once. Their readings at 500 stays by the
+same probe: 0.665 (10⁹ without 2012), 0.718 (2019 alone), 0.682 (mixture without 2012). Under
+every backbone of width 256 read so far the encoder at its initialisation fills 27.6 to 27.8
+directions on 2012.
+
+**Prediction.** Descriptive, with no test: each of the three fills more than 12.5 directions on
+2012, above every backbone of width 256 that read 2012 (2.0 to 12.5, seen and held out),
+towards the initialisation's 27.7. A report that refuses a backbone is named and the backbone
+left out.
+
+**What follows.**
+
+- If it holds: a backbone enters a reading of the rank only on corpora it was pretrained on. The
+  three stay out of this hypothesis, the measured section above is its test, complete, and their
+  readings (0.665 to 0.718) are not read against such a rank.
+- If it fails, any of the three at or below 12.5: the rank on 2012 does not need 2012 in the
+  pretraining and the three could have been read. The test above stands as declared; using them
+  would need a new declaration over backbones not yet read, not a second reading of this one.
+
+**Limitations.**
+
+- Three points, one draw of the grown rows; the direction and the distance from 12.5 are read,
+  not a statistic.
+- The channel row is one of three things a state is made of, with the value and the instant,
+  and the blocks are trained; the rank may fall well below the initialisation's and still lie
+  above 12.5.
