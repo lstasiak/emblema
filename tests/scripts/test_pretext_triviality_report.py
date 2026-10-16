@@ -42,13 +42,16 @@ from scripts.pretext_triviality_report import (
     kinds_of,
     own_channels,
     read_corpora,
+    read_fit,
     read_kinds,
     read_settings,
     read_tallies,
     render,
     supplied_by,
+    unset_rows_fitted,
     unset_rows_to_mean,
     write_corpora,
+    write_fit,
     write_kinds,
     write_settings,
     write_tallies,
@@ -505,3 +508,70 @@ def test_a_corpus_is_supplied_by_another_backbone_only_where_this_one_never_read
         supplied_by(source, source, CORPUS)
     with pytest.raises(ValueError, match="did not read"):
         supplied_by(never_read, never_read, CORPUS)
+
+
+def test_fitting_the_rows_moves_the_chosen_rows_and_nothing_else(control: Control) -> None:
+    model, corpus = toy(control), corpus_of(control)
+    torch.manual_seed(5)
+    grown(model, control.vocabulary_size + 2)
+    before = {name: value.detach().clone() for name, value in model.state_dict().items()}
+    # Channels 2 and 3 occur in the control's windows; the grown rows, past its vocabulary,
+    # cannot, so a gradient reaches the chosen rows that are read and nothing else.
+    chosen = [2, 3, control.vocabulary_size + 1]
+
+    losses = unset_rows_fitted(
+        model, chosen, corpus.training, WITHOUT_TAIL, SQUARED, device="cpu", steps=3, batch_size=4
+    )
+
+    assert len(losses) == 3
+    assert all(value > 0.0 for value in losses)
+    after = model.state_dict()
+    learnt = "encoder.channel_embedding.learnt.table.weight"
+    grown_rows = "encoder.channel_embedding.grown.weight"
+    assert not torch.equal(after[learnt][[2, 3]], before[learnt][[2, 3]])
+    others = [row for row in range(before[learnt].shape[0]) if row not in (2, 3)]
+    assert torch.equal(after[learnt][others], before[learnt][others])
+    assert torch.equal(after[grown_rows], before[grown_rows])
+    for name, value in before.items():
+        if name not in (learnt, grown_rows):
+            assert torch.equal(after[name], value), name
+    assert not any(parameter.requires_grad for parameter in model.parameters())
+
+
+def test_the_fit_s_losses_read_back_and_are_rendered(control: Control, tmp_path: Path) -> None:
+    corpus = corpus_of(control)
+    tallies = [
+        ("control-a", t)
+        for t in diagnose(toy(control), WITHOUT_TAIL, SQUARED, corpus, device="cpu")
+    ]
+    write_settings(
+        tmp_path,
+        {
+            "backbone": "0123456789abcdef",
+            "weights": "fedcba9876543210",
+            "experiment": "toy",
+            "loss": "mse",
+            "validation_seed": "1",
+            "fit_seed": "2",
+            "resamples": "20",
+            "device": "cpu",
+            "machine": "test",
+            "torch": "0",
+            "revision": "abc",
+            "started": "2026-10-16 21:00:00",
+            "corpus": "control-a",
+            "windows_of": "abcdef12-" + "0" * 27,
+            "unset_rows": "drawn",
+            "fit_rows": "3",
+            "fit_rate": "0.01",
+        },
+    )
+    write_corpora(tmp_path, [CorpusRow.of(corpus, 1.0)])
+    write_tallies(tmp_path, tallies)
+    write_kinds(tmp_path, kinds_of(tallies, resamples=20))
+    write_fit(tmp_path, [0.5, 0.4, 0.3])
+
+    assert read_fit(tmp_path) == [0.5, 0.4, 0.3]
+    rendered = render(tmp_path)
+    assert "fitted for 3 steps at 0.01" in rendered
+    assert "went from 0.500 to 0.300" in rendered

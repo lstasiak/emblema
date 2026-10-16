@@ -19,7 +19,10 @@ seen, against baselines fitted on that corpus alone, its channels passing throug
 channel table no pretraining set — drawn, as the evaluation gives them, or set to the mean of
 the learnt rows (``--unset-rows mean``), which tells a row the model never saw from a row
 unlike any it saw. The encoder at its initialisation (``--at-initialisation``) is the floor
-of either reading.
+of either reading. The rows alone can be fitted on the corpus's unlabelled training windows
+under the pretext, every other weight frozen (``--fit-rows STEPS``): what the encoder's
+machinery carries once the corpus's channels have an identity it chose, read on the same
+validation windows; the losses of the fit go to ``fit.csv``.
 
     uv run --env-file .env.r2 scripts/pretext_triviality_report.py --backbone <id>
     uv run --env-file .env.r2 scripts/pretext_triviality_report.py --backbone <id>
@@ -41,6 +44,7 @@ from uuid import UUID
 
 import numpy as np
 import torch
+from torch import Tensor
 
 # Run from anywhere: the sibling script modules live in this directory's package at the repository
 # root. The imports below follow, which is why this file is exempt from the import-order rule in
@@ -118,6 +122,11 @@ RESAMPLES = 2_000
 VALIDATION_SEED = 1
 FIT_SEED = 2
 SETTINGS, CORPORA, TALLIES, KINDS = "settings.csv", "corpora.csv", "tallies.csv", "kinds.csv"
+FIT = "fit.csv"
+# The rate the rows alone are fitted at: a row starts where torch drew it, at unit scale, and
+# the learnt rows lie within a few units of each other, so a hundredth a step reaches them in
+# a few hundred steps without leaving them.
+FIT_RATE = 1e-2
 
 
 # ------------------------------------------------------------------------------------------------
@@ -237,6 +246,88 @@ def supplied_by(source: Backbone, backbone: Backbone, corpus: str) -> list[Pretr
     if not supplied:
         raise ValueError(f"backbone {source.id} did not read {corpus}")
     return supplied
+
+
+def unset_rows_fitted(
+    model: MaskedReconstruction,
+    channel_ids: Iterable[int],
+    windows: Sequence[TokenWindow],
+    strategy: MaskingStrategy,
+    loss: ObjectiveLoss,
+    *,
+    device: str,
+    steps: int,
+    learning_rate: float = FIT_RATE,
+    batch_size: int = BATCH_SIZE,
+    seed: int = FIT_SEED,
+) -> list[float]:
+    """Fit the rows of ``channel_ids`` on ``windows`` under the pretext, everything else frozen.
+
+    The loop is the pretraining's in miniature — the strategy's masks drawn per batch from a
+    seed, the loss on the hidden tokens, Adam — over the two tables' weights alone, with the
+    gradient of every row outside ``channel_ids`` zeroed before each step, so no learnt row
+    moves and no weight of the encoder or the decoder does. Adam's moments of a row that never
+    receives a gradient stay zero, so zeroing the gradient holds the row still.
+
+    Returns:
+        The mean loss on hidden tokens of each step's batch, in the order taken.
+    """
+    table = model.encoder.channel_embedding
+    learnt = table.learnt if isinstance(table, GrownChannelEmbedding) else table
+    if not isinstance(learnt, LearnedChannelEmbedding):
+        raise ValueError(f"only a learnt channel table has unset rows, not {type(learnt).__name__}")
+    chosen = set(channel_ids)
+    within = torch.zeros(learnt.vocabulary_size + 1, 1)
+    for channel_id in chosen:
+        if channel_id <= learnt.vocabulary_size:
+            within[channel_id] = 1.0
+        elif not isinstance(table, GrownChannelEmbedding):
+            raise ValueError(f"channel {channel_id} lies past a table that was not grown")
+    beyond: Tensor | None = None
+    if isinstance(table, GrownChannelEmbedding):
+        beyond = torch.zeros(table.grown.num_embeddings, 1)
+        for channel_id in chosen:
+            if channel_id > learnt.vocabulary_size:
+                beyond[channel_id - learnt.vocabulary_size - 1] = 1.0
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    fitted = [learnt.table.weight]
+    if isinstance(table, GrownChannelEmbedding):
+        fitted.append(table.grown.weight)
+    for weight in fitted:
+        weight.requires_grad_(True)
+    model = model.to(device).train()
+    within = within.to(device)
+    beyond = beyond.to(device) if beyond is not None else None
+    optimiser = torch.optim.Adam(fitted, lr=learning_rate)
+    masking = TokenMasking(strategy)
+    loader = WindowLoader(windows, batch_size=batch_size, seed=seed, shuffle=True)
+    losses: list[float] = []
+    epoch = 0
+    while len(losses) < steps:
+        for batch in loader.batches_of(epoch):
+            if len(losses) == steps:
+                break
+            masks = masking.draw(batch, torch.Generator().manual_seed(seed * 1_000 + len(losses)))
+            score = model.score(batch.to(device), masks.to(device), loss)
+            mean = score.error / score.tokens.clamp(min=1)
+            optimiser.zero_grad()
+            torch.autograd.backward(mean)
+            if learnt.table.weight.grad is not None:
+                learnt.table.weight.grad.mul_(within)
+            if (
+                beyond is not None
+                and isinstance(table, GrownChannelEmbedding)
+                and table.grown.weight.grad is not None
+            ):
+                table.grown.weight.grad.mul_(beyond)
+            optimiser.step()
+            losses.append(float(mean.detach().to("cpu")))
+        epoch += 1
+    for weight in fitted:
+        weight.requires_grad_(False)
+    model.eval()
+    return losses
 
 
 def grown(model: PretrainingObjective, vocabulary_size: int) -> PretrainingObjective:
@@ -523,6 +614,18 @@ def write_settings(directory: Path, settings: dict[str, str]) -> None:
     )
 
 
+def write_fit(directory: Path, losses: Sequence[float]) -> None:
+    write_rows(
+        directory / FIT,
+        ["step", "loss"],
+        ({"step": str(step), "loss": _number(value)} for step, value in enumerate(losses, 1)),
+    )
+
+
+def read_fit(directory: Path) -> list[float]:
+    return [float(record["loss"]) for record in read_rows(directory / FIT)]
+
+
 def read_settings(directory: Path) -> dict[str, str]:
     return {row["key"]: row["value"] for row in read_rows(directory / SETTINGS)}
 
@@ -625,6 +728,7 @@ def corpora_table(rows: Sequence[CorpusRow]) -> str:
 
 def render(directory: Path) -> str:
     settings = read_settings(directory)
+    fit = read_fit(directory) if (directory / FIT).exists() else []
     strategy = ", ".join(
         f"{key} {settings[key]}"
         for key in (
@@ -667,6 +771,14 @@ def render(directory: Path) -> str:
             + (
                 " The encoder is read at its initialisation, before a step of pretraining."
                 if settings.get("at_initialisation") == "true"
+                else ""
+            )
+            + (
+                f" The rows of the corpus's own channels were then fitted for "
+                f"{settings['fit_rows']} steps at {settings['fit_rate']} on the training "
+                f"windows under the pretext, every other weight frozen; the loss of a step's "
+                f"batch went from {fit[0]:.3f} to {fit[-1]:.3f}."
+                if fit
                 else ""
             ),
             corpora_table(read_corpora(directory)),
@@ -769,6 +881,14 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         help="read the encoder as the run drew it, before a step, instead of the weights kept",
     )
     parser.add_argument(
+        "--fit-rows",
+        type=int,
+        default=0,
+        metavar="STEPS",
+        help="fit the rows of the corpus's own channels for this many steps, the rest frozen",
+    )
+    parser.add_argument("--fit-rate", type=float, default=FIT_RATE)
+    parser.add_argument(
         "--report-only", type=Path, metavar="DIR", help="render a stored diagnostic"
     )
     parser.add_argument(
@@ -834,6 +954,10 @@ def main(argv: Sequence[str] | None = None) -> None:
             unset_rows_to_mean(model, own_channels(manifest.channels, arguments.corpus))
     elif arguments.unset_rows == "mean":
         raise SystemExit("--unset-rows mean needs --windows-of: a backbone's own rows are all set")
+    if arguments.fit_rows and source is backbone:
+        raise SystemExit("--fit-rows needs --windows-of: a backbone's own rows are all set")
+    if arguments.fit_rows < 0:
+        raise SystemExit("--fit-rows takes a number of steps, zero for none")
     directory = arguments.out or WORKSPACE / str(backbone.id)
     strategy = configuration.masking
     settings = {
@@ -867,6 +991,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         settings["rows_seed"] = str(VALIDATION_SEED)
     if arguments.at_initialisation:
         settings["at_initialisation"] = "true"
+    if arguments.fit_rows:
+        settings["fit_rows"] = str(arguments.fit_rows)
+        settings["fit_rate"] = _number(arguments.fit_rate)
+        settings["fit_seed"] = str(FIT_SEED)
     write_settings(directory, settings)
     tallies: list[tuple[str, MaskKindTally]] = []
     rows = []
@@ -879,6 +1007,25 @@ def main(argv: Sequence[str] | None = None) -> None:
         corpus=arguments.corpus,
     ):
         started = time.perf_counter()
+        if arguments.fit_rows:
+            manifest = PublishedCorpusManifestJson().decode(store.get(supplied[0].manifest))
+            fitted = unset_rows_fitted(
+                model,
+                own_channels(manifest.channels, arguments.corpus),
+                corpus.training,
+                strategy,
+                configuration.loss,
+                device=arguments.device,
+                steps=arguments.fit_rows,
+                learning_rate=arguments.fit_rate,
+                batch_size=arguments.batch_size,
+            )
+            write_fit(directory, fitted)
+            print(
+                f"{corpus.corpus}: rows fitted {len(fitted)} steps, loss {fitted[0]:.3f} to "
+                f"{fitted[-1]:.3f}",
+                file=sys.stderr,
+            )
         found = diagnose(
             model,
             strategy,
