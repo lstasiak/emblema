@@ -35,7 +35,7 @@ import csv
 import sys
 import time
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
 from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -248,6 +248,11 @@ def supplied_by(source: Backbone, backbone: Backbone, corpus: str) -> list[Pretr
     return supplied
 
 
+def narrowed[T: TokenTensors | TokenMasks](batch: T, start: int, stop: int) -> T:
+    """``batch`` cut to its windows ``start`` to ``stop``, every tensor sliced alike."""
+    return replace(batch, **{f.name: getattr(batch, f.name)[start:stop] for f in fields(batch)})
+
+
 def unset_rows_fitted(
     model: MaskedReconstruction,
     channel_ids: Iterable[int],
@@ -260,6 +265,7 @@ def unset_rows_fitted(
     learning_rate: float = FIT_RATE,
     batch_size: int = BATCH_SIZE,
     seed: int = FIT_SEED,
+    chunk: int | None = None,
 ) -> list[float]:
     """Fit the rows of ``channel_ids`` on ``windows`` under the pretext, everything else frozen.
 
@@ -268,6 +274,11 @@ def unset_rows_fitted(
     gradient of every row outside ``channel_ids`` zeroed before each step, so no learnt row
     moves and no weight of the encoder or the decoder does. Adam's moments of a row that never
     receives a gradient stay zero, so zeroing the gradient holds the row still.
+
+    A batch whose activations do not fit the device at once is scored ``chunk`` windows at a
+    time under the masks drawn for the whole batch, each chunk's summed error divided by the
+    batch's count of hidden tokens, so the step's gradient and loss are the whole batch's up to
+    the order of a floating-point sum.
 
     Returns:
         The mean loss on hidden tokens of each step's batch, in the order taken.
@@ -309,10 +320,19 @@ def unset_rows_fitted(
             if len(losses) == steps:
                 break
             masks = masking.draw(batch, torch.Generator().manual_seed(seed * 1_000 + len(losses)))
-            score = model.score(batch.to(device), masks.to(device), loss)
-            mean = score.error / score.tokens.clamp(min=1)
+            batch, masks = batch.to(device), masks.to(device)
+            tokens = (masks.hidden & ~batch.padding_mask).sum().clamp(min=1)
             optimiser.zero_grad()
-            torch.autograd.backward(mean)
+            mean = torch.zeros((), device=device)
+            stride = chunk or batch.batch_size
+            for start in range(0, batch.batch_size, stride):
+                stop = start + stride
+                score = model.score(
+                    narrowed(batch, start, stop), narrowed(masks, start, stop), loss
+                )
+                part = score.error / tokens
+                torch.autograd.backward(part)
+                mean += part.detach()
             if learnt.table.weight.grad is not None:
                 learnt.table.weight.grad.mul_(within)
             if (
@@ -780,6 +800,12 @@ def render(directory: Path) -> str:
                 f"batch went from {fit[0]:.3f} to {fit[-1]:.3f}."
                 if fit
                 else ""
+            )
+            + (
+                f" Each batch of the fit was scored {settings['fit_chunk']} windows at a time "
+                f"under the batch's masks, its error divided once by the batch's hidden tokens."
+                if fit and "fit_chunk" in settings
+                else ""
             ),
             corpora_table(read_corpora(directory)),
             kinds_table(read_kinds(directory)),
@@ -889,6 +915,13 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--fit-rate", type=float, default=FIT_RATE)
     parser.add_argument(
+        "--fit-chunk",
+        type=int,
+        default=0,
+        metavar="WINDOWS",
+        help="score each batch of the fit this many windows at a time, zero for the whole batch",
+    )
+    parser.add_argument(
         "--report-only", type=Path, metavar="DIR", help="render a stored diagnostic"
     )
     parser.add_argument(
@@ -958,6 +991,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise SystemExit("--fit-rows needs --windows-of: a backbone's own rows are all set")
     if arguments.fit_rows < 0:
         raise SystemExit("--fit-rows takes a number of steps, zero for none")
+    if arguments.fit_chunk < 0:
+        raise SystemExit("--fit-chunk takes a number of windows, zero for the whole batch")
     directory = arguments.out or WORKSPACE / str(backbone.id)
     strategy = configuration.masking
     settings = {
@@ -995,6 +1030,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         settings["fit_rows"] = str(arguments.fit_rows)
         settings["fit_rate"] = _number(arguments.fit_rate)
         settings["fit_seed"] = str(FIT_SEED)
+        if arguments.fit_chunk:
+            settings["fit_chunk"] = str(arguments.fit_chunk)
     write_settings(directory, settings)
     tallies: list[tuple[str, MaskKindTally]] = []
     rows = []
@@ -1019,6 +1056,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 steps=arguments.fit_rows,
                 learning_rate=arguments.fit_rate,
                 batch_size=arguments.batch_size,
+                chunk=arguments.fit_chunk or None,
             )
             write_fit(directory, fitted)
             print(

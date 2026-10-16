@@ -538,6 +538,37 @@ def test_fitting_the_rows_moves_the_chosen_rows_and_nothing_else(control: Contro
     assert not any(parameter.requires_grad for parameter in model.parameters())
 
 
+ROWS = "encoder.channel_embedding.table.weight"
+
+
+def test_a_fit_scored_in_chunks_moves_the_rows_as_the_whole_batch_does(control: Control) -> None:
+    corpus = corpus_of(control)
+    chosen = [2, 3]
+    fits = []
+    for chunk in (None, 2):
+        torch.manual_seed(5)
+        model = toy(control)
+        losses = unset_rows_fitted(
+            model,
+            chosen,
+            corpus.training,
+            WITHOUT_TAIL,
+            SQUARED,
+            device="cpu",
+            steps=3,
+            batch_size=5,
+            chunk=chunk,
+        )
+        fits.append((losses, model.state_dict()[ROWS].detach().clone()))
+    (whole_losses, whole_rows), (chunked_losses, chunked_rows) = fits
+    torch.manual_seed(5)
+    unfitted = toy(control).state_dict()[ROWS]
+
+    assert chunked_losses == pytest.approx(whole_losses, abs=1e-6)
+    assert torch.allclose(chunked_rows, whole_rows, atol=1e-6)
+    assert not torch.equal(whole_rows[[2, 3]], unfitted[[2, 3]])
+
+
 def test_the_fit_s_losses_read_back_and_are_rendered(control: Control, tmp_path: Path) -> None:
     corpus = corpus_of(control)
     tallies = [
@@ -575,3 +606,7 @@ def test_the_fit_s_losses_read_back_and_are_rendered(control: Control, tmp_path:
     rendered = render(tmp_path)
     assert "fitted for 3 steps at 0.01" in rendered
     assert "went from 0.500 to 0.300" in rendered
+    assert "windows at a time" not in rendered
+    settings = read_settings(tmp_path)
+    write_settings(tmp_path, {**settings, "fit_chunk": "8"})
+    assert "scored 8 windows at a time" in render(tmp_path)
