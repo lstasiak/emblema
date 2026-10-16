@@ -1,0 +1,52 @@
+# Full fine-tuning with the encoder's weights slowed to a tenth or a hundredth of the schedule's
+# rate, with the head drawn or solved first, against fine-tuning's setting at 200 stays, the
+# budget where fine-tuning already leads the network from nothing (docs/verification/
+# fine-tuning-recipe.md, 2026-10-16). The network from nothing runs at its setting at this
+# budget, so the variants can also be read against it.
+#
+# Every cell is scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10,
+# so readings pair by stay and seed with the reader's campaigns at 200 stays. A campaign divided
+# this way chooses nothing; the reading is the pairs declared in the note. Defined under the
+# mixture of four's first two pretraining seeds. Every cell trains a network, so the campaign is
+# fulfilled on a GPU platform from its order.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "recipe-encoder-rate-200-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.003",
+    "full_fine_tuning",
+    "full_fine_tuning@encoder_rate=0.1",
+    "full_fine_tuning@encoder_rate=0.01",
+    "full_fine_tuning@encoder_rate=0.1,head_start=solved",
+    "full_fine_tuning@encoder_rate=0.01,head_start=solved",
+]
+control = "from_scratch@learning_rate=0.003"
+endpoint = "full_fine_tuning@encoder_rate=0.1,head_start=solved"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+# Four contenders beside fine-tuning's setting at one budget, less the endpoint.
+secondary_family_size = 4
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
