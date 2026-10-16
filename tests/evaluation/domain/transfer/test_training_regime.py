@@ -26,6 +26,7 @@ def test_the_standard_regime_runs_every_epoch_weighs_nothing_and_reads_every_cha
         "class_weight": "none",
         "channel_dropout": 0.0,
         "head_start": "fresh",
+        "encoder_rate": 1.0,
     }
 
 
@@ -65,6 +66,10 @@ def test_the_weight_and_the_channel_dropout_turn_and_are_named_only_when_turned(
         ("patience_steps", "4.5"),
         ("stop_division", "random"),
         ("head_start", "trained"),
+        ("encoder_rate", "0"),
+        ("encoder_rate", "1.5"),
+        ("encoder_rate", "nan"),
+        ("encoder_rate", "slow"),
         ("early_stop", "yes"),
     ],
 )
@@ -110,3 +115,23 @@ def test_the_head_starts_solved_when_turned_so_and_is_named_only_then() -> None:
     assert solved.solves_the_head_first
     assert not solved.stops
     assert solved.turned_away() == {"head_start": "solved"}
+
+
+def test_the_encoder_learns_at_the_heads_rate_unless_a_share_of_it_is_turned() -> None:
+    standard = TrainingRegime.standard()
+    slowed = standard.tuned("encoder_rate", "0.1")
+
+    assert not standard.slows_the_encoder
+    assert standard.parameters()["encoder_rate"] == 1.0
+    assert "encoder_rate" not in standard.turned_away()
+    assert slowed.slows_the_encoder
+    assert slowed.encoder_rate == 0.1
+    assert slowed.turned_away() == {"encoder_rate": 0.1}
+    assert not slowed.tuned("encoder_rate", "1").slows_the_encoder
+
+
+def test_a_share_of_the_rate_outside_its_range_is_refused_at_construction_too() -> None:
+    with pytest.raises(InvalidTrainingRegimeError, match="encoder_rate"):
+        TrainingRegime(encoder_rate=0.0)
+    with pytest.raises(InvalidTrainingRegimeError, match="encoder_rate"):
+        TrainingRegime(encoder_rate=2.0)
