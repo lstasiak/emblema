@@ -87,6 +87,7 @@ from emblema.pretraining.domain.assessment.kind_summary import (
 )
 from emblema.pretraining.domain.assessment.mask_kind_tally import MaskKindTally
 from emblema.pretraining.domain.backbone.backbone import Backbone
+from emblema.pretraining.domain.backbone.pretraining_input import PretrainingInput
 from emblema.pretraining.domain.identifiers import BackboneId
 from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
@@ -221,6 +222,21 @@ def unset_rows_to_mean(model: PretrainingObjective, channel_ids: Iterable[int]) 
                 table.grown.weight[channel_id - learnt.vocabulary_size - 1] = mean
             else:
                 raise ValueError(f"channel {channel_id} lies past a table that was not grown")
+
+
+def supplied_by(source: Backbone, backbone: Backbone, corpus: str) -> list[PretrainingInput]:
+    """The inputs of ``source`` that carry ``corpus``, for a backbone that never read it.
+
+    Raises:
+        ValueError: If ``backbone`` read the corpus itself, so the reading would not be of a
+            corpus it never saw, or if ``source`` did not read it.
+    """
+    if any(stated.corpus == corpus for stated in backbone.inputs):
+        raise ValueError(f"backbone {backbone.id} read {corpus} itself; read it on its own windows")
+    supplied = [stated for stated in source.inputs if stated.corpus == corpus]
+    if not supplied:
+        raise ValueError(f"backbone {source.id} did not read {corpus}")
+    return supplied
 
 
 def grown(model: PretrainingObjective, vocabulary_size: int) -> PretrainingObjective:
@@ -806,9 +822,10 @@ def main(argv: Sequence[str] | None = None) -> None:
             "scripts/latent_prediction_report.py"
         )
     if source is not backbone:
-        supplied = [stated for stated in source.inputs if stated.corpus == arguments.corpus]
-        if not supplied:
-            raise SystemExit(f"backbone {source.id} did not read {arguments.corpus}")
+        try:
+            supplied = supplied_by(source, backbone, arguments.corpus)
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
         # The rows no pretraining set are drawn from one seed, so a reading repeats.
         torch.manual_seed(VALIDATION_SEED)
         grown(model, max(stated.vocabulary_size for stated in supplied))

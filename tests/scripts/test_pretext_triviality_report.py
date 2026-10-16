@@ -46,6 +46,7 @@ from scripts.pretext_triviality_report import (
     read_settings,
     read_tallies,
     render,
+    supplied_by,
     unset_rows_to_mean,
     write_corpora,
     write_kinds,
@@ -487,3 +488,20 @@ def test_a_corpus_s_own_channels_are_the_ones_the_manifest_names_under_it() -> N
 
     assert own_channels(channels, "this") == [3, 4]
     assert own_channels(channels, "later") == []
+
+
+def test_a_corpus_is_supplied_by_another_backbone_only_where_this_one_never_read_it(
+    tmp_path: Path,
+) -> None:
+    published = publish(InMemoryArtifactStore(), tmp_path / "publisher")
+    another = pretraining_input(
+        corpus="another", manifest=published.manifest, block_checksum=published.block.checksum
+    )
+    source = backbone(inputs=(published.described, another))
+    never_read = backbone(inputs=(another,))
+
+    assert supplied_by(source, never_read, CORPUS) == [published.described]
+    with pytest.raises(ValueError, match=r"read .* itself"):
+        supplied_by(source, source, CORPUS)
+    with pytest.raises(ValueError, match="did not read"):
+        supplied_by(never_read, never_read, CORPUS)
