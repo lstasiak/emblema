@@ -48,6 +48,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from emblema.catalog.contracts.published_channel import PublishedChannel
 from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
 from emblema.config.settings import Settings
@@ -187,6 +188,16 @@ def channels_apart_of(manifest: PublishedCorpusManifest) -> frozenset[int]:
         for channel in manifest.channels
         if channel.timeless or (channel.statistics is not None and channel.statistics.std == 0.0)
     )
+
+
+def own_channels(channels: Iterable[PublishedChannel], corpus: str) -> list[int]:
+    """The identifiers of the channels ``corpus`` itself has.
+
+    A published manifest carries the whole vocabulary its chain had reached, every earlier
+    corpus's channels included; only the rows of this corpus's own channels are the ones no
+    pretraining without it set.
+    """
+    return [channel.channel_id for channel in channels if channel.corpus == corpus]
 
 
 def unset_rows_to_mean(model: PretrainingObjective, channel_ids: Iterable[int]) -> None:
@@ -798,10 +809,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         supplied = [stated for stated in source.inputs if stated.corpus == arguments.corpus]
         if not supplied:
             raise SystemExit(f"backbone {source.id} did not read {arguments.corpus}")
+        # The rows no pretraining set are drawn from one seed, so a reading repeats.
+        torch.manual_seed(VALIDATION_SEED)
         grown(model, max(stated.vocabulary_size for stated in supplied))
         if arguments.unset_rows == "mean":
             manifest = PublishedCorpusManifestJson().decode(store.get(supplied[0].manifest))
-            unset_rows_to_mean(model, (channel.channel_id for channel in manifest.channels))
+            unset_rows_to_mean(model, own_channels(manifest.channels, arguments.corpus))
     elif arguments.unset_rows == "mean":
         raise SystemExit("--unset-rows mean needs --windows-of: a backbone's own rows are all set")
     directory = arguments.out or WORKSPACE / str(backbone.id)
@@ -834,6 +847,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     if source is not backbone:
         settings["windows_of"] = str(source.id)
         settings["unset_rows"] = arguments.unset_rows
+        settings["rows_seed"] = str(VALIDATION_SEED)
     if arguments.at_initialisation:
         settings["at_initialisation"] = "true"
     write_settings(directory, settings)

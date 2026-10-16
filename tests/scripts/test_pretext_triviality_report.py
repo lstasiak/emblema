@@ -40,6 +40,7 @@ from scripts.pretext_triviality_report import (
     evenly_spaced,
     grown,
     kinds_of,
+    own_channels,
     read_corpora,
     read_kinds,
     read_settings,
@@ -459,3 +460,30 @@ def test_the_rendering_names_the_rows_and_the_initialisation(
 
     assert "set to the mean of the learnt rows." in rendered
     assert "read at its initialisation" in rendered
+
+
+def test_a_corpus_s_own_channels_are_the_ones_the_manifest_names_under_it() -> None:
+    statistics = PublishedChannelStatistics(count=10, mean=0.0, std=1.0)
+    channels = [
+        PublishedChannel(channel_id=1, corpus="earlier", channel="a", timeless=False, unit=None),
+        PublishedChannel(channel_id=2, corpus="earlier", channel="b", timeless=False, unit=None),
+        PublishedChannel(
+            channel_id=3,
+            corpus="this",
+            channel="c",
+            timeless=False,
+            unit=None,
+            statistics=statistics,
+        ),
+        PublishedChannel(
+            channel_id=4,
+            corpus="this",
+            channel="d",
+            timeless=True,
+            unit=None,
+            statistics=statistics,
+        ),
+    ]
+
+    assert own_channels(channels, "this") == [3, 4]
+    assert own_channels(channels, "later") == []
