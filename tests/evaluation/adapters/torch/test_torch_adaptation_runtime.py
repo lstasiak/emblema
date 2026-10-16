@@ -255,6 +255,26 @@ def test_under_full_fine_tuning_the_backbone_moves(published: Published) -> None
     assert any(not torch.equal(after[name], before[name]) for name in before)
 
 
+def test_a_slowed_encoder_moves_less_than_under_the_whole_rate_and_the_head_still_learns(
+    published: Published,
+) -> None:
+    whole = adapt(published, plan(TransferMode.FULL_FINE_TUNING))
+    slowed = adapt(
+        published,
+        plan(TransferMode.FULL_FINE_TUNING, regime=TrainingRegime(encoder_rate=0.1)),
+    )
+
+    before = pretrained_weights()
+    moved = [
+        sum(float((after[name] - before[name]).norm()) for name in before)
+        for after in (built.state_dict() for built in published.backbones.built)
+    ]
+    assert 0.0 < moved[1] < moved[0]
+    assert slowed.trainable_parameters == whole.trainable_parameters
+    assert slowed.training_losses != whole.training_losses
+    assert slowed.plan.parameters()["encoder_rate"] == 0.1
+
+
 def test_the_control_arm_never_asks_for_the_pretrained_weights(published: Published) -> None:
     adapt(published, plan(TransferMode.FROM_SCRATCH))
 

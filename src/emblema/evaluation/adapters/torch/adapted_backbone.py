@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Any, Self
 
 from torch import Tensor, nn
 
@@ -11,6 +11,10 @@ from emblema.evaluation.adapters.torch.regression_head import RegressionHead
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.shared.adapters.tensors.grown_parameters import GrownParameters
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
+
+# One group of an optimiser's parameters and the rate they learn at: torch takes a group as an
+# untyped mapping of the parameters and their options, so Any is what it is.
+ParameterGroup = dict[str, Any]
 
 
 class AdaptedBackbone(nn.Module):
@@ -103,3 +107,28 @@ class AdaptedBackbone(nn.Module):
 
     def trainable_parameters(self) -> list[nn.Parameter]:
         return [parameter for parameter in self.parameters() if parameter.requires_grad]
+
+    def parameter_groups(self, rate: float, *, encoder_share: float) -> list[ParameterGroup]:
+        """The trainable parameters as the optimiser takes them, in two groups by their rate.
+
+        The head, the pooling's own weights and the rows grown for the task's new channels learn
+        at ``rate``; the encoder's other weights at ``rate × encoder_share``, where the plan
+        slows them. One group holds everything where the share is one, so a run under the
+        standard regime hands the optimiser what it always did.
+        """
+        trainable = self.trainable_parameters()
+        if encoder_share >= 1.0:
+            return [{"params": trainable, "lr": rate}]
+        grown = {
+            id(parameter)
+            for module in self.encoder.modules()
+            if isinstance(module, GrownParameters)
+            for parameter in module.grown_parameters()
+        }
+        slowed = {id(p) for p in self.encoder.parameters() if p.requires_grad} - grown
+        groups: list[ParameterGroup] = [
+            {"params": [p for p in trainable if id(p) not in slowed], "lr": rate},
+            {"params": [p for p in trainable if id(p) in slowed], "lr": rate * encoder_share},
+        ]
+        # The optimiser refuses a group with nothing in it.
+        return [group for group in groups if group["params"]]
