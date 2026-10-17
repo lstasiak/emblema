@@ -3,6 +3,8 @@ from dataclasses import replace
 import pytest
 
 from emblema.pretraining.domain.exceptions import (
+    BackboneNotFoundError,
+    IncompatibleStartError,
     InvalidTrainingMixtureError,
     PretrainingOrderRejectedError,
 )
@@ -10,10 +12,21 @@ from emblema.pretraining.domain.handoff.pretraining_order import PretrainingOrde
 from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.run_signature import RunSignature
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
-from tests.support.experiments import continued, corpus, mixture
-from tests.support.handoff import COMMIT, CONFIGURATION, CORPUS, MANIFEST, ORDERED_AT
+from tests.support.experiments import WEIGHTS, configuration, continued, corpus, mixture
+from tests.support.handoff import (
+    COMMIT,
+    CONFIGURATION,
+    CORPUS,
+    DELIVERED_AT,
+    MANIFEST,
+    ORDERED_AT,
+    RESULT_REF,
+    backbone,
+    backbone_id,
+)
 from tests.support.handoff import pretraining_input as described
 from tests.support.handoff_process import InMemoryHandoff, order_command
 
@@ -144,3 +157,83 @@ def test_passes_for_a_corpus_the_order_does_not_read_are_refused() -> None:
 
     with pytest.raises(PretrainingOrderRejectedError, match="does not read: \\['stays'\\]"):
         machines.order()(order_command(configuration=weighted))
+
+
+CONTINUED = configuration(name="continued", start=WEIGHTS, trained=TrainedParameters.CHANNEL_ROWS)
+
+
+def with_a_ready_parent(**overrides: object) -> InMemoryHandoff:
+    # Registered under an identifier the sequential generator will not hand the child.
+    machines = InMemoryHandoff()
+    parent = backbone(id=backbone_id(99), **overrides)
+    machines.backbones.save(parent.deliver(RESULT_REF, WEIGHTS, DELIVERED_AT))
+    return machines
+
+
+def test_an_order_continuing_stored_weights_registers_the_backbone_holding_them_as_parent() -> None:
+    machines = with_a_ready_parent()
+    second = continued(name="second", seed=2)
+    machines.reader.publish(
+        SECOND_MANIFEST, described(corpus="second", manifest=SECOND_MANIFEST), second
+    )
+
+    placed = machines.order()(
+        order_command(configuration=CONTINUED, corpora=(("second", SECOND_MANIFEST),))
+    )
+
+    child = machines.backbones.get(placed.backbone)
+    assert child.parent == machines.backbones.get_by_artifact(WEIGHTS).id
+    assert child.configuration.start == WEIGHTS
+    assert machines.exchange.read_order(placed.order).configuration == CONTINUED
+
+
+def test_an_order_from_its_seed_registers_no_parent() -> None:
+    machines = with_a_ready_parent()
+
+    placed = machines.order()(order_command())
+
+    assert machines.backbones.get(placed.backbone).parent is None
+
+
+def test_an_order_continuing_weights_no_ready_backbone_holds_is_refused() -> None:
+    machines = InMemoryHandoff()
+
+    with pytest.raises(BackboneNotFoundError, match="no ready backbone"):
+        machines.order()(order_command(configuration=CONTINUED))
+
+
+def test_an_order_continuing_a_backbone_of_another_shape_is_refused() -> None:
+    machines = with_a_ready_parent(configuration=replace(CONFIGURATION, decoder_layers=2))
+
+    with pytest.raises(IncompatibleStartError, match="another decoder"):
+        machines.order()(order_command(configuration=CONTINUED))
+
+
+def test_an_order_over_corpora_off_the_parent_s_chain_is_refused() -> None:
+    machines = with_a_ready_parent()
+    apart = corpus(name="apart", seed=5, channels=("apart/x", "apart/y", "apart/z"))
+    machines.reader.publish(
+        SECOND_MANIFEST, described(corpus="apart", manifest=SECOND_MANIFEST), apart
+    )
+
+    with pytest.raises(IncompatibleStartError, match="not published on the chain"):
+        machines.order()(
+            order_command(configuration=CONTINUED, corpora=(("apart", SECOND_MANIFEST),))
+        )
+
+
+def test_an_order_over_a_corpus_from_the_middle_of_the_parent_s_chain_is_accepted() -> None:
+    # The parent's vocabulary continues the corpus's own: a run over that corpus alone reads
+    # under the shorter vocabulary, and the rows carried over still name its channels.
+    machines = InMemoryHandoff()
+    longer = continued(name="longer", seed=3)
+    longer_described = described(corpus="longer", manifest=SECOND_MANIFEST, vocabulary_size=5)
+    machines.reader.publish(SECOND_MANIFEST, longer_described, longer)
+    parent = backbone(id=backbone_id(99), inputs=(longer_described,)).deliver(
+        RESULT_REF, WEIGHTS, DELIVERED_AT
+    )
+    machines.backbones.save(parent)
+
+    placed = machines.order()(order_command(configuration=CONTINUED))
+
+    assert machines.backbones.get(placed.backbone).parent == parent.id

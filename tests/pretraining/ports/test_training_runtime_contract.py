@@ -25,8 +25,10 @@ from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.pretraining.ports.training_runtime import TrainingRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.retention import Retention
 from emblema.shared.ports.artifact_store import ArtifactStore
+from emblema.shared.ports.exceptions import ArtifactNotFoundError
 from tests.support.experiments import budget, configuration, continued, corpus, mixture
 from tests.support.platform import SimulatedPlatform
 
@@ -243,3 +245,12 @@ def test_bytes_that_are_not_a_checkpoint_are_refused(
 
     with pytest.raises(IncompatibleCheckpointError, match="not a checkpoint"):
         run(build(store), stated(), ref)
+
+
+def test_a_run_starting_from_weights_the_store_does_not_hold_is_refused(
+    build: Callable[[ArtifactStore], TrainingRuntime], store: InMemoryArtifactStore
+) -> None:
+    nowhere = ArtifactRef("durable/nowhere", Checksum.of_bytes(b"no model under this"))
+
+    with pytest.raises(ArtifactNotFoundError):
+        run(build(store), stated(start=nowhere))

@@ -93,6 +93,14 @@ class UnsupportedPrecisionError(PretrainingError):
     """Raised where a device cannot run the precision the experiment declared."""
 
 
+class IncompatibleStartError(PretrainingError):
+    """Raised where a run is asked to start from weights it cannot continue.
+
+    The weights are of another shape or objective than the run's, belong to a backbone that
+    holds none yet, or were learnt under a vocabulary the run's corpora do not chain with.
+    """
+
+
 class DivergedRunError(PretrainingError):
     """Raised where a run's loss or gradients stop being finite, before a step is taken on them."""
 

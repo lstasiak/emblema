@@ -10,6 +10,7 @@ from emblema.pretraining.domain.training.experiment_configuration import Experim
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
 from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.shared.kernel.compute import ComputeTier
 
@@ -61,6 +62,16 @@ class ExperimentConfigurationDocument:
             if configuration.target.is_latent
             else {}
         )
+        # The start and the trained parameters too: a run from its seed moving everything
+        # writes the document every run wrote before either knob existed.
+        start: Document = (
+            {} if configuration.start is None else {"start": Fields.of_ref(configuration.start)}
+        )
+        trained: Document = (
+            {}
+            if configuration.trained is TrainedParameters.EVERYTHING
+            else {"trained": str(configuration.trained)}
+        )
         return {
             "name": configuration.name,
             "tier": str(configuration.tier),
@@ -99,6 +110,8 @@ class ExperimentConfigurationDocument:
             "checkpoint": {"every_steps": configuration.checkpoint.every_steps},
             "passes": {stated.corpus: stated.passes for stated in configuration.passes},
             **fraction,
+            **start,
+            **trained,
         }
 
     def decode(self, document: Mapping[str, object]) -> ExperimentConfiguration:
@@ -121,6 +134,7 @@ class ExperimentConfigurationDocument:
         fraction = fields.optional_fields("fraction")
         horizon = masking.optional_fields("horizon")
         target = objective.optional_fields("target")
+        trained = fields.optional_text("trained")
         return ExperimentConfiguration(
             name=fields.text("name"),
             tier=ComputeTier(fields.text("tier")),
@@ -185,5 +199,9 @@ class ExperimentConfigurationDocument:
             else tuple(
                 CorpusFraction(corpus=corpus, fraction=fraction.number(corpus))
                 for corpus in sorted(fields.mapping("fraction"))
+            ),
+            start=fields.optional_ref("start"),
+            trained=(
+                TrainedParameters.EVERYTHING if trained is None else TrainedParameters(trained)
             ),
         )

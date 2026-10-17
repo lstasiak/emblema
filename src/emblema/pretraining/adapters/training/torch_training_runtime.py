@@ -22,6 +22,7 @@ from emblema.pretraining.domain.training.experiment_configuration import Experim
 from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
 from emblema.pretraining.domain.training.run_position import RunPosition
 from emblema.pretraining.domain.training.run_signature import RunSignature
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.adapters.loaders.interleaved_loader import InterleavedLoader
@@ -131,6 +132,11 @@ class TorchTrainingRuntime:
     Masks are drawn on the host and moved, as the batches are, so a run on any device hides the
     same tokens; the device is where the arithmetic happens, never where the randomness comes
     from.
+
+    A run that continues a backbone draws its objective from the seed as any run does and then
+    carries the stored weights into it, so what the seed decides for it is the rows of channels
+    the stored model never had; which parameters then move is the configuration's, and the
+    optimiser is handed those alone.
     """
 
     def __init__(
@@ -182,6 +188,9 @@ class TorchTrainingRuntime:
             IncompatibleCheckpointError: If the checkpoint belongs to another run, or to one that
                 has finished.
             UnsupportedPrecisionError: If this device cannot train at the declared precision.
+            IncompatibleStartError: If the stored model the run starts from is of another shape
+                or objective.
+            UnreadableTrainedModelError: If what the run is to start from is not a stored model.
             DivergedRunError: While the run trains, if a loss or a gradient stops being finite.
         """
         return self._epochs(self._assemble(configuration, mixture, resume_from))
@@ -209,11 +218,15 @@ class TorchTrainingRuntime:
         # Built on the host from the run's seed, so the same seed gives the same initial weights
         # whatever the device, and moved afterwards.
         torch.manual_seed(budget.seed)
-        model = (
-            ObjectiveShape.of(configuration, mixture.vocabulary_size)
-            .build(dropout=configuration.dropout)
-            .to(self._device)
+        model = ObjectiveShape.of(configuration, mixture.vocabulary_size).build(
+            dropout=configuration.dropout
         )
+        if configuration.start is not None:
+            stored = TrainedModel.read(self._store.get(configuration.start))
+            stored.require_shape_of(configuration)
+            stored.carried_into(model)
+        model = model.to(self._device)
+        self._restrict(model, configuration.trained)
         # A corpus read more than once an epoch is that many loaders over its windows, each turn
         # in its own order, so its share of the steps grows by whole passes and the interleaving
         # treats a pass as it treats a corpus.
@@ -272,6 +285,14 @@ class TorchTrainingRuntime:
         if resume_from is not None:
             self._resume(session, resume_from)
         return session
+
+    @staticmethod
+    def _restrict(model: PretrainingObjective, trained: TrainedParameters) -> None:
+        """Leave a gradient to the parameters the configuration moves, and to no other."""
+        if trained is TrainedParameters.EVERYTHING:
+            return
+        model.requires_grad_(False)
+        model.encoder.channel_embedding.requires_grad_(True)
 
     def _resume(self, session: _Session, ref: ArtifactRef) -> None:
         """Put a checkpoint's state back into an assembled run, and refuse one that does not fit."""

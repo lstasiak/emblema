@@ -62,3 +62,18 @@ def test_a_mixture_without_a_corpus_is_refused() -> None:
 def test_a_corpus_mixed_in_twice_is_refused() -> None:
     with pytest.raises(InvalidTrainingMixtureError, match="twice"):
         TrainingMixture.of(FIRST, corpus(seed=9))
+
+
+def test_a_mixture_chains_with_a_vocabulary_its_own_continues_or_is_continued_by() -> None:
+    first_alone, both = TrainingMixture.of(FIRST), TrainingMixture.of(FIRST, SECOND)
+
+    assert both.chains_with(FIRST.channels)
+    assert first_alone.chains_with(SECOND.channels)
+    assert both.chains_with(SECOND.channels)
+
+
+def test_a_mixture_does_not_chain_with_a_vocabulary_published_apart() -> None:
+    apart = ("apart/x", "apart/y", "apart/z")
+
+    assert not TrainingMixture.of(FIRST).chains_with(apart)
+    assert not TrainingMixture.of(FIRST, SECOND).chains_with((*CHANNEL_NAMES[:2], "renamed/c"))

@@ -12,6 +12,7 @@ from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.retention import Retention
 from emblema.shared.ports.artifact_store import ArtifactStore
+from emblema.shared.ports.exceptions import ArtifactNotFoundError
 
 
 class InMemoryTrainingRuntime:
@@ -36,6 +37,10 @@ class InMemoryTrainingRuntime:
         mixture: TrainingMixture,
         resume_from: ArtifactRef | None = None,
     ) -> Iterator[EpochOutcome]:
+        # The stored model a run continues is read before anything is trained, here as there: a
+        # start the store does not hold is refused where the runtime that trains refuses it.
+        if configuration.start is not None and not self._store.exists(configuration.start):
+            raise ArtifactNotFoundError(configuration.start.key)
         signature = RunSignature.of(configuration, mixture)
         batches = sum(
             ceil(len(corpus.training) / configuration.budget.batch_size)

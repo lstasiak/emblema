@@ -37,16 +37,23 @@ class TrainingRuntime(Protocol):
         is the best epoch's weights; the epochs before it carry whatever checkpoints the policy
         asked for.
 
+        A configuration that names a start continues the stored model it names rather than
+        drawing its weights, and moves the parameters it says; the mixture's vocabulary is the
+        run's, as for any run.
+
         Nothing is trained until the first outcome is asked for, and a caller that stops consuming
         stops the run.
 
         Raises:
             IncompatibleCheckpointError: If the checkpoint is not one this configuration and
                 mixture produced, or the run it comes from has already finished.
+            IncompatibleStartError: If the stored model the run starts from is of another shape
+                or objective than the configuration's.
             UnsupportedPrecisionError: If the device cannot compute at the declared precision.
             DivergedRunError: While the run trains, if a loss or a gradient stops being finite;
                 nothing computed from it is stepped or written.
-            ArtifactNotFoundError: If the checkpoint is not in the store.
+            ArtifactNotFoundError: If the checkpoint, or the stored model the run starts from,
+                is not in the store.
             ArtifactIntegrityError: If the stored checkpoint does not hash to its checksum.
         """
         ...

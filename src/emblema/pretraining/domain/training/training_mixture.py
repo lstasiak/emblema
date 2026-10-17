@@ -59,6 +59,17 @@ class TrainingMixture:
     def vocabulary_size(self) -> int:
         return len(self.channels)
 
+    def chains_with(self, channels: tuple[str, ...]) -> bool:
+        """Whether this mixture's vocabulary and ``channels`` lie on one chain of publications.
+
+        True when the shorter of the two is a prefix of the longer: the mixture's corpora were
+        published continuing the vocabulary ``channels`` names, or that vocabulary was published
+        continuing theirs. A run that carries the channel table of a backbone over this mixture
+        relies on it, since a row is carried by its identifier alone.
+        """
+        shorter, longer = sorted((self.channels, channels), key=len)
+        return longer[: len(shorter)] == shorter
+
     @property
     def shape(self) -> TrainingMixtureShape:
         """The mixture without its windows: what a run's signature is computed from.

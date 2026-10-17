@@ -38,6 +38,9 @@ class BlockTrainingCorpusReader:
             vocabulary_size=len(published.channels),
         )
 
+    def channels(self, manifest: ArtifactRef) -> tuple[str, ...]:
+        return self._channels(self._manifest(manifest))
+
     def read(self, manifest: ArtifactRef, share: CorpusShare) -> TrainingCorpus:
         published = self._manifest(manifest)
         try:
@@ -54,9 +57,13 @@ class BlockTrainingCorpusReader:
                 self._positions(positions, share.select(published.training_units))
             ),
             validation=block.of_units(self._positions(positions, published.validation_units)),
-            channels=tuple(
-                self.channel_name(channel.corpus, channel.channel) for channel in published.channels
-            ),
+            channels=self._channels(published),
+        )
+
+    @classmethod
+    def _channels(cls, published: PublishedCorpusManifest) -> tuple[str, ...]:
+        return tuple(
+            cls.channel_name(channel.corpus, channel.channel) for channel in published.channels
         )
 
     @staticmethod

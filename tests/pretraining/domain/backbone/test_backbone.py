@@ -1,19 +1,24 @@
+from dataclasses import replace
 from typing import Any
 
 import pytest
 
 from emblema.pretraining.domain.exceptions import (
     BackboneAlreadyDeliveredError,
+    IncompatibleStartError,
     InvalidBackboneError,
 )
+from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
-from tests.support.experiments import TINY, WEIGHTS
+from tests.support.experiments import TINY, WEIGHTS, configuration
 from tests.support.handoff import (
     DELIVERED_AT,
     ORDERED_AT,
     RESULT_REF,
     backbone,
+    backbone_id,
     pretraining_input,
 )
 
@@ -122,3 +127,48 @@ def test_vocabularies_that_shrink_along_the_corpora_are_refused() -> None:
         backbone(
             inputs=(pretraining_input(), pretraining_input(corpus="second", vocabulary_size=2))
         )
+
+
+CONTINUED = configuration(name="continued", start=WEIGHTS, trained=TrainedParameters.CHANNEL_ROWS)
+
+
+def test_a_backbone_continued_from_stored_weights_names_its_parent_and_one_from_the_seed_none() -> (
+    None
+):
+    child = backbone(id=backbone_id(2), configuration=CONTINUED, parent=backbone_id(1))
+
+    assert child.parent == backbone_id(1)
+    assert backbone().parent is None
+    with pytest.raises(InvalidBackboneError, match="names its parent"):
+        backbone(configuration=CONTINUED)
+    with pytest.raises(InvalidBackboneError, match="names none"):
+        backbone(parent=backbone_id(1))
+
+
+def test_a_ready_backbone_of_the_run_s_shape_and_objective_can_be_continued() -> None:
+    ready = backbone().deliver(RESULT_REF, WEIGHTS, DELIVERED_AT)
+
+    ready.require_continuable_by(CONTINUED)
+
+
+def test_a_backbone_without_weights_cannot_be_continued() -> None:
+    with pytest.raises(IncompatibleStartError, match="holds no weights"):
+        backbone().require_continuable_by(CONTINUED)
+
+
+@pytest.mark.parametrize(
+    ("differing", "label"),
+    [
+        ({"decoder_layers": 2}, "decoder"),
+        ({"target": ObjectiveTarget.latent(layers=1)}, "target"),
+        ({"architecture": replace(TINY, width=32, feedforward_width=64)}, "shape"),
+    ],
+    ids=["decoder", "target", "shape"],
+)
+def test_a_run_of_another_shape_objective_or_decoder_cannot_continue_the_weights(
+    differing: dict[str, object], label: str
+) -> None:
+    ready = backbone().deliver(RESULT_REF, WEIGHTS, DELIVERED_AT)
+
+    with pytest.raises(IncompatibleStartError, match=f"another {label}"):
+        ready.require_continuable_by(configuration(start=WEIGHTS, **differing))

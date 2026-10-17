@@ -17,6 +17,9 @@ from emblema.pretraining.domain.exceptions import (
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
+from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.compute import ComputeTier
 
 # Every experiment the repository states, which a run is reproduced by naming.
@@ -278,3 +281,39 @@ def test_the_latent_target_s_values_are_the_domain_s_to_refuse(tmp_path: Path) -
 
     with pytest.raises(InvalidObjectiveTargetError, match="at least one block"):
         ExperimentFile.load(written(text, tmp_path)).configuration()
+
+
+STORED = Checksum.of_bytes(b"the weights of the point").digest
+CONTINUED = (
+    STATED.replace("decoder_layers = 2\n", 'decoder_layers = 2\ntrained = "channel_rows"\n')
+    + f'\n[start]\nweights = "durable/sha256/{STORED}"\nchecksum = "sha256:{STORED}"\n'
+)
+
+
+def test_a_file_may_continue_a_stored_model_and_move_the_channel_rows_alone(tmp_path: Path) -> None:
+    stated = ExperimentFile.load(written(CONTINUED, tmp_path)).configuration()
+
+    assert stated.start == ArtifactRef(
+        f"durable/sha256/{STORED}", Checksum.parse(f"sha256:{STORED}")
+    )
+    assert stated.trained is TrainedParameters.CHANNEL_ROWS
+
+
+def test_a_file_that_says_nothing_of_a_start_draws_its_weights_and_moves_everything(
+    tmp_path: Path,
+) -> None:
+    stated = ExperimentFile.load(written(STATED, tmp_path)).configuration()
+
+    assert stated.start is None
+    assert stated.trained is TrainedParameters.EVERYTHING
+
+
+def test_a_start_without_its_checksum_and_parameters_nobody_can_train_are_refused(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValidationError, match="checksum"):
+        ExperimentFile.load(
+            written(STATED + '\n[start]\nweights = "durable/sha256/abc"\n', tmp_path)
+        )
+    with pytest.raises(ValidationError, match="trained"):
+        ExperimentFile.load(written(STATED + '\ntrained = "the decoder"\n', tmp_path))

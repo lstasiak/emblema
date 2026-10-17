@@ -20,17 +20,28 @@ from emblema.pretraining.adapters.encoder.grown_channel_embedding import (
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.pretraining.adapters.objective.latent_prediction import LatentPrediction
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
+from emblema.pretraining.adapters.training.torch_training_runtime import TorchTrainingRuntime
+from emblema.pretraining.adapters.training.trained_model import TrainedModel
 from emblema.pretraining.domain.assessment.mask_kind_tally import MaskKindTally
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
+from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
+from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
+from emblema.pretraining.domain.training.training_budget import TrainingBudget
+from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
+from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.adapters.windows.window_block import WindowBlock
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.compute import ComputeTier
 from scripts.pretext_triviality_report import (
+    FIT_RATE,
     CorpusRow,
     CorpusWindows,
     KindRow,
@@ -57,6 +68,7 @@ from scripts.pretext_triviality_report import (
     write_tallies,
 )
 from tests.support.control_corpus import Control, publish_control
+from tests.support.experiments import checksum_of, configuration
 from tests.support.handoff import backbone, pretraining_input
 from tests.support.published import CHANNELS, CORPUS, VALIDATION_UNIT, manifest_of, publish
 
@@ -616,3 +628,82 @@ def test_the_fit_s_losses_read_back_and_are_rendered(control: Control, tmp_path:
     settings = read_settings(tmp_path)
     write_settings(tmp_path, {**settings, "fit_chunk": "8"})
     assert "scored 8 windows at a time" in render(tmp_path)
+
+
+def test_one_step_of_the_fit_is_one_step_of_a_pretraining_that_moves_the_rows_alone(
+    control: Control,
+) -> None:
+    """The registered run over the same windows takes the step the diagnostic takes.
+
+    Both draw their first masks from a generator seeded with the run's seed and order the
+    windows by it, so under seed zero one batch of every window meets the same masks in the
+    same order; the fit divides the error by the hidden tokens before the backward pass and the
+    pretraining divides the gradients after it, so the rows agree to rounding rather than
+    bitwise. Later steps draw their masks by each one's own protocol.
+    """
+    corpus = corpus_of(control)
+    windows = list(corpus.training)
+    torch.manual_seed(5)
+    fitted = toy(control)
+    store = InMemoryArtifactStore()
+    started_from = store.put(
+        TrainedModel.of(configuration(architecture=TOY), control.vocabulary_size, fitted).to_bytes()
+    )
+    stated = ExperimentConfiguration(
+        name="rows",
+        tier=ComputeTier.S,
+        corpus_fraction=1.0,
+        architecture=TOY,
+        dropout=0.0,
+        decoder_layers=1,
+        masking=WITHOUT_TAIL,
+        loss=SQUARED,
+        budget=TrainingBudget(
+            epochs=1,
+            batch_size=len(windows),
+            accumulation_steps=1,
+            learning_rate=FIT_RATE,
+            warmup_epochs=0,
+            final_lr_fraction=1.0,
+            seed=0,
+        ),
+        precision=Precision.FP32,
+        checkpoint=CheckpointPolicy(every_steps=1_000),
+        start=started_from,
+        trained=TrainedParameters.CHANNEL_ROWS,
+    )
+    mixture = TrainingMixture.of(
+        TrainingCorpus(
+            name="control-a",
+            checksum=checksum_of(windows),
+            training=windows,
+            validation=list(corpus.validation),
+            channels=control.channels,
+        )
+    )
+
+    losses = unset_rows_fitted(
+        fitted,
+        range(1, control.vocabulary_size + 1),
+        windows,
+        WITHOUT_TAIL,
+        SQUARED,
+        device="cpu",
+        steps=1,
+        batch_size=len(windows),
+        seed=0,
+    )
+    outcomes = list(TorchTrainingRuntime(store, device="cpu").train(stated, mixture))
+
+    kept = outcomes[-1].backbone
+    assert kept is not None
+    pretrained = TrainedModel.read(store.get(kept)).weights
+    by_the_fit = fitted.state_dict()
+    assert outcomes[-1].training_loss == pytest.approx(losses[0], rel=1e-6)
+    assert torch.allclose(pretrained[ROWS], by_the_fit[ROWS], atol=1e-6)
+    assert not torch.equal(
+        pretrained[ROWS], TrainedModel.read(store.get(started_from)).weights[ROWS]
+    )
+    for key, value in by_the_fit.items():
+        if key != ROWS:
+            assert torch.equal(pretrained[key], value), key

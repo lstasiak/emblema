@@ -25,6 +25,19 @@ class TrainingCorpusReader(Protocol):
         """
         ...
 
+    def channels(self, manifest: ArtifactRef) -> tuple[str, ...]:
+        """The names of the published vocabulary's channels, as a training corpus carries them.
+
+        From the manifest alone, at the cost of ``describe``: whoever checks that two
+        publications lie on one chain needs the names and not the windows.
+
+        Raises:
+            UnreadablePublishedCorpusError: If the artifact is not a manifest this can read.
+            ArtifactNotFoundError: If the manifest is not in the store.
+            ArtifactIntegrityError: If the stored manifest does not hash to its checksum.
+        """
+        ...
+
     def read(self, manifest: ArtifactRef, share: CorpusShare) -> TrainingCorpus:
         """The windows the manifest describes, training and validation sides apart.
 

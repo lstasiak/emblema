@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Self
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, Integer, Text, Uuid
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Text, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,7 +32,8 @@ class BackboneRecord(Base):
     about and a query should not have to open the document. The status is a column of its own,
     so that what is ready can be selected without knowing which columns a delivery fills, and
     check constraints keep it true to them: a ready row names its weights and the result they
-    came with, and is dated.
+    came with, and is dated. The parent is a key into this table, so a run continued from
+    another's weights is traced without opening its configuration.
     """
 
     __tablename__ = "backbone"
@@ -67,6 +68,7 @@ class BackboneRecord(Base):
     artifact_digest: Mapped[str | None] = mapped_column(Text)
     ordered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    parent_id: Mapped[UUID | None] = mapped_column(Uuid, ForeignKey("pretraining.backbone.id"))
     inputs: Mapped[list[PretrainingInputRecord]] = relationship(
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -95,6 +97,7 @@ class BackboneRecord(Base):
             artifact_digest=None if artifact is None else artifact.checksum.digest,
             ordered_at=backbone.ordered_at.value,
             delivered_at=None if backbone.delivered_at is None else backbone.delivered_at.value,
+            parent_id=None if backbone.parent is None else backbone.parent.value,
             inputs=[
                 PretrainingInputRecord.from_input(backbone.id, position, read)
                 for position, read in enumerate(backbone.inputs)
@@ -110,6 +113,7 @@ class BackboneRecord(Base):
             git_commit=self.git_commit,
             signature=RunSignature(self.signature),
             ordered_at=as_utc(self.ordered_at),
+            parent=None if self.parent_id is None else BackboneId(self.parent_id),
             result=self._ref(self.result_key, self.result_algorithm, self.result_digest),
             artifact=self._ref(self.artifact_key, self.artifact_algorithm, self.artifact_digest),
             delivered_at=None if self.delivered_at is None else as_utc(self.delivered_at),

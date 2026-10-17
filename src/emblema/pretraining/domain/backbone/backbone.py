@@ -5,6 +5,7 @@ from typing import Self
 from emblema.pretraining.domain.backbone.pretraining_input import PretrainingInput
 from emblema.pretraining.domain.exceptions import (
     BackboneAlreadyDeliveredError,
+    IncompatibleStartError,
     InvalidBackboneError,
 )
 from emblema.pretraining.domain.identifiers import BackboneId
@@ -27,7 +28,9 @@ class Backbone:
     Invariants: the run name and the commit are non-empty without surrounding whitespace; at
     least one corpus was read, none twice, and their vocabularies do not shrink along the order,
     since each continues the one before; the result, the artifact and the time of delivery come
-    together or not at all; a delivery is never earlier than the order.
+    together or not at all; a delivery is never earlier than the order; a backbone whose
+    configuration starts from stored weights names the backbone those weights belong to, and
+    one drawn from its seed names none.
 
     Attributes:
         id: Identity of the backbone.
@@ -39,6 +42,9 @@ class Backbone:
         git_commit: Revision of the code the run was ordered at, and made with.
         signature: What the run is: the configuration over the corpora as read at ordering.
         ordered_at: When the run was ordered.
+        parent: The backbone whose weights the run started from; ``None`` for a run from the
+            seed. Provenance, not a dependency: the parent's weights are named by the
+            configuration, and the parent is the registered backbone that holds them.
         result: The result the weights were delivered with, which names the order it fulfilled,
             the checkpoint the run was picked up from and every epoch; ``None`` while the order
             is open.
@@ -53,11 +59,17 @@ class Backbone:
     git_commit: str
     signature: RunSignature
     ordered_at: UtcDateTime
+    parent: BackboneId | None = None
     result: ArtifactRef | None = None
     artifact: ArtifactRef | None = None
     delivered_at: UtcDateTime | None = None
 
     def __post_init__(self) -> None:
+        if (self.parent is None) != (self.configuration.start is None):
+            raise InvalidBackboneError(
+                "a backbone started from stored weights names its parent, and one drawn from "
+                "its seed names none"
+            )
         for label, text in (("run", self.run), ("git_commit", self.git_commit)):
             if not text or text != text.strip():
                 raise InvalidBackboneError(
@@ -114,6 +126,32 @@ class Backbone:
             raise BackboneAlreadyDeliveredError(
                 f"backbone {self.name} already holds {self.artifact.key}"
             )
+
+    def require_continuable_by(self, configuration: ExperimentConfiguration) -> None:
+        """Refuse a run of ``configuration`` that would start from this backbone's weights.
+
+        A run continues a backbone's weights only where they fit: the same shape, the same
+        objective and the same decoder, so that every tensor but the channel table is carried
+        over whole. The vocabulary is not held: the table is carried over as far as the run's
+        own reaches, which the run's corpora decide.
+
+        Raises:
+            IncompatibleStartError: If the backbone holds no weights yet, or they are of another
+                shape, objective or decoder than the run's.
+        """
+        if self.artifact is None:
+            raise IncompatibleStartError(f"backbone {self.name} holds no weights to start from")
+        theirs, ours = self.configuration, configuration
+        for label, stored, asked in (
+            ("shape", theirs.architecture, ours.architecture),
+            ("decoder", theirs.decoder_layers, ours.decoder_layers),
+            ("target", theirs.target, ours.target),
+        ):
+            if stored != asked:
+                raise IncompatibleStartError(
+                    f"backbone {self.name} was pretrained with another {label} than "
+                    f"{ours.name!r} states: {stored} against {asked}"
+                )
 
     def deliver(self, result: ArtifactRef, artifact: ArtifactRef, at: UtcDateTime) -> Self:
         """The backbone with its weights registered, which makes it ready.

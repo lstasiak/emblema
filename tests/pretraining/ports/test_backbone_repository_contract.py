@@ -15,7 +15,10 @@ from emblema.pretraining.adapters.persistence.backbone_repository import (
 from emblema.pretraining.domain.exceptions import BackboneNotFoundError
 from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.pretraining.ports.backbone_repository import BackboneRepository
+from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
 from tests.support.database import clear_pretraining, migrated_engine
 from tests.support.experiments import WEIGHTS, budget, configuration
 from tests.support.handoff import (
@@ -131,3 +134,49 @@ def test_a_backbone_over_several_corpora_reads_back_with_them_in_order(
         "second",
         "third",
     ]
+
+
+def test_a_ready_backbone_is_found_by_the_artifact_holding_its_weights(
+    backbones: BackboneRepository,
+) -> None:
+    ready = backbone().deliver(RESULT_REF, WEIGHTS, DELIVERED_AT)
+    backbones.save(ready)
+    backbones.save(backbone(id=backbone_id(2), run="open"))
+
+    assert backbones.get_by_artifact(WEIGHTS) == ready
+    with pytest.raises(BackboneNotFoundError, match="no ready backbone"):
+        backbones.get_by_artifact(ArtifactRef("durable/other", Checksum.of_bytes(b"other")))
+
+
+def test_two_runs_that_delivered_the_same_bytes_are_traced_to_the_one_ordered_first(
+    backbones: BackboneRepository,
+) -> None:
+    later = backbone(id=backbone_id(3), run="again", ordered_at=DELIVERED_AT).deliver(
+        RESULT_REF, WEIGHTS, DELIVERED_AT
+    )
+    first = backbone().deliver(RESULT_REF, WEIGHTS, DELIVERED_AT)
+    backbones.save(later)
+    backbones.save(first)
+
+    assert backbones.get_by_artifact(WEIGHTS) == first
+
+
+def test_a_backbone_continued_from_another_reads_back_with_its_parent(
+    backbones: BackboneRepository,
+) -> None:
+    parent = backbone().deliver(RESULT_REF, WEIGHTS, DELIVERED_AT)
+    child = backbone(
+        id=backbone_id(2),
+        configuration=configuration(
+            name="continued", start=WEIGHTS, trained=TrainedParameters.CHANNEL_ROWS
+        ),
+        run="rows",
+        parent=parent.id,
+    )
+
+    backbones.save(parent)
+    backbones.save(child)
+
+    assert backbones.get(child.id) == child
+    assert backbones.get(child.id).parent == parent.id
+    assert backbones.get(parent.id).parent is None
