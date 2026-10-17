@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 
 from emblema.pretraining.domain.backbone.backbone import Backbone
-from emblema.pretraining.domain.exceptions import PretrainingOrderRejectedError
+from emblema.pretraining.domain.exceptions import (
+    IncompatibleStartError,
+    PretrainingOrderRejectedError,
+)
 from emblema.pretraining.domain.handoff.pretraining_order import PretrainingOrder
 from emblema.pretraining.domain.identifiers import BackboneId
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
@@ -53,9 +56,12 @@ class OrderPretraining:
     The corpora are read here rather than only described: the signature the result will be
     held to covers how much of each corpus a run reads, and that is known from the windows, not
     from the manifests. Reading them together is also what checks that they can be trained on
-    together — that each continues the vocabulary of the one before. The backbone is saved
-    before the order is placed, because an order in the exchange for a backbone the registry
-    does not know is a delivery nobody could accept.
+    together — that each continues the vocabulary of the one before. A run that starts from
+    stored weights is traced to the ready backbone holding them, which becomes the parent, and
+    is refused where those weights would not fit: another shape or objective, or a vocabulary
+    the corpora ordered do not chain with, since a row of the channel table is carried over by
+    its identifier alone. The backbone is saved before the order is placed, because an order in
+    the exchange for a backbone the registry does not know is a delivery nobody could accept.
     """
 
     def __init__(
@@ -80,6 +86,11 @@ class OrderPretraining:
                 it is named for, or the configuration states passes or fractions for a corpus
                 the order does not read.
             InvalidTrainingMixtureError: If the corpora read are not a chain of one vocabulary.
+            BackboneNotFoundError: If the configuration starts from weights no ready backbone
+                of the registry holds.
+            IncompatibleStartError: If the backbone holding those weights is of another shape,
+                objective or decoder, or its vocabulary and the corpora's do not lie on one
+                chain of publications.
             UnreadablePublishedCorpusError: If a manifest or its block cannot be read.
         """
         named = {name for name, _ in command.corpora}
@@ -113,8 +124,28 @@ class OrderPretraining:
             git_commit=command.git_commit,
             signature=RunSignature.of(command.configuration, mixture),
             ordered_at=self._clock.now(),
+            parent=self._parent_of(command.configuration, mixture),
         )
         self._backbones.save(backbone)
         return PlacedPretrainingOrder(
             backbone=backbone.id, order=self._exchange.place(PretrainingOrder.of(backbone))
         )
+
+    def _parent_of(
+        self, configuration: ExperimentConfiguration, mixture: TrainingMixture
+    ) -> BackboneId | None:
+        """The backbone whose weights the run starts from, held to the run; none from the seed."""
+        if configuration.start is None:
+            return None
+        parent = self._backbones.get_by_artifact(configuration.start)
+        parent.require_continuable_by(configuration)
+        # The parent's vocabulary is the last corpus's of its chain; the run's corpora must lie
+        # on that chain, before or after it, or the rows carried over would name other channels.
+        learnt_under = self._reader.channels(parent.inputs[-1].manifest)
+        if not mixture.chains_with(learnt_under):
+            raise IncompatibleStartError(
+                f"the corpora ordered ({mixture.name}) are not published on the chain backbone "
+                f"{parent.name} was pretrained on: its {len(learnt_under)} channels and their "
+                f"{mixture.vocabulary_size} are not one a prefix of the other"
+            )
+        return parent.id

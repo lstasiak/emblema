@@ -70,6 +70,9 @@ class InMemoryTrainingCorpusReader:
     def describe(self, manifest: ArtifactRef) -> PretrainingInput:
         return self._found(manifest).described
 
+    def channels(self, manifest: ArtifactRef) -> tuple[str, ...]:
+        return self._found(manifest).corpus.channels
+
     def read(self, manifest: ArtifactRef, share: CorpusShare) -> TrainingCorpus:
         published = self._found(manifest)
         if share.is_whole:

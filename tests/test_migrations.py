@@ -34,6 +34,7 @@ from emblema.pretraining.adapters.persistence.backbone_record import BackboneRec
 from emblema.pretraining.adapters.persistence.backbone_repository import (
     SqlAlchemyBackboneRepository,
 )
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.serving.adapters.persistence.promotable_artifact_record import (
     PromotableArtifactRecord,
 )
@@ -53,12 +54,20 @@ from tests.support.database import (
     create_test_database,
     migrated_engine,
 )
-from tests.support.handoff import backbone, pretraining_input
+from tests.support.experiments import WEIGHTS, configuration
+from tests.support.handoff import (
+    DELIVERED_AT,
+    RESULT_REF,
+    backbone,
+    backbone_id,
+    pretraining_input,
+)
 
 pytestmark = pytest.mark.integration
 
 BEFORE_INPUTS_WERE_ORDERED = "0002"
 BEFORE_TASKS_CHOSE_THEIR_WINDOWS = "0007"
+BEFORE_RUNS_CONTINUED_A_BACKBONE = "0008"
 SECOND_MANIFEST = ArtifactRef("durable/second", Checksum.of_bytes(b"second manifest"))
 
 
@@ -167,3 +176,32 @@ def test_a_task_reading_one_window_of_each_unit_refuses_the_downgrade_that_would
     finally:
         command.upgrade(tree, "head")
         clear_evaluation(engine)
+
+
+def test_a_backbone_continued_from_another_refuses_the_downgrade_that_would_lose_its_parent() -> (
+    None
+):
+    engine = migrated_engine()
+    clear_evaluation(engine)
+    clear_pretraining(engine)
+    backbones = SqlAlchemyBackboneRepository(engine)
+    tree = Config(str(REPO_ROOT / "alembic.ini"))
+    parent = backbone().deliver(RESULT_REF, WEIGHTS, DELIVERED_AT)
+    child = backbone(
+        id=backbone_id(2),
+        configuration=configuration(
+            name="continued", start=WEIGHTS, trained=TrainedParameters.CHANNEL_ROWS
+        ),
+        run="rows",
+        parent=parent.id,
+    )
+    backbones.save(parent)
+    backbones.save(child)
+
+    try:
+        with pytest.raises(RuntimeError, match=r"1 backbones .* name the backbone they continued"):
+            command.downgrade(tree, BEFORE_RUNS_CONTINUED_A_BACKBONE)
+    finally:
+        command.upgrade(tree, "head")
+
+    assert backbones.get(child.id) == child

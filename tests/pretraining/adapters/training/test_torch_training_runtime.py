@@ -10,13 +10,18 @@ from typing import Any
 
 import pytest
 
-from emblema.pretraining.domain.exceptions import DivergedRunError, UnsupportedPrecisionError
+from emblema.pretraining.domain.exceptions import (
+    DivergedRunError,
+    IncompatibleStartError,
+    UnsupportedPrecisionError,
+)
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.pretraining.domain.training.training_mixture import TrainingMixture
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -539,3 +544,111 @@ def test_a_corpus_read_twice_an_epoch_takes_twice_its_steps(
     ]
     # Four batches of the first corpus and two of the second, read twice: eight steps, not six.
     assert progress[-1].startswith("epoch 1 of 1, step 8 of 8")
+
+
+TABLE = "encoder.channel_embedding.table.weight"
+
+
+def pretrained(store: InMemoryArtifactStore) -> ArtifactRef:
+    """A backbone trained here over the test corpus, as a stored model a run can continue."""
+    outcomes = list(
+        TorchTrainingRuntime(store, device="cpu").train(
+            configuration(budget=budget(epochs=1, batch_size=2)), MIXTURE
+        )
+    )
+    kept = outcomes[-1].backbone
+    assert kept is not None
+    return kept
+
+
+def test_a_run_continuing_a_backbone_starts_from_its_weights_and_draws_the_rest() -> None:
+    """Over a wider vocabulary the stored rows are carried and the new rows come from the seed."""
+    store = InMemoryArtifactStore()
+    parent = pretrained(store)
+    wider = mixture(continued(name="second", seed=2))
+    stated = configuration(
+        name="continued",
+        start=parent,
+        trained=TrainedParameters.CHANNEL_ROWS,
+        budget=budget(epochs=1, batch_size=8, seed=4),
+    )
+
+    outcomes = list(TorchTrainingRuntime(store, device="cpu").train(stated, wider))
+
+    child = weights_of(store, outcomes[-1].backbone)
+    before = weights_of(store, parent)
+    for key, value in before.items():
+        if key != TABLE:
+            assert torch.equal(child[key], value), key
+    # The windows carry channels 1 to 3, whose rows move; the rows the run drew for channels 4
+    # and 5 receive no gradient, and the padding row none, so all three stay where they started.
+    assert child[TABLE].shape[0] == wider.vocabulary_size + 1
+    assert not torch.equal(child[TABLE][1:4], before[TABLE][1:4])
+    torch.manual_seed(4)
+    drawn = ObjectiveShape.of(stated, wider.vocabulary_size).build().state_dict()[TABLE]
+    assert torch.equal(child[TABLE][4:], drawn[4:])
+    assert torch.equal(child[TABLE][0], before[TABLE][0])
+
+
+def test_the_rows_alone_may_be_moved_on_an_encoder_the_seed_drew() -> None:
+    stated = configuration(
+        name="untrained", trained=TrainedParameters.CHANNEL_ROWS, budget=budget(epochs=1)
+    )
+    store = InMemoryArtifactStore()
+
+    outcomes = list(TorchTrainingRuntime(store, device="cpu").train(stated, MIXTURE))
+
+    trained = weights_of(store, outcomes[-1].backbone)
+    torch.manual_seed(stated.budget.seed)
+    drawn = ObjectiveShape.of(stated, MIXTURE.vocabulary_size).build().state_dict()
+    assert not torch.equal(trained[TABLE], drawn[TABLE])
+    for key, value in drawn.items():
+        if key != TABLE:
+            assert torch.equal(trained[key], value), key
+
+
+def test_a_run_continuing_a_backbone_may_move_everything() -> None:
+    store = InMemoryArtifactStore()
+    parent = pretrained(store)
+    stated = configuration(name="continued", start=parent, budget=budget(epochs=1))
+
+    outcomes = list(TorchTrainingRuntime(store, device="cpu").train(stated, MIXTURE))
+
+    child, before = weights_of(store, outcomes[-1].backbone), weights_of(store, parent)
+    moved = [key for key, value in before.items() if not torch.equal(child[key], value)]
+    assert TABLE in moved
+    assert any(key.startswith("encoder.blocks") for key in moved)
+
+
+def test_a_run_cannot_continue_a_backbone_of_another_shape() -> None:
+    store = InMemoryArtifactStore()
+    parent = pretrained(store)
+    deeper = configuration(name="deeper", start=parent, decoder_layers=2)
+
+    with pytest.raises(IncompatibleStartError, match="another decoder"):
+        TorchTrainingRuntime(store, device="cpu").train(deeper, MIXTURE)
+
+
+def test_a_continued_run_resumes_from_its_checkpoint_as_any_run_does() -> None:
+    whole, halved = InMemoryArtifactStore(), InMemoryArtifactStore()
+    parents = (pretrained(whole), pretrained(halved))
+    assert parents[0] == parents[1]
+    stated = configuration(
+        name="continued",
+        start=parents[0],
+        trained=TrainedParameters.CHANNEL_ROWS,
+        budget=budget(epochs=2, batch_size=2),
+        checkpoint=CheckpointPolicy(every_steps=3),
+    )
+
+    uninterrupted = list(TorchTrainingRuntime(whole, device="cpu").train(stated, MIXTURE))
+    interrupted = TorchTrainingRuntime(halved, device="cpu").train(stated, MIXTURE)
+    stopped = next(interrupted)
+    resumed = list(
+        TorchTrainingRuntime(halved, device="cpu").train(stated, MIXTURE, stopped.checkpoint)
+    )
+
+    trained = weights_of(whole, uninterrupted[-1].backbone)
+    picked_up = weights_of(halved, resumed[-1].backbone)
+    for key, value in trained.items():
+        assert torch.equal(value, picked_up[key]), key

@@ -11,7 +11,9 @@ from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
+from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.compute import ComputeTier
 from emblema.shared.kernel.learning_rate_schedule import LearningRateSchedule
 
@@ -58,6 +60,14 @@ class ExperimentConfiguration:
         fractions: The corpora of the mixture read at a share of their own rather than the
             mixture's; empty where every corpus is read at ``corpus_fraction``, which is every
             run before the knob existed.
+        start: The stored model the run starts from, where it continues a backbone rather than
+            drawing its weights from the seed; ``None`` for a run from the seed, which is every
+            run before the knob existed. The model must be of this configuration's shape and
+            objective; its channel table is carried over row by row as far as both the stored
+            table and the run's vocabulary reach, a row of the run's vocabulary beyond the
+            stored table is drawn from the seed, and a stored row beyond the run's vocabulary is
+            left behind.
+        trained: Which parameters the run moves; everything unless stated.
     """
 
     name: str
@@ -74,6 +84,8 @@ class ExperimentConfiguration:
     target: ObjectiveTarget = field(default_factory=ObjectiveTarget.value)
     passes: tuple[CorpusPasses, ...] = ()
     fractions: tuple[CorpusFraction, ...] = ()
+    start: ArtifactRef | None = None
+    trained: TrainedParameters = TrainedParameters.EVERYTHING
 
     def __post_init__(self) -> None:
         for knob, stated_for in (("passes", self.passes), ("fraction", self.fractions)):
@@ -148,7 +160,10 @@ class ExperimentConfiguration:
         must digest to one signature. Passes and fractions are rendered last, by corpus name,
         and only where stated: a run that reads every corpus once, at the mixture's share,
         renders as it did before either knob existed. The tail is rendered only where it is
-        drawn, and the target only where it is a state, for the same reason.
+        drawn, the target only where it is a state, the start only where there is one and the
+        trained parameters only where they are not everything, for the same reason. The start
+        renders as the checksum of the stored model: what the run starts from is the weights,
+        wherever they are kept.
         """
         passes = {
             f"passes.{stated.corpus}": stated.passes
@@ -177,6 +192,12 @@ class ExperimentConfiguration:
             }
             if self.target.is_latent
             else {}
+        )
+        start: dict[str, str | int | float] = (
+            {} if self.start is None else {"start": str(self.start.checksum)}
+        )
+        trained: dict[str, str | int | float] = (
+            {} if self.trained is TrainedParameters.EVERYTHING else {"trained": str(self.trained)}
         )
         return {
             "name": self.name,
@@ -208,6 +229,8 @@ class ExperimentConfiguration:
             "seed": self.budget.seed,
             "precision": str(self.precision),
             "checkpoint_every_steps": self.checkpoint.every_steps,
+            **start,
+            **trained,
             **passes,
             **fractions,
         }

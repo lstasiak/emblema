@@ -11,8 +11,13 @@ from emblema.pretraining.adapters.training.exceptions import (
     UnreadableTrainedModelError,
 )
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
+from emblema.pretraining.domain.exceptions import IncompatibleStartError
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
+
+# The one tensor a continued run carries over by rows rather than whole: the channel table,
+# whose height is the vocabulary the run reads under, not the shape.
+CHANNEL_TABLE = "channel_embedding.table.weight"
 
 
 @dataclass(frozen=True)
@@ -136,3 +141,56 @@ class TrainedModel:
                 f"weights do not fit the shape stored: {error}"
             ) from (error)
         return model.eval()
+
+    def require_shape_of(self, configuration: ExperimentConfiguration) -> None:
+        """Refuse a run of ``configuration`` that would continue these weights in another shape.
+
+        Raises:
+            IncompatibleStartError: If the shape, the decoder or the target stored with the
+                weights is not the run's.
+        """
+        for label, stored, asked in (
+            ("shape", self.architecture, configuration.architecture),
+            ("decoder", self.decoder_layers, configuration.decoder_layers),
+            ("target", self.target, configuration.target),
+        ):
+            if stored != asked:
+                raise IncompatibleStartError(
+                    f"the stored model has another {label} than {configuration.name!r} states: "
+                    f"{stored} against {asked}"
+                )
+
+    def carried_into(self, model: PretrainingObjective) -> None:
+        """Put these weights into ``model``, an objective of this shape over any vocabulary.
+
+        Every tensor is copied whole but the channel table, which is copied row by row as far as
+        both tables reach: a row past these weights keeps what the model drew, a row past the
+        model's table is left behind. A run that continues a backbone over a corpus the backbone
+        never read is where the first happens; one over a corpus from the middle of the
+        backbone's chain is where the second does.
+
+        Raises:
+            IncompatibleStartError: If a tensor of the model is missing from these weights or
+                differs in shape, which is a model of another objective or architecture.
+        """
+        carried = {}
+        for key, current in model.state_dict().items():
+            stored = self.weights.get(key)
+            if stored is None:
+                raise IncompatibleStartError(f"the stored model has no tensor {key!r}")
+            if stored.shape == current.shape:
+                carried[key] = stored
+            elif key.endswith(CHANNEL_TABLE) and stored.shape[1:] == current.shape[1:]:
+                rows = min(stored.shape[0], current.shape[0])
+                table = current.detach().clone()
+                table[:rows] = stored[:rows]
+                carried[key] = table
+            else:
+                raise IncompatibleStartError(
+                    f"the stored tensor {key!r} is of shape {tuple(stored.shape)}, the run's of "
+                    f"{tuple(current.shape)}"
+                )
+        unknown = sorted(set(self.weights) - set(carried))
+        if unknown:
+            raise IncompatibleStartError(f"the stored model has tensors the run has not: {unknown}")
+        model.load_state_dict(carried)

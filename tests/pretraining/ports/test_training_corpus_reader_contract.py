@@ -102,9 +102,17 @@ def test_the_corpus_read_is_named_and_signed_as_the_block_and_the_vocabulary(
     assert read.checksum == harness.published.block.checksum
 
 
+def test_the_channels_are_named_from_the_manifest_as_the_corpus_read_carries_them(
+    harness: Harness,
+) -> None:
+    assert harness.reader.channels(harness.published.manifest) == harness.published.corpus.channels
+
+
 def test_a_manifest_that_is_not_there_is_reported(harness: Harness) -> None:
     with pytest.raises(ArtifactNotFoundError):
         harness.reader.describe(UNKNOWN)
+    with pytest.raises(ArtifactNotFoundError):
+        harness.reader.channels(UNKNOWN)
     with pytest.raises(ArtifactNotFoundError):
         harness.reader.read(UNKNOWN, WHOLE)
 

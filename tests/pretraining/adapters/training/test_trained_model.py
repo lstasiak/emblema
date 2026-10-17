@@ -3,6 +3,7 @@ import io
 import pytest
 
 from emblema.pretraining.adapters.training.exceptions import UnreadableTrainedModelError
+from emblema.pretraining.domain.exceptions import IncompatibleStartError
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from tests.support.experiments import CHANNELS, LATENT, configuration, windows
@@ -123,3 +124,54 @@ def test_a_model_that_predicts_states_is_read_back_with_its_teacher_and_its_targ
     with torch.no_grad():
         assert torch.equal(read(batch, masks), trained(batch, masks))
         assert torch.equal(read.targets(batch), trained.targets(batch))
+
+
+TABLE = "encoder.channel_embedding.table.weight"
+
+
+def fresh(vocabulary_size: int, *, seed: int) -> MaskedReconstruction:
+    torch.manual_seed(seed)
+    return MaskedReconstruction(
+        SetEncoder.for_vocabulary(configuration().architecture, vocabulary_size), decoder_layers=1
+    )
+
+
+@pytest.mark.parametrize("vocabulary_size", [CHANNELS + 2, CHANNELS - 1], ids=["wider", "narrower"])
+def test_stored_weights_are_carried_whole_but_the_channel_table_which_goes_by_rows(
+    vocabulary_size: int,
+) -> None:
+    stored = TrainedModel.of(configuration(), CHANNELS, objective())
+    model = fresh(vocabulary_size, seed=11)
+    drawn = {key: value.detach().clone() for key, value in model.state_dict().items()}
+
+    stored.carried_into(model)
+
+    carried = model.state_dict()
+    rows = min(CHANNELS, vocabulary_size) + 1
+    assert torch.equal(carried[TABLE][:rows], stored.weights[TABLE][:rows])
+    assert torch.equal(carried[TABLE][rows:], drawn[TABLE][rows:])
+    assert carried[TABLE].shape[0] == vocabulary_size + 1
+    for key, value in stored.weights.items():
+        if key != TABLE:
+            assert torch.equal(carried[key], value), key
+
+
+def test_stored_weights_of_another_shape_or_objective_are_not_carried() -> None:
+    stored = TrainedModel.of(configuration(), CHANNELS, objective())
+    torch.manual_seed(5)
+    wider = MaskedReconstruction(
+        SetEncoder.for_vocabulary(configuration(decoder_layers=2).architecture, CHANNELS),
+        decoder_layers=2,
+    )
+    torch.manual_seed(5)
+    of_states = ObjectiveShape.of(configuration(target=LATENT), CHANNELS).build()
+
+    with pytest.raises(IncompatibleStartError, match="has no tensor"):
+        stored.carried_into(wider)
+    with pytest.raises(IncompatibleStartError, match="has no tensor"):
+        stored.carried_into(of_states)
+    with pytest.raises(IncompatibleStartError, match="another decoder"):
+        stored.require_shape_of(configuration(decoder_layers=2))
+    with pytest.raises(IncompatibleStartError, match="another target"):
+        stored.require_shape_of(configuration(target=LATENT))
+    stored.require_shape_of(configuration(name="the same shape under another name"))

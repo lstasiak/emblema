@@ -11,7 +11,8 @@ from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
-from tests.support.experiments import LATENT, budget, configuration
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
+from tests.support.experiments import LATENT, WEIGHTS, budget, configuration
 
 BOUNDED = ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.0)
 
@@ -259,3 +260,34 @@ def test_the_target_is_rendered_after_the_reading_and_only_where_it_is_a_state()
 def test_a_target_reading_more_blocks_than_the_encoder_has_is_refused() -> None:
     with pytest.raises(InvalidExperimentConfigurationError, match="blocks of an encoder"):
         configuration(target=ObjectiveTarget.latent(layers=2))
+
+
+def test_the_start_and_the_trained_parameters_render_only_where_they_are_stated() -> None:
+    continued = configuration(start=WEIGHTS, trained=TrainedParameters.CHANNEL_ROWS)
+
+    parameters = list(continued.parameters())
+
+    assert not any(key in ("start", "trained") for key in configuration().parameters())
+    after_the_checkpoint = parameters.index("checkpoint_every_steps") + 1
+    assert parameters[after_the_checkpoint : after_the_checkpoint + 2] == ["start", "trained"]
+    rendered = continued.parameters()
+    assert rendered["start"] == str(WEIGHTS.checksum)
+    assert rendered["trained"] == "channel_rows"
+    assert continued.differences_from(configuration()) == ("start", "trained")
+    assert configuration().differences_from(continued) == ("start", "trained")
+
+
+def test_a_run_moving_everything_from_its_seed_renders_as_every_run_before_the_knobs() -> None:
+    stated = configuration(start=None, trained=TrainedParameters.EVERYTHING)
+
+    assert stated == configuration()
+    assert stated.parameters() == configuration().parameters()
+
+
+def test_the_rows_alone_may_be_moved_from_the_seed_as_well_as_from_stored_weights() -> None:
+    # The control that tells an encoder's machinery from its rows: the same fit of the rows on
+    # an encoder the seed drew.
+    untrained = configuration(trained=TrainedParameters.CHANNEL_ROWS)
+
+    assert untrained.start is None
+    assert untrained.differences_from(configuration()) == ("trained",)

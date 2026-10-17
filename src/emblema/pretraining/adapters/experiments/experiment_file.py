@@ -22,7 +22,10 @@ from emblema.pretraining.domain.training.experiment_configuration import Experim
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
 from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
+from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.compute import ComputeTier
 
 
@@ -137,6 +140,20 @@ class _Checkpoint(_Section):
         return CheckpointPolicy(every_steps=self.every_steps)
 
 
+class _Start(_Section):
+    """The stored model a run continues: its key in the store and the checksum of its bytes.
+
+    Named as the evaluation names a backbone, by the weights rather than by a registry's
+    identifier, so that the file runs on a machine that has the store and no registry.
+    """
+
+    weights: str
+    checksum: str
+
+    def ref(self) -> ArtifactRef:
+        return ArtifactRef(self.weights, Checksum.parse(self.checksum))
+
+
 class ExperimentFile(_Section):
     """An experiment as it is written down: every parameter of scale, in one file, under a tier.
 
@@ -167,6 +184,9 @@ class ExperimentFile(_Section):
             knob existed was scored by.
         budget: How long the run trains and in how large a step.
         checkpoint: How often resumable state is written.
+        start: The stored model the run continues, where it does not draw its weights from the
+            seed; a file that says nothing draws them.
+        trained: Which parameters the run moves; everything unless the file says otherwise.
     """
 
     name: str
@@ -183,6 +203,8 @@ class ExperimentFile(_Section):
     objective: _Objective = _Objective()
     budget: _Budget
     checkpoint: _Checkpoint
+    start: _Start | None = None
+    trained: TrainedParameters = TrainedParameters.EVERYTHING
 
     @model_validator(mode="after")
     def _knobs_name_corpora_of_the_run(self) -> Self:
@@ -220,6 +242,8 @@ class ExperimentFile(_Section):
                 teacher.
             InvalidTrainingBudgetError: If the budget is not one a run could follow.
             InvalidCheckpointPolicyError: If the interval is not positive.
+            InvalidChecksumError: If the start's checksum is not one in canonical form.
+            InvalidArtifactRefError: If the start's key is blank.
         """
         profile = (ComputeTiers.load() if tiers is None else tiers).profile(self.tier)
         architecture = architecture_of(profile)
@@ -246,4 +270,6 @@ class ExperimentFile(_Section):
                 CorpusFraction(corpus=corpus, fraction=fraction)
                 for corpus, fraction in sorted(self.fraction.items())
             ),
+            start=None if self.start is None else self.start.ref(),
+            trained=self.trained,
         )

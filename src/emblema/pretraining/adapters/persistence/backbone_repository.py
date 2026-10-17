@@ -1,10 +1,11 @@
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from emblema.pretraining.adapters.persistence.backbone_record import BackboneRecord
 from emblema.pretraining.domain.backbone.backbone import Backbone
 from emblema.pretraining.domain.exceptions import BackboneNotFoundError
 from emblema.pretraining.domain.identifiers import BackboneId
+from emblema.shared.kernel.artifacts import ArtifactRef
 
 
 class SqlAlchemyBackboneRepository:
@@ -24,6 +25,21 @@ class SqlAlchemyBackboneRepository:
             record = session.get(BackboneRecord, backbone_id.value)
             if record is None:
                 raise BackboneNotFoundError(f"no backbone {backbone_id}")
+            return record.to_backbone()
+
+    def get_by_artifact(self, artifact: ArtifactRef) -> Backbone:
+        with Session(self._engine) as session:
+            record = session.scalars(
+                select(BackboneRecord)
+                .where(
+                    BackboneRecord.artifact_key == artifact.key,
+                    BackboneRecord.artifact_algorithm == str(artifact.checksum.algorithm),
+                    BackboneRecord.artifact_digest == artifact.checksum.digest,
+                )
+                .order_by(BackboneRecord.ordered_at)
+            ).first()
+            if record is None:
+                raise BackboneNotFoundError(f"no ready backbone holds {artifact.key}")
             return record.to_backbone()
 
     def save(self, backbone: Backbone) -> None:
