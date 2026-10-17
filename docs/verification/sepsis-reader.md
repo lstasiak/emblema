@@ -150,3 +150,108 @@ at 400 patients. One backbone, descriptive.
 - The power at 400 patients is read from a seed spread of 0.029 with about twenty septic labels
   a draw; the budget is below any reading the stage would make.
 - The task over hospital B alone is not read.
+
+## 2026-10-17 — M1 Pro, MPS: the four intensive-care pretrainings and 2019 alone, measured
+
+**Question.** The part the section above left open: the error between pretrainings s on the
+sepsis task, from the four intensive-care pretrainings, and whether the registered rule between
+two backbones resolves 0.01 or 0.02 at any budget here; PhysioNet 2019 alone descriptively.
+
+**Conditions.** Commit `e4824b7d`, the five campaigns ordered from it with the one above. On
+this machine, MPS, fp32, one after another: the four intensive-care pretrainings
+(`backbone-clinical-m`, `-seed2`, `-seed3`, `-seed4`) in 68, 77, 90 and 106 minutes, the last
+two beside another reading on the accelerator, and 2019 alone (`backbone-physionet2019-m`) in
+81 minutes; 60 cells each, every cell accepted. Pairs by `scripts/campaign_pairs_report.py`
+over one export of the five campaigns above (`pairs.sh`, 9,761 stays) and one of 2019 alone
+(`pairs-p2019.sh`); s by the registered formula per budget over the six pairs of intensive-care
+pretrainings (`data/report/l16/s.py`, `power/s.txt`); power by
+`scripts/comparison_power_report.py` with that s for the pairs between pretrainings
+(`power.sh --seed-gap B …`). CSV under `data/report/l21/pairs/`, `pairs-p2019/` and `power/`.
+
+**Area on the 9,761 stays held out**, mean over seeds 1 to 10 (the seeds' standard
+deviation); the probe at the encoder's initialisation and under 10⁹ from the section above.
+
+| Budget | at initialisation | 10⁹ | intensive care s1 / s2 / s3 / s4 | 2019 alone |
+|---|---|---|---|---|
+| 400 | 0.647 (0.018) | 0.582 (0.030) | 0.645 (0.030) / 0.643 (0.017) / 0.643 (0.028) / 0.659 (0.014) | 0.651 (0.018) |
+| 4,000 | 0.728 (0.005) | 0.680 (0.008) | 0.733 (0.004) / 0.730 (0.004) / 0.712 (0.007) / 0.718 (0.005) | 0.725 (0.003) |
+| all | 0.743 (0.004) | 0.701 (0) | 0.749 / 0.747 / 0.729 / 0.724 (0) | 0.736 (0) |
+
+**The pairs**, paired over stays (95 % interval), seed by seed (mean ± standard error).
+
+| Kind | Budget | Reading |
+|---|---|---|
+| A, probe less initialisation, intensive care | 400 | −0.004 to +0.013; s4 +0.013 [+0.004; +0.021] ± 0.006, the others across zero |
+| A | 4,000 | −0.016 to +0.006; s3 −0.016 [−0.028; −0.004] ± 0.003, the others across zero |
+| A | all | −0.019 to +0.006; s3 −0.014 [−0.026; −0.001], s4 −0.019 [−0.033; −0.004], s1 and s2 across zero |
+| A, 2019 alone | 400 / 4,000 / all | +0.005 [−0.003; +0.013] ± 0.008 / −0.003 [−0.013; +0.008] ± 0.002 / −0.007 [−0.019; +0.005] |
+| B, seed j less seed i, intensive care | 400 / 4,000 / all | **s = 0.0096 / 0.0131 / 0.0159**, pooled 0.0131 |
+| B, the widest pair | 400 / 4,000 / all | +0.017 [+0.009; +0.025] (s4 less s2) / −0.022 [−0.033; −0.010] (s3 less s1) / −0.024 [−0.039; −0.009] (s4 less s1) |
+
+Half-widths of the paired interval: kind A 0.007 to 0.015 at 400, 0.009 to 0.017 at 4,000
+and 0.011 to 0.018 at every patient (0.018 is 10⁹; the intensive-care pretrainings 0.011 to
+0.014); kind B 0.006 to 0.008, 0.009 to 0.011 and 0.012 to 0.015.
+
+**Power at ten seeds**, read directly off the draws (medians over pairs, kind A over the five
+backbones), the rule as registered with s at the budget for kind B; the intensive-care reader at
+500 stays from `verdict-statistics.md`, 2026-10-13.
+
+| Kind | Budget | seed SE | interval SE | δ = 0.01 | 0.02 | 0.03 |
+|---|---|---|---|---|---|---|
+| A, pretraining's share | 400 | 0.008 | 0.005 | 0.16 | 0.78 | 1.00 |
+| A | 4,000 | 0.002 | 0.005 | **0.43** | **0.97** | 1.00 |
+| A | all | 0.001 | 0.007 | 0.33 | 0.87 | 1.00 |
+| A, intensive care, 500 stays | | 0.012 | 0.010 | 0.08 | 0.35 | 0.73 |
+| B, between pretrainings, s = 0.0096 | 400 | 0.006 | 0.003 | 0.00 | 0.28 | 0.99 |
+| B, s = 0.0131 | 4,000 | 0.003 | 0.005 | 0.00 | 0.10 | 0.74 |
+| B, s = 0.0159 | all | 0 | 0.007 | 0.00 | 0.05 | 0.39 |
+| B, intensive care, 500 stays, s = 0.0057 | | 0.005 | 0.009 | 0.19 | 0.58 | 0.91 |
+
+Kind A under 10⁹ alone read 0.23 / 0.68 at 4,000 above; the four intensive-care pretrainings
+carry smaller seed and interaction parts, and the median over five moves to 0.43 / 0.97.
+
+**Predictions, re-read over the five backbones.**
+
+1. *The interval.* Holds under 10⁹ (0.018) and fails narrower under the intensive-care
+   pretrainings (0.011 to 0.014 against 0.014 to 0.020): the 500 septic stays narrow the
+   interval more than the two-strata scaling from 289 deaths gave.
+2. *The seeds.* Holds at 4,000 (0.003 to 0.008) and at every patient (zero); at 400 the
+   spread is 0.014 to 0.030, below 0.02 under two of the five backbones.
+3. *The resolution.* As above: no budget resolves 0.01 four times in five (0.43 at best,
+   kind A at 4,000). Every patient resolves 0.02 within a backbone (kind A, 0.87) and not
+   between pretrainings (kind B, 0.05): s between the four intensive-care pretrainings is
+   0.016 there, nearly three times the 0.0057 at 500 stays on the intensive-care task.
+
+**Decision, by the reading declared.**
+
+- *The sepsis task is a second task, not a finer instrument between backbones.* By the
+  registered rule two backbones resolve a gain of 0.02 four times in five at no budget here
+  (0.28, 0.10, 0.05) against 0.58 at 500 stays of the intensive-care task. The intensive-care
+  reader stays the reader of the stage; no rule row changes.
+- *Within a backbone the task reads finer than any budget of the stays.* The probe less its
+  initialisation at 4,000 patients resolves 0.02 in 0.97 and 0.01 in 0.43, against 0.35 and
+  0.08 at 500 stays. A declaration about the pretraining's share under one backbone can be
+  read here at 4,000 patients.
+- The positive control of transfer planned next is designed for a resolution of 0.02 between
+  backbones: four pretrainings a side, or a reading pooled over both tasks.
+
+**Conclusions.**
+
+1. On the sepsis task no pretraining helps the probe. 10⁹ reads worse than the initialisation
+   by 0.04 to 0.07 at every budget; the four intensive-care pretrainings lie within ±0.02 of
+   it, one below at 4,000 and two at every patient; 2019 alone, the task's own corpus, lies
+   within ±0.01. On the intensive-care task the same probes gained 0.02 to 0.04 at 200 stays
+   and lost from 1,000 up; here the loss starts at 400 patients.
+2. The pretrainings differ more on this task than on the stays: s rises from 0.0057 to 0.016,
+   and the spread of the four at every patient (0.724 to 0.749) is the size of the gain the
+   stage looks for. A rule between two backbones is bound by that spread, not by the stays.
+3. The campaigns cost 68 to 106 minutes each on this machine; the pairs over five campaigns
+   2.5 hours in one process.
+
+**Limitations.**
+
+- s comes from four pretrainings of one recipe, as on the intensive-care task; 0.013 pooled
+  against 0.014 registered.
+- The probe is the reader; a network fine-tuned on the sepsis task is not read, and the
+  validation side stays unread.
+- The task over hospital B alone is not read.
