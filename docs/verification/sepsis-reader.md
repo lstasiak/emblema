@@ -91,9 +91,9 @@ under the point of about 10⁹ values.
 
 | Budget | probe | probe at initialisation | probe less initialisation, paired over stays | seed by seed |
 |---|---|---|---|---|
-| 400 | 0.582 (0.029) | 0.647 (0.017) | **−0.065 [−0.080; −0.051]** | −0.065 ± 0.012 |
+| 400 | 0.582 (0.030) | 0.647 (0.018) | **−0.065 [−0.080; −0.051]** | −0.065 ± 0.012 |
 | 4,000 | 0.680 (0.008) | 0.728 (0.005) | **−0.047 [−0.064; −0.030]** | −0.047 ± 0.003 |
-| all | 0.701 (0) | 0.743 (0.003) | **−0.042 [−0.060; −0.024]** | −0.042 ± 0.001 |
+| all | 0.701 (0) | 0.743 (0.004) | **−0.042 [−0.060; −0.024]** | −0.042 ± 0.001 |
 
 The half-width of the paired interval: 0.015 at 400, 0.017 at 4,000, 0.018 at every patient.
 At every patient the probe's seeds draw the same labels, so its spread is zero; the encoder at
@@ -114,7 +114,7 @@ seeds, 9,761 stays; the intensive-care reader at 500 stays beside it from
 **Predictions.**
 
 1. *The interval*: held. At every patient the half-width is 0.018, within 0.014 to 0.020.
-2. *The seeds*: held. The probe spreads by 0.029 at 400 patients, 0.008 at 4,000, zero at every
+2. *The seeds*: held. The probe spreads by 0.030 at 400 patients, 0.008 at 4,000, zero at every
    patient.
 3. *The resolution*: held in its first part, failed in its second. No budget resolves 0.01 four
    times in five (0.23 at best, at 4,000); every patient resolves 0.02 three times in five
@@ -146,8 +146,8 @@ at 400 patients. One backbone, descriptive.
 **Limitations.**
 
 - One backbone. The error between pretrainings s on this task waits for the four intensive-care
-  pretrainings, ordered and not run; their reading adds to this section when they are.
-- The power at 400 patients is read from a seed spread of 0.029 with about twenty septic labels
+  pretrainings, ordered and not run; their reading follows in a section of its own.
+- The power at 400 patients is read from a seed spread of 0.030 with about twenty septic labels
   a draw; the budget is below any reading the stage would make.
 - The task over hospital B alone is not read.
 
@@ -216,7 +216,7 @@ carry smaller seed and interaction parts, and the median over five moves to 0.43
    pretrainings (0.011 to 0.014 against 0.014 to 0.020): the 500 septic stays narrow the
    interval more than the two-strata scaling from 289 deaths gave.
 2. *The seeds.* Holds at 4,000 (0.003 to 0.008) and at every patient (zero); at 400 the
-   spread is 0.014 to 0.030, below 0.02 under two of the five backbones.
+   spread is 0.014 to 0.030, below 0.02 under two of the five backbones and under 2019 alone.
 3. *The resolution.* As above: no budget resolves 0.01 four times in five (0.43 at best,
    kind A at 4,000). Every patient resolves 0.02 within a backbone (kind A, 0.87) and not
    between pretrainings (kind B, 0.05): s between the four intensive-care pretrainings is
@@ -228,12 +228,17 @@ carry smaller seed and interaction parts, and the median over five moves to 0.43
   registered rule two backbones resolve a gain of 0.02 four times in five at no budget here
   (0.28, 0.10, 0.05) against 0.58 at 500 stays of the intensive-care task. The intensive-care
   reader stays the reader of the stage; no rule row changes.
-- *Within a backbone the task reads finer than any budget of the stays.* The probe less its
+- *Within a backbone the task reads finer than the stays at 500.* The probe less its
   initialisation at 4,000 patients resolves 0.02 in 0.97 and 0.01 in 0.43, against 0.35 and
   0.08 at 500 stays. A declaration about the pretraining's share under one backbone can be
   read here at 4,000 patients.
-- The positive control of transfer planned next is designed for a resolution of 0.02 between
-  backbones: four pretrainings a side, or a reading pooled over both tasks.
+- The positive control of transfer planned next needs a resolution of 0.02 between backbones,
+  and neither task alone gives it with four pretrainings a side: by the stage's threshold for
+  n pretrainings a side, twice √(SE² + (s²/2)(1/n_c + 1/n_r)), four against four sit at about
+  0.021 on the sepsis task at every patient (SE 0.007, s 0.016) and 0.019 on the intensive-care
+  task at 500 stays (SE 0.009, s 0.0057), so a gain of 0.02 is read about one time in two on
+  either. The control's declaration computes the power of a reading pooled over both tasks
+  before it runs.
 
 **Conclusions.**
 
