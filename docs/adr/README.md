@@ -69,3 +69,4 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0052](0052-a-task-may-read-each-units-first-window.md) | A task may read each unit's first window: the corpus is published for pretraining, the moment of prediction is the task's | proposed |
 | [0053](0053-reading-the-encoders-states-at-another-layer.md) | Reading the encoder's states at another layer: a knob of the frozen modes, every layer through the final normalisation | accepted |
 | [0054](0054-predicting-the-teachers-states-at-the-hidden-tokens.md) | Predicting the teacher's states at the hidden tokens: a second objective beside masked reconstruction, chosen by the experiment file | accepted |
+| [0055](0055-the-encoders-share-of-the-learning-rate.md) | The encoder's share of the learning rate: a knob of the regime for the modes that train the backbone's weights, so the head learns at the whole rate and the pretrained states at a share of it | accepted |

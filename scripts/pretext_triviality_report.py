@@ -13,7 +13,17 @@ Measuring and reporting are two steps: the tallies per unit and the summaries pe
 written as CSV, and the tables are rendered from those files, so a note is redrawn without the
 backbone or the corpora in hand.
 
+A corpus the backbone never read is read through another backbone's windows (``--corpus``
+with ``--windows-of``): the question is then what the pretext carries to a corpus it has not
+seen, against baselines fitted on that corpus alone, its channels passing through rows of the
+channel table no pretraining set — drawn, as the evaluation gives them, or set to the mean of
+the learnt rows (``--unset-rows mean``), which tells a row the model never saw from a row
+unlike any it saw. The encoder at its initialisation (``--at-initialisation``) is the floor
+of either reading.
+
     uv run --env-file .env.r2 scripts/pretext_triviality_report.py --backbone <id>
+    uv run --env-file .env.r2 scripts/pretext_triviality_report.py --backbone <id>
+        --corpus <name> --windows-of <id>
     uv run scripts/pretext_triviality_report.py --report-only data/report/pretext/<backbone>
 """
 
@@ -38,6 +48,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from emblema.catalog.contracts.published_channel import PublishedChannel
 from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
 from emblema.config.settings import Settings
@@ -54,7 +65,16 @@ from emblema.pretraining.adapters.diagnostics.own_and_cross_channel_ridge_baseli
 )
 from emblema.pretraining.adapters.diagnostics.triviality_diagnostic import TrivialityDiagnostic
 from emblema.pretraining.adapters.diagnostics.unit_bootstrap import UnitBootstrap
+from emblema.pretraining.adapters.encoder.grown_channel_embedding import (
+    GrownChannelEmbedding,
+)
+from emblema.pretraining.adapters.encoder.learned_channel_embedding import (
+    LearnedChannelEmbedding,
+)
+from emblema.pretraining.adapters.objective.latent_prediction import LatentPrediction
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
+from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape
+from emblema.pretraining.adapters.objective.pretraining_objective import PretrainingObjective
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
 from emblema.pretraining.adapters.training.devices import available_device
@@ -67,6 +87,7 @@ from emblema.pretraining.domain.assessment.kind_summary import (
 )
 from emblema.pretraining.domain.assessment.mask_kind_tally import MaskKindTally
 from emblema.pretraining.domain.backbone.backbone import Backbone
+from emblema.pretraining.domain.backbone.pretraining_input import PretrainingInput
 from emblema.pretraining.domain.identifiers import BackboneId
 from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
@@ -75,7 +96,7 @@ from emblema.pretraining.ports.backbone_repository import BackboneRepository
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.adapters.windows.window_block import WindowBlock
-from emblema.shared.kernel.tokens import TokenWindow
+from emblema.shared.kernel.tokens import PADDING_CHANNEL_ID, TokenWindow
 from emblema.shared.ports.artifact_store import ArtifactStore
 from scripts.corpus_saturation_report import BLOCKS
 from scripts.excursion_report import fetched_block, sides_of
@@ -168,6 +189,70 @@ def channels_apart_of(manifest: PublishedCorpusManifest) -> frozenset[int]:
         for channel in manifest.channels
         if channel.timeless or (channel.statistics is not None and channel.statistics.std == 0.0)
     )
+
+
+def own_channels(channels: Iterable[PublishedChannel], corpus: str) -> list[int]:
+    """The identifiers of the channels ``corpus`` itself has.
+
+    A published manifest carries the whole vocabulary its chain had reached, every earlier
+    corpus's channels included; only the rows of this corpus's own channels are the ones no
+    pretraining without it set.
+    """
+    return [channel.channel_id for channel in channels if channel.corpus == corpus]
+
+
+def unset_rows_to_mean(model: PretrainingObjective, channel_ids: Iterable[int]) -> None:
+    """Set the rows of ``channel_ids``, which no pretraining set, to the mean of the learnt rows.
+
+    A row torch drew is unlike any row the backbone learnt; the mean of the learnt rows is a
+    channel the backbone could have seen, without saying which. Rows past the learnt table are
+    the grown ones; rows within it that the backbone never read keep their drawn values until
+    they are set here. Padding's zero row is left out of the mean.
+    """
+    table = model.encoder.channel_embedding
+    learnt = table.learnt if isinstance(table, GrownChannelEmbedding) else table
+    if not isinstance(learnt, LearnedChannelEmbedding):
+        raise ValueError(f"only a learnt channel table has unset rows, not {type(learnt).__name__}")
+    with torch.no_grad():
+        mean = learnt.table.weight[PADDING_CHANNEL_ID + 1 :].mean(dim=0)
+        for channel_id in channel_ids:
+            if channel_id <= learnt.vocabulary_size:
+                learnt.table.weight[channel_id] = mean
+            elif isinstance(table, GrownChannelEmbedding):
+                table.grown.weight[channel_id - learnt.vocabulary_size - 1] = mean
+            else:
+                raise ValueError(f"channel {channel_id} lies past a table that was not grown")
+
+
+def supplied_by(source: Backbone, backbone: Backbone, corpus: str) -> list[PretrainingInput]:
+    """The inputs of ``source`` that carry ``corpus``, for a backbone that never read it.
+
+    Raises:
+        ValueError: If ``backbone`` read the corpus itself, so the reading would not be of a
+            corpus it never saw, or if ``source`` did not read it.
+    """
+    if any(stated.corpus == corpus for stated in backbone.inputs):
+        raise ValueError(f"backbone {backbone.id} read {corpus} itself; read it on its own windows")
+    supplied = [stated for stated in source.inputs if stated.corpus == corpus]
+    if not supplied:
+        raise ValueError(f"backbone {source.id} did not read {corpus}")
+    return supplied
+
+
+def grown(model: PretrainingObjective, vocabulary_size: int) -> PretrainingObjective:
+    """The model over a vocabulary that continues its own, for a corpus it never read.
+
+    The rows its table learnt stay as they are; a channel past them gets a row drawn from
+    torch's generator here, which no pretraining set, as the evaluation gives it. An objective
+    that predicts states is refused: its teacher reads the same table and would not be grown.
+
+    Raises:
+        ValueError: If the objective predicts states.
+    """
+    if isinstance(model, LatentPrediction):
+        raise ValueError("an objective that predicts states is read on its own corpora only")
+    model.encoder.grown_to(vocabulary_size)
+    return model
 
 
 # ------------------------------------------------------------------------------------------------
@@ -565,7 +650,25 @@ def render(directory: Path) -> str:
             f"Masks: {strategy}; validation masks from seed {settings['validation_seed']}, the "
             f"baselines fitted under seed {settings['fit_seed']}; {settings['resamples']} "
             f"resamples over units; loss {settings['loss']}; {settings['device']}, "
-            f"{settings['machine']}, torch {settings['torch']}, commit {settings['revision']}.",
+            f"{settings['machine']}, torch {settings['torch']}, commit {settings['revision']}."
+            + (
+                f" The windows of `{settings['corpus']}` are the ones backbone "
+                f"`{settings['windows_of'][:8]}-…` read; this backbone never read it, the "
+                "baselines are fitted on that corpus alone, and its channels pass through rows "
+                "no pretraining set, "
+                + (
+                    "set to the mean of the learnt rows."
+                    if settings.get("unset_rows") == "mean"
+                    else "drawn as the evaluation draws them."
+                )
+                if "windows_of" in settings
+                else ""
+            )
+            + (
+                " The encoder is read at its initialisation, before a step of pretraining."
+                if settings.get("at_initialisation") == "true"
+                else ""
+            ),
             corpora_table(read_corpora(directory)),
             kinds_table(read_kinds(directory)),
             "Errors are the run's own reading of the loss on hidden tokens, in normalised units. "
@@ -636,9 +739,35 @@ def _registry() -> BackboneRepository:  # pragma: no cover - environment
     return SqlAlchemyBackboneRepository(configured_engine(Settings()))
 
 
+def _backbone_id(text: str, option: str) -> BackboneId:
+    try:
+        return BackboneId(UUID(text))
+    except ValueError as error:
+        raise SystemExit(f"{option} must be a backbone's id: {error}") from error
+
+
 def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--backbone", metavar="ID", help="a backbone the registry holds ready")
+    parser.add_argument(
+        "--corpus", metavar="NAME", help="one corpus to read, the backbone's own or another's"
+    )
+    parser.add_argument(
+        "--windows-of",
+        metavar="ID",
+        help="the backbone whose windows of --corpus are read, where this one never read it",
+    )
+    parser.add_argument(
+        "--unset-rows",
+        choices=("drawn", "mean"),
+        default="drawn",
+        help="rows of channels the backbone never read: drawn, or the mean of the learnt rows",
+    )
+    parser.add_argument(
+        "--at-initialisation",
+        action="store_true",
+        help="read the encoder as the run drew it, before a step, instead of the weights kept",
+    )
     parser.add_argument(
         "--report-only", type=Path, metavar="DIR", help="render a stored diagnostic"
     )
@@ -665,58 +794,89 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise SystemExit("--backbone is needed to diagnose anything")
     if not device_available(arguments.device):
         raise SystemExit(f"device {arguments.device} is not available on this machine")
-    try:
-        backbone_id = BackboneId(UUID(arguments.backbone))
-    except ValueError as error:
-        raise SystemExit(f"--backbone must be a backbone's id: {error}") from error
-    backbone = _registry().get(backbone_id)
+    registry = _registry()
+    backbone = registry.get(_backbone_id(arguments.backbone, "--backbone"))
     if backbone.artifact is None:
         raise SystemExit(f"backbone {backbone.id} is not ready: it has no weights")
+    # The windows come from this backbone's own inputs unless another's are asked for.
+    source = backbone
+    if arguments.windows_of is not None:
+        if arguments.corpus is None:
+            raise SystemExit("--windows-of needs --corpus, the corpus that backbone supplies")
+        source = registry.get(_backbone_id(arguments.windows_of, "--windows-of"))
     store = configured_store(Settings())
     configuration = backbone.configuration
-    model = TrainedModel.read(store.get(backbone.artifact)).build()
+    model: PretrainingObjective
+    if arguments.at_initialisation:
+        # The objective drawn as the run drew it, before a step, over the backbone's vocabulary.
+        torch.manual_seed(configuration.budget.seed)
+        model = ObjectiveShape.of(
+            configuration, max(stated.vocabulary_size for stated in backbone.inputs)
+        ).build()
+    else:
+        model = TrainedModel.read(store.get(backbone.artifact)).build()
     if not isinstance(model, MaskedReconstruction):
         raise SystemExit(
             f"backbone {backbone.id} was pretrained to predict states, not values; its "
             "predictions are not scored against the baselines of a value — see "
             "scripts/latent_prediction_report.py"
         )
+    if source is not backbone:
+        try:
+            supplied = supplied_by(source, backbone, arguments.corpus)
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
+        # The rows no pretraining set are drawn from one seed, so a reading repeats.
+        torch.manual_seed(VALIDATION_SEED)
+        grown(model, max(stated.vocabulary_size for stated in supplied))
+        if arguments.unset_rows == "mean":
+            manifest = PublishedCorpusManifestJson().decode(store.get(supplied[0].manifest))
+            unset_rows_to_mean(model, own_channels(manifest.channels, arguments.corpus))
+    elif arguments.unset_rows == "mean":
+        raise SystemExit("--unset-rows mean needs --windows-of: a backbone's own rows are all set")
     directory = arguments.out or WORKSPACE / str(backbone.id)
     strategy = configuration.masking
-    write_settings(
-        directory,
-        {
-            "backbone": str(backbone.id),
-            "weights": backbone.artifact.checksum.digest,
-            "experiment": configuration.name,
-            "loss": str(configuration.loss.kind),
-            **{
-                key: _number(value)
-                for key, value in configuration.parameters().items()
-                if key.startswith(("channel_rate", "block_", "token_rate", "horizon_"))
-                and isinstance(value, float)
-            },
-            "validation_windows": str(arguments.validation_windows),
-            "training_windows": str(arguments.training_windows),
-            "batch_size": str(arguments.batch_size),
-            "validation_seed": str(VALIDATION_SEED),
-            "fit_seed": str(FIT_SEED),
-            "resamples": str(arguments.resamples),
-            "device": arguments.device,
-            "machine": machine(),
-            "torch": version("torch"),
-            "revision": SourceRevision().current(),
-            "started": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+    settings = {
+        "backbone": str(backbone.id),
+        "weights": backbone.artifact.checksum.digest,
+        "experiment": configuration.name,
+        "loss": str(configuration.loss.kind),
+        **{
+            key: _number(value)
+            for key, value in configuration.parameters().items()
+            if key.startswith(("channel_rate", "block_", "token_rate", "horizon_"))
+            and isinstance(value, float)
         },
-    )
+        "validation_windows": str(arguments.validation_windows),
+        "training_windows": str(arguments.training_windows),
+        "batch_size": str(arguments.batch_size),
+        "validation_seed": str(VALIDATION_SEED),
+        "fit_seed": str(FIT_SEED),
+        "resamples": str(arguments.resamples),
+        "device": arguments.device,
+        "machine": machine(),
+        "torch": version("torch"),
+        "revision": SourceRevision().current(),
+        "started": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+    }
+    if arguments.corpus is not None:
+        settings["corpus"] = arguments.corpus
+    if source is not backbone:
+        settings["windows_of"] = str(source.id)
+        settings["unset_rows"] = arguments.unset_rows
+        settings["rows_seed"] = str(VALIDATION_SEED)
+    if arguments.at_initialisation:
+        settings["at_initialisation"] = "true"
+    write_settings(directory, settings)
     tallies: list[tuple[str, MaskKindTally]] = []
     rows = []
     for corpus in corpora_of(
-        backbone,
+        source,
         store,
         arguments.blocks,
         training_windows=arguments.training_windows,
         validation_windows=arguments.validation_windows,
+        corpus=arguments.corpus,
     ):
         started = time.perf_counter()
         found = diagnose(

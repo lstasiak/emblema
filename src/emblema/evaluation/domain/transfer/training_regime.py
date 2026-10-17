@@ -78,8 +78,17 @@ class TrainingRegime:
     plan refuses a stop stated in part. The head may start solved rather than drawn, which
     spends no step, so the budget is the one every other arm spends.
 
+    The encoder's weights may learn at a share of the schedule's rate while the head learns at
+    the whole of it: under one rate a head still finding its bearing moves the pretrained states
+    as fast as it moves itself, and what the pretraining made of them is lost in the first
+    steps (Kumar et al., 2022). The share holds for the modes that train the backbone's
+    weights, the network from nothing included, so a comparison holds the recipe fixed across
+    arms; rows grown for a task's new channels learn at the head's rate, since nothing
+    pretrained is in them (ADR-0055).
+
     Invariants: the share held out lies in ``[0, 0.5]``; both patiences are not negative, and
-    at most one is stated; the channel dropout lies in ``[0, 1)``.
+    at most one is stated; the channel dropout lies in ``[0, 1)``; the encoder's share of the
+    rate lies in ``(0, 1]``.
 
     Attributes:
         stop_share: Share of the labelled units held out to stop on; zero for no stop.
@@ -92,6 +101,8 @@ class TrainingRegime:
         channel_dropout: Probability a window's channel is withheld whole while it is learnt
             from; zero for every channel read.
         head_start: Where the head stands before the first step.
+        encoder_rate: Share of the schedule's rate the encoder's weights learn at; one for the
+            head's rate, as every campaign ran before this was a knob.
     """
 
     stop_share: float = 0.0
@@ -101,6 +112,7 @@ class TrainingRegime:
     class_weight: ClassWeight = ClassWeight.NONE
     channel_dropout: float = 0.0
     head_start: HeadStart = HeadStart.FRESH
+    encoder_rate: float = 1.0
 
     KNOBS: ClassVar[tuple[str, ...]] = (
         "stop_share",
@@ -110,6 +122,7 @@ class TrainingRegime:
         "class_weight",
         "channel_dropout",
         "head_start",
+        "encoder_rate",
     )
 
     def __post_init__(self) -> None:
@@ -130,6 +143,10 @@ class TrainingRegime:
         if not isfinite(self.channel_dropout) or not 0.0 <= self.channel_dropout < 1.0:
             raise InvalidTrainingRegimeError(
                 f"channel_dropout must lie in [0, 1), got {self.channel_dropout}"
+            )
+        if not isfinite(self.encoder_rate) or not 0.0 < self.encoder_rate <= 1.0:
+            raise InvalidTrainingRegimeError(
+                f"encoder_rate must lie in (0, 1], got {self.encoder_rate}"
             )
 
     @classmethod
@@ -156,6 +173,11 @@ class TrainingRegime:
     def solves_the_head_first(self) -> bool:
         """Whether the head is solved in closed form before the run's first step."""
         return self.head_start is HeadStart.SOLVED
+
+    @property
+    def slows_the_encoder(self) -> bool:
+        """Whether the encoder's weights learn at less than the head's rate."""
+        return self.encoder_rate < 1.0
 
     @property
     def _waits(self) -> bool:
@@ -191,6 +213,7 @@ class TrainingRegime:
             "class_weight": str(self.class_weight),
             "channel_dropout": self.channel_dropout,
             "head_start": str(self.head_start),
+            "encoder_rate": self.encoder_rate,
         }
 
     def turned_away(self) -> dict[str, float | int | str]:
@@ -214,4 +237,6 @@ class TrainingRegime:
             turned_knobs["channel_dropout"] = self.channel_dropout
         if self.head_start is not HeadStart.FRESH:
             turned_knobs["head_start"] = str(self.head_start)
+        if self.slows_the_encoder:
+            turned_knobs["encoder_rate"] = self.encoder_rate
         return turned_knobs

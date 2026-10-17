@@ -135,7 +135,9 @@ class TorchAdaptationRuntime:
             stop = self._stop(plan, len(learnt), epochs) if regime.stops else None
             losses = ScheduledTraining(plan.schedule, plan.seed).losses(
                 candidate,
-                candidate.trainable_parameters(),
+                candidate.parameter_groups(
+                    plan.schedule.learning_rate, encoder_share=regime.encoder_rate
+                ),
                 forward,
                 targets,
                 loss=self._loss(link, regime, targets),

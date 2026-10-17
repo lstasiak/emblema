@@ -29,7 +29,6 @@ from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
 from typing import Self
-from uuid import UUID
 
 import numpy as np
 import torch
@@ -52,7 +51,6 @@ from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShap
 from emblema.pretraining.adapters.objective.pretraining_objective import PretrainingObjective
 from emblema.pretraining.adapters.training.devices import available_device
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
-from emblema.pretraining.domain.identifiers import BackboneId
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from scripts.corpus_saturation_report import BLOCKS
@@ -62,9 +60,11 @@ from scripts.pretext_triviality_report import (
     BATCH_SIZE,
     VALIDATION_SEED,
     CorpusWindows,
+    _backbone_id,
     _number,
     _registry,
     corpora_of,
+    grown,
     read_rows,
     read_settings,
     write_rows,
@@ -212,22 +212,6 @@ def last_block(encoder: SetEncoder, batch: TokenTensors) -> Tensor:
     return states
 
 
-def grown(model: PretrainingObjective, vocabulary_size: int) -> PretrainingObjective:
-    """The model over a vocabulary that continues its own, for a corpus it never read.
-
-    The rows its table learnt stay as they are; a channel past them gets a row drawn from
-    torch's generator here, which no pretraining set, as the evaluation gives it. An objective
-    that predicts states is refused: its teacher reads the same table and would not be grown.
-
-    Raises:
-        ValueError: If the objective predicts states.
-    """
-    if isinstance(model, LatentPrediction):
-        raise ValueError("an objective that predicts states is read on its own corpora only")
-    model.encoder.grown_to(vocabulary_size)
-    return model
-
-
 def readers_of(
     model: PretrainingObjective, initial: PretrainingObjective | None, *, layers: int
 ) -> dict[str, Reader]:
@@ -370,13 +354,6 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         "--blocks", type=Path, default=BLOCKS, help="where blocks are fetched to and mapped from"
     )
     return parser.parse_args(argv)
-
-
-def _backbone_id(text: str, option: str) -> BackboneId:
-    try:
-        return BackboneId(UUID(text))
-    except ValueError as error:
-        raise SystemExit(f"{option} must be a backbone's id: {error}") from error
 
 
 def main(argv: Sequence[str] | None = None) -> None:

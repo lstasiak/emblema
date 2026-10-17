@@ -207,6 +207,29 @@ def test_rows_grown_for_the_tasks_new_channels_train_under_every_mode(
     assert sum(p.numel() for p in built.trainable_parameters()) == trainable
 
 
+def test_a_slowed_encoder_learns_at_its_share_and_the_head_and_grown_rows_at_the_rate() -> None:
+    built = grown(TransferMode.FULL_FINE_TUNING)
+
+    groups = built.parameter_groups(1e-3, encoder_share=0.1)
+
+    assert [group["lr"] for group in groups] == [1e-3, 1e-4]
+    at_rate, slowed = (group["params"] for group in groups)
+    assert sum(p.numel() for p in at_rate) == HEAD + GROWN_ROWS
+    assert sum(p.numel() for p in slowed) == ENCODER
+    assert {id(p) for p in at_rate} | {id(p) for p in slowed} == {
+        id(p) for p in built.trainable_parameters()
+    }
+
+
+def test_under_the_whole_rate_the_optimiser_is_handed_one_group_of_everything_trainable() -> None:
+    built, _ = candidate(TransferMode.FULL_FINE_TUNING)
+
+    (group,) = built.parameter_groups(1e-3, encoder_share=1.0)
+
+    assert group["lr"] == 1e-3
+    assert group["params"] == built.trainable_parameters()
+
+
 def test_a_grown_candidate_answers_windows_over_the_tasks_new_channels() -> None:
     built = grown(TransferMode.FROZEN_PROBE)
     batch = random_batch(3, 9, seed=2)
