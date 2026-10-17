@@ -518,6 +518,13 @@ def test_fitting_the_rows_moves_the_chosen_rows_and_nothing_else(control: Contro
     # Channels 2 and 3 occur in the control's windows; the grown rows, past its vocabulary,
     # cannot, so a gradient reaches the chosen rows that are read and nothing else.
     chosen = [2, 3, control.vocabulary_size + 1]
+    learnt = "encoder.channel_embedding.learnt.table.weight"
+    grown_rows = "encoder.channel_embedding.grown.weight"
+    # The fit is asked with the learnt table frozen and the model in training mode, to see
+    # that it leaves both as it found them.
+    dict(model.named_parameters())[learnt].requires_grad_(False)
+    model.train()
+    took_gradients = {name: p.requires_grad for name, p in model.named_parameters()}
 
     losses = unset_rows_fitted(
         model, chosen, corpus.training, WITHOUT_TAIL, SQUARED, device="cpu", steps=3, batch_size=4
@@ -526,8 +533,6 @@ def test_fitting_the_rows_moves_the_chosen_rows_and_nothing_else(control: Contro
     assert len(losses) == 3
     assert all(value > 0.0 for value in losses)
     after = model.state_dict()
-    learnt = "encoder.channel_embedding.learnt.table.weight"
-    grown_rows = "encoder.channel_embedding.grown.weight"
     assert not torch.equal(after[learnt][[2, 3]], before[learnt][[2, 3]])
     others = [row for row in range(before[learnt].shape[0]) if row not in (2, 3)]
     assert torch.equal(after[learnt][others], before[learnt][others])
@@ -535,7 +540,8 @@ def test_fitting_the_rows_moves_the_chosen_rows_and_nothing_else(control: Contro
     for name, value in before.items():
         if name not in (learnt, grown_rows):
             assert torch.equal(after[name], value), name
-    assert not any(parameter.requires_grad for parameter in model.parameters())
+    assert {name: p.requires_grad for name, p in model.named_parameters()} == took_gradients
+    assert model.training
 
 
 ROWS = "encoder.channel_embedding.table.weight"

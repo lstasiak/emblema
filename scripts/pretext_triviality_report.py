@@ -278,7 +278,10 @@ def unset_rows_fitted(
     A batch whose activations do not fit the device at once is scored ``chunk`` windows at a
     time under the masks drawn for the whole batch, each chunk's summed error divided by the
     batch's count of hidden tokens, so the step's gradient and loss are the whole batch's up to
-    the order of a floating-point sum.
+    the order of a floating-point sum. The model is scored in evaluation mode, the forward pass
+    the rows are read with afterwards, so that equality does not depend on a dropout the
+    configuration may set. The model's mode and which of its parameters take gradients are as
+    they were when this returns, whether the fit ends or fails.
 
     Returns:
         The mean loss on hidden tokens of each step's batch, in the order taken.
@@ -300,14 +303,14 @@ def unset_rows_fitted(
         for channel_id in chosen:
             if channel_id > learnt.vocabulary_size:
                 beyond[channel_id - learnt.vocabulary_size - 1] = 1.0
-    for parameter in model.parameters():
-        parameter.requires_grad_(False)
     fitted = [learnt.table.weight]
     if isinstance(table, GrownChannelEmbedding):
         fitted.append(table.grown.weight)
-    for weight in fitted:
-        weight.requires_grad_(True)
-    model = model.to(device).train()
+    took_gradients = [parameter.requires_grad for parameter in model.parameters()]
+    was_training = model.training
+    for parameter in model.parameters():
+        parameter.requires_grad_(any(parameter is weight for weight in fitted))
+    model = model.to(device).eval()
     within = within.to(device)
     beyond = beyond.to(device) if beyond is not None else None
     optimiser = torch.optim.Adam(fitted, lr=learning_rate)
@@ -315,38 +318,41 @@ def unset_rows_fitted(
     loader = WindowLoader(windows, batch_size=batch_size, seed=seed, shuffle=True)
     losses: list[float] = []
     epoch = 0
-    while len(losses) < steps:
-        for batch in loader.batches_of(epoch):
-            if len(losses) == steps:
-                break
-            masks = masking.draw(batch, torch.Generator().manual_seed(seed * 1_000 + len(losses)))
-            batch, masks = batch.to(device), masks.to(device)
-            tokens = (masks.hidden & ~batch.padding_mask).sum().clamp(min=1)
-            optimiser.zero_grad()
-            mean = torch.zeros((), device=device)
-            stride = chunk or batch.batch_size
-            for start in range(0, batch.batch_size, stride):
-                stop = start + stride
-                score = model.score(
-                    narrowed(batch, start, stop), narrowed(masks, start, stop), loss
-                )
-                part = score.error / tokens
-                torch.autograd.backward(part)
-                mean += part.detach()
-            if learnt.table.weight.grad is not None:
-                learnt.table.weight.grad.mul_(within)
-            if (
-                beyond is not None
-                and isinstance(table, GrownChannelEmbedding)
-                and table.grown.weight.grad is not None
-            ):
-                table.grown.weight.grad.mul_(beyond)
-            optimiser.step()
-            losses.append(float(mean.detach().to("cpu")))
-        epoch += 1
-    for weight in fitted:
-        weight.requires_grad_(False)
-    model.eval()
+    try:
+        while len(losses) < steps:
+            for batch in loader.batches_of(epoch):
+                if len(losses) == steps:
+                    break
+                generator = torch.Generator().manual_seed(seed * 1_000 + len(losses))
+                masks = masking.draw(batch, generator)
+                batch, masks = batch.to(device), masks.to(device)
+                tokens = (masks.hidden & ~batch.padding_mask).sum().clamp(min=1)
+                optimiser.zero_grad()
+                mean = torch.zeros((), device=device)
+                stride = chunk or batch.batch_size
+                for start in range(0, batch.batch_size, stride):
+                    stop = start + stride
+                    score = model.score(
+                        narrowed(batch, start, stop), narrowed(masks, start, stop), loss
+                    )
+                    part = score.error / tokens
+                    torch.autograd.backward(part)
+                    mean += part.detach()
+                if learnt.table.weight.grad is not None:
+                    learnt.table.weight.grad.mul_(within)
+                if (
+                    beyond is not None
+                    and isinstance(table, GrownChannelEmbedding)
+                    and table.grown.weight.grad is not None
+                ):
+                    table.grown.weight.grad.mul_(beyond)
+                optimiser.step()
+                losses.append(float(mean.detach().to("cpu")))
+            epoch += 1
+    finally:
+        for parameter, took in zip(model.parameters(), took_gradients, strict=True):
+            parameter.requires_grad_(took)
+        model.train(was_training)
     return losses
 
 
@@ -913,7 +919,13 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         metavar="STEPS",
         help="fit the rows of the corpus's own channels for this many steps, the rest frozen",
     )
-    parser.add_argument("--fit-rate", type=float, default=FIT_RATE)
+    parser.add_argument(
+        "--fit-rate",
+        type=float,
+        default=FIT_RATE,
+        metavar="RATE",
+        help="the rate Adam fits the rows at",
+    )
     parser.add_argument(
         "--fit-chunk",
         type=int,
@@ -982,9 +994,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         # The rows no pretraining set are drawn from one seed, so a reading repeats.
         torch.manual_seed(VALIDATION_SEED)
         grown(model, max(stated.vocabulary_size for stated in supplied))
+        manifest = PublishedCorpusManifestJson().decode(store.get(supplied[0].manifest))
+        own = own_channels(manifest.channels, arguments.corpus)
         if arguments.unset_rows == "mean":
-            manifest = PublishedCorpusManifestJson().decode(store.get(supplied[0].manifest))
-            unset_rows_to_mean(model, own_channels(manifest.channels, arguments.corpus))
+            unset_rows_to_mean(model, own)
     elif arguments.unset_rows == "mean":
         raise SystemExit("--unset-rows mean needs --windows-of: a backbone's own rows are all set")
     if arguments.fit_rows and source is backbone:
@@ -1045,10 +1058,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     ):
         started = time.perf_counter()
         if arguments.fit_rows:
-            manifest = PublishedCorpusManifestJson().decode(store.get(supplied[0].manifest))
             fitted = unset_rows_fitted(
                 model,
-                own_channels(manifest.channels, arguments.corpus),
+                own,
                 corpus.training,
                 strategy,
                 configuration.loss,
