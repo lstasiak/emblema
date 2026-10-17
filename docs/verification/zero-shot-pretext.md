@@ -300,7 +300,9 @@ given the same fit, not?
 M1 Pro, MPS, fp32; `data/report/l25c/run.sh`, output under `data/report/l25c/`. The fit as
 declared: 1,000 steps of Adam at 0.01 on batches of 64 of the 2,000 training windows, the
 other weights frozen; 9 minutes a fit on 2019, 29 to 31 on 2012, 49 to 56 on C-MAPSS. The
-reading afterwards on the same 2,000 validation windows as the section above.
+reading afterwards on the same 2,000 validation windows as the section above. The script of
+these commits fitted with the model in training mode; every experiment sets a dropout of 0.0,
+so that is the evaluation pass the script fits in since the review that followed the run.
 
 *Fault, named.* The first fit on 2012 stopped at its first step: the backward pass over a batch
 of 64 windows asked MPS for 40 GiB (`loco2012-on-2012-fit.oom.log`). A window of 2012 holds
@@ -312,7 +314,8 @@ the order of a floating-point sum (`--fit-chunk`; 8 windows on 2012, 4 on C-MAPS
 CPU holds the chunked fit to the whole one within 10⁻⁶). The check: the fit on 2019 repeated in
 chunks of 8 reads 0.292 / 0.180 / 0.145 against the whole batch's 0.292 / 0.180 / 0.145, and
 its loss over the first 200, steps 400 to 600 and the last 400 is 0.271 / 0.219 / 0.217 in
-both. The 2019 readings of the run reproduce the trial's to three places.
+both. The 2019 errors of the run reproduce the trial's to three places; the interval of the
+channel's excess moves by 0.001 with the resamples.
 
 **The reading** (channel hidden whole / block / token; the model's error, and in brackets the
 matched baseline's less the model's, with its 95 % interval over 2,000 resamples of units; a
