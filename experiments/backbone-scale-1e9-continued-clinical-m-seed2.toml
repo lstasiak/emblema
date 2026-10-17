@@ -1,0 +1,36 @@
+# The continuation of backbone-scale-1e9-continued-clinical-m.toml at a second seed, everything
+# else that file to the step: the same stored weights started from, another draw of the masks
+# and of the order the stays are read in. A recipe is screened as the mean of two pretrainings.
+name = "backbone-scale-1e9-continued-clinical-m-seed2"
+tier = "M"
+corpora = ["physionet2012", "physionet2019"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[start]
+weights = "durable/sha256/8e7fa11d299cce959c8ec0f08f7cf1823367a138c267ee07c2451ccf8eb492b9"
+checksum = "sha256:8e7fa11d299cce959c8ec0f08f7cf1823367a138c267ee07c2451ccf8eb492b9"
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as the point was read.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 4
+batch_size = 8
+accumulation_steps = 4
+learning_rate = 1e-4
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 2
+
+[checkpoint]
+every_steps = 2000
