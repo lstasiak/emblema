@@ -972,6 +972,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     store = configured_store(Settings())
     configuration = backbone.configuration
     model: PretrainingObjective
+    if arguments.at_initialisation and configuration.start is not None:
+        raise SystemExit(
+            f"backbone {backbone.id} continued the weights of another backbone: its "
+            "initialisation is that backbone's weights, read with --backbone and its id"
+        )
     if arguments.at_initialisation:
         # The objective drawn as the run drew it, before a step, over the backbone's vocabulary.
         torch.manual_seed(configuration.budget.seed)
