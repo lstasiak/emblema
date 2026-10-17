@@ -356,9 +356,11 @@ intensive-care corpora's interval is [+0.005; +0.025] against a threshold of 0.0
   lies above a true zero about 5 % of the time rather than 2.5 %
   (`docs/verification/verdict-statistics.md`). The confirmed endpoint sits far from that
   boundary; a result near it would need a bias-corrected interval, registered before the run.
-- **Two supervised tasks so far.** Transfer across corpora (leave-one-corpus-out, zero-shot) is not
-  yet measured. The intensive-care task learns from set A only, under half the stays the
-  published benchmarks on this corpus learn from, so its levels are not comparable with theirs.
+- **Two supervised tasks so far.** Transfer across corpora (leave-one-corpus-out) is measured at
+  the pretext (`docs/verification/zero-shot-pretext.md`) and, within one pretraining, on the
+  sepsis task (`docs/verification/task-transfer.md`); neither reading is in the tables above.
+  The intensive-care task learns from set A only, under half the stays the published benchmarks
+  on this corpus learn from, so its levels are not comparable with theirs.
 - **Two kinds of accelerator.** The repeated curve ran budgets 50 and 200 on an A100 and 1,000
   and all on a G4, one kind per budget as registered; the arm from nothing was selected on an
   A100 and the other arms on a G4. Between accelerators an arm drifts by up to 0.7 RMSE.
