@@ -288,3 +288,94 @@ baselines 0.137 / 0.167 / 0.160).
   the target domain does; it is not zero-shot, and the section above is.
 - PhysioNet 2019 was seen before the predictions were written; the test is on the two other
   corpora.
+
+## 2026-10-17 — M1 Pro, MPS: the rows alone, fitted on the corpus never read, measured
+
+**Question.** The one declared above: with the rows of the corpus's own channels, and nothing
+else, fitted on its unlabelled training windows, does the backbone that never read the corpus
+reach the baselines and the backbone that read it, and does the encoder at its initialisation,
+given the same fit, not?
+
+**Conditions.** Commits `5617203f` (PhysioNet 2019) and `5b8dcb51` (the rest); MacBook Pro
+M1 Pro, MPS, fp32; `data/report/l25c/run.sh`, output under `data/report/l25c/`. The fit as
+declared: 1,000 steps of Adam at 0.01 on batches of 64 of the 2,000 training windows, the
+other weights frozen; 9 minutes a fit on 2019, 29 to 31 on 2012, 49 to 56 on C-MAPSS. The
+reading afterwards on the same 2,000 validation windows as the section above.
+
+*Fault, named.* The first fit on 2012 stopped at its first step: the backward pass over a batch
+of 64 windows asked MPS for 40 GiB (`loco2012-on-2012-fit.oom.log`). A window of 2012 holds
+about 2.6 times the tokens of one of 2019 and a window of C-MAPSS 6.4 times, and attention's
+activations grow with the square. From `5b8dcb51` the script scores each batch a few windows
+at a time under the masks drawn for the whole batch, each part's summed error divided once by
+the batch's count of hidden tokens, so the step's gradient and loss are the whole batch's up to
+the order of a floating-point sum (`--fit-chunk`; 8 windows on 2012, 4 on C-MAPSS; a test on
+CPU holds the chunked fit to the whole one within 10⁻⁶). The check: the fit on 2019 repeated in
+chunks of 8 reads 0.292 / 0.180 / 0.145 against the whole batch's 0.292 / 0.180 / 0.145, and
+its loss over the first 200, steps 400 to 600 and the last 400 is 0.271 / 0.219 / 0.217 in
+both. The 2019 readings of the run reproduce the trial's to three places.
+
+**The reading** (channel hidden whole / block / token; the model's error, and in brackets the
+matched baseline's less the model's, with its 95 % interval over 2,000 resamples of units; a
+kind is learnt when the interval lies above zero).
+
+| Corpus | Zero-shot, rows drawn | Rows fitted 1,000 steps | The backbone that read it | At initialisation, rows fitted |
+|---|---|---|---|---|
+| 2019, channel | 0.469 (−0.181) | 0.292 (−0.004 [−0.008; +0.001]) | 0.271 (+0.017) | 0.370 (−0.083) |
+| 2019, block | 0.404 (−0.178) | **0.180 (+0.046 [+0.041; +0.051])** | 0.162 (+0.063) | 0.396 (−0.171) |
+| 2019, token | 0.359 (−0.202) | **0.145 (+0.012 [+0.007; +0.017])** | 0.125 (+0.032) | 0.400 (−0.242) |
+| 2012, channel | 0.404 (−0.146) | **0.248 (+0.010 [+0.004; +0.017])** | 0.243 (+0.015) | 0.354 (−0.096) |
+| 2012, block | 0.348 (−0.120) | **0.145 (+0.083 [+0.078; +0.088])** | 0.142 (+0.086) | 0.341 (−0.113) |
+| 2012, token | 0.306 (−0.161) | **0.119 (+0.026 [+0.022; +0.030])** | 0.113 (+0.032) | 0.365 (−0.220) |
+| C-MAPSS, channel | 0.344 (−0.207) | **0.114 (+0.022 [+0.005; +0.048])** | 0.110 (+0.027) | 0.326 (−0.189) |
+| C-MAPSS, block | 0.332 (−0.165) | **0.102 (+0.065 [+0.062; +0.068])** | 0.100 (+0.067) | 0.321 (−0.154) |
+| C-MAPSS, token | 0.330 (−0.170) | **0.103 (+0.057 [+0.053; +0.061])** | 0.101 (+0.059) | 0.326 (−0.166) |
+
+The matched baselines: 2019 0.288 / 0.226 / 0.157, 2012 0.258 / 0.228 / 0.145, C-MAPSS
+0.137 / 0.167 / 0.160.
+
+**The fit's loss**, mean over the first 200 steps, steps 400 to 600 and the last 400.
+
+| Fit | 2019 | 2012 | C-MAPSS |
+|---|---|---|---|
+| the backbone that left the corpus out | 0.271 / 0.219 / 0.217 | 0.228 / 0.183 / 0.178 | 0.124 / 0.081 / 0.080 |
+| the encoder at its initialisation | 0.402 / 0.387 / 0.384 | 0.363 / 0.346 / 0.342 | 0.249 / 0.239 / 0.236 |
+
+**Predictions.**
+
+1. *Block and token learnt on both corpora.* Holds: 2012 +0.083 and +0.026, C-MAPSS +0.065
+   and +0.057, every interval above zero. On both the channel hidden whole is learnt too
+   (+0.010 [+0.004; +0.017] and +0.022 [+0.005; +0.048]), which 2019 did not give.
+2. *Within 0.03 of the backbone that read the corpus on block and token, 0.05 on the
+   channel.* Holds, by a wide margin: 0.003 to 0.006 behind on 2012, 0.002 to 0.004 on
+   C-MAPSS, against 0.018 to 0.021 on 2019.
+3. *The initialisation, given the same fit, stays beaten by more than 0.05.* Holds: by 0.11
+   to 0.25 on 2012 and 0.21 to 0.22 on C-MAPSS. On C-MAPSS the fit moves the initialisation
+   by 0.09 to 0.10, from 0.42 to 0.32, and leaves it at the channel-mean baseline.
+4. *Convergence.* Holds on every fit: the last 400 steps lie 0.001 to 0.005 below steps
+   400 to 600.
+
+**Conclusions.**
+
+- The encoder's machinery transfers to a corpus it never read. Once the corpus's channels
+  have identities fitted without labels, the backbone that left the corpus out reads it
+  within 0.006 of the backbone that read it on 2012 and C-MAPSS, and beats every baseline
+  there; on 2019 it stays 0.02 behind and matches the cross-channel baseline on a channel
+  hidden whole. The rows that no pretraining set were what failed zero-shot.
+- The rows alone do not do it: the same fit on the encoder at its initialisation stays 0.08
+  to 0.25 behind, at or below the channel-mean baseline on every kind.
+- The fit is cheap and converges: the corpus's own rows (39 on 2019), 1,000 steps on 2,000
+  unlabelled windows, 9 to 56 minutes on this machine's accelerator.
+- The few-shot forecasting task reopens with the rows' fit as its adaptation, and the
+  identity of channels across corpora is the next direction: what the fitted rows are,
+  against the rows the backbone learnt for like channels. For the evaluation, a frozen probe
+  on a corpus the backbone never read should fit its grown rows the same way first; whether
+  that moves the probe at 500 stays is a declared reading of its own.
+
+**Limitations.**
+
+- One seed, rate and number of steps of the fit, chosen on 2019; one pretraining per
+  left-out corpus, so the 0.006 gap to the seen backbone carries no error between pretrainings.
+- The fit sees the corpus's training windows without labels; it is unsupervised adaptation,
+  not zero-shot.
+- The check of the chunked fit is one reading on 2019; the 2012 and C-MAPSS fits were not run
+  whole, since they cannot be here.
