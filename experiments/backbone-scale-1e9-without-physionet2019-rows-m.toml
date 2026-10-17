@@ -1,0 +1,45 @@
+# The point of about 10⁹ observed values without the PhysioNet 2019 stays
+# (backbone-scale-1e9-without-physionet2019-m, 4028de56-…), continued over those stays with the
+# channel table alone free: the rows of 2019's channels fitted on its unlabelled training side
+# under the point's own pretext, every other weight the point's. The diagnostic of
+# docs/verification/zero-shot-pretext.md (2026-10-17) fitted the rows this way and found the
+# pretext restored; this file registers the same fit as a run, so a task can read what the rows
+# carry. The fit's recipe: Adam at a hundredth, neither warm-up nor decay, batches of 64, about
+# a thousand steps — a quarter of the training stays over six epochs — read at the precision
+# the diagnostic read it at, the best epoch kept by the pretext's validation loss as every run
+# keeps it. Its control is the same file without a start (-rows-untrained-m).
+name = "backbone-scale-1e9-without-physionet2019-rows-m"
+tier = "M"
+corpora = ["physionet2019"]
+corpus_fraction = 0.25
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+trained = "channel_rows"
+
+[start]
+weights = "durable/sha256/a7aabcff0bccd7d9253ac72b61bf653a3d54fd4877dc5fec8bd9932cc7afb746"
+checksum = "sha256:a7aabcff0bccd7d9253ac72b61bf653a3d54fd4877dc5fec8bd9932cc7afb746"
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as the point was read.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 6
+batch_size = 16
+accumulation_steps = 4
+learning_rate = 1e-2
+warmup_epochs = 0
+final_lr_fraction = 1.0
+seed = 1
+
+[checkpoint]
+every_steps = 2000

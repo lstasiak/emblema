@@ -1,8 +1,10 @@
 """The experiment files of the curve over the scale of pretraining keep the rules registered for
 it: a task's corpus is read as often at every point, the points of one publication differ in the
 amount of data alone, a point without a corpus differs from the whole point in that corpus
-alone, the larger shape differs from today's in the shape, the micro-batch and the rate, and the
-longer run differs from the whole point in the length of its training alone."""
+alone, the larger shape differs from today's in the shape, the micro-batch and the rate, the
+longer run differs from the whole point in the length of its training alone, and the rows of a
+corpus left out are fitted on it alone, continuing the point without it, with a control that
+differs in the start alone."""
 
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from emblema.pretraining.adapters.experiments.experiment_file import ExperimentF
 from emblema.pretraining.domain.training.experiment_configuration import (
     ExperimentConfiguration,
 )
+from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 
 EXPERIMENTS = Path(__file__).resolve().parents[4] / "experiments"
 CORPORA_OF_THE_TASKS = ("cmapss", "physionet2012", "physionet2019")
@@ -25,6 +28,22 @@ MIXTURE_OF_FOUR = "backbone-mixed4-m"
 LATENT_OBJECTIVE = "backbone-mixed4-latent-m"
 THE_TARGET = {"target", "target_layers", "momentum", "final_momentum"}
 LEFT_OUT = ("physionet2012", "cmapss", "physionet2019")
+ROWS_FITTED = ("physionet2012", "physionet2019")
+# What a fit of the rows states beside the point it continues: how it starts, what it moves,
+# the budget of the fit and the precision it was read at.
+THE_FIT = {
+    "start",
+    "trained",
+    "corpus_fraction",
+    "precision",
+    "epochs",
+    "batch_size",
+    "accumulation_steps",
+    "effective_batch_size",
+    "learning_rate",
+    "warmup_epochs",
+    "final_lr_fraction",
+}
 POINTS = (
     TENTH_POINT,
     SMALLER_POINT,
@@ -146,3 +165,30 @@ def test_the_second_objective_differs_from_the_mixture_of_four_in_the_target_alo
     assert latent.target.is_latent
     assert latent.target.layers == 4
     assert latent.architecture.layers == 6
+
+
+@pytest.mark.parametrize("left_out", ROWS_FITTED)
+def test_the_rows_of_a_corpus_left_out_are_fitted_on_it_alone_continuing_the_point_without_it(
+    left_out: str,
+) -> None:
+    without = f"{WHOLE_POINT[:-2]}-without-{left_out}-m"
+    rows = f"{without[:-2]}-rows-m"
+    point, fit = configured(without), configured(rows)
+
+    assert stated(rows).corpora == (left_out,)
+    assert fit.start is not None
+    assert fit.trained is TrainedParameters.CHANNEL_ROWS
+    assert (fit.budget.warmup_epochs, fit.budget.final_lr_fraction) == (0.0, 1.0)
+    assert fit.budget.effective_batch_size == 64
+    passes = {f"passes.{corpus}" for corpus in CORPORA_OF_THE_TASKS}
+    assert differing(point, fit) <= {"name", *THE_FIT, *passes}
+
+
+@pytest.mark.parametrize("left_out", ROWS_FITTED)
+def test_the_control_of_a_fit_of_the_rows_differs_from_it_in_the_start_alone(left_out: str) -> None:
+    rows = f"{WHOLE_POINT[:-2]}-without-{left_out}-rows-m"
+    untrained = f"{rows[:-2]}-untrained-m"
+
+    assert stated(untrained).corpora == stated(rows).corpora
+    assert configured(untrained).start is None
+    assert differing(configured(rows), configured(untrained)) == {"name", "start"}
