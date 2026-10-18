@@ -141,3 +141,29 @@ above; the predictions quote the ones they need.
   whether the base reads the engines.
 - Comparisons to the initialisation hold within a backbone alone: (G), (H) and the point draw
   it over three vocabularies.
+
+## 2026-10-19 — declared before the run: the continuation at the clinical recipe's peak
+
+**Question.** The continuation at a peak of 1e-4 left the reader where the point stands: (A) and
+(A2) less the point read −0.0003 [−0.007; +0.007] at 500 stays, prediction 2 of the section
+above failing (its measured section follows the yardsticks). Did the rate hold the base in
+place? The rule declared for that outcome is run: one pretraining at 1e-3, the clinical
+recipe's own peak, read before anything is concluded.
+
+**Conditions.** `experiments/backbone-scale-1e9-continued-clinical-high-rate-m.toml`, (A) to the
+step but the peak, seed 1, so its masks and its order of stays are (A)'s; pretrained on this
+machine's accelerator (MPS, fp32) and read with `campaigns/reader-probes-physionet2012.toml` as
+(A) was. One pretraining: a judgement, not a screening.
+
+**Predictions.**
+
+1. Every untrained cell equals the point's to the bit.
+2. The high rate less the point lies within −0.014 and +0.039 at 500 stays: from the point's
+   threshold below to the clinical four's lead over it (0.712 against 0.673) above. A judgement.
+3. The high rate less (A) lies above zero at 500 stays: a rate that moves the weights more moves
+   the reader towards the clinic. A judgement.
+
+**What follows.** If the high rate less the point exceeds the registered threshold for one
+pretraining against one, 2·√(SE² + s²) with s = 0.014, about 0.03, a second seed is pretrained and the two are screened by the registered
+rule. If it does not, the continuation over the task's corpora is closed at both rates: the
+domain does not move the reader of this base, and the work turns to the pretext.
