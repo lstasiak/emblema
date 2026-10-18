@@ -6,7 +6,8 @@ longer run differs from the whole point in the length of its training alone, the
 corpus left out are fitted on it alone, continuing the point without it, with a control that
 differs in the start alone, and the whole point continued over the clinical corpora keeps the
 clinical recipe's effective batch and the shape of its schedule, with a control that differs in
-the parameters moved alone."""
+the parameters moved alone and a second reading at the recipe's peak that differs in the rate
+alone."""
 
 from pathlib import Path
 
@@ -239,3 +240,11 @@ def test_the_control_of_the_continuation_differs_from_it_in_the_parameters_moved
     assert stated(rows).corpora == stated(CONTINUED_ON_CLINICAL).corpora
     assert configured(rows).trained is TrainedParameters.CHANNEL_ROWS
     assert differing(configured(CONTINUED_ON_CLINICAL), configured(rows)) == {"name", "trained"}
+
+
+def test_the_continuation_at_the_recipes_peak_differs_from_it_in_the_rate_alone() -> None:
+    continued = configured(CONTINUED_ON_CLINICAL)
+    high = configured(f"{CONTINUED_ON_CLINICAL[:-2]}-high-rate-m")
+
+    assert high.budget.learning_rate == configured(CLINICAL_RECIPE).budget.learning_rate
+    assert differing(continued, high) == {"name", "learning_rate"}
