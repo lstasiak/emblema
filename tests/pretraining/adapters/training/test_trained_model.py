@@ -4,13 +4,17 @@ import pytest
 
 from emblema.pretraining.adapters.training.exceptions import UnreadableTrainedModelError
 from emblema.pretraining.domain.exceptions import IncompatibleStartError
+from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
-from tests.support.experiments import CHANNELS, LATENT, configuration, windows
+from tests.support.experiments import CHANNELS, CONTRAST, LATENT, configuration, windows
 
 torch = pytest.importorskip("torch")
 
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
+from emblema.pretraining.adapters.objective.contrastive_reconstruction import (  # noqa: E402
+    ContrastiveReconstruction,
+)
 from emblema.pretraining.adapters.objective.latent_prediction import (  # noqa: E402
     LatentPrediction,
 )
@@ -98,14 +102,22 @@ def test_bytes_written_before_a_target_existed_build_the_objective_that_predicts
     stored = torch.load(
         io.BytesIO(TrainedModel.of(stated, CHANNELS, trained).to_bytes()), weights_only=True
     )
-    for key in ("target", "target_layers", "momentum", "final_momentum"):
+    for key in (
+        "target",
+        "target_layers",
+        "momentum",
+        "final_momentum",
+        "contrast_weight",
+        "contrast_temperature",
+    ):
         del stored[key]
     torch.save(stored, buffer)
 
     read = TrainedModel.read(buffer.getvalue())
 
     assert read.target == ObjectiveTarget.value()
-    assert isinstance(read.build(), MaskedReconstruction)
+    assert read.contrast == ContrastiveTerm.none()
+    assert type(read.build()) is MaskedReconstruction
 
 
 def test_a_model_that_predicts_states_is_read_back_with_its_teacher_and_its_target() -> None:
@@ -124,6 +136,27 @@ def test_a_model_that_predicts_states_is_read_back_with_its_teacher_and_its_targ
     with torch.no_grad():
         assert torch.equal(read(batch, masks), trained(batch, masks))
         assert torch.equal(read.targets(batch), trained.targets(batch))
+
+
+def test_a_model_that_contrasts_the_halves_is_read_back_with_its_projection_and_its_term() -> None:
+    stated = configuration(contrast=CONTRAST)
+    torch.manual_seed(6)
+    trained = ObjectiveShape.of(stated, CHANNELS).build().eval()
+    batch = TokenTensors.from_windows(windows(3, seed=9))
+    masks = TokenMasking(stated.masking).draw(batch, torch.Generator().manual_seed(4))
+
+    stored = TrainedModel.read(TrainedModel.of(stated, CHANNELS, trained).to_bytes())
+    read = stored.build()
+
+    assert stored.contrast == CONTRAST
+    assert isinstance(read, ContrastiveReconstruction)
+    assert isinstance(trained, ContrastiveReconstruction)
+    with torch.no_grad():
+        assert torch.equal(read(batch, masks), trained(batch, masks))
+        for mine, theirs in zip(
+            read.contrasted(batch, masks), trained.contrasted(batch, masks), strict=True
+        ):
+            assert torch.equal(mine, theirs)
 
 
 TABLE = "encoder.channel_embedding.table.weight"
@@ -174,4 +207,6 @@ def test_stored_weights_of_another_shape_or_objective_are_not_carried() -> None:
         stored.require_shape_of(configuration(decoder_layers=2))
     with pytest.raises(IncompatibleStartError, match="another target"):
         stored.require_shape_of(configuration(target=LATENT))
+    with pytest.raises(IncompatibleStartError, match="another contrast"):
+        stored.require_shape_of(configuration(contrast=CONTRAST))
     stored.require_shape_of(configuration(name="the same shape under another name"))
