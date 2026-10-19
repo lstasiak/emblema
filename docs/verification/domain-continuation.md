@@ -167,3 +167,128 @@ machine's accelerator (MPS, fp32) and read with `campaigns/reader-probes-physion
 pretraining against one, 2·√(SE² + s²) with s = 0.014, about 0.03, a second seed is pretrained and the two are screened by the registered
 rule. If it does not, the continuation over the task's corpora is closed at both rates: the
 domain does not move the reader of this base, and the work turns to the pretext.
+
+## 2026-10-19 — measured: both peaks on the reader, the yardsticks and FD001
+
+**Question.** The two declared above, read together.
+
+**Conditions.** Orders from `b1047304` (the first declaration, `12ebc03d`, with the register's
+row) and `dff7a45d` (the second); every campaign ran whole and was accepted. The reader's four
+campaigns on this machine (MPS, fp32; 2026-10-18 18:43 to 21:25 and 2026-10-19 01:19 to
+02:14, 53 min each). The yardsticks under (A) and (A2) in one Kaggle session of two T4s, cut
+by its twelve hours with two orders part-way; the other seven on one Colab G4 in five lanes
+under CUDA MPS, 2026-10-19 13:05 to 14:27, those two resumed from the stored results. The
+high rate (`61f82c53-…`, `sha256:9965fe48…`) ran 2,865 s here, kept its last epoch (0.1624 /
+0.1913), reads the pretext 0.005 to 0.011 below the point on both corpora, four times (A)'s
+move, and fills 7.0 directions on 2012 (the point 8.3, (A) 7.7) and 6.7 on 2019 (6.4, 5.8).
+Pairs by `scripts/campaign_pairs_report.py` (`data/report/l23b/pairs.sh`, `pairs-high.sh`),
+paired over stays or engines, seeds 1 to 10, 2,000 resamples; the yardsticks with the floors
+of 0.035 and 0.03.
+
+**The reader** (area under the ROC curve on the half, `frozen_ridge@layer=concat`; the
+difference, candidate less control, with its interval).
+
+| Candidate less control | 200 | 500 | 1,000 | all |
+|---|---|---|---|---|
+| (A)+(A2) − the point | +0.003 [−0.004; +0.009] | −0.000 [−0.007; +0.007] | +0.006 [−0.005; +0.016] | +0.012 [−0.001; +0.025] |
+| (A)+(A2) − (B) | +0.003 [−0.003; +0.010] | +0.001 [−0.006; +0.008] | +0.006 [−0.004; +0.017] | +0.013 [+0.000; +0.026] |
+| (A)+(A2) − the mixture's four | −0.015 [−0.029; −0.002] | −0.025 [−0.039; −0.011] | −0.024 [−0.042; −0.006] | −0.021 [−0.041; +0.000] |
+| (A)+(A2) − the clinical four | −0.026 [−0.042; −0.010] | −0.039 [−0.055; −0.023] | −0.043 [−0.062; −0.024] | −0.041 [−0.063; −0.019] |
+| (B) − the point | −0.001 [−0.002; −0.000] | −0.001 [−0.002; +0.000] | −0.001 [−0.002; +0.001] | −0.001 [−0.003; +0.001] |
+| the high rate − the point | +0.018 [+0.005; +0.031] | **+0.023 [+0.007; +0.038]** | +0.035 [+0.015; +0.055] | +0.034 [+0.011; +0.057] |
+| the high rate − (A) | +0.011 [+0.000; +0.021] | +0.023 [+0.009; +0.037] | +0.025 [+0.006; +0.044] | +0.017 [−0.007; +0.040] |
+| the high rate − the mixture's four | −0.000 [−0.014; +0.013] | −0.002 [−0.016; +0.013] | +0.006 [−0.012; +0.024] | +0.001 [−0.019; +0.021] |
+| the high rate − the clinical four | −0.010 [−0.026; +0.005] | −0.016 [−0.032; −0.001] | −0.013 [−0.032; +0.006] | −0.019 [−0.042; +0.003] |
+| the probe − the initialisation, under (A) | +0.018 [−0.007; +0.042] | −0.008 [−0.029; +0.014] | −0.044 [−0.067; −0.021] | −0.047 [−0.073; −0.021] |
+| the probe − the initialisation, under the high rate | +0.028 [+0.006; +0.051] | +0.015 [−0.005; +0.035] | −0.020 [−0.042; +0.003] | −0.031 [−0.055; −0.005] |
+
+(A) less (A2) at 500 is +0.000 [−0.008; +0.008]; (A)+(A2) less the four-epoch run −0.015
+[−0.035; +0.005], the high rate less it +0.008 [−0.013; +0.028]. The reader reads 0.673 under
+the point, (A), (A2) and (B) alike, 0.696 under the high rate, 0.697 under the mixture's four
+and 0.712 under the clinical four. The threshold for the high rate against the point, one
+pretraining against one, is 2·√(SE² + s²) = 0.032 with SE 0.008.
+
+**The yardsticks** (validation side, the mean of ten seeds; fine-tuning / the probe; the
+network from nothing reads 0.585 to 0.591, 0.602 to 0.607 and 0.657 to 0.669 under every
+backbone of the point's vocabulary, the initialisation's probe 0.524, 0.586 and 0.622).
+
+| Backbone | 20 stays | 50 stays | 200 stays |
+|---|---|---|---|
+| the point | 0.568 / 0.524 | 0.605 / 0.564 | 0.671 / 0.596 |
+| the four-epoch run | 0.555 / 0.526 | 0.600 / 0.602 | 0.679 / 0.635 |
+| the mixture's seeds 1, 2 | 0.565, 0.571 / 0.533, 0.520 | 0.620, 0.626 / 0.591, 0.595 | 0.700, 0.678 / 0.639, 0.661 |
+| (A) | 0.567 / 0.514 | 0.616 / 0.580 | 0.664 / 0.606 |
+| (A2) | 0.566 / 0.529 | 0.606 / 0.575 | 0.656 / 0.603 |
+| (B) | 0.562 / 0.524 | 0.608 / 0.561 | 0.666 / 0.596 |
+
+Paired with the point, fine-tuning under (A) moves −0.001, +0.011 [+0.003; +0.019] and −0.007
+[−0.015; +0.000] at 20, 50 and 200 stays; under (A2) −0.002, +0.001 and −0.015 [−0.023;
+−0.007]; under (B) −0.007, +0.003 and −0.006. At 200 it lies below the mixture's seeds by
+0.014 to 0.043. The probe under (A) lies above the point's by +0.016 [+0.010; +0.022] at 50
+and +0.009 at 200, below it by 0.010 at 20; (B)'s repeats the point's within 0.003.
+
+**FD001 at 50 windows** (RMSE on the validation engines, the mean of ten seeds; the network
+from nothing / the probe / fine-tuning).
+
+| Backbone | from nothing / probe / fine-tuning |
+|---|---|
+| the point | 16.8 / 22.6 / 24.6 |
+| the four-epoch run; the mixture's seeds 1, 2 | — / 24.0; 25.5, 23.5 / 24.0; 22.4, 20.9 |
+| (A), (A2), (B) | 16.8, 17.1, 16.6 / 22.7, 22.2, 22.6 / 24.8, 24.2, 24.8 |
+| (G), the point without C-MAPSS with its rows fitted | 16.7 / 22.6 / 23.1 |
+| (H), the point without C-MAPSS, rows drawn | 17.6 / 22.3 / 23.9 |
+
+The initialisation's probe reads 20.5 over the point's vocabulary and 19.3 over (G)'s. (G) less
+(H): the probe 0.34 worse [−0.70; +1.37], fine-tuning 0.85 better [−0.25; +2.02]. (G) less the
+point: the probe −0.01 [−0.71; +0.67], fine-tuning 1.55 better [+0.84; +2.35]. (B)'s probe on
+FD001 equals the point's to the bit, since (B) moved only the clinic's rows.
+
+**The predictions of 2026-10-18.**
+
+1. *The initialisation to the bit*: **fails in the letter.** Under (A) and (A2) on the Kaggle
+   T4s, 10 of the 30 untrained cells differ from the point's by 2.6 × 10⁻⁷, the same cells by
+   the same amount under both; under (B) on a G4, where the point's own ran, all 30 equal it
+   to the bit, as does every reader and FD001 cell. The device rounds, the configuration is
+   the same; the reading went on by that judgement.
+2. *The continuation gains on the point*: **fails.** −0.000 [−0.007; +0.007] at 500 stays,
+   below +0.007; nor at any other budget.
+3. *The rows alone do not move the point*: **holds.** −0.001 at every budget.
+4. *The base plus the clinic does not reach the clinic alone*: **holds.** −0.039 to the
+   clinical four; −0.025 [−0.039; −0.011] to the mixture's four, inside −0.03 to +0.01.
+5. *The yardsticks*: **holds**: the network from nothing within 0.007 of the point's,
+   fine-tuning at 200 within 0.015 ((A2) at the edge), the probe at 50 and 200 above the
+   point's by 0.006 to 0.016.
+6. *FD001*: **fails on (G) against (H)**, the probe 0.34 worse where it was to be better by
+   the interval; every other edge holds.
+
+**The predictions of 2026-10-19.** 1 **holds** (40 of 40 cells). 2 **holds**: +0.023 inside
+−0.014 to +0.039. 3 **holds**: +0.023 [+0.009; +0.037] over (A). The gain stays under the
+threshold of 0.032: by the rule declared, no second seed.
+
+**Conclusions.**
+
+- Four epochs over the task's corpora at a tenth of the recipe's peak leave the reader at the
+  point, at every budget, as do the same epochs with the encoder frozen: the pretext fell by
+  a hundredth and the states narrowed, and neither moved the probe.
+- At the recipe's own peak the continuation gains +0.023 [+0.007; +0.038] at 500 stays,
+  reaches the mixture's four (−0.002) and stays below the clinical four (−0.016 [−0.032;
+  −0.001]), under the threshold for one pretraining. The continuation is closed at both
+  rates: the base carries nothing the reader sees beyond the domain, and the work turns to
+  the pretext.
+- On the validation side fine-tuning under the continuation lies within 0.015 of the point's
+  at every budget and below the mixture's seeds at 200; the probe at 50 gains 0.011 to 0.016.
+- On FD001 the rows of C-MAPSS fitted without labels read the probe as the point does and no
+  better than rows drawn; fine-tuning gains 1.5 RMSE on the point and 0.9 [−0.3; +2.0] on
+  the drawn rows. The rows carry the pretext on the engines, not a linear reading of the
+  remaining life; four epochs on the clinic cost the engines nothing.
+- The high rate's probe reads above the initialisation at 200 stays, +0.028 [+0.006; +0.051],
+  where every backbone of about 10⁹ values read before lay at or below it; from 1,000 it lies
+  below as the others do.
+
+**Limitations.**
+
+- Two pretrainings at 1e-4 and one at 1e-3; the rule declared stopped at one. The rates are
+  two choices, no sweep.
+- Prediction 1's letter was not met on the T4s, its substance was; the next declaration of
+  its kind says "to the device's precision".
+- The yardsticks and FD001 read the validation side; their comparators are not a rule.
