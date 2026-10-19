@@ -1,0 +1,25 @@
+corpus,channel,counterpart_corpus,counterpart_channel,note
+physionet2019,HR,physionet2012,HR,
+physionet2019,Temp,physionet2012,Temp,
+physionet2019,Resp,physionet2012,RespRate,
+physionet2019,SBP,physionet2012,SysABP,2012 names the invasive line; 2019 does not say
+physionet2019,DBP,physionet2012,DiasABP,2012 names the invasive line; 2019 does not say
+physionet2019,MAP,physionet2012,MAP,2012 names the invasive line; 2019 does not say
+physionet2019,SaO2,physionet2012,SaO2,2019 also carries O2Sat from the pulse oximeter
+physionet2019,FiO2,physionet2012,FiO2,2012 a fraction and 2019 a percentage: a scale the normalisation removes
+physionet2019,pH,physionet2012,pH,
+physionet2019,HCO3,physionet2012,HCO3,
+physionet2019,PaCO2,physionet2012,PaCO2,
+physionet2019,AST,physionet2012,AST,
+physionet2019,Alkalinephos,physionet2012,ALP,
+physionet2019,BUN,physionet2012,BUN,
+physionet2019,Creatinine,physionet2012,Creatinine,
+physionet2019,Glucose,physionet2012,Glucose,
+physionet2019,Bilirubin_total,physionet2012,Bilirubin,2012 does not say total or direct
+physionet2019,Lactate,physionet2012,Lactate,mg/dL against mmol/L: a scale the normalisation removes
+physionet2019,Magnesium,physionet2012,Mg,2019's unit is documented as mmol/dL
+physionet2019,Potassium,physionet2012,K,
+physionet2019,Platelets,physionet2012,Platelets,
+physionet2019,WBC,physionet2012,WBC,
+physionet2019,Hct,physionet2012,HCT,
+physionet2019,TroponinI,physionet2012,TroponinI,

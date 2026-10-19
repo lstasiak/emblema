@@ -382,3 +382,118 @@ The matched baselines: 2019 0.288 / 0.226 / 0.157, 2012 0.258 / 0.228 / 0.145, C
   not zero-shot.
 - The check of the chunked fit is one reading on 2019; the 2012 and C-MAPSS fits were not run
   whole, since they cannot be here.
+
+## 2026-10-19 — declared before the run: what the fitted rows are
+
+**Question.** The section above restored the pretext on a corpus the backbone never read by
+fitting the rows of that corpus's channels alone. Is a fitted row the identity of a quantity,
+so that the row of 2019's heart rate lies near the row the backbone learnt for 2012's, or the
+corpus's own? If the quantity's, a backbone reads a new corpus through a map of counterparts
+instead of a fit, and a channel embedding shared across corpora is a knob of the pretraining;
+if the corpus's, the fit without labels stays the adaptation.
+
+**The data.**
+
+- *The tables.* `scripts/channel_identity_report.py`: for each pair of
+  `docs/verification/channel-counterparts.csv` (24 channels of PhysioNet 2019 and the channel
+  of 2012 that is the same quantity; six pairs carry a note that says why they are doubtful),
+  the counterpart's rank by cosine among every measured row of its corpus, in three readings —
+  the rows as they are, the rows centred by the candidates' mean, and the fitted row's shift
+  from where its run started it — with a percentile bootstrap over pairs and a permutation
+  that gives every pair a random candidate; the share of counterparts within the first three
+  (`TOP`), since a corpus's pressures lie near one another. The fitted rows are those of the
+  registered continuations of 2026-10-17 (`task-transfer.md`), whose pretext repeats the
+  section above's fit to 0.002: 2019's rows under the backbone without 2019 (`7d9beac7-…`),
+  2012's under the one without 2012 (`8d29b0e6-…`), and C-MAPSS's under the one without it
+  (`f6193117-…`, 2026-10-18). Beside them, within one corpus: the cuff against the line in
+  2012 (`channel-counterparts-within-2012.csv`, three pairs) and each turbofan sensor against
+  itself under the other five flight conditions (`--family`, 630 pairs among 125 rows); and
+  C-MAPSS's fitted rows against 2012's learnt ones, where no counterpart exists, read by the
+  largest cosine a row reaches, beside 1,000 rows drawn as the table draws them.
+- *The pretext under the map.* `pretext_triviality_report.py --unset-rows map` on the backbone
+  without 2019, on 2019 through the point's windows: the 24 mapped rows copied from the rows
+  learnt for their counterparts, the other rows at the mean (`map-mean`) or drawn (`map`);
+  the same under the map permuted (`data/report/l25d/counterparts-permuted.csv`, every
+  channel given another's counterpart from seed 1), the control that says what a learnt row
+  of the wrong quantity carries; and, for the first time, the tokens of the mapped channels
+  tallied apart (`kinds-mapped.csv`) under every reading, the mean rows, the drawn rows, the
+  fitted rows of `7d9beac7-…` and the point that read the corpus among them, so that the
+  comparison is on the tokens the map reaches. The same on 2012 with the map read the other
+  way. `data/report/l25d/run.sh`; about twenty readings, each under a minute.
+- *Read before this was written.* The point `803b82eb-…`, which read both corpora, as the
+  reference for what the learnt rows do (`data/report/l25d/point-*`); the script's trial on
+  five pairs of `7d9beac7-…` (`trial-rows2019-5pairs`); and the map mode's trial on the
+  backbone without 2019 under a permuted map of the same five pairs
+  (`trial-loco2019-permuted5`).
+
+**What was read before**, the point's own learnt rows (share within three [bootstrap], median
+rank, p of the permutation):
+
+| Pairs | Candidates | Raw | Centred |
+|---|---|---|---|
+| 2019 → 2012, 24 | 37 | 0.04 [0.00; 0.12], 21.5, 0.88 | 0.04 [0.00; 0.12], 21.5, 0.86 |
+| 2012 → 2019, 24 | 34 | 0.12 [0.00; 0.25], 21.5, 0.37 | 0.12 [0.00; 0.29], 22.0, 0.36 |
+| 2012, cuff → line, 3 | 36 | 1.00, 1.0, 0.002 | 1.00, 1.0, < 0.001 |
+| C-MAPSS, sensor → the same under another condition, 630 | 125 | 0.21 [0.17; 0.24], 11, < 0.001 | 0.21 [0.18; 0.24], 11, < 0.001 |
+
+Chance puts 3 of 37 within three, 0.08, and 3 of 125, 0.024. The largest centred cosine a
+drawn row reaches among 2012's rows: median +0.13, 95th percentile +0.19. So the rows the
+backbone learnt put the same quantity together within a corpus — the cuff beside the line,
+a sensor beside itself under another condition — and not across the two intensive-care
+corpora: 2019's heart rate is no nearer 2012's than 2012's other channels. The trial on five
+fitted rows of 2019 (HR, Temp, SBP, MAP, DBP) placed their counterparts 16th to 42nd of 44
+under every reading, the rows having moved 11 to 13 units from draws of 16 to 17. The permuted
+five-pair map on the backbone without 2019 read 0.465 / 0.366 / 0.337 over the corpus, and on
+the five channels alone 0.454 / 0.285 / 0.228 against 0.483 / 0.478 / 0.485 on the rest at the
+mean: a learnt row of the wrong quantity already reads far better than the mean row.
+
+**Predictions.** No interval read before covers a rank or a cosine; the thresholds below are
+judgements anchored on the reference, and say so.
+
+1. *Across corpora the fitted rows find no counterpart.* On 2019 → 2012 and 2012 → 2019 the
+   share within three lies at chance under every reading — its bootstrap interval covers
+   0.08 (2019 → 2012) or 0.09 (2012 → 2019) and the permutation gives p > 0.05 — as the
+   point's own rows do (0.04 to 0.12). A judgement from the reference and the five-pair trial.
+2. *Within a corpus the fit recovers the structure the learnt rows have.* The fitted rows of
+   C-MAPSS put a sensor beside itself under another condition at a share above 0.10 under
+   the shifted reading (chance 0.024, the point 0.21), p < 0.01; the fitted rows of 2012 put
+   the cuff within three of the line for at least two of the three pairs. A judgement at half
+   the reference's strength.
+3. *A fitted row with no counterpart reaches no learnt row.* The median largest centred cosine
+   of C-MAPSS's fitted rows among 2012's learnt rows lies at or below +0.19, the drawn rows'
+   95th percentile.
+4. *The map carries the row, not the quantity.* On the 24 mapped channels' tokens of 2019, the
+   right map reads within ±0.02 of the permuted map on the block and the token, and both lie
+   more than 0.05 above the fitted rows of `7d9beac7-…` on the same tokens; over the whole
+   corpus `map-mean` reads at least 0.05 below the mean rows on the block and the token
+   (0.472 / 0.473), as the permuted trial did (0.366 / 0.337). The same on 2012. A judgement
+   from the trial.
+
+**What follows.**
+
+- If 1, 3 and 4 hold: a channel's identity in this backbone is the corpus's, not the
+  quantity's; a map of counterparts is no way to read a new corpus and a shared channel
+  embedding is no knob of the next pretraining; the fit without labels stays the adaptation
+  (ADR-0057). Prediction 2 then says whether a fitted row is a row of the same kind as a
+  learnt one or a nuisance parameter: if 2 fails, the cosine readings of fitted rows say
+  nothing about them, and only the pretext does.
+- If 1 fails — the fitted rows find counterparts the point's own rows do not: the fit on a
+  frozen encoder lands on a quantity's direction the joint pretraining spread; the map
+  reading is then the test of use, and 4 is read first.
+- If 4 fails — the right map beats the permuted one by more than 0.05 on the mapped tokens:
+  the quantity's identity carries across corpora in use though not in cosine; the rows of a
+  new corpus start from their counterparts before the fit, a knob declared for the next
+  pretraining.
+- A reading that refuses is named and left out.
+
+**Limitations.**
+
+- One fitted table per corpus, one seed of each fit; the C-MAPSS rows were fitted under a
+  shorter schedule than the clinical ones (900 steps at 16 × 4 against 6 epochs).
+- The map is one reading of "the same quantity": six pairs are doubtful and are read with and
+  without; a counterpart in the other corpus may be sampled on another cadence, which the
+  row may encode, so a failure of 1 does not say whether the identity is the corpus's or its
+  cadence's.
+- The reference and two trials were seen before the predictions; the thresholds are
+  judgements, not intervals.
+- 24 pairs: a share within three of 0.25 or more is told from chance, one of 0.15 is not.
