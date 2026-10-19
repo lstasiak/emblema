@@ -22,7 +22,14 @@ unlike any it saw. The encoder at its initialisation (``--at-initialisation``) i
 of either reading. The rows alone can be fitted on the corpus's unlabelled training windows
 under the pretext, every other weight frozen (``--fit-rows STEPS``): what the encoder's
 machinery carries once the corpus's channels have an identity it chose, read on the same
-validation windows; the losses of the fit go to ``fit.csv``.
+validation windows; the losses of the fit go to ``fit.csv``. Or a row can be copied from the
+row the backbone learnt for the same quantity in a corpus it read (``--unset-rows map`` with
+``--map FILE``, the counterparts one per line; ``map-mean`` sets the rows the map does not
+name to the mean, ``map`` leaves them drawn): whether a channel's identity is the quantity's,
+shared across corpora, or the corpus's own. Under a map the tokens of the channels it names are
+tallied apart as well (``tallies-mapped.csv``, ``kinds-mapped.csv``), since the map reaches
+those channels alone; ``--map`` with any other rows copies nothing and tallies those channels
+apart all the same, which reads a backbone that set the rows itself on the same tokens.
 
     uv run --env-file .env.r2 scripts/pretext_triviality_report.py --backbone <id>
     uv run --env-file .env.r2 scripts/pretext_triviality_report.py --backbone <id>
@@ -102,6 +109,7 @@ from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.adapters.windows.window_block import WindowBlock
 from emblema.shared.kernel.tokens import PADDING_CHANNEL_ID, TokenWindow
 from emblema.shared.ports.artifact_store import ArtifactStore
+from scripts.channel_identity_report import Counterpart, read_map, swapped
 from scripts.corpus_saturation_report import BLOCKS
 from scripts.excursion_report import fetched_block, sides_of
 from scripts.masked_reconstruction_report import DEVICES, device_available
@@ -122,6 +130,7 @@ RESAMPLES = 2_000
 VALIDATION_SEED = 1
 FIT_SEED = 2
 SETTINGS, CORPORA, TALLIES, KINDS = "settings.csv", "corpora.csv", "tallies.csv", "kinds.csv"
+TALLIES_MAPPED, KINDS_MAPPED = "tallies-mapped.csv", "kinds-mapped.csv"
 FIT = "fit.csv"
 # The rate the rows alone are fitted at: a row starts where torch drew it, at unit scale, and
 # the learnt rows lie within a few units of each other, so a hundredth a step reaches them in
@@ -142,6 +151,7 @@ class CorpusWindows:
         corpus: Name the corpus is registered under.
         vocabulary_size: Entries of the channel vocabulary the backbone was pretrained over.
         channels_apart: Channels the verdict leaves aside: timeless ones and ones that never vary.
+        channel_ids: The corpus's own channels, which a map's tally stands apart from.
         training: Windows the linear baselines are fitted on.
         validation: Windows the model and the baselines are scored on.
         validation_units: The unit each validation window was cut from, in that order.
@@ -155,6 +165,7 @@ class CorpusWindows:
     validation: Sequence[TokenWindow]
     validation_units: tuple[str, ...]
     block_checksum: str
+    channel_ids: frozenset[int]
 
     @classmethod
     def of(
@@ -181,6 +192,7 @@ class CorpusWindows:
             validation=[validation.windows[position] for position in kept],
             validation_units=tuple(validation.units[position] for position in kept),
             block_checksum=str(manifest.block.checksum),
+            channel_ids=frozenset(own_channels(manifest.channels, corpus)),
         )
 
 
@@ -231,6 +243,97 @@ def unset_rows_to_mean(model: PretrainingObjective, channel_ids: Iterable[int]) 
                 table.grown.weight[channel_id - learnt.vocabulary_size - 1] = mean
             else:
                 raise ValueError(f"channel {channel_id} lies past a table that was not grown")
+
+
+def named_channels(
+    channels: Iterable[PublishedChannel], corpus: str, pairs: Iterable[Counterpart]
+) -> list[int]:
+    """The channels of ``corpus`` a map asks about, for a tally that copies nothing.
+
+    Raises:
+        ValueError: If a pair asks about a channel of another corpus or one the manifest lacks.
+    """
+    ids = {(channel.corpus, channel.channel): channel.channel_id for channel in channels}
+    named = []
+    for pair in pairs:
+        if pair.corpus != corpus:
+            raise ValueError(f"{pair.corpus}/{pair.channel} is not a channel of {corpus}")
+        if (pair.corpus, pair.channel) not in ids:
+            raise ValueError(f"the manifest names no row for {pair.corpus}/{pair.channel}")
+        named.append(ids[(pair.corpus, pair.channel)])
+    return named
+
+
+def vocabulary_of(backbone: Backbone, store: ArtifactStore) -> list[PublishedChannel]:
+    """Every channel of the backbone's own chain, from the manifest that reached furthest.
+
+    A corpus from the middle of the chain is published under a shorter vocabulary than the
+    backbone's; its counterparts in a later corpus are named by the backbone's widest manifest.
+    """
+    widest = max(backbone.inputs, key=lambda stated: stated.vocabulary_size)
+    return list(PublishedCorpusManifestJson().decode(store.get(widest.manifest)).channels)
+
+
+def corpora_channels_of(
+    backbone: Backbone, store: ArtifactStore, corpus: str
+) -> list[PublishedChannel]:
+    """The channels the manifest of ``corpus``, as the backbone read it, names."""
+    for stated in backbone.inputs:
+        if stated.corpus == corpus:
+            return list(PublishedCorpusManifestJson().decode(store.get(stated.manifest)).channels)
+    raise ValueError(f"backbone {backbone.id} did not read {corpus}")
+
+
+def unset_rows_from_counterparts(
+    model: PretrainingObjective,
+    channels: Iterable[PublishedChannel],
+    own: Iterable[int],
+    pairs: Iterable[Counterpart],
+) -> list[int]:
+    """Set each mapped row of the corpus's own channels to the learnt row of its counterpart.
+
+    The query of every pair must be one of ``own``, the channels no pretraining set, and its
+    counterpart a channel of another corpus whose row the backbone learnt: a row within the
+    learnt table and outside ``own``. Rows the map does not name are left as they are.
+
+    Returns:
+        The identifiers of the rows set, in the map's order.
+
+    Raises:
+        ValueError: If a pair names a channel the manifest lacks, a query that is not one of the
+            corpus's own channels, or a counterpart whose row no pretraining set.
+    """
+    table = model.encoder.channel_embedding
+    learnt = table.learnt if isinstance(table, GrownChannelEmbedding) else table
+    if not isinstance(learnt, LearnedChannelEmbedding):
+        raise ValueError(f"only a learnt channel table has unset rows, not {type(learnt).__name__}")
+    ids = {(channel.corpus, channel.channel): channel.channel_id for channel in channels}
+    unset = set(own)
+    mapped = []
+    with torch.no_grad():
+        for pair in pairs:
+            query = ids.get((pair.corpus, pair.channel))
+            counterpart = ids.get((pair.counterpart_corpus, pair.counterpart_channel))
+            if query is None or counterpart is None:
+                raise ValueError(f"the manifest names no row for a channel of the pair {pair}")
+            if query not in unset:
+                raise ValueError(
+                    f"{pair.corpus}/{pair.channel} is not a channel of the corpus never read"
+                )
+            if counterpart in unset or counterpart > learnt.vocabulary_size:
+                raise ValueError(
+                    f"no pretraining set the row of {pair.counterpart_corpus}/"
+                    f"{pair.counterpart_channel}, so it is no counterpart"
+                )
+            row = learnt.table.weight[counterpart].detach().clone()
+            if query <= learnt.vocabulary_size:
+                learnt.table.weight[query] = row
+            elif isinstance(table, GrownChannelEmbedding):
+                table.grown.weight[query - learnt.vocabulary_size - 1] = row
+            else:
+                raise ValueError(f"channel {query} lies past a table that was not grown")
+            mapped.append(query)
+    return mapped
 
 
 def supplied_by(source: Backbone, backbone: Backbone, corpus: str) -> list[PretrainingInput]:
@@ -405,11 +508,42 @@ def diagnose(
     before it is widened. The baselines are fitted on the training windows under masks of another
     seed.
     """
+    [tallies] = diagnose_each(
+        model,
+        strategy,
+        loss,
+        corpus,
+        [corpus.channels_apart],
+        device=device,
+        batch_size=batch_size,
+        validation_seed=validation_seed,
+        fit_seed=fit_seed,
+    )
+    return tallies
+
+
+def diagnose_each(
+    model: MaskedReconstruction,
+    strategy: MaskingStrategy,
+    loss: ObjectiveLoss,
+    corpus: CorpusWindows,
+    apart: Sequence[frozenset[int]],
+    *,
+    device: str,
+    batch_size: int = BATCH_SIZE,
+    validation_seed: int = VALIDATION_SEED,
+    fit_seed: int = FIT_SEED,
+) -> list[tuple[MaskKindTally, ...]]:
+    """``diagnose`` once per set of channels tallied apart, over one pass of predictions.
+
+    A second set that holds every channel but the ones a map names tallies those alone on the
+    other side, from the same predictions and under the same masks.
+    """
     fit = fitted_batches(corpus.training, strategy, batch_size=batch_size, seed=fit_seed)
     interpolation = LinearInterpolationBaseline()
     ridge = CrossChannelRidgeBaseline.fitted(fit, vocabulary_size=corpus.vocabulary_size)
     combined = OwnAndCrossChannelRidgeBaseline.fitted(fit, vocabulary_size=corpus.vocabulary_size)
-    diagnostic = TrivialityDiagnostic(loss, channels_apart=corpus.channels_apart)
+    diagnostics = [TrivialityDiagnostic(loss, channels_apart=channels) for channels in apart]
     masking = TokenMasking(strategy)
     loader = WindowLoader(
         corpus.validation, batch_size=batch_size, seed=validation_seed, shuffle=False
@@ -424,16 +558,16 @@ def diagnose(
                 batch, torch.Generator().manual_seed(validation_seed * 1_000 + index)
             )
             predicted = model(batch.to(device), masks.to(device)).detach().to("cpu")
-            diagnostic = diagnostic.observe(
-                batch,
-                masks,
-                units,
-                model=predicted,
-                interpolation=interpolation.predict(batch, masks),
-                ridge=ridge.predict(batch, masks),
-                combined=combined.predict(batch, masks),
-            )
-    return diagnostic.tallies()
+            predictions = {
+                "interpolation": interpolation.predict(batch, masks),
+                "ridge": ridge.predict(batch, masks),
+                "combined": combined.predict(batch, masks),
+            }
+            diagnostics = [
+                diagnostic.observe(batch, masks, units, model=predicted, **predictions)
+                for diagnostic in diagnostics
+            ]
+    return [diagnostic.tallies() for diagnostic in diagnostics]
 
 
 def summarise(
@@ -656,20 +790,22 @@ def read_settings(directory: Path) -> dict[str, str]:
     return {row["key"]: row["value"] for row in read_rows(directory / SETTINGS)}
 
 
-def write_tallies(directory: Path, tallies: Iterable[tuple[str, MaskKindTally]]) -> None:
-    write_rows(directory / TALLIES, TALLY_FIELDS, (tally_record(c, t) for c, t in tallies))
+def write_tallies(
+    directory: Path, tallies: Iterable[tuple[str, MaskKindTally]], name: str = TALLIES
+) -> None:
+    write_rows(directory / name, TALLY_FIELDS, (tally_record(c, t) for c, t in tallies))
 
 
 def read_tallies(directory: Path) -> list[tuple[str, MaskKindTally]]:
     return [parse_tally(record) for record in read_rows(directory / TALLIES)]
 
 
-def write_kinds(directory: Path, rows: Iterable[KindRow]) -> None:
-    write_rows(directory / KINDS, KindRow.FIELDS, (row.record() for row in rows))
+def write_kinds(directory: Path, rows: Iterable[KindRow], name: str = KINDS) -> None:
+    write_rows(directory / name, KindRow.FIELDS, (row.record() for row in rows))
 
 
-def read_kinds(directory: Path) -> list[KindRow]:
-    return [KindRow.parse(record) for record in read_rows(directory / KINDS)]
+def read_kinds(directory: Path, name: str = KINDS) -> list[KindRow]:
+    return [KindRow.parse(record) for record in read_rows(directory / name)]
 
 
 def write_corpora(directory: Path, rows: Iterable[CorpusRow]) -> None:
@@ -785,12 +921,7 @@ def render(directory: Path) -> str:
                 f" The windows of `{settings['corpus']}` are the ones backbone "
                 f"`{settings['windows_of'][:8]}-…` read; this backbone never read it, the "
                 "baselines are fitted on that corpus alone, and its channels pass through rows "
-                "no pretraining set, "
-                + (
-                    "set to the mean of the learnt rows."
-                    if settings.get("unset_rows") == "mean"
-                    else "drawn as the evaluation draws them."
-                )
+                "no pretraining set, " + _rows_text(settings)
                 if "windows_of" in settings
                 else ""
             )
@@ -815,6 +946,15 @@ def render(directory: Path) -> str:
             ),
             corpora_table(read_corpora(directory)),
             kinds_table(read_kinds(directory)),
+            *(
+                (
+                    "On the channels the map names alone (the rows marked apart are every "
+                    "other channel of the corpus):",
+                    kinds_table(read_kinds(directory, KINDS_MAPPED)),
+                )
+                if (directory / KINDS_MAPPED).exists()
+                else ()
+            ),
             "Errors are the run's own reading of the loss on hidden tokens, in normalised units. "
             "Each interval is a bootstrap over validation units under one draw of the masks; a "
             "kind is learnt only when the whole interval of the matched baseline's error less the "
@@ -823,6 +963,19 @@ def render(directory: Path) -> str:
             "Learnt: " + (", ".join(learnt) if learnt else "none") + ".",
         )
     )
+
+
+def _rows_text(settings: dict[str, str]) -> str:
+    rows = settings.get("unset_rows", "drawn")
+    if rows == "mean":
+        return "set to the mean of the learnt rows."
+    if rows.startswith("map"):
+        rest = "set to the mean of the learnt rows" if rows == "map-mean" else "drawn"
+        return (
+            f"the {settings.get('mapped', '?')} the map names copied from the rows learnt for "
+            f"their counterparts, the rest {rest}."
+        )
+    return "drawn as the evaluation draws them."
 
 
 # ------------------------------------------------------------------------------------------------
@@ -903,10 +1056,17 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--unset-rows",
-        choices=("drawn", "mean"),
+        choices=("drawn", "mean", "map", "map-mean"),
         default="drawn",
-        help="rows of channels the backbone never read: drawn, or the mean of the learnt rows",
+        help=(
+            "rows of channels the backbone never read: drawn, the mean of the learnt rows, or "
+            "copied from their counterparts' learnt rows (--map), the rest drawn or at the mean"
+        ),
     )
+    parser.add_argument(
+        "--map", type=Path, metavar="FILE", help="the counterparts, one per line, for map modes"
+    )
+    parser.add_argument("--swap", action="store_true", help="read the map the other way round")
     parser.add_argument(
         "--at-initialisation",
         action="store_true",
@@ -965,6 +1125,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise SystemExit(f"backbone {backbone.id} is not ready: it has no weights")
     # The windows come from this backbone's own inputs unless another's are asked for.
     source = backbone
+    mapped: list[int] = []
     if arguments.windows_of is not None:
         if arguments.corpus is None:
             raise SystemExit("--windows-of needs --corpus, the corpus that backbone supplies")
@@ -1001,10 +1162,37 @@ def main(argv: Sequence[str] | None = None) -> None:
         grown(model, max(stated.vocabulary_size for stated in supplied))
         manifest = PublishedCorpusManifestJson().decode(store.get(supplied[0].manifest))
         own = own_channels(manifest.channels, arguments.corpus)
-        if arguments.unset_rows == "mean":
+        if arguments.unset_rows in ("mean", "map-mean"):
             unset_rows_to_mean(model, own)
-    elif arguments.unset_rows == "mean":
-        raise SystemExit("--unset-rows mean needs --windows-of: a backbone's own rows are all set")
+        if arguments.unset_rows.startswith("map"):
+            if arguments.map is None:
+                raise SystemExit(f"--unset-rows {arguments.unset_rows} needs --map")
+            pairs = read_map(arguments.map)
+            # The counterparts are rows of the backbone's own chain, which may reach past the
+            # corpus's manifest; the corpus's channels come from its own.
+            known = {channel.channel_id: channel for channel in vocabulary_of(backbone, store)}
+            known.update({channel.channel_id: channel for channel in manifest.channels})
+            try:
+                mapped = unset_rows_from_counterparts(
+                    model, known.values(), own, swapped(pairs) if arguments.swap else pairs
+                )
+            except ValueError as error:
+                raise SystemExit(str(error)) from error
+    elif arguments.unset_rows != "drawn":
+        raise SystemExit(
+            f"--unset-rows {arguments.unset_rows} needs --windows-of: a backbone's own rows are "
+            "all set"
+        )
+    tallied_apart: list[int] = list(mapped)
+    if arguments.map is not None and not mapped:
+        if arguments.corpus is None:
+            raise SystemExit("--map needs --corpus, the corpus whose channels it names")
+        pairs = read_map(arguments.map)
+        tallied_apart = named_channels(
+            corpora_channels_of(source, store, arguments.corpus),
+            arguments.corpus,
+            swapped(pairs) if arguments.swap else pairs,
+        )
     if arguments.fit_rows and source is backbone:
         raise SystemExit("--fit-rows needs --windows-of: a backbone's own rows are all set")
     if arguments.fit_rows < 0:
@@ -1042,6 +1230,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         settings["windows_of"] = str(source.id)
         settings["unset_rows"] = arguments.unset_rows
         settings["rows_seed"] = str(VALIDATION_SEED)
+        if mapped:
+            settings["mapped"] = str(len(mapped))
+    if arguments.map is not None:
+        settings["map"] = str(arguments.map)
+        settings["swap"] = "true" if arguments.swap else "false"
+        settings["tallied_apart"] = str(len(tallied_apart))
     if arguments.at_initialisation:
         settings["at_initialisation"] = "true"
     if arguments.fit_rows:
@@ -1052,6 +1246,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             settings["fit_chunk"] = str(arguments.fit_chunk)
     write_settings(directory, settings)
     tallies: list[tuple[str, MaskKindTally]] = []
+    tallies_mapped: list[tuple[str, MaskKindTally]] = []
     rows = []
     for corpus in corpora_of(
         source,
@@ -1081,20 +1276,37 @@ def main(argv: Sequence[str] | None = None) -> None:
                 f"{fitted[-1]:.3f}",
                 file=sys.stderr,
             )
-        found = diagnose(
+        apart = [corpus.channels_apart]
+        if tallied_apart:
+            # Every channel of the corpus but the named ones on the other side: the named
+            # channels' tokens then stand alone as the side not apart.
+            named = frozenset(tallied_apart)
+            others = frozenset(
+                channel_id for channel_id in corpus.channel_ids if channel_id not in named
+            )
+            apart.append(corpus.channels_apart | others)
+        found, *rest = diagnose_each(
             model,
             strategy,
             configuration.loss,
             corpus,
+            apart,
             device=arguments.device,
             batch_size=arguments.batch_size,
         )
         tallies += [(corpus.corpus, tally) for tally in found]
+        if rest:
+            tallies_mapped += [(corpus.corpus, tally) for tally in rest[0]]
         rows.append(CorpusRow.of(corpus, time.perf_counter() - started))
         print(f"{corpus.corpus}: {len(found)} tallies in {rows[-1].seconds:.0f} s", file=sys.stderr)
         write_tallies(directory, tallies)
         write_corpora(directory, rows)
     write_kinds(directory, kinds_of(tallies, resamples=arguments.resamples))
+    if tallies_mapped:
+        write_tallies(directory, tallies_mapped, TALLIES_MAPPED)
+        write_kinds(
+            directory, kinds_of(tallies_mapped, resamples=arguments.resamples), KINDS_MAPPED
+        )
     print(render(directory))
     print(f"\nstored under {directory}")
 

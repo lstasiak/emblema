@@ -1,0 +1,4 @@
+corpus,channel,counterpart_corpus,counterpart_channel,note
+physionet2012,NISysABP,physionet2012,SysABP,the cuff against the line
+physionet2012,NIDiasABP,physionet2012,DiasABP,the cuff against the line
+physionet2012,NIMAP,physionet2012,MAP,the cuff against the line

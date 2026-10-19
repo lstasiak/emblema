@@ -40,17 +40,21 @@ from emblema.shared.adapters.windows.window_block import WindowBlock
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.compute import ComputeTier
+from scripts.channel_identity_report import Counterpart
 from scripts.pretext_triviality_report import (
     FIT_RATE,
+    KINDS_MAPPED,
     CorpusRow,
     CorpusWindows,
     KindRow,
     channels_apart_of,
     corpora_of,
     diagnose,
+    diagnose_each,
     evenly_spaced,
     grown,
     kinds_of,
+    named_channels,
     own_channels,
     read_corpora,
     read_fit,
@@ -60,6 +64,7 @@ from scripts.pretext_triviality_report import (
     render,
     supplied_by,
     unset_rows_fitted,
+    unset_rows_from_counterparts,
     unset_rows_to_mean,
     write_corpora,
     write_fit,
@@ -103,6 +108,7 @@ def corpus_of(control: Control) -> CorpusWindows:
         validation=windows[8:16],
         validation_units=tuple(f"unit-{index // 2}" for index in range(8)),
         block_checksum="sha256:0",
+        channel_ids=frozenset(range(1, control.vocabulary_size + 1)),
     )
 
 
@@ -707,3 +713,172 @@ def test_one_step_of_the_fit_is_one_step_of_a_pretraining_that_moves_the_rows_al
     for key, value in by_the_fit.items():
         if key != ROWS:
             assert torch.equal(pretrained[key], value), key
+
+
+def channels_of(control: Control) -> list[PublishedChannel]:
+    """The control's channels, and two of a corpus the backbone never read past them."""
+    size = control.vocabulary_size
+    return [
+        PublishedChannel(channel_id=index, corpus="control-a", channel=f"c{index}")
+        for index in range(1, size + 1)
+    ] + [
+        PublishedChannel(channel_id=size + index, corpus="other", channel=f"o{index}")
+        for index in (1, 2)
+    ]
+
+
+def pair_of(channel: str, counterpart: str) -> Counterpart:
+    return Counterpart(
+        corpus="other",
+        channel=channel,
+        counterpart_corpus="control-a",
+        counterpart_channel=counterpart,
+    )
+
+
+def test_a_mapped_row_copies_its_counterpart_s_learnt_row_and_the_rest_stay(
+    control: Control,
+) -> None:
+    model = toy(control)
+    size = control.vocabulary_size
+    torch.manual_seed(5)
+    grown(model, size + 2)
+    table = model.encoder.channel_embedding
+    assert isinstance(table, GrownChannelEmbedding)
+    drawn = table.grown.weight.detach().clone()
+    learnt = table.learnt.table.weight.detach().clone()
+
+    mapped = unset_rows_from_counterparts(
+        model, channels_of(control), [size + 1, size + 2], [pair_of("o1", "c2")]
+    )
+
+    assert mapped == [size + 1]
+    assert torch.equal(table.grown.weight[0], learnt[2])
+    assert torch.equal(table.grown.weight[1], drawn[1])
+    assert torch.equal(table.learnt.table.weight, learnt)
+
+
+def test_a_pair_that_is_no_counterpart_is_refused(control: Control) -> None:
+    model = toy(control)
+    size = control.vocabulary_size
+    torch.manual_seed(5)
+    grown(model, size + 2)
+    own = [size + 1, size + 2]
+    channels = channels_of(control)
+
+    with pytest.raises(ValueError, match="names no row"):
+        unset_rows_from_counterparts(model, channels, own, [pair_of("o1", "c99")])
+    with pytest.raises(ValueError, match="not a channel of the corpus never read"):
+        unset_rows_from_counterparts(
+            model,
+            channels,
+            own,
+            [
+                Counterpart(
+                    corpus="control-a",
+                    channel="c1",
+                    counterpart_corpus="control-a",
+                    counterpart_channel="c2",
+                )
+            ],
+        )
+    with pytest.raises(ValueError, match="no counterpart"):
+        unset_rows_from_counterparts(
+            model,
+            channels,
+            own,
+            [
+                Counterpart(
+                    corpus="other",
+                    channel="o1",
+                    counterpart_corpus="other",
+                    counterpart_channel="o2",
+                )
+            ],
+        )
+
+
+def test_the_mapped_channels_are_tallied_apart_from_the_same_predictions(
+    control: Control,
+) -> None:
+    model, corpus = toy(control), corpus_of(control)
+    whole, split = diagnose_each(
+        model, WITHOUT_TAIL, SQUARED, corpus, [frozenset(), frozenset({1, 2})], device="cpu"
+    )
+
+    assert whole == diagnose(model, WITHOUT_TAIL, SQUARED, corpus, device="cpu")
+    by_kind_whole = {kind: sum(t.tokens for t in whole if t.kind is kind) for kind in MaskKind}
+    by_kind_split = {kind: sum(t.tokens for t in split if t.kind is kind) for kind in MaskKind}
+    assert by_kind_split == by_kind_whole
+    assert any(t.apart for t in split)
+    assert sum(t.tokens for t in split if not t.apart) < sum(t.tokens for t in whole)
+
+
+def test_the_rendering_names_the_map_and_tables_the_mapped_channels(
+    control: Control, tmp_path: Path
+) -> None:
+    corpus = corpus_of(control)
+    tallies = [
+        ("control-a", t)
+        for t in diagnose(toy(control), WITHOUT_TAIL, SQUARED, corpus, device="cpu")
+    ]
+    write_settings(
+        tmp_path,
+        {
+            "backbone": "0123456789abcdef",
+            "weights": "fedcba9876543210",
+            "experiment": "toy",
+            "loss": "mse",
+            "validation_seed": "1",
+            "fit_seed": "2",
+            "resamples": "20",
+            "device": "cpu",
+            "machine": "test",
+            "torch": "0",
+            "revision": "abc",
+            "started": "2026-10-19 12:00:00",
+            "corpus": "control-a",
+            "windows_of": "abcdef12-" + "0" * 27,
+            "unset_rows": "map-mean",
+            "map": "counterparts.csv",
+            "mapped": "24",
+        },
+    )
+    write_corpora(tmp_path, [CorpusRow.of(corpus, 1.0)])
+    write_tallies(tmp_path, tallies)
+    write_kinds(tmp_path, kinds_of(tallies, resamples=20))
+    write_kinds(tmp_path, kinds_of(tallies, resamples=20), KINDS_MAPPED)
+
+    rendered = render(tmp_path)
+
+    assert "the 24 the map names copied from the rows learnt for their counterparts" in rendered
+    assert "the rest set to the mean of the learnt rows" in rendered
+    assert "On the channels the map names alone" in rendered
+
+
+def test_a_map_names_the_channels_of_the_corpus_read_for_a_tally_that_copies_nothing(
+    control: Control,
+) -> None:
+    channels = channels_of(control)
+    pairs = [
+        Counterpart(
+            corpus="control-a", channel="c2", counterpart_corpus="other", counterpart_channel="o1"
+        )
+    ]
+
+    assert named_channels(channels, "control-a", pairs) == [2]
+    with pytest.raises(ValueError, match="not a channel of other"):
+        named_channels(channels, "other", pairs)
+    with pytest.raises(ValueError, match="names no row"):
+        named_channels(
+            channels,
+            "control-a",
+            [
+                Counterpart(
+                    corpus="control-a",
+                    channel="c99",
+                    counterpart_corpus="other",
+                    counterpart_channel="o1",
+                )
+            ],
+        )
