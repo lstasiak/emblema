@@ -11,7 +11,7 @@ from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
-from tests.support.experiments import LATENT, WEIGHTS, budget, configuration
+from tests.support.experiments import CONTRAST, LATENT, WEIGHTS, budget, configuration
 
 CODEC = ExperimentConfigurationDocument()
 
@@ -166,6 +166,20 @@ def test_a_document_written_before_a_target_existed_predicts_the_token_s_value()
     assert document["objective"] == {"kind": "mse", "huber_delta": 0.0}
 
     assert CODEC.decode(document) == configuration()
+
+
+def test_the_contrast_travels_inside_the_objective_and_only_where_it_is_stated() -> None:
+    contrasted = configuration(contrast=CONTRAST)
+
+    document = CODEC.encode(contrasted)
+
+    assert document["objective"] == {
+        "kind": "mse",
+        "huber_delta": 0.0,
+        "contrast": {"weight": 0.5, "temperature": 0.2},
+    }
+    assert CODEC.decode(json.loads(json.dumps(document))) == contrasted
+    assert CODEC.encode(configuration())["objective"] == {"kind": "mse", "huber_delta": 0.0}
 
 
 def test_the_start_and_the_trained_parameters_travel_only_where_stated() -> None:

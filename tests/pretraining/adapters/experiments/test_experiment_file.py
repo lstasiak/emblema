@@ -7,6 +7,7 @@ from emblema.config.compute_tiers import ComputeTiers
 from emblema.pretraining.adapters.encoder.tier_architecture import architecture_of
 from emblema.pretraining.adapters.experiments.experiment_file import ExperimentFile
 from emblema.pretraining.domain.exceptions import (
+    InvalidContrastiveTermError,
     InvalidCorpusFractionError,
     InvalidCorpusPassesError,
     InvalidMaskingStrategyError,
@@ -14,6 +15,7 @@ from emblema.pretraining.domain.exceptions import (
     InvalidObjectiveTargetError,
     InvalidTrainingBudgetError,
 )
+from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
@@ -280,6 +282,36 @@ def test_the_latent_target_s_values_are_the_domain_s_to_refuse(tmp_path: Path) -
     )
 
     with pytest.raises(InvalidObjectiveTargetError, match="at least one block"):
+        ExperimentFile.load(written(text, tmp_path)).configuration()
+
+
+def test_a_file_states_the_contrast_with_its_weight_and_temperature(tmp_path: Path) -> None:
+    text = STATED + (
+        '\n[objective]\nkind = "huber"\nhuber_delta = 1.0\ncontrast_weight = 0.5\n'
+        "contrast_temperature = 0.2\n"
+    )
+
+    stated = ExperimentFile.load(written(text, tmp_path)).configuration()
+
+    assert stated.contrast == ContrastiveTerm.of(weight=0.5, temperature=0.2)
+    assert stated.target == ObjectiveTarget.value()
+
+
+def test_a_file_that_states_no_contrast_trains_none(tmp_path: Path) -> None:
+    text = STATED + '\n[objective]\nkind = "huber"\nhuber_delta = 1.0\n'
+
+    assert ExperimentFile.load(written(text, tmp_path)).configuration().contrast == (
+        ContrastiveTerm.none()
+    )
+
+
+@pytest.mark.parametrize(
+    "stated", ["contrast_temperature = 0.2\n", "contrast_weight = 0.5\n", "contrast_weight = -1\n"]
+)
+def test_the_contrast_s_values_are_the_domain_s_to_refuse(tmp_path: Path, stated: str) -> None:
+    text = STATED + "\n[objective]\n" + stated
+
+    with pytest.raises(InvalidContrastiveTermError):
         ExperimentFile.load(written(text, tmp_path)).configuration()
 
 

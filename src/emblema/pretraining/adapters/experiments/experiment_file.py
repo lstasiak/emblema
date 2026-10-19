@@ -16,6 +16,7 @@ from emblema.pretraining.adapters.encoder.tier_architecture import architecture_
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
@@ -86,11 +87,12 @@ class _Masking(_Section):
 
 
 class _Objective(_Section):
-    """What the objective counts a miss as, and what it compares the prediction with.
+    """What the objective counts a miss as, what it compares the prediction with, and what else.
 
-    A file that says nothing is scored by the square against the token's value. The knobs of the
-    latent target default to nothing, as the knee does under the square: a value target stating
-    one, or a latent target leaving one out, is refused by the target itself.
+    A file that says nothing is scored by the square against the token's value, with no second
+    term. The knobs of the latent target and of the contrast default to nothing, as the knee
+    does under the square: a value target stating one, a latent target leaving one out, or a
+    temperature without a weight, is refused by the value object itself.
     """
 
     kind: LossKind = LossKind.MSE
@@ -99,9 +101,14 @@ class _Objective(_Section):
     target_layers: int = 0
     momentum: float = 0.0
     final_momentum: float = 0.0
+    contrast_weight: float = 0.0
+    contrast_temperature: float = 0.0
 
     def loss(self) -> ObjectiveLoss:
         return ObjectiveLoss(kind=self.kind, huber_delta=self.huber_delta)
+
+    def contrastive_term(self) -> ContrastiveTerm:
+        return ContrastiveTerm(weight=self.contrast_weight, temperature=self.contrast_temperature)
 
     def objective_target(self) -> ObjectiveTarget:
         return ObjectiveTarget(
@@ -179,9 +186,10 @@ class ExperimentFile(_Section):
         fraction: The corpora read at a share of their own, by name, and that share; each one
             of ``corpora``. A corpus left out is read at ``corpus_fraction``.
         masking: What the objective hides.
-        objective: What it counts a miss as, and what it predicts: the squared error against the
-            token's value unless the file says otherwise, which is what every run before either
-            knob existed was scored by.
+        objective: What it counts a miss as, what it predicts and whether it also tells the
+            halves of a window apart: the squared error against the token's value and nothing
+            else unless the file says otherwise, which is what every run before any of the
+            knobs existed was scored by.
         budget: How long the run trains and in how large a step.
         checkpoint: How often resumable state is written.
         start: The stored model the run continues, where it does not draw its weights from the
@@ -240,6 +248,8 @@ class ExperimentFile(_Section):
             InvalidObjectiveTargetError: If the latent target reads no block or its momentum is
                 not one a teacher could trail by, or the value target states a knob of the
                 teacher.
+            InvalidContrastiveTermError: If the contrast's weight is negative, a stated term
+                has no positive temperature, or a temperature is stated without a weight.
             InvalidTrainingBudgetError: If the budget is not one a run could follow.
             InvalidCheckpointPolicyError: If the interval is not positive.
             InvalidChecksumError: If the start's checksum is not one in canonical form.
@@ -259,6 +269,7 @@ class ExperimentFile(_Section):
             masking=self.masking.strategy(),
             loss=self.objective.loss(),
             target=self.objective.objective_target(),
+            contrast=self.objective.contrastive_term(),
             budget=self.budget.budget(),
             precision=self.precision,
             checkpoint=self.checkpoint.policy(),
