@@ -1,0 +1,42 @@
+# The mixture of four under a second term of the objective: beside the values at the hidden
+# tokens, the two halves of every window — the tokens the encoder sees and the tokens hidden
+# from it — are told apart from the halves of the other windows in the batch, everything else the
+# file of backbone-mixed4-m.toml to the step. A value in a dense channel is answered by a line
+# through its neighbours; that two disjoint sets of observations belong to one stay or one month
+# is not, and the probe reads a window, not a token. The term weighs half of one hidden token's
+# loss per anchor, at a temperature of 0.2; neither is tuned.
+name = "backbone-mixed4-contrast-m"
+tier = "M"
+corpora = ["cmapss", "skab", "esa_ad", "physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation: the satellite corpus is learnt under that reading and not
+# under the square, and the stays' channels have heavy tails too.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+contrast_weight = 0.5
+contrast_temperature = 0.2
+
+# Eight passes over every window, the epoch kept the one whose mean relative validation over the
+# corpora is lowest; sixteen windows a micro-batch, two to a step, as every mixture before; a
+# quarter of the first epoch warming up.
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000

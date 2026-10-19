@@ -30,6 +30,8 @@ LONGER_TRAINING = "backbone-scale-1e9-4ep-m"
 MIXTURE_OF_FOUR = "backbone-mixed4-m"
 LATENT_OBJECTIVE = "backbone-mixed4-latent-m"
 THE_TARGET = {"target", "target_layers", "momentum", "final_momentum"}
+CONTRASTIVE_OBJECTIVE = "backbone-mixed4-contrast-m"
+THE_CONTRAST = {"contrast_weight", "contrast_temperature"}
 LEFT_OUT = ("physionet2012", "cmapss", "physionet2019")
 ROWS_FITTED = ("physionet2012", "cmapss", "physionet2019")
 # The fits whose control, the same fit on an encoder drawn from the seed, is registered too.
@@ -172,6 +174,22 @@ def test_the_second_objective_differs_from_the_mixture_of_four_in_the_target_alo
     assert latent.target.is_latent
     assert latent.target.layers == 4
     assert latent.architecture.layers == 6
+
+
+def test_the_contrastive_objective_differs_from_the_mixture_of_four_in_the_term_alone() -> None:
+    assert differing(configured(MIXTURE_OF_FOUR), configured(CONTRASTIVE_OBJECTIVE)) == {
+        "name",
+        *THE_CONTRAST,
+    }
+    assert differing(
+        configured(f"{MIXTURE_OF_FOUR}-seed2"), configured(f"{CONTRASTIVE_OBJECTIVE}-seed2")
+    ) == {"name", *THE_CONTRAST}
+    assert differing(
+        configured(CONTRASTIVE_OBJECTIVE), configured(f"{CONTRASTIVE_OBJECTIVE}-seed2")
+    ) == {"name", "seed"}
+    contrasted = configured(CONTRASTIVE_OBJECTIVE)
+    assert contrasted.contrast.is_stated
+    assert not contrasted.target.is_latent
 
 
 @pytest.mark.parametrize("left_out", ROWS_FITTED)
