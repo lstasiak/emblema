@@ -345,6 +345,29 @@ intensive-care corpora's interval is [+0.005; +0.025] against a threshold of 0.0
 - **From 1,000 stays up no backbone gains over its untrained encoder** (section 9): the clinical
   four lie at −0.006 and −0.011 with intervals across zero, the decoder 0.05 to 0.07 below.
 
+### 12. Continuing the base on the task's own corpora adds nothing beyond the domain's recipe
+
+The point of about 10⁹ values, continued for four epochs over the two intensive-care corpora
+with every weight free, read by the probe at 500 stays ([note](verification/domain-continuation.md),
+2026-10-19).
+
+| Gain in area at 500 stays | over the point | over the mixture's four | over the intensive-care four |
+| --- | --- | --- | --- |
+| at a tenth of the recipe's peak (two pretrainings) | −0.000 [−0.007; +0.007] | **−0.025** | **−0.039** |
+| at the recipe's peak (one pretraining) | *+0.023* [+0.007; +0.038] | −0.002 | **−0.016** |
+
+- **The rate decides whether the base moves at all.** At the low peak the continuation, and
+  the same continuation with the encoder frozen, leave the probe where the point stands at every
+  budget, though the pretext fell and the states narrowed. At the recipe's own peak it gains
+  0.023, under the threshold of 0.032 for one pretraining against one.
+- **The base plus its domain reads as the domain alone at best.** The high rate reaches the
+  mixture's four and stays below the intensive-care four, which never saw the base. Nothing in
+  the base's other corpora reaches the task's reader through four epochs on the clinic.
+- **Fitted channel rows carry the pretext to a corpus never read, not a linear reading of the
+  task.** On the turbofan task at 50 windows, the point pretrained without C-MAPSS reads the
+  probe as the point does once C-MAPSS's rows are fitted without labels, and no better than with
+  rows drawn; fine-tuning gains 1.5 RMSE on the point.
+
 ## Limitations
 
 - **Validation only.** Every configuration choice (window, normalisation, corpus, backbone, peaks)

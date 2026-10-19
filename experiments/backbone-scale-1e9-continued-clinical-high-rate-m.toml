@@ -1,0 +1,37 @@
+# The continuation of backbone-scale-1e9-continued-clinical-m.toml at the clinical recipe's own
+# peak, ten times its rate, everything else that file to the step, its seed included: read
+# because the continuation at the lower peak left the reader where the point stands, so whether
+# the rate held the base in place is read once before anything is concluded.
+name = "backbone-scale-1e9-continued-clinical-high-rate-m"
+tier = "M"
+corpora = ["physionet2012", "physionet2019"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[start]
+weights = "durable/sha256/8e7fa11d299cce959c8ec0f08f7cf1823367a138c267ee07c2451ccf8eb492b9"
+checksum = "sha256:8e7fa11d299cce959c8ec0f08f7cf1823367a138c267ee07c2451ccf8eb492b9"
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as the point was read.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 4
+batch_size = 8
+accumulation_steps = 4
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000

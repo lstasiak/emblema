@@ -1,0 +1,45 @@
+# The point of about 10⁹ observed values (backbone-scale-1e9-m, 803b82eb-…) continued over the
+# two intensive-care corpora alone with every weight free: the question of the foundation model
+# in the classification, whether a broad base plus a short continuation on the unlabelled stays
+# reads the task better than the base as it is and than the clinical corpora pretrained alone
+# (backbone-clinical-m and its seeds). The base read these corpora eight times within the
+# mixture; four epochs of them alone add about 6,300 steps, a third of the clinical recipe's,
+# with that recipe's effective batch of 32 and the shape of its schedule — a warm-up and a decay
+# to a hundredth — at a peak ten times lower, since the run starts from weights the base ended
+# at a hundred-thousandth, not from the seed. The micro-batch is 8 because the 2012 stays'
+# windows are long. Its control for the parameters moved is the same file with the channel
+# table alone free (-rows-m); its control for the training added is the whole point read for
+# four epochs (backbone-scale-1e9-4ep-m).
+name = "backbone-scale-1e9-continued-clinical-m"
+tier = "M"
+corpora = ["physionet2012", "physionet2019"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[start]
+weights = "durable/sha256/8e7fa11d299cce959c8ec0f08f7cf1823367a138c267ee07c2451ccf8eb492b9"
+checksum = "sha256:8e7fa11d299cce959c8ec0f08f7cf1823367a138c267ee07c2451ccf8eb492b9"
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as the point was read.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 4
+batch_size = 8
+accumulation_steps = 4
+learning_rate = 1e-4
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000

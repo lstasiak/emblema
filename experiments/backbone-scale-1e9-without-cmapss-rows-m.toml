@@ -1,0 +1,44 @@
+# The point of about 10⁹ observed values without C-MAPSS
+# (backbone-scale-1e9-without-cmapss-m, 12fd5139-…), continued over the engines with the channel
+# table alone free: the rows of C-MAPSS's sensors fitted on its unlabelled training side under
+# the point's own pretext, every other weight the point's, the fit docs/verification/zero-shot-pretext.md
+# (2026-10-17) found to restore the pretext there and backbone-scale-1e9-without-physionet2019-rows-m
+# registers for the 2019 stays. The same recipe: Adam at a hundredth, neither warm-up nor decay,
+# batches of 64, about a thousand steps — a quarter of the training windows over twelve epochs —
+# at the precision the diagnostic read it at, the best epoch kept by the pretext's validation
+# loss. The backbone the few-shot reading on FD001 starts from.
+name = "backbone-scale-1e9-without-cmapss-rows-m"
+tier = "M"
+corpora = ["cmapss"]
+corpus_fraction = 0.25
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+trained = "channel_rows"
+
+[start]
+weights = "durable/sha256/0310abc65303326bc34941e140d9a83da932b30823fb2c4f7f447c2cb2b19282"
+checksum = "sha256:0310abc65303326bc34941e140d9a83da932b30823fb2c4f7f447c2cb2b19282"
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as the point was read.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+
+[budget]
+epochs = 12
+batch_size = 16
+accumulation_steps = 4
+learning_rate = 1e-2
+warmup_epochs = 0
+final_lr_fraction = 1.0
+seed = 1
+
+[checkpoint]
+every_steps = 2000

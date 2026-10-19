@@ -2,9 +2,12 @@
 it: a task's corpus is read as often at every point, the points of one publication differ in the
 amount of data alone, a point without a corpus differs from the whole point in that corpus
 alone, the larger shape differs from today's in the shape, the micro-batch and the rate, the
-longer run differs from the whole point in the length of its training alone, and the rows of a
+longer run differs from the whole point in the length of its training alone, the rows of a
 corpus left out are fitted on it alone, continuing the point without it, with a control that
-differs in the start alone."""
+differs in the start alone, and the whole point continued over the clinical corpora keeps the
+clinical recipe's effective batch and the shape of its schedule, with a control that differs in
+the parameters moved alone and a second reading at the recipe's peak that differs in the rate
+alone."""
 
 from pathlib import Path
 
@@ -28,7 +31,11 @@ MIXTURE_OF_FOUR = "backbone-mixed4-m"
 LATENT_OBJECTIVE = "backbone-mixed4-latent-m"
 THE_TARGET = {"target", "target_layers", "momentum", "final_momentum"}
 LEFT_OUT = ("physionet2012", "cmapss", "physionet2019")
-ROWS_FITTED = ("physionet2012", "physionet2019")
+ROWS_FITTED = ("physionet2012", "cmapss", "physionet2019")
+# The fits whose control, the same fit on an encoder drawn from the seed, is registered too.
+ROWS_CONTROLLED = ("physionet2012", "physionet2019")
+CLINICAL_RECIPE = "backbone-clinical-m"
+CONTINUED_ON_CLINICAL = "backbone-scale-1e9-continued-clinical-m"
 # What a fit of the rows states beside the point it continues: how it starts, what it moves,
 # the budget of the fit and the precision it was read at.
 THE_FIT = {
@@ -184,7 +191,7 @@ def test_the_rows_of_a_corpus_left_out_are_fitted_on_it_alone_continuing_the_poi
     assert differing(point, fit) <= {"name", *THE_FIT, *passes}
 
 
-@pytest.mark.parametrize("left_out", ROWS_FITTED)
+@pytest.mark.parametrize("left_out", ROWS_CONTROLLED)
 def test_the_control_of_a_fit_of_the_rows_differs_from_it_in_the_start_alone(left_out: str) -> None:
     rows = f"{WHOLE_POINT[:-2]}-without-{left_out}-rows-m"
     untrained = f"{rows[:-2]}-untrained-m"
@@ -192,3 +199,52 @@ def test_the_control_of_a_fit_of_the_rows_differs_from_it_in_the_start_alone(lef
     assert stated(untrained).corpora == stated(rows).corpora
     assert configured(untrained).start is None
     assert differing(configured(rows), configured(untrained)) == {"name", "start"}
+
+
+def test_the_continuation_on_the_clinical_corpora_keeps_the_recipes_batch_and_schedule() -> None:
+    recipe, continued = configured(CLINICAL_RECIPE), configured(CONTINUED_ON_CLINICAL)
+
+    assert stated(CONTINUED_ON_CLINICAL).corpora == stated(CLINICAL_RECIPE).corpora
+    assert continued.start is not None
+    assert continued.trained is TrainedParameters.EVERYTHING
+    assert continued.budget.effective_batch_size == recipe.budget.effective_batch_size
+    assert continued.budget.final_lr_fraction == recipe.budget.final_lr_fraction
+    assert 0 < continued.budget.warmup_epochs < continued.budget.epochs < recipe.budget.epochs
+    assert continued.budget.learning_rate == recipe.budget.learning_rate / 10
+    assert differing(recipe, continued) == {
+        "name",
+        "start",
+        "precision",
+        "epochs",
+        "batch_size",
+        "accumulation_steps",
+        "learning_rate",
+        "warmup_epochs",
+    }
+    passes = {f"passes.{corpus}" for corpus in CORPORA_OF_THE_TASKS}
+    assert differing(configured(WHOLE_POINT), continued) <= {"name", *THE_FIT, *passes} - {
+        "trained",
+        "corpus_fraction",
+    }
+
+
+def test_the_second_seed_of_the_continuation_differs_from_it_in_the_seed_alone() -> None:
+    assert differing(
+        configured(CONTINUED_ON_CLINICAL), configured(f"{CONTINUED_ON_CLINICAL}-seed2")
+    ) == {"name", "seed"}
+
+
+def test_the_control_of_the_continuation_differs_from_it_in_the_parameters_moved_alone() -> None:
+    rows = f"{CONTINUED_ON_CLINICAL[:-2]}-rows-m"
+
+    assert stated(rows).corpora == stated(CONTINUED_ON_CLINICAL).corpora
+    assert configured(rows).trained is TrainedParameters.CHANNEL_ROWS
+    assert differing(configured(CONTINUED_ON_CLINICAL), configured(rows)) == {"name", "trained"}
+
+
+def test_the_continuation_at_the_recipes_peak_differs_from_it_in_the_rate_alone() -> None:
+    continued = configured(CONTINUED_ON_CLINICAL)
+    high = configured(f"{CONTINUED_ON_CLINICAL[:-2]}-high-rate-m")
+
+    assert high.budget.learning_rate == configured(CLINICAL_RECIPE).budget.learning_rate
+    assert differing(continued, high) == {"name", "learning_rate"}
