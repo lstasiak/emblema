@@ -63,3 +63,12 @@ new corpus through a map of counterparts, without a fit.
   of counterparts reads the pretext closer to the fit than to a permuted map by more than
   0.05 on the mapped channels: then a row shared by quantity, or a start from the counterpart
   before the fit, becomes a knob of the next pretraining and this record is superseded.
+
+## Amendments
+
+- 2026-10-19: the declared reading found the fitted rows of one corpus no nearer the learnt
+  rows of the same quantity in another by cosine, and the counterpart's learnt row, copied,
+  reading the mapped channels' block and token masks within 0.01 to 0.02 of the fitted rows,
+  0.06 to 0.11 better than the wrong quantity's learnt row (a channel hidden whole, 0.03 to
+  0.05 behind). Points one and two stand; the start of a new corpus's rows from their
+  counterparts, before the fit, is the next record's.
