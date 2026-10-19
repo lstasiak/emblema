@@ -264,6 +264,16 @@ def named_channels(
     return named
 
 
+def vocabulary_of(backbone: Backbone, store: ArtifactStore) -> list[PublishedChannel]:
+    """Every channel of the backbone's own chain, from the manifest that reached furthest.
+
+    A corpus from the middle of the chain is published under a shorter vocabulary than the
+    backbone's; its counterparts in a later corpus are named by the backbone's widest manifest.
+    """
+    widest = max(backbone.inputs, key=lambda stated: stated.vocabulary_size)
+    return list(PublishedCorpusManifestJson().decode(store.get(widest.manifest)).channels)
+
+
 def corpora_channels_of(
     backbone: Backbone, store: ArtifactStore, corpus: str
 ) -> list[PublishedChannel]:
@@ -1158,9 +1168,13 @@ def main(argv: Sequence[str] | None = None) -> None:
             if arguments.map is None:
                 raise SystemExit(f"--unset-rows {arguments.unset_rows} needs --map")
             pairs = read_map(arguments.map)
+            # The counterparts are rows of the backbone's own chain, which may reach past the
+            # corpus's manifest; the corpus's channels come from its own.
+            known = {channel.channel_id: channel for channel in vocabulary_of(backbone, store)}
+            known.update({channel.channel_id: channel for channel in manifest.channels})
             try:
                 mapped = unset_rows_from_counterparts(
-                    model, manifest.channels, own, swapped(pairs) if arguments.swap else pairs
+                    model, known.values(), own, swapped(pairs) if arguments.swap else pairs
                 )
             except ValueError as error:
                 raise SystemExit(str(error)) from error
