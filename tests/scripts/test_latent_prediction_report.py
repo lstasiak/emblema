@@ -72,6 +72,7 @@ def corpus_of(control: Control) -> CorpusWindows:
         validation=windows[8:16],
         validation_units=tuple(f"unit-{index // 2}" for index in range(8)),
         block_checksum="sha256:0",
+        channel_ids=frozenset(range(1, control.vocabulary_size + 1)),
     )
 
 
