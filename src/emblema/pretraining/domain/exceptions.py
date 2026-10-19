@@ -65,6 +65,10 @@ class InvalidObjectiveTargetError(PretrainingError, ValueError):
     pass
 
 
+class InvalidContrastiveTermError(PretrainingError, ValueError):
+    pass
+
+
 class IncomparableFloorError(PretrainingError, ValueError):
     pass
 

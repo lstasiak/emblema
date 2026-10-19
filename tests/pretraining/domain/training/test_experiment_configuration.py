@@ -12,7 +12,7 @@ from emblema.pretraining.domain.training.objective_loss import LossKind, Objecti
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
-from tests.support.experiments import LATENT, WEIGHTS, budget, configuration
+from tests.support.experiments import CONTRAST, LATENT, WEIGHTS, budget, configuration
 
 BOUNDED = ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.0)
 
@@ -260,6 +260,31 @@ def test_the_target_is_rendered_after_the_reading_and_only_where_it_is_a_state()
 def test_a_target_reading_more_blocks_than_the_encoder_has_is_refused() -> None:
     with pytest.raises(InvalidExperimentConfigurationError, match="blocks of an encoder"):
         configuration(target=ObjectiveTarget.latent(layers=2))
+
+
+def test_the_contrast_is_rendered_after_the_target_and_only_where_it_is_stated() -> None:
+    contrasted = configuration(contrast=CONTRAST)
+
+    parameters = list(contrasted.parameters())
+
+    assert not any(key.startswith("contrast") for key in configuration().parameters())
+    knee = parameters.index("huber_delta") + 1
+    assert parameters[knee : knee + 3] == ["contrast_weight", "contrast_temperature", "epochs"]
+    rendered = contrasted.parameters()
+    assert (rendered["contrast_weight"], rendered["contrast_temperature"]) == (0.5, 0.2)
+    assert contrasted.differences_from(configuration()) == (
+        "contrast_weight",
+        "contrast_temperature",
+    )
+    assert configuration().differences_from(contrasted) == (
+        "contrast_weight",
+        "contrast_temperature",
+    )
+
+
+def test_the_contrast_is_stated_beside_the_value_target_only() -> None:
+    with pytest.raises(InvalidExperimentConfigurationError, match="value target only"):
+        configuration(target=LATENT, contrast=CONTRAST)
 
 
 def test_the_start_and_the_trained_parameters_render_only_where_they_are_stated() -> None:
