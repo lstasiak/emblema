@@ -38,6 +38,7 @@ from dataclasses import dataclass, fields
 from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
+from typing import Self
 from uuid import UUID
 
 import numpy as np
@@ -145,6 +146,25 @@ class ChannelTable:
 
     def entry(self, channel_id: int) -> VocabularyRow:
         return self.entries[channel_id - 1]
+
+    def extended_by(self, wider: Self) -> Self:
+        """This table with ``wider``'s rows past its last, under ``wider``'s vocabulary.
+
+        A continuation over a corpus from the middle of its parent's chain keeps a table of
+        that corpus's vocabulary and leaves the parent's later rows behind (ADR-0056); the
+        parent's table supplies them, so the continuation's fitted rows can be read against
+        rows the continuation never carried.
+
+        Raises:
+            ValueError: If ``wider`` does not continue this table's vocabulary entry for entry.
+        """
+        if len(wider.entries) <= len(self.entries):
+            raise ValueError("the wider table must reach past this one")
+        if wider.entries[: len(self.entries)] != self.entries:
+            raise ValueError("the wider table does not continue this one's vocabulary")
+        return type(self)(
+            np.vstack([self.rows, wider.rows[len(self.entries) + 1 :]]), wider.entries
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -805,6 +825,11 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         help="counterparts within one corpus: channels whose names share the pattern's group",
     )
     parser.add_argument(
+        "--extended-by",
+        metavar="ID",
+        help="a backbone whose table continues this one's past its last row, its parent",
+    )
+    parser.add_argument(
         "--start",
         action="store_true",
         help="read each row's shift from where the run started it, for a continued backbone",
@@ -859,6 +884,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         read = table_of(backbone, store)
         start = start_table_of(backbone, store) if arguments.start else None
+        if arguments.extended_by is not None:
+            try:
+                wider_id = BackboneId(UUID(arguments.extended_by))
+            except ValueError as error:
+                raise SystemExit(f"--extended-by must be a backbone's id: {error}") from error
+            wider = table_of(registry.get(wider_id), store)
+            read = read.extended_by(wider)
+            start = start.extended_by(wider) if start is not None else None
         pairs = read_map(arguments.map) if arguments.map is not None else []
         if arguments.swap:
             pairs = swapped(pairs)
@@ -885,6 +918,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "experiment": backbone.configuration.name,
         "parent": str(backbone.parent) if backbone.parent is not None else "",
         "start": "true" if start is not None else "false",
+        "extended_by": arguments.extended_by or "",
         "map": str(arguments.map) if arguments.map is not None else "",
         "swap": "true" if arguments.swap else "false",
         "family": arguments.family or "",

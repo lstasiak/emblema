@@ -211,6 +211,23 @@ def test_a_row_is_placed_among_at_least_two_candidates(learnt: np.ndarray) -> No
         row_readings(table, 1, [2], 2, None)
 
 
+def test_a_table_extended_by_a_wider_one_keeps_its_rows_and_takes_the_rest(
+    learnt: np.ndarray,
+) -> None:
+    fitted = table_of(learnt * 2.0, "a")
+    wider = table_of(np.vstack([learnt, learnt]), "a", "b")
+
+    extended = fitted.extended_by(wider)
+
+    assert extended.entries == wider.entries
+    assert np.array_equal(extended.rows[: len(CHANNELS) + 1], fitted.rows)
+    assert np.array_equal(extended.rows[len(CHANNELS) + 1 :], learnt)
+    with pytest.raises(ValueError, match="reach past"):
+        wider.extended_by(fitted)
+    with pytest.raises(ValueError, match="does not continue"):
+        fitted.extended_by(table_of(np.vstack([learnt, learnt]), "b", "a"))
+
+
 def test_a_table_whose_rows_and_entries_disagree_is_refused(learnt: np.ndarray) -> None:
     with pytest.raises(ValueError, match="does not index"):
         ChannelTable(learnt, entries_of("a"))
