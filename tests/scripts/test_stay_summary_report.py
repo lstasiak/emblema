@@ -14,6 +14,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+import scripts.stay_summary_report as report  # noqa: E402
 from emblema.evaluation.adapters.features.window_statistics import (  # noqa: E402
     WindowStatistics,
 )
@@ -78,7 +79,7 @@ from scripts.stay_summary_report import (  # noqa: E402
     render,
     render_fidelity,
     save_arrays,
-    write,
+    write_probed,
     write_rows,
 )
 
@@ -327,7 +328,7 @@ def test_the_written_files_are_paired_by_the_stages_pairing(stored: Stored, tmp_
             Reading(source="mix1", candidate=STATES_ALONE, arm=PRETRAINED, summaries=False),
         ],
     )
-    write(tmp_path, probed, [])
+    write_probed(tmp_path, probed)
 
     comparison = pair(
         read_cells(tmp_path / CELLS),
@@ -429,3 +430,47 @@ def test_a_held_out_stay_far_from_every_learnt_state_is_answered_within_the_lear
     [mean] = [row for row in decoded if (row.digest, row.statistic) == (INFORMED, "mean")]
     # One stay of a hundred and twenty answered at the edge of the learnt range, not at 10⁴.
     assert mean.r2 > 0.5
+
+
+def test_a_decomposition_that_does_not_converge_is_taken_by_the_one_sided_method(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generator = np.random.default_rng(5)
+    states = generator.normal(size=(60, 4))
+    targets = (states[:, :1] * 2.0 + generator.normal(size=(60, 1))).astype(np.float64)
+    penalties = RidgePenalties((0.1, 10.0))
+    divided = JointRidge.fitted(states, targets, penalties)
+
+    def diverged(*_: object, **__: object) -> None:
+        raise RuntimeError("linalg.svd: The algorithm failed to converge")
+
+    monkeypatch.setattr(torch.linalg, "svd", diverged)
+    one_sided = JointRidge.fitted(states, targets, penalties)
+
+    assert divided.decomposition == JointRidge.DIVIDE_AND_CONQUER
+    assert one_sided.decomposition == JointRidge.ONE_SIDED
+    np.testing.assert_allclose(one_sided.weights, divided.weights, atol=1e-10)
+    np.testing.assert_array_equal(one_sided.penalties, divided.penalties)
+
+
+def test_the_heads_are_kept_when_the_mapping_after_them_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = stored_directory(tmp_path)
+
+    def failed(*_: object) -> None:
+        raise RuntimeError("the mapping failed")
+
+    monkeypatch.setattr(report, "decode", failed)
+    with pytest.raises(RuntimeError, match="mapping failed"):
+        main([str(directory)])
+    assert (directory / FITS).is_file()
+    assert (directory / CELLS).is_file()
+    assert not (directory / DECODING).exists()
+
+    monkeypatch.undo()
+    fits = (directory / FITS).read_text(encoding="utf-8")
+    main([str(directory), "--decode-only"])
+
+    assert (directory / FITS).read_text(encoding="utf-8") == fits
+    assert (directory / DECODING).is_file()

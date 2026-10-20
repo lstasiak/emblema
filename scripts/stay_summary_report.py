@@ -33,9 +33,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import fmean, median
-from typing import Self
+from typing import ClassVar, Self
 
 import numpy as np
+import scipy.linalg
 import torch
 from numpy.typing import NDArray
 
@@ -656,15 +657,25 @@ class JointRidge:
     smaller on a tie — run for a matrix of targets at once, so a summary of every channel costs
     one decomposition per set of stays rather than one per summary.
 
+    The decomposition is LAPACK's divide and conquer, as ``RidgeSolution``'s is; on the rare
+    matrix that method fails to converge on — states of a few thousand stays whose spread spans
+    eight orders of magnitude — the same decomposition is taken by the slower one-sided method,
+    which converges where the first does not, and the fit says so.
+
     Attributes:
         weights: The map over the states as given, one column per target.
         intercepts: What each target's map adds.
         penalties: The penalty each target chose.
+        decomposition: Which LAPACK driver decomposed the states.
     """
 
     weights: NDArray[np.float64]
     intercepts: NDArray[np.float64]
     penalties: NDArray[np.float64]
+    decomposition: str
+
+    DIVIDE_AND_CONQUER: ClassVar[str] = "gesdd"
+    ONE_SIDED: ClassVar[str] = "gesvd"
 
     @classmethod
     def fitted(
@@ -685,7 +696,7 @@ class JointRidge:
         scaled = x / scale
         x_mean, y_mean = scaled.mean(dim=0), y.mean(dim=0)
         centred, residual = scaled - x_mean, y - y_mean
-        left, singular, right_t = torch.linalg.svd(centred, full_matrices=False)
+        left, singular, right_t, decomposition = cls._decomposed(centred)
         projected = left.T @ residual
         squared = singular**2
         best = torch.full((y.shape[1],), torch.inf, dtype=torch.float64)
@@ -705,7 +716,22 @@ class JointRidge:
             weights=(coefficients / scale.unsqueeze(1)).numpy(),
             intercepts=(y_mean - (x_mean.unsqueeze(1) * coefficients).sum(dim=0)).numpy(),
             penalties=chosen.numpy(),
+            decomposition=decomposition,
         )
+
+    @classmethod
+    def _decomposed(
+        cls, centred: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, str]:
+        try:
+            left, singular, right_t = torch.linalg.svd(centred, full_matrices=False)
+        # The linear-algebra error torch raises here is a RuntimeError its stubs do not name.
+        except RuntimeError:
+            u, s, vt = scipy.linalg.svd(
+                centred.numpy(), full_matrices=False, lapack_driver=cls.ONE_SIDED
+            )
+            return torch.from_numpy(u), torch.from_numpy(s), torch.from_numpy(vt), cls.ONE_SIDED
+        return left, singular, right_t, cls.DIVIDE_AND_CONQUER
 
     def answered(self, states: NDArray[np.floating]) -> NDArray[np.float64]:
         return np.asarray(states, dtype=np.float64) @ self.weights + self.intercepts
@@ -725,6 +751,7 @@ class Decoded:
         penalty: The penalty the map chose.
         r2: One less the squared error over the variance around the held-out half's mean, the
             map's answers held within the range of the values it was fitted on.
+        decomposition: Which LAPACK driver decomposed the states the map was fitted on.
     """
 
     digest: str
@@ -735,8 +762,19 @@ class Decoded:
     scored: int
     penalty: float
     r2: float
+    decomposition: str
 
-    COLUMNS = ("digest", "channel_id", "statistic", "family", "learnt", "scored", "penalty", "r2")
+    COLUMNS = (
+        "digest",
+        "channel_id",
+        "statistic",
+        "family",
+        "learnt",
+        "scored",
+        "penalty",
+        "r2",
+        "decomposition",
+    )
 
     def record(self) -> dict[str, str]:
         return {
@@ -748,6 +786,7 @@ class Decoded:
             "scored": str(self.scored),
             "penalty": _number(self.penalty),
             "r2": _number(self.r2),
+            "decomposition": self.decomposition,
         }
 
     @classmethod
@@ -761,6 +800,7 @@ class Decoded:
             scored=int(record["scored"]),
             penalty=float(record["penalty"]),
             r2=float(record["r2"]),
+            decomposition=record["decomposition"],
         )
 
 
@@ -839,6 +879,7 @@ def decode(stored: Stored, columns: Sequence[int]) -> list[Decoded]:
                         scored=int(defined.sum()),
                         penalty=float(ridge.penalties[index]),
                         r2=float(1.0 - (error**2).sum() / (spread**2).sum()),
+                        decomposition=ridge.decomposition,
                     )
                 )
         print(
@@ -849,10 +890,13 @@ def decode(stored: Stored, columns: Sequence[int]) -> list[Decoded]:
     return found
 
 
-def write(directory: Path, probed: Probed, decoded: Sequence[Decoded]) -> None:
+def write_probed(directory: Path, probed: Probed) -> None:
     write_rows(directory / FITS, Fit.COLUMNS, (fit.record() for fit in probed.fits))
     write_cells(directory / CELLS, probed.cells)
     write_predictions(directory / PREDICTIONS, probed.predictions)
+
+
+def write_decoded(directory: Path, decoded: Sequence[Decoded]) -> None:
     write_rows(directory / DECODING, Decoded.COLUMNS, (row.record() for row in decoded))
 
 
@@ -983,7 +1027,13 @@ def render(
 def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("directory", type=Path, help="where the storing step left its arrays")
-    parser.add_argument("--report-only", action="store_true", help="render the stored fits")
+    stage = parser.add_mutually_exclusive_group()
+    stage.add_argument("--report-only", action="store_true", help="render the stored fits")
+    stage.add_argument(
+        "--decode-only",
+        action="store_true",
+        help="keep the heads already fitted and map the summaries again",
+    )
     parser.add_argument(
         "--reference",
         type=Path,
@@ -1006,14 +1056,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     arguments = parse_arguments(argv)
     directory: Path = arguments.directory
     stored = Stored.read(directory)
-    if arguments.report_only:
+    # Each stage is written as soon as it ends, so a later one that fails costs only itself.
+    if arguments.report_only or arguments.decode_only:
         fits = [Fit.parse(row) for row in read_rows(directory / FITS)]
-        decoded = [Decoded.parse(row) for row in read_rows(directory / DECODING)]
     else:
         probed = probe(stored)
-        decoded = decode(stored, decoded_targets(stored, arguments.decode_channels))
-        write(directory, probed, decoded)
+        write_probed(directory, probed)
         fits = list(probed.fits)
+    if arguments.report_only:
+        decoded = [Decoded.parse(row) for row in read_rows(directory / DECODING)]
+    else:
+        decoded = decode(stored, decoded_targets(stored, arguments.decode_channels))
+        write_decoded(directory, decoded)
     report = render(stored, fits, decoded, arguments.reference)
     (directory / REPORT).write_text(report, encoding="utf-8")
     print(report)
