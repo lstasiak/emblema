@@ -208,6 +208,8 @@ allowed-confusables = ["×"]
 "scripts/channel_identity_report.py" = ["E402"]
 "scripts/comparison_power_report.py" = ["E402"]
 "scripts/stage_reader_figures.py" = ["E402"]
+"scripts/stay_summary_states.py" = ["E402"]
+"scripts/stay_summary_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
