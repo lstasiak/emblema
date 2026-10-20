@@ -17,6 +17,7 @@ from typing import Any
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.corpus_validation import CorpusValidation
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
@@ -36,6 +37,8 @@ TINY = EncoderArchitecture(width=16, heads=2, layers=1, feedforward_width=32, ti
 MIXTURE = MaskingStrategy(channel_rate=0.15, block_rate=0.6, block_span=0.5, token_rate=0.1)
 # The latent target at the test's scale: the tiny encoder has one block, so one is all it reads.
 LATENT = ObjectiveTarget.latent(layers=1)
+# The contrastive term at the test's scale: a weight and a temperature, neither tuned.
+CONTRAST = ContrastiveTerm.of(weight=0.5, temperature=0.2)
 CHANNELS = 3
 CHANNEL_NAMES = ("invented/a", "invented/b", "invented/c")
 

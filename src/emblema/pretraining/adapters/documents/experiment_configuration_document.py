@@ -4,6 +4,7 @@ from emblema.pretraining.adapters.documents.fields import Document, Fields
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
@@ -62,6 +63,17 @@ class ExperimentConfigurationDocument:
             if configuration.target.is_latent
             else {}
         )
+        # And the contrast: a run without the term writes the objective it always wrote.
+        contrast: Document = (
+            {
+                "contrast": {
+                    "weight": configuration.contrast.weight,
+                    "temperature": configuration.contrast.temperature,
+                }
+            }
+            if configuration.contrast.is_stated
+            else {}
+        )
         # The start and the trained parameters too: a run from its seed moving everything
         # writes the document every run wrote before either knob existed.
         start: Document = (
@@ -96,6 +108,7 @@ class ExperimentConfigurationDocument:
                 "kind": str(configuration.loss.kind),
                 "huber_delta": configuration.loss.huber_delta,
                 **target,
+                **contrast,
             },
             "budget": {
                 "epochs": budget.epochs,
@@ -134,6 +147,7 @@ class ExperimentConfigurationDocument:
         fraction = fields.optional_fields("fraction")
         horizon = masking.optional_fields("horizon")
         target = objective.optional_fields("target")
+        contrast = objective.optional_fields("contrast")
         trained = fields.optional_text("trained")
         return ExperimentConfiguration(
             name=fields.text("name"),
@@ -174,6 +188,11 @@ class ExperimentConfigurationDocument:
                 layers=target.integer("layers"),
                 momentum=target.number("momentum"),
                 final_momentum=target.number("final_momentum"),
+            ),
+            contrast=ContrastiveTerm.none()
+            if contrast is None
+            else ContrastiveTerm.of(
+                weight=contrast.number("weight"), temperature=contrast.number("temperature")
             ),
             budget=TrainingBudget(
                 epochs=budget.integer("epochs"),

@@ -2,7 +2,7 @@ import logging
 import math
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Self
 
 import torch
@@ -75,6 +75,9 @@ class _Session:
     # inside an epoch carries them, so a resumed epoch reports its loss over every batch.
     epoch_error: float = 0.0
     epoch_tokens: int = 0
+    # The error's named terms, where the objective has more than one, for the log alone: a
+    # checkpoint does not carry them, so a resumed epoch logs them from where it was picked up.
+    epoch_terms: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -104,6 +107,23 @@ class _Progress:
             steps_in_epoch=steps_in_epoch,
             steps_in_run=budget.epochs * steps_in_epoch,
         )
+
+
+_Terms = dict[str, float]
+
+
+def _terms(terms: _Terms, tokens: int, trivial: _Terms | None = None) -> str:
+    """The named terms of a loss as a log reads them, per token; nothing where there is one."""
+    if not terms:
+        return ""
+    divisor = max(tokens, 1)
+    parts = []
+    for name, value in terms.items():
+        part = f"{name} {value / divisor:.5f}"
+        if trivial is not None and name in trivial:
+            part += f" of {trivial[name] / divisor:.5f}"
+        parts.append(part)
+    return " (" + ", ".join(parts) + ")"
 
 
 def _duration(seconds: float) -> str:
@@ -339,7 +359,7 @@ class TorchTrainingRuntime:
             epoch = session.position.epoch
             started = time.perf_counter()
             training, checkpoint = self._epoch(session, batches)
-            validation, hidden_ratio = self._validate(session)
+            validation, hidden_ratio, validated = self._validate(session)
             outcome = EpochOutcome(
                 epoch=epoch,
                 training_loss=training,
@@ -362,16 +382,17 @@ class TorchTrainingRuntime:
             if session.configuration.checkpoint.due_at(session.position.steps):
                 outcome = replace(outcome, checkpoint=self._write_checkpoint(session))
             logger.info(
-                "epoch %d of %d done in %.0f s, %.0f s into this session: training %.5f; %s",
+                "epoch %d of %d done in %.0f s, %.0f s into this session: training %.5f%s; %s",
                 epoch + 1,
                 budget.epochs,
                 outcome.seconds,
                 time.perf_counter() - session.started,
                 training,
+                _terms(session.epoch_terms, session.epoch_tokens),
                 "; ".join(
                     f"{scored.corpus} validation {scored.loss:.5f}, {scored.relative:.3f} of "
-                    f"the trivial predictor's"
-                    for scored in validation
+                    f"the trivial predictor's{_terms(terms, scored.tokens, trivial_terms)}"
+                    for scored, (terms, trivial_terms) in zip(validation, validated, strict=True)
                 ),
             )
             yield outcome
@@ -390,6 +411,7 @@ class TorchTrainingRuntime:
         session.model.train()
         if skip == 0:
             session.epoch_error, session.epoch_tokens = 0.0, 0
+        session.epoch_terms = {}
         group_tokens = 0
         progress = _Progress.at(session, batches)
         for index, on_host in enumerate(session.training.batches_of(session.position.epoch)):
@@ -416,6 +438,8 @@ class TorchTrainingRuntime:
             session.epoch_error += summed
             session.epoch_tokens += hidden
             progress.tokens += hidden
+            for name, term in score.terms.items():
+                session.epoch_terms[name] = session.epoch_terms.get(name, 0.0) + float(term)
             stepped = budget.takes_a_step_at(index, batches)
             if stepped:
                 self._average_gradients(session, group_tokens)
@@ -483,8 +507,13 @@ class TorchTrainingRuntime:
                 f"{session.position.epoch}, at {session.configuration.precision}"
             )
 
-    def _validate(self, session: _Session) -> tuple[tuple[CorpusValidation, ...], float]:
+    def _validate(
+        self, session: _Session
+    ) -> tuple[tuple[CorpusValidation, ...], float, list[tuple[_Terms, _Terms]]]:
         """What each corpus's held-out side cost this epoch, and the share of tokens scored.
+
+        Beside them, for the log, the named terms of the loss and of the trivial predictor's,
+        per corpus, summed as the losses are; empty under an objective of one term.
 
         The masks are drawn per batch from a generator the seed fixes, so every epoch is scored
         under the same hidden tokens: what moves between epochs is the model. The objective's
@@ -499,10 +528,13 @@ class TorchTrainingRuntime:
         """
         session.model.eval()
         scored_corpora: list[CorpusValidation] = []
+        terms_of_corpora: list[tuple[_Terms, _Terms]] = []
         hidden_tokens_in_all, observed_in_all = 0, 0
         with torch.no_grad():
             for corpus, loader in session.validation:
                 total, trivial, hidden_tokens = 0.0, 0.0, 0
+                terms: _Terms = {}
+                trivial_terms: _Terms = {}
                 for index, on_host in enumerate(loader.batches_of(0)):
                     draws = torch.Generator().manual_seed(
                         session.configuration.budget.seed * VALIDATION_SEED_STRIDE + index
@@ -516,6 +548,10 @@ class TorchTrainingRuntime:
                     trivial += float(score.trivial)
                     hidden_tokens += scored
                     observed_in_all += int((~batch.padding_mask).sum())
+                    for name, term in score.terms.items():
+                        terms[name] = terms.get(name, 0.0) + float(term)
+                    for name, term in score.trivial_terms.items():
+                        trivial_terms[name] = trivial_terms.get(name, 0.0) + float(term)
                 if hidden_tokens > 0 and trivial <= 0.0:
                     raise DivergedRunError(
                         f"the targets of {corpus.name} have collapsed: the trivial predictor "
@@ -531,7 +567,12 @@ class TorchTrainingRuntime:
                         trivial=trivial / max(hidden_tokens, 1),
                     )
                 )
-        return tuple(scored_corpora), hidden_tokens_in_all / max(observed_in_all, 1)
+                terms_of_corpora.append((terms, trivial_terms))
+        return (
+            tuple(scored_corpora),
+            hidden_tokens_in_all / max(observed_in_all, 1),
+            terms_of_corpora,
+        )
 
     def _write_checkpoint(self, session: _Session) -> ArtifactRef:
         """The whole state of the run, kept only as long as a dropped session might want it."""

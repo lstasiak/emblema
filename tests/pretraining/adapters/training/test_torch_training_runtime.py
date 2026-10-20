@@ -6,6 +6,7 @@ resumed, and that the weights it stored are the weights it trained.
 """
 
 import math
+import re
 from typing import Any
 
 import pytest
@@ -30,6 +31,7 @@ from emblema.shared.kernel.retention import Retention
 from emblema.shared.kernel.tokens import Token, TokenWindow
 from tests.support.experiments import (
     CHANNEL_NAMES,
+    CONTRAST,
     LATENT,
     budget,
     checksum_of,
@@ -42,6 +44,9 @@ from tests.support.experiments import (
 
 torch = pytest.importorskip("torch")
 
+from emblema.pretraining.adapters.objective.contrastive_reconstruction import (  # noqa: E402
+    ContrastiveReconstruction,
+)
 from emblema.pretraining.adapters.objective.latent_prediction import (  # noqa: E402
     LatentPrediction,
 )
@@ -50,6 +55,9 @@ from emblema.pretraining.adapters.objective.masked_reconstruction import (  # no
 )
 from emblema.pretraining.adapters.objective.objective_score import ObjectiveScore  # noqa: E402
 from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape  # noqa: E402
+from emblema.pretraining.adapters.objective.pretraining_objective import (  # noqa: E402
+    PretrainingObjective,
+)
 from emblema.pretraining.adapters.training.torch_training_runtime import (  # noqa: E402
     TorchTrainingRuntime,
     _duration,
@@ -64,9 +72,14 @@ pytestmark = pytest.mark.ml
 
 CORPUS = corpus(training=8, validation=4)
 MIXTURE = mixture(CORPUS)
-# What a run may predict at its hidden tokens; what the runtime does is the same under either.
-TARGETS = [ObjectiveTarget.value(), LATENT]
-TARGET_IDS = ["value", "latent"]
+# What a run may train: the value at its hidden tokens, a teacher's state there, or the value
+# beside the contrast of the window's halves; what the runtime does is the same under each.
+OBJECTIVES: list[dict[str, object]] = [
+    {"target": ObjectiveTarget.value()},
+    {"target": LATENT},
+    {"contrast": CONTRAST},
+]
+OBJECTIVE_IDS = ["value", "latent", "contrast"]
 
 
 class RecordingStore(InMemoryArtifactStore):
@@ -94,9 +107,9 @@ def checkpoint_at(
     return TrainingCheckpoint.read(store.get(ref), signature=signature)
 
 
-@pytest.mark.parametrize("target", TARGETS, ids=TARGET_IDS)
-def test_the_same_configuration_twice_trains_the_same_weights(target: ObjectiveTarget) -> None:
-    stated = configuration(budget=budget(epochs=1, batch_size=2), target=target)
+@pytest.mark.parametrize("objective", OBJECTIVES, ids=OBJECTIVE_IDS)
+def test_the_same_configuration_twice_trains_the_same_weights(objective: dict[str, object]) -> None:
+    stated = configuration(budget=budget(epochs=1, batch_size=2), **objective)
     first, second = InMemoryArtifactStore(), InMemoryArtifactStore()
 
     one = list(TorchTrainingRuntime(first, device="cpu").train(stated, MIXTURE))
@@ -149,12 +162,12 @@ def test_accumulated_micro_batches_make_one_step_between_them() -> None:
     assert (written.position.batches, written.position.steps) == (4, 2)
 
 
-@pytest.mark.parametrize("target", TARGETS, ids=TARGET_IDS)
-def test_a_resumed_run_ends_where_the_uninterrupted_one_did(target: ObjectiveTarget) -> None:
+@pytest.mark.parametrize("objective", OBJECTIVES, ids=OBJECTIVE_IDS)
+def test_a_resumed_run_ends_where_the_uninterrupted_one_did(objective: dict[str, object]) -> None:
     stated = configuration(
         budget=budget(epochs=2, batch_size=2),
         checkpoint=CheckpointPolicy(every_steps=3),
-        target=target,
+        **objective,
     )
     whole, halved = InMemoryArtifactStore(), InMemoryArtifactStore()
 
@@ -173,7 +186,8 @@ def test_a_resumed_run_ends_where_the_uninterrupted_one_did(target: ObjectiveTar
         assert torch.equal(value, picked_up[key]), key
     # The trailing copy of the encoder is state the optimiser does not hold, so it is checked by
     # name: a resume that rebuilt it rather than restored it would still agree on the encoder.
-    assert any(key.startswith("teacher.") for key in trained) == target.is_latent
+    assert any(key.startswith("teacher.") for key in trained) == stated.target.is_latent
+    assert any(key.startswith("projection.") for key in trained) == stated.contrast.is_stated
 
 
 def test_a_checkpoint_records_where_the_run_stood() -> None:
@@ -188,9 +202,9 @@ def test_a_checkpoint_records_where_the_run_stood() -> None:
     assert (written.position.epoch, written.position.batches, written.position.steps) == (0, 3, 3)
 
 
-@pytest.mark.parametrize("target", TARGETS, ids=TARGET_IDS)
-def test_what_a_run_stored_is_what_it_trained(target: ObjectiveTarget) -> None:
-    stated = configuration(budget=budget(epochs=1, batch_size=2), target=target)
+@pytest.mark.parametrize("objective", OBJECTIVES, ids=OBJECTIVE_IDS)
+def test_what_a_run_stored_is_what_it_trained(objective: dict[str, object]) -> None:
+    stated = configuration(budget=budget(epochs=1, batch_size=2), **objective)
     store = InMemoryArtifactStore()
     runtime = TorchTrainingRuntime(store, device="cpu")
 
@@ -201,7 +215,12 @@ def test_what_a_run_stored_is_what_it_trained(target: ObjectiveTarget) -> None:
     restored = runtime.restore(kept)
     assert restored.encoder.architecture == stated.architecture
     assert not restored.training
-    assert isinstance(restored, LatentPrediction if target.is_latent else MaskedReconstruction)
+    expected: type[PretrainingObjective] = MaskedReconstruction
+    if stated.target.is_latent:
+        expected = LatentPrediction
+    elif stated.contrast.is_stated:
+        expected = ContrastiveReconstruction
+    assert type(restored) is expected
 
 
 def test_a_precision_this_device_cannot_run_is_refused_before_anything_is_trained() -> None:
@@ -468,6 +487,24 @@ def test_the_run_says_where_it_can_be_picked_up_from(caplog: pytest.LogCaptureFi
     assert any(
         message.startswith("epoch 1 of 1 done") and "invented validation" in message
         for message in said
+    )
+
+
+def test_the_run_says_what_each_term_of_a_two_term_objective_cost(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stated = configuration(budget=budget(epochs=1, batch_size=2), contrast=CONTRAST)
+
+    with caplog.at_level("INFO", logger="emblema.pretraining"):
+        list(TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(stated, MIXTURE))
+
+    done = [m for m in (r.getMessage() for r in caplog.records) if m.startswith("epoch 1 of 1")]
+    assert len(done) == 1
+    assert re.search(r"training [\d.]+ \(reconstruction [\d.]+, contrast [\d.]+\)", done[0])
+    assert re.search(
+        r"invented validation [\d.]+, [\d.]+ of the trivial predictor's "
+        r"\(reconstruction [\d.]+ of [\d.]+, contrast [\d.]+ of [\d.]+\)",
+        done[0],
     )
 
 

@@ -5,6 +5,7 @@ from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.exceptions import InvalidExperimentConfigurationError
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.checkpoint_policy import CheckpointPolicy
+from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.corpus_fraction import CorpusFraction
 from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
@@ -33,7 +34,9 @@ class ExperimentConfiguration:
     layer; the corpus fraction is a share a run could read; no corpus has its passes or its
     fraction stated twice, and both are stated in the order of their corpus names, so that one
     configuration is one value whatever order a file or a database listed the corpora in; a
-    latent target reads no more blocks than the encoder has.
+    latent target reads no more blocks than the encoder has; a contrastive term is stated beside
+    the value target only, since the objective that predicts states has no decoder's half to
+    contrast.
 
     Attributes:
         name: What the experiment is called, and what its runs are grouped under.
@@ -52,6 +55,9 @@ class ExperimentConfiguration:
         target: What the prediction at a hidden token is compared with: the token's value, as
             every run before the knob existed, or the state a trailing copy of the encoder gives
             it. Another parameter of the method: the two are different runs over the same data.
+        contrast: The term beside the loss at the hidden tokens that tells the two halves of a
+            window apart from other windows', weighted and tempered; none unless stated, which
+            is every run before the term existed.
         budget: How long the run trains and in how large a step.
         precision: What the forward and backward pass are computed at.
         checkpoint: How often resumable state is written.
@@ -82,6 +88,7 @@ class ExperimentConfiguration:
     precision: Precision
     checkpoint: CheckpointPolicy
     target: ObjectiveTarget = field(default_factory=ObjectiveTarget.value)
+    contrast: ContrastiveTerm = field(default_factory=ContrastiveTerm.none)
     passes: tuple[CorpusPasses, ...] = ()
     fractions: tuple[CorpusFraction, ...] = ()
     start: ArtifactRef | None = None
@@ -114,6 +121,11 @@ class ExperimentConfiguration:
             raise InvalidExperimentConfigurationError(
                 f"the target reads {self.target.layers} blocks of an encoder of "
                 f"{self.architecture.layers}"
+            )
+        if self.contrast.is_stated and self.target.is_latent:
+            raise InvalidExperimentConfigurationError(
+                "the contrastive term is stated beside the value target only, not the "
+                f"{self.target.kind} target"
             )
         # Building the share runs its invariant: a fraction no run could read is no configuration.
         _ = self.corpus_share
@@ -160,10 +172,10 @@ class ExperimentConfiguration:
         must digest to one signature. Passes and fractions are rendered last, by corpus name,
         and only where stated: a run that reads every corpus once, at the mixture's share,
         renders as it did before either knob existed. The tail is rendered only where it is
-        drawn, the target only where it is a state, the start only where there is one and the
-        trained parameters only where they are not everything, for the same reason. The start
-        renders as the checksum of the stored model: what the run starts from is the weights,
-        wherever they are kept.
+        drawn, the target only where it is a state, the contrast only where it is stated, the
+        start only where there is one and the trained parameters only where they are not
+        everything, for the same reason. The start renders as the checksum of the stored model:
+        what the run starts from is the weights, wherever they are kept.
         """
         passes = {
             f"passes.{stated.corpus}": stated.passes
@@ -193,6 +205,14 @@ class ExperimentConfiguration:
             if self.target.is_latent
             else {}
         )
+        contrast: dict[str, str | int | float] = (
+            {
+                "contrast_weight": float(self.contrast.weight),
+                "contrast_temperature": float(self.contrast.temperature),
+            }
+            if self.contrast.is_stated
+            else {}
+        )
         start: dict[str, str | int | float] = (
             {} if self.start is None else {"start": str(self.start.checksum)}
         )
@@ -219,6 +239,7 @@ class ExperimentConfiguration:
             "loss": str(self.loss.kind),
             "huber_delta": float(self.loss.huber_delta),
             **target,
+            **contrast,
             "epochs": self.budget.epochs,
             "batch_size": self.budget.batch_size,
             "accumulation_steps": self.budget.accumulation_steps,

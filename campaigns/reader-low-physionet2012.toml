@@ -1,0 +1,48 @@
+# The network from nothing and full fine-tuning at 20 and 50 stays on half the tuning side, under
+# the settings in force at those budgets (docs/preregistration.md, "Recipe"): the few-shot cells
+# the literature's gains for a contrastive pretext live in, read descriptively beside the reader
+# of the stage (docs/verification/pretext-variants.md, 2026-10-20). Neither network had run on
+# the half at these budgets before.
+#
+# Scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10, so the cells
+# pair by stay and seed with the probes' campaign at the same budgets. A campaign divided this
+# way chooses nothing. Defined under the backbones the declaration names, so that fine-tuning is
+# read under each pretraining and the network from nothing, which reads no weights, runs under
+# each as a pair that should differ by nothing but the card.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "reader-low-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch",
+    "full_fine_tuning",
+]
+control = "from_scratch"
+endpoint = "full_fine_tuning"
+
+[budgets]
+labels = ["20", "50"]
+endpoint = "50"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+# One contender at two budgets: the family holds the cell beside the endpoint.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

@@ -20,6 +20,9 @@ class MaskedReconstruction(PretrainingObjective):
     every position and ``ReconstructionLoss`` decides which count; the masks come from outside, so
     tests and diagnostics can hold them fixed.
 
+    Encoding and decoding are two calls, so an objective that adds a term over the encoder's
+    states reads them once and decodes from the same states.
+
     Attributes:
         encoder: The backbone being pretrained; what remains when the objective is done.
         decoder: The part that is thrown away.
@@ -32,19 +35,23 @@ class MaskedReconstruction(PretrainingObjective):
             encoder.architecture, layers=decoder_layers, dropout=dropout
         )
 
-    def forward(self, batch: TokenTensors, masks: TokenMasks) -> Tensor:
-        hidden = masks.hidden
-        states = self.encoder(
-            batch.features,
-            batch.channel_ids,
-            batch.timestamps,
-            batch.timeless,
-            batch.padding_mask | hidden,
+    def encoded(self, batch: TokenTensors, padding_mask: Tensor) -> Tensor:
+        """The encoder's states of every position, the tokens under ``padding_mask`` unseen."""
+        states: Tensor = self.encoder(
+            batch.features, batch.channel_ids, batch.timestamps, batch.timeless, padding_mask
         )
+        return states
+
+    def decoded(self, states: Tensor, batch: TokenTensors, masks: TokenMasks) -> Tensor:
+        """The value predicted at every position from the states of the tokens the encoder saw."""
         encodings = self.encoder.channel_embedding(batch.channel_ids) + self.encoder.time_encoding(
             batch.timestamps, batch.timeless
         )
-        return self.decoder(states, hidden, encodings, batch.padding_mask)
+        prediction: Tensor = self.decoder(states, masks.hidden, encodings, batch.padding_mask)
+        return prediction
+
+    def forward(self, batch: TokenTensors, masks: TokenMasks) -> Tensor:
+        return self.decoded(self.encoded(batch, batch.padding_mask | masks.hidden), batch, masks)
 
     def score(self, batch: TokenTensors, masks: TokenMasks, loss: ObjectiveLoss) -> ObjectiveScore:
         """The error against the hidden values, and what predicting the channel mean would cost."""
