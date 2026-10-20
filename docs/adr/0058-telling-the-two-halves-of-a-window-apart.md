@@ -1,6 +1,6 @@
 # ADR-0058: Telling the two halves of a window apart — a contrastive term beside masked reconstruction, weighted by the experiment file
 
-- Status: proposed; accepted or closed by the reading declared in [`pretext-variants.md`](../verification/pretext-variants.md)
+- Status: rejected (2026-10-20): the term learnt the stays' measurement clock ([`pretext-variants.md`](../verification/pretext-variants.md))
 - Date: 2026-10-19
 
 ## Context
