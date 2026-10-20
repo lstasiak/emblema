@@ -1,415 +1,149 @@
 # Findings
 
-What the project has measured so far, in one place. Every number is **preliminary and on the
-validation side**: the frozen test side of every task is opened once, at the end. Rules for each
-comparison were registered before the run they judge ([preregistration](preregistration.md)).
-The evidence for each line is in [`docs/verification/`](verification/README.md).
+What the project has measured, on one page. Every number is on the **validation side** and
+preliminary: each task's frozen test side is opened once, at the end. Each comparison was judged
+by a rule registered before its run ([preregistration](preregistration.md)); each row links the
+note that holds its evidence ([`verification/`](verification/README.md)).
 
-Last updated 2026-10-15.
+Last updated 2026-10-20.
 
-## The claim
+## Status
 
-A single variable-channel, permutation-invariant transformer, pretrained without labels on sensor
-corpora that differ in channel count and sampling regime, lowers the number of labels a new task
-needs. The claim is tested against the same architecture trained from scratch and against strong
-classical baselines, with paired intervals over independent units.
+- **The claim is not supported so far.** No way of using the pretrained encoder beats the same
+  network trained from scratch beyond the instrument's resolution, on either task, with one
+  exception: full fine-tuning at 200 intensive-care stays (+0.024 to +0.033 in area), below the
+  registered least gain.
+- **Classical models lead at few labels.** Trees over per-channel summaries match or beat every
+  network from 200 labels up on both tasks; on the intensive-care stays MiniRocket does too.
+- **What transfers is the encoder's machinery, not its features for the task.** Fitting only the
+  channel rows of a corpus the backbone never read, on its unlabelled windows, brings the pretext
+  to within 0.006 of a backbone that read it, and carries part of a downstream task (+0.031 on
+  sepsis at 4,000 patients).
+- **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
+  task's own domain, the adaptation recipe, and five variants of the pretext.
+- **Next:** measure what the task reads at few labels and whether the encoder's states carry it,
+  before another objective is trained.
 
 ## Setup
 
 | | |
 | --- | --- |
-| Task | Remaining useful life on C-MAPSS FD001: 79 tuning engines, 21 validation engines, 100 frozen test engines; the second task, in-hospital death on PhysioNet 2012, is set out in section 6 |
-| Corpus | The four C-MAPSS subsets, one channel per sensor and operating condition, scaled within the condition ([ADR-0034](adr/0034-the-turbofan-corpus-read-per-operating-condition.md)); window 50 cycles, stride 5 |
-| Backbone | 4.75M-parameter encoder (256 wide, 6 blocks), masked reconstruction, 8 epochs |
-| Arms | From scratch (control), frozen probe, frozen probe solved in closed form, low-rank updates (LoRA), full fine-tuning; one linear head over the tail of the window ([ADR-0030](adr/0030-transfer-modes.md), [ADR-0041](adr/0041-the-pooling-of-the-head-as-a-knob.md), [ADR-0044](adr/0044-the-probe-solved-in-closed-form.md)); rate and tail chosen per arm and budget by a declared selection |
-| Statistics | Reduction in RMSE against the control, 95 % paired bootstrap over engines, Holm over the secondary cells (35 in the paired campaign), a practical floor ([ADR-0032](adr/0032-statistics-of-a-paired-comparison.md)) |
-| Budgets | 50, 200 (endpoint), 1,000 and all 2,568 labelled windows; 5 seeds |
+| Tasks | Remaining useful life on C-MAPSS FD001 (RMSE in cycles; 79 tuning and 21 validation engines); death in hospital on PhysioNet 2012 (AUROC over the first 48 h of a stay); sepsis on PhysioNet 2019 as a reader within one backbone |
+| Pretraining corpora | Mixture of four: C-MAPSS, SKAB, ESA satellite telemetry, PhysioNet 2012 ([ADR-0029](adr/0029-pretraining-over-a-mixture-of-corpora.md)); up to about 10⁹ values over 26 publications for the scale curve |
+| Backbone | Set encoder over (channel, time, value) tokens, 4.8M parameters (25.3M for scale), pretrained by masked reconstruction ([ADR-0017](adr/0017-encoder-architecture.md)) |
+| Arms | From scratch (control), frozen probe, probe solved in closed form, LoRA, full fine-tuning; trees, MiniRocket and a patch model as classical baselines |
+| Statistics | Paired bootstrap over engines or stays, seeds paired; a backbone comparison counts past 2·√(SE² + (s²/2)(1/n₁ + 1/n₂)), s the spread between pretrainings ([ADR-0032](adr/0032-statistics-of-a-paired-comparison.md)) |
+| Instrument | The closed-form probe over all blocks at 500 stays on half the tuning side, ten seeds; it resolves 0.02 to 0.03 in area, not 0.01 ([note](verification/verdict-statistics.md)) |
 
 ## Results
 
-### 1. Repeated by the harness, the registered endpoint is not confirmed: the control leads
+### Pretraining against training from scratch
 
-One paired campaign over ten candidates, four budgets and five seeds, every network pooling by
-the tail of the window and every trained arm at the rate and tail its selection chose per budget
-(tier M, Colab G4 and A100, fp32; [note](verification/label-efficiency-curve.md)). At 200
-labelled windows full fine-tuning is **10.5 % worse** than training from scratch (14.29 → 15.77;
-interval [−2.56, −0.54]; floor 0.50). No candidate beats the control at any budget under the
-family's correction.
+FD001, one paired campaign, five seeds, the encoder pretrained on the four C-MAPSS subsets,
+every arm tuned per budget by the same declared selection
+([note](verification/label-efficiency-curve.md), [classical](verification/classical-baselines.md)).
+RMSE, lower is better.
 
-| Labelled windows | From scratch | Frozen probe | Probe, closed form | LoRA | Full fine-tuning |
+| Labelled windows | From scratch | Frozen probe | Full fine-tuning | Trees per channel | MiniRocket |
 | --- | --- | --- | --- | --- | --- |
-| 50 | **16.34** | 16.93 (n.s.) | 17.41 (worse) | 20.19 (worse) | 17.61 (worse) |
-| 200 | **14.29** | 14.66 (n.s.) | 15.12 (n.s.) | 14.96 (n.s.) | 15.77 (worse, endpoint) |
-| 1,000 | **12.77** | 14.53 (worse) | 14.29 (worse) | 13.97 (n.s.) | 13.40 (n.s.) |
-| 2,568 (all) | **11.47** | 14.18 (worse) | 13.61 (worse) | 12.76 (n.s.) | 12.71 (n.s.) |
+| 50 | **16.34** | 16.93 | 17.61 | 19.35 | 17.17 |
+| 200 | 14.29 | 14.66 | 15.77 | **14.08** | 15.30 |
+| 1,000 | 12.77 | 14.53 | 13.40 | **12.04** | 15.40 |
+| all (2,568) | **11.47** | 14.18 | 12.71 | 11.76 | 15.42 |
 
-RMSE in cycles, mean over five seeds; verdicts are the campaign's, paired over engines.
+Bold: the lowest mean. The registered endpoint, full fine-tuning at 200 windows, is 10.5 %
+worse than from scratch (interval [−2.56, −0.54] RMSE).
 
-- The first curve (2026-09-22, every arm under the mean, one peak per arm) read +12.3 % for full
-  fine-tuning at 200 labels. What that measured was the control's handicap: under the tail and
-  at its own rate the control fell from 19.0 to 14.3 at 200 labels, full fine-tuning only from
-  16.6 to 15.8.
-- The pretrained arms are not under-tuned: each ran at what its own selection chose at that
-  budget, and the selections found the pretrained weights hurt by more optimisation, not helped.
-- Both probes place the pretrained states within about a cycle of the control at 200 labels and
-  no closer. What the encoder learnt from the pretext is close to what a fresh encoder learns
-  from 200 labelled windows of this task.
+PhysioNet 2012, half the tuning side, ten seeds ([note](verification/verdict-statistics.md)).
+AUROC, higher is better.
 
-### 2. Classical baselines tie the control and beat every pretrained arm
-
-In the same campaign, at the variants their selections chose per budget
-([ADR-0038](adr/0038-the-tuned-baseline.md), [note](verification/classical-baselines.md)):
-
-| Labelled windows | From scratch | Trees per channel | Trees across channels | MiniRocket | Patch model |
-| --- | --- | --- | --- | --- | --- |
-| 50 | **16.34** | 19.35 (worse) | 16.59 (n.s.) | 17.17 (n.s.) | 22.13 (worse) |
-| 200 | 14.29 | **14.08** (n.s.) | 14.24 (n.s.) | 15.30 (n.s.) | 17.67 (worse) |
-| 1,000 | 12.77 | **12.04** (n.s.) | 13.09 (n.s.) | 15.40 (worse) | 13.91 (n.s.) |
-| 2,568 (all) | **11.47** | 11.76 (n.s.) | 13.32 (n.s.) | 15.42 (worse) | 12.54 (n.s.) |
-
-The trees per channel and the control are indistinguishable from 200 labels up; the earlier
-26 % margin of the trees over the network from scratch was the same handicap. Trees over the
-spectrum trail everything (18.2 at 200). The patch model, run as published under the mean, is
-24 % behind the control at 200 and within reach at 1,000 and above. **On FD001 a well-tuned
-transformer trained from scratch is as good as a well-tuned classical method, and the pretrained
-encoder adds nothing to either.**
-
-### 3. The pipeline finds structure where it exists
-
-A generated positive control has two sensor layouts over one latent process
-([ADR-0018](adr/0018-synthetic-positive-control.md), [note](verification/synthetic-transfer.md)).
-
-- With a window that spans the process's time scales (128 steps), the coupled pair transfers:
-  0.094 below a fresh encoder, interval [+0.089, +0.099], floor 0.053.
-- At a window of 32 everything fails, including the ceiling. The window was the fault, not the data.
-- A backbone pretrained on noise is a worse start than none.
-- The "null" pair shares the family of the signals, and that family is most of what transfers. It
-  controls leakage, not structure.
-
-### 4. Pretraining over a mixture of corpora learns every corpus
-
-C-MAPSS, SKAB, SMD and ESA satellite telemetry under one chained vocabulary, 8 epochs on a Kaggle
-T4 ([ADR-0029](adr/0029-pretraining-over-a-mixture-of-corpora.md),
-[note](verification/manual-handoff.md)). Each held-out side is learnt against its channel-mean
-predictor: C-MAPSS to 0.7 %, SKAB to 26 %, SMD to 37 %, ESA-AD to 28 %. SMD's held-out loss rises
-while the mean falls, so a per-corpus weight is the next parameter.
-
-Two findings shaped that run:
-
-- A squared error let 0.13 % of satellite tokens carry 45 % of the gradient. A Huber loss and a
-  split that puts excursions on both sides turned *not learnt* into *data-limited*
-  ([ADR-0028](adr/0028-bounding-the-loss-of-an-excursion.md)).
-- Scaling C-MAPSS sensors across all operating conditions made the pretext trivially solvable.
-  The first grid failed its endpoint on that corpus
-  ([ADR-0034](adr/0034-the-turbofan-corpus-read-per-operating-condition.md)).
-
-### 5. The head cost most of the gap, and the pretraining margin at 200 labels shrinks with it
-
-Every network above pooled a window's states by their mean before a linear head. Read on frozen
-states ([note](verification/head-and-representation.md)), the mean is the largest identified loss
-against the trees: a linear head over the last fifth of the window sits within the trees' interval
-(14.73 against 13.94), the same head over the whole window 19 % behind. The last reading alone is
-not the task (21.6): remaining life is read from the movement within the window. The pretrained
-states beat an untrained encoder's everywhere.
-
-Under training, in one paired campaign at 200 labels, tier S, three seeds:
-
-| pooling | from scratch | frozen probe | full fine-tuning |
-| --- | --- | --- | --- |
-| mean | 18.72 | 19.75 | 15.84 |
-| tail 20 % | **14.96** | 16.83 | 15.44 |
-| attention | 18.86 | 19.29 | 16.24 |
-
-- The network trained from nothing under the tail lands 7 % behind the trees, interval across
-  zero; under the mean it was 26 % behind.
-- **Under the tail, full fine-tuning against from scratch is −3.3 %, interval [−1.93, +0.79].**
-  Part of the first curve's 12.3 % was the mean handicapping the control more than the
-  pretrained arm. Three seeds and one budget could not tell a 5 % advantage from none; the repeat
-  in section 1 settled it: all of it was.
-- Attention pooling from a zero query does not help under this schedule; the frozen probe's head,
-  trained by the arms' schedule, stays about three cycles above a ridge on the same states.
-- A pilot selection on held-out tuning engines (three repeats of 16, never the validation side)
-  finds the two arms want different rates: from nothing gains 8.0 % [+0.78, +1.71] at three times
-  the peak, full fine-tuning loses 38 % at it and keeps its setting; doubling the steps buys the
-  control 2.4 % [+0.04, +0.70]. At each arm's own setting the control leads full fine-tuning by
-  8.0 % [+0.47, +2.03] on those engines. One peak for every arm was the curve's second handicap.
-
-### 6. On in-hospital death the endpoint is not confirmed; the task's own backbone helps the probe
-
-Death in hospital after an intensive-care stay (PhysioNet/CinC Challenge 2012), read over the
-first 48 hours: learnt from set A's 3,997 stays, scored on set B's 3,994, AUROC with a paired
-bootstrap over stays ([ADR-0046](adr/0046-comparing-candidates-by-auroc.md),
-[note](verification/intensive-care-curve.md)). Two campaigns, one per backbone, every candidate at
-its selection's choice per budget, five seeds; the registered least gain is 0.045 in area.
-
-| Labelled stays | From scratch | Frozen probe | Full fine-tuning | Trees per channel | MiniRocket |
-| --- | --- | --- | --- | --- | --- |
-| 50 | 0.65 | 0.64 (0.67) | 0.67 (0.71) | 0.66 | 0.71 |
-| 200 | 0.68 | 0.66 (0.75) | 0.70 (0.71) | 0.76 | **0.76** |
-| 1,000 | 0.78 | 0.76 (0.82) | 0.77 (0.79) | **0.83** | 0.82 |
-| 3,997 (all) | 0.81 | 0.79 (0.84) | 0.81 (0.80) | **0.86** | 0.85 |
-
-AUROC, mean over five seeds, under the mixed backbone; in brackets under the backbone of the
-stays alone.
-
-- **The endpoint is not confirmed**: under the mixed backbone full fine-tuning gains 0.024 in area
-  at 200 stays, interval [+0.012, +0.036], below a floor of 0.040 set by one seed's spread.
-- Under the mixed backbone no way of using it beats the network trained from nothing at any
-  budget. Under a backbone pretrained on the stays alone the frozen probe gains 0.055, 0.047 and
-  0.031 at 200, 1,000 and every stay, above the floor. The two backbones side by side were not given a
-  prediction beforehand, so this is a description, not a test.
-- From 200 stays up a classical baseline has the highest mean area: MiniRocket at 200, the trees
-  per channel at 1,000 and every stay; the stays-alone probe comes within 0.005 of the trees at
-  1,000. At 50 stays full fine-tuning under the stays alone and MiniRocket are level.
-- The methods that need a grid pay nothing measurable for it: the patch model leads the network
-  on raw readings by 0.042 and 0.041 at 50 and 200 stays, MiniRocket by 0.04 to 0.08 at every
-  budget. The patch model also differs in shape and dropout, so the grid alone is not isolated;
-  the raw readings give the network no advantage at these budgets.
-- Two possible handicaps of the networks are open: rates chosen at the edge of their grid, and a
-  step floor confirmed on the turbofans only.
-
-### 7. The network's deficit on the stays is in its training, not in its data
-
-A diagnosis before transfer is measured, read on one fifth of set A's tuning stays (800 stays,
-held out by one seed, the validation side unread), seeds 1 to 10, every step declared with a
-prediction before it ran ([note](verification/intensive-care-curve.md), sections from
-2026-10-01; [ADR-0047](adr/0047-a-training-regime-beside-the-schedule.md)). Levels here are on
-that fifth and are not those of the table in section 6.
-
-| Network from nothing, every stay | AUROC | Gain over the control |
-| --- | --- | --- |
-| control: 30 epochs of cosine decay, last weights | 0.783 | |
-| kept at its best epoch on a fifth of its labels held out | 0.810 | +0.027 [+0.009, +0.044] |
-| 64 wide, 2 blocks (77,000 parameters), under the published network's regime whole | 0.818 | +0.034 [+0.015, +0.054] |
-| STraTS, the published network, on the same stays | 0.827 | |
-
-- **The data are not the deficit.** The published network run on this project's tokens reaches
-  0.827, on its own preparation 0.822; the tokens are the raw files.
-- **Nor are the things tried first.** Static features set apart in the head, pooling under
-  attention, dropout, readings on an hourly grid, a nonlinear value embedding and values
-  bounded at five standard deviations each gain the network nothing measurable. The published
-  network's own lead from its value embedding is a bound on the tails: a linear value with
-  clipped readings recovers 0.034 of the 0.039 it loses.
-- **The stop is the lever.** Kept at its best epoch on held-out labels the network gains 0.027
-  from fewer labels (2,560 against 3,200) and its spread over seeds falls from 0.018 to 0.006;
-  the network overfitted through the second half of its schedule and the protocol read the last
-  weights. The stop is the registered recipe of every arm at the budget of every stay from
-  2026-10-03. No registered verdict changes.
-- **Two blocks instead of six close the rest.** Under the published regime whole the small shape
-  lands 0.009 from the published network, an interval that includes it. It needs the regime's
-  other parts (a class weight, withheld channels, dropout, a constant rate), which cost the
-  large shape 0.011.
-- **The stop does not scale down.** At 1,000 stays it gains 0.018 and 0.013 by the interval
-  only; at 200 it gains nothing in the large shape and loses 0.038 in the small one, because a
-  patience of ten epochs is 100 steps there, inside the warm-up. The fixed epochs stand below
-  the budget of every stay.
-- **The mixture.** Without SMD, 40 % of its steps, the mixture transfers as the mixture does, so
-  that corpus teaches the task nothing; the same mixture at thirteen passes, with the better
-  pretext loss, loses 0.057 under fine-tuning to its eight-pass twin. A backbone is chosen on
-  the task, never by its pretext loss. The rate and the step floor of fine-tuning at 200 stays
-  move it by at most 0.012.
-
-### 8. At about 10⁸ values, pretraining does not carry a probe to the network from nothing
-
-The first point of a curve of the gain over the data a backbone is pretrained on
-([ADR-0049](adr/0049-the-scale-of-pretraining-as-a-stage.md),
-[note](verification/intensive-care-curve.md), 2026-10-05): the mixture of four corpora, about 10⁸
-values, read by the probe solved in closed form against the network from nothing, ten seeds, under
-a recipe chosen on the tuning side beforehand
-([ADR-0050](adr/0050-a-head-solved-first-a-patience-in-steps-and-a-probe-at-initialisation.md)).
-
-| Gain of the probe, in area | 20 stays | 50 stays | 200 stays |
-| --- | --- | --- | --- |
-| against the network from nothing (two pretraining seeds) | −0.058, −0.071 | −0.022, −0.016 | −0.024, +0.013 |
-| against the same probe over an untrained encoder | +0.011, −0.002 | +0.009, +0.013 | +0.012, +0.035 |
-
-- **The probe lies below the network from nothing at 20 stays** under both pretrainings, past
-  the spread a draw of labels makes; at 50 stays the gap (−0.022, −0.016) is within it. What
-  pretraining adds over an untrained encoder's states at 20 and 50 stays cannot be told from zero
-  ([note](verification/intensive-care-curve.md), 2026-10-08).
-- **On FD001 the mixture's states are worse than an untrained encoder's** for a linear reading
-  of the remaining life, by 3.9 to 5.9 RMSE at 50 windows.
-- **Two pretrainings differ by 0.004 at 50 stays**, within a draw of labels (±0.016), so the
-  gap between pretraining seeds is not measured. A shape five times larger gains nothing
-  here, once its rate is halved.
-- Full fine-tuning gains 0.030 and 0.036 over the network from nothing at 200 stays under
-  today's shape, and loses 0.021 under the larger one at its rate.
-
-This is the curve's left end; whether the gain grows with the data is read at the next points.
-Two variants of the pretext, a forecast tail and masks over three quarters of a window, were
-read by the same probe on a fifth of the tuning side ([note](verification/pretext-variants.md),
-2026-10-06): neither beats the mixture's masks at 50 stays (−0.017 and −0.015 in area, intervals
-crossing zero), so the curve continues under the masks it started with. A second objective, which
-predicts a trailing teacher's states at the hidden tokens rather than their values
-([ADR-0054](adr/0054-predicting-the-teachers-states-at-the-hidden-tokens.md),
-[note](verification/pretext-variants.md), 2026-10-11), was pretrained twice and read by the
-probe over the blocks side by side: it is worse than the mixture's masks by 0.03 at 50 stays past
-the spread of pretraining, no better than an untrained encoder, and worse on FD001 by 5.5 and
-9.5 RMSE. Read again (2026-10-12), its states on the stays fill 4 to 6 directions of 256 against
-7 to 8 under the mixture's masks measured the same way, and lose most of their channel and time
-identity; the pretext is barely learnt there beyond the window's mean state, and the second
-pretraining kept its second epoch of eight by a rule that assumes a fixed baseline. One design of this
-objective failed; whether a target no line can answer teaches better features is still open.
-
-### 9. Read at 500 stays and above, pretraining's share turns negative
-
-Over 200, 500, 1,000 and every stay of half the tuning side, ten seeds: the probe over the blocks
-side by side under the mixture's four pretrainings, the networks under two
-([note](verification/verdict-statistics.md), 2026-10-13).
-
-| Area on the 2,000 stays held out | 200 | 500 | 1,000 | all (2,000) |
+| Labelled stays | 200 | 500 | 1,000 | all (2,000) |
 | --- | --- | --- | --- | --- |
-| network from nothing (the stop from 500 up) | 0.65 | 0.75 | 0.79 | 0.79 |
-| full fine-tuning (the stop from 500 up) | 0.69 | 0.74 | 0.76 | 0.79 |
-| probe, the mixture of four | 0.65–0.67 | 0.69–0.71 | 0.72–0.74 | 0.74–0.76 |
-| probe, about 10⁹ values | 0.64 | 0.67 | 0.69 | 0.71 |
-| probe at initialisation | 0.64 | 0.69 | 0.75 | 0.78 |
+| Network from scratch | 0.65 | 0.75 | 0.79 | 0.79 |
+| Full fine-tuning, mixture of four | 0.69 | 0.74 | 0.76 | 0.79 |
+| Probe, mixture of four | 0.65–0.67 | 0.69–0.71 | 0.72–0.74 | 0.74–0.76 |
+| Probe, untrained encoder | 0.64 | 0.69 | 0.75 | 0.78 |
 
-- **The sign of pretraining's share reverses with the budget.** Over an untrained encoder the
-  probe gains 0.02 to 0.04 at 200 stays, nothing at 500, and loses 0.01 to 0.04 from 1,000 up,
-  every interval below zero at every stay.
-- **More pretraining reads worse.** The point of about 10⁹ values lies below every pretraining
-  of the 10⁸ mixture at every budget, by 0.02 to 0.05 from 500 up, and 0.06 below its own
-  untrained encoder at 1,000 stays and above.
-- **The pretrained weights are a worse start than a draw.** Full fine-tuning beats the network
-  from nothing at 200 stays (+0.032) and loses at 500 and 1,000 (−0.01 to −0.03); on FD001 it
-  is worse at every budget, by 2 to 5 RMSE, and both probes stay behind the network from
-  nothing there.
-- **Not the card, not the recipe, not the labels.** The network from nothing run twice under
-  two campaigns differs by at most 0.005; the stop was chosen for both arms at 500 stays and
-  above (+0.03 to +0.04) before this reading; the gain does not grow with labels, it vanishes.
+Pretraining's share changes sign with the budget: the probe gains 0.02 to 0.04 over an untrained
+encoder at 200 stays, nothing at 500 and loses 0.01 to 0.04 from 1,000 up. On the full grid
+against set B, trees reach 0.76 at 200 stays and 0.86 at every stay, the network 0.68 and 0.81
+([note](verification/intensive-care-curve.md)).
 
-What remains as a cause is the pretext. Reconstructing masked values over the mixture leaves
-states that a linear head, or a network with hundreds of labels, reads worse than the encoder's
-initialisation, and more of it leaves less. Earlier readings saw pieces of this without the dose:
-the task sits in the early blocks ([note](verification/layer-readout.md), 2026-10-09), and the
-second objective's states concentrate (section 8). Here the loss grows with the data pretrained
-on and with the labels learnt from.
+### Is the pipeline sound?
 
-### 10. At 500 stays the loss sits in the top blocks, and no larger recipe beats the mixture
-
-The probe at every block under the point of about 10⁹ values and the mixture's two pretrainings,
-and over the blocks side by side under eighteen other backbones, ten seeds, half the tuning side
-([note](verification/layer-readout.md), 2026-10-14).
-
-| At 500 stays, gain in area | Gain | Read against |
+| Check | Result | Source |
 | --- | --- | --- |
-| about 10⁹ values: blocks 0 to 2 | −0.008 to +0.008 | its initialisation |
-| about 10⁹ values: block 4, block 5, last block | −0.032, −0.037, −0.049 | its initialisation |
-| the mixture by blocks side by side | about +0.005 | its initialisation |
-| PhysioNet 2019 alone (one pretraining) | **+0.020** ± 0.005 | the mixture's four |
-| the stays four times as often | +0.012 ± 0.003 | the mixture's four |
-| 10⁸ and 3·10⁸ points of the data curve | **−0.018**, **−0.021** | the mixture's four |
-| 25.3M at about 10⁹ values: two epochs (two seeds), four epochs | **−0.021** and +0.004, **−0.032** | the mixture's four |
-| the objective of states (two seeds) | **−0.055**, **−0.055** | the mixture's four |
+| Generated data with known shared structure | the pretrained encoder's error 0.094 [0.089; 0.099] below a fresh one's, at a window spanning the process | [synthetic-transfer](verification/synthetic-transfer.md) |
+| Published network (STraTS) on the same stays | 0.827; this network from scratch 0.818 once kept at its best epoch and shrunk to two blocks | [intensive-care-curve](verification/intensive-care-curve.md) |
+| The network from scratch in two campaigns | differs by at most 0.005 | [verdict-statistics](verification/verdict-statistics.md) |
 
-Bold passes the threshold between backbones under both the mixture's spread and the spread
-pooled over every recipe pretrained twice.
+### What changes the backbone
 
-- **The loss is in the top blocks.** Under the point of about 10⁹ values the early blocks read
-  as the initialisation does and the loss grows block by block to the last. A one-block decoder
-  that leaves reconstruction to the encoder's top blocks would do this.
-- **No larger recipe beats the mixture.** More data, the larger shape and longer training lie at
-  or below it; 25.3M's two pretrainings differ by 0.025.
-- **One corpus alone reads the stays better.** PhysioNet 2019, pretrained alone for eight epochs,
-  is the only backbone above the mixture over both thresholds, from one pretraining; how much of
-  that is the corpus and how much the epochs is not separated.
-- **The objective of states is the worst reading of all**, under both seeds.
+Each recipe read by the instrument at 500 stays against the mixture of four (four pretrainings).
+Bold passes the threshold in force, s = max(0.014, the recipe's own): about 0.024 for one
+pretraining against four, 0.021 for two.
 
-### 11. Neither a deeper decoder nor the intensive-care corpora alone replace the mixture
-
-Two variants of the mixture's recipe, read by the probe over the blocks side by side at 500
-stays against the mixture's four pretrainings: the decoder pretrained twice, the intensive-care
-corpora four times ([note](verification/pretext-variants.md), 2026-10-15).
-
-| Gain in area over the mixture | 200 | 500 | 1,000 | all (2,000) |
-| --- | --- | --- | --- | --- |
-| a decoder of four blocks | **−0.025** | **−0.037** | **−0.044** | **−0.022** |
-| the two intensive-care corpora, at the mixture's steps | *+0.010* | *+0.015* | *+0.019* | *+0.021* |
-
-Bold: the interval lies below zero; italic: above zero. At 500, the rule's budget, the
-intensive-care corpora's interval is [+0.005; +0.025] against a threshold of 0.022.
-
-- **The deeper decoder makes the encoder worse, not freer.** It reads worse at every budget and
-  in every block, and leaves the encoder's states 2 to 3 directions wide of 256 against the
-  mixture's 8, while reconstructing the stays no better. Depth of the decoder is not the cause of
-  the loss in the top blocks (section 10).
-- **The intensive-care corpora read the stays better than the mixture, by less than they vary.**
-  Four against four the gain lies above zero at every budget, but their four pretrainings differ
-  by up to 0.036 at 500 stays: their spread of 0.020 is 3.5 times the mixture's, and it sets the
-  threshold the gain of +0.015 stays under. Their states are the richest read so far.
-- **The registered spread understates what a new recipe brings.** The mixture's 0.0057 comes from
-  its own four; pooled over every recipe pretrained more than once, the spread at 500 stays is
-  0.014. Under it the single pretraining on the 2019 stays alone (section 10, +0.020) no longer
-  passes: one against four, the threshold is about 0.025.
-- **From 1,000 stays up no backbone gains over its untrained encoder** (section 9): the clinical
-  four lie at −0.006 and −0.011 with intervals across zero, the decoder 0.05 to 0.07 below.
-
-### 12. Continuing the base on the task's own corpora adds nothing beyond the domain's recipe
-
-The point of about 10⁹ values, continued for four epochs over the two intensive-care corpora
-with every weight free, read by the probe at 500 stays ([note](verification/domain-continuation.md),
-2026-10-19).
-
-| Gain in area at 500 stays | over the point | over the mixture's four | over the intensive-care four |
+| Recipe | Pretrainings | Gain in area | Source |
 | --- | --- | --- | --- |
-| at a tenth of the recipe's peak (two pretrainings) | −0.000 [−0.007; +0.007] | **−0.025** | **−0.039** |
-| at the recipe's peak (one pretraining) | *+0.023* [+0.007; +0.038] | −0.002 | **−0.016** |
+| Scale curve at about 10⁸ and 3·10⁸ values | 1 each | −0.018, −0.021 | [layer-readout](verification/layer-readout.md) |
+| Scale curve at about 10⁹ values | 1 | 0.02 to 0.05 below every mixture pretraining | [verdict-statistics](verification/verdict-statistics.md) |
+| 25.3M parameters at about 10⁹ values | 2 + 1 | −0.021 / +0.004; four epochs **−0.032** | [layer-readout](verification/layer-readout.md) |
+| Intensive-care corpora alone | 4 | +0.015 [+0.005; +0.025], threshold 0.022 | [pretext-variants](verification/pretext-variants.md) |
+| PhysioNet 2019 alone | 1 | +0.020 ± 0.005 | [layer-readout](verification/layer-readout.md) |
+| The stays four times as often in the mixture | 1 | +0.012 ± 0.003 | [layer-readout](verification/layer-readout.md) |
+| Masks over three quarters of a window | 1 | +0.008 ± 0.005 | [layer-readout](verification/layer-readout.md) |
+| Masks over the forecast tail | 1 | −0.019 ± 0.005 | [layer-readout](verification/layer-readout.md) |
+| Decoder of four blocks | 2 | **−0.037** | [pretext-variants](verification/pretext-variants.md) |
+| Predicting a teacher's states instead of values | 2 | **−0.055** | [pretext-variants](verification/pretext-variants.md) |
+| Contrast between a window's two halves | 2 | **−0.103** [−0.125; −0.081] | [pretext-variants](verification/pretext-variants.md) |
+| 10⁹ continued on the task's domain, rate 1e-4 / 1e-3 | 2 / 1 | **−0.025** / −0.002 | [domain-continuation](verification/domain-continuation.md) |
 
-- **The rate decides whether the base moves at all.** At the low peak the continuation, and
-  the same continuation with the encoder frozen, leave the probe where the point stands at every
-  budget, though the pretext fell and the states narrowed. At the recipe's own peak it gains
-  0.023, under the threshold of 0.032 for one pretraining against one.
-- **The base plus its domain reads as the domain alone at best.** The high rate reaches the
-  mixture's four and stays below the intensive-care four, which never saw the base. Nothing in
-  the base's other corpora reaches the task's reader through four epochs on the clinic.
-- **Fitted channel rows carry the pretext to a corpus never read, not a linear reading of the
-  task.** On the turbofan task at 50 windows, the point pretrained without C-MAPSS reads the
-  probe as the point does once C-MAPSS's rows are fitted without labels, and no better than with
-  rows drawn; fine-tuning gains 1.5 RMSE on the point.
+### How the backbone is used
+
+| Change | Result | Source |
+| --- | --- | --- |
+| All blocks side by side instead of the last | +0.020 to +0.036 at 50 stays; registered as the reader | [layer-readout](verification/layer-readout.md) |
+| Encoder slowed to 1/10 or 1/100 during fine-tuning (LP-FT) | loses up to 0.11; at the full rate within 0.01 of fine-tuning | [fine-tuning-recipe](verification/fine-tuning-recipe.md) |
+| Network kept at its best epoch on held-out labels | +0.027 at every stay, spread over seeds 0.018 → 0.006 | [intensive-care-curve](verification/intensive-care-curve.md) |
+
+### Transfer to a corpus the backbone never read
+
+| Reading | Result | Source |
+| --- | --- | --- |
+| Pretext, unseen channels left as drawn | loses to interpolation and cross-channel regression by 0.12 to 0.21 | [zero-shot-pretext](verification/zero-shot-pretext.md) |
+| Pretext, only the channel rows fitted on unlabelled windows | within 0.006 of the backbone that read the corpus (2012, C-MAPSS); 0.02 behind on 2019 | [zero-shot-pretext](verification/zero-shot-pretext.md) |
+| Pretext, rows copied from the same quantity in another corpus, no fit | within 0.01 to 0.02 of the fitted rows | [zero-shot-pretext](verification/zero-shot-pretext.md) |
+| Sepsis task at 4,000 patients, rows fitted | +0.031 [+0.015; +0.047] over drawn rows; none at 500 stays on 2012 | [task-transfer](verification/task-transfer.md) |
+
+### What the failures have in common
+
+- **A better pretext loss is not a better backbone.** Thirteen passes over the mixture lower the
+  pretext loss and lose 0.057 under fine-tuning to eight passes; continuing on the task's domain
+  at the low rate lowers it and moves nothing the reader sees.
+- **The loss sits in the top blocks.** Under the point of about 10⁹ values the early blocks read
+  like an untrained encoder and the deficit grows block by block to the last.
+- **Pretexts are solved by cues that are not the task.** Under masks over three quarters of a
+  window the stays' single tokens are matched by interpolation alone; the contrast between a
+  window's halves was solved by the stays' clock of measurements, which pairs the halves without
+  error with no model.
 
 ## Limitations
 
-- **Validation only.** Every configuration choice (window, normalisation, corpus, backbone, peaks)
-  was registered before its run, but each was read on the same 21 validation engines. A
-  configuration kept because it did better there scores optimistically there. The single test-set
-  run is what removes that bias.
-- **21 engines** bound every interval on the turbofan task. On synthetic data with a known answer
-  the percentile interval over 21 units covers about 92 % rather than 95 %, and its whole width
-  lies above a true zero about 5 % of the time rather than 2.5 %
-  (`docs/verification/verdict-statistics.md`). The confirmed endpoint sits far from that
-  boundary; a result near it would need a bias-corrected interval, registered before the run.
-- **Two supervised tasks so far.** Transfer across corpora (leave-one-corpus-out) is measured at
-  the pretext (`docs/verification/zero-shot-pretext.md`) and, within one pretraining, on the
-  sepsis task (`docs/verification/task-transfer.md`); neither reading is in the tables above.
-  The intensive-care task learns from set A only, under half the stays the published benchmarks
-  on this corpus learn from, so its levels are not comparable with theirs.
-- **Two kinds of accelerator.** The repeated curve ran budgets 50 and 200 on an A100 and 1,000
-  and all on a G4, one kind per budget as registered; the arm from nothing was selected on an
-  A100 and the other arms on a G4. Between accelerators an arm drifts by up to 0.7 RMSE.
-- **One pretraining corpus for the turbofan task.** Its backbone was pretrained on C-MAPSS itself;
-  a fresh encoder has the same data to learn the task from. The mixture backbone is read on the
-  intensive-care task only, where it is the weaker of the two.
-- **The instrument's resolution.** Read over 200 to every stay of half the tuning side, the
-  replacement rule between backbones sees most at 500 stays, where the closed-form probe
-  replaces a true gain of 0.02 to 0.03 four times in five and fine-tuning less. No reading of
-  the half sees 0.01 four times in five: the 2,000 stays scored and their 289 deaths, not the
-  seeds, set the floor, and fine-tuning under the stop at every stay comes closest
-  ([note](verification/verdict-statistics.md), 2026-10-13). Comparisons of backbones from here
-  on are read at 500 stays; a gain of 0.01 needs a task with more units, not more seeds.
-- The patch model ran as published, under the mean, since no selection turned its pooling.
-- The pretrained arms' spread over seeds is largest at 50 labels (LoRA 2.2) and at every window
-  (full fine-tuning 1.65).
+- **Validation only.** Each configuration was chosen on the same validation side it is reported
+  on; the single test run removes that bias.
+- **Resolution.** At 500 stays the instrument resolves 0.02 to 0.03 in area; published gains of
+  self-supervision in the clinic at 10 % of labels or more are 0.004 to 0.013, below it.
+- **Few independent units.** FD001 has 21 validation engines; its 95 % interval covers about
+  92 % on known answers.
+- **Two main tasks.** Transfer across corpora is read at the pretext and on sepsis within one
+  pretraining; the intensive-care task learns from set A only, so its levels are not comparable
+  with published benchmarks.
+- **Accelerators.** Arms ran on Colab G4, A100 and Kaggle T4; between accelerators an arm drifts
+  by up to 0.7 RMSE.
 
 ## Next
 
-1. Change the pretext before scaling it. A deeper decoder is ruled out (section 11); next an
-   objective that does not reconstruct values, chosen to keep the encoder's states wide. The
-   larger scale waits on this, since more of today's pretext reads worse.
-2. Measure transfer on the intensive-care task again under the stop at every stay, with
-   backbones of eight passes over a mixture without SMD, in the control's shape and in two
-   blocks on the stays alone; the stop for the pretrained arms is declared with a prediction
-   before the first campaign.
-3. Measure transfer across corpora and to unseen sensor layouts, where a fresh encoder has
-   nothing of the target to learn from and the pretrained one has everything else.
-4. Open the frozen test side once.
+1. Measure what the task reads at few labels, where trees over per-channel summaries lead, and
+   whether the mixture's states carry it, before another objective is trained.
+2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
+3. Open the frozen test side once.
