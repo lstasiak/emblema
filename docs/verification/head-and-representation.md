@@ -686,3 +686,130 @@ the mean, 0.357 at 0.0001, 0.314 at 1, 0.402 from 1,000,000 up.
 **Limitations.** One pooling of each scheme, tier M, one seed of each backbone; a selection
 draws its budget from four fifths of the tuning side, so its largest budget is smaller than the
 every-stay row here and its choice may sit a step stronger.
+
+## 2026-10-20 — declared before the run: what the intensive-care task reads at a few labels, and whether the states carry it
+
+**Question.** At 200 stays the classical models over per-channel summaries led every network
+on the validation side (MiniRocket 0.765, the network from nothing 0.681, fine-tuning 0.704;
+`intensive-care-curve.md`, 2026-09-30), and no pretext tried since has moved the probe. Before
+another pretext goes to an accelerator: on the half of the tuning stays the stage reads every
+comparison on, (a) how far the classical models and a linear head over the summaries lie above
+the networks and the probe, (b) how much of each family of summaries a linear map recovers from
+the frozen states of the mixture of four, against the same encoder at its initialisation, and
+(c) whether the probe's head over the states and the summaries together reads more than over
+the summaries alone.
+
+**The data.** PhysioNet 2012's in-hospital death (task `a6a9c653-…`), the tuning side divided
+by seed 101 into 1,997 stays learnt from and 2,000 scored; 200 and 500 labels drawn under seeds
+1 to 10, as every campaign of the stage draws them.
+
+- *The classical models*: `campaigns/classical-half-physionet2012.toml` (`cf3760a5`), boosted
+  trees per channel and MiniRocket bare, as their selection chose them at 200 and 1,000 stays;
+  defined under the worker settings every campaign of the repository was defined under (trees:
+  100 rounds, depth 6, rate 0.3; MiniRocket: 9,996 features, the logistic penalty among 15
+  strengths) and run on this machine's processor.
+- *The states and the summaries*: `scripts/stay_summary_states.py` (`5f3e56f5`) reads the four
+  campaigns of the stage reader's probe (`reader-probes-physionet2012.toml` under the mixture's
+  pretraining seeds 1 to 4, `4fcf8db8-…`, `5c814460-…`, `a5e5a2d7-…`, `62862536-…`), refuses to
+  run where the worker settings would build any other probe than the one each recorded, draws
+  every cell's labels by the use case the cells drew them by, and embeds every stay by each
+  cell's encoder: each campaign's pretrained one, and the encoder at its initialisation as
+  each seed drew it. Beside them the summaries the trees read, for each of the 44 channels the
+  learnt half observes: count, mean, deviation, minimum, maximum, first, last, slope, step and
+  mean gap; a static descriptor is its value and whether it was recorded.
+- *The readings*: `scripts/stay_summary_report.py`, every head the probe's own (logistic
+  regression, its penalty chosen by the folds' log-loss among the nine strengths the campaigns
+  ran under) over (i) the summaries, a gap filled with its mean over the drawn stays and a
+  column the draw holds constant dropped; (ii) the states alone, which must answer as the
+  registered cells did; (iii) the states and the summaries side by side. For (b), ridge from
+  the states to each summary, learnt on every stay of the learnt half where the summary is
+  defined (a summary needs no label), its penalty chosen leave-one-out, scored on the held-out
+  half by R², the map's answers held within the range of the values it learnt. A summary is
+  read where both halves define it on at least 50 stays and it varies; families: level
+  (mean, first, last), extremes (minimum, maximum, deviation), trend (slope, step), frequency
+  (count, gap), statics (value, presence).
+- *The pairs*: `scripts/campaign_pairs_report.py` over the registered cells and the script's
+  rows, the mixture's side the mean over its four pretrainings; the networks are the stage's
+  (`net200-mix1/2`, `net500-mix1/2`, the stop at 500).
+- *Read before this was written.* The script's trial under `probes-mix1` at seed 1: the
+  reading over states alone answered as the registered cells did to 1.0·10⁻⁶ in area at 200
+  and 0 at 500 under the pretrained encoder, and to 0 under the encoder at its initialisation.
+  It also printed every reading at seed 1 — the summaries 0.688 / 0.769 at 200 / 500, the
+  states 0.673 / 0.710, both 0.702 / 0.757 — and heart rate's ten summaries recovered under
+  both encoders (its mean 0.95 and 0.98, its trends 0.15 to 0.40). One held-out stay, heart
+  rate read once, took the untrained map's mean gap to 0.49 against a learnt range up to 0.09,
+  R² −2.51; holding answers within the learnt range, now part of the method, reads it 0.88
+  and moves no other summary of heart rate by more than 0.06. The classical trial (budget 50, seed 1, a campaign of its own) scored the
+  same 2,000 stays as the probes.
+
+**What was read before**, area on the same 2,000 stays (`verdict-statistics.md`, 2026-10-13):
+
+| Budget | from nothing | fine-tuning | probe, mixture s1–s4 | probe at initialisation |
+|---|---|---|---|---|
+| 200 | 0.652, 0.654 | 0.685, 0.687 | 0.654–0.673 | 0.635 |
+| 500 | 0.750, 0.748 (stop) | 0.733, 0.737 (stop) | 0.692–0.710 | 0.693 |
+
+The probe less its initialisation: +0.019 to +0.038 at 200, −0.001 to +0.017 at 500. On the
+validation side at 200 stays, MiniRocket less the network from nothing +0.084 [+0.072; +0.097].
+
+**Reading.**
+
+- *(a), descriptive.* Trees, MiniRocket and the summaries' head, each against the mixture's
+  probe, the network from nothing and fine-tuning, at 200 and 500, paired over stays.
+- *(b).* For each family, the median R² over its summaries, per encoder: the mixture's four
+  and the ten draws at initialisation, read as the mean with its range. A family is *carried*
+  where the mixture's median reaches 0.5, *not carried* below 0.3; pretraining's share is the
+  mixture's median less that at initialisation.
+- *(c), the one confirmatory comparison per budget.* Δ = (states and summaries) − (summaries),
+  the mixture's side the mean over its four pretrainings, against the threshold in force,
+  T = 2·√(SE² + (s²/2)(1/n_c + 1/n_r)) with s = 0.014, n = 4 on the mixture's side and no
+  term on the summaries', which no pretraining draws: about 0.02 at either budget. *Adds*
+  where Δ > T, *costs* where Δ < −T, *nothing* otherwise. Beside it, descriptively, the same
+  head over the states at initialisation and the summaries against the mixture's, and the
+  summaries' head against the states alone.
+
+**Predictions** (from the intervals above where they bear; judgements where none does, and
+anchored on a trial that was seen).
+
+1. *The classical bar stands on the half.* At 200 stays MiniRocket and the trees lie above the
+   mixture's probe by at least 0.05 and above the network from nothing by at least 0.07, the
+   lower edge of the validation side's interval; at 500 both lie at or above the network from
+   nothing under the stop (0.750), a judgement from the curve on the validation side.
+2. *The summaries' head lies at or above the probe.* At 500 stays the logistic head over the
+   summaries reads at least 0.03 above the mixture's probe; at 200 within ±0.03 of it. A
+   judgement from the bar above and from the trial's seed.
+3. *The states carry the level and the extremes, not the trend.* The mixture's median R²
+   reaches 0.5 for level and extremes and stays below 0.3 for trend; the encoder at its
+   initialisation lies within 0.1 of it in every family. A judgement from heart rate in the
+   trial.
+4. *The states add nothing to the summaries.* Δ lies within ±T at 200 and at 500, as the probe
+   less its initialisation did at 500 (−0.001 to +0.017).
+
+**What follows.**
+
+- *(b) not carried* — level, extremes or trend below 0.3 under the mixture: the next pretext
+  predicts the summaries of the hidden part of a window or of its next hours, a target the
+  stay's own clock cannot answer; a shortcut audit and the classical bar of (a) come first.
+- *(b) carried and the summaries' head above the probe* (its paired interval above zero): the
+  loss lies in reading the states, not in what pretraining puts in them; the next task is the
+  head and its pooling over the frozen states — a pooling per channel, the summaries' layout —
+  read before any new pretext.
+- *(c) adds at either budget*: the backbone carries something the summaries do not; that is
+  the direction of the stage's product claim, and the next task reads it under fine-tuning at
+  200 stays.
+- *(c) costs*: the states disturb a head that has the summaries; pretraining's share against
+  the encoder at initialisation says whether pretraining or the states' width is at fault.
+- A reading that refuses is named and left out.
+
+**Limitations.**
+
+- The trial's seed 1 of every reading and heart rate's recovery were seen before the
+  predictions; predictions 2 and 3 are anchored on them and say so.
+- One linear head throughout: a head over states and summaries chooses one penalty for both,
+  so (c) can understate what a head with a penalty per block would read; the trees over the
+  same columns are not fitted beside the states.
+- R² is a share of variance over 2,000 stays; a summary with heavy tails is read within the
+  learnt range, which favours neither encoder but bounds how badly a map can extrapolate.
+- The summaries are of the values as published, standardised per channel, with a gap filled
+  from the draw; a head with indicators of absence beyond the count is not read.
+- Tier M models read on this machine (M1 Pro, MPS, fp32); validation side, not the test.
