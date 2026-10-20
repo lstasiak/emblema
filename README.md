@@ -89,29 +89,19 @@ budget by the same declared procedure as the classical baselines.
 
 Preliminary, on validation data. Each task's test data is used once, at the end.
 
-On the first task, remaining useful life of turbofan engines (NASA C-MAPSS), pretraining does
-not help. A first curve found the fine-tuned encoder 12 % better than the same network trained
-from scratch at 200 labelled windows; diagnostics showed the control had been handicapped by
-its head and its learning rate. Repeated with every arm tuned per budget by one declared
-procedure, in one paired campaign with the classical baselines, the network trained from
-scratch is the best candidate at every budget: 10 % better than the fine-tuned encoder at 200
-labels, level with the tuned gradient-boosted trees.
-
-On the second task, death in hospital after an intensive-care stay (PhysioNet 2012), no way of
-using the mixed backbone beats the network trained from scratch, and the classical baselines
-lead.
-A diagnosis against a published network on the same stays found the deficit in the training,
-not the data: kept at its best epoch on held-out labels and shrunk to two blocks, the network
-trained from scratch lands within noise of the published one. After pretraining on about 10⁸
-values, under an adaptation recipe chosen beforehand, a linear probe on the encoder still trails
-the network trained from scratch at 20 labelled stays (at 50 within the spread a draw of labels
-makes), and what it gains over the same probe on an untrained encoder cannot be told from zero.
-
-**In progress:** whether that gain grows with the data. The encoder is pretrained on mixtures
-about three and ten times larger (thirty, if a registered rule calls for it), adding public
-collections (UTSD, PhysioNet 2019, Tennessee Eastman), and every point is read by the same
-yardstick under rules registered before the runs
-([ADR-0049](docs/adr/0049-the-scale-of-pretraining-as-a-stage.md)).
+- **On both tasks pretraining does not yet pay off.** On turbofan remaining life (NASA C-MAPSS)
+  the network trained from scratch is the best candidate at every budget, 10 % better than the
+  fine-tuned encoder at 200 labelled windows. On death in hospital (PhysioNet 2012) the only
+  gain, fine-tuning at 200 stays, lies below the registered least gain.
+- **Classical baselines lead at few labels.** Gradient-boosted trees over per-channel summaries
+  match or beat every network from 200 labels up.
+- **Ruled out:** more pretraining data (up to about 10⁹ values), a five times larger model,
+  continuing on the task's own domain, the adaptation recipe and five variants of the pretext.
+- **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
+  dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
+  model that saw it, and carries part of a downstream task.
+- **Next:** measure what a task reads at few labels, and whether the encoder carries it, before
+  another pretraining objective is tried.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
