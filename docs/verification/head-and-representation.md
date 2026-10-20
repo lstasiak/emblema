@@ -929,3 +929,122 @@ not the map, and moves no family's median.
 - The trial's seed 1 of every reading and heart rate's recovery were seen before the
   predictions; predictions 2 and 3 were anchored on them, and both failed in part.
 - Tier M models read on this machine; validation side, not the test.
+
+## 2026-10-21 — declared before the run: whether the summaries sit in the token states, and what the schedule of measurements gives
+
+**Question.** The probe's vector, the mean of every token's state over a stay, holds a median 15 %
+of a channel's level under the mixture of four, against 31 % at initialisation (2026-10-20). Is
+that information absent from the token states, or lost in the mean over the window? And how much
+of what the probe and the summaries read comes from when each channel was measured rather than
+from what it read?
+
+**The data.** As on 2026-10-20: PhysioNet 2012's in-hospital death, the tuning side divided by
+seed 101 into 1,997 stays learnt from and 2,000 scored, 200 and 500 labels under seeds 1 to 10,
+the four probe campaigns of the mixture (`4fcf8db8-…`, `5c814460-…`, `a5e5a2d7-…`,
+`62862536-…`) and their encoders at initialisation.
+
+- *The states*: `scripts/stay_summary_states.py` (`2d3fdbb3`). One pass of each encoder gives the
+  probe's vector and, under `--per-channel`, the mean state of each channel's tokens over all six
+  blocks side by side (1,536 wide), zeros for a channel a stay does not measure. Two more passes
+  embed the stays with their measured values replaced, while times, channels, gaps and static
+  descriptors stay as recorded: `--values constant` (each channel's mean over the learnt half's
+  readings) and `--values transplanted` (each reading takes a value drawn with replacement from
+  one other learnt stay that measured the channel; donor and draws ranked under seed 1).
+- *The readings*: `scripts/channel_pooling_report.py --components 34`, over the stored arrays.
+  - (i) *Recovery.* Ridge from states to each summary of a channel, on the stays that measure it
+    (count ≥ 1) on both halves, fitted, scored and bounded as on 2026-10-20. Three poolings: the
+    mean over the window, the mean over the channel's tokens, and that mean reduced to its 34
+    leading principal components; the first two over all blocks and over each block alone. Family
+    medians per encoder; the mixture is the mean of its four, initialisation the mean of ten.
+    Because a channel is read only where it is measured, the frequency family is not comparable
+    with the 2026-10-20 table; the mean over the window on the same stays is the comparison.
+  - (ii) *The per-channel probe.* The probe's own head (logistic regression, penalty chosen by
+    the folds' log-loss among the campaigns' nine strengths) over the reduced per-channel
+    states, 44 × 34 = 1,496 columns, no wider than the probe's 1,536. The components come from
+    each channel's states on the learnt stays that measure it, without labels; a stay without
+    the channel takes the image of the zero state.
+  - (iii) *The schedule.* The same head over three splits of the summaries: all of them (as on
+    2026-10-20), the schedule (count and mean gap of each timed channel, with every column of the
+    static descriptors) and the values (the other eight summaries, with the statics). The probe's
+    head over the states of the stays with constant and with transplanted values.
+  - The head over the recorded states alone is fitted again and must answer as the 160
+    registered probe cells did.
+- *The pairs*: `scripts/campaign_pairs_report.py` over the registered cells and the script's
+  rows, the mixture's side the mean over its four pretrainings; run by
+  `data/report/l27/run.sh`.
+
+**Read before this was written.** The trial (`data/report/l27/trial.sh`): all three passes under
+`probes-mix1` at seed 1, then the report. Read for its mechanics only — refusals, fidelity,
+sizes and seconds; the readings it printed were not opened. Nothing was refused (every channel
+of a scored stay is measured on the learnt half). The head over states alone answered as the
+registered cells did to 1.0·10⁻⁶ in area at 500 and to 0 at 200, under both encoders. A pass took
+29 to 34 s per encoder, the per-channel states 1.1 GB each; a head over 1,496 or 1,536 columns
+8 to 10 s; the recovery 143 s per encoder. The heads read 380 columns of summaries, 95 of the
+schedule and 306 of the values. The components kept a median 99.5 % of a channel's variance
+under both encoders; the reduction guard below was written before that was seen.
+
+**Rules.**
+
+- T = 2·√(SE² + (s²/2)(1/n_c + 1/n_r)), s = 0.014, n = 4 on a mixture side and no term on the
+  summaries' side: about 0.02, as for (c) on 2026-10-20.
+- *Carried* where the mixture's median R² reaches 0.5, *not carried* below 0.3, as on
+  2026-10-20; read for level and extremes under the per-channel mean over all blocks.
+- Δ₁ = per-channel probe − summaries' head, per budget: the one confirmatory comparison.
+- *Reduction guard*: where the mixture's median R² of level or extremes under the reduced
+  per-channel states lies more than 0.1 below that under the full ones, Δ₁ is undecided by the
+  reduction and branch C below is not taken.
+- Descriptive: Δ₂ = per-channel probe − window probe (mixture); the per-channel probe less its
+  initialisation; the per-channel probe less the trees; schedule and values against all the
+  summaries; transplanted and constant values against the recorded ones, under the mixture and
+  at initialisation; recovery per block.
+
+**Predictions** (from the intervals of 2026-10-20 where they bear; judgements where none does).
+
+1. *The token states carry level.* Under the per-channel mean over all blocks, the median R² of
+   level reaches 0.5 under the mixture and at initialisation, extremes reach 0.3 under both, and
+   trend stays below 0.3. Under the window's mean on the same stays, level stays below 0.3 under
+   the mixture. A judgement from the architecture: a value enters the residual stream through a
+   linear map, so the mean over one channel's tokens holds the mean of that map.
+2. *Pretraining's loss sits in the upper blocks.* Under the per-channel mean, the mixture's level
+   is highest in block 1 and at least 0.1 lower in block 6; at initialisation it varies by less
+   than 0.1 across blocks. A judgement.
+3. *The per-channel probe lies between the probe and the summaries.* From the summaries' head
+   over the probe, +0.051 [+0.025; +0.077] at 200 and +0.062 [+0.035; +0.088] at 500: Δ₂ reaches
+   the lower edges, +0.025 and +0.035. A head four times wider than the summaries' pays for its
+   width on 200 stays: Δ₁ < −T at 200, within ±T at 500.
+4. *The schedule carries much of the summaries.* The schedule's head lies no more than 0.05 below
+   all the summaries at either budget; the values' head within ±0.03 of them. A judgement:
+   frequency is the family the states carry best (0.456), and how often a laboratory value is
+   drawn reflects how ill the patient is.
+5. *The mixture's probe reads mostly the schedule.* Transplanted values cost the mixture's probe
+   less than T at both budgets and cost the probe at initialisation more than the mixture's,
+   which carries half the level (0.153 against 0.313); constant values within ±0.02 of
+   transplanted ones under both. A judgement from (b) on 2026-10-20.
+
+**What follows.**
+
+- *A — not in the states*: level or extremes not carried under the per-channel mean → the next
+  step is the pretext of the summaries of a hidden part of the window, each channel weighted
+  alike, with a shortcut audit and the classical bar first.
+- *B — diluted by the mean*: level and extremes at least 0.3 under the per-channel mean and
+  Δ₁ ≥ −T at both budgets → the next task is a per-channel pooling for the probe, read by the
+  stage reader against the mixture, before any new pretext.
+- *C — carried, not read*: level and extremes at least 0.3 under the per-channel mean and
+  Δ₁ < −T at either budget, the reduction guard passed → as A: a linear head cannot read what
+  the states hold at this width and these labels, so the pretext must put the summaries where
+  a head reads them.
+- Δ₁ undecided by the reduction → the head over every per-channel column, solved in the space
+  of the drawn stays, before a branch is chosen.
+- Whatever the branch, (iii) sets what the step-2 shortcut audit must test: if transplanted
+  values cost the mixture's probe less than T, a pretext target that the schedule predicts
+  without the values is a shortcut.
+
+**Limitations.**
+
+- One linear head throughout; the reduction keeps the widest directions of each channel's
+  states, not those the outcome needs, which the guard bounds only for the summaries.
+- Transplanted values are drawn with replacement, so they also lose the order within a stay;
+  constant values are an input the encoder never met in pretraining.
+- The static descriptors keep their values in every variant, so the schedule's head and the
+  replaced-values states still hold age, sex, weight and the unit.
+- Tier M models read on this machine (M1 Pro, MPS, fp32); validation side, not the test.
