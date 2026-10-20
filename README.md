@@ -401,7 +401,7 @@
 | src/emblema/pretraining/adapters/diagnostics/triviality\_diagnostic.py                    |       61 |        0 |       16 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/diagnostics/unit\_bootstrap.py                           |       39 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/diagnostics/window\_arrays.py                            |       19 |        0 |        0 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/documents/experiment\_configuration\_document.py         |       33 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/documents/experiment\_configuration\_document.py         |       36 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/documents/fields.py                                      |       69 |        0 |       14 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/documents/pretraining\_order\_json.py                    |       30 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/documents/pretraining\_result\_json.py                   |       47 |        0 |        4 |        0 |    100% |           |
@@ -413,7 +413,7 @@
 | src/emblema/pretraining/adapters/encoder/self\_attention.py                               |       21 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/set\_encoder.py                                  |       48 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/tier\_architecture.py                            |        4 |        0 |        0 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/experiments/experiment\_file.py                          |       80 |        0 |        4 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/experiments/experiment\_file.py                          |       85 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/handoff/artifact\_store\_handoff\_exchange.py            |       20 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/handoff/handoff\_training\_runtime.py                    |       19 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/in\_memory/backbone\_repository.py                       |       19 |        0 |        2 |        0 |    100% |           |
@@ -422,12 +422,15 @@
 | src/emblema/pretraining/adapters/in\_memory/training\_corpus\_reader.py                   |       36 |        0 |        6 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/in\_memory/training\_runtime.py                          |       60 |        0 |       14 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/mlflow/mlflow\_experiment\_tracker.py                    |       40 |        0 |       10 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/objective/contrast\_projection.py                        |       11 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/objective/contrastive\_loss.py                           |       30 |        0 |        4 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/objective/contrastive\_reconstruction.py                 |       43 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/latent\_prediction.py                          |       54 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/latent\_prediction\_loss.py                    |       24 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/latent\_predictor.py                           |       21 |        0 |        4 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/objective/masked\_reconstruction.py                      |       24 |        0 |        0 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/objective/objective\_score.py                            |        4 |        0 |        0 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/objective/objective\_shape.py                            |       19 |        0 |        2 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/objective/masked\_reconstruction.py                      |       28 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/objective/objective\_score.py                            |        7 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/objective/objective\_shape.py                            |       26 |        0 |        6 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/pretraining\_objective.py                      |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/reconstruction\_decoder.py                     |       20 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/reconstruction\_loss.py                        |       30 |        0 |        2 |        0 |    100% |           |
@@ -441,8 +444,8 @@
 | src/emblema/pretraining/adapters/training/devices.py                                      |        5 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/training/exceptions.py                                   |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/training/torch\_precision.py                             |       26 |        0 |        4 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/training/torch\_training\_runtime.py                     |      235 |        0 |       58 |        1 |     99% | 425-\>427 |
-| src/emblema/pretraining/adapters/training/trained\_model.py                               |       60 |        2 |       14 |        2 |     95% |  189, 195 |
+| src/emblema/pretraining/adapters/training/torch\_training\_runtime.py                     |      259 |        0 |       70 |        1 |     99% | 449-\>451 |
+| src/emblema/pretraining/adapters/training/trained\_model.py                               |       62 |        2 |       14 |        2 |     95% |  202, 208 |
 | src/emblema/pretraining/adapters/training/training\_checkpoint.py                         |       42 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/application/use\_cases/accept\_pretraining\_result.py             |       30 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/application/use\_cases/assess\_reconstruction\_run.py             |       11 |        0 |        0 |        0 |    100% |           |
@@ -463,7 +466,7 @@
 | src/emblema/pretraining/domain/backbone/backbone.py                                       |       63 |        0 |       24 |        0 |    100% |           |
 | src/emblema/pretraining/domain/backbone/pretraining\_input.py                             |       12 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/domain/encoder\_architecture.py                                   |       29 |        0 |        8 |        0 |    100% |           |
-| src/emblema/pretraining/domain/exceptions.py                                              |       61 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/domain/exceptions.py                                              |       63 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/handoff/pretraining\_order.py                              |       29 |        0 |       12 |        0 |    100% |           |
 | src/emblema/pretraining/domain/handoff/pretraining\_result.py                             |       51 |        0 |       16 |        0 |    100% |           |
 | src/emblema/pretraining/domain/identifiers.py                                             |        4 |        0 |        0 |        0 |    100% |           |
@@ -473,12 +476,13 @@
 | src/emblema/pretraining/domain/saturation/saturation\_point.py                            |       27 |        0 |       14 |        0 |    100% |           |
 | src/emblema/pretraining/domain/saturation/saturation\_verdict.py                          |       25 |        0 |        6 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/checkpoint\_policy.py                             |       11 |        0 |        4 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/contrastive\_term.py                              |       33 |        0 |       12 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/corpus\_fraction.py                               |       10 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/corpus\_passes.py                                 |        9 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/corpus\_share.py                                  |       22 |        0 |        6 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/corpus\_validation.py                             |       17 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/epoch\_outcome.py                                 |       30 |        0 |       12 |        0 |    100% |           |
-| src/emblema/pretraining/domain/training/experiment\_configuration.py                      |       68 |        0 |       22 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/experiment\_configuration.py                      |       73 |        0 |       24 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/objective\_loss.py                                |       26 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/objective\_target.py                              |       43 |        0 |       18 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/precision.py                                      |        5 |        0 |        0 |        0 |    100% |           |
@@ -627,7 +631,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **17309** |  **104** | **3316** |   **92** | **99%** |           |
+| **TOTAL**                                                                                 | **17481** |  **104** | **3352** |   **92** | **99%** |           |
 
 130 empty files skipped.
 
