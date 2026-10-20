@@ -94,14 +94,15 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
   fine-tuned encoder at 200 labelled windows. On death in hospital (PhysioNet 2012) the only
   gain, fine-tuning at 200 stays, lies below the registered least gain.
 - **Classical baselines lead at few labels.** Gradient-boosted trees over per-channel summaries
-  match or beat every network from 200 labels up.
+  match or beat every network from 200 labels up. On the intensive-care stays, pretraining
+  leaves the encoder holding less of those summaries than before it was trained.
 - **Ruled out:** more pretraining data (up to about 10⁹ values), a five times larger model,
   continuing on the task's own domain, the adaptation recipe and five variants of the pretext.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** measure what a task reads at few labels, and whether the encoder carries it, before
-  another pretraining objective is tried.
+- **Next:** a pretraining objective that predicts each sensor's summaries over a hidden stretch
+  of time, every sensor weighted alike.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 

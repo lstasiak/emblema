@@ -1,0 +1,48 @@
+# The classical models at 200 and 500 stays of half the tuning side: boosted trees over the
+# summaries of each channel and MiniRocket, the two that led every network at 200 stays when
+# scored on the validation side, now on the half every comparison of the stage is read on. The
+# bar a new pretext must clear before it goes to an accelerator, read beside the probes and the
+# networks of the stage reader (docs/verification/head-and-representation.md, 2026-10-20). Both
+# run bare, as their selection chose them at 200 and 1,000 stays; every cell runs on the host's
+# processor.
+#
+# Every cell is scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10, so
+# readings pair by stay and seed with the probes' and the networks' campaigns at the same budgets.
+# A campaign divided this way chooses nothing.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "classical-half-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "boosted_trees_per_channel",
+    "minirocket",
+]
+control = "boosted_trees_per_channel"
+endpoint = "minirocket"
+
+[budgets]
+labels = ["200", "500"]
+endpoint = "500"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+# One contender at two budgets, less the endpoint.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
