@@ -5,7 +5,7 @@ preliminary: each task's frozen test side is opened once, at the end. Each compa
 by a rule registered before its run ([preregistration](preregistration.md)); each row links the
 note that holds its evidence ([`verification/`](verification/README.md)).
 
-Last updated 2026-10-20.
+Last updated 2026-10-21.
 
 ## Status
 
@@ -14,15 +14,19 @@ Last updated 2026-10-20.
   exception: full fine-tuning at 200 intensive-care stays (+0.024 to +0.033 in area), below the
   registered least gain.
 - **Classical models lead at few labels.** Trees over per-channel summaries match or beat every
-  network from 200 labels up on both tasks; on the intensive-care stays MiniRocket does too.
+  network from 200 labels up on both tasks; on the intensive-care stays they lie 0.07 to 0.09 in
+  area above the probe, and a logistic head over the same summaries 0.05 to 0.06 above it.
+- **Pretraining empties the probe's states of the stay's summaries.** A linear map recovers a
+  median 15 % of a channel's level from them against 31 % before training; the rarely measured
+  laboratory values are what is lost, and the states add nothing to the summaries.
 - **What transfers is the encoder's machinery, not its features for the task.** Fitting only the
   channel rows of a corpus the backbone never read, on its unlabelled windows, brings the pretext
   to within 0.006 of a backbone that read it, and carries part of a downstream task (+0.031 on
   sepsis at 4,000 patients).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and five variants of the pretext.
-- **Next:** measure what the task reads at few labels and whether the encoder's states carry it,
-  before another objective is trained.
+- **Next:** a pretext that predicts the summaries of each channel, weighted alike, once the
+  token states pooled per channel have shown whether the summaries are missing or only diluted.
 
 ## Setup
 
@@ -63,9 +67,13 @@ AUROC, higher is better.
 | Full fine-tuning, mixture of four | 0.69 | 0.74 | 0.76 | 0.79 |
 | Probe, mixture of four | 0.65–0.67 | 0.69–0.71 | 0.72–0.74 | 0.74–0.76 |
 | Probe, untrained encoder | 0.64 | 0.69 | 0.75 | 0.78 |
+| Trees per channel | **0.74** | **0.79** | | |
+| MiniRocket | 0.71 | 0.76 | | |
+| Logistic head over the per-channel summaries | 0.71 | 0.76 | | |
 
 Pretraining's share changes sign with the budget: the probe gains 0.02 to 0.04 over an untrained
-encoder at 200 stays, nothing at 500 and loses 0.01 to 0.04 from 1,000 up. On the full grid
+encoder at 200 stays, nothing at 500 and loses 0.01 to 0.04 from 1,000 up. The classical rows
+were read at 200 and 500 stays only ([note](verification/head-and-representation.md)). On the full grid
 against set B, trees reach 0.76 at 200 stays and 0.86 at every stay, the network 0.68 and 0.81
 ([note](verification/intensive-care-curve.md)).
 
@@ -122,6 +130,10 @@ pretraining against four, 0.021 for two.
   at the low rate lowers it and moves nothing the reader sees.
 - **The loss sits in the top blocks.** Under the point of about 10⁹ values the early blocks read
   like an untrained encoder and the deficit grows block by block to the last.
+- **The pretext removes what the task reads.** The probe's states hold less of a stay's
+  levels, extremes and measurement counts than the same encoder at initialisation — half the
+  level — and the loss falls on the channels measured a few times a stay; trends neither holds
+  ([note](verification/head-and-representation.md)).
 - **Pretexts are solved by cues that are not the task.** Under masks over three quarters of a
   window the stays' single tokens are matched by interpolation alone; the contrast between a
   window's halves was solved by the stays' clock of measurements, which pairs the halves without
@@ -143,7 +155,8 @@ pretraining against four, 0.021 for two.
 
 ## Next
 
-1. Measure what the task reads at few labels, where trees over per-channel summaries lead, and
-   whether the mixture's states carry it, before another objective is trained.
+1. Read the token states pooled per channel, then train a pretext that predicts each channel's
+   summaries of the hidden part of a window, every channel weighted alike, against the trees'
+   bar of 0.74 / 0.79.
 2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
 3. Open the frozen test side once.
