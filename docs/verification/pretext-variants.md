@@ -989,3 +989,120 @@ a new recipe brings its own spread, here 0.020.
 - The match between the reading and the relative validation is four points, not a selection
   rule.
 - The probe alone decides; fine-tuning was not read.
+
+## 2026-10-20 — declared before the run: the contrast between the two halves of a window
+
+**Question.** Does a pretext that, beside reconstructing the hidden values, asks the encoder to
+tell the two halves of a window apart from other windows' halves (ADR-0058) give fine-tuning at
+200 stays more than the mixture's masks alone, and does it leave the reader of the stage at 500
+stays no worse? A contrast's gains in the clinic live at few labels under fine-tuning (Chowdhury et al.
+2023: +0.03 to +0.07 at one to four stays, +0.013 at full labels), below what the probe at 500
+resolves, so the probe screens for harm and fine-tuning at 200 is the reading.
+
+**The variant** (`experiments/backbone-mixed4-contrast-m.toml`, `-seed2.toml`). The file of
+`backbone-mixed4-m` to the step — the four corpora, 4.8M parameters, the mixture's masks, huber
+at one deviation, eight epochs, 16 × 2 windows a step, 1e-3 — with one section changed:
+`[objective] contrast_weight = 1.0`, `contrast_temperature = 0.1`. The masks cut every window
+into the tokens the encoder sees and the tokens hidden from it; each half goes through the
+encoder with the other as padding, is pooled to one point and carried through two linear maps
+that are thrown away, and must pick the other half of its window out of both halves of the
+other fifteen windows of the micro-batch (NT-Xent, 31 candidates an anchor, cosine at the
+temperature). The term weighs one anchor's loss against one hidden token's; the kept epoch is
+the lowest combined loss over trivial. Seed 1 draws the encoder and the decoder the mixture's
+seed 1 drew.
+
+**Pilot, before any order** (2026-10-19/20, this machine, MPS, fp32; the M shape at a tenth of
+each corpus, one epoch; registered as `pilot-l24-*`, read by nothing else). Five runs: the file
+without the term and four pairs of knobs, weights 0.5, 1 and 2 at temperature 0.2 and weight 1
+at temperature 0.1. The rule choosing the pair was written before the first run
+(`data/report/l24/pilot/RULE.md`): weight 1 at 0.2 unless a setting beat the file without the
+term by more than its paired SE under the reader of the stage, beat that default by more than
+the paired SE of the difference, and kept its reconstruction within 10 % of the plain run's on
+every corpus. The file without the term repeats the pilot of 2026-10-14 to five decimals for
+200 steps and parts at step 250, the accelerator's accumulated precision: the refactoring behind
+the term changed nothing in the run without it.
+
+| Setting | Reconstruction vs plain (cmapss / skab / esa / 2012) | Contrast over chance (cmapss / skab / esa / 2012) | Effective rank, last block | Probe at 500, 1 − AUROC | vs plain |
+|---|---|---|---|---|---|
+| plain | — | — | 1.3 / 1.7 / 1.4 / 1.4 | 0.284 (+0.023 over untrained) | — |
+| 0.5, 0.2 | −5 / −22 / −2 / −1 % | 0.87 / 1.00 / 1.02 / 0.84 | 2.5 / 1.4 / 1.9 / 2.3 | 0.328 | −0.044 ± 0.005 |
+| 1, 0.2 | −5 / −16 / −3 / −2 % | 0.86 / 1.02 / 1.01 / 0.86 | 2.4 / 1.4 / 1.7 / 2.3 | 0.296 | −0.012 ± 0.006 |
+| 2, 0.2 | −9 / −20 / −2 / −4 % | 0.87 / 1.05 / 1.01 / 0.79 | 2.1 / 1.4 / 1.5 / 2.0 | 0.307 | −0.023 ± 0.012 |
+| **1, 0.1** | −5 / −14 / −3 / +1 % | 0.90 / 1.02 / 0.85 / 0.93 | 2.3 / 1.4 / 2.2 / 3.4 | 0.279 (+0.028 over untrained) | +0.005 ± 0.005 |
+
+Validation per corpus, the kept epoch; the probe is `frozen_ridge@layer=concat` at 500 stays on
+the half held out by seed 101, seeds 1 to 10, paired by seed
+(`data/report/l24/pilot/{pretext.csv,pairs/table.md,spread-*/}`). The term trains in one epoch at
+this scale on C-MAPSS and the stays, not on SKAB, and on the satellite corpus only at 0.1; every
+setting lowers the reconstruction's validation loss on every corpus, so the term costs the first
+objective nothing here. An epoch costs 2.1 times the plain run's. The rule chose weight 1 at
+temperature 0.1: it beats plain by 0.0051 against a paired SE of 0.0048, a hair, and the default
+by +0.017 [+0.001; +0.033]; every setting at 0.2 reads below plain.
+
+**Pretraining.** Two seeds, 1 and 2, on Kaggle T4 ×2, one per GPU, from the orders of the
+committed experiment files; the first steps of seed 1 on the T4 are the trial of the family
+(memory and pace) before the second order is placed. About 4 h each: the second pass of the
+encoder doubles the encoder's share of a step over the mixture's 2.1 h.
+
+**Diagnostics, before the reading.** The run's log per epoch (each term per token against its
+chance, per validation corpus); `scripts/state_spread_report.py --backbone <id>` and
+`scripts/pretext_triviality_report.py --backbone <id>` under the mixture's masks, as every value
+objective is read.
+
+- *Not trained.* A backbone whose contrast at the kept epoch lies above 0.9 of chance on every
+  corpus has not trained the term and is read with that said.
+
+**Reading.** Every cell on the half of the tuning side held out by seed 101 (`one_in = 2`),
+seeds 1 to 10, the same labels per seed, so every difference is paired by seed; a side of
+several pretrainings is read as the mean over them (`scripts/campaign_pairs_report.py`, sides
+joined by `+`).
+
+- *Screen, the reader of the stage.* `review-concat-500-physionet2012.toml` under both
+  backbones: `frozen_ridge@layer=concat` at 500 against the mixture's four (`backbone-mixed4-m`
+  seeds 1 to 4, already read). Δ₅₀₀ = mean over seeds of (the two − the four); threshold
+  T₅₀₀ = 2·√(SE² + (s²/2)(1/2 + 1/4)), s = max(0.014, the two pretrainings' own). The objective
+  is **closed for harm** where Δ₅₀₀ < −T₅₀₀.
+- *Primary.* `reader-200-physionet2012.toml` under both backbones: `full_fine_tuning` at 200
+  under the settings in force, against the same cells under the mixture's four — seeds 1 and 2
+  read on 2026-10-13 and 2026-10-16 (0.682 and 0.688 in area), seeds 3 and 4 ordered with this
+  declaration. Δ₂₀₀ = mean over seeds of (the two −
+  the four); threshold T₂₀₀ = 2·√(SE² + (s_FT²/2)(1/2 + 1/4)), s_FT = max(0.014, the spread
+  between pretrainings under fine-tuning at 200 on the half by the registered formula, pooled
+  over the mixture's six pairs and the candidate's one). With SE about 0.012 the threshold is
+  about 0.03; a gain below it is not seen.
+- *Descriptive.* `reader-low-physionet2012.toml`, a new file: `full_fine_tuning` and the network
+  from nothing at 20 and 50 stays on the half under both backbones and the mixture's seeds 1
+  and 2; read as fine-tuning less the network from nothing, the two against the two. Resolution
+  0.05: one seed's area moves by 0.03 to 0.04 there (`verdict-statistics.md`, 2026-09-29). The
+  validation side is not read.
+- *What follows.* The screen passed and Δ₂₀₀ above zero → pretrained to four and read by the
+  replacement rule at 200 and at 500, as a screened recipe is; Δ₂₀₀ within ±T₂₀₀ with the screen
+  passed → closed as "no gain the instrument sees"; the screen failed → closed for harm. One
+  confirmatory comparison, no correction.
+
+**Predictions** (from intervals; a judgement where none bears).
+
+1. Screen: Δ₅₀₀ within [−0.02, +0.02]. The two variants of the masks lay at −0.017 and −0.015
+   against seed 1 (2026-10-06), the objective of states at −0.03 (2026-10-11), and at tier S the
+   chosen setting reads +0.005 ± 0.005 against the plain run.
+2. Primary: Δ₂₀₀ within [−0.02, +0.03]. Fine-tuning at 200 gains +0.012 and +0.028 over the
+   network from nothing under the mixture's two seeds (`fine-tuning-recipe.md`, 2026-10-16), and
+   the recipe's variants moved fine-tuning at 200 by at most 0.025 (`intensive-care-curve.md`,
+   2026-10-07); a gain past 0.03 would be the first. A judgement from those intervals.
+3. Few-shot: fine-tuning less the network from nothing at 20 and 50 under the objective lies
+   within ±0.05 of the same under the mixture's two. A judgement from one seed's spread there.
+4. The term is trained: the contrast at the kept epoch lies below 0.9 of chance on three of the
+   four corpora under both seeds (the pilot: three of four at 0.1 after a tenth of an epoch of
+   the recipe), and the reconstruction's relative validation lies within 5 % of the mixture's
+   per corpus (the pilot: below it everywhere).
+5. The two backbones' probes at 500 differ by less than 0.03 (s pooled 0.014, two draws).
+
+**Limitations.**
+
+- One pair of knobs, chosen at tier S by a rule whose first clause held by a hair; the
+  ordering of settings at a tenth of the data for one epoch may not hold at tier M.
+- 31 candidates an anchor, the micro-batch; a queue of past halves was not built.
+- Two pretrainings against four, so a gain below about 0.03 at 200 is not seen.
+- The kept epoch is chosen by the combined loss, a second difference beside the gradient.
+- Seeds 3 and 4 of the mixture enter fine-tuning at 200 on the half with this declaration, so
+  s_FT is pooled over pairs read at two times; it is named at the reading.
