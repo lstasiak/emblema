@@ -10,8 +10,17 @@ then embedded by the encoder of every cell, once per distinct set of weights, an
 the per-channel summaries a classical model reads. Nothing is written to the registry: the task is
 copied into memory before anything is drawn from it.
 
+Two options widen what is stored. ``--per-channel`` keeps, beside the probe's state, the mean
+state of each channel's tokens, one file per encoder laid out channel by channel. ``--values``
+embeds the stays with their measured values replaced while their times, channels, gaps and static
+descriptors stay as recorded: by each channel's mean over the learnt half, or by values drawn from
+another stay of the learnt half that measured the channel. Either way the stay's own values are
+gone and the schedule of its measurements is not; the summaries stored are always the recorded
+ones.
+
     uv run --env-file .env.r2 scripts/stay_summary_states.py --out DIR
         --campaign NAME ID [--campaign NAME ID ...] [--budgets 200 500] [--seeds 1 ...]
+        [--per-channel] [--values recorded|constant|transplanted] [--values-seed N]
 """
 
 import argparse
@@ -81,16 +90,21 @@ from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubs
 from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.ordering import seeded_rank
 from emblema.shared.kernel.timestamps import UtcDateTime
-from emblema.shared.kernel.tokens import TokenWindow
+from emblema.shared.kernel.tokens import Token, TokenWindow
+from scripts.frozen_representations import channel_means
 from scripts.reporting import machine
 from scripts.stay_summary_report import (
+    CHANNEL_STATES,
     CHANNELS,
     CONDITIONS,
+    CONSTANT,
     DRAWS,
     ENCODERS,
     LEARNT,
     PRETRAINED,
+    RECORDED,
     REGISTERED,
     SCORED,
     STATES,
@@ -99,6 +113,8 @@ from scripts.stay_summary_report import (
     SUMMARIES_SOURCE,
     SUMMARY_CHANNELS,
     SUMMARY_STATISTICS,
+    TRANSPLANTED,
+    VALUES,
     StoredChannel,
     StoredDraw,
     StoredEncoder,
@@ -314,19 +330,155 @@ def digest_of(candidate: AdaptedBackbone) -> str:
 
 
 def embedded(
-    candidate: AdaptedBackbone, windows: Sequence[TokenWindow], *, batch_size: int, device: str
+    candidate: AdaptedBackbone,
+    windows: Sequence[TokenWindow],
+    *,
+    batch_size: int,
+    device: str,
+    per_channel: tuple[Sequence[int], Path] | None = None,
 ) -> NDArray[np.float32]:
     """The pooled states a closed-form head reads, every window once, in the order given.
 
-    The states leave the accelerator before anything else is done to them.
+    With ``per_channel`` — channels and a file — the mean state of each of those channels' tokens
+    goes to the file as one array ``[channels, windows, width]``, zeros where a window does not
+    hold the channel, written as the batches come so that it never has to fit in memory. Both
+    come from one pass of the encoder, so the two poolings are of the same states. The states
+    leave the accelerator before anything else is done to them.
     """
     candidate.to(device).eval()
     rows = []
+    channels, target = ((), None) if per_channel is None else per_channel
+    channel_ids = torch.as_tensor(list(channels), dtype=torch.int64, device=device)
+    means: np.memmap[tuple[int, ...], np.dtype[np.float32]] | None = None
     with torch.no_grad():
         for start in range(0, len(windows), batch_size):
-            batch = TokenTensors.from_windows(list(windows[start : start + batch_size]))
-            rows.append(candidate.embed(batch.to(device)).to("cpu").numpy())
+            batch = TokenTensors.from_windows(list(windows[start : start + batch_size])).to(device)
+            states = candidate.encoder(*batch.args)
+            pooled = candidate.pooling(states, batch.padding_mask, batch.timestamps, batch.timeless)
+            rows.append(pooled.to("cpu").numpy())
+            if target is None:
+                continue
+            found, _ = channel_means(states, batch, channel_ids)
+            if means is None:
+                means = np.lib.format.open_memmap(
+                    target,
+                    mode="w+",
+                    dtype=np.float32,
+                    shape=(len(channel_ids), len(windows), states.shape[-1]),
+                )
+            stop = start + found.shape[0]
+            means[:, start:stop] = found.to("cpu").numpy().astype(np.float32).transpose(1, 0, 2)
+    if means is not None:
+        means.flush()
     return np.concatenate(rows).astype(np.float32)
+
+
+def constant_values(windows: Sequence[TokenWindow], learnt: int) -> list[TokenWindow]:
+    """``windows`` with every measured value replaced by its channel's mean over the learnt half.
+
+    The first ``learnt`` windows are the learnt half. Static descriptors keep their values.
+
+    Raises:
+        RefusalError: If a window measures a channel the learnt half never measured.
+    """
+    totals: dict[int, list[float]] = {}
+    for window in windows[:learnt]:
+        for token in window:
+            if not token.timeless:
+                totals.setdefault(token.channel_id, []).append(token.value)
+    means = {channel: float(np.mean(values)) for channel, values in totals.items()}
+    return [
+        _revalued(window, lambda token, _: _held(means, token.channel_id)) for window in windows
+    ]
+
+
+def transplanted_values(
+    windows: Sequence[TokenWindow], units: Sequence[str], learnt: int, seed: int
+) -> list[TokenWindow]:
+    """``windows`` with each channel's measured values drawn from another stay's of the learnt half.
+
+    The first ``learnt`` windows are the learnt half, and ``units`` names each window's stay. For
+    each channel the stays that measure it are ranked under ``seed``; a stay's donor is the next
+    stay of the learnt half after it in that ranking, taken round, so it is never the stay itself.
+    Each of the stay's readings of the channel takes one of the donor's values, drawn under
+    ``seed`` with replacement, so a stay keeps how many readings it had and when, and holds values
+    of the channel's natural spread that say nothing about the stay. Static descriptors keep their
+    values.
+
+    Raises:
+        RefusalError: If a channel has no learnt stay to donate to a stay that measures it.
+    """
+    held: dict[int, dict[int, list[float]]] = {}
+    for row, window in enumerate(windows):
+        for token in window:
+            if not token.timeless:
+                held.setdefault(token.channel_id, {}).setdefault(row, []).append(token.value)
+    donors: dict[tuple[int, int], list[float]] = {}
+    for channel, by_row in held.items():
+        ranked = sorted(by_row, key=lambda row: seeded_rank(seed, "donor", channel, units[row]))
+        for position, row in enumerate(ranked):
+            following = ranked[position + 1 :] + ranked[:position]
+            donor = next((other for other in following if other < learnt), None)
+            if donor is None:
+                raise RefusalError(f"no other learnt stay measures channel {channel}")
+            donors[(channel, row)] = by_row[donor]
+
+    def drawn_for(row: int) -> Callable[[Token, int], float]:
+        def value(token: Token, index: int) -> float:
+            pool = donors[(token.channel_id, row)]
+            rank = seeded_rank(seed, "value", token.channel_id, units[row], index)
+            return pool[int.from_bytes(rank) % len(pool)]
+
+        return value
+
+    return [_revalued(window, drawn_for(row)) for row, window in enumerate(windows)]
+
+
+def embedded_windows(
+    windows: Sequence[TokenWindow], units: Sequence[str], learnt: int, values: str, seed: int
+) -> list[TokenWindow]:
+    """The windows the encoders read: as recorded, or with their measured values replaced.
+
+    Raises:
+        RefusalError: If the values cannot be replaced as asked.
+    """
+    if values == RECORDED:
+        return list(windows)
+    if values == CONSTANT:
+        return constant_values(windows, learnt)
+    if values == TRANSPLANTED:
+        return transplanted_values(windows, units, learnt, seed)
+    raise RefusalError(f"{values!r} names no way to embed the values")
+
+
+def _held(means: Mapping[int, float], channel: int) -> float:
+    if channel not in means:
+        raise RefusalError(f"the learnt half never measures channel {channel}")
+    return means[channel]
+
+
+def _revalued(window: TokenWindow, value: Callable[[Token, int], float]) -> TokenWindow:
+    """``window`` with each measured token's value replaced by ``value(token, index)``.
+
+    The index counts the window's readings of the token's channel, in the window's order.
+    """
+    seen: dict[int, int] = {}
+    tokens = []
+    for token in window:
+        if token.timeless:
+            tokens.append(token)
+            continue
+        index = seen.get(token.channel_id, 0)
+        seen[token.channel_id] = index + 1
+        tokens.append(
+            Token(
+                channel_id=token.channel_id,
+                value=value(token, index),
+                time=token.time,
+                gap=token.gap,
+            )
+        )
+    return TokenWindow.of(tokens)
 
 
 @dataclass(frozen=True)
@@ -377,6 +529,20 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--workspace", type=Path, default=Path("data/workspace"))
     parser.add_argument("--corpora", type=Path, default=Path("data/raw"))
     parser.add_argument("--device", default=None, help="where to compute; the accelerator if any")
+    parser.add_argument(
+        "--per-channel",
+        action="store_true",
+        help="store each channel's mean state beside the probe's, one file per encoder",
+    )
+    parser.add_argument(
+        "--values",
+        choices=VALUES,
+        default=RECORDED,
+        help="the measured values the stays are embedded with; the summaries are the recorded ones",
+    )
+    parser.add_argument(
+        "--values-seed", type=int, default=1, help="the seed transplanted values are drawn under"
+    )
     return parser.parse_args(argv)
 
 
@@ -425,11 +591,25 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise SystemExit(f"refused: {refusal}") from refusal
     manifest = blocks.manifest_of(task.manifest)
     windows = blocks.block_of(manifest).at([stay.position for stay in stays])
-    observed = observed_channels(windows[: sum(stay.half == LEARNT for stay in stays)])
+    learnt_count = sum(stay.half == LEARNT for stay in stays)
+    observed = observed_channels(windows[:learnt_count])
     summaries, summary_channels, summary_statistics = summaries_of(
         windows, observed, len(manifest.channels)
     )
-    print(f"{len(stays)} stays, {len(draws)} drawn, {len(observed)} channels, on {device}")
+    try:
+        read = embedded_windows(
+            windows,
+            [stay.unit for stay in stays],
+            learnt_count,
+            arguments.values,
+            arguments.values_seed,
+        )
+    except RefusalError as refusal:
+        raise SystemExit(f"refused: {refusal}") from refusal
+    print(
+        f"{len(stays)} stays, {len(draws)} drawn, {len(observed)} channels, "
+        f"values {arguments.values}, on {device}"
+    )
     arrays: dict[str, NDArray[np.generic]] = {
         SUMMARIES: summaries,
         SUMMARY_CHANNELS: summary_channels,
@@ -440,6 +620,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     shapes: dict[str, Mapping[str, int]] = {}
     penalties: set[tuple[float, ...]] = set()
     batch_sizes: set[int] = set()
+    out: Path = arguments.out
+    out.mkdir(parents=True, exist_ok=True)
+    if arguments.per_channel:
+        (out / CHANNEL_STATES).mkdir(exist_ok=True)
     for name, campaign in campaigns:
         backbones = RestoredBackbones(store, arms[name].weights)
         shapes[name] = {"width": backbones.width, "layers": backbones.layers}
@@ -464,14 +648,20 @@ def main(argv: Sequence[str] | None = None) -> None:
                     continue
                 started = time.perf_counter()
                 arrays[digest] = embedded(
-                    candidate, windows, batch_size=plan.schedule.batch_size, device=device
+                    candidate,
+                    read,
+                    batch_size=plan.schedule.batch_size,
+                    device=device,
+                    per_channel=(
+                        (observed, out / CHANNEL_STATES / f"{digest}.npy")
+                        if arguments.per_channel
+                        else None
+                    ),
                 )
                 seconds[digest] = time.perf_counter() - started
                 print(f"{name} {arm} seed {seed}: {seconds[digest]:.0f} s", flush=True)
     if len(penalties) != 1 or len(batch_sizes) != 1:
         raise SystemExit("refused: the probes do not share one list of penalties and one batch")
-    out: Path = arguments.out
-    out.mkdir(parents=True, exist_ok=True)
     save_arrays(out / STATES, arrays)
     write_rows(out / STAYS, StoredStay.COLUMNS, (stay.record() for stay in stays))
     write_rows(out / DRAWS, StoredDraw.COLUMNS, (draw.record() for draw in draws))
@@ -499,6 +689,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         "batch_size": batch_sizes.pop(),
         "vocabulary": len(manifest.channels),
         "stays": {LEARNT: sum(s.half == LEARNT for s in stays), SCORED: len(scored)},
+        "values": arguments.values,
+        "values_seed": arguments.values_seed if arguments.values == TRANSPLANTED else None,
+        "per_channel": arguments.per_channel,
         "distinct_encoders": len(seconds),
         "seconds": seconds,
     }

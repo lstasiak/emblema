@@ -23,6 +23,7 @@ from emblema.evaluation.adapters.candidates.routed_candidate_catalogue import ( 
 from emblema.evaluation.adapters.features.per_channel_features import (  # noqa: E402
     PerChannelFeatures,
 )
+from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
 from emblema.evaluation.application.use_cases.draw_run_labels import (  # noqa: E402
     DrawRunLabelsCommand,
 )
@@ -40,12 +41,16 @@ from emblema.evaluation.domain.transfer.adaptation_schedule import (  # noqa: E4
     AdaptationSchedule,
 )
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
+from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
 from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
 from emblema.shared.kernel.tokens import Token, TokenWindow  # noqa: E402
 from scripts.stay_summary_report import (  # noqa: E402
+    CONSTANT,
     LEARNT,
     PRETRAINED,
+    RECORDED,
     SCORED,
+    TRANSPLANTED,
     UNTRAINED,
     StoredDraw,
 )
@@ -55,13 +60,16 @@ from scripts.stay_summary_states import (  # noqa: E402
     arms_of,
     candidate_of,
     channels_of,
+    constant_values,
     digest_of,
     drawn,
     embedded,
+    embedded_windows,
     observed_channels,
     plan_of,
     stays_of,
     summaries_of,
+    transplanted_values,
 )
 from tests.entrypoints.cli.campaign.test_every_campaign_file import DECLARED  # noqa: E402
 from tests.evaluation.support import (  # noqa: E402
@@ -339,3 +347,138 @@ def test_the_channels_are_named_and_marked_static_as_the_manifest_says() -> None
         (1, "test-corpus/temperature", False),
         (3, "test-corpus/age", True),
     ]
+
+
+def _built(seed: int = 3) -> AdaptedBackbone:
+    probes = arms_of("mix1", designed(), DECLARED)
+    return candidate_of(
+        plan_of(probes.arms[PRETRAINED], seed), SmallBackbones(), vocabulary_size=VOCABULARY_SIZE
+    )
+
+
+def test_each_channels_mean_state_is_stored_from_the_pass_the_probe_reads(tmp_path: Path) -> None:
+    built = _built()
+    windows = [_window(seed) for seed in range(7)]
+    channels = [1, 2, 3]
+
+    in_threes = embedded(
+        built, windows, batch_size=3, device="cpu", per_channel=(channels, tmp_path / "a.npy")
+    )
+    whole = embedded(
+        built,
+        windows,
+        batch_size=len(windows),
+        device="cpu",
+        per_channel=(channels, tmp_path / "b.npy"),
+    )
+
+    means = np.load(tmp_path / "a.npy")
+    np.testing.assert_allclose(means, np.load(tmp_path / "b.npy"), atol=1e-5)
+    np.testing.assert_allclose(in_threes, whole, atol=1e-5)
+    batch = TokenTensors.from_windows(windows)
+    with torch.no_grad():
+        states = built.encoder(*batch.args).numpy()
+        probe = built.embed(batch).numpy()
+    np.testing.assert_allclose(in_threes, probe, atol=1e-5)
+    assert means.shape == (len(channels), len(windows), states.shape[-1])
+    for row, window in enumerate(windows):
+        ids = np.array(window.channel_ids)
+        for index, channel in enumerate(channels):
+            held = ids == channel
+            expected = states[row, : len(ids)][held].mean(axis=0) if held.any() else 0.0
+            np.testing.assert_allclose(means[index, row], expected, atol=1e-5)
+        # Every token belongs to one of the channels, so the means weighted by their counts are
+        # the probe's mean over the window.
+        counts = np.array([(ids == channel).sum() for channel in channels], dtype=np.float64)
+        weighted = (counts[:, None] * means[:, row]).sum(axis=0) / counts.sum()
+        np.testing.assert_allclose(weighted, probe[row], atol=1e-5)
+
+
+def _schedule(window: TokenWindow) -> list[tuple[int, float, float, bool]]:
+    return sorted((token.channel_id, token.time, token.gap, token.timeless) for token in window)
+
+
+def test_a_constant_holds_each_channels_mean_over_the_learnt_half_and_the_schedule() -> None:
+    windows = [_window(seed) for seed in range(6)]
+    learnt = 4
+    means = {
+        channel: np.mean(
+            [
+                token.value
+                for window in windows[:learnt]
+                for token in window
+                if token.channel_id == channel and not token.timeless
+            ]
+        )
+        for channel in (1, 2)
+    }
+
+    replaced = constant_values(windows, learnt)
+
+    for before, after in zip(windows, replaced, strict=True):
+        assert _schedule(after) == _schedule(before)
+        for token in after:
+            expected = before.values[0] if token.timeless else means[token.channel_id]
+            assert token.value == pytest.approx(expected)
+
+
+def test_a_channel_the_learnt_half_never_measures_has_no_constant() -> None:
+    unseen = TokenWindow.of([Token(channel_id=2, value=1.0, time=0.5, gap=0.0)])
+    seen = TokenWindow.of([Token(channel_id=1, value=1.0, time=0.5, gap=0.0)])
+
+    with pytest.raises(RefusalError, match="never measures channel 2"):
+        constant_values([seen, unseen], 1)
+
+
+def test_transplanted_values_come_from_another_learnt_stay_of_the_same_channel() -> None:
+    windows = [_window(seed) for seed in range(10)]
+    units = [f"set-a/{row:04d}" for row in range(10)]
+    learnt = 6
+
+    replaced = transplanted_values(windows, units, learnt, seed=1)
+
+    assert transplanted_values(windows, units, learnt, seed=1) == replaced
+    assert transplanted_values(windows, units, learnt, seed=2) != replaced
+    for row, (before, after) in enumerate(zip(windows, replaced, strict=True)):
+        assert _schedule(after) == _schedule(before)
+        for channel in (1, 2):
+            own = {t.value for t in before if t.channel_id == channel and not t.timeless}
+            drawn = {t.value for t in after if t.channel_id == channel and not t.timeless}
+            if not own:
+                continue
+            donors = [
+                other
+                for other in range(learnt)
+                if other != row
+                and drawn <= {t.value for t in windows[other] if t.channel_id == channel}
+            ]
+            assert donors, f"stay {row}'s channel {channel} holds values of no other learnt stay"
+        assert [t.value for t in after if t.timeless] == [t.value for t in before if t.timeless]
+
+
+def test_a_stay_whose_channel_no_other_learnt_stay_measures_has_no_donor() -> None:
+    alone = TokenWindow.of([Token(channel_id=2, value=1.0, time=0.5, gap=0.0)])
+    other = TokenWindow.of([Token(channel_id=1, value=1.0, time=0.5, gap=0.0)])
+
+    with pytest.raises(RefusalError, match="no other learnt stay measures channel 2"):
+        transplanted_values([alone, other], ["a", "b"], 2, seed=1)
+
+
+@pytest.mark.parametrize("values", [RECORDED, CONSTANT, TRANSPLANTED])
+def test_the_windows_are_read_as_the_values_option_says(values: str) -> None:
+    windows = [_window(seed) for seed in range(6)]
+    units = [f"u{row}" for row in range(6)]
+
+    read = embedded_windows(windows, units, 4, values, 1)
+
+    expected = {
+        RECORDED: windows,
+        CONSTANT: constant_values(windows, 4),
+        TRANSPLANTED: transplanted_values(windows, units, 4, 1),
+    }[values]
+    assert read == expected
+
+
+def test_no_other_way_to_read_the_values_is_taken() -> None:
+    with pytest.raises(RefusalError, match="no way"):
+        embedded_windows([_window(1)], ["u"], 1, "shuffled", 1)

@@ -119,11 +119,8 @@ def pooled(
     for share in tails:
         late = observed & (batch.timeless | (batch.timestamps >= 1.0 - share - TOLERANCE))
         found[tail_name(share)] = _masked_mean(states, late)
-    same = observed.unsqueeze(1) & (batch.channel_ids.unsqueeze(1) == channels.view(1, -1, 1))
+    per_channel, same = channel_means(states, batch, channels)
     counts = same.sum(dim=-1)
-    weights = same.to(states.dtype)
-    per_channel = torch.einsum("bct,btd->bcd", weights, states)
-    per_channel = per_channel / counts.clamp(min=1).unsqueeze(-1).to(states.dtype)
     found[CHANNEL_MEAN] = per_channel.reshape(states.shape[0], -1)
     times = torch.where(
         same, batch.timestamps.unsqueeze(1), torch.full_like(same, -1.0, dtype=states.dtype)
@@ -133,6 +130,25 @@ def pooled(
     gathered = gathered * (counts > 0).unsqueeze(-1).to(states.dtype)
     found[CHANNEL_LAST] = gathered.reshape(states.shape[0], -1)
     return found
+
+
+def channel_means(states: Tensor, batch: TokenTensors, channels: Tensor) -> tuple[Tensor, Tensor]:
+    """The mean state of each channel's observed tokens, per window.
+
+    Args:
+        states: One state per token, ``[batch, tokens, width]``.
+        batch: The tokens the states are of, for their masks and channels.
+        channels: The channels the means are laid over, ``[channels]``.
+
+    Returns:
+        The means, ``[batch, channels, width]``, zeros for a channel a window does not hold; and
+        which observed tokens belong to each channel, ``[batch, channels, tokens]``.
+    """
+    observed = ~batch.padding_mask
+    same = observed.unsqueeze(1) & (batch.channel_ids.unsqueeze(1) == channels.view(1, -1, 1))
+    counts = same.sum(dim=-1)
+    summed = torch.einsum("bct,btd->bcd", same.to(states.dtype), states)
+    return summed / counts.clamp(min=1).unsqueeze(-1).to(states.dtype), same
 
 
 def _masked_mean(states: Tensor, kept: Tensor) -> Tensor:
