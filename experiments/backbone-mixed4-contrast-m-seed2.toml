@@ -19,8 +19,8 @@ token_rate = 0.1
 [objective]
 kind = "huber"
 huber_delta = 1.0
-contrast_weight = 0.5
-contrast_temperature = 0.2
+contrast_weight = 1.0
+contrast_temperature = 0.1
 
 # Eight passes over every window, the epoch kept the one whose mean relative validation over the
 # corpora is lowest; sixteen windows a micro-batch, two to a step, as every mixture before; a
