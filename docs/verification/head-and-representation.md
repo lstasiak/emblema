@@ -813,3 +813,119 @@ anchored on a trial that was seen).
 - The summaries are of the values as published, standardised per channel, with a gap filled
   from the draw; a head with indicators of absence beyond the count is not read.
 - Tier M models read on this machine (M1 Pro, MPS, fp32); validation side, not the test.
+
+## 2026-10-20 — M1 Pro, MPS and CPU, fp32: the stays' summaries read better than the probe's states, which pretraining empties of them
+
+**Question.** The one declared above: on half the intensive-care tuning stays at 200 and 500
+labels, (a) the classical bar, (b) how much of each family of summaries the mixture's frozen
+states carry, and (c) whether the states add to the summaries under the probe's own head.
+
+**Conditions.** Classical campaign `6a388747-…` defined from `54138770`, its 40 cells run on this
+machine's processor (140 s at 200, 260 s at 500). States by `scripts/stay_summary_states.py` at
+`54138770`: 14 distinct encoders (the mixture's four; one draw at initialisation per seed, the
+same under all four campaigns), about 30 s each on MPS. Fits by
+`scripts/stay_summary_report.py` at `58de6bd8`: the first run stopped at the eleventh encoder,
+where LAPACK's divide-and-conquer decomposition did not converge on one set of states (the
+encoder at initialisation under seed 10, 1,958 stays, singular values from 991 to 2.6·10⁻⁶);
+the fix takes that decomposition by the one-sided method and writes the heads before the
+mapping. It decomposed 7 of the 369 summaries' maps, all of that set; the heads repeated the
+first run's to every printed digit. Pairs by `scripts/campaign_pairs_report.py`. CSV under
+`data/report/l26/`.
+
+**Fidelity.** The head over the states alone answered as the 160 registered probe cells did, to
+at most 2.0·10⁻⁶ in area, under every pretraining, both arms and both budgets.
+
+**(a) Area under the ROC curve**, mean over seeds 1 to 10 (their standard deviation); the
+mixture's readings the mean over its four pretrainings, the networks over their two.
+
+| Reading | 200 | 500 |
+|---|---|---|
+| Boosted trees per channel | **0.736** (0.025) | **0.787** (0.014) |
+| MiniRocket | 0.713 (0.016) | 0.756 (0.020) |
+| Logistic head over the summaries | 0.713 (0.022) | 0.759 (0.016) |
+| Network from nothing (stop at 500) | 0.653 | 0.749 |
+| Fine-tuning, mixture (stop at 500) | 0.686 | 0.735 |
+| Probe, mixture | 0.662 (0.028) | 0.697 (0.016) |
+| Probe, encoder at initialisation | 0.635 (0.041) | 0.693 (0.032) |
+| States and summaries, mixture | 0.711 (0.026) | 0.754 (0.012) |
+| States and summaries, at initialisation | 0.713 (0.034) | 0.762 (0.012) |
+
+**The pairs** (gain of the second over the first in area, 95 % interval over stays, seed by
+seed mean ± SE):
+
+| Pair | 200 | 500 |
+|---|---|---|
+| trees over the probe | +0.074 [+0.051; +0.097] ± 0.007 | +0.089 [+0.066; +0.112] ± 0.006 |
+| MiniRocket over the probe | +0.051 [+0.024; +0.078] ± 0.006 | +0.059 [+0.034; +0.083] ± 0.008 |
+| trees over the network from nothing | +0.083 [+0.068; +0.097] ± 0.009 | +0.038 [+0.024; +0.052] ± 0.012 |
+| MiniRocket over the network from nothing | +0.060 [+0.040; +0.080] ± 0.011 | +0.007 [−0.011; +0.025] ± 0.011 |
+| trees over fine-tuning | +0.050 [+0.035; +0.065] ± 0.007 | +0.052 [+0.038; +0.066] ± 0.009 |
+| trees over the summaries' head | +0.023 [+0.008; +0.038] ± 0.005 | +0.028 [+0.013; +0.043] ± 0.005 |
+| summaries' head over the probe | +0.051 [+0.025; +0.077] ± 0.007 | +0.062 [+0.035; +0.088] ± 0.006 |
+| **(c)** states and summaries over the summaries | **−0.002** [−0.018; +0.015] ± 0.004 | **−0.005** [−0.018; +0.008] ± 0.005 |
+| states and summaries, mixture over initialisation | −0.002 [−0.014; +0.010] ± 0.007 | −0.009 [−0.019; +0.001] ± 0.004 |
+
+T in force for (c), from the intervals' standard errors: 0.020 at 200, 0.017 at 500.
+
+**(b) Median R² per family** on the 2,000 held-out stays, mean over encoders [range]; 369
+summaries of 44 channels.
+
+| Family | Summaries | Mixture (4) | At initialisation (10) | Difference |
+|---|---|---|---|---|
+| level | 108 | 0.153 [0.146; 0.159] | 0.313 [0.297; 0.333] | −0.160 |
+| extremes | 108 | 0.172 [0.146; 0.194] | 0.263 [0.255; 0.270] | −0.090 |
+| trend | 70 | 0.015 [0.012; 0.017] | 0.016 [0.014; 0.018] | −0.001 |
+| frequency | 74 | 0.456 [0.430; 0.465] | 0.548 [0.528; 0.562] | −0.092 |
+| statics | 9 | 0.373 [0.259; 0.537] | 0.475 [0.424; 0.590] | −0.102 |
+| share with R² ≥ 0.5 | 369 | 0.182 [0.171; 0.206] | 0.253 [0.241; 0.271] | — |
+
+By channel (descriptive), the median R² of level and extremes follows how often a channel is
+measured: Spearman's ρ with tokens per stay 0.76 under the mixture, 0.47 at initialisation.
+The frequent channels keep or gain under pretraining (heart rate 0.55 against 0.52, 57 tokens a
+stay; temperature 0.39 against 0.02); the laboratory values, about three tokens a stay, are lost
+(sodium 0.09 against 0.42, bicarbonate 0.21 against 0.50, ALT 0.04 against 0.36). The pH
+channel holds values recorded on the wrong scale (94 to 734 in the raw files, up to 88σ once
+standardised, the 99th percentile 0.01σ): its R² of −10 to −46 under both encoders is the tail,
+not the map, and moves no family's median.
+
+**Predictions.**
+
+1. *Held in part.* At 200 the trees and MiniRocket lie above the probe by 0.074 and 0.051 (at
+   least 0.05 ✓); above the network from nothing by 0.083 and 0.060, MiniRocket below the 0.07
+   declared. At 500 both lie at or above the network under the stop (+0.038, +0.007) ✓.
+2. *Held at 500, failed at 200 in the summaries' favour.* +0.062 at 500 (at least 0.03 ✓);
+   +0.051 at 200, outside the ±0.03 declared.
+3. *Failed.* Level and extremes are not carried (0.153, 0.172 < 0.3); trend is not (0.015 ✓);
+   the encoder at initialisation is not within 0.1 of the mixture but above it in level by
+   0.160.
+4. *Held.* Δ −0.002 and −0.005, inside ±T at both budgets: nothing.
+
+**Conclusions.**
+
+1. The classical bar on the stage's half is boosted trees per channel: 0.736 at 200 stays and
+   0.787 at 500, 0.07 to 0.09 above the probe, 0.05 above fine-tuning and 0.04 to 0.08 above
+   the network from nothing. A logistic regression over the same summaries already reads 0.05
+   to 0.06 above the probe.
+2. By the rule declared, (b) is *not carried*: the vector the probe reads holds 15 % of the
+   variance of a channel's level, half of what the same encoder holds before training.
+   Pretraining removes summaries rather than adding them, in every family but trend, which no
+   encoder carries.
+3. What is lost is the rarely measured channels: the frequent ones keep their level, the
+   laboratory values do not. A loss per token weights a channel by how often it is measured,
+   which fits this pattern; it was not measured directly.
+4. The states add nothing to the summaries at either budget (c), and the pretrained states
+   beside the summaries read no better than the untrained ones (−0.009 at 500).
+5. Following the declared branch, the next pretext predicts the summaries of a window's hidden
+   part or of its next hours, each channel weighted alike; its first step is to read the token
+   states pooled per channel, which tells a summary missing from the states from one lost in
+   the mean over the window.
+
+**Limitations.**
+
+- (b) reads the probe's vector, the mean over every token of a stay; whether the tokens' own
+  states carry the laboratory values is not read here, and conclusion 2 is about what the probe
+  sees.
+- One linear head throughout, one penalty for states and summaries together.
+- The trial's seed 1 of every reading and heart rate's recovery were seen before the
+  predictions; predictions 2 and 3 were anchored on them, and both failed in part.
+- Tier M models read on this machine; validation side, not the test.
