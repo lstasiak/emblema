@@ -10,12 +10,12 @@ from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa:
 from emblema.pretraining.adapters.objective.masked_reconstruction import (  # noqa: E402
     MaskedReconstruction,
 )
+from emblema.pretraining.adapters.objective.objective_score import RECONSTRUCTION  # noqa: E402
 from emblema.pretraining.adapters.objective.summary_loss import (  # noqa: E402
     SummaryLoss,
     SummaryUnits,
 )
 from emblema.pretraining.adapters.objective.summary_reconstruction import (  # noqa: E402
-    RECONSTRUCTION,
     SUMMARY,
     SummaryReconstruction,
 )

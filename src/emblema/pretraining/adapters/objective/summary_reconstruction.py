@@ -2,7 +2,10 @@ from torch import Tensor, nn
 
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
-from emblema.pretraining.adapters.objective.objective_score import ObjectiveScore
+from emblema.pretraining.adapters.objective.objective_score import (
+    RECONSTRUCTION,
+    ObjectiveScore,
+)
 from emblema.pretraining.adapters.objective.reconstruction_loss import ReconstructionLoss
 from emblema.pretraining.adapters.objective.summary_loss import SummaryLoss, SummaryUnits
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
@@ -10,7 +13,6 @@ from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
 from emblema.pretraining.domain.training.summary_term import SUMMARIES, SummaryTerm
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
-RECONSTRUCTION = "reconstruction"
 SUMMARY = "summaries"
 
 
