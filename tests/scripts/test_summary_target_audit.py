@@ -2,15 +2,19 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from emblema.pretraining.adapters.diagnostics.window_arrays import WindowArrays
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
+from emblema.pretraining.adapters.objective.summary_reconstruction import SummaryReconstruction
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
+from emblema.pretraining.domain.training.summary_term import SummaryTerm
 from scripts.pretext_triviality_report import CorpusWindows
 from scripts.summary_target_audit import (
     COMBINED,
+    HEAD,
     INTERPOLATION,
     LEAST_SAMPLES,
     MODEL,
@@ -30,6 +34,7 @@ from scripts.summary_target_audit import (
     read_scores,
     render,
     samples_of,
+    spread_over_tokens,
     summarised,
     write_scores,
     write_settings,
@@ -162,6 +167,31 @@ def test_every_answer_is_scored_on_every_summary_and_the_tokens(control: Control
             (r.channel_id, r.summary, r.part): r.score.count for r in rows if r.answer == VISIBLE
         }
         assert {key: counts[key] for key in same} == visible
+
+
+def test_a_backbone_that_answers_the_summaries_is_scored_on_its_answers(control: Control) -> None:
+    model = SummaryReconstruction(
+        SetEncoder.for_vocabulary(TOY, control.vocabulary_size),
+        decoder_layers=1,
+        summary=SummaryTerm.of(weight=1.0),
+    ).eval()
+    corpus = corpus_of(control)
+    [(batch, masks), *_] = drawn(corpus.validation, MASKS, batch_size=4, seed=3)
+    with torch.no_grad():
+        summaries, units = model.summarised(batch, masks)
+    unit = units.unit.numpy()
+
+    spread = spread_over_tokens(summaries, units)
+
+    for row, token in zip(*np.nonzero(unit >= 0), strict=True):
+        np.testing.assert_allclose(spread[row, token], summaries[unit[row, token]].double().numpy())
+    assert np.isnan(spread[unit < 0]).all()
+    samples, _ = samples_of(batch, masks, {}, frozenset(), {HEAD: spread})
+    assert samples
+    assert all(np.isnan(sample.answers[HEAD][3]) for sample in samples)
+    rows = audited(corpus, MASKS, "own", model=model, device="cpu", batch_size=4)
+    assert {row.summary for row in rows if row.answer == HEAD} == set(SUMMARIES)
+    assert not any(row.answer == HEAD for row in rows if row.summary == TOKEN)
 
 
 def test_the_same_seeds_score_the_same(control: Control) -> None:

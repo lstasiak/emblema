@@ -16,8 +16,10 @@ on the validation windows by answers that learn nothing from them:
 The two ridge maps are fitted per channel and summary on one half of the training windows, the
 regression the others summarise on the other half, so neither is scored where it was fitted. A
 backbone's own reconstruction is summarised the same way (``model``), and each token is scored as
-well (``token``), the objective as it stands. The masks are the backbone's own, or those of an
-experiment file's ``[masking]`` (``--masks``), drawn from fixed seeds.
+well (``token``), the objective as it stands. A backbone trained to answer the summaries beside
+the values gives its answers as well (``head``); it answers no slope. The masks are the
+backbone's own, or those of an experiment file's ``[masking]`` (``--masks``), drawn from fixed
+seeds.
 
 Scores are kept as sums per corpus, masks, channel, summary, part and answer, so the R² of any
 grouping is computed from the CSV without the corpora at hand; the tables are rendered from it.
@@ -62,6 +64,8 @@ from emblema.pretraining.adapters.diagnostics.own_and_cross_channel_ridge_baseli
 )
 from emblema.pretraining.adapters.diagnostics.window_arrays import WindowArrays
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
+from emblema.pretraining.adapters.objective.summary_loss import SummaryUnits
+from emblema.pretraining.adapters.objective.summary_reconstruction import SummaryReconstruction
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
 from emblema.pretraining.adapters.training.devices import available_device
@@ -91,10 +95,10 @@ FAMILY = {"mean": "level", "minimum": "extremes", "maximum": "extremes", "slope"
 TOKEN = "token"
 PARTIAL, WHOLE = "partial", "whole"
 VISIBLE, INTERPOLATION, COMBINED = "visible", "interpolation", "combined"
-SCHEDULE, STACKED, MODEL = "schedule", "stacked", "model"
+SCHEDULE, STACKED, MODEL, HEAD = "schedule", "stacked", "model", "head"
 # The answers summarised from values at the hidden instants, and the ones fitted on summaries.
 SUMMARISED = (INTERPOLATION, COMBINED, MODEL)
-ANSWERS = (VISIBLE, INTERPOLATION, COMBINED, SCHEDULE, STACKED, MODEL)
+ANSWERS = (VISIBLE, INTERPOLATION, COMBINED, SCHEDULE, STACKED, MODEL, HEAD)
 # The ridge maps' penalty on standardised features, and the samples a channel needs before one is
 # fitted; below that it answers the training mean.
 PENALTY = 1.0
@@ -186,8 +190,14 @@ def samples_of(
     masks: TokenMasks,
     predictions: Mapping[str, NDArray[np.float64]],
     channels_apart: frozenset[int],
+    answered: Mapping[str, NDArray[np.float64]] | None = None,
 ) -> tuple[list[Sample], list[TokenScore]]:
-    """Every channel of every window that lost a token, with its summaries and its tokens."""
+    """Every channel of every window that lost a token, with its summaries and its tokens.
+
+    ``predictions`` answer each token, ``[batch, tokens]``, and are summarised here; ``answered``
+    hold an answer per summary at every hidden token of the channel, ``[batch, tokens, 3]``,
+    without a slope.
+    """
     arrays = WindowArrays.of(batch)
     timeless = batch.timeless.cpu().numpy()
     hidden = masks.hidden.cpu().numpy() & arrays.observed & ~timeless
@@ -207,6 +217,8 @@ def samples_of(
                 name: summarised(times, predicted[row, lost])
                 for name, predicted in predictions.items()
             }
+            for name, given in (answered or {}).items():
+                answers[name] = np.append(given[row, lost][0], np.nan)
             answers[VISIBLE] = (
                 summarised(arrays.times[row, kept], arrays.values[row, kept])
                 if part == PARTIAL
@@ -421,7 +433,7 @@ def scored(
             key = (channel, part, summary)
             fallback = maps.means.get(key, 0.0)
             answers: dict[str, NDArray[np.float64]] = {}
-            for answer in (VISIBLE, *SUMMARISED):
+            for answer in (VISIBLE, *SUMMARISED, HEAD):
                 if answer not in members[0].answers:
                     continue
                 given = np.array([sample.answers[answer][summary] for sample in members])
@@ -526,15 +538,30 @@ def collected(
             INTERPOLATION: interpolation.predict(batch, masks).double().numpy(),
             COMBINED: regressions.predict(batch, masks),
         }
+        answered: dict[str, NDArray[np.float64]] = {}
         if model is not None:
+            on_device, masks_on_device = batch.to(device), masks.to(device)
             with torch.no_grad():
-                answered = model(batch.to(device), masks.to(device)).detach().to("cpu")
-            # Off the accelerator first, widened after: one call that does both reads zeros.
-            predictions[MODEL] = answered.to(torch.float64).numpy()
-        found, answered_tokens = samples_of(batch, masks, predictions, channels_apart)
+                values = model(on_device, masks_on_device).detach().to("cpu")
+                # Off the accelerator first, widened after: one call that does both reads zeros.
+                predictions[MODEL] = values.to(torch.float64).numpy()
+                if isinstance(model, SummaryReconstruction):
+                    answered[HEAD] = spread_over_tokens(
+                        *model.summarised(on_device, masks_on_device)
+                    )
+        found, answered_tokens = samples_of(batch, masks, predictions, channels_apart, answered)
         samples += found
         tokens += answered_tokens
     return samples, tokens
+
+
+def spread_over_tokens(summaries: torch.Tensor, units: SummaryUnits) -> NDArray[np.float64]:
+    """Each unit's answers at every token of the unit, NaN at tokens of none."""
+    unit = units.unit.detach().to("cpu")
+    host = summaries.detach().to("cpu").to(torch.float64)
+    spread = torch.full((*unit.shape, host.shape[-1]), torch.nan, dtype=torch.float64)
+    spread[unit >= 0] = host[unit[unit >= 0]]
+    return spread.numpy()
 
 
 def audited(
