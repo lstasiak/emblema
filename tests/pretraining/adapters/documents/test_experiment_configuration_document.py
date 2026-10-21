@@ -11,7 +11,7 @@ from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
-from tests.support.experiments import CONTRAST, LATENT, WEIGHTS, budget, configuration
+from tests.support.experiments import CONTRAST, LATENT, SUMMARY, WEIGHTS, budget, configuration
 
 CODEC = ExperimentConfigurationDocument()
 
@@ -180,6 +180,15 @@ def test_the_contrast_travels_inside_the_objective_and_only_where_it_is_stated()
     }
     assert CODEC.decode(json.loads(json.dumps(document))) == contrasted
     assert CODEC.encode(configuration())["objective"] == {"kind": "mse", "huber_delta": 0.0}
+
+
+def test_the_summaries_travel_inside_the_objective_and_only_where_they_are_stated() -> None:
+    summarised = configuration(summary=SUMMARY)
+
+    document = CODEC.encode(summarised)
+
+    assert document["objective"] == {"kind": "mse", "huber_delta": 0.0, "summary": {"weight": 0.5}}
+    assert CODEC.decode(json.loads(json.dumps(document))) == summarised
 
 
 def test_the_start_and_the_trained_parameters_travel_only_where_stated() -> None:

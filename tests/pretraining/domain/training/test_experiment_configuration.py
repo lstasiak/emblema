@@ -12,7 +12,14 @@ from emblema.pretraining.domain.training.objective_loss import LossKind, Objecti
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
-from tests.support.experiments import CONTRAST, LATENT, WEIGHTS, budget, configuration
+from tests.support.experiments import (
+    CONTRAST,
+    LATENT,
+    SUMMARY,
+    WEIGHTS,
+    budget,
+    configuration,
+)
 
 BOUNDED = ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.0)
 
@@ -285,6 +292,28 @@ def test_the_contrast_is_rendered_after_the_target_and_only_where_it_is_stated()
 def test_the_contrast_is_stated_beside_the_value_target_only() -> None:
     with pytest.raises(InvalidExperimentConfigurationError, match="value target only"):
         configuration(target=LATENT, contrast=CONTRAST)
+
+
+def test_the_summaries_are_rendered_after_the_contrast_and_only_where_they_are_stated() -> None:
+    summarised = configuration(summary=SUMMARY)
+
+    parameters = list(summarised.parameters())
+
+    assert "summary_weight" not in configuration().parameters()
+    knee = parameters.index("huber_delta") + 1
+    assert parameters[knee : knee + 2] == ["summary_weight", "epochs"]
+    assert summarised.parameters()["summary_weight"] == 0.5
+    assert summarised.differences_from(configuration()) == ("summary_weight",)
+
+
+def test_the_summaries_are_stated_beside_the_value_target_only() -> None:
+    with pytest.raises(InvalidExperimentConfigurationError, match="value target only"):
+        configuration(target=LATENT, summary=SUMMARY)
+
+
+def test_the_summaries_are_not_stated_beside_the_contrast() -> None:
+    with pytest.raises(InvalidExperimentConfigurationError, match="not stated together"):
+        configuration(contrast=CONTRAST, summary=SUMMARY)
 
 
 def test_the_start_and_the_trained_parameters_render_only_where_they_are_stated() -> None:
