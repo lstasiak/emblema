@@ -1294,3 +1294,106 @@ hidden whole at 0.07 to 0.12, not the declared 0.2 to 0.5.
 **Limitations.** One backbone and one draw of masks; the stack is linear, so a nonlinear answer
 without a model could read more; the sparse laboratory values enter the partially hidden table
 through one channel.
+
+## 2026-10-22 — declared before the run: each channel's summaries of the hidden part
+
+**Question.** Does the term that asks for each channel's mean, minimum and maximum over a window's
+hidden part (ADR-0059) learn them at tier M beyond answers without a model, and does it put into
+the stays' token states, pooled per channel, what initialisation does not? The probe over those
+states reads 0.265 in 1 − AUROC at 500 stays under the mixture's four and under an untrained
+encoder alike, and 0.241 over the summaries themselves (`head-and-representation.md`,
+2026-10-21): 0.024 lies between them.
+
+**The variant** (`experiments/backbone-mixed4-summary-m.toml`, `-seed2.toml`). The file of
+`backbone-mixed4-m` to the step — four corpora, 4.8M parameters, the mixture's masks, huber at
+one deviation, eight epochs, 16 × 2 windows a step, 1e-3, fp16 — with `[objective]
+summary_weight = 1.0`. The kept epoch is the one whose reconstruction alone reads lowest
+(ADR-0060), the rule the mixture's runs were kept by. Seed 1 draws the encoder and the decoder
+the mixture's seed 1 drew.
+
+**Pilot, before any order** (2026-10-21/22, this machine, MPS, fp32; the M shape at a tenth of
+each corpus, one epoch; `data/report/l27/pilot/`). Weights 0.5, 1 and 2 under the mixture's
+masks, the forecast tail with and without the term, and the file without the term run twice.
+It answers the mechanics only:
+
+- the term trains without diverging; at every weight the reconstruction's validation lies 5 to
+  21 % below the run without the term on every corpus, and the run without it repeats itself to
+  0.4 %;
+- an epoch costs 1.04 to 1.08 times the run without the term;
+- no run learns the stays' values at this scale: the reconstruction's R² per token there is
+  about 0 (SKAB −0.16 against 0.99 for a line through the visible tokens), the head's R² of the
+  summaries about 0, and the probes read the stays better than the mixture at tier M does.
+
+The representation readings of the pilot are therefore not used, and the weight is the pilot's
+default, set before it ran. The forecast tail is not ordered: it beat the mixture's masks only
+on a reading this scale cannot make.
+
+**Pretraining.** Two seeds, 1 and 2, on Kaggle T4 ×2, one per GPU, from the orders of the
+committed files; about 2.3 h each (the mixture's 2.1 h times the pilot's ratio). The first steps
+of seed 1 on the T4 are the trial of the family (memory, pace, fp16) before the second order is
+placed.
+
+**Gate: the term is learnt.** `scripts/summary_target_audit.py --backbone <id>` on the stays'
+validation windows under each backbone's own masks; median R² over dense channels that keep
+visible tokens, answer `head`, against `stacked` (0.67 mean, 0.60 minimum, 0.63 maximum,
+2026-10-21). The gate passes where the head's R², averaged over the three summaries and the two
+backbones, reaches the stack's average (0.63). Where it fails, the term has learnt no more than
+a linear answer without a model reads, the representation readings are not run, and the
+objective is closed as not learnt at this scale. The `model` answer (the reconstruction
+summarised) is read beside it against the mixture's (0.64, 0.44, 0.41).
+
+**Readings, if the gate passes.** Every cell on the half of the tuning side held out by seed 101
+(`one_in = 2`), seeds 1 to 10, paired by seed; the two against the mixture's four as a
+difference of means over pretrainings (`scripts/campaign_pairs_report.py`, sides joined by `+`).
+T = 2·√(SE² + (s²/2)(1/2 + 1/4)), s = max(0.014, the two pretrainings' own spread by the
+registered formula).
+
+- *Screen, the reader of the stage.* `review-concat-500-physionet2012.toml`:
+  `frozen_ridge@layer=concat` at 500. **Closed for harm** where Δ₅₀₀ < −T₅₀₀.
+- *Primary, the term's own reading.* `channel_states` at 500 (`scripts/stay_summary_states.py
+  --per-channel`, `scripts/channel_pooling_report.py`, as on 2026-10-21) against the mixture's
+  four. With SE about 0.004 and s = 0.014, T is about 0.019: only a gain of most of the 0.024 to
+  the summaries is seen.
+- *Secondary.* `reader-200-physionet2012.toml`: `full_fine_tuning` at 200 against the same cells
+  under the mixture's four (seeds 1 and 2 read, seeds 3 and 4 accepted on 2026-10-20); s_FT as
+  declared on 2026-10-20. Threshold about 0.03.
+- *Descriptive.* `channel_states` at 200; the R² of the summaries in the token states pooled per
+  channel against initialisation (`stay_summary_report.py`, L-26's rule: carried at 0.5 or
+  more, lost below 0.3); the reconstruction's relative validation per corpus at the kept epoch
+  against the mixture's four.
+
+**What follows.** The screen failed → closed for harm. The screen passed and Δ above T at 500 per
+channel or at 200 under fine-tuning → pretrained to four and read by the replacement rule, and
+the pooling of L-29 is built over these backbones. Both within ±T → closed as "no gain the
+instrument sees"; the pooling is built over the mixture. Two comparisons, each one-sided at
+about 2.5 %, no correction.
+
+**Predictions** (from intervals; a judgement where none bears).
+
+1. Gate: the head's average R² lies in [0.50, 0.68]. The lower edge is the mixture's
+   reconstruction summarised (0.50 averaged), which the term reads off the same decoder; the
+   upper is the stack plus the 0.05 a nonlinear answer may add. Whether the gate passes is
+   near even.
+2. Screen: Δ₅₀₀ within [−0.03, +0.02]. The variants of the masks lay at −0.017 and −0.015, the
+   objective of states at −0.03; the summaries hold no clock (the schedule reads them at 0.08 at
+   most), so the contrast's −0.10 has no counterpart here.
+3. Primary: Δ per channel at 500 within [−0.005, +0.024]: from the mixture's own interval
+   against initialisation (+0.000 ± 0.003) to the summaries' ceiling.
+4. Secondary: Δ₂₀₀ within [−0.02, +0.03], as declared for the contrast from the same intervals.
+5. The reconstruction's relative validation lies within [−10 %, +5 %] of the mixture's on every
+   corpus; the contrast cost the stays +16 to +21 %, the pilot here −5 to −21 % at one epoch.
+6. The two backbones' probes at 500 differ by less than 0.03 (s pooled 0.014, two draws).
+
+**Cost.** Kaggle: two pretraining orders (~2.3 h, parallel), then two fine-tuning orders of 20
+cells (~2.2 h, parallel). This machine: audit ~5 min a backbone, screen ~10 min a backbone,
+states and the per-channel probe ~2.5 h.
+
+**Limitations.**
+
+- One weight, taken without a reading at this scale; a weight that changes the verdict would go
+  unseen.
+- Two pretrainings against four: below about 0.02 per channel and 0.03 under fine-tuning a gain
+  is not seen.
+- The gate reads the stays' dense channels; the sparse laboratory values, hidden whole, are
+  answered by nothing and train towards their mean.
+- The mixture's masks only; the forecast tail is not read at tier M.
