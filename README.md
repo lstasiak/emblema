@@ -94,8 +94,9 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
   fine-tuned encoder at 200 labelled windows. On death in hospital (PhysioNet 2012) the only
   gain, fine-tuning at 200 stays, lies below the registered least gain.
 - **Classical baselines lead at few labels.** Gradient-boosted trees over per-channel summaries
-  match or beat every network from 200 labels up. On the intensive-care stays, pretraining
-  leaves the encoder holding less of those summaries than before it was trained.
+  match or beat every network from 200 labels up. On the intensive-care stays, the encoder's
+  average over a stay holds less of those summaries than before it was trained; each channel's
+  own tokens still hold them, as they did before training.
 - **Ruled out:** more pretraining data (up to about 10⁹ values), a five times larger model,
   continuing on the task's own domain, the adaptation recipe and five variants of the pretext.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
