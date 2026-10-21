@@ -8,7 +8,8 @@ on the validation windows by answers that learn nothing from them:
 - ``visible``: the same summary of the channel's visible tokens, where it keeps any;
 - ``interpolation``: the summary of a line through the channel's visible tokens at the hidden
   instants;
-- ``combined``: the summary of the regression on the channel's own line and the other channels;
+- ``combined``: the summary of the regression on the channel's own line and the other channels,
+  and on the other channels alone where the channel is hidden whole;
 - ``schedule``: a ridge map from when and how often the channel was hidden and seen, no value;
 - ``stacked``: a ridge map from all of the above, the strongest linear answer without a model.
 
@@ -50,6 +51,9 @@ sys.path.insert(0, str(REPO_ROOT))
 from emblema.config.settings import Settings
 from emblema.entrypoints.configured import configured_store
 from emblema.entrypoints.source_revision import SourceRevision
+from emblema.pretraining.adapters.diagnostics.cross_channel_ridge_baseline import (
+    CrossChannelRidgeBaseline,
+)
 from emblema.pretraining.adapters.diagnostics.linear_interpolation_baseline import (
     LinearInterpolationBaseline,
 )
@@ -480,9 +484,37 @@ def drawn(
     ]
 
 
+@dataclass(frozen=True)
+class Regressions:
+    """The strongest linear answer per token: own line and other channels, or the others alone.
+
+    The regression over both sources leaves a channel hidden whole at zero, as it has no line of
+    its own; the regression over the other channels answers those tokens, as the diagnostic of the
+    masks composes the two.
+    """
+
+    combined: OwnAndCrossChannelRidgeBaseline
+    cross: CrossChannelRidgeBaseline
+
+    @classmethod
+    def fitted(
+        cls, batches: Sequence[tuple[TokenTensors, TokenMasks]], *, vocabulary_size: int
+    ) -> "Regressions":
+        return cls(
+            OwnAndCrossChannelRidgeBaseline.fitted(batches, vocabulary_size=vocabulary_size),
+            CrossChannelRidgeBaseline.fitted(batches, vocabulary_size=vocabulary_size),
+        )
+
+    def predict(self, batch: TokenTensors, masks: TokenMasks) -> NDArray[np.float64]:
+        whole = masks.channel.cpu().numpy()
+        combined = self.combined.predict(batch, masks).double().numpy()
+        cross = self.cross.predict(batch, masks).double().numpy()
+        return np.where(whole, cross, combined)
+
+
 def collected(
     batches: Iterable[tuple[TokenTensors, TokenMasks]],
-    combined: OwnAndCrossChannelRidgeBaseline,
+    regressions: Regressions,
     channels_apart: frozenset[int],
     model: MaskedReconstruction | None = None,
     device: str = "cpu",
@@ -492,7 +524,7 @@ def collected(
     for batch, masks in batches:
         predictions = {
             INTERPOLATION: interpolation.predict(batch, masks).double().numpy(),
-            COMBINED: combined.predict(batch, masks).double().numpy(),
+            COMBINED: regressions.predict(batch, masks),
         }
         if model is not None:
             with torch.no_grad():
@@ -516,20 +548,20 @@ def audited(
 ) -> list[ScoreRow]:
     """One corpus's scores under one set of masks.
 
-    The regression is fitted on the first half of the training windows, the ridge maps on the
+    The regressions are fitted on the first half of the training windows, the ridge maps on the
     second, each under masks of the fitting seed; the validation windows are scored under masks
     of the validation seed.
     """
     half = len(corpus.training) // 2
     first = drawn(corpus.training[:half], strategy, batch_size=batch_size, seed=FIT_SEED)
-    combined = OwnAndCrossChannelRidgeBaseline.fitted(first, vocabulary_size=corpus.vocabulary_size)
+    regressions = Regressions.fitted(first, vocabulary_size=corpus.vocabulary_size)
     second = drawn(corpus.training[half:], strategy, batch_size=batch_size, seed=FIT_SEED + 1)
-    fitting, _ = collected(second, combined, corpus.channels_apart)
+    fitting, _ = collected(second, regressions, corpus.channels_apart)
     maps = FittedMaps.fitted(fitting)
     if model is not None:
         model = model.to(device).eval()
     validation = drawn(corpus.validation, strategy, batch_size=batch_size, seed=VALIDATION_SEED)
-    samples, tokens = collected(validation, combined, corpus.channels_apart, model, device)
+    samples, tokens = collected(validation, regressions, corpus.channels_apart, model, device)
     return scored(corpus.corpus, masks, samples, tokens, maps)
 
 

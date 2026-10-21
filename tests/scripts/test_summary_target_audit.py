@@ -21,6 +21,7 @@ from scripts.summary_target_audit import (
     TOKEN,
     VISIBLE,
     WHOLE,
+    Regressions,
     RidgeMap,
     Score,
     audited,
@@ -95,6 +96,21 @@ def test_a_channel_set_apart_yields_no_sample(control: Control) -> None:
     kept, _ = samples_of(batch, masks, {}, apart)
     assert all(sample.channel_id not in apart for sample in kept)
     assert len(kept) < len(samples)
+
+
+def test_a_channel_hidden_whole_is_answered_by_the_other_channels(control: Control) -> None:
+    windows = control.windows_of(0)
+    fit = drawn(windows[:8], MASKS, batch_size=4, seed=2)
+    regressions = Regressions.fitted(fit, vocabulary_size=control.vocabulary_size)
+    [(batch, masks), *_] = drawn(windows[8:16], MASKS, batch_size=8, seed=1)
+    whole = masks.channel.numpy() & ~batch.padding_mask.numpy()
+    assert whole.any()
+    answered = regressions.predict(batch, masks)
+    cross = regressions.cross.predict(batch, masks).double().numpy()
+    combined = regressions.combined.predict(batch, masks).double().numpy()
+    np.testing.assert_array_equal(answered[whole], cross[whole])
+    np.testing.assert_array_equal(answered[~whole], combined[~whole])
+    assert np.abs(answered[whole]).max() > 0.0
 
 
 def test_an_exact_answer_scores_one_and_the_mean_zero() -> None:
