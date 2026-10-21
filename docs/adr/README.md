@@ -6,8 +6,9 @@ states the threshold at which the choice flips.
 
 Format: Status, Date, Context, Decision, Consequences, and optionally Alternatives considered,
 Revisit when and Amendments. Status is `proposed`, `accepted`, `rejected` or
-`superseded by ADR-XXXX`. A record is at most 800 words and holds one decision. A changed decision is a new record that
-supersedes the old one; an amendment is a dated line for a change of status or a short addition.
+`superseded by ADR-XXXX`. A record is at most 800 words and holds one decision. A changed
+decision is a new record that supersedes the old one; an amendment is a dated line for a change
+of status or a short addition.
 
 The records were condensed to this format on 2026-09-24 without changing any decision, number or
 status. The full text as first written is in commit `5f14447`, e.g.
