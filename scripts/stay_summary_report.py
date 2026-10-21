@@ -75,6 +75,13 @@ DRAWS = "draws.csv"
 ENCODERS = "encoders.csv"
 CHANNELS = "channels.csv"
 CONDITIONS = "conditions.json"
+# Where the storing step leaves each encoder's mean state per channel, one file per encoder named
+# by its digest, laid out channel by channel.
+CHANNEL_STATES = "channel_states"
+# What a stay's measured values are when it is embedded: as recorded, each channel's mean over the
+# learnt half, or values drawn from another stay of the learnt half.
+RECORDED, CONSTANT, TRANSPLANTED = "recorded", "constant", "transplanted"
+VALUES = (RECORDED, CONSTANT, TRANSPLANTED)
 # The arrays besides the states, which are keyed by their encoder's digest.
 SUMMARIES = "summaries"
 SUMMARY_CHANNELS = "summary_channels"
@@ -831,13 +838,40 @@ def decoded_targets(stored: Stored, channels: Sequence[int] | None = None) -> li
     return kept
 
 
+def recovered(
+    learnt_states: NDArray[np.floating],
+    learnt_values: NDArray[np.float64],
+    scored_states: NDArray[np.floating],
+    scored_values: NDArray[np.float64],
+    penalties: RidgePenalties,
+) -> tuple[JointRidge, NDArray[np.float64]]:
+    """Maps from states to each column of values, and the share of variance each recovers.
+
+    Fitted on ``learnt_values``, defined on every row, and scored on the rows of
+    ``scored_values`` where each column is defined, by one less the squared error over the
+    variance around those rows' mean. A map answers within the range of the values it was
+    fitted on: a held-out row whose state lies far from every learnt one would otherwise be
+    answered by extrapolation, and its one error could outweigh every other row's.
+    """
+    ridge = JointRidge.fitted(learnt_states, learnt_values, penalties)
+    answers = np.clip(
+        ridge.answered(scored_states), learnt_values.min(axis=0), learnt_values.max(axis=0)
+    )
+    shares = np.empty(learnt_values.shape[1], dtype=np.float64)
+    for index in range(learnt_values.shape[1]):
+        truth = scored_values[:, index]
+        defined = np.isfinite(truth)
+        error = truth[defined] - answers[defined, index]
+        around = truth[defined] - truth[defined].mean()
+        shares[index] = 1.0 - (error**2).sum() / (around**2).sum()
+    return ridge, shares
+
+
 def decode(stored: Stored, columns: Sequence[int]) -> list[Decoded]:
     """Every stored encoder's states mapped to each of ``columns``, fitted and scored by halves.
 
-    Columns defined on the same stays share one decomposition. A map answers within the range of
-    the values it was fitted on: a held-out stay whose state lies far from every learnt one — a
-    channel read once, under an encoder at its initialisation — would otherwise be answered by
-    extrapolation, and its one error could outweigh every other stay's in the share of variance.
+    Columns defined on the same stays share one decomposition; each is scored as ``recovered``
+    scores it, which a channel read once under an encoder at its initialisation needs.
     """
     learnt = np.array([stay.row for stay in stored.half(LEARNT)])
     scored = np.array([stay.row for stay in stored.half(SCORED)])
@@ -853,18 +887,11 @@ def decode(stored: Stored, columns: Sequence[int]) -> list[Decoded]:
         states = stored.states(digest)
         for mask, members in groups.items():
             rows = learnt[np.frombuffer(mask, dtype=bool)]
-            learnt_values = summaries[np.ix_(rows, members)]
-            ridge = JointRidge.fitted(states[rows], learnt_values, penalties)
-            answers = np.clip(
-                ridge.answered(states[scored]),
-                learnt_values.min(axis=0),
-                learnt_values.max(axis=0),
+            truths = summaries[np.ix_(scored, members)]
+            ridge, shares = recovered(
+                states[rows], summaries[np.ix_(rows, members)], states[scored], truths, penalties
             )
             for index, column in enumerate(members):
-                truth = summaries[scored, column]
-                defined = np.isfinite(truth)
-                error = truth[defined] - answers[defined, index]
-                spread = truth[defined] - truth[defined].mean()
                 channel, statistic = described[column]
                 family = family_of(statistic, timeless=channel.timeless)
                 if family is None:
@@ -876,9 +903,9 @@ def decode(stored: Stored, columns: Sequence[int]) -> list[Decoded]:
                         statistic=statistic,
                         family=family,
                         learnt=len(rows),
-                        scored=int(defined.sum()),
+                        scored=int(np.isfinite(truths[:, index]).sum()),
                         penalty=float(ridge.penalties[index]),
-                        r2=float(1.0 - (error**2).sum() / (spread**2).sum()),
+                        r2=float(shares[index]),
                         decomposition=ridge.decomposition,
                     )
                 )
@@ -900,7 +927,7 @@ def write_decoded(directory: Path, decoded: Sequence[Decoded]) -> None:
     write_rows(directory / DECODING, Decoded.COLUMNS, (row.record() for row in decoded))
 
 
-def _spread(values: Sequence[float]) -> str:
+def spread(values: Sequence[float]) -> str:
     if not values:
         return "—"
     if len(values) == 1:
@@ -952,6 +979,24 @@ def render_fidelity(stored: Stored, fits: Sequence[Fit], reference: Path) -> tup
     return table(header, rows), largest
 
 
+def render_areas(fits: Sequence[Fit]) -> str:
+    """Area per reading and budget: the mean over seeds per source, spread over the sources."""
+    budgets = list(dict.fromkeys(fit.budget for fit in fits))
+    by_candidate: dict[str, dict[str, dict[str, list[float]]]] = {}
+    for fit in fits:
+        by_candidate.setdefault(fit.candidate, {}).setdefault(fit.budget, {}).setdefault(
+            fit.source, []
+        ).append(fit.auroc)
+    rows = []
+    for candidate, per_budget in by_candidate.items():
+        cells = []
+        for budget in budgets:
+            sources = per_budget.get(budget, {})
+            cells.append(spread([fmean(values) for values in sources.values()]))
+        rows.append([candidate, *cells])
+    return table(["reading", *budgets], rows)
+
+
 def render(
     stored: Stored, fits: Sequence[Fit], decoded: Sequence[Decoded], reference: Path | None
 ) -> str:
@@ -966,22 +1011,9 @@ def render(
         sections.append(
             f"### Fidelity to the registered probe cells (largest {largest:.2e})\n\n{fidelity}"
         )
-    budgets = list(dict.fromkeys(fit.budget for fit in fits))
-    by_candidate: dict[str, dict[str, dict[str, list[float]]]] = {}
-    for fit in fits:
-        by_candidate.setdefault(fit.candidate, {}).setdefault(fit.budget, {}).setdefault(
-            fit.source, []
-        ).append(fit.auroc)
-    area_rows = []
-    for candidate, per_budget in by_candidate.items():
-        cells = []
-        for budget in budgets:
-            sources = per_budget.get(budget, {})
-            cells.append(_spread([fmean(values) for values in sources.values()]))
-        area_rows.append([candidate, *cells])
     sections.append(
         "### Area under the ROC curve, mean over seeds (mean over sources [range])\n\n"
-        + table(["reading", *budgets], area_rows)
+        + render_areas(fits)
     )
     arms = {encoder.digest: encoder.arm for encoder in stored.encoders}
     medians: dict[str, dict[str, list[float]]] = {}
@@ -1002,15 +1034,13 @@ def render(
             f"{fmean(pretrained) - fmean(untrained):+.3f}" if pretrained and untrained else "—"
         )
         count = len({(row.channel_id, row.statistic) for row in decoded if row.family == family})
-        family_rows.append(
-            [family, str(count), _spread(pretrained), _spread(untrained), difference]
-        )
+        family_rows.append([family, str(count), spread(pretrained), spread(untrained), difference])
     family_rows.append(
         [
             f"share ≥ {CARRIED}",
             str(len({(row.channel_id, row.statistic) for row in decoded})),
-            _spread(shares.get(PRETRAINED, [])),
-            _spread(shares.get(UNTRAINED, [])),
+            spread(shares.get(PRETRAINED, [])),
+            spread(shares.get(UNTRAINED, [])),
             "—",
         ]
     )
