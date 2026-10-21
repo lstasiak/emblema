@@ -1048,3 +1048,133 @@ under both encoders; the reduction guard below was written before that was seen.
 - The static descriptors keep their values in every variant, so the schedule's head and the
   replaced-values states still hold age, sex, weight and the unit.
 - Tier M models read on this machine (M1 Pro, MPS, fp32); validation side, not the test.
+
+## 2026-10-21 — M1 Pro, MPS and CPU, fp32: the token states hold the summaries; the mean over the window loses them, and pretraining adds nothing to a mean per channel
+
+**Question.** The one declared above: (i) whether a channel's summaries sit in the states of its
+own tokens or are absent; (ii) whether the probe's head over those states, reduced to the probe's
+width, reaches the head over the summaries; (iii) how much the schedule of measurements gives
+with the values replaced.
+
+**Conditions.** States by `scripts/stay_summary_states.py` at `811ec57e` (the declaration's
+commit): 14 distinct encoders, three passes (recorded with per-channel states, constant,
+transplanted), 29 to 34 s per encoder on MPS, 14 GB of per-channel states. Fits by
+`scripts/channel_pooling_report.py --components 34`: 14 reductions, 400 heads, the recovery over
+14 encoders. Pairs by `scripts/campaign_pairs_report.py` over the registered export of
+2026-10-20 and the script's rows. `data/report/l27/run.sh`, 01:44 to 04:20. CSV under
+`data/report/l27/`.
+
+**Fidelity.** The head over the recorded states alone answered as the 160 registered probe cells
+did, to at most 2.0·10⁻⁶ in area. Under the window's mean the median R² of level is 0.153
+[0.146; 0.159] under the mixture, the reading of 2026-10-20 to every digit.
+
+**(i) Median R² per family** on the held-out stays that measure the channel, every block, mean
+over encoders [range]; mixture 4, initialisation 10.
+
+| Family | Window, mixture | Window, initialisation | Channel, mixture | Channel, initialisation | Reduced, mixture | Reduced, initialisation |
+|---|---|---|---|---|---|---|
+| level | 0.153 [0.146; 0.159] | 0.313 [0.297; 0.333] | **0.856** [0.850; 0.861] | 0.859 [0.858; 0.860] | 0.821 | 0.823 |
+| extremes | 0.172 [0.146; 0.194] | 0.263 [0.255; 0.270] | **0.673** [0.666; 0.678] | 0.702 [0.695; 0.709] | 0.596 | 0.591 |
+| trend | 0.015 | 0.016 | 0.202 [0.185; 0.217] | 0.217 [0.194; 0.236] | 0.131 | 0.078 |
+| frequency | 0.417 | 0.602 | 0.800 [0.786; 0.818] | 0.965 [0.963; 0.968] | 0.360 | 0.844 |
+| statics | 0.089 | 0.196 | 1.000 | 1.000 | 0.998 | 1.000 |
+
+The components keep a median 99.4 % of a channel's variance under the mixture, 99.3 % at
+initialisation. Reduction guard: level −0.035 and extremes −0.077 from full to reduced, inside
+0.1 — passed.
+
+**By block**, median R² of level, mixture / initialisation:
+
+| Pooling | 1 | 2 | 3 | 4 | 5 | 6 | all |
+|---|---|---|---|---|---|---|---|
+| window | 0.17 / 0.26 | 0.16 / 0.25 | 0.14 / 0.25 | 0.14 / 0.26 | 0.13 / 0.25 | 0.13 / 0.25 | 0.15 / 0.31 |
+| channel | 0.85 / 0.85 | 0.85 / 0.85 | 0.85 / 0.86 | 0.85 / 0.86 | 0.85 / 0.86 | 0.84 / 0.86 | 0.86 / 0.86 |
+
+Frequency under the per-channel mean falls with depth under the mixture (0.80 in block 1 to
+0.67 in block 6) and stays at 0.94 to 0.95 at initialisation; extremes and trend are flat in
+every block under both poolings.
+
+**(ii) and (iii) Area under the ROC curve**, mean over seeds 1 to 10, the mixture's the mean over
+its four pretrainings [range]:
+
+| Reading | 200 | 500 |
+|---|---|---|
+| Logistic head over the summaries | 0.713 | 0.759 |
+| over their values (and statics) | 0.710 | 0.760 |
+| over their schedule (and statics) | 0.668 | 0.704 |
+| Per-channel probe, mixture | 0.699 [0.697; 0.704] | 0.735 [0.733; 0.737] |
+| Per-channel probe, at initialisation | 0.697 | 0.735 |
+| Probe, mixture | 0.662 [0.654; 0.673] | 0.697 [0.692; 0.710] |
+| Probe, at initialisation | 0.635 | 0.693 |
+| Probe, constant values, mixture | 0.592 [0.579; 0.604] | 0.636 [0.613; 0.656] |
+| Probe, transplanted values, mixture | 0.535 [0.529; 0.541] | 0.571 [0.557; 0.585] |
+| Probe, transplanted values, at initialisation | 0.583 | 0.627 |
+
+**The pairs** (gain of the second over the first in area, 95 % interval over stays, seed by seed
+mean ± SE):
+
+| Pair | 200 | 500 |
+|---|---|---|
+| **Δ₁** summaries' head → per-channel probe | **−0.014** [−0.035; +0.006] ± 0.008 | **−0.024** [−0.046; −0.003] ± 0.004 |
+| Δ₂ probe → per-channel probe | +0.037 [+0.010; +0.064] ± 0.008 | +0.038 [+0.010; +0.064] ± 0.004 |
+| per-channel probe at initialisation → mixture | +0.001 [−0.007; +0.009] ± 0.005 | +0.000 [−0.010; +0.010] ± 0.003 |
+| trees → per-channel probe | −0.037 [−0.056; −0.019] ± 0.005 | −0.052 [−0.071; −0.033] ± 0.005 |
+| summaries → schedule | −0.045 [−0.065; −0.025] ± 0.007 | −0.055 [−0.076; −0.034] ± 0.004 |
+| summaries → values | −0.004 [−0.010; +0.003] ± 0.002 | +0.001 [−0.005; +0.007] ± 0.001 |
+| probe → transplanted values, mixture | −0.127 [−0.150; −0.104] ± 0.015 | −0.126 [−0.151; −0.102] ± 0.010 |
+| probe → constant values, mixture | −0.070 [−0.096; −0.044] ± 0.009 | −0.062 [−0.090; −0.033] ± 0.006 |
+| probe → transplanted values, at initialisation | −0.052 [−0.065; −0.039] ± 0.020 | −0.066 [−0.083; −0.050] ± 0.006 |
+
+T in force for Δ₁, from the intervals' standard errors as on 2026-10-20: 0.0232 at 200, 0.0244 at
+500. Δ₁ at 500 is −0.0239: inside −T by 0.0005, with an interval that excludes zero.
+
+**Predictions.**
+
+1. *Held.* Level 0.856 and 0.859 under the per-channel mean (≥ 0.5 ✓), extremes 0.673 and 0.702
+   (≥ 0.3 ✓), trend 0.20 and 0.22 (< 0.3 ✓); under the window's mean level 0.153 (< 0.3 ✓).
+2. *Failed.* The per-channel level is flat over the blocks and equal under both encoders (0.84 to
+   0.85 against 0.85 to 0.86); the mixture's loss under the window's mean is there from block 1
+   (0.17 against 0.26).
+3. *Held for Δ₂, failed for Δ₁ at 200.* Δ₂ +0.037 and +0.038, at or above the lower edges
+   (+0.025, +0.035) ✓. Δ₁ −0.014 at 200, inside ±T, not below −T ✗; −0.024 at 500, inside ±T ✓.
+4. *Held in part.* The schedule lies 0.045 below the summaries at 200 (within 0.05 ✓) and 0.055
+   at 500 ✗; the values within ±0.03 at both ✓.
+5. *Failed.* Transplanted values cost the mixture's probe 0.127 and 0.126, five times T, and cost
+   the probe at initialisation less (0.052, 0.066); constant values lie 0.057 and 0.065 above
+   transplanted ones, not within ±0.02.
+
+**Conclusions.**
+
+1. The summaries are in the token states. A ridge map from the mean of one channel's tokens
+   recovers a median 86 % of the channel's level and 67 % of its extremes, in every block, as it
+   does from the same encoder at initialisation. What loses them is the mean over the window:
+   15 % of level, half of what that mean holds before training, and the loss is there from the
+   first block.
+2. By the rule declared, the branch is *B — diluted by the mean*: Δ₁ lies inside ±T at both
+   budgets. At 500 it does so by 0.0005 and its interval lies below zero, so the per-channel
+   probe reads at most what the summaries' head reads.
+3. Pooling per channel lifts the probe by 0.037 and 0.038, but pretraining has no share in that
+   lift: the per-channel probe reads the same under the mixture as at initialisation (+0.001,
+   +0.000), and trees stay 0.04 to 0.05 above it.
+4. The probe reads the values, not the schedule. With the values replaced it falls to 0.54 to
+   0.64, below a head over the schedule alone (0.67, 0.70); a head over the values without the
+   schedule reads what all the summaries read. The mixture's probe falls further than the
+   untrained one's, as its window's mean holds less of the frequency family (0.42 against 0.60).
+5. The declared branch names a per-channel pooling for the probe, but that head is as wide as
+   the corpus has channels and bound to their layout, which
+   [ADR-0041](../adr/0041-the-pooling-of-the-head-as-a-knob.md) keeps out of the candidates. It
+   is a diagnostic: the ceiling for a pooling free of the layout, and the reader under which a
+   pretext has to put into the token states what initialisation does not, which by conclusion 3
+   the mixture's pretext does not.
+
+**Limitations.**
+
+- Δ₁ at 500 decides the branch by 0.0005 in area, less than any difference the instrument
+  resolves; branch C would have been read had it fallen the other way.
+- The reduction keeps the widest directions of each channel's states; the guard bounds what it
+  loses of level and extremes (0.035, 0.077), not of frequency, where it loses 0.44 under the
+  mixture and 0.12 at initialisation. Before the reduction the mixture holds no family better
+  than initialisation, so conclusion 3 does not rest on that loss.
+- Transplanted and constant values are inputs the encoder never met in pretraining; their states
+  measure how the probe reads values it was not trained on as much as what the schedule carries.
+- One linear head throughout; validation side, not the test; Tier M models read on this machine.
