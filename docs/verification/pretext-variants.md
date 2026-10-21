@@ -1236,3 +1236,61 @@ mixture ran and were accepted (`reader-200` under seeds 3 and 4, `reader-low` un
   taken apart.
 - One construction of the views; views drawn from different spans of time would not share a
   clock, and were not tried.
+
+## 2026-10-21 — M1 Pro, MPS and CPU, fp32: each channel's summaries of the hidden part, against answers without a model
+
+**Question.** Before a term that predicts each channel's level and extremes of a window's hidden
+part goes to an accelerator ([ADR-0059](../adr/0059-predicting-each-channels-summaries-of-the-hidden-part.md)):
+how much of those summaries do answers that learn nothing from the scored windows read, does the
+schedule of measurements give them away, and does the mixture's reconstruction already learn them?
+The rule and the predictions were written before the run (`data/report/l27/audit/PREDICTION.md`).
+
+**Conditions.** Commit `391c77b6`; `scripts/summary_target_audit.py --backbone 2aaca0ba-…
+--masks experiments/backbone-mixed4-m-forecast.toml`. The mixture's backbone of seed 1 and its
+four corpora: 2,000 validation windows per corpus (SKAB 768) under masks of seed 1; the
+regressions fitted on the first 1,000 training windows, the ridge maps on the other 1,000, each
+under masks of their own seeds. Two sets of masks: the mixture's own and the forecast tail. Per
+window and channel with a hidden token: the mean, minimum, maximum and slope of its hidden values,
+answered by the channel's visible part (`visible`), a line through it (`interpolation`), the
+regression on its own line and the other channels, or on the others alone where it is hidden whole
+(`combined`), a ridge map from when and how often it was hidden and seen (`schedule`), a ridge
+stack of all of these (`stacked`), and the backbone's reconstruction summarised (`model`, own
+masks only). Median R² over channels with at least 30 samples. A first run left a channel hidden
+whole at zero under `combined`; fixed and rerun, the rows of a channel that keeps visible tokens
+unchanged. Files: `data/report/l27/audit/`.
+
+**The stays, a channel that keeps visible tokens** (33 channels; own masks / forecast tail):
+
+| Summary | visible | interpolation | combined | schedule | stacked | model |
+|---|---|---|---|---|---|---|
+| mean | 0.57 / 0.43 | 0.58 / 0.52 | 0.59 / 0.52 | 0.01 / 0.01 | **0.67** / 0.59 | 0.64 |
+| minimum | 0.09 / 0.09 | 0.23 / 0.31 | 0.39 / 0.22 | 0.07 / 0.04 | **0.60** / 0.53 | 0.44 |
+| maximum | 0.18 / −0.12 | 0.50 / 0.27 | 0.47 / 0.24 | 0.08 / 0.04 | **0.63** / 0.51 | 0.41 |
+| slope | −0.54 / −0.68 | 0.05 / −0.00 | 0.02 / −0.00 | −0.01 / −0.03 | 0.00 / −0.06 | 0.06 |
+| each token | — | 0.38 / 0.43 | 0.50 / 0.38 | — | — | 0.53 |
+
+**A channel hidden whole**, stays: `stacked` reads the mean at 0.16 / 0.15 on the dense channels
+and 0.02 / −0.00 on the sparse ones (at most three tokens a window: 10 / 7 channels), the model
+0.10 and −0.01. Of the 11 sparse channels, 10 are only ever hidden whole.
+
+**The other corpora**, a channel that keeps visible tokens, `stacked` under the forecast tail:
+C-MAPSS 0.78 to 0.82, SKAB 0.92 to 0.96, satellite telemetry 0.90 to 0.93.
+
+**Conclusions.**
+
+1. The summaries are not trivial on the stays: the strongest linear answer reads 0.60 to 0.67,
+   short of the declared 0.90.
+2. The schedule gives them nothing (at most 0.08, declared limit 0.50): the target is no clock.
+3. Nothing reads the slope of the hidden part, the backbone included; it leaves the target.
+4. The mixture's reconstruction does not learn the hidden part's extremes: summarised, it reads
+   them 0.16 to 0.22 below the linear stack, while it matches the stack on the mean (−0.03) and
+   leads every single answer on the tokens.
+5. The forecast tail leaves 0.07 to 0.12 more beyond the stack than the mixture's masks, which the
+   declared rule takes as the first setting; the pilot reads both.
+
+**Predictions.** Five of six held. The miss: the regression on the other channels reads a channel
+hidden whole at 0.07 to 0.12, not the declared 0.2 to 0.5.
+
+**Limitations.** One backbone and one draw of masks; the stack is linear, so a nonlinear answer
+without a model could read more; the sparse laboratory values enter the partially hidden table
+through one channel.
