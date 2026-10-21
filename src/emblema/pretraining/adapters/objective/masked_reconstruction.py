@@ -44,11 +44,17 @@ class MaskedReconstruction(PretrainingObjective):
 
     def decoded(self, states: Tensor, batch: TokenTensors, masks: TokenMasks) -> Tensor:
         """The value predicted at every position from the states of the tokens the encoder saw."""
-        encodings = self.encoder.channel_embedding(batch.channel_ids) + self.encoder.time_encoding(
-            batch.timestamps, batch.timeless
+        prediction: Tensor = self.decoder(
+            states, masks.hidden, self.encodings(batch), batch.padding_mask
         )
-        prediction: Tensor = self.decoder(states, masks.hidden, encodings, batch.padding_mask)
         return prediction
+
+    def encodings(self, batch: TokenTensors) -> Tensor:
+        """The channel and time encodings the decoder tells every position apart by."""
+        encoded: Tensor = self.encoder.channel_embedding(
+            batch.channel_ids
+        ) + self.encoder.time_encoding(batch.timestamps, batch.timeless)
+        return encoded
 
     def forward(self, batch: TokenTensors, masks: TokenMasks) -> Tensor:
         return self.decoded(self.encoded(batch, batch.padding_mask | masks.hidden), batch, masks)

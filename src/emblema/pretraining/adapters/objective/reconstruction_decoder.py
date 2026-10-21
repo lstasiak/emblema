@@ -36,8 +36,20 @@ class ReconstructionDecoder(nn.Module):
     def forward(
         self, states: Tensor, hidden: Tensor, encodings: Tensor, padding_mask: Tensor
     ) -> Tensor:
+        return self.valued(self.streamed(states, hidden, encodings, padding_mask))
+
+    def streamed(
+        self, states: Tensor, hidden: Tensor, encodings: Tensor, padding_mask: Tensor
+    ) -> Tensor:
+        """The normalised state at every position before the head, for a term that reads it."""
         placeholder = self.mask_token.to(states.dtype).expand_as(states)
         stream = torch.where(hidden.unsqueeze(-1), placeholder, states) + encodings
         for block in self.blocks:
             stream = block(stream, padding_mask)
-        return self.head(self.norm(stream)).squeeze(-1)
+        normalised: Tensor = self.norm(stream)
+        return normalised
+
+    def valued(self, streamed: Tensor) -> Tensor:
+        """The value the head reads off each position's normalised state."""
+        value: Tensor = self.head(streamed).squeeze(-1)
+        return value
