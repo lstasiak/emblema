@@ -1,6 +1,6 @@
 # ADR-0059: Predicting each channel's summaries of the hidden part — a term beside masked reconstruction, one unit per channel and window
 
-- Status: proposed
+- Status: rejected (2026-10-22): on the stays the term was learnt no better than a linear answer without a model ([`pretext-variants.md`](../verification/pretext-variants.md))
 - Date: 2026-10-21
 
 ## Context
