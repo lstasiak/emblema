@@ -128,3 +128,95 @@ lies above zero, *and* the mean over seeds exceeds the threshold.
   set s only if they spread more than the floor.
 - Every number in this section is a validation number in the sense of the registered test
   set: the test stays are not read.
+
+## 2026-10-22 — Kaggle T4 and M1 Pro: fine-tuning at 200, 50 and 20 stays under four pretrainings, read by the rule
+
+**Question.** Does full fine-tuning's gain over the network from nothing at 200 stays hold under
+seeds 3 and 4, how large is it under all four pretrainings, and does fine-tuning gain at 20 or
+50 stays?
+
+**Conditions.** Orders placed from `545c29cd` and run on Kaggle T4 ×2, one order per GPU:
+`reader-low-physionet2012.toml` under seed 3 (`d5871e20-…`, backbone `50b46711…`, 10,385 s)
+and seed 4 (`00079504-…`, `5a45aac9…`, 10,700 s), 40 cells each, accepted. Reading on this
+machine: `data/report/l30/pairs.sh` exports the eight campaigns and pairs them with
+`scripts/campaign_pairs_report.py`; `verdict.py` beside it applies the rule declared above.
+Files: `data/report/l30/pairs/`.
+
+**The primary and the size, at 200 stays.** Δ is fine-tuning less the network from nothing, in
+area; s = 0.014 (fine-tuning's own spread is 0.000 after its noise is removed, so the floor sets
+s).
+
+| Side | Δ | 95 % interval | Threshold | Rule |
+|---|---|---|---|---|
+| Seed 1 | +0.032 | [+0.018; +0.046] | T₁ 0.037 | (read before) |
+| Seed 2 | +0.033 | [+0.019; +0.047] | T₁ 0.030 | (read before) |
+| Seed 3 | +0.010 | [−0.005; +0.025] | T₁ 0.030 | |
+| Seed 4 | +0.019 | [+0.006; +0.031] | T₁ 0.029 | |
+| **Seeds 3 + 4 (primary)** | **+0.014** | [+0.003; +0.026] | T₂ **0.021** | **fails** |
+| All four (size) | +0.024 | [+0.014; +0.033] | T₄ 0.017 | passes T₄; least gain 0.050 |
+
+**Level 1, not replicated.** The interval of the primary lies above zero, but its mean does not
+reach T₂. The size under four passes T₄, but by the declared table that does not count without
+the primary.
+
+**Few-shot, one family under Holm.** Fine-tuning's own spread is 0.010 at 20 stays (the floor
+sets s) and 0.025 at 50 stays, where it sets s.
+
+| Budget | Δ under four | 95 % interval | p | Holm α | T₄ | Rule |
+|---|---|---|---|---|---|---|
+| 20 | −0.017 | [−0.029; −0.004] | 0.010 | 0.025 | 0.029 | does not pass |
+| 50 | −0.003 | [−0.015; +0.009] | 0.636 | 0.050 | 0.030 | does not pass |
+
+At 20 stays fine-tuning loses to the network from nothing under every pretraining (−0.037,
+−0.009, −0.005, −0.016). The loss is within its threshold, so it is not read as harm. At 50 stays
+the pretrainings disagree (−0.008, −0.029, +0.024, +0.002). Two of the six pairs between them
+differ by more than T₄ (0.049 and 0.031).
+
+**Against the classical bar.** Area of the mean over four pretrainings and ten seeds, beside
+boosted trees per channel on the same half (`head-and-representation.md`, 2026-10-20):
+
+| Stays | From nothing | Full fine-tuning | Trees per channel |
+|---|---|---|---|
+| 20 | 0.599 | 0.582 | — |
+| 50 | 0.622 | 0.619 | — |
+| 200 | 0.659 | 0.683 | **0.736** |
+
+**The null pair.** All 18 pairs lie within ±0.02. At 200 stays they lie from −0.002 to +0.014.
+At 20 and 50 stays the network from nothing is the same network under every card: the same
+seed draws the same weights and labels and never reads the backbone. Its scores agree to 10⁻⁵
+at 20 stays, and to 10⁻³ on eight seeds of ten at 50. On the other two, a difference at the
+device's precision grows through training to 0.03 and 0.08. The null pair therefore checks
+repeatability there, not the card.
+
+**Configuration checked before the reading.** The two new campaigns were defined under
+`50b46711…` and `5a45aac9…`, as declared, and each holds its 40 cells; the export read 240
+cells over the eight campaigns, every cell declared. `verdict.py` first
+stopped at the pooled pair of seeds 3 and 4 at 20 and 50 stays, which `pairs.sh` builds and the
+rule does not read. The check was narrowed to print those pairs as descriptive, with no change
+to the rule.
+
+**Conclusions.**
+
+1. By the declared rule the gain at 200 stays is not replicated (level 1). Under the two
+   pretrainings it was found on, it was +0.032 and +0.033; under the two never read it is +0.010
+   and +0.019.
+2. The best estimate of the gain at 200 stays is +0.024 [+0.014; +0.033] over four pretrainings.
+   That is half the registered least gain, and it includes the two pretrainings that selected it.
+3. Fine-tuning does not gain at 20 or 50 stays. At 20 stays it loses slightly under every
+   pretraining; at 50 stays the choice of pretraining moves the result as much as pretraining
+   does.
+4. At 200 stays the network from nothing lies 0.077 below the trees, and fine-tuning closes 0.024
+   of that gap. The network trails the classical bar by more than any gain pretraining has shown.
+
+**Predictions.** 1 held (+0.014 within [+0.005, +0.035]); 2 held (+0.024 < 0.050); 3 held
+(−0.017 within [−0.04, 0.00], and −0.003 within [−0.01, +0.03] without a pass); 4 held; 5
+held (0.000 at 200 stays). At 50 stays, which it did not name, fine-tuning's own spread is
+0.025.
+
+**Limitations.**
+
+- One task, on half the tuning side; every number is a validation number.
+- At 20 and 50 stays the null pair checks repeatability, not the card (above).
+- Seeds 3 and 4 at 200 stays ran from `8aced485`, seeds 1 and 2 from `08a764f5`. Between them
+  the evaluation path differs only in a change that the declaration's test holds bit for bit.
+- The trees were read at 200 and 500 stays only, so the bar at 20 and 50 stays is not known.
