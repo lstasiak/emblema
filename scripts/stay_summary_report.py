@@ -407,20 +407,25 @@ class Stored:
 def prepared(
     sample: NDArray[np.float64], scored: NDArray[np.float64]
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """The summaries a linear head can read: gaps filled from the drawn stays alone.
+    """The summaries a linear head can read: gaps filled and ranges bounded by the drawn stays.
 
     A statistic a stay cannot support is filled with its mean over the drawn stays, so nothing of
-    the scored half reaches the fit; a column the draw never defines, or defines as one value
-    everywhere, is dropped, since the head could only spend its penalty on it. Whether a channel
-    was measured at all is its count, which is always defined.
+    the scored half reaches the fit; a column the draw defines fewer than twice distinctly is
+    dropped, since the head could only spend its penalty on it. A scored value is bounded to the
+    range the drawn stays span: a column a few drawn stays define has, once filled, a spread
+    near zero, and a scored stay that holds the channel would otherwise sit thousands of
+    deviations out once the head scales its columns. Whether a channel was measured at all is its
+    count, which is always defined.
     """
-    defined = ~np.all(np.isnan(sample), axis=0)
-    sample, scored = sample[:, defined], scored[:, defined]
+    varying = np.array(
+        [np.unique(column[~np.isnan(column)]).size >= 2 for column in sample.T], dtype=bool
+    )
+    sample, scored = sample[:, varying], scored[:, varying]
     means = np.nanmean(sample, axis=0)
+    bounded = np.clip(scored, np.nanmin(sample, axis=0), np.nanmax(sample, axis=0))
     filled_sample = np.where(np.isnan(sample), means, sample)
-    filled_scored = np.where(np.isnan(scored), means, scored)
-    varying = filled_sample.std(axis=0) > 0.0
-    return filled_sample[:, varying], filled_scored[:, varying]
+    filled_scored = np.where(np.isnan(bounded), means, bounded)
+    return filled_sample, filled_scored
 
 
 def logistic_answers(
