@@ -23,6 +23,7 @@ from emblema.pretraining.domain.training.experiment_configuration import Experim
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
 from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.summary_term import SummaryTerm
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -90,7 +91,8 @@ class _Objective(_Section):
     """What the objective counts a miss as, what it compares the prediction with, and what else.
 
     A file that says nothing is scored by the square against the token's value, with no second
-    term. The knobs of the latent target and of the contrast default to nothing, as the knee
+    term. The knobs of the latent target, of the contrast and of the summaries default to
+    nothing, as the knee
     does under the square: a value target stating one, a latent target leaving one out, or a
     temperature without a weight, is refused by the value object itself.
     """
@@ -103,12 +105,16 @@ class _Objective(_Section):
     final_momentum: float = 0.0
     contrast_weight: float = 0.0
     contrast_temperature: float = 0.0
+    summary_weight: float = 0.0
 
     def loss(self) -> ObjectiveLoss:
         return ObjectiveLoss(kind=self.kind, huber_delta=self.huber_delta)
 
     def contrastive_term(self) -> ContrastiveTerm:
         return ContrastiveTerm(weight=self.contrast_weight, temperature=self.contrast_temperature)
+
+    def summary_term(self) -> SummaryTerm:
+        return SummaryTerm(weight=self.summary_weight)
 
     def objective_target(self) -> ObjectiveTarget:
         return ObjectiveTarget(
@@ -250,6 +256,7 @@ class ExperimentFile(_Section):
                 teacher.
             InvalidContrastiveTermError: If the contrast's weight is negative, a stated term
                 has no positive temperature, or a temperature is stated without a weight.
+            InvalidSummaryTermError: If the summaries' weight is negative or not a number.
             InvalidTrainingBudgetError: If the budget is not one a run could follow.
             InvalidCheckpointPolicyError: If the interval is not positive.
             InvalidChecksumError: If the start's checksum is not one in canonical form.
@@ -270,6 +277,7 @@ class ExperimentFile(_Section):
             loss=self.objective.loss(),
             target=self.objective.objective_target(),
             contrast=self.objective.contrastive_term(),
+            summary=self.objective.summary_term(),
             budget=self.budget.budget(),
             precision=self.precision,
             checkpoint=self.checkpoint.policy(),

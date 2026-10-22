@@ -70,3 +70,8 @@ stays pairs a contrast with a reconstruction (Chowdhury et al. 2023).
   generator stream to checkpoint, for augmentations the set encoder has no natural form for.
 - **Contrast alone**: read below no pretraining at full labels (Chowdhury et al. 2023, Tab. 4).
 - **A contrast beside the objective of states**: that objective collapsed its targets.
+
+## Amendments
+
+- **2026-10-22**: the kept epoch is read on the reconstruction alone, not the combined loss
+  (ADR-0060).

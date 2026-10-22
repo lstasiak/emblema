@@ -15,6 +15,7 @@ from emblema.pretraining.domain.exceptions import IncompatibleStartError
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
+from emblema.pretraining.domain.training.summary_term import SummaryTerm
 
 # The one tensor a continued run carries over by rows rather than whole: the channel table,
 # whose height is the vocabulary the run reads under, not the shape.
@@ -30,9 +31,10 @@ class TrainedModel:
     own predictions cannot be reproduced, and a diagnostic that scores something other than what
     was stored is scoring the wrong thing. The shape travels with the weights so the artifact
     rebuilds a model on its own, without the configuration that produced it; so do the target
-    and the contrast, which say which objective the weights are of. Bytes written before a
-    target or a contrast could be stated are of the objective every run then had, the one
-    predicting values alone.
+    and the terms beside the values, which say which objective the weights are of. Bytes written
+    before a target or a term could be stated are of the objective every run then had, the one
+    predicting values alone; the summaries' weight is written only where stated, so the bytes of
+    a run without it are those it wrote before the term existed.
 
     Attributes:
         architecture: Shape of the encoder the weights load into.
@@ -41,6 +43,7 @@ class TrainedModel:
         weights: State of the whole objective, on the host.
         target: What the objective predicted, which picks the objective the weights load into.
         contrast: The term the objective trained beside the values, where it did.
+        summary: The summaries the objective trained beside the values, where it did.
     """
 
     architecture: EncoderArchitecture
@@ -49,6 +52,7 @@ class TrainedModel:
     weights: dict[str, Any]
     target: ObjectiveTarget = field(default_factory=ObjectiveTarget.value)
     contrast: ContrastiveTerm = field(default_factory=ContrastiveTerm.none)
+    summary: SummaryTerm = field(default_factory=SummaryTerm.none)
 
     @classmethod
     def of(
@@ -65,6 +69,7 @@ class TrainedModel:
             weights={key: value.detach().to("cpu") for key, value in model.state_dict().items()},
             target=configuration.target,
             contrast=configuration.contrast,
+            summary=configuration.summary,
         )
 
     def to_bytes(self) -> bytes:
@@ -86,6 +91,7 @@ class TrainedModel:
                 "final_momentum": self.target.final_momentum,
                 "contrast_weight": self.contrast.weight,
                 "contrast_temperature": self.contrast.temperature,
+                **({"summary_weight": self.summary.weight} if self.summary.is_stated else {}),
             },
             buffer,
         )
@@ -122,6 +128,7 @@ class TrainedModel:
                     weight=stored.get("contrast_weight", 0.0),
                     temperature=stored.get("contrast_temperature", 0.0),
                 ),
+                summary=SummaryTerm(weight=stored.get("summary_weight", 0.0)),
             )
         except UNREADABLE_BYTES as error:
             raise UnreadableTrainedModelError(f"not a trained model this can read: {error}") from (
@@ -144,6 +151,7 @@ class TrainedModel:
             decoder_layers=self.decoder_layers,
             target=self.target,
             contrast=self.contrast,
+            summary=self.summary,
         )
         try:
             model = shape.build(dropout=dropout)
@@ -158,14 +166,15 @@ class TrainedModel:
         """Refuse a run of ``configuration`` that would continue these weights in another shape.
 
         Raises:
-            IncompatibleStartError: If the shape, the decoder, the target or the contrast
-                stored with the weights is not the run's.
+            IncompatibleStartError: If the shape, the decoder, the target, the contrast or the
+                summaries stored with the weights are not the run's.
         """
         for label, stored, asked in (
             ("shape", self.architecture, configuration.architecture),
             ("decoder", self.decoder_layers, configuration.decoder_layers),
             ("target", self.target, configuration.target),
             ("contrast", self.contrast, configuration.contrast),
+            ("summaries", self.summary, configuration.summary),
         ):
             if stored != asked:
                 raise IncompatibleStartError(

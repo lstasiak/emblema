@@ -25,6 +25,7 @@ from emblema.pretraining.domain.training.experiment_configuration import Experim
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.summary_term import SummaryTerm
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.pretraining.domain.training.training_mixture import TrainingMixture
@@ -39,6 +40,7 @@ MIXTURE = MaskingStrategy(channel_rate=0.15, block_rate=0.6, block_span=0.5, tok
 LATENT = ObjectiveTarget.latent(layers=1)
 # The contrastive term at the test's scale: a weight and a temperature, neither tuned.
 CONTRAST = ContrastiveTerm.of(weight=0.5, temperature=0.2)
+SUMMARY = SummaryTerm.of(weight=0.5)
 CHANNELS = 3
 CHANNEL_NAMES = ("invented/a", "invented/b", "invented/c")
 

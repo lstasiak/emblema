@@ -26,10 +26,9 @@ Last updated 2026-10-22.
   to within 0.006 of a backbone that read it, and carries part of a downstream task (+0.031 on
   sepsis at 4,000 patients).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
-  task's own domain, the adaptation recipe, and five variants of the pretext.
-- **Next:** a pretext that puts into the token states what initialisation does not, read with
-  the states pooled per channel as a diagnostic, since a head bound to one corpus's channels does
-  not transfer.
+  task's own domain, the adaptation recipe, and six variants of the pretext.
+- **Next:** a pooling free of the channel layout that keeps what the mean per channel reads,
+  since a head bound to one corpus's channels does not transfer.
 
 ## Setup
 
@@ -107,6 +106,7 @@ pretraining against four, 0.021 for two.
 | Decoder of four blocks | 2 | **−0.037** | [pretext-variants](verification/pretext-variants.md) |
 | Predicting a teacher's states instead of values | 2 | **−0.055** | [pretext-variants](verification/pretext-variants.md) |
 | Contrast between a window's two halves | 2 | **−0.103** [−0.125; −0.081] | [pretext-variants](verification/pretext-variants.md) |
+| Each channel's summaries of the hidden part beside reconstruction | 2 | not read: on the stays the term is learnt no better than a linear answer without a model (0.57 against 0.63 in R²) | [pretext-variants](verification/pretext-variants.md) |
 | 10⁹ continued on the task's domain, rate 1e-4 / 1e-3 | 2 / 1 | **−0.025** / −0.002 | [domain-continuation](verification/domain-continuation.md) |
 
 ### How the backbone is used
@@ -144,7 +144,8 @@ pretraining against four, 0.021 for two.
 - **Pretexts are solved by cues that are not the task.** Under masks over three quarters of a
   window the stays' single tokens are matched by interpolation alone; the contrast between a
   window's halves was solved by the stays' clock of measurements, which pairs the halves without
-  error with no model.
+  error with no model; each channel's summaries of a stay's hidden part are read by a linear
+  answer from the visible part, and a term asking for them learns nothing past it.
 
 ## Limitations
 
@@ -162,8 +163,6 @@ pretraining against four, 0.021 for two.
 
 ## Next
 
-1. Train a pretext that puts into each channel's token states what initialisation does not,
-   read with the states pooled per channel, against the trees' bar of 0.74 / 0.79.
-2. Find a pooling free of the channel layout that keeps what the mean per channel reads.
-3. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
-4. Open the frozen test side once.
+1. Find a pooling free of the channel layout that keeps what the mean per channel reads.
+2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
+3. Open the frozen test side once.

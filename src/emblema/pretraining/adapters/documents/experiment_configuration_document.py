@@ -11,6 +11,7 @@ from emblema.pretraining.domain.training.experiment_configuration import Experim
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
 from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.summary_term import SummaryTerm
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
 from emblema.shared.kernel.compute import ComputeTier
@@ -74,6 +75,12 @@ class ExperimentConfigurationDocument:
             if configuration.contrast.is_stated
             else {}
         )
+        # So do the summaries.
+        summary: Document = (
+            {"summary": {"weight": configuration.summary.weight}}
+            if configuration.summary.is_stated
+            else {}
+        )
         # The start and the trained parameters too: a run from its seed moving everything
         # writes the document every run wrote before either knob existed.
         start: Document = (
@@ -109,6 +116,7 @@ class ExperimentConfigurationDocument:
                 "huber_delta": configuration.loss.huber_delta,
                 **target,
                 **contrast,
+                **summary,
             },
             "budget": {
                 "epochs": budget.epochs,
@@ -148,6 +156,7 @@ class ExperimentConfigurationDocument:
         horizon = masking.optional_fields("horizon")
         target = objective.optional_fields("target")
         contrast = objective.optional_fields("contrast")
+        summary = objective.optional_fields("summary")
         trained = fields.optional_text("trained")
         return ExperimentConfiguration(
             name=fields.text("name"),
@@ -194,6 +203,9 @@ class ExperimentConfigurationDocument:
             else ContrastiveTerm.of(
                 weight=contrast.number("weight"), temperature=contrast.number("temperature")
             ),
+            summary=SummaryTerm.none()
+            if summary is None
+            else SummaryTerm.of(weight=summary.number("weight")),
             budget=TrainingBudget(
                 epochs=budget.integer("epochs"),
                 batch_size=budget.integer("batch_size"),

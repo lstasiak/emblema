@@ -13,12 +13,14 @@ from emblema.pretraining.domain.exceptions import (
     InvalidMaskingStrategyError,
     InvalidObjectiveLossError,
     InvalidObjectiveTargetError,
+    InvalidSummaryTermError,
     InvalidTrainingBudgetError,
 )
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
+from emblema.pretraining.domain.training.summary_term import SummaryTerm
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
@@ -312,6 +314,30 @@ def test_the_contrast_s_values_are_the_domain_s_to_refuse(tmp_path: Path, stated
     text = STATED + "\n[objective]\n" + stated
 
     with pytest.raises(InvalidContrastiveTermError):
+        ExperimentFile.load(written(text, tmp_path)).configuration()
+
+
+def test_a_file_states_the_summaries_with_their_weight(tmp_path: Path) -> None:
+    text = STATED + '\n[objective]\nkind = "huber"\nhuber_delta = 1.0\nsummary_weight = 0.5\n'
+
+    stated = ExperimentFile.load(written(text, tmp_path)).configuration()
+
+    assert stated.summary == SummaryTerm.of(weight=0.5)
+    assert stated.contrast == ContrastiveTerm.none()
+
+
+def test_a_file_that_states_no_summaries_trains_none(tmp_path: Path) -> None:
+    text = STATED + '\n[objective]\nkind = "huber"\nhuber_delta = 1.0\n'
+
+    assert ExperimentFile.load(written(text, tmp_path)).configuration().summary == (
+        SummaryTerm.none()
+    )
+
+
+def test_the_summaries_weight_is_the_domain_s_to_refuse(tmp_path: Path) -> None:
+    text = STATED + "\n[objective]\nsummary_weight = -1\n"
+
+    with pytest.raises(InvalidSummaryTermError):
         ExperimentFile.load(written(text, tmp_path)).configuration()
 
 

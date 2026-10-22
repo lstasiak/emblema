@@ -5,9 +5,10 @@ implementation and a measurement, not a preference; where two options are viable
 states the threshold at which the choice flips.
 
 Format: Status, Date, Context, Decision, Consequences, and optionally Alternatives considered,
-Revisit when and Amendments. Status is `proposed`, `accepted` or `superseded by ADR-XXXX`. A
-record is at most 800 words and holds one decision. A changed decision is a new record that
-supersedes the old one; an amendment is a dated line for a change of status or a short addition.
+Revisit when and Amendments. Status is `proposed`, `accepted`, `rejected` or
+`superseded by ADR-XXXX`. A record is at most 800 words and holds one decision. A changed
+decision is a new record that supersedes the old one; an amendment is a dated line for a change
+of status or a short addition.
 
 The records were condensed to this format on 2026-09-24 without changing any decision, number or
 status. The full text as first written is in commit `5f14447`, e.g.
@@ -72,4 +73,6 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0055](0055-the-encoders-share-of-the-learning-rate.md) | The encoder's share of the learning rate: a knob of the regime for the modes that train the backbone's weights, so the head learns at the whole rate and the pretrained states at a share of it | accepted |
 | [0056](0056-a-pretraining-continued-from-stored-weights.md) | A pretraining continued from stored weights: the start and the trained parameters as knobs of the experiment file, the parent in the registry, the channel table carried by rows | accepted |
 | [0057](0057-the-rows-of-a-corpus-the-backbone-never-read.md) | The rows of a corpus the backbone never read: one row per corpus and channel, fitted without labels as the first step of any reading on that corpus; a map of counterparts is a diagnostic, not a reading mode | accepted |
-| [0058](0058-telling-the-two-halves-of-a-window-apart.md) | Telling the two halves of a window apart: a contrastive term beside masked reconstruction, the second view the complement of the first, weighted by the experiment file | proposed |
+| [0058](0058-telling-the-two-halves-of-a-window-apart.md) | Telling the two halves of a window apart: a contrastive term beside masked reconstruction, the second view the complement of the first, weighted by the experiment file | rejected |
+| [0059](0059-predicting-each-channels-summaries-of-the-hidden-part.md) | Predicting each channel's summaries of the hidden part: level and extremes beside masked reconstruction, one unit per channel and window, weighted by the experiment file | rejected |
+| [0060](0060-a-run-under-a-second-term-keeps-the-epoch-its-reconstruction-chooses.md) | A run under a second term keeps the epoch its reconstruction chooses: validation reads the hidden tokens' own term alone | accepted |

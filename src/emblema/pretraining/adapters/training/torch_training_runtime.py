@@ -518,9 +518,11 @@ class TorchTrainingRuntime:
         The masks are drawn per batch from a generator the seed fixes, so every epoch is scored
         under the same hidden tokens: what moves between epochs is the model. The objective's
         trivial predictor is scored over the same tokens in the same pass, so that what a corpus
-        is worth against nothing learnt is measured rather than looked up. Each corpus is scored
-        on its own loader and reported on its own: a single number over the mixture would be the
-        largest corpus's.
+        is worth against nothing learnt is measured rather than looked up. A term beside the
+        hidden tokens' own is logged but not scored, so the epoch a run keeps is chosen as a run
+        without the term would choose it, and the two runs' validation compares. Each corpus is
+        scored on its own loader and reported on its own: a single number over the mixture would
+        be the largest corpus's.
 
         Raises:
             DivergedRunError: If a corpus's trivial predictor costs nothing, which under a target
@@ -544,8 +546,9 @@ class TorchTrainingRuntime:
                     with session.precision.autocast():
                         score = session.model.score(batch, drawn, session.loss)
                     scored = int(score.tokens)
-                    total += float(score.error)
-                    trivial += float(score.trivial)
+                    error, trivial_error = score.reconstruction
+                    total += float(error)
+                    trivial += float(trivial_error)
                     hidden_tokens += scored
                     observed_in_all += int((~batch.padding_mask).sum())
                     for name, term in score.terms.items():
