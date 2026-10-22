@@ -112,12 +112,17 @@ def count_hashing(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
 class FakeResponse:
     """What ``urlopen`` returns, reduced to the surface ``download`` touches."""
 
-    def __init__(self, status: int, payload: bytes) -> None:
+    def __init__(self, status: int, payload: bytes, *, stalls_after: int | None = None) -> None:
         self.status = status
         self.headers = {"Content-Length": str(len(payload))}
         self._buffer = io.BytesIO(payload)
+        self._stalls_after = stalls_after
 
     def read(self, size: int) -> bytes:
+        if self._stalls_after is not None and self._buffer.tell() >= self._stalls_after:
+            raise TimeoutError("the server went silent")
+        if self._stalls_after is not None:
+            size = min(size, self._stalls_after - self._buffer.tell())
         return self._buffer.read(size)
 
     def __enter__(self) -> "FakeResponse":
@@ -130,7 +135,8 @@ class FakeResponse:
 def serve(monkeypatch: pytest.MonkeyPatch, response: FakeResponse) -> list[urllib.request.Request]:
     requests: list[urllib.request.Request] = []
 
-    def urlopen(request: urllib.request.Request) -> FakeResponse:
+    def urlopen(request: urllib.request.Request, *, timeout: float) -> FakeResponse:
+        assert timeout == fetch_corpora.SILENCE
         requests.append(request)
         return response
 
@@ -170,7 +176,7 @@ def test_download_treats_an_unsatisfiable_range_as_a_complete_partial_file(
     target = tmp_path / "file.zip"
     target.with_suffix(".zip.part").write_bytes(b"complete")
 
-    def refuse(request: urllib.request.Request) -> FakeResponse:
+    def refuse(request: urllib.request.Request, *, timeout: float) -> FakeResponse:
         raise urllib.error.HTTPError(
             "https://example.org", 416, "Range Not Satisfiable", Message(), None
         )
@@ -180,6 +186,19 @@ def test_download_treats_an_unsatisfiable_range_as_a_complete_partial_file(
     download("https://example.org/file.zip", target)
 
     assert target.read_bytes() == b"complete"
+
+
+def test_a_server_that_goes_silent_mid_file_ends_the_download_and_leaves_what_arrived(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    target = tmp_path / "file.zip"
+    serve(monkeypatch, FakeResponse(200, b"abcdef", stalls_after=4))
+
+    with pytest.raises(TimeoutError):
+        download("https://example.org/file.zip", target)
+
+    assert not target.exists()
+    assert target.with_suffix(".zip.part").read_bytes() == b"abcd"
 
 
 def test_download_skips_a_file_that_is_already_there(
@@ -553,7 +572,7 @@ PAGES = {
 def test_an_index_page_lists_its_files_and_follows_the_pages_it_names(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    def urlopen(request: urllib.request.Request) -> FakeResponse:
+    def urlopen(request: urllib.request.Request, *, timeout: float) -> FakeResponse:
         return FakeResponse(200, PAGES[request.full_url].encode())
 
     monkeypatch.setattr(urllib.request, "urlopen", urlopen)
