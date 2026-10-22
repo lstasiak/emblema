@@ -20,15 +20,15 @@ Last updated 2026-10-22.
   recovers a median 86 % of a channel's level from the mean of its own tokens, in every block and
   as before training, but 15 % from the mean over the stay (31 % before training). Pooling per
   channel lifts the probe by 0.04 to within the threshold of a head over the summaries, and
-  pretraining has no share in that lift.
+  pretraining has no share in that lift; no average over a stay's channels keeps it.
 - **What transfers is the encoder's machinery, not its features for the task.** Fitting only the
   channel rows of a corpus the backbone never read, on its unlabelled windows, brings the pretext
   to within 0.006 of a backbone that read it, and carries part of a downstream task (+0.031 on
   sepsis at 4,000 patients).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
-- **Next:** a pooling free of the channel layout that keeps what the mean per channel reads,
-  since a head bound to one corpus's channels does not transfer.
+- **Next:** full fine-tuning at 20, 50 and 200 stays under all four pretrainings against the
+  network from scratch, the one reading where pretraining has shown a gain.
 
 ## Setup
 
@@ -116,6 +116,7 @@ pretraining against four, 0.021 for two.
 | All blocks side by side instead of the last | +0.020 to +0.036 at 50 stays; registered as the reader | [layer-readout](verification/layer-readout.md) |
 | Encoder slowed to 1/10 or 1/100 during fine-tuning (LP-FT) | loses up to 0.11; at the full rate within 0.01 of fine-tuning | [fine-tuning-recipe](verification/fine-tuning-recipe.md) |
 | Mean per channel instead of over the stay, reduced to the probe's width | +0.037 / +0.038 at 200 / 500 stays; 0.699 / 0.735, within the threshold of the summaries' head, and the same at initialisation; a diagnostic, bound to the corpus's channels | [head-and-representation](verification/head-and-representation.md) |
+| Mean over the channels a stay measured, free of their layout | −0.058 / −0.052 behind the per-channel mean at 200 / 500 stays, and no better than the mean over the stay; the same at initialisation | [head-and-representation](verification/head-and-representation.md) |
 | Network kept at its best epoch on held-out labels | +0.027 at every stay, spread over seeds 0.018 → 0.006 | [intensive-care-curve](verification/intensive-care-curve.md) |
 
 ### Transfer to a corpus the backbone never read
@@ -162,6 +163,6 @@ pretraining against four, 0.021 for two.
 
 ## Next
 
-1. Find a pooling free of the channel layout that keeps what the mean per channel reads.
+1. Read full fine-tuning at 20, 50 and 200 stays under the mixture's four pretrainings.
 2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
 3. Open the frozen test side once.

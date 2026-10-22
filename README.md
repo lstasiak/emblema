@@ -96,14 +96,15 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
 - **Classical baselines lead at few labels.** Gradient-boosted trees over per-channel summaries
   match or beat every network from 200 labels up. On the intensive-care stays, the encoder's
   average over a stay holds less of those summaries than before it was trained; each channel's
-  own tokens still hold them, as they did before training.
+  own tokens still hold them, as they did before training, and no average over a stay's sensors
+  keeps them.
 - **Ruled out:** more pretraining data (up to about 10⁹ values), a five times larger model,
   continuing on the task's own domain, the adaptation recipe and six variants of the pretext.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** a way of pooling the encoder's states that keeps each sensor's summaries without
-  tying the model to one dataset's set of sensors.
+- **Next:** fine-tuning at 20, 50 and 200 labelled stays under all four pretrainings against
+  the same network trained from scratch, the one setting where pretraining has shown a gain.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
