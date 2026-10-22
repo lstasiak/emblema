@@ -1178,3 +1178,86 @@ T in force for Δ₁, from the intervals' standard errors as on 2026-10-20: 0.02
 - Transplanted and constant values are inputs the encoder never met in pretraining; their states
   measure how the probe reads values it was not trained on as much as what the schedule carries.
 - One linear head throughout; validation side, not the test; Tier M models read on this machine.
+
+## 2026-10-22 — declared before the run: pooling over a stay's channels
+
+**Question.** The mean of each channel's own tokens lets the probe read the stays 0.037 and 0.038
+in area better than the mean over the window, but a head over every channel side by side is as
+wide as the corpus has channels and bound to their order, so it transfers to no other corpus.
+Does a pooling over the channels a stay measured, which no order or count of channels changes,
+keep that gain?
+
+**The data.** As on 2026-10-21: PhysioNet 2012's in-hospital death, the half of the tuning side
+held out by seed 101 (1,997 stays learnt from, 2,000 scored), 200 and 500 labels under seeds 1 to
+10, the four probe campaigns of the mixture and their encoders at initialisation; the per-channel
+states stored that day (`data/report/l27/recorded`, 14 encoders, all six blocks side by side,
+1,536 wide, zeros for a channel a stay does not measure).
+
+- *The poolings*: `scripts/channel_set_pooling_report.py`, over the stored arrays.
+  - `channel_set_mean`: the mean of a stay's per-channel mean states over the channels it
+    measured, 1,536 wide, the probe's width.
+  - `channel_set_extremes`: their mean, maximum and minimum over the same channels, each reduced
+    to its 512 leading principal components on the learnt half without labels, 1,536 wide.
+- *The heads*: the probe's own head over each pooling, as on 2026-10-21.
+- *The recovery* (descriptive): ridge from each pooling to each channel's summaries on the stays
+  that measure it, every block together, beside the window's and the channel's of 2026-10-21.
+- *The pairs*: `scripts/campaign_pairs_report.py` over the cells of 2026-10-21 and the script's
+  rows, the mixture's side the mean over its four pretrainings; `data/report/l29/run.sh`.
+
+**Read before this was written.** The trial (`data/report/l29/trial.py`) pooled the 14 encoders
+and fitted one head per pooling at 500, seed 1, under one pretrained and one untrained encoder,
+read for its mechanics only; no area was printed. Nothing was refused: no channel holds a state
+on a stay that did not measure it, and a stay measures 4 to 39 channels (median 31). The mean
+statistic keeps 100 % of its variance in 512 components, the maximum and minimum 99.3 to 99.8 %.
+A head takes 9 to 10 s; without the reduction the head over the three statistics side by side
+(4,608 columns) took 205 s, which is why they are reduced. The mixture's encoder maps a token's
+value by one linear map shared by every channel, added to the channel's embedding, so the linear
+part of a channel's level is averaged with every other channel's under these poolings.
+
+**Rules.**
+
+- T = 2·√(SE² + (s²/2)(1/n_c + 1/n_r)), s = 0.014, n = 4 on both sides (the same pretrainings):
+  about 0.021 at 200 and 0.016 at 500.
+- Δ_c = pooling − per-channel probe (`channel_states`), per budget: the confirmatory comparison.
+  A pooling *reaches the ceiling* where Δ_c ≥ −T at both budgets.
+- Where both reach it, `channel_set_mean` is the one taken, unless `channel_set_extremes` lies
+  more than T above it at 500.
+- Descriptive: Δ_f = pooling − probe (`states`, the mean over the window); each pooling under the
+  mixture less at initialisation; `channel_set_extremes` less `channel_set_mean`; recovery per
+  family.
+
+**Predictions** (from the intervals of 2026-10-21 where they bear; judgements where none does).
+
+1. Δ_f of `channel_set_mean` lies within [+0.010, +0.038] at 500 and [0, +0.037] at 200: from the
+   lower edge of the per-channel probe's gain over the probe ([+0.010; +0.064]) to its point. The
+   linear part of each level is shared across channels; what is read must come from the blocks.
+2. `channel_set_mean` does not reach the ceiling at 200 (Δ_c < −T); at 500 whether it reaches it
+   is near even. A judgement: equal weights restore the sparse channels the window's mean drowns,
+   but average their levels together.
+3. `channel_set_extremes` less `channel_set_mean` lies within [−0.01, +0.02] at both budgets. A
+   judgement: the highest and lowest state over channels say whether any channel lay far from
+   its usual range, which an equal mean dilutes.
+4. Under each pooling the mixture less initialisation lies within ±0.010, from the per-channel
+   probe's +0.001 [−0.007; +0.009] and +0.000 [−0.010; +0.010].
+5. Recovery: under `channel_set_mean` the mixture's median R² of level lies within [0.3, 0.7],
+   above the window's 0.153 and below the channel's 0.856. A judgement.
+
+**What follows.**
+
+- A pooling reaches the ceiling → a record of the decision to pool the probe's states over
+  channels, a pooling the probe's head is given, and a row in the register; the stage's reader
+  is then read under it.
+- Neither reaches it → the closed form gains no pooling free of the channel layout; learnt
+  queries need the encoder in the loop, and the choice between them and the next task in the
+  queue is made after the reading.
+
+**Cost.** This machine, about 45 minutes: 28 poolings, 200 heads and the recovery over 14
+encoders.
+
+**Limitations.**
+
+- One linear head, closed form; a pooling learnt with the head is not read.
+- The reduction of the wider pooling keeps its widest directions, not those the outcome needs.
+- The ceiling and both poolings are read on the stays, one corpus with 44 channels; that the
+  pooling reads another corpus's channels is its design, not a measurement here.
+- Tier M models read on this machine (M1 Pro, MPS, fp32); validation side, not the test.
