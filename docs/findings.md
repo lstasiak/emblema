@@ -31,17 +31,16 @@ Last updated 2026-10-22.
   sepsis at 4,000 patients).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
-- **Next:** how well the pretraining corpora cover irregular, asynchronous sampling like the
-  intensive-care stays'; then the network trained from scratch brought up to the classical
-  baselines, with an encoder designed together with its pretext, before pretraining is read
-  again at few labels.
+- **Next:** the network trained from scratch brought up to the classical baselines, with an
+  encoder designed together with its pretext and pretraining data sampled like the
+  intensive-care tasks, before pretraining is read again at few labels.
 
 ## Setup
 
 | | |
 | --- | --- |
 | Tasks | Remaining useful life on C-MAPSS FD001 (RMSE in cycles; 79 tuning and 21 validation engines); death in hospital on PhysioNet 2012 (AUROC over the first 48 h of a stay); sepsis on PhysioNet 2019 as a reader within one backbone |
-| Pretraining corpora | Mixture of four: C-MAPSS, SKAB, ESA satellite telemetry, PhysioNet 2012 ([ADR-0029](adr/0029-pretraining-over-a-mixture-of-corpora.md)); up to about 10⁹ values over 26 publications for the scale curve |
+| Pretraining corpora | Mixture of four: C-MAPSS, SKAB, ESA satellite telemetry, PhysioNet 2012 ([ADR-0029](adr/0029-pretraining-over-a-mixture-of-corpora.md)); up to about 10⁹ values over 26 publications for the scale curve; sampled like the intensive-care tasks: 4.5 % of the mixture's windows, 1 to 3 % of the scale curve's values ([note](verification/pretraining-corpus-sampling.md)) |
 | Backbone | Set encoder over (channel, time, value) tokens, 4.8M parameters (25.3M for scale), pretrained by masked reconstruction ([ADR-0017](adr/0017-encoder-architecture.md)) |
 | Arms | From scratch (control), frozen probe, probe solved in closed form, LoRA, full fine-tuning; trees, MiniRocket and a patch model as classical baselines |
 | Statistics | Paired bootstrap over engines or stays, seeds paired; a backbone comparison counts past 2·√(SE² + (s²/2)(1/n₁ + 1/n₂)), s the spread between pretrainings ([ADR-0032](adr/0032-statistics-of-a-paired-comparison.md)) |
@@ -156,6 +155,12 @@ pretraining against four, 0.021 for two.
   window's halves was solved by the stays' clock of measurements, which pairs the halves without
   error with no model; each channel's summaries of a stay's hidden part are read by a linear
   answer from the visible part, and a term asking for them learns nothing past it.
+- **Pretraining reads little that is sampled like the intensive-care tasks.** Only the stays
+  read their channels at their own times: a fifth to a third of a stay's channels at one instant,
+  rates 14 to 24 times apart, 2 to 4 readings of a channel in a window. They are 4.5 % of the
+  mixture's windows and 1 to 3 % of the values along the scale curve. The satellite telemetry,
+  declared irregular, is read as a grid, and most of the rest are dense grids where a hidden value
+  lies between readings of its own channel ([note](verification/pretraining-corpus-sampling.md)).
 
 ## Limitations
 
@@ -173,9 +178,8 @@ pretraining against four, 0.021 for two.
 
 ## Next
 
-1. Measure how well the pretraining corpora cover irregular, asynchronous sampling like the
-   intensive-care stays'.
-2. Bring the network trained from scratch up to the classical baselines, with an encoder designed
-   together with its pretext; then read pretraining on it at 20, 50 and 200 stays.
-3. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
-4. Open the frozen test side once.
+1. Bring the network trained from scratch up to the classical baselines, with an encoder designed
+   together with its pretext and pretraining data sampled like the intensive-care tasks; then read
+   pretraining on it at 20, 50 and 200 stays.
+2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
+3. Open the frozen test side once.
