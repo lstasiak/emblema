@@ -81,7 +81,7 @@ NAMES = WindowStatistics.NAMES
 UNMEASURED = slice(None, None, 5)
 
 
-def _widened(directory: Path, values: str = RECORDED) -> Path:
+def widened(directory: Path, values: str = RECORDED) -> Path:
     """The summary report's directory, as the storing step stores it with per-channel states."""
     directory.mkdir()
     stored_directory(directory)
@@ -121,7 +121,7 @@ def _widened(directory: Path, values: str = RECORDED) -> Path:
 
 @pytest.fixture
 def recorded(tmp_path: Path) -> Path:
-    return _widened(tmp_path / "recorded")
+    return widened(tmp_path / "recorded")
 
 
 def test_the_blocks_are_the_concatenated_states_side_by_side(recorded: Path) -> None:
@@ -244,7 +244,7 @@ def test_a_directory_of_replaced_values_must_be_of_the_same_stays_and_commit(
     recorded: Path, tmp_path: Path
 ) -> None:
     stored = Stored.read(recorded)
-    constant = Stored.read(_widened(tmp_path / "constant", CONSTANT))
+    constant = Stored.read(widened(tmp_path / "constant", CONSTANT))
 
     matching(stored, constant, CONSTANT)
     with pytest.raises(RefusalError, match="holds other values"):
@@ -259,8 +259,8 @@ def test_a_directory_of_replaced_values_must_be_of_the_same_stays_and_commit(
 def test_every_head_is_fitted_and_the_report_renders_again_from_its_files(
     recorded: Path, tmp_path: Path
 ) -> None:
-    constant = _widened(tmp_path / "constant", CONSTANT)
-    transplanted = _widened(tmp_path / "transplanted", TRANSPLANTED)
+    constant = widened(tmp_path / "constant", CONSTANT)
+    transplanted = widened(tmp_path / "transplanted", TRANSPLANTED)
     out = tmp_path / "out"
     arguments = [
         str(recorded),
@@ -299,8 +299,8 @@ def test_every_head_is_fitted_and_the_report_renders_again_from_its_files(
 
 
 def test_a_recorded_directory_without_per_channel_states_is_refused(tmp_path: Path) -> None:
-    constant = _widened(tmp_path / "constant", CONSTANT)
-    transplanted = _widened(tmp_path / "transplanted", TRANSPLANTED)
+    constant = widened(tmp_path / "constant", CONSTANT)
+    transplanted = widened(tmp_path / "transplanted", TRANSPLANTED)
 
     with pytest.raises(SystemExit, match="no recorded per-channel states"):
         main(

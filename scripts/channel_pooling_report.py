@@ -529,18 +529,20 @@ def load_reductions(out: Path, stored: Stored) -> dict[str, Reduction]:
         }
 
 
-def render_families(stored: Stored, decoded: Sequence[ChannelDecoded]) -> str:
+def render_families(
+    stored: Stored, decoded: Sequence[ChannelDecoded], poolings: Sequence[str] = POOLINGS
+) -> str:
     """Median R² per family under each pooling over every block: mixture, initialisation."""
     arms = {encoder.digest: encoder.arm for encoder in stored.encoders}
     rows = []
     for family in FAMILIES:
         cells = [family]
-        for pooling in POOLINGS:
+        for pooling in poolings:
             medians = _medians(decoded, arms, family=family, pooling=pooling, block=EVERY_BLOCK)
             cells += [spread(medians[PRETRAINED]), spread(medians[UNTRAINED])]
         rows.append(cells)
     header = ["family"]
-    for pooling in POOLINGS:
+    for pooling in poolings:
         header += [f"{pooling}, pretrained", f"{pooling}, at initialisation"]
     return table(header, rows)
 
