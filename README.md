@@ -92,19 +92,23 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
 - **On both tasks pretraining does not yet pay off.** On turbofan remaining life (NASA C-MAPSS)
   the network trained from scratch is the best candidate at every budget, 10 % better than the
   fine-tuned encoder at 200 labelled windows. On death in hospital (PhysioNet 2012) the only
-  gain, fine-tuning at 200 stays, lies below the registered least gain.
+  gain, fine-tuning at 200 stays, did not replicate under two fresh pretrainings (+0.024 under
+  all four, half the registered least gain), and fine-tuning gains nothing at 20 or 50 stays.
 - **Classical baselines lead at few labels.** Gradient-boosted trees over per-channel summaries
-  match or beat every network from 200 labels up. On the intensive-care stays, the encoder's
-  average over a stay holds less of those summaries than before it was trained; each channel's
-  own tokens still hold them, as they did before training, and no average over a stay's sensors
-  keeps them.
+  match or beat every network from 200 labels up. The network trained from scratch trails them
+  by 0.08 in area at 200 stays and 0.05 at every stay, more than any gain pretraining has shown.
+  On the intensive-care stays, the encoder's average over a stay holds less of those summaries
+  than before it was trained; each channel's own tokens still hold them, as they did before
+  training, and no average over a stay's sensors keeps them.
 - **Ruled out:** more pretraining data (up to about 10⁹ values), a five times larger model,
   continuing on the task's own domain, the adaptation recipe and six variants of the pretext.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** fine-tuning at 20, 50 and 200 labelled stays under all four pretrainings against
-  the same network trained from scratch, the one setting where pretraining has shown a gain.
+- **Next:** measure how well the pretraining data cover irregular, asynchronous sampling like
+  the intensive-care stays'; then bring the network trained from scratch up to the classical
+  baselines, with an encoder designed together with its pretext; only then read pretraining
+  again at few labels.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
