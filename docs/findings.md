@@ -10,12 +10,16 @@ Last updated 2026-10-22.
 ## Status
 
 - **The claim is not supported so far.** No way of using the pretrained encoder beats the same
-  network trained from scratch beyond the instrument's resolution, on either task, with one
-  exception: full fine-tuning at 200 intensive-care stays (+0.024 to +0.033 in area), below the
-  registered least gain.
+  network trained from scratch beyond the instrument's resolution, on either task. Full
+  fine-tuning at 200 intensive-care stays, the one reading that did, is not replicated under the
+  two pretrainings it was not found on (+0.014 against a threshold of 0.021); under all four it
+  gains +0.024 [+0.014; +0.033] in area, half the registered least gain. At 20 and 50 stays it
+  gains nothing.
 - **Classical models lead at few labels.** Trees over per-channel summaries match or beat every
   network from 200 labels up on both tasks; on the intensive-care stays they lie 0.07 to 0.09 in
-  area above the probe, and a logistic head over the same summaries 0.05 to 0.06 above it.
+  area above the probe, and a logistic head over the same summaries 0.05 to 0.06 above it. The
+  network trained from scratch trails the trees by 0.077 at 200 stays and, against set B, by
+  0.05 at every stay: more than any gain pretraining has shown.
 - **The summaries are in the token states; the probe's average loses them.** A linear map
   recovers a median 86 % of a channel's level from the mean of its own tokens, in every block and
   as before training, but 15 % from the mean over the stay (31 % before training). Pooling per
@@ -27,8 +31,10 @@ Last updated 2026-10-22.
   sepsis at 4,000 patients).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
-- **Next:** full fine-tuning at 20, 50 and 200 stays under all four pretrainings against the
-  network from scratch, the one reading where pretraining has shown a gain.
+- **Next:** how well the pretraining corpora cover irregular, asynchronous sampling like the
+  intensive-care stays'; then the network trained from scratch brought up to the classical
+  baselines, with an encoder designed together with its pretext, before pretraining is read
+  again at few labels.
 
 ## Setup
 
@@ -77,7 +83,11 @@ Pretraining's share changes sign with the budget: the probe gains 0.02 to 0.04 o
 encoder at 200 stays, nothing at 500 and loses 0.01 to 0.04 from 1,000 up. The classical rows
 were read at 200 and 500 stays only ([note](verification/head-and-representation.md)). On the full grid
 against set B, trees reach 0.76 at 200 stays and 0.86 at every stay, the network 0.68 and 0.81
-([note](verification/intensive-care-curve.md)).
+([note](verification/intensive-care-curve.md)). Under all four pretrainings, full fine-tuning
+reads 0.58, 0.62 and 0.68 at 20, 50 and 200 stays, and the network from scratch 0.60, 0.62 and
+0.66. The gain at 200 stays, +0.024 [+0.014; +0.033], is not replicated under the two
+pretrainings never read there (+0.014 against 0.021), and neither 20 nor 50 stays passes
+([note](verification/few-label-fine-tuning.md)).
 
 ### Is the pipeline sound?
 
@@ -163,6 +173,9 @@ pretraining against four, 0.021 for two.
 
 ## Next
 
-1. Read full fine-tuning at 20, 50 and 200 stays under the mixture's four pretrainings.
-2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
-3. Open the frozen test side once.
+1. Measure how well the pretraining corpora cover irregular, asynchronous sampling like the
+   intensive-care stays'.
+2. Bring the network trained from scratch up to the classical baselines, with an encoder designed
+   together with its pretext; then read pretraining on it at 20, 50 and 200 stays.
+3. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
+4. Open the frozen test side once.
