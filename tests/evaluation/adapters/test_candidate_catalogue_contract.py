@@ -574,3 +574,34 @@ def test_a_probe_over_the_encoder_at_its_initialisation_names_the_model_it_is_sh
     assert untrained.starts_from is None
     assert stated["architecture_of"] == f"{WEIGHTS.key}@{WEIGHTS.checksum}"
     assert stated["ridge_penalties"] == "0.1 1 10"
+
+
+@pytest.mark.parametrize("reading", ["beside", "only"])
+def test_a_network_from_nothing_reads_the_summaries_and_names_that_alone(reading: str) -> None:
+    base = BOTH_ARMS.describe(CandidateRef("from_scratch"))
+
+    variant = BOTH_ARMS.describe(
+        CandidateRef(f"from_scratch@patience=10,stop_share=0.2,summaries={reading}")
+    )
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    stopped = BOTH_ARMS.describe(CandidateRef("from_scratch@patience=10,stop_share=0.2"))
+    before = {p.name: p.value for p in stopped.method.parameters}
+    assert {name: stated[name] for name in stated.keys() - before.keys()} == {"summaries": reading}
+    assert variant.budget == base.budget
+    assert BOTH_ARMS.arm_of(variant.ref).encoder.reads_summaries
+
+
+@pytest.mark.parametrize(
+    ("name", "reason"),
+    [
+        ("full_fine_tuning@summaries=beside", "only the network trained from nothing"),
+        ("from_scratch@dropout=0.1,summaries=only", "never run the encoder, so a dropout"),
+        ("from_scratch@grid_resolution=1,summaries=beside", "laid on a grid"),
+    ],
+)
+def test_a_variant_reading_summaries_where_they_mean_nothing_is_refused(
+    name: str, reason: str
+) -> None:
+    with pytest.raises(UnknownCandidateError, match=reason):
+        BOTH_ARMS.describe(CandidateRef(name))

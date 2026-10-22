@@ -21,6 +21,24 @@ class ValueEmbedding(StrEnum):
     NONLINEAR = "nonlinear"
 
 
+class SummaryReading(StrEnum):
+    """Whether the head also reads the window's statistics per channel, the trees' own table.
+
+    A diagnostic of the network trained from nothing, never a candidate: the statistics hand the
+    head what an encoder is meant to learn to build, so a run that reads them answers how far the
+    encoder falls short of them, not how good a network it is.
+
+    Attributes:
+        NONE: The head reads the encoder's pooled states alone, as every run before this knob.
+        BESIDE: The head reads the pooled states and the statistics side by side.
+        ONLY: The head reads the statistics alone; the encoder is built but never run.
+    """
+
+    NONE = "none"
+    BESIDE = "beside"
+    ONLY = "only"
+
+
 @dataclass(frozen=True, kw_only=True)
 class EncoderSetting:
     """How a cell runs the encoder beyond its weights: what it drops, what it is given, its build.
@@ -51,6 +69,10 @@ class EncoderSetting:
     encoder nor what it is fed. Reading below the last layer leaves the blocks above it out of
     what a run could train, so the plan takes it only where the encoder's weights do not train.
 
+    The summaries put the window's statistics per channel, the table the trees read, beside the
+    pooled states or in their place. They take the network from nothing apart from its encoder:
+    what a head makes of the statistics, and what the encoder adds to them.
+
     Invariants: the dropout lies in ``[0, 1)``; a grid has a positive, finite resolution; every
     count of the shape stated is positive; a clip is positive and finite.
 
@@ -66,6 +88,7 @@ class EncoderSetting:
         value_clip: Bound on a token's value at the input, either side of zero; ``None`` for the
             readings as they are.
         layer: Which of the encoder's layers the head reads.
+        summaries: Whether the head reads the window's statistics per channel too, or instead.
     """
 
     dropout: float = 0.0
@@ -77,6 +100,7 @@ class EncoderSetting:
     feedforward_width: int | None = None
     value_clip: float | None = None
     layer: LayerReading = field(default_factory=LayerReading.last)
+    summaries: SummaryReading = SummaryReading.NONE
 
     KNOBS: ClassVar[tuple[str, ...]] = (
         "dropout",
@@ -88,6 +112,7 @@ class EncoderSetting:
         "feedforward_width",
         "value_clip",
         "layer",
+        "summaries",
     )
     _SHAPE: ClassVar[tuple[str, ...]] = ("width", "heads", "layers", "feedforward_width")
 
@@ -148,12 +173,22 @@ class EncoderSetting:
             or self.value_embedding is not ValueEmbedding.LINEAR
         )
 
+    @property
+    def reads_summaries(self) -> bool:
+        """Whether the head reads the window's statistics per channel, beside or alone."""
+        return self.summaries is not SummaryReading.NONE
+
+    @property
+    def reads_tokens(self) -> bool:
+        """Whether the encoder is run at all: not where the head reads the statistics alone."""
+        return self.summaries is not SummaryReading.ONLY
+
     def tuned(self, knob: str, value: str) -> Self:
         """This setting with ``knob`` turned to ``value``.
 
         The dropout, the grid's resolution and the clip are read as numbers, the shape's counts
-        as whole numbers, the value's embedding and the layer read by their names: a knob left at
-        ``None`` has no value to take its type from.
+        as whole numbers, the value's embedding, the layer read and the summaries by their
+        names: a knob left at ``None`` has no value to take its type from.
 
         Raises:
             UnknownKnobError: If the setting has no such knob, or it cannot take that value.
@@ -178,6 +213,8 @@ class EncoderSetting:
                     return replace(self, value_clip=float(value))
                 case "layer":
                     return replace(self, layer=LayerReading.of(value))
+                case "summaries":
+                    return replace(self, summaries=SummaryReading(value))
                 case _:
                     return replace(self, dropout=float(value))
         except (InvalidEncoderSettingError, ValueError) as error:
@@ -206,6 +243,7 @@ class EncoderSetting:
             **{f"encoder_{label}": getattr(self, label) or 0 for label in self._SHAPE},
             "value_clip": 0.0 if self.value_clip is None else self.value_clip,
             "encoder_layer": str(self.layer),
+            "summaries": str(self.summaries),
         }
 
     def turned_away(self) -> dict[str, float | int | str]:
@@ -231,4 +269,6 @@ class EncoderSetting:
             turned["value_clip"] = self.value_clip
         if not self.layer.is_last:
             turned["encoder_layer"] = str(self.layer)
+        if self.reads_summaries:
+            turned["summaries"] = str(self.summaries)
         return turned

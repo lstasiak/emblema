@@ -173,10 +173,10 @@ def test_more_tokens_than_the_export_declared_still_run(lora: Exported) -> None:
 class Untraceable(AdaptedBackbone):
     """A candidate whose answer branches on a value the exporter cannot know while tracing."""
 
-    def embed(self, batch: TokenTensors) -> Tensor:
+    def embed(self, batch: TokenTensors, summaries: Tensor | None = None) -> Tensor:
         if float(batch.features.sum()) > 0.0:
-            return super().embed(batch)
-        return super().embed(batch) * 2
+            return super().embed(batch, summaries)
+        return super().embed(batch, summaries) * 2
 
 
 def test_a_candidate_the_exporter_cannot_trace_is_refused_with_a_domain_error() -> None:

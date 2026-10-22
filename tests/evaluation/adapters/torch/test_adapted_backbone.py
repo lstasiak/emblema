@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -8,9 +9,11 @@ from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  
 from emblema.evaluation.adapters.torch.clipped_values import ClippedValues  # noqa: E402
 from emblema.evaluation.adapters.torch.layer_readout import LayerReadout  # noqa: E402
 from emblema.evaluation.adapters.torch.lora_linear import LoraLinear  # noqa: E402
+from emblema.evaluation.domain.exceptions import InvalidAdaptationPlanError  # noqa: E402
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling  # noqa: E402
 from emblema.evaluation.domain.transfer.encoder_setting import (  # noqa: E402
     EncoderSetting,
+    SummaryReading,
     ValueEmbedding,
 )
 from emblema.evaluation.domain.transfer.layer_reading import LayerReading  # noqa: E402
@@ -270,3 +273,81 @@ def test_a_probe_at_the_last_layer_holds_the_encoder_as_it_always_did() -> None:
     built, _ = candidate(TransferMode.FROZEN_RIDGE)
 
     assert isinstance(built.encoder, SetEncoder)
+
+
+# The statistics of six windows over four columns, each column varying.
+SUMMARIES = np.arange(24, dtype=np.float64).reshape(6, 4) ** 1.5
+BRANCH = 4 * SMALL.width + SMALL.width
+
+
+def reading(summaries: SummaryReading) -> AdaptedBackbone:
+    torch.manual_seed(5)
+    return AdaptedBackbone.under(
+        plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(summaries=summaries)),
+        SmallBackbones(),
+        vocabulary_size=VOCABULARY_SIZE,
+        starting_at=0.0,
+        summary_rows=SUMMARIES,
+    )
+
+
+def test_the_summaries_beside_the_encoder_widen_the_state_the_head_reads() -> None:
+    beside = reading(SummaryReading.BESIDE)
+    batch = random_batch(3, 9, seed=2)
+    rows = torch.from_numpy(SUMMARIES[:3]).to(torch.float32)
+
+    assert beside.embed(batch, rows).shape == (3, 2 * SMALL.width)
+    assert sum(p.numel() for p in beside.trainable_parameters()) == (
+        ENCODER + BRANCH + 2 * SMALL.width + 1
+    )
+    assert torch.isfinite(beside(batch, rows)).all()
+
+
+def test_the_summaries_alone_never_run_the_encoder_and_train_none_of_it() -> None:
+    alone = reading(SummaryReading.ONLY)
+
+    def refuse(*_: object) -> None:
+        raise AssertionError("the encoder was run")
+
+    alone.encoder.forward = refuse
+    rows = torch.from_numpy(SUMMARIES[:3]).to(torch.float32)
+
+    assert alone(random_batch(3, 9, seed=2), rows).shape == (3,)
+    assert sum(p.numel() for p in alone.trainable_parameters()) == BRANCH + SMALL.width + 1
+
+
+def test_a_candidate_reading_the_summaries_refuses_to_answer_without_them() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="given none"):
+        reading(SummaryReading.BESIDE)(random_batch(3, 9, seed=2))
+
+
+@pytest.mark.parametrize(
+    ("summaries", "rows"), [(SummaryReading.BESIDE, None), (SummaryReading.NONE, SUMMARIES)]
+)
+def test_summaries_are_given_exactly_to_a_plan_that_reads_them(
+    summaries: SummaryReading, rows: np.ndarray | None
+) -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="summaries"):
+        AdaptedBackbone.under(
+            plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(summaries=summaries)),
+            SmallBackbones(),
+            vocabulary_size=VOCABULARY_SIZE,
+            starting_at=0.0,
+            summary_rows=rows,
+        )
+
+
+def test_a_plan_reading_no_summaries_draws_its_head_and_encoder_as_it_always_did() -> None:
+    plain, _ = candidate(TransferMode.FROM_SCRATCH)
+    torch.manual_seed(5)
+    again = AdaptedBackbone.under(
+        plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(summaries=SummaryReading.NONE)),
+        SmallBackbones(),
+        vocabulary_size=VOCABULARY_SIZE,
+        starting_at=0.0,
+    )
+
+    assert plain.summaries is None
+    assert all(
+        torch.equal(value, again.state_dict()[key]) for key, value in plain.state_dict().items()
+    )

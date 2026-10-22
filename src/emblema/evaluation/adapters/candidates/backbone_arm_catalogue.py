@@ -13,6 +13,7 @@ from emblema.evaluation.domain.exceptions import (
     UnknownCandidateError,
     UnknownKnobError,
 )
+from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.evaluation.domain.transfer.training_regime import TrainingRegime
 from emblema.evaluation.domain.tuning.candidate_variant import CandidateVariant
 
@@ -125,6 +126,15 @@ class BackboneArmCatalogue:
             _ = turned.encoder.shape
         except InvalidEncoderSettingError as error:
             raise UnknownCandidateError(f"{variant.ref} names no variant: {error}") from error
+        refusal = AdaptationPlan.summaries_refusal(
+            mode=turned.mode,
+            pooling=turned.pooling,
+            encoder=turned.encoder,
+            regime=turned.regime,
+            solves_a_head=turned.solves_a_head,
+        )
+        if refusal is not None:
+            raise UnknownCandidateError(f"{variant.ref} names no variant: {refusal}")
         return replace(turned, ref=variant.ref)
 
     @staticmethod
