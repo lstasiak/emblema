@@ -5,7 +5,7 @@ preliminary: each task's frozen test side is opened once, at the end. Each compa
 by a rule registered before its run ([preregistration](preregistration.md)); each row links the
 note that holds its evidence ([`verification/`](verification/README.md)).
 
-Last updated 2026-10-21.
+Last updated 2026-10-22.
 
 ## Status
 
@@ -116,6 +116,7 @@ pretraining against four, 0.021 for two.
 | All blocks side by side instead of the last | +0.020 to +0.036 at 50 stays; registered as the reader | [layer-readout](verification/layer-readout.md) |
 | Encoder slowed to 1/10 or 1/100 during fine-tuning (LP-FT) | loses up to 0.11; at the full rate within 0.01 of fine-tuning | [fine-tuning-recipe](verification/fine-tuning-recipe.md) |
 | Mean per channel instead of over the stay, reduced to the probe's width | +0.037 / +0.038 at 200 / 500 stays; 0.699 / 0.735, within the threshold of the summaries' head, and the same at initialisation; a diagnostic, bound to the corpus's channels | [head-and-representation](verification/head-and-representation.md) |
+| Mean over the channels a stay measured, free of their layout | −0.058 / −0.052 behind the per-channel mean at 200 / 500 stays, and no better than the mean over the stay; the same at initialisation | [head-and-representation](verification/head-and-representation.md) |
 | Network kept at its best epoch on held-out labels | +0.027 at every stay, spread over seeds 0.018 → 0.006 | [intensive-care-curve](verification/intensive-care-curve.md) |
 
 ### Transfer to a corpus the backbone never read
