@@ -1343,3 +1343,60 @@ block, mean over encoders [range]; the window's and the channel's from 2026-10-2
 - The reduction of `channel_set_extremes` keeps the widest directions of each statistic, not
   those the outcome needs.
 - One corpus with 44 channels; validation side, not the test; Tier M models read on this machine.
+
+## 2026-10-23 — M1 Pro, CPU, fp64: the head over the summaries re-read, its preparation corrected
+
+**Question.** The summaries were prepared for the logistic head by filling a gap with the drawn
+stays' mean and keeping every column whose filled spread was above zero. A column that a few
+drawn stays define then has a spread near zero, and a scored stay holding that channel lands
+thousands of deviations out once the head scales its columns; a column defined once kept a
+spread of rounding error and sent such stays out by about 10¹⁶. How far did that understate the
+head over the summaries of 2026-10-20, and what of the readings built on it still holds?
+
+**Conditions.** `prepared()` in `scripts/stay_summary_report.py` corrected on
+`feature/L-32b1-gap-decomposition`. A column is kept where the drawn stays define at least two
+distinct values, and a scored value is bounded to the range the drawn stays span. Same stored
+arrays, draws, penalties and pairs as 2026-10-20 (`data/report/l26/states`, copied, unchanged);
+the old preparation reproduces the published areas to the third decimal. The per-channel probe of
+2026-10-21 is paired against the re-read head from its own stored answers. CSV under
+`data/report/l32b1/l26-recheck*` and `l27-recheck-pairs`.
+
+    uv run scripts/stay_summary_report.py data/report/l32b1/l26-recheck \
+      --reference data/report/l26/registered
+    data/report/l32b1/l26-recheck-pairs.sh; data/report/l32b1/l27-recheck-pairs.sh
+
+**Area under the ROC curve**, mean over seeds 1 to 10:
+
+| Reading | 200, as of 2026-10-20 | 200, corrected | 500, as of 2026-10-20 | 500, corrected |
+|---|---|---|---|---|
+| Logistic head over the summaries | 0.713 | **0.730** | 0.759 | **0.769** |
+| States and summaries, mixture | 0.711 | 0.717 | 0.754 | 0.759 |
+| States and summaries, at initialisation | 0.713 | 0.723 | 0.762 | 0.768 |
+
+**The pairs** (gain of the second over the first in area, 95 % interval over stays, seed by seed
+mean ± SE):
+
+| Pair | 200 | 500 |
+|---|---|---|
+| summaries → trees per channel | +0.006 [−0.007; +0.019] ± 0.005 (was +0.023) | **+0.018** [+0.004; +0.033] ± 0.005 (was +0.028) |
+| summaries → states and summaries | −0.014 [−0.029; +0.003] ± 0.005 | −0.010 [−0.023; +0.004] ± 0.005 |
+| at initialisation → mixture, states and summaries | −0.006 [−0.019; +0.006] ± 0.008 | −0.009 [−0.019; +0.001] ± 0.005 |
+| summaries → per-channel probe (2026-10-21) | **−0.031** [−0.051; −0.012] ± 0.008 (was −0.014) | **−0.034** [−0.056; −0.013] ± 0.004 (was −0.024) |
+
+**Conclusions.**
+
+1. The head over the summaries was understated by 0.017 at 200 stays and 0.010 at 500. A linear
+   head over the trees' table is within 0.006 of the trees at 200 stays, which no interval
+   separates, and 0.018 below them at 500.
+2. The summaries still beat the probe by a wide margin, and states still add nothing to them:
+   the conclusions of 2026-10-20 on what the states carry stand. The recovery of each family of
+   summaries from the states did not use this preparation and is unchanged.
+3. The per-channel probe of 2026-10-21 does **not** read within the threshold of the head over
+   the summaries: it lies 0.031 and 0.034 below it, intervals clear of zero, against thresholds of
+   0.024. Pooling per channel recovers part of what the mean over the window loses, not all.
+4. The heads over the schedule alone and the values alone (2026-10-21) used the same preparation
+   and were not re-read, since their stored states were not kept. Both are likely understated.
+
+**Limitations.** The trees and the probes are untouched; only heads over the summaries change.
+The corrected preparation bounds a scored value but still fills a gap with a mean, so a channel
+the draw rarely defines is read with little weight, as before.
