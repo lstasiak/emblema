@@ -32,6 +32,7 @@ kept as recorded.
 | [data-spike.md](data-spike.md) | Licences, units, windows and tokens counted from the raw corpora; the classical corpora are small and ESA-AD makes the reference model legitimate; the published chain for the curve over the scale of pretraining holds 1.04 billion observed training values over 30 corpora, 0.30 billion at the quarter the smaller point reads, against 0.056 billion in the mixture of four. |
 | [window-sanity.md](window-sanity.md) | Raw windows and their token reconstructions agree to 1e-14 on every corpus; per-channel shapes and tails are recorded. |
 | [corpus-saturation.md](corpus-saturation.md) | C-MAPSS saturates from a quarter of its engines; SMD and SKAB are data-limited; ESA-AD is data-limited once its loss is bounded and its split names its excursion months. |
+| [pretraining-corpus-sampling.md](pretraining-corpus-sampling.md) | Only the two sets of intensive-care stays are sampled the way the intensive-care tasks are (22 % and 32 % of a stay's channels read at one instant, rates 14 to 24 times apart, 2 to 4 readings of a channel in a window); the satellite telemetry, declared irregular, is read as a grid, so the mixture of four, 73 % irregular by declaration, gives the stays' regime 4.5 % of its windows and 3.1 % of its values, and the scale curve 1.1 % to 3.2 % of its values. |
 
 ## Model and objective
 

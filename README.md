@@ -105,10 +105,10 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** measure how well the pretraining data cover irregular, asynchronous sampling like
-  the intensive-care stays'; then bring the network trained from scratch up to the classical
-  baselines, with an encoder designed together with its pretext; only then read pretraining
-  again at few labels.
+- **Next:** bring the network trained from scratch up to the classical baselines, with an
+  encoder designed together with its pretext. The pretraining data change too: so far only 4.5 %
+  of the mixture's windows were sampled like the intensive-care stays. Only then is pretraining
+  read again at few labels.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
