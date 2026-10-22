@@ -1397,3 +1397,79 @@ states and the per-channel probe ~2.5 h.
 - The gate reads the stays' dense channels; the sparse laboratory values, hidden whole, are
   answered by nothing and train towards their mean.
 - The mixture's masks only; the forecast tail is not read at tier M.
+
+## 2026-10-22 — Kaggle T4 and M1 Pro, MPS: each channel's summaries of the hidden part, read by the rule
+
+**Question.** Does the summary term (ADR-0059), pretrained twice at tier M, learn each channel's
+mean, minimum and maximum over the stays' hidden part beyond the linear stack of answers without a
+model, the gate declared above?
+
+**Conditions.** Commit `9ca3fcee`. Pretraining on Kaggle T4 ×2, one order per GPU, fp16:
+`backbone-mixed4-summary-m` (seed 1, backbone `9e868208-…`, 7,429 s) and `-seed2` (seed 2,
+`84b6bb80-…`, 7,473 s); both kept their last epoch of eight. Gate on this machine, MPS, fp32:
+`scripts/summary_target_audit.py --backbone <id> --device mps`, 2,000 validation windows per
+corpus (SKAB 768) under masks of seed 1, the regressions and ridge maps fitted on 2,000 training
+windows under masks of seeds 2 and 3, each backbone's own masks. Files:
+`data/report/summary-target/<backbone>/`.
+
+**The gate.** The stays, dense channels that keep visible tokens (33), median R² over channels:
+
+| Summary | stacked | head, seed 1 | head, seed 2 | model, seed 1 / 2 | model, mixture |
+|---|---|---|---|---|---|
+| mean | 0.67 | 0.67 | 0.67 | 0.67 / 0.66 | 0.64 |
+| minimum | 0.60 | 0.48 | 0.48 | 0.45 / 0.37 | 0.44 |
+| maximum | 0.63 | 0.58 | 0.53 | 0.45 / 0.34 | 0.41 |
+| **average** | **0.63** | 0.58 | 0.56 | | |
+
+The head averages **0.57** over the three summaries and the two backbones, below the stack's
+0.63: **the gate fails**, and the representation readings are not run.
+
+**Beside the gate** (descriptive).
+
+- A channel hidden whole on the stays: the head reads the mean at 0.16 / 0.12 on the dense
+  channels, the stack 0.16; on the sparse laboratory values both read 0.02 or less.
+- The other corpora, all channels that keep visible tokens, head against stack: C-MAPSS 0.84 to
+  0.90 against 0.76 to 0.82 (above it on every summary), satellite telemetry 0.92 to 0.98 against
+  0.94 to 0.96, SKAB 0.86 to 0.99 against 0.98 to 0.99 (below it on the minimum).
+- Relative validation of the reconstruction alone at the kept epoch, mean of the two against the
+  mean of the mixture's four:
+
+| Corpus | Mixture (4) | Summaries (2) | Change |
+|---|---|---|---|
+| C-MAPSS | 0.3126 | 0.3126 | −0.0 % |
+| Satellite telemetry | 0.2725 | 0.2757 | +1.1 % |
+| PhysioNet 2012 | 0.5020 | 0.5053 | +0.7 % |
+| SKAB | 0.2722 | 0.2730 | +0.3 % |
+
+**Configuration checked before the reading.** Both tracked runs record `summary_weight = 1.0`
+and eight epochs; their training loss falls at every epoch; the stack reads the stays at 0.67,
+0.60 and 0.63, the values it read on 2026-10-21 under the mixture's backbone, so the audit scored
+the same windows and masks.
+
+**Conclusions.**
+
+1. By the declared rule the term is closed as not learnt at this scale: on the stays its head
+   matches the stack on the mean and falls 0.12 below it on the minimum and 0.05 to 0.10 on the
+   maximum.
+2. The term is learnt where the measurements are dense and regular: on C-MAPSS its head leads
+   the stack by 0.07 to 0.09. On the stays the hidden part's summaries are largely a linear
+   answer from the visible part, and the term adds nothing past it.
+3. The extremes stay the weak summary. The head reads them 0.03 to 0.19 better than the
+   reconstruction summarised, which reads them within 0.07 of the mixture's, but not as well as
+   the stack.
+4. The term costs the reconstruction nothing: within 1.1 % of the mixture's on every corpus,
+   where the contrast cost the stays 16 to 21 %.
+5. A target for a pretext of this kind needs room past the strongest answer without a model, not
+   only past the schedule of measurements; on the stays that room was small before the run.
+
+**Predictions.** 1 held (the head at 0.57, within [0.50, 0.68]); 5 held (−0.0 to +1.1 %). 2, 3,
+4 and 6 were not read.
+
+**Limitations.**
+
+- One weight and eight epochs; the training loss was still falling, and a longer run or a larger
+  weight could move the head, which the rule does not read.
+- The gate reads the stays alone; on C-MAPSS the term is learnt, but no reading there was
+  declared.
+- The stack is linear and fitted on 2,000 windows; the head is read on the same validation
+  windows and masks, one draw.
