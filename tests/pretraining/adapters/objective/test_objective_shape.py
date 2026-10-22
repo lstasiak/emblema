@@ -12,11 +12,14 @@ from emblema.pretraining.adapters.objective.masked_reconstruction import (  # no
     MaskedReconstruction,
 )
 from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape  # noqa: E402
+from emblema.pretraining.adapters.objective.summary_reconstruction import (  # noqa: E402
+    SummaryReconstruction,
+)
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking  # noqa: E402
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm  # noqa: E402
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget  # noqa: E402
 from tests.support.encoders import SMALL  # noqa: E402
-from tests.support.experiments import CONTRAST, LATENT, configuration  # noqa: E402
+from tests.support.experiments import CONTRAST, LATENT, SUMMARY, configuration  # noqa: E402
 from tests.support.token_tensors import VOCABULARY_SIZE, random_batch  # noqa: E402
 
 pytestmark = pytest.mark.ml
@@ -54,6 +57,43 @@ def test_a_contrast_beside_the_latent_target_is_refused() -> None:
         shape(ObjectiveTarget.latent(layers=1), CONTRAST).build()
 
 
+def test_stated_summaries_build_the_objective_that_also_asks_for_them() -> None:
+    model = ObjectiveShape(
+        architecture=SMALL,
+        vocabulary_size=VOCABULARY_SIZE,
+        decoder_layers=1,
+        target=ObjectiveTarget.value(),
+        summary=SUMMARY,
+    ).build()
+
+    assert isinstance(model, SummaryReconstruction)
+    assert model.term == SUMMARY
+
+
+@pytest.mark.parametrize(
+    ("target", "contrast", "refusal"),
+    [
+        (ObjectiveTarget.latent(layers=1), NO_CONTRAST, "value target only"),
+        (ObjectiveTarget.value(), CONTRAST, "not stated together"),
+    ],
+    ids=["latent", "contrast"],
+)
+def test_summaries_beside_the_latent_target_or_the_contrast_are_refused(
+    target: ObjectiveTarget, contrast: ContrastiveTerm, refusal: str
+) -> None:
+    built = ObjectiveShape(
+        architecture=SMALL,
+        vocabulary_size=VOCABULARY_SIZE,
+        decoder_layers=1,
+        target=target,
+        contrast=contrast,
+        summary=SUMMARY,
+    )
+
+    with pytest.raises(ValueError, match=refusal):
+        built.build()
+
+
 def test_the_latent_target_builds_the_objective_that_predicts_states() -> None:
     model = shape(ObjectiveTarget.latent(layers=2)).build()
 
@@ -69,6 +109,7 @@ def test_a_target_reading_more_blocks_than_the_encoder_has_is_refused() -> None:
 def test_the_shape_is_read_off_a_configuration() -> None:
     stated = configuration(target=LATENT, decoder_layers=2)
     contrasted = configuration(contrast=CONTRAST)
+    summarised = configuration(summary=SUMMARY)
 
     assert ObjectiveShape.of(stated, 7) == ObjectiveShape(
         architecture=stated.architecture, vocabulary_size=7, decoder_layers=2, target=LATENT
@@ -80,6 +121,7 @@ def test_the_shape_is_read_off_a_configuration() -> None:
         target=ObjectiveTarget.value(),
         contrast=CONTRAST,
     )
+    assert ObjectiveShape.of(summarised, 7).summary == SUMMARY
 
 
 @pytest.mark.parametrize(
@@ -88,8 +130,15 @@ def test_the_shape_is_read_off_a_configuration() -> None:
         shape(ObjectiveTarget.value()),
         shape(ObjectiveTarget.latent(layers=1)),
         shape(ObjectiveTarget.value(), CONTRAST),
+        ObjectiveShape(
+            architecture=SMALL,
+            vocabulary_size=VOCABULARY_SIZE,
+            decoder_layers=1,
+            target=ObjectiveTarget.value(),
+            summary=SUMMARY,
+        ),
     ],
-    ids=["value", "latent", "contrast"],
+    ids=["value", "latent", "contrast", "summaries"],
 )
 def test_the_same_seed_builds_the_same_objective_of_any_kind(built: ObjectiveShape) -> None:
     batch = random_batch(2, 16, seed=8)

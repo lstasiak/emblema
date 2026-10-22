@@ -12,12 +12,12 @@ from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa:
 from emblema.pretraining.adapters.objective.contrastive_loss import ContrastiveLoss  # noqa: E402
 from emblema.pretraining.adapters.objective.contrastive_reconstruction import (  # noqa: E402
     CONTRAST,
-    RECONSTRUCTION,
     ContrastiveReconstruction,
 )
 from emblema.pretraining.adapters.objective.masked_reconstruction import (  # noqa: E402
     MaskedReconstruction,
 )
+from emblema.pretraining.adapters.objective.objective_score import RECONSTRUCTION  # noqa: E402
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking  # noqa: E402
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks  # noqa: E402
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy  # noqa: E402

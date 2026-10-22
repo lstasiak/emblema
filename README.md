@@ -98,12 +98,12 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
   average over a stay holds less of those summaries than before it was trained; each channel's
   own tokens still hold them, as they did before training.
 - **Ruled out:** more pretraining data (up to about 10⁹ values), a five times larger model,
-  continuing on the task's own domain, the adaptation recipe and five variants of the pretext.
+  continuing on the task's own domain, the adaptation recipe and six variants of the pretext.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** a pretraining objective that predicts each sensor's summaries over a hidden stretch
-  of time, every sensor weighted alike.
+- **Next:** a way of pooling the encoder's states that keeps each sensor's summaries without
+  tying the model to one dataset's set of sensors.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 

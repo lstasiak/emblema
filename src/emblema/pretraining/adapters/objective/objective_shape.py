@@ -8,10 +8,12 @@ from emblema.pretraining.adapters.objective.contrastive_reconstruction import (
 from emblema.pretraining.adapters.objective.latent_prediction import LatentPrediction
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
 from emblema.pretraining.adapters.objective.pretraining_objective import PretrainingObjective
+from emblema.pretraining.adapters.objective.summary_reconstruction import SummaryReconstruction
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
+from emblema.pretraining.domain.training.summary_term import SummaryTerm
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,8 @@ class ObjectiveShape:
         target: What the hidden tokens' predictions are compared with, which picks the objective.
         contrast: The term beside the value objective that tells a window's halves apart, where
             stated; none picks the value objective alone.
+        summary: The term beside the value objective that asks for each channel's level and
+            extremes of the hidden part, where stated.
     """
 
     architecture: EncoderArchitecture
@@ -37,6 +41,7 @@ class ObjectiveShape:
     decoder_layers: int
     target: ObjectiveTarget
     contrast: ContrastiveTerm = field(default_factory=ContrastiveTerm.none)
+    summary: SummaryTerm = field(default_factory=SummaryTerm.none)
 
     @classmethod
     def of(cls, configuration: ExperimentConfiguration, vocabulary_size: int) -> Self:
@@ -46,26 +51,33 @@ class ObjectiveShape:
             decoder_layers=configuration.decoder_layers,
             target=configuration.target,
             contrast=configuration.contrast,
+            summary=configuration.summary,
         )
 
     def build(self, *, dropout: float = 0.0) -> PretrainingObjective:
         """The objective in this shape, its weights drawn from torch's generator as it stands.
 
         Raises:
-            ValueError: If the target reads more blocks than the encoder has, or a contrast is
-                stated beside the latent target.
+            ValueError: If the target reads more blocks than the encoder has, a term is stated
+                beside the latent target, or both terms are stated.
         """
         encoder = SetEncoder.for_vocabulary(
             self.architecture, self.vocabulary_size, dropout=dropout
         )
+        if self.contrast.is_stated and self.summary.is_stated:
+            raise ValueError("the contrast and the summaries are not stated together")
         if self.target.is_latent:
-            if self.contrast.is_stated:
-                raise ValueError("the contrast is stated beside the value target only")
+            if self.contrast.is_stated or self.summary.is_stated:
+                raise ValueError("a term is stated beside the value target only")
             return LatentPrediction(
                 encoder, predictor_layers=self.decoder_layers, target=self.target, dropout=dropout
             )
         if self.contrast.is_stated:
             return ContrastiveReconstruction(
                 encoder, decoder_layers=self.decoder_layers, contrast=self.contrast, dropout=dropout
+            )
+        if self.summary.is_stated:
+            return SummaryReconstruction(
+                encoder, decoder_layers=self.decoder_layers, summary=self.summary, dropout=dropout
             )
         return MaskedReconstruction(encoder, decoder_layers=self.decoder_layers, dropout=dropout)

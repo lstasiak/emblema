@@ -69,6 +69,10 @@ class InvalidContrastiveTermError(PretrainingError, ValueError):
     pass
 
 
+class InvalidSummaryTermError(PretrainingError, ValueError):
+    pass
+
+
 class IncomparableFloorError(PretrainingError, ValueError):
     pass
 

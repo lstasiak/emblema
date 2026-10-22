@@ -7,7 +7,14 @@ from emblema.pretraining.domain.exceptions import IncompatibleStartError
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
-from tests.support.experiments import CHANNELS, CONTRAST, LATENT, configuration, windows
+from tests.support.experiments import (
+    CHANNELS,
+    CONTRAST,
+    LATENT,
+    SUMMARY,
+    configuration,
+    windows,
+)
 
 torch = pytest.importorskip("torch")
 
@@ -22,6 +29,9 @@ from emblema.pretraining.adapters.objective.masked_reconstruction import (  # no
     MaskedReconstruction,
 )
 from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape  # noqa: E402
+from emblema.pretraining.adapters.objective.summary_reconstruction import (  # noqa: E402
+    SummaryReconstruction,
+)
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking  # noqa: E402
 from emblema.pretraining.adapters.training.trained_model import TrainedModel  # noqa: E402
 
@@ -159,6 +169,33 @@ def test_a_model_that_contrasts_the_halves_is_read_back_with_its_projection_and_
             assert torch.equal(mine, theirs)
 
 
+def test_a_model_that_asks_for_the_summaries_is_read_back_with_its_head_and_its_term() -> None:
+    stated = configuration(summary=SUMMARY)
+    torch.manual_seed(6)
+    trained = ObjectiveShape.of(stated, CHANNELS).build().eval()
+    batch = TokenTensors.from_windows(windows(3, seed=9))
+    masks = TokenMasking(stated.masking).draw(batch, torch.Generator().manual_seed(4))
+
+    stored = TrainedModel.read(TrainedModel.of(stated, CHANNELS, trained).to_bytes())
+    read = stored.build()
+
+    assert stored.summary == SUMMARY
+    assert isinstance(read, SummaryReconstruction)
+    assert isinstance(trained, SummaryReconstruction)
+    with torch.no_grad():
+        assert torch.equal(read(batch, masks), trained(batch, masks))
+        assert torch.equal(read.summarised(batch, masks)[0], trained.summarised(batch, masks)[0])
+
+
+def test_the_bytes_of_a_model_without_the_summaries_hold_no_key_for_them() -> None:
+    stored = torch.load(
+        io.BytesIO(TrainedModel.of(configuration(), CHANNELS, objective()).to_bytes()),
+        weights_only=True,
+    )
+
+    assert "summary_weight" not in stored
+
+
 TABLE = "encoder.channel_embedding.table.weight"
 
 
@@ -209,4 +246,6 @@ def test_stored_weights_of_another_shape_or_objective_are_not_carried() -> None:
         stored.require_shape_of(configuration(target=LATENT))
     with pytest.raises(IncompatibleStartError, match="another contrast"):
         stored.require_shape_of(configuration(contrast=CONTRAST))
+    with pytest.raises(IncompatibleStartError, match="another summaries"):
+        stored.require_shape_of(configuration(summary=SUMMARY))
     stored.require_shape_of(configuration(name="the same shape under another name"))

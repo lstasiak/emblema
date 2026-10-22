@@ -33,6 +33,7 @@ from tests.support.experiments import (
     CHANNEL_NAMES,
     CONTRAST,
     LATENT,
+    SUMMARY,
     budget,
     checksum_of,
     configuration,
@@ -506,6 +507,35 @@ def test_the_run_says_what_each_term_of_a_two_term_objective_cost(
         r"\(reconstruction [\d.]+ of [\d.]+, contrast [\d.]+ of [\d.]+\)",
         done[0],
     )
+
+
+@pytest.mark.parametrize(
+    "term", [{"contrast": CONTRAST}, {"summary": SUMMARY}], ids=["contrast", "summary"]
+)
+def test_a_run_under_a_second_term_is_validated_on_the_hidden_tokens_alone(
+    term: dict[str, object], caplog: pytest.LogCaptureFixture
+) -> None:
+    """The epoch a run keeps is chosen on what a run without the term is chosen on."""
+    stated = configuration(budget=budget(epochs=1, batch_size=2), **term)
+
+    with caplog.at_level("INFO", logger="emblema.pretraining"):
+        outcomes = list(
+            TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(stated, MIXTURE)
+        )
+
+    done = [m for m in (r.getMessage() for r in caplog.records) if m.startswith("epoch 1 of 1")]
+    said = re.search(
+        r"invented validation ([\d.]+), ([\d.]+) of the trivial predictor's "
+        r"\(reconstruction ([\d.]+) of ([\d.]+), \w+ [\d.]+ of [\d.]+\)",
+        done[0],
+    )
+    assert said is not None
+    validation, relative, reconstruction, trivial = said.groups()
+    assert validation == reconstruction
+    assert float(relative) == pytest.approx(float(reconstruction) / float(trivial), abs=1e-3)
+    scored = outcomes[-1].validation[0]
+    assert f"{scored.loss:.5f}" == reconstruction
+    assert f"{scored.trivial:.5f}" == trivial
 
 
 def test_the_run_says_how_far_the_epoch_has_come_every_so_many_steps(

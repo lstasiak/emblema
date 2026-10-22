@@ -1,0 +1,42 @@
+# The mixture of four under a second term of the objective: beside the values at the hidden
+# tokens, each channel's mean, minimum and maximum over the part of the window hidden from the
+# encoder, read off the decoder's states pooled per channel (ADR-0059), everything else the file
+# of backbone-mixed4-m.toml to the step. The loss at the hidden tokens weighs a channel by how
+# often it is measured; the term weighs every channel of a window once. One unit of the term
+# weighs one hidden token's loss, the pilot's default kept without reading the pilot for it: at
+# a tenth of the corpora for one epoch no run learns the stays' values (pretext-variants.md).
+name = "backbone-mixed4-summary-m"
+tier = "M"
+corpora = ["cmapss", "skab", "esa_ad", "physionet2012"]
+precision = "fp16"
+dropout = 0.0
+decoder_layers = 1
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation: the satellite corpus is learnt under that reading and not
+# under the square, and the stays' channels have heavy tails too.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+summary_weight = 1.0
+
+# Eight passes over every window, the epoch kept the one whose reconstruction alone has the lowest
+# mean relative validation over the corpora, as a run without the term keeps it (ADR-0060);
+# sixteen windows a micro-batch, two to a step, as every mixture before; a quarter of the first
+# epoch warming up.
+[budget]
+epochs = 8
+batch_size = 16
+accumulation_steps = 2
+learning_rate = 1e-3
+warmup_epochs = 0.25
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000

@@ -23,11 +23,10 @@ import torch
 
 from emblema.pretraining.adapters.objective.contrastive_reconstruction import (
     CONTRAST,
-    RECONSTRUCTION,
     ContrastiveReconstruction,
 )
 from emblema.pretraining.adapters.objective.masked_reconstruction import MaskedReconstruction
-from emblema.pretraining.adapters.objective.objective_score import ObjectiveScore
+from emblema.pretraining.adapters.objective.objective_score import RECONSTRUCTION, ObjectiveScore
 from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.domain.mask_kind import MaskKind
