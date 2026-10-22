@@ -1261,3 +1261,85 @@ encoders.
 - The ceiling and both poolings are read on the stays, one corpus with 44 channels; that the
   pooling reads another corpus's channels is its design, not a measurement here.
 - Tier M models read on this machine (M1 Pro, MPS, fp32); validation side, not the test.
+
+## 2026-10-22 — M1 Pro, CPU, fp32: neither pooling over a stay's channels keeps the per-channel gain
+
+**Question.** The one declared above: whether a pooling over the channels a stay measured, which
+no order or count of channels changes, reads the stays as the per-channel probe does.
+
+**Conditions.** `scripts/channel_set_pooling_report.py` at `815e8f97` (the declaration's commit)
+over the per-channel states of 2026-10-21: 28 poolings, 320 heads, the recovery over 14 encoders.
+Pairs by `scripts/campaign_pairs_report.py` over the cells of 2026-10-21 and the script's rows.
+`data/report/l29/run.sh`, 09:33 to 11:10, twice the 45 minutes declared. CSV under `data/report/l29/`. Nothing was refused; the
+reduction kept 100 % of the mean's variance and 99.3 to 99.8 % of the maximum's and minimum's.
+
+**Area under the ROC curve**, mean over seeds 1 to 10, the mixture's the mean over its four
+pretrainings [range]:
+
+| Reading | 200 | 500 |
+|---|---|---|
+| Per-channel probe, mixture (2026-10-21) | 0.699 | 0.735 |
+| Probe, mixture (2026-10-21) | 0.662 | 0.697 |
+| `channel_set_mean`, mixture | 0.641 [0.630; 0.650] | 0.683 [0.677; 0.699] |
+| `channel_set_mean`, at initialisation | 0.631 | 0.695 |
+| `channel_set_extremes`, mixture | 0.619 [0.610; 0.628] | 0.670 [0.658; 0.681] |
+| `channel_set_extremes`, at initialisation | 0.628 | 0.687 |
+
+**The pairs** (gain of the second over the first in area, 95 % interval over stays, seed by seed
+mean ± SE); T from each pair's own SE, as the rule defines it:
+
+| Pair | 200 | 500 |
+|---|---|---|
+| **Δ_c** per-channel probe → `channel_set_mean` | **−0.058** [−0.084; −0.031] ± 0.010, T 0.024 | **−0.052** [−0.076; −0.026] ± 0.004, T 0.016 |
+| **Δ_c** per-channel probe → `channel_set_extremes` | **−0.080** [−0.101; −0.059] ± 0.006, T 0.018 | **−0.065** [−0.086; −0.043] ± 0.003, T 0.015 |
+| Δ_f probe → `channel_set_mean` | −0.021 [−0.037; −0.005] ± 0.006 | −0.014 [−0.031; +0.003] ± 0.003 |
+| Δ_f probe → `channel_set_extremes` | −0.043 [−0.065; −0.022] ± 0.008 | −0.027 [−0.049; −0.006] ± 0.004 |
+| `channel_set_mean` at initialisation → mixture | +0.010 [−0.010; +0.030] ± 0.009 | −0.012 [−0.032; +0.009] ± 0.006 |
+| `channel_set_extremes` at initialisation → mixture | −0.010 [−0.022; +0.003] ± 0.005 | −0.017 [−0.031; −0.003] ± 0.006 |
+| `channel_set_mean` → `channel_set_extremes` | −0.022 [−0.042; −0.003] ± 0.009 | −0.013 [−0.031; +0.005] ± 0.003 |
+
+**Recovery**, median R² of each family on the held-out stays that measure the channel, every
+block, mean over encoders [range]; the window's and the channel's from 2026-10-21:
+
+| Family | Window, mixture / init. | Channel, mixture / init. | `channel_set_mean`, mixture / init. | `channel_set_extremes`, mixture / init. |
+|---|---|---|---|---|
+| level | 0.153 / 0.313 | 0.856 / 0.859 | 0.293 [0.269; 0.320] / 0.649 | 0.360 [0.345; 0.385] / 0.648 |
+| extremes | 0.172 / 0.263 | 0.673 / 0.702 | 0.247 / 0.487 | 0.338 / 0.533 |
+| trend | 0.015 / 0.016 | 0.202 / 0.217 | 0.018 / 0.043 | 0.043 / 0.068 |
+| frequency | 0.417 / 0.602 | 0.800 / 0.965 | 0.413 / 0.806 | 0.442 / 0.774 |
+| statics | 0.089 / 0.196 | 1.000 / 1.000 | 0.845 / 0.934 | 0.904 / 0.978 |
+
+**Predictions.**
+
+1. *Failed.* Δ_f of `channel_set_mean` is −0.021 at 200 and −0.014 at 500, below the predicted
+   [0, +0.037] and [+0.010, +0.038]: the pooling reads below the window's mean, not above it.
+2. *Held at 200, failed at 500.* At 200 Δ_c is −0.058, below −T (0.024) ✓; at 500, called near
+   even, it is −0.052, more than three times T (0.016) below.
+3. *Failed.* `channel_set_extremes` less `channel_set_mean` is −0.022 and −0.013, below −0.01.
+4. *Failed, narrowly.* At 200 `channel_set_extremes` lies within ±0.010 (−0.0096) and
+   `channel_set_mean` just outside (+0.0102); at 500 initialisation reads 0.012 and 0.017 better.
+5. *Failed, narrowly.* Level under `channel_set_mean` is 0.293 [0.269; 0.320], below 0.3.
+
+**Conclusions.**
+
+1. Neither pooling reaches the ceiling: both lie 0.052 to 0.080 below the per-channel probe, two
+   to five times T, at both budgets. By the rule declared, the closed form gains no pooling free
+   of the channel layout.
+2. Neither reads better than the probe's mean over the window: `channel_set_mean` lies 0.021 and
+   0.014 below it, about one T, and `channel_set_extremes`, with two thirds of its columns given
+   to the maximum and minimum, 0.043 and 0.027 below, about two T.
+3. The mean over channels holds 29 % of a channel's level under the mixture against 65 % at
+   initialisation: as under the window's mean (15 % against 31 %), pretraining leaves less than
+   half of what an average keeps at initialisation, while the per-channel states hold the level as
+   before training.
+4. Pretraining has no share under either pooling: the mixture less initialisation lies between
+   −0.017 and +0.010, inside T (0.024 to 0.029) at both budgets.
+5. The per-channel probe remains a diagnostic only: no pooling of its states over channels that
+   the closed-form head can read comes within T of it.
+
+**Limitations.**
+
+- One linear head, closed form; a pooling learnt with the head, or with the encoder, is not read.
+- The reduction of `channel_set_extremes` keeps the widest directions of each statistic, not
+  those the outcome needs.
+- One corpus with 44 channels; validation side, not the test; Tier M models read on this machine.
