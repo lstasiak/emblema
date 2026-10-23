@@ -26,6 +26,12 @@ Last updated 2026-10-23.
   as before training, but 15 % from the mean over the stay (31 % before training). Pooling per
   channel lifts the probe by 0.04, still 0.03 below a head over the summaries, and
   pretraining has no share in that lift; no average over a stay's channels keeps it.
+- **Below 500 labels the network's gap is representation; above it, the trees' table.** A
+  network handed the trees' per-channel summaries reads above the trees at 20 and 50 stays
+  (+0.023, +0.046; carried at 50) and leads the network on its tokens by 0.045 to 0.059 up to 200 stays. From 500 stays
+  the network on its tokens matches it, and both stop 0.03 below the trees, as a linear head over
+  the summaries does: the rest is what trees make of that table
+  ([note](verification/gap-to-the-trees.md)).
 - **What transfers is the encoder's machinery, not its features for the task.** Fitting only the
   channel rows of a corpus the backbone never read, on its unlabelled windows, brings the pretext
   to within 0.006 of a backbone that read it, and carries part of a downstream task (+0.031 on
@@ -66,7 +72,8 @@ RMSE, lower is better.
 Bold: the lowest mean. The registered endpoint, full fine-tuning at 200 windows, is 10.5 %
 worse than from scratch (interval [−2.56, −0.54] RMSE).
 
-PhysioNet 2012, half the tuning side, ten seeds ([note](verification/verdict-statistics.md)).
+PhysioNet 2012, half the tuning side, ten seeds ([note](verification/verdict-statistics.md);
+1,000 and every stay of the classical rows and the diagnostic: [note](verification/gap-to-the-trees.md)).
 AUROC, higher is better.
 
 | Labelled stays | 200 | 500 | 1,000 | all (2,000) |
@@ -75,9 +82,10 @@ AUROC, higher is better.
 | Full fine-tuning, mixture of four | 0.69 | 0.74 | 0.76 | 0.79 |
 | Probe, mixture of four | 0.65–0.67 | 0.69–0.71 | 0.72–0.74 | 0.74–0.76 |
 | Probe, untrained encoder | 0.64 | 0.69 | 0.75 | 0.78 |
-| Trees per channel | **0.74** | **0.79** | | |
-| MiniRocket | 0.71 | 0.76 | | |
-| Logistic head over the per-channel summaries | 0.73 | 0.77 | | |
+| Trees per channel | **0.74** | **0.79** | **0.82** | **0.84** |
+| MiniRocket | 0.71 | 0.76 | 0.78 | 0.81 |
+| Logistic head over the per-channel summaries | 0.73 | 0.77 | | 0.81 |
+| Network over the per-channel summaries (diagnostic) | 0.71 | 0.75 | 0.79 | 0.81 |
 
 Pretraining's share changes sign with the budget: the probe gains 0.02 to 0.04 over an untrained
 encoder at 200 stays, nothing at 500 and loses 0.01 to 0.04 from 1,000 up. The classical rows
