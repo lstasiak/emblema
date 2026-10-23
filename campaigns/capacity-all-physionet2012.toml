@@ -1,0 +1,53 @@
+# The small encoder from nothing on cells of six bins at every stay of half the tuning side, under
+# the recipe registered there (a stop with a fifth held out and a patience of ten epochs, a rate
+# of 0.000333), beside three rates (0.000333 registered, 0.001, 0.003), the same shape with a
+# dropout of a fifth, and the same shape learning from every drawn stay with no stop; the 4.8M
+# encoder on raw tokens and on six bins as the controls. The trees and the network over the trees'
+# table ran at this budget in the gap's campaigns and are read from there.
+#
+# Scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10, so the cells
+# pair by stay and seed with every other campaign on the half at the same budget. A campaign
+# divided this way chooses nothing; the reading is the pairs declared in
+# docs/verification/encoder-candidates.md. Defined under the mixture of four at its first
+# pretraining seed, whose shape the 4.8M encoder borrows (ADR-0062).
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "capacity-all-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2",
+    "from_scratch@bins=6,learning_rate=0.000333,patience=10,stop_share=0.2",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,patience=10,stop_share=0.2,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.001,patience=10,stop_share=0.2,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.003,patience=10,stop_share=0.2,width=64",
+    "from_scratch@bins=6,dropout=0.2,feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,patience=10,stop_share=0.2,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,width=64",
+]
+control = "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2"
+endpoint = "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,patience=10,stop_share=0.2,width=64"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+secondary_family_size = 5
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
