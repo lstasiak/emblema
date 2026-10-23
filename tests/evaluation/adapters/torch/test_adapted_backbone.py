@@ -371,7 +371,7 @@ def test_a_network_from_nothing_over_cells_reads_nine_features_and_may_learn_its
         SmallBackbones(),
         vocabulary_size=VOCABULARY_SIZE,
         starting_at=0.0,
-        input_features=BinnedTokens.N_FEATURES,
+        layout=BinnedTokens(4),
     )
     batch = random_batch(3, 9, seed=2)
     cells = TokenTensors(

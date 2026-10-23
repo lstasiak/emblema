@@ -144,8 +144,7 @@ class TorchAdaptationRuntime:
             vocabulary_size=len(manifest.channels),
             starting_at=link.starting_at(sample.mean_target),
             summary_rows=None if summaries is None else np.concatenate(summaries[:2]),
-            input_features=layout.features,
-            value_features=layout.value_features,
+            layout=layout,
         ).to(self._device)
         learnt_rows, stopping_rows, held_rows = (
             (None, None, None)
