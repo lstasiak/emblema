@@ -232,3 +232,48 @@ Three rates do not close D1, but a head over the table trained on the whole draw
 could. The network on its
 tokens at 20, 50 and 1,000 stays comes from T4 cells against G4 cells on the other side of D2.
 The logistic head at every stay was fitted after the run and is descriptive.
+
+## 2026-10-23 — declared before the run: is the table's distance to the trees its training?
+
+**Question.** The network over the trees' table read 0.030 to 0.033 below the trees from 200
+stays up (D1, above). From 500 stays it learnt from the four fifths of the draw its stop leaves,
+with no penalty, while the trees learn from all of it and the logistic head over the same table
+chooses its penalty; that head lies 0.006 and 0.018 below the trees at 200 and 500. Is D1 the
+network's training, or what a smooth model makes of the table? The answer decides whether the
+next encoder needs more than the table to reach the trees at every stay. And are the trees at
+20 and 50 stays the bar they could be?
+
+**Conditions.** As the section above, at `2d6c4b27`; every cell on the M1 Pro (the network over
+the table on MPS, fp32; the trees on the CPU).
+
+| Campaign | Budgets | Candidates |
+|---|---|---|
+| `gap-table-200` | 200 | the setting in force (no stop, every drawn stay) at a weight decay of 0.1 and of 1 |
+| `gap-table-500` | 500 | no stop, every drawn stay, at the schedule's rate, decay 0, 0.1 and 1 |
+| `gap-table-all` | every stay | no stop, every drawn stay, at 0.000333, decay 0, 0.1 and 1 |
+| `gap-trees-low` | 20, 50 | trees `max_depth=2,rounds=50`, `learning_rate=0.1,max_depth=3`, `max_depth=3,min_leaf_weight=5` |
+
+A trial ran one point of each family at seed 1 (500 stays and 20), printing counts of cells
+only: three network cells in 56 s, three tree cells in 12 s.
+
+**Readings.** D1′ at 200, 500 and every stay: the best of the network's settings over the table
+(the new ones and the one read above) → the trees. The best of several chosen on the stays it is
+scored on reads high; that is the direction against the conclusion it can support. At 20 and 50:
+the best of the trees' four settings → the network over the table under its setting in force, and
+→ the network on its tokens. Rule as above (interval and twice the standard error); no family, all
+descriptive except D1′ at every stay, which is the one reading a decision rests on.
+
+**Predictions.**
+
+1. At 200 and 500 stays the best network over the table reads within 0.01 of the logistic head
+   (0.730, 0.769; `head-and-representation.md`, 2026-10-23), and D1′ lies within that head's
+   interval against the trees: [−0.007; +0.019] at 200, [+0.004; +0.033] at 500.
+2. At every stay D1′ is carried and at least +0.02: the logistic head over the table, on every
+   drawn stay with its chosen penalty, reads 0.810, 0.029 below the trees (one fit, descriptive).
+3. At 50 stays the best trees still read below the network over the table, by no more than the
+   upper edge of D1 there (0.031); at 20 the two cannot be told apart.
+
+**What follows.** If D1′ at every stay is not carried, the table's distance to the trees is the
+network's training, and an encoder that rebuilds the table under a better recipe can meet the
+registered parity. If it is carried, a smooth reading of the table falls short of the trees there,
+and parity at every stay needs an encoder that reads more than the table holds.
