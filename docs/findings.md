@@ -38,9 +38,15 @@ Last updated 2026-10-23.
   sepsis at 4,000 patients).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
-- **Next:** the network trained from scratch brought up to the classical baselines, with an
-  encoder designed together with its pretext and pretraining data sampled like the
-  intensive-care tasks, before pretraining is read again at few labels.
+- **Reading the window as cells does not close the gap at few labels.** An encoder trained from
+  scratch over cells of channel and time bin, carrying each bin's count, level, extremes and
+  ends, reads within 0.01 of the same encoder on raw readings at 50 and 200 stays, and 0.03 to
+  0.05 below a network handed the trees' table; a learnt time encoding, several pooling
+  queries and rows for the channels a stay never measured move nothing beyond the reader's
+  resolution ([note](verification/encoder-candidates.md)).
+- **Next:** what an encoder from scratch can learn from a few hundred stays, before more
+  candidates are built: the cells' reading improved with less input (6 bins over 12) and a
+  class weight, not with more, which points at optimisation and capacity at few labels.
 
 ## Setup
 
@@ -79,6 +85,7 @@ AUROC, higher is better.
 | Labelled stays | 200 | 500 | 1,000 | all (2,000) |
 | --- | --- | --- | --- | --- |
 | Network from scratch | 0.65 | 0.75 | 0.79 | 0.79 |
+| Network from scratch over cells of channel × time bin, 6 / 12 bins ([note](verification/encoder-candidates.md)) | 0.69 / 0.67 | | | |
 | Full fine-tuning, mixture of four | 0.69 | 0.74 | 0.76 | 0.79 |
 | Probe, mixture of four | 0.65–0.67 | 0.69–0.71 | 0.72–0.74 | 0.74–0.76 |
 | Probe, untrained encoder | 0.64 | 0.69 | 0.75 | 0.78 |
