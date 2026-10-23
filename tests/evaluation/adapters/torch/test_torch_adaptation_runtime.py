@@ -5,6 +5,7 @@ do not change their values, and the low-rank mode leaves the layers it wraps as 
 encoder a run received is read back through the factory, which keeps every module it hands out.
 """
 
+import math
 from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
@@ -55,7 +56,10 @@ from emblema.evaluation.domain.labels.target_kind import TargetKind  # noqa: E40
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
-from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting  # noqa: E402
+from emblema.evaluation.domain.transfer.encoder_setting import (  # noqa: E402
+    EncoderSetting,
+    SummaryReading,
+)
 from emblema.evaluation.domain.transfer.layer_reading import LayerReading  # noqa: E402
 from emblema.evaluation.domain.transfer.training_regime import (  # noqa: E402
     ClassWeight,
@@ -731,3 +735,82 @@ def test_under_the_closed_form_probe_another_layer_answers_the_task_and_is_recor
 
     assert len(outcome.predictions) == len(VALIDATION)
     assert outcome.plan.parameters()["encoder_layer"] == reading
+
+
+@pytest.mark.parametrize("reading", [SummaryReading.BESIDE, SummaryReading.ONLY])
+def test_a_network_reading_the_summaries_answers_every_window_under_the_stop_and_repeats(
+    published: Published, reading: SummaryReading
+) -> None:
+    stated = plan(
+        TransferMode.FROM_SCRATCH,
+        encoder=EncoderSetting(summaries=reading),
+        regime=TrainingRegime(stop_share=0.5, patience=1),
+    )
+
+    first, again = adapt(published, stated), adapt(published, stated)
+
+    assert len(first.predictions) == len(VALIDATION)
+    assert all(math.isfinite(p.predicted) for p in first.predictions)
+    assert first.predictions == again.predictions
+    assert first.plan.parameters()["summaries"] == str(reading)
+
+
+def test_the_summaries_alone_train_a_branch_and_a_head_and_nothing_of_the_encoder(
+    published: Published,
+) -> None:
+    plain = adapt(published, plan(TransferMode.FROM_SCRATCH))
+    alone = adapt(
+        published,
+        plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(summaries=SummaryReading.ONLY)),
+    )
+    beside = adapt(
+        published,
+        plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(summaries=SummaryReading.BESIDE)),
+    )
+
+    assert alone.trainable_parameters < plain.trainable_parameters < beside.trainable_parameters
+
+
+def test_a_candidate_reading_the_summaries_is_kept_without_a_graph(tmp_path: Path) -> None:
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "scratch")
+    runtime = TorchAdaptationRuntime(
+        SmallBackbones(vocabulary_size=len(CHANNELS)),
+        PublishedCorpusBlocks(store, tmp_path / "workspace"),
+        device="cpu",
+        store=store,
+    )
+    defined = replace(task(), manifest=published.manifest, labels=RemainingLifeScheme(CEILING))
+    beside = plan(
+        TransferMode.FROM_SCRATCH, encoder=EncoderSetting(summaries=SummaryReading.BESIDE)
+    )
+
+    outcome = runtime.adapt(beside, defined, SAMPLE, VALIDATION, retain=True)
+
+    assert outcome.artifact is not None
+    kept = KeptCandidates(store).read(outcome.artifact)
+    assert [form.format for form in kept.representations] == [FittedCandidate.FORMAT]
+    fitted = FittedCandidate.read(store.get(kept.measured.artifact))
+    assert fitted.parameters["summaries"] == "beside"
+    assert "summaries.centre" in fitted.weights
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="runs on the accelerator")
+def test_a_network_reading_the_summaries_answers_on_the_accelerator_as_on_the_host(
+    tmp_path: Path,
+) -> None:
+    store = InMemoryArtifactStore()
+    manifest = publish(store, tmp_path / "scratch").manifest
+    defined = replace(task(), manifest=manifest, labels=RemainingLifeScheme(CEILING))
+    alone = plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(summaries=SummaryReading.ONLY))
+    answers = {}
+    for device in ("cpu", "mps"):
+        runtime = TorchAdaptationRuntime(
+            SmallBackbones(vocabulary_size=len(CHANNELS)),
+            PublishedCorpusBlocks(store, tmp_path / device),
+            device=device,
+        )
+        outcome = runtime.adapt(alone, defined, SAMPLE, VALIDATION, retain=False)
+        answers[device] = [p.predicted for p in outcome.predictions]
+
+    assert answers["mps"] == pytest.approx(answers["cpu"], rel=1e-3)

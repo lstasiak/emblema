@@ -31,7 +31,10 @@ class AdaptationPlan:
     built otherwise than its backbone (its own shape, its own value embedding) only where it starts
     from no weights, and its own shape is stated whole; a head reads below the last layer only
     where the run leaves the encoder as it is; the encoder's weights learn at less than the
-    head's rate only where the mode trains them.
+    head's rate only where the mode trains them. The head reads the window's statistics per
+    channel only in the network trained from nothing, with a head it trains, over the raw
+    readings and every channel; where it reads them alone, nothing that only shapes the encoder
+    is turned, since the encoder is never run.
 
     Attributes:
         mode: What the backbone's weights do while the task is learnt.
@@ -136,6 +139,64 @@ class AdaptationPlan:
                 f"{self.mode} trains none of the backbone's weights, so the encoder's rate "
                 "would change nothing"
             )
+        refusal = self.summaries_refusal(
+            mode=self.mode,
+            pooling=self.pooling,
+            encoder=self.encoder,
+            regime=self.regime,
+            solves_a_head=self.solves_a_head,
+        )
+        if refusal is not None:
+            raise InvalidAdaptationPlanError(refusal)
+
+    @staticmethod
+    def summaries_refusal(
+        *,
+        mode: TransferMode,
+        pooling: HeadPooling,
+        encoder: EncoderSetting,
+        regime: TrainingRegime,
+        solves_a_head: bool,
+    ) -> str | None:
+        """Why a head could not read the statistics per channel so, or ``None`` if it could.
+
+        Stated once for the plan and for the catalogue that reads a variant's name, so the two
+        refuse the same variants for the same reason.
+        """
+        if not encoder.reads_summaries:
+            return None
+        reading = encoder.summaries
+        if mode is not TransferMode.FROM_SCRATCH:
+            return (
+                f"{mode} reads a backbone, and summaries {reading} take apart only the network "
+                "trained from nothing"
+            )
+        if solves_a_head:
+            return (
+                f"summaries {reading} are read by a head that trains, and this one is solved over "
+                "the encoder's states alone"
+            )
+        if encoder.grid_resolution is not None:
+            return f"summaries {reading} are of the raw readings, not of readings laid on a grid"
+        if regime.channel_dropout > 0.0:
+            return f"summaries {reading} would still show the channels a batch withholds"
+        if encoder.reads_tokens:
+            return None
+        shaping = {
+            "a dropout": encoder.dropout > 0.0,
+            "an encoder of its own build": encoder.builds_its_own_encoder,
+            "a clip": encoder.value_clip is not None,
+            "a layer below the last": not encoder.layer.is_last,
+            "a pooling of its own": pooling != HeadPooling.mean(),
+            "a slower encoder": regime.slows_the_encoder,
+        }
+        turned = [label for label, holds in shaping.items() if holds]
+        if not turned:
+            return None
+        return (
+            f"summaries {reading} never run the encoder, so {', '.join(turned)} would change "
+            "nothing"
+        )
 
     @property
     def solves_a_head(self) -> bool:

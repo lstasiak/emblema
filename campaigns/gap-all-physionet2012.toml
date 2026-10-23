@@ -1,0 +1,56 @@
+# The classical bar and the network from nothing at every stay of half the tuning side. The trees
+# per channel at the setting chosen at every stay on the tuning side and at their setting in
+# force, MiniRocket at the setting chosen at every stay; the network from nothing under the
+# setting registered at that budget, on its tokens, with the window's statistics per channel
+# beside its encoder, and with the statistics instead of it; the statistics alone also at three
+# times and a third of that rate, since the setting was chosen for the encoder and a head over a
+# table may want another.
+#
+# Scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10, so the cells
+# pair by stay and seed with every other campaign on the half at the same budget. A campaign
+# divided this way chooses nothing; the reading is the pairs declared in
+# docs/verification/gap-to-the-trees.md. A network reading the window's statistics is a
+# diagnostic, never a candidate (ADR-0061). Defined under the mixture of four at its first
+# pretraining seed, whose shape the network from nothing borrows.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "gap-all-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "boosted_trees_per_channel@learning_rate=0.1,rounds=300",
+    "boosted_trees_per_channel",
+    "minirocket@grid_resolution=2",
+    "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2",
+    "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2,summaries=beside",
+    "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2,summaries=only",
+    "from_scratch@learning_rate=0.001,patience=10,stop_share=0.2,summaries=only",
+    "from_scratch@learning_rate=0.0001,patience=10,stop_share=0.2,summaries=only",
+]
+control = "boosted_trees_per_channel@learning_rate=0.1,rounds=300"
+endpoint = "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+secondary_family_size = 6
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

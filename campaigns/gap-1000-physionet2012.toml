@@ -1,0 +1,49 @@
+# The classical bar and a network over the window's statistics per channel alone at 1,000 stays
+# of half the tuning side: the trees per channel and MiniRocket at their settings in force, and
+# the network from nothing under the setting registered at that budget reading the statistics
+# instead of its encoder. The network from nothing on its tokens ran at this budget in
+# `reader-1000` and is read from there.
+#
+# Scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10, so the cells
+# pair by stay and seed with every other campaign on the half at the same budget. A campaign
+# divided this way chooses nothing; the reading is the pairs declared in
+# docs/verification/gap-to-the-trees.md. A network reading the window's statistics is a
+# diagnostic, never a candidate (ADR-0061). Defined under the mixture of four at its first
+# pretraining seed, whose shape the network from nothing borrows.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "gap-1000-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "boosted_trees_per_channel",
+    "minirocket",
+    "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2,summaries=only",
+]
+control = "boosted_trees_per_channel"
+endpoint = "from_scratch@learning_rate=0.000333,patience=10,stop_share=0.2,summaries=only"
+
+[budgets]
+labels = ["1000"]
+endpoint = "1000"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

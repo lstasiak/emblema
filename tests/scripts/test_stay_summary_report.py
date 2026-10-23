@@ -251,9 +251,10 @@ def test_summaries_are_filled_from_the_draw_alone() -> None:
 
     filled_sample, filled_scored = prepared(sample, scored)
 
-    # The constant third column and the fourth, defined once, go; the gaps take the draw's mean.
+    # The constant third column and the fourth, defined once, go; the gaps take the draw's mean,
+    # and a scored value beyond the draw's range takes its edge.
     np.testing.assert_array_equal(filled_sample, [[1.0, 5.0], [3.0, 4.0], [2.0, 6.0]])
-    np.testing.assert_array_equal(filled_scored, [[2.0, 5.0], [100.0, 100.0]])
+    np.testing.assert_array_equal(filled_scored, [[2.0, 5.0], [3.0, 6.0]])
 
 
 def test_a_draw_that_names_a_stay_off_the_learnt_half_is_refused(stored: Stored) -> None:

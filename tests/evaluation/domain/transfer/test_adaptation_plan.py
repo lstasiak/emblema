@@ -5,7 +5,11 @@ from emblema.evaluation.domain.exceptions import (
     InvalidEncoderSettingError,
 )
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
-from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
+from emblema.evaluation.domain.transfer.encoder_setting import (
+    EncoderSetting,
+    SummaryReading,
+    ValueEmbedding,
+)
 from emblema.evaluation.domain.transfer.layer_reading import LayerReading
 from emblema.evaluation.domain.transfer.training_regime import (
     ClassWeight,
@@ -258,3 +262,91 @@ def test_a_frozen_encoder_is_read_at_any_layer(
     assert plan(mode, backbone=backbone, encoder=EncoderSetting(layer=reading)).encoder.layer == (
         reading
     )
+
+
+BESIDE = EncoderSetting(summaries=SummaryReading.BESIDE)
+ONLY = EncoderSetting(summaries=SummaryReading.ONLY)
+
+
+@pytest.mark.parametrize("reading", [BESIDE, ONLY])
+def test_the_network_from_nothing_reads_the_summaries_beside_or_instead_of_its_encoder(
+    reading: EncoderSetting,
+) -> None:
+    stated = plan(TransferMode.FROM_SCRATCH, encoder=reading)
+
+    assert stated.encoder.reads_summaries
+    assert stated.parameters()["summaries"] == str(reading.summaries)
+
+
+@pytest.mark.parametrize("mode", [mode for mode in TransferMode if mode.takes_pretrained_weights])
+@pytest.mark.parametrize("reading", [BESIDE, ONLY])
+def test_summaries_are_refused_wherever_a_backbone_is_read(
+    mode: TransferMode, reading: EncoderSetting
+) -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="only the network trained from nothing"):
+        plan(mode, encoder=reading)
+
+
+def test_summaries_are_refused_under_a_head_solved_before_its_first_step() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="read by a head that trains"):
+        plan(
+            TransferMode.FROM_SCRATCH,
+            encoder=BESIDE,
+            regime=TrainingRegime(head_start=HeadStart.SOLVED),
+            ridge=PENALTIES,
+        )
+
+
+def test_summaries_are_refused_over_readings_laid_on_a_grid() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="not of readings laid on a grid"):
+        plan(
+            TransferMode.FROM_SCRATCH,
+            encoder=EncoderSetting(summaries=SummaryReading.BESIDE, grid_resolution=1.0),
+        )
+
+
+def test_summaries_are_refused_where_a_batch_withholds_channels() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="channels a batch withholds"):
+        plan(
+            TransferMode.FROM_SCRATCH,
+            encoder=BESIDE,
+            regime=TrainingRegime(channel_dropout=0.2),
+        )
+
+
+@pytest.mark.parametrize(
+    ("overrides", "named"),
+    [
+        ({"encoder": EncoderSetting(summaries=SummaryReading.ONLY, dropout=0.1)}, "a dropout"),
+        (
+            {
+                "encoder": EncoderSetting(
+                    summaries=SummaryReading.ONLY, value_embedding=ValueEmbedding.NONLINEAR
+                )
+            },
+            "an encoder of its own build",
+        ),
+        ({"encoder": EncoderSetting(summaries=SummaryReading.ONLY, value_clip=5.0)}, "a clip"),
+        (
+            {"encoder": ONLY, "pooling": HeadPooling(pooling=PoolingScheme.ATTENTION)},
+            "a pooling of its own",
+        ),
+        ({"encoder": ONLY, "regime": TrainingRegime(encoder_rate=0.1)}, "a slower encoder"),
+    ],
+)
+def test_summaries_alone_refuse_whatever_only_shapes_the_encoder(
+    overrides: dict[str, object], named: str
+) -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match=f"never run the encoder, so {named}"):
+        plan(TransferMode.FROM_SCRATCH, **overrides)
+
+
+def test_summaries_beside_the_encoder_keep_what_shapes_it() -> None:
+    stated = plan(
+        TransferMode.FROM_SCRATCH,
+        encoder=EncoderSetting(summaries=SummaryReading.BESIDE, dropout=0.1),
+        pooling=HeadPooling(pooling=PoolingScheme.ATTENTION),
+        regime=TrainingRegime(stop_share=0.2, patience=10),
+    )
+
+    assert stated.encoder.reads_tokens

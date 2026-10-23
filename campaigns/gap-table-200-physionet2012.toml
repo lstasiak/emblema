@@ -1,0 +1,46 @@
+# The network over the window's statistics per channel alone at 200 stays of half the tuning
+# side under a penalty: its setting in force, which learns from every drawn stay, with a weight
+# decay of 0.1 and of 1. Whether its distance to the trees is its training or the table.
+#
+# Scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10, as every other
+# campaign on the half, so the cells pair by stay and seed with the gap's campaigns. A campaign
+# divided this way chooses nothing; the reading is the pairs declared in
+# docs/verification/gap-to-the-trees.md. A network reading the window's statistics is a
+# diagnostic, never a candidate (ADR-0061). Defined under the mixture of four at its first
+# pretraining seed, whose shape the network from nothing borrows.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "gap-table-200-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.003,summaries=only,weight_decay=0.1",
+    "from_scratch@learning_rate=0.003,summaries=only,weight_decay=1.0",
+]
+control = "from_scratch@learning_rate=0.003,summaries=only,weight_decay=0.1"
+endpoint = "from_scratch@learning_rate=0.003,summaries=only,weight_decay=1.0"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

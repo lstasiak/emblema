@@ -3,7 +3,11 @@ import math
 import pytest
 
 from emblema.evaluation.domain.exceptions import InvalidEncoderSettingError, UnknownKnobError
-from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting, ValueEmbedding
+from emblema.evaluation.domain.transfer.encoder_setting import (
+    EncoderSetting,
+    SummaryReading,
+    ValueEmbedding,
+)
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
 from emblema.evaluation.domain.transfer.layer_reading import LayerCombination, LayerReading
 
@@ -48,6 +52,7 @@ def test_both_knobs_turn_from_the_standard_setting() -> None:
         ("value_embedding", "cubic"),
         ("layer", "-1"),
         ("layer", "first"),
+        ("summaries", "all"),
     ],
 )
 def test_a_knob_the_encoder_has_not_or_a_value_it_cannot_take_is_refused(
@@ -74,6 +79,7 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
         "encoder_feedforward_width": 0,
         "value_clip": 0.0,
         "encoder_layer": "last",
+        "summaries": "none",
     }
     turned = EncoderSetting(
         dropout=0.2,
@@ -85,6 +91,7 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
         feedforward_width=128,
         value_clip=5.0,
         layer=LayerReading(layer=3),
+        summaries=SummaryReading.BESIDE,
     )
     assert turned.parameters() == {
         "encoder_dropout": 0.2,
@@ -96,6 +103,7 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
         "encoder_feedforward_width": 128,
         "value_clip": 5.0,
         "encoder_layer": "3",
+        "summaries": "beside",
     }
 
 
@@ -171,3 +179,28 @@ def test_the_layer_read_turns_and_is_named_only_when_turned(
 
 def test_the_last_layer_named_is_the_standard_setting() -> None:
     assert EncoderSetting.standard().tuned("layer", "last") == EncoderSetting.standard()
+
+
+@pytest.mark.parametrize(
+    ("value", "reading", "reads_tokens"),
+    [("beside", SummaryReading.BESIDE, True), ("only", SummaryReading.ONLY, False)],
+)
+def test_the_summaries_turn_and_are_named_only_when_turned(
+    value: str, reading: SummaryReading, reads_tokens: bool
+) -> None:
+    turned = EncoderSetting.standard().tuned("summaries", value)
+
+    assert turned.summaries is reading
+    assert turned.reads_summaries
+    assert turned.reads_tokens is reads_tokens
+    assert turned.turned_away() == {"summaries": value}
+    assert turned.builds_its_own_encoder is False
+
+
+def test_the_standard_setting_reads_no_summaries_and_runs_the_encoder() -> None:
+    standard = EncoderSetting.standard()
+
+    assert standard.summaries is SummaryReading.NONE
+    assert not standard.reads_summaries
+    assert standard.reads_tokens
+    assert standard.tuned("summaries", "none") == standard

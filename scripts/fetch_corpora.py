@@ -34,6 +34,10 @@ DATA_ROOT = Path(__file__).resolve().parent.parent / "data" / "raw"
 CHUNK = 8 * 1024 * 1024
 NESTED_WRAPPER_LIMIT = 3
 RANGE_NOT_SATISFIABLE = 416
+# Seconds a connection may stay silent, to open or between two reads, before it is given up: a
+# server that stalls mid-file would otherwise hold the process, and a paid accelerator, forever.
+# What arrived stays in the partial file, so the next run resumes from it.
+SILENCE = 60.0
 DIGEST_CACHE = ".digests.json"
 # Compression method 9, Deflate64 (PKWARE "enhanced deflate"): zlib has no decompressor for it, so
 # zipfile raises NotImplementedError on such a member. The ESA mission archives use it for one
@@ -272,7 +276,7 @@ def download(url: str, target: Path, *, quiet: bool = False) -> None:
     if offset:
         request.add_header("Range", f"bytes={offset}-")
     try:
-        with urllib.request.urlopen(request) as response:
+        with urllib.request.urlopen(request, timeout=SILENCE) as response:
             resumed = response.status == 206
             total = response.headers.get("Content-Length")
             expected = ((offset if resumed else 0) + int(total)) if total else None
@@ -377,7 +381,7 @@ def listed(url: str) -> Iterator[str]:
     A link that leaves the directory — upwards, to a query, to another host — names no file of it.
     """
     request = urllib.request.Request(url, headers={"User-Agent": "emblema-fetch-corpora"})
-    with urllib.request.urlopen(request) as response:
+    with urllib.request.urlopen(request, timeout=SILENCE) as response:
         page = b"".join(iter(lambda: response.read(CHUNK), b"")).decode("utf-8", errors="replace")
     parser = _IndexLinks()
     parser.feed(page)
