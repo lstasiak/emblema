@@ -285,3 +285,108 @@ path on one point per family at seed 1 on the M1 Pro (MPS), printing counts of c
 regime (427, 65, 150 and 62 s); at 200 the control, the clip and the two stop candidates (564,
 162, 62 and 26 s). A first trial with a patience of ten epochs at 200 stays ended its cell in
 7 s, inside the warm-up, which is why the stop is stated in steps past it.
+
+## 2026-10-24 — Colab G4, fp32: the small shape on six bins reaches the trees at 200 stays and leads them at 50
+
+**Question.** The one declared above: whether a smaller, regularised encoder from nothing closes
+the gap to the trees' table at 50 and 200 stays, and whether a clip on the cells' values adds
+anything.
+
+**Conditions.** Campaigns `0b337917…` (50) and `91170939…` (200) defined and ordered at
+`0e98ca3a`; 280 network cells on one Colab G4 under CUDA MPS in four lanes per order
+(`campaign_run --lane i/4`), 27 to 30 minutes wall-clock for all eight lanes (the card 93 %
+busy); the eight results accepted lane by lane (`data/report/l32b2/accept-capacity.sh`). Pairs
+by `scripts/campaign_pairs_report.py` (`pairs-capacity.sh`), CSV under
+`data/report/l32b2/capacity-pairs/`. The reused cells as declared.
+
+**Checks before reading.** Both held. The control rerun reads 0.615 at 50 and 0.655 at 200,
+within 0.010 of the selection's controls (0.624, 0.666) and of the earlier campaigns' (0.625,
+0.647), by the paired intervals. Every stored description names its knobs. Throughput: four
+lanes per order on the same card answered 280 cells in 30 minutes against 260 in 83 minutes
+under two lanes; the cells of the small shape are four times cheaper (12 against 45 s), so the
+lanes gave about one and a half to two times the throughput, not four.
+
+**Area under the ROC curve**, mean over seeds 1 to 10 (every candidate on six bins unless
+named; "small" = two blocks, 64 wide, feed-forward 128, 16 heads):
+
+| Candidate | 50 | 200 |
+|---|---|---|
+| Control on raw tokens | 0.615 | 0.655 |
+| Six bins | 0.637 | 0.679 |
+| **Small shape** | **0.656** | **0.733** |
+| Small shape with dropout 0.2 (named before the run) | 0.655 | 0.715 |
+| Small shape, dropout, class weight, decay 0.1 | 0.637 | 0.713 |
+| Dropout 0.2 / decay 0.1 / clip at 3 / class weight | 0.623 / 0.629 / 0.621 / 0.618 | 0.685 / 0.678 / 0.683 / 0.687 |
+| Dropout with the clip | 0.625 | 0.669 |
+| Small shape on raw tokens, without / with dropout | 0.636 / 0.638 | 0.682 / 0.691 |
+| The published regime whole, no stop | 0.645 | **0.735** |
+| Stop (500 steps past the warm-up): six bins / small with dropout | | 0.689 / 0.684 |
+| Network over the trees' table (reused) | 0.674 | 0.706 |
+| Trees per channel (reused) | 0.628 | 0.736 |
+| MiniRocket (reused) | 0.655 | 0.713 |
+
+**The pairs** (gain of the second over the first in area, 95 % interval over stays, seed by
+seed mean ± SE; **bold** = carried):
+
+| Pair | 50 | 200 |
+|---|---|---|
+| R: six bins → small with dropout (family, Holm over two) | +0.018 [+0.009; +0.027] ± 0.011 | **+0.036** [+0.024; +0.049] ± 0.007 |
+| Six bins → small shape | +0.019 [+0.010; +0.028] ± 0.012 | **+0.054** [+0.042; +0.066] ± 0.009 |
+| Six bins → dropout / decay / clip / class weight | −0.014 / −0.008 / −0.017 / −0.019, none carried | +0.006 / −0.001 / +0.003 / +0.007, none carried |
+| Small with dropout → small alone | +0.001 [−0.001; +0.003] ± 0.003 | **+0.018** [+0.012; +0.024] ± 0.006 |
+| Small with dropout → with class weight and decay too | **−0.018** [−0.023; −0.014] ± 0.005 | −0.002 [−0.009; +0.005] ± 0.008 |
+| Dropout → dropout with the clip | +0.002 [−0.005; +0.009] ± 0.010 | −0.017 [−0.027; −0.006] ± 0.011 |
+| Small with dropout → the published regime whole | −0.011 [−0.019; −0.003] ± 0.008 | +0.019 [+0.010; +0.028] ± 0.010 |
+| Control → small shape on raw tokens | +0.021 [+0.011; +0.031] ± 0.013 | +0.027 [+0.015; +0.038] ± 0.015 |
+| Control → six bins | +0.022 [+0.006; +0.039] ± 0.018 | +0.024 [+0.010; +0.038] ± 0.014 |
+| Control → small shape on six bins | **+0.041** [+0.025; +0.058] ± 0.014 | **+0.078** [+0.064; +0.092] ± 0.014 |
+| Six bins → with the stop; small with dropout → with the stop | | +0.010 [−0.002; +0.023] ± 0.017; −0.032 [−0.040; −0.023] ± 0.025 |
+| Bar: small shape → trees | **−0.028** [−0.043; −0.013] ± 0.011 | +0.003 [−0.011; +0.017] ± 0.006 |
+| Bar: small shape → network over the table | +0.018 [+0.001; +0.035] ± 0.010 | **−0.027** [−0.043; −0.011] ± 0.004 |
+| Bar: small shape → MiniRocket | −0.001 [−0.021; +0.019] ± 0.018 | **−0.020** [−0.040; −0.001] ± 0.005 |
+| Bar: the published regime → trees, → the table | | +0.001 [−0.012; +0.015] ± 0.008; **−0.029** [−0.044; −0.014] ± 0.008 |
+
+**Predictions.** 1 held: R is carried at 200 (+0.036, above +0.018) and at 50 lies above zero
+(+0.018, not carried by the seeds). 2 held: at 200 the small shape reads 0.027 above the
+network over the table, carried, and within 0.003 of the trees, not distinguishable; at 50 it
+reads 0.018 below the table, within T, and 0.028 above the trees, carried. 3 failed: the small
+shape alone reads above the small shape with dropout at 200 (+0.018, carried) and level with it
+at 50; the small shape on raw tokens gains +0.021 and +0.027 over the control, within T of the
++0.019 predicted. 4 held in the letter: the clip, the decay and the class weight lie within ±T
+at both budgets, all at or below zero at 50; the stop on six bins lies above zero at 200. 5
+failed at 200: the published regime whole reads 0.019 above the small shape with dropout and
+level with the small shape alone (0.735 against 0.733); it held at 50.
+
+**Conclusions.**
+
+1. **The gap at few labels was the encoder's size, not its input.** Shrinking the encoder from
+   4.8M to two blocks 64 wide, on cells of six bins, lifts the network from nothing by 0.041 at
+   50 stays and 0.078 at 200, both carried, where every change of what the encoder reads had
+   moved it by 0.01 or less. By the declared rule the outcome is *reaches the table* at 200:
+   the small shape reads 0.027 above the network handed the trees' table and level with the
+   trees (+0.003 [−0.011; +0.017]). At 50 it reads within T of the table's network and 0.028
+   above the trees, carried.
+2. **Regularisation does not help a network this small at these budgets.** Dropout costs 0.018
+   at 200 and nothing at 50; the decay, the clip on the cells' values and the class weight move
+   nothing beyond T, and at 50 all four read below six bins alone. The published regime whole
+   matches the small shape at 200 through its constant rate and withheld channels, and loses at
+   50.
+3. The two contributions are of one size at 200: six bins alone +0.024 over the control, the
+   small shape on raw tokens +0.027, and together +0.078, more than their sum. At 50 the small
+   shape on raw tokens is worth as much as on six bins (+0.021 against +0.019 on top of bins).
+4. The stop in steps past the warm-up adds nothing at 200 on six bins and costs 0.032 with the
+   small shape and dropout, where it stops a network still improving; the stop stays a knob for
+   500 stays and up, where it was read.
+5. As declared for *reaches the table*: the small shape on six bins goes to 500 and every stay
+   of the half under the registered stop, then to set B at every stay under the registered
+   parity, with its own declaration.
+
+**Limitations.** The small shape without dropout was the best of fifteen at 200 and of thirteen
+at 50, chosen on the stays it is scored on; the candidate named before the run, with dropout,
+reads 0.018 below it at 200 and is the conservative estimate (+0.036 over six bins, 0.009 above
+the table's network). The rate was the raw network's (0.003 at 200, 0.001 at 50); a small
+network may want another, which the next step turns on the half. Ten seeds at 50 stays leave a
+standard error of 0.01 to 0.02 on a mean; the differences among the regularisers there are not
+read. Two of the three bars at 200 are carried in the candidate's favour (above the table's
+network and MiniRocket); parity with the trees is a non-finding at this budget, not a
+demonstrated equality, and is read on set B by the registered rule.
