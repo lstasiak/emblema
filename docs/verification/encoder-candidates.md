@@ -390,3 +390,71 @@ standard error of 0.01 to 0.02 on a mean; the differences among the regularisers
 read. Two of the three bars at 200 are carried in the candidate's favour (above the table's
 network and MiniRocket); parity with the trees is a non-finding at this budget, not a
 demonstrated equality, and is read on set B by the registered rule.
+
+## 2026-10-24 — declared before the run: the small shape on six bins at 500 and every stay of the half
+
+**Question.** At 200 stays the small encoder on six bins stands level with the trees and above
+the network handed their table; at 50 it leads the trees. From 500 stays up the 4.8M encoder
+already rebuilds the table, and what remains to the trees there is what they make of the table
+that a smooth model does not (D1, +0.030 at every stay, `gap-to-the-trees.md`, 2026-10-23).
+Does the small shape keep its standing at 500 and every stay of the half, where the registered
+stop holds a fifth of the stays out, and which rate does it want there? The reading names the
+variant that goes to set B.
+
+**Conditions.** As above, at the commit of this declaration; campaigns
+`campaigns/capacity-{500,all}-physionet2012.toml`, seven candidates each: the 4.8M encoder on raw
+tokens (the control) and on six bins, the small shape on six bins under the recipe registered at
+the budget (a stop with a fifth held out and a patience of ten epochs; at every stay a rate of
+0.000333), the same at two other rates (0.003 and 0.0003 at 500; 0.001 and 0.003 at every stay),
+the same with a dropout of a fifth, and the same learning from every drawn stay with no stop.
+The trees, the network over the table and MiniRocket at 500 and every stay are read from the
+gap's campaigns (`d1741c48…`, `105c9081…`, `6a388747…`) on the same stays and seeds; at every
+stay the trees are the variant chosen there (`learning_rate=0.1,rounds=300`). Network cells on
+one Colab G4 under CUDA MPS, four lanes per order; the trial on the M1 Pro (MPS).
+
+**Readings.** S: six bins → the small shape under the registered recipe, at 500 and every stay,
+the one family under Holm (two). Descriptively: the control → the small shape; each rate, the
+dropout and the run without a stop against the registered recipe; the small shape, at its
+registered recipe and at the best of its variants, against the trees, the table's network and
+MiniRocket. Rule as above. **The variant for set B** is the small shape's variant with the
+highest mean at every stay of the half, the registered recipe on a tie within 0.005; it is named
+in the register before the set B campaign is defined, with its own declaration. The best of five
+chosen on the stays it is scored on reads high; set B is where it is tested.
+
+**Predictions.**
+
+1. S is carried at both budgets and lies at no less than +0.024, the lower edge of the small
+   shape's gain over six bins at 200 under dropout (the conservative estimate above).
+2. At every stay the small shape under the registered recipe reads between the table's
+   network (0.810) and the trees (0.839): the pair against the trees lies within [−0.030; +0.003],
+   D1's distance below and the 200-stay reading above, and the pair against the table's network
+   at or above zero. The registered parity on set B needs the lower edge against the trees above
+   −0.015; on the half, the same bound is the level that makes the step to set B worth its cost.
+3. At 500 the small shape reads within T (0.018) of the trees (0.787) and above the table's
+   network (0.754) by no less than +0.011, the lower edge of its lead at 200.
+4. A higher rate than the registered one gains at every stay (the registered 0.000333 was chosen
+   for the 4.8M encoder; the small shape read best at 0.003 at 200), by no more than T; dropout
+   lies within ±T; learning from every drawn stay with no stop lies at or below the stop, as it
+   did for the network over the table (−0.014 at 500, `gap-to-the-trees.md`, 2026-10-23).
+
+**Levels of the outcome.** *Within the margin*: the small shape's pair against the trees at
+every stay has its lower edge above −0.015. *Below the margin*: the pair's lower edge below
+−0.015 while S is carried. *Lost*: S not carried at every stay.
+
+**What follows.** *Within the margin*: the named variant goes to set B at every stay, learning
+from every stay of set A, against the trees at their chosen setting, ten seeds, under the
+registered rule (non-inferiority at δ = 0.015, then superiority), with a register row naming it
+before the campaign is defined. *Below the margin*: the small shape has closed what the 4.8M
+encoder could not at few labels and not what the trees make of the table at every stay; the
+step to set B waits for a reading above the table (the next question of the stage), and the
+ticket closes with that mechanism. *Lost*: the small shape's standing at 200 does not carry to
+larger budgets; talked through. *Checks before reading*: the controls within 0.02 of the gap's
+cells at 500 and every stay (0.749, 0.796 on the G4); every stored description names its
+knobs.
+
+**Limitations.** Set B is read once; the variant is chosen on the half, so its reading there is
+an estimate, not a test. The rate grid is three points. The stop's patience in epochs is sound
+from 500 stays up (at 500, ten epochs are 250 steps against a warm-up of 200), though a small
+network under it may stop early: in the trial on the M1 Pro (MPS), one point per family at
+seed 1 printing counts only, the small shape under the stop took 10 s at 500 and 34 s at every
+stay against 54 and 97 s without it; the 4.8M encoder on six bins took 28 and 95 s.
