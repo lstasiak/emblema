@@ -148,3 +148,87 @@ the exact path at 20 stays (classical and the statistics alone) and at 500 (all 
 seed 1, on the M1 Pro (MPS for the networks), printing counts of cells only: six cells of 2,000
 stays each, the network cells at 500 in 104 and 113 s and the statistics alone in 4 to 13 s; the
 stored descriptions name `summaries` where it is turned and nothing new where it is not.
+
+## 2026-10-23 — M1 Pro CPU and Colab G4, fp32: the gap to the trees taken apart
+
+**Question.** The one declared above: how much of the gap between the network trained from
+nothing and the trees per channel is what a network makes of the trees' own table (D1), how much
+is what the encoder fails to build from the readings (D2), and whether the encoder adds anything
+once the table is handed to the head (D3).
+
+**Conditions.** Campaigns defined and ordered at `82f6bab5`: `f7611c9f…` (20, 50), `9458a4d9…`
+(200), `d1741c48…` (500), `a5192869…` (1,000), `105c9081…` (every stay). Classical cells on the
+M1 Pro CPU (90 cells, 45 minutes); network cells on one Colab G4 under CUDA MPS, four lanes (160
+cells, the longest lane 23 minutes). Reused cells as declared, except that the network at 1,000
+stays (`723cc57d…`) borrows the shape of the mixture's second pretraining (`94f00d72…`), not the
+first: the same architecture and parameter count, so the same initialisation under a seed. Pairs by
+`scripts/campaign_pairs_report.py`, `data/report/l32b1/pairs.sh`; CSV under
+`data/report/l32b1/pairs/`.
+
+**Checks before reading.** Both held. The statistics alone read 0.706 and 0.754 at 200 and 500
+stays, 0.024 and 0.015 below the logistic head over them, within the declared 0.03. The network on
+its tokens rerun on the G4 reads within 0.006 of the T4 cells in its mean at 200, 500 and every
+stay (−0.005, −0.001, +0.006). Single seeds differ by up to 0.098: training is not repeatable
+across devices to their precision, only in its mean over seeds.
+
+**Area under the ROC curve**, mean over seeds 1 to 10:
+
+| Reading | 20 | 50 | 200 | 500 | 1,000 | every stay |
+|---|---|---|---|---|---|---|
+| Trees per channel | 0.621 | 0.628 | **0.736** | **0.787** | **0.818** | **0.839** |
+| Statistics alone (`summaries=only`) | **0.644** | **0.674** | 0.706 | 0.754 | 0.788 | 0.810 |
+| Statistics beside the encoder (`summaries=beside`) | | | 0.718 | 0.761 | | 0.817 |
+| Network on its tokens | 0.599 | 0.625 | 0.647 | 0.749 | 0.789 | 0.796 |
+| MiniRocket | 0.589 | 0.655 | 0.713 | 0.756 | 0.784 | 0.809 |
+
+At every stay the trees are the variant chosen there (`learning_rate=0.1,rounds=300`); at their
+setting in force they read 0.832. A logistic head over the summaries at every learnt stay of the
+half, fitted once afterwards and not declared, reads 0.810.
+
+**The pairs** (gain of the second over the first in area, 95 % interval over stays, seed by seed
+mean ± SE; **bold** = carried and, at 500 and every stay, through Holm over six):
+
+| Pair | 20 | 50 | 200 | 500 | 1,000 | every stay |
+|---|---|---|---|---|---|---|
+| D1 statistics alone → trees | −0.023 [−0.038; −0.009] ± 0.017 | **−0.046** [−0.061; −0.031] ± 0.009 | **+0.030** [+0.016; +0.044] ± 0.005 | **+0.033** [+0.019; +0.048] ± 0.007 | **+0.030** [+0.014; +0.047] ± 0.005 | **+0.030** [+0.011; +0.049] ± 0.002 |
+| D2 network on its tokens → statistics alone | **+0.045** [+0.024; +0.066] ± 0.016 | **+0.049** [+0.027; +0.069] ± 0.013 | **+0.059** [+0.041; +0.076] ± 0.011 | +0.004 [−0.014; +0.022] ± 0.011 | −0.001 [−0.019; +0.016] ± 0.006 | +0.014 [−0.006; +0.032] ± 0.005 |
+| D3 statistics alone → beside the encoder | | | **+0.012** [+0.004; +0.020] ± 0.003 | +0.007 [+0.001; +0.014] ± 0.006 | | **+0.007** [+0.002; +0.012] ± 0.002 |
+| Network on its tokens → trees | +0.022 [+0.006; +0.039] | +0.003 [−0.014; +0.019] | **+0.089** [+0.073; +0.103] | **+0.038** [+0.024; +0.051] | **+0.029** [+0.014; +0.044] | **+0.043** [+0.025; +0.061] |
+| Network on its tokens → MiniRocket | −0.010 [−0.030; +0.010] | +0.030 [+0.007; +0.053] | **+0.066** [+0.046; +0.085] | +0.007 [−0.011; +0.024] | −0.005 [−0.023; +0.012] | +0.013 [−0.006; +0.031] |
+
+The statistics alone at three times and a third of the recipe's rate lie 0.026 to 0.039 below the
+trees at 500 and every stay; no rate closes D1.
+
+**Predictions.** 1 held: the trees read 0.839 at every stay of the half and lead the network on
+its tokens by 0.043. 2 failed: the statistics alone read 0.014 and 0.005 below the logistic head
+less 0.01, and D1 at 200 stays (+0.030) lies above the logistic head's interval. 3 held: D2 is
++0.059 at 200 stays, at the lower edge declared, and +0.004 at 500, not carried. 4 failed: D3 is
+above zero at every budget it was read at, carried at 200 and every stay.
+
+**Conclusions.**
+
+1. **Below 500 stays the gap is representation.** At 20, 50 and 200 stays the network on its
+   tokens loses 0.045 to 0.059 to a network handed the trees' table (D2). The same network over
+   the table reads above the trees at 20 and 50 stays (by 0.023 and 0.046), where the claim of
+   the project lives; only the lead at 50 is carried, and the trees there run a setting chosen at
+   larger budgets.
+2. **From 500 stays the encoder builds what the table holds.** D2 is 0.004, −0.001 and +0.014 at
+   500, 1,000 and every stay, none carried. What remains to the trees there, 0.029 to 0.043, is
+   what the trees make of the same table that a smooth model, as trained here, does not: a
+   logistic head and a network over it both read 0.810 at every stay, 0.029 below the trees (D1).
+   That is an upper bound on the table's cost to a smooth model, not a settled one (below).
+3. **The encoder adds a little beyond the table** under end-to-end training: +0.007 to +0.012
+   (D3). The probe over frozen states added nothing to the summaries (`head-and-representation.md`,
+   2026-10-20); a trained encoder does.
+4. By the declared rule this is the outcome *a network over the table falls short*: D1 is above
+   0.015 at every stay and carried. An encoder that only recovers the table will not reach the
+   registered parity at every stay; it needs to read more than ten statistics per channel hold.
+5. MiniRocket is within reach of the network at every budget but 200; the trees are the bar.
+
+**Limitations.** The statistics alone and beside the encoder ran under the network's recipe:
+from 500 stays they learn from the four fifths of the draw the stop leaves, with no penalty on a
+layer 256 wide, while the trees learn from all of it and the logistic head chooses its penalty.
+Three rates do not close D1, but a head over the table trained on the whole draw under a penalty
+could. The network on its
+tokens at 20, 50 and 1,000 stays comes from T4 cells against G4 cells on the other side of D2.
+The logistic head at every stay was fitted after the run and is descriptive.
