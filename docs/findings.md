@@ -40,8 +40,10 @@ Last updated 2026-10-23.
   task's own domain, the adaptation recipe, and six variants of the pretext.
 - **Reading the window as cells does not close the gap at few labels.** An encoder trained from
   scratch over cells of channel and time bin, carrying each bin's count, level, extremes and
-  ends, reads within 0.01 of the same encoder on raw readings at 50 and 200 stays, and 0.03 to
-  0.05 below a network handed the trees' table; a learnt time encoding, several pooling
+  ends, reads within 0.01 of the same encoder on raw readings rerun beside it at 50 and 200
+  stays (0.67 at 200 in that rerun, 0.65 in the earlier campaign), and 0.03 to 0.05 below a
+  network handed the trees' table; the best of thirteen variants, six bins, gains 0.03 at 200
+  stays and still trails that network; a learnt time encoding, several pooling
   queries and rows for the channels a stay never measured move nothing beyond the reader's
   resolution ([note](verification/encoder-candidates.md)).
 - **Next:** what an encoder from scratch can learn from a few hundred stays, before more
@@ -85,6 +87,7 @@ AUROC, higher is better.
 | Labelled stays | 200 | 500 | 1,000 | all (2,000) |
 | --- | --- | --- | --- | --- |
 | Network from scratch | 0.65 | 0.75 | 0.79 | 0.79 |
+| Network from scratch, rerun beside the cells ([note](verification/encoder-candidates.md)) | 0.67 | | | |
 | Network from scratch over cells of channel × time bin, 6 / 12 bins ([note](verification/encoder-candidates.md)) | 0.69 / 0.67 | | | |
 | Full fine-tuning, mixture of four | 0.69 | 0.74 | 0.76 | 0.79 |
 | Probe, mixture of four | 0.65–0.67 | 0.69–0.71 | 0.72–0.74 | 0.74–0.76 |
