@@ -45,7 +45,6 @@ class CampaignRunCli:
 
         Raises:
             RuntimeError: If the revision cannot be read.
-            InvalidOrderLaneError: If the lane is not written ``index/count``.
         """
         arguments = self._parser().parse_args(argv)
         revision = SourceRevision() if self._revision is None else self._revision
@@ -54,7 +53,7 @@ class CampaignRunCli:
                 order=self._ref(arguments.order),
                 git_commit=revision.current(),
                 resume=None if arguments.resume is None else self._ref(arguments.resume),
-                lane=None if arguments.lane is None else OrderLane.parse(arguments.lane),
+                lane=arguments.lane,
             )
         )
 
@@ -103,6 +102,7 @@ class CampaignRunCli:
         parser.add_argument(
             "--lane",
             metavar="INDEX/COUNT",
+            type=OrderLane.parse,
             help="run only every COUNT-th cell of the order from the INDEX-th, from zero",
         )
         return parser

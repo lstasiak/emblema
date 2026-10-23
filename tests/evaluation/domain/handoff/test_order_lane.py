@@ -24,7 +24,9 @@ def test_a_lane_is_read_as_it_is_written() -> None:
     assert str(OrderLane(index=2, count=5)) == "2/5"
 
 
-@pytest.mark.parametrize("text", ["2", "2/", "/5", "two/5", "2/5/1", "1.5/4", ""])
+@pytest.mark.parametrize(
+    "text", ["2", "2/", "/5", "two/5", "2/5/1", "1.5/4", "", "+1/2", "1_0/20", "1 / 2", "-1/2"]
+)
 def test_a_lane_not_written_index_slash_count_is_refused(text: str) -> None:
     with pytest.raises(InvalidOrderLaneError, match="index/count"):
         OrderLane.parse(text)

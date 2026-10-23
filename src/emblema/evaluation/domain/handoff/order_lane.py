@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import Self
 
@@ -43,13 +44,10 @@ class OrderLane:
             InvalidOrderLaneError: If the text is not two whole numbers around a slash, or
                 they make no lane.
         """
-        index, slash, count = text.strip().partition("/")
-        try:
-            if not slash:
-                raise ValueError("no slash")
-            return cls(index=int(index), count=int(count))
-        except ValueError as error:
-            raise InvalidOrderLaneError(f"a lane is written index/count, got {text!r}") from error
+        written = re.fullmatch(r"(\d+)/(\d+)", text.strip())
+        if written is None:
+            raise InvalidOrderLaneError(f"a lane is written index/count, got {text!r}")
+        return cls(index=int(written.group(1)), count=int(written.group(2)))
 
     def takes(self, position: int) -> bool:
         """Whether the cell at ``position`` in the order's grid falls to this lane."""

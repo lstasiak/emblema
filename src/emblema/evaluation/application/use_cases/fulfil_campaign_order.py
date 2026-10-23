@@ -59,20 +59,26 @@ class FulfilCampaignOrder:
 
         Raises:
             CampaignOrderRejectedError: If this machine runs other code than the order names,
-                the result resumed from answers another order, or no cell falls to the lane.
+                the result resumed from answers another order or cells outside this lane, or no
+                cell falls to the lane.
             UnreadableCampaignDocumentError: If a reference holds no order or no result.
             UnknownCandidateError: If this process supplies no candidate a cell names.
             CandidateMismatchError: If a candidate here is not what the campaign recorded.
         """
         order = self._handoff.read_order(command.order)
         order.require_commit(command.git_commit)
-        self._tasks.save(order.task)
+        evaluations = order.evaluations if command.lane is None else order.lane_of(command.lane)
         answered = (
             []
             if command.resume is None
             else list(self._resumed(command.order, command.resume).results)
         )
-        evaluations = order.evaluations if command.lane is None else order.lane_of(command.lane)
+        outside = {result.cell for result in answered} - {e.cell for e in evaluations}
+        if outside:
+            raise CampaignOrderRejectedError(
+                f"the result resumed from answers {len(outside)} cells outside lane {command.lane}"
+            )
+        self._tasks.save(order.task)
         for evaluation in evaluations:
             if any(result.cell == evaluation.cell for result in answered):
                 continue

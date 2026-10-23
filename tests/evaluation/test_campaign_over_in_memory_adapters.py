@@ -630,3 +630,27 @@ def test_a_lane_with_no_cell_to_run_is_refused_before_anything_runs(running: Cam
         )
 
     assert handoff.reported == []
+
+
+def test_a_lane_resumed_from_another_lanes_result_is_refused_before_anything_runs(
+    running: Campaign,
+) -> None:
+    campaign_id = running.declared()
+    handoff = InMemoryCampaignHandoff()
+    order = ordered(running, handoff, campaign_id)
+    elsewhere = ElsewhereRun(running, handoff)
+    first = elsewhere.fulfil(
+        FulfilCampaignOrderCommand(
+            order=order, git_commit="abc123", lane=OrderLane(index=0, count=2)
+        )
+    )
+    reported_before = len(handoff.reported)
+
+    with pytest.raises(CampaignOrderRejectedError, match="outside lane 1/2"):
+        elsewhere.fulfil(
+            FulfilCampaignOrderCommand(
+                order=order, git_commit="abc123", lane=OrderLane(index=1, count=2), resume=first
+            )
+        )
+
+    assert len(handoff.reported) == reported_before
