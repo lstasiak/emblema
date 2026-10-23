@@ -614,6 +614,7 @@ def test_a_variant_reading_summaries_where_they_mean_nothing_is_refused(
         ("from_scratch@bins=12,cells=corpus", {"bins": "12", "cells": "corpus"}),
         ("from_scratch@time_encoding=learned", {"time_encoding": "learned"}),
         ("from_scratch@pooling=attention,queries=4", {"pooling": "attention", "queries": "4"}),
+        ("from_scratch@bins=6,value_clip=3", {"bins": "6", "value_clip": "3.0"}),
     ],
 )
 def test_a_network_from_nothing_over_cells_a_learnt_time_or_several_queries_names_that_alone(
@@ -636,7 +637,6 @@ def test_a_network_from_nothing_over_cells_a_learnt_time_or_several_queries_name
         ("full_fine_tuning@time_encoding=learned", "fix its encoder's build"),
         ("from_scratch@bins=12,summaries=only", "not of cells"),
         ("from_scratch@bins=12,summaries=beside", "not of cells"),
-        ("from_scratch@bins=12,value_clip=3", "a cell carries its values otherwise"),
         ("from_scratch@bins=12,grid_resolution=1", "two layouts"),
         ("from_scratch@cells=corpus", "knob of the bins"),
         ("from_scratch@bins=0", "bins cannot be 0"),

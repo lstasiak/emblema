@@ -83,6 +83,11 @@ class BinnedTokens:
         return self.N_FEATURES
 
     @property
+    def value_features(self) -> slice:
+        """The mean, minimum, maximum, first and last of a cell: what a clip bounds."""
+        return slice(2, 7)
+
+    @property
     def over_the_corpus(self) -> bool:
         """Whether every window gets the corpus's channels rather than its own."""
         return self._channels is not None

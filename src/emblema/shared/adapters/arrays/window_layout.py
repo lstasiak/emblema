@@ -23,6 +23,11 @@ class WindowLayout(Protocol):
         """How wide the feature axis of a batch this lays out is."""
         ...
 
+    @property
+    def value_features(self) -> slice:
+        """Which features of a token hold its values, for whatever bounds them."""
+        ...
+
     def lay(self, windows: Sequence[TokenWindow]) -> list[LaidWindow]:
         """Every window as the columns this layout gives it, in the order given.
 

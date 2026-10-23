@@ -44,9 +44,9 @@ because they assume a grid; a cell over a span of time with any number of readin
   frequencies and zero phase, so a run begins where the fixed encoding stands. This is the
   ablation arm ADR-0017 left behind the same call.
 - **Only the network trained from nothing takes either**: pretrained weights fix the value map's
-  width and the time module. Cells exclude the grid (two layouts of one window), the clip (it
-  bounds a reading's value, which a cell carries otherwise) and the window's statistics (they
-  describe the raw readings).
+  width and the time module. Cells exclude the grid (two layouts of one window) and the
+  window's statistics (they describe the raw readings); a clip bounds a cell's five value
+  features as it bounds a raw reading's value.
 - **A candidate over cells is kept in its measured form alone.** The inference graph takes raw
   tokens; serving cells needs the host step before the graph that tokenisation already is, and
   is decided when a candidate passes the confirmation on set B.

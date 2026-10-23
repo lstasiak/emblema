@@ -246,11 +246,11 @@ def test_bins_that_are_not_a_positive_count_are_refused(value: str) -> None:
         EncoderSetting.standard().tuned("bins", value)
 
 
-def test_a_clip_bounds_a_reading_and_is_refused_over_cells() -> None:
-    with pytest.raises(UnknownKnobError, match="a cell carries its values otherwise"):
-        EncoderSetting.standard().tuned("bins", "12").tuned("value_clip", "3")
-    with pytest.raises(InvalidEncoderSettingError, match="a cell carries its values otherwise"):
-        EncoderSetting(bins=12, value_clip=3.0)
+def test_a_clip_bounds_the_values_of_cells_as_it_bounds_a_reading() -> None:
+    clipped = EncoderSetting.standard().tuned("bins", "12").tuned("value_clip", "3")
+
+    assert clipped == EncoderSetting(bins=12, value_clip=3.0)
+    assert clipped.turned_away() == {"bins": 12, "value_clip": 3.0}
 
 
 def test_bins_and_a_grid_are_two_layouts_and_a_setting_takes_one() -> None:

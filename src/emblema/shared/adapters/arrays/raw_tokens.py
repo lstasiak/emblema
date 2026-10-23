@@ -19,6 +19,10 @@ class RawTokens:
     def features(self) -> int:
         return N_FEATURES
 
+    @property
+    def value_features(self) -> slice:
+        return slice(0, 1)
+
     def lay(self, windows: Sequence[TokenWindow]) -> list[LaidWindow]:
         return [
             LaidWindow(

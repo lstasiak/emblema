@@ -919,3 +919,15 @@ def test_a_network_over_cells_answers_on_the_accelerator_as_on_the_host(tmp_path
         answers[device] = [p.predicted for p in outcome.predictions]
 
     assert answers["mps"] == pytest.approx(answers["cpu"], rel=1e-3)
+
+
+def test_a_clip_over_cells_bounds_their_values_and_changes_the_answers(
+    published: Published,
+) -> None:
+    binned = plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(bins=4))
+    clipped = plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(bins=4, value_clip=0.1))
+
+    assert adapt(published, binned).predictions != adapt(published, clipped).predictions
+    received = published.backbones.built[-1]
+    assert isinstance(received, SetEncoder)
+    assert received.value_projection.in_features == BinnedTokens.N_FEATURES

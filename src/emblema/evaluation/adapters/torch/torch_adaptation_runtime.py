@@ -145,6 +145,7 @@ class TorchAdaptationRuntime:
             starting_at=link.starting_at(sample.mean_target),
             summary_rows=None if summaries is None else np.concatenate(summaries[:2]),
             input_features=layout.features,
+            value_features=layout.value_features,
         ).to(self._device)
         learnt_rows, stopping_rows, held_rows = (
             (None, None, None)

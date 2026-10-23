@@ -70,6 +70,7 @@ class AdaptedBackbone(nn.Module):
         starting_at: float,
         summary_rows: NDArray[np.float64] | None = None,
         input_features: int = N_FEATURES,
+        value_features: slice = slice(0, 1),
     ) -> Self:
         """The candidate ``plan`` describes, built on the host from torch's current generator.
 
@@ -78,7 +79,8 @@ class AdaptedBackbone(nn.Module):
         link places a predictor that knows nothing of the labels the run holds. The encoder is
         asked for over ``vocabulary_size``, the channels of the task's corpus, and over
         ``input_features``, the feature axis of the layout the run lays windows out in, which
-        the run owns; rows it grew for
+        the run owns, as it owns ``value_features``, the features a clip bounds; rows it grew
+        for
         channels it was never trained on are trained under every mode, as the head is, because
         there is nothing pretrained in them to freeze. A branch over the statistics per channel is
         drawn after everything else and prepared over ``summary_rows``, the statistics of the
@@ -133,7 +135,7 @@ class AdaptedBackbone(nn.Module):
         if not plan.encoder.layer.is_last:
             encoder = LayerReadout(encoder, plan.encoder.layer, blocks=blocks)
         if plan.encoder.value_clip is not None:
-            encoder = ClippedValues(encoder, plan.encoder.value_clip)
+            encoder = ClippedValues(encoder, plan.encoder.value_clip, value_features)
         if not reading.reads_tokens:
             encoder.requires_grad_(False)
         return cls(

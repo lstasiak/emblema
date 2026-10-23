@@ -201,3 +201,9 @@ def test_a_static_feature_named_twice_is_summarised_as_a_bin_would_be() -> None:
 def test_a_binned_batch_spells_no_windows() -> None:
     with pytest.raises(InvalidTokenWindowError, match="spells no windows"):
         batched(BinnedTokens(2), WINDOW).windows()
+
+
+def test_the_value_features_of_a_cell_are_its_mean_extremes_and_ends() -> None:
+    names = BinnedTokens.FEATURE_NAMES[BinnedTokens(2).value_features]
+
+    assert names == ("mean", "minimum", "maximum", "first", "last")

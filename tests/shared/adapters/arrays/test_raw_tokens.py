@@ -26,3 +26,7 @@ def test_the_raw_layout_is_the_batch_every_encoder_was_trained_under() -> None:
         assert np.array_equal(getattr(laid, name), getattr(expected, name)), name
     assert laid.features.dtype == np.float32
     assert laid.windows() == (WINDOW, SHORT)
+
+
+def test_the_value_of_a_raw_token_is_its_first_feature() -> None:
+    assert RawTokens().value_features == slice(0, 1)

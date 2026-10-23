@@ -92,8 +92,9 @@ class EncoderSetting:
     some of them while it is being turned; ``shape`` is the whole of them or nothing, and a plan
     takes only a whole one.
 
-    A clip bounds every token's value at the encoder's input, in the standard deviations the
-    readings are standardised in, and leaves the gap alone. It changes what the encoder is fed,
+    A clip bounds every token's values at the encoder's input, in the standard deviations the
+    readings are standardised in: a raw reading's value, or a cell's mean, extremes and ends,
+    leaving the gap, the presence and the counts alone. It changes what the encoder is fed,
     not what it is built as, so any encoder takes it, pretrained ones included; a published
     network fed the same tokens lost most of its lead to the readings beyond five standard
     deviations once its value embedding could pass them.
@@ -107,9 +108,8 @@ class EncoderSetting:
     what a head makes of the statistics, and what the encoder adds to them.
 
     Invariants: the dropout lies in ``[0, 1)``; a grid has a positive, finite resolution; the
-    bins are positive and exclude a grid and a clip, which bounds a reading's value where a cell
-    carries its values otherwise; the cell set is turned only with bins; every count of the
-    shape stated is positive; a clip is positive and finite.
+    bins are positive and exclude a grid; the cell set is turned only with bins; every count of
+    the shape stated is positive; a clip is positive and finite.
 
     Attributes:
         dropout: Share of activations the encoder drops while it learns the task.
@@ -179,10 +179,6 @@ class EncoderSetting:
         if self.cells is not CellSet.WINDOW and self.bins is None:
             raise InvalidEncoderSettingError(
                 f"the cell set {self.cells} is a knob of the bins, and none are stated"
-            )
-        if self.bins is not None and self.value_clip is not None:
-            raise InvalidEncoderSettingError(
-                "a clip bounds a reading's value, and a cell carries its values otherwise"
             )
         for label in self._SHAPE:
             count = getattr(self, label)
