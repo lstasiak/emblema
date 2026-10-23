@@ -5,7 +5,7 @@ preliminary: each task's frozen test side is opened once, at the end. Each compa
 by a rule registered before its run ([preregistration](preregistration.md)); each row links the
 note that holds its evidence ([`verification/`](verification/README.md)).
 
-Last updated 2026-10-23.
+Last updated 2026-10-24.
 
 ## Status
 
@@ -46,9 +46,14 @@ Last updated 2026-10-23.
   stays and still trails that network; a learnt time encoding, several pooling
   queries and rows for the channels a stay never measured move nothing beyond the reader's
   resolution ([note](verification/encoder-candidates.md)).
-- **Next:** what an encoder from scratch can learn from a few hundred stays, before more
-  candidates are built: the cells' reading improved with less input (6 bins over 12) and a
-  class weight, not with more, which points at optimisation and capacity at few labels.
+- **A small encoder from scratch reaches the trees at 200 stays and leads them at 50.** Two
+  blocks 64 wide over cells of six bins read 0.73 at 200 stays, level with the trees (+0.003
+  [−0.011; +0.017]) and 0.027 above the network handed their table, and 0.66 at 50, 0.028 above
+  the trees; the 4.8M encoder on the same cells reads 0.68 and 0.64. The gap at few labels was
+  the encoder's size, not what it read; dropout, weight decay, a clip and a class weight add
+  nothing ([note](verification/encoder-candidates.md)).
+- **Next:** the small encoder at 500 and every stay of the half, then once on set B under the
+  registered parity with the trees; pretraining is read again on it afterwards.
 
 ## Setup
 
@@ -89,6 +94,7 @@ AUROC, higher is better.
 | Network from scratch | 0.65 | 0.75 | 0.79 | 0.79 |
 | Network from scratch, rerun beside the cells ([note](verification/encoder-candidates.md)) | 0.67 | | | |
 | Network from scratch over cells of channel × time bin, 6 / 12 bins ([note](verification/encoder-candidates.md)) | 0.69 / 0.67 | | | |
+| Small network from scratch (2 blocks, 64 wide) over 6-bin cells ([note](verification/encoder-candidates.md)) | 0.73 | | | |
 | Full fine-tuning, mixture of four | 0.69 | 0.74 | 0.76 | 0.79 |
 | Probe, mixture of four | 0.65–0.67 | 0.69–0.71 | 0.72–0.74 | 0.74–0.76 |
 | Probe, untrained encoder | 0.64 | 0.69 | 0.75 | 0.78 |
