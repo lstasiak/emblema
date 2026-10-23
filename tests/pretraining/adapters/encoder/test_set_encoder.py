@@ -300,3 +300,23 @@ def test_the_residual_stream_is_what_the_layers_are_before_the_final_normalisati
         + encoder.channel_embedding(batch.channel_ids)
         + encoder.time_encoding(batch.timestamps, batch.timeless),
     )
+
+
+def test_a_value_module_over_a_wider_feature_axis_adds_exactly_its_extra_inputs() -> None:
+    torch.manual_seed(1)
+    cells = SetEncoder.for_vocabulary(
+        SMALL, VOCABULARY_SIZE, value_embedding=nn.Linear(9, SMALL.width)
+    ).eval()
+    batch = random_batch(2, 11, seed=5)
+    wider = TokenTensors(
+        torch.randn(2, 11, 9),
+        batch.channel_ids,
+        batch.timestamps,
+        batch.timeless,
+        batch.padding_mask,
+    )
+
+    held = sum(parameter.numel() for parameter in cells.parameters())
+
+    assert held == SMALL.parameter_count(VOCABULARY_SIZE) + (9 - N_FEATURES) * SMALL.width
+    assert cells(*wider.args).shape == (2, 11, SMALL.width)
