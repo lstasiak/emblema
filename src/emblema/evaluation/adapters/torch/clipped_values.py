@@ -32,11 +32,14 @@ class ClippedValues(nn.Module):
         timeless: Tensor,
         padding_mask: Tensor,
     ) -> Tensor:
-        before, held, after = (
-            features[..., : self.values.start],
-            features[..., self.values],
-            features[..., self.values.stop :],
+        start, stop, _ = self.values.indices(features.shape[-1])
+        bounded = torch.cat(
+            [
+                features[..., :start],
+                features[..., start:stop].clamp(-self.bound, self.bound),
+                features[..., stop:],
+            ],
+            dim=-1,
         )
-        bounded = torch.cat([before, held.clamp(-self.bound, self.bound), after], dim=-1)
         states: Tensor = self.encoder(bounded, channel_ids, timestamps, timeless, padding_mask)
         return states
