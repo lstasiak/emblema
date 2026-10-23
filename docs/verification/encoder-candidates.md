@@ -204,7 +204,7 @@ read; the budget tells candidates apart only by the stays' interval. The run-to-
 control's mean over ten seeds on one device, 0.018, bounds what a single campaign can resolve at
 200 stays. The best of thirteen is a descriptive number.
 
-## 2026-10-24 — declared before the run: the recipe and the capacity of the encoder from nothing at 50 and 200 stays
+## 2026-10-23 — declared before the run: the recipe and the capacity of the encoder from nothing at 50 and 200 stays
 
 **Question.** The candidates above handed the encoder what the trees' table holds and it did not
 close the gap; what moved the reading at 200 stays was less input (six bins over twelve) and a

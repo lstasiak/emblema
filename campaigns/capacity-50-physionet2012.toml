@@ -1,9 +1,9 @@
 # The recipe and the capacity of an encoder trained from nothing at 50 stays of half the tuning
 # side, on cells of six bins, the layout that read best at 200 stays: the small shape of the
 # published regime (two blocks, 64 wide), a dropout of a fifth, a weight decay, a clip on the
-# cells' values, the outcomes weighed alike, and their combinations; the small shape on raw
-# tokens too; the published regime whole on cells. Each under its setting in force
-# unless it turns the rate. The network on its tokens runs again as the control.
+# cells' values, the outcomes weighed alike, and their combinations; the small shape on raw tokens
+# too; the published regime whole on cells. Each under its setting in force unless it turns the
+# rate. The network on its tokens runs again as the control.
 #
 # Scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10, so the cells
 # pair by stay and seed with every other campaign on the half at the same budget. A campaign
