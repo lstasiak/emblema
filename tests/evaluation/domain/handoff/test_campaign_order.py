@@ -12,6 +12,7 @@ from emblema.evaluation.domain.exceptions import (
 )
 from emblema.evaluation.domain.handoff.campaign_order import CampaignOrder
 from emblema.evaluation.domain.handoff.campaign_order_result import CampaignOrderResult
+from emblema.evaluation.domain.handoff.order_lane import OrderLane
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
@@ -106,3 +107,19 @@ def test_the_pool_follows_from_what_the_cells_are() -> None:
     assert order().needs_the_ml_stack is True
     assert {cell.candidate for cell in order().cells} == {CONTROL, CONTENDER}
     assert all(cell.budget in (LabelBudget.of(50), LabelBudget.of(200)) for cell in order().cells)
+
+
+def test_the_lanes_of_an_order_take_its_cells_by_position_and_together_take_them_all() -> None:
+    whole = order()
+    lanes = [whole.lane_of(OrderLane(index=index, count=2)) for index in range(2)]
+
+    assert [e.cell for e in lanes[0]] == list(whole.cells[0::2])
+    assert [e.cell for e in lanes[1]] == list(whole.cells[1::2])
+    assert whole.lane_of(OrderLane(index=0, count=1)) == whole.evaluations
+
+
+def test_a_lane_no_cell_falls_to_is_refused() -> None:
+    whole = order()
+
+    with pytest.raises(CampaignOrderRejectedError, match="nothing to run"):
+        whole.lane_of(OrderLane(index=len(whole.cells), count=len(whole.cells) + 1))

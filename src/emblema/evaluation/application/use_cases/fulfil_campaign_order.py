@@ -4,6 +4,7 @@ from emblema.evaluation.domain.campaign.cell_result import CellResult
 from emblema.evaluation.domain.exceptions import CampaignOrderRejectedError
 from emblema.evaluation.domain.handoff.campaign_order import CampaignOrder
 from emblema.evaluation.domain.handoff.campaign_order_result import CampaignOrderResult
+from emblema.evaluation.domain.handoff.order_lane import OrderLane
 from emblema.evaluation.ports.campaign_handoff import CampaignHandoff
 from emblema.evaluation.ports.candidate_provider import CandidateProvider
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
@@ -19,11 +20,14 @@ class FulfilCampaignOrderCommand:
         git_commit: Revision of the code on this machine.
         resume: The last result an interrupted session of the same order reported; its cells
             are kept and not run again. ``None`` to start from the first cell.
+        lane: Which of several processes sharing the order this one is, taking only the cells
+            that fall to it; ``None`` to run the whole order.
     """
 
     order: ArtifactRef
     git_commit: str
     resume: ArtifactRef | None = None
+    lane: OrderLane | None = None
 
 
 class FulfilCampaignOrder:
@@ -35,7 +39,9 @@ class FulfilCampaignOrder:
 
     Every cell answered is reported at once, as a result holding all cells so far, because the
     platforms this runs on end sessions without warning: whatever was finished is then behind
-    the last reference reported, and a session started again from it runs only the rest.
+    the last reference reported, and a session started again from it runs only the rest. A
+    lane runs the order's cells that fall to it and reports them as any run reports, so the
+    lanes of one order leave as many results as there are lanes, each accepted on its own.
     """
 
     def __init__(
@@ -53,7 +59,7 @@ class FulfilCampaignOrder:
 
         Raises:
             CampaignOrderRejectedError: If this machine runs other code than the order names,
-                or the result resumed from answers another order.
+                the result resumed from answers another order, or no cell falls to the lane.
             UnreadableCampaignDocumentError: If a reference holds no order or no result.
             UnknownCandidateError: If this process supplies no candidate a cell names.
             CandidateMismatchError: If a candidate here is not what the campaign recorded.
@@ -66,7 +72,8 @@ class FulfilCampaignOrder:
             if command.resume is None
             else list(self._resumed(command.order, command.resume).results)
         )
-        for evaluation in order.evaluations:
+        evaluations = order.evaluations if command.lane is None else order.lane_of(command.lane)
+        for evaluation in evaluations:
             if any(result.cell == evaluation.cell for result in answered):
                 continue
             answered.append(self._candidates.evaluate(evaluation))

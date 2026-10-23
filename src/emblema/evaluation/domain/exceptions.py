@@ -334,6 +334,10 @@ class CampaignOrderRejectedError(EvaluationError):
     """An order is run on other code than it names, or answered with cells it never held."""
 
 
+class InvalidOrderLaneError(EvaluationError, ValueError):
+    """A lane of an order names no count, an index outside the count, or cannot be read."""
+
+
 class InvalidCampaignOrderResultError(EvaluationError, ValueError):
     """A result of an order answers no cell, answers one twice, or names no commit."""
 

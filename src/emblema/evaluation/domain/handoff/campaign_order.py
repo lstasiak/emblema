@@ -8,6 +8,7 @@ from emblema.evaluation.domain.exceptions import (
     InvalidCampaignOrderError,
 )
 from emblema.evaluation.domain.handoff.campaign_order_result import CampaignOrderResult
+from emblema.evaluation.domain.handoff.order_lane import OrderLane
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 
 
@@ -22,7 +23,9 @@ class CampaignOrder:
 
     One order is one kind of process. The cells that need the training stack and the ones that
     must run without it are never in one order, because on some platforms the two cannot share
-    a process at all.
+    a process at all. Several processes of that kind may share one order as lanes, each taking
+    the cells whose position in the grid falls to it, so a card runs as many cells at once as it
+    has room for.
 
     Invariants: at least one cell, none twice; every request is over the order's task; every
     cell needs the same stack; the commit is non-empty without surrounding whitespace.
@@ -65,6 +68,24 @@ class CampaignOrder:
     @property
     def cells(self) -> tuple[CampaignCell, ...]:
         return tuple(evaluation.cell for evaluation in self.evaluations)
+
+    def lane_of(self, lane: OrderLane) -> tuple[CandidateEvaluation, ...]:
+        """The cells that fall to ``lane``, in the grid's order.
+
+        Raises:
+            CampaignOrderRejectedError: If no cell falls to the lane, which happens when more
+                lanes share the order than it has cells.
+        """
+        taken = tuple(
+            evaluation
+            for position, evaluation in enumerate(self.evaluations)
+            if lane.takes(position)
+        )
+        if not taken:
+            raise CampaignOrderRejectedError(
+                f"lane {lane} of an order of {len(self.evaluations)} cells has nothing to run"
+            )
+        return taken
 
     def require_commit(self, git_commit: str) -> None:
         """Stop a run on code other than the code ordered, before it runs a cell.
