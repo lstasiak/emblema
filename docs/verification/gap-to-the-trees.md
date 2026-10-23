@@ -277,3 +277,74 @@ descriptive except D1′ at every stay, which is the one reading a decision rest
 network's training, and an encoder that rebuilds the table under a better recipe can meet the
 registered parity. If it is carried, a smooth reading of the table falls short of the trees there,
 and parity at every stay needs an encoder that reads more than the table holds.
+
+## 2026-10-23 — M1 Pro, MPS and CPU, fp32: the table's distance to the trees is not its training
+
+**Question.** The one declared above: whether the network over the trees' table falls short of
+the trees because of how it was trained, and whether the trees at 20 and 50 stays could do better.
+
+**Conditions.** Campaigns `5862cdff…` (200), `9c2ce9fa…` (500), `e6d790ff…` (every stay),
+`c7c7951c…` (trees, 20 and 50), ordered at `b4f734a6`; 140 cells on the M1 Pro in 34 minutes
+(`data/report/l32b1/run-table.sh`). Pairs by `scripts/campaign_pairs_report.py`
+(`data/report/l32b1/pairs-table.sh`); CSV under `data/report/l32b1/table/pairs/`.
+
+**Area under the ROC curve**, mean over seeds 1 to 10:
+
+| The network over the table | 200 | 500 | every stay |
+|---|---|---|---|
+| Setting read above (stop at 500 and every stay) | **0.706** | 0.754 | **0.810** |
+| Every drawn stay, no penalty | (as above) | 0.739 | 0.802 |
+| Every drawn stay, decay 0.1 | 0.704 | 0.739 | 0.802 |
+| Every drawn stay, decay 1 | 0.699 | 0.737 | 0.805 |
+| Stop, a third of the rate (read above) | | **0.761** | 0.806 |
+| Logistic head over the table (2026-10-23) | 0.730 | 0.769 | 0.810 |
+| Trees per channel | 0.736 | 0.787 | 0.839 |
+
+| The trees | 20 | 50 |
+|---|---|---|
+| Setting in force | 0.621 | **0.628** |
+| `learning_rate=0.1,max_depth=3` | **0.627** | 0.624 |
+| `max_depth=2,rounds=50` | 0.621 | **0.628** |
+| `max_depth=3,min_leaf_weight=5` | 0.500 | 0.500 |
+| Network over the table | 0.644 | 0.674 |
+| Network on its tokens | 0.599 | 0.625 |
+
+The heavier leaves leave no split at these draws, so the trees answer a constant.
+
+**The pairs** (gain of the second over the first in area, 95 % interval, seed by seed mean ± SE):
+
+| Pair | Reading |
+|---|---|
+| D1′ best network over the table → trees, 200 | **+0.030** [+0.016; +0.044] ± 0.005 |
+| D1′ at 500 | **+0.026** [+0.011; +0.041] ± 0.005 |
+| D1′ at every stay | **+0.030** [+0.011; +0.049] ± 0.002 |
+| Best trees → network over the table, 20 | +0.017 [+0.004; +0.031] ± 0.015 |
+| Best trees → network over the table, 50 | **+0.046** [+0.031; +0.061] ± 0.009 |
+| Network on its tokens → best trees, 20 | +0.028 [+0.011; +0.044] ± 0.021 |
+| Stop → every drawn stay, no penalty, 500 | −0.014 [−0.026; −0.002] ± 0.005 |
+| Stop → every drawn stay, decay 1, every stay | −0.004 [−0.019; +0.010] |
+
+**Predictions.** 1 failed at 200 (the best network over the table reads 0.024 below the logistic
+head; D1′ lies above that head's interval) and held at 500 (0.008 below it; D1′ within its
+interval). 2 held: D1′ at every stay is +0.030 and carried. 3 failed at 50: the network over the
+table leads the best trees by 0.046, more than the 0.031 predicted; at 20 the lead is not carried.
+
+**Conclusions.**
+
+1. **The distance is not the network's training.** Learning from every drawn stay costs the
+   network 0.008 to 0.014, and a penalty changes nothing: the stop on a fifth held out is worth
+   more than the fifth it holds out. From 500 stays a network and a linear head over the table
+   read within 0.008 of each other, and both stay about 0.03 below the trees.
+2. By the declared rule, a smooth reading of the trees' table falls short of the trees at every
+   stay. Parity there needs an encoder that reads more than the table's ten statistics per
+   channel, or a head that models their interactions as trees do; rebuilding the table is not
+   enough.
+3. At 200 stays a network over the table reads 0.024 below a linear head over it: with few labels
+   its hidden layer costs more than it brings.
+4. The trees at 20 and 50 stays are not held back by their setting: none of three settings for a
+   small draw moves them by more than 0.006. The network over the table leads them at 50 stays
+   by 0.046.
+
+**Limitations.** The best of each family is chosen on the stays it is scored on. The decay acts
+through AdamW at the schedule's rate, so it is a mild penalty over 2,000 steps; dropout on the
+branch was not tried.
