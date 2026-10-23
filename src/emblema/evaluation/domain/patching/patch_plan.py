@@ -52,4 +52,5 @@ class PatchPlan:
             "warmup_fraction": float(self.schedule.warmup_fraction),
             "final_lr_fraction": float(self.schedule.final_lr_fraction),
             **self.pooling.parameters(),
+            "queries": self.pooling.queries,
         }

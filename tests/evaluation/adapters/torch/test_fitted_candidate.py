@@ -80,3 +80,40 @@ def test_a_candidate_missing_a_field_of_its_own_is_refused() -> None:
 
     with pytest.raises(UnreadableFittedCandidateError):
         FittedCandidate.read(buffer.getvalue())
+
+
+def test_a_candidate_over_the_corpus_cells_keeps_the_channels_its_rows_stand_for() -> None:
+    kept = FittedCandidate.of(
+        plan(),
+        candidate(),
+        vocabulary_size=VOCABULARY,
+        link=LINK,
+        cell_channels=(1, 2, 5),
+        cell_statics=(9,),
+    )
+
+    read = FittedCandidate.read(kept.to_bytes())
+
+    assert (read.cell_channels, read.cell_statics) == ((1, 2, 5), (9,))
+    assert (fitted().cell_channels, fitted().cell_statics) == ((), ())
+
+
+def test_a_candidate_kept_before_cells_were_a_layout_reads_as_one_over_the_raw_readings() -> None:
+    import io
+
+    kept = fitted()
+    buffer = io.BytesIO()
+    torch.save(
+        {
+            "parameters": kept.parameters,
+            "vocabulary_size": kept.vocabulary_size,
+            "target_kind": str(kept.link.kind),
+            "target_scale": kept.link.scale,
+            "weights": kept.weights,
+        },
+        buffer,
+    )
+
+    read = FittedCandidate.read(buffer.getvalue())
+
+    assert (read.cell_channels, read.cell_statics) == ((), ())

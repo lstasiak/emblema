@@ -16,6 +16,7 @@ from emblema.evaluation.domain.exceptions import InvalidAdaptationPlanError
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
 from emblema.shared.adapters.tensors.grown_parameters import GrownParameters
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
+from emblema.shared.kernel.tokens import N_FEATURES
 
 # One group of an optimiser's parameters and the rate they learn at: torch takes a group as an
 # untyped mapping of the parameters and their options, so Any is what it is.
@@ -68,13 +69,16 @@ class AdaptedBackbone(nn.Module):
         vocabulary_size: int,
         starting_at: float,
         summary_rows: NDArray[np.float64] | None = None,
+        input_features: int = N_FEATURES,
     ) -> Self:
         """The candidate ``plan`` describes, built on the host from torch's current generator.
 
         The head is drawn first, so under one seed every mode starts it from the same weights,
         whatever the encoder draws after it; its bias starts at ``starting_at``, where the task's
         link places a predictor that knows nothing of the labels the run holds. The encoder is
-        asked for over ``vocabulary_size``, the channels of the task's corpus; rows it grew for
+        asked for over ``vocabulary_size``, the channels of the task's corpus, and over
+        ``input_features``, the feature axis of the layout the run lays windows out in, which
+        the run owns; rows it grew for
         channels it was never trained on are trained under every mode, as the head is, because
         there is nothing pretrained in them to freeze. A branch over the statistics per channel is
         drawn after everything else and prepared over ``summary_rows``, the statistics of the
@@ -112,6 +116,8 @@ class AdaptedBackbone(nn.Module):
                 dropout=dropout,
                 value_embedding=plan.encoder.value_embedding,
                 shape=shape,
+                time_encoding=plan.encoder.time_encoding,
+                input_features=input_features,
             )
         else:
             encoder = backbones.pretrained(

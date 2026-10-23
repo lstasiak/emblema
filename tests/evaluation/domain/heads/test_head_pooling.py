@@ -82,3 +82,31 @@ def test_static_features_are_set_apart_under_every_scheme(scheme: str) -> None:
     apart = HeadPooling.mean().tuned("pooling", scheme).tuned("statics", "apart")
 
     assert (apart.pooling, apart.statics) == (PoolingScheme(scheme), StaticsPlacement.APART)
+
+
+def test_several_queries_turn_only_under_attention_and_widen_the_state() -> None:
+    attention = HeadPooling.mean().tuned("pooling", "attention")
+
+    four = attention.tuned("queries", "4")
+
+    assert four == HeadPooling(pooling=PoolingScheme.ATTENTION, queries=4)
+    assert four.width_factor == 4
+    assert four.tuned("statics", "apart").width_factor == 5
+    assert four.parameters() == {"pooling": "attention", "tail_share": 1.0}
+    assert four.turned_away() == {"queries": 4}
+    assert attention.turned_away() == {}
+    assert attention.width_factor == 1
+
+
+@pytest.mark.parametrize("scheme", [PoolingScheme.MEAN, PoolingScheme.TAIL])
+def test_a_query_count_under_a_scheme_without_queries_is_refused(scheme: PoolingScheme) -> None:
+    with pytest.raises(InvalidHeadPoolingError, match="no knob"):
+        HeadPooling(pooling=scheme, queries=2)
+    with pytest.raises(UnknownKnobError, match="no knob"):
+        HeadPooling(pooling=scheme).tuned("queries", "2")
+
+
+@pytest.mark.parametrize("queries", ["0", "-1", "two", "1.5"])
+def test_a_query_count_that_is_not_a_positive_count_is_refused(queries: str) -> None:
+    with pytest.raises(UnknownKnobError):
+        HeadPooling(pooling=PoolingScheme.ATTENTION).tuned("queries", queries)

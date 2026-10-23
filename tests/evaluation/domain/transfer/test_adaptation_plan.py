@@ -6,8 +6,10 @@ from emblema.evaluation.domain.exceptions import (
 )
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.encoder_setting import (
+    CellSet,
     EncoderSetting,
     SummaryReading,
+    TimeEncoding,
     ValueEmbedding,
 )
 from emblema.evaluation.domain.transfer.layer_reading import LayerReading
@@ -350,3 +352,33 @@ def test_summaries_beside_the_encoder_keep_what_shapes_it() -> None:
     )
 
     assert stated.encoder.reads_tokens
+
+
+@pytest.mark.parametrize("mode", [TransferMode.FROZEN_PROBE, TransferMode.FULL_FINE_TUNING])
+def test_cells_and_a_learnt_time_are_refused_wherever_pretrained_weights_are_read(
+    mode: TransferMode,
+) -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="fix its encoder's build"):
+        plan(mode, encoder=EncoderSetting(bins=12))
+    with pytest.raises(InvalidAdaptationPlanError, match="fix its encoder's build"):
+        plan(mode, encoder=EncoderSetting(time_encoding=TimeEncoding.LEARNED))
+
+
+def test_several_queries_are_refused_where_the_head_is_solved_in_closed_form() -> None:
+    with pytest.raises(InvalidAdaptationPlanError, match="cannot learn"):
+        plan(
+            TransferMode.FROZEN_RIDGE,
+            pooling=HeadPooling(pooling=PoolingScheme.ATTENTION, queries=4),
+        )
+
+
+@pytest.mark.parametrize("reading", [SummaryReading.BESIDE, SummaryReading.ONLY])
+def test_the_summaries_describe_the_raw_readings_and_are_refused_over_cells(
+    reading: SummaryReading,
+) -> None:
+    assert plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(bins=12)).encoder.reads_cells
+    with pytest.raises(InvalidAdaptationPlanError, match="not of cells"):
+        plan(
+            TransferMode.FROM_SCRATCH,
+            encoder=EncoderSetting(bins=12, cells=CellSet.CORPUS, summaries=reading),
+        )

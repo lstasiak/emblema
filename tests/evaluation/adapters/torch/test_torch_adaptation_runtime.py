@@ -57,8 +57,10 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask  # noq
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome  # noqa: E402
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan  # noqa: E402
 from emblema.evaluation.domain.transfer.encoder_setting import (  # noqa: E402
+    CellSet,
     EncoderSetting,
     SummaryReading,
+    TimeEncoding,
 )
 from emblema.evaluation.domain.transfer.layer_reading import LayerReading  # noqa: E402
 from emblema.evaluation.domain.transfer.training_regime import (  # noqa: E402
@@ -68,6 +70,11 @@ from emblema.evaluation.domain.transfer.training_regime import (  # noqa: E402
     TrainingRegime,
 )
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
+from emblema.pretraining.adapters.encoder.learned_time_encoding import (  # noqa: E402
+    LearnedTimeEncoding,
+)
+from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
+from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens  # noqa: E402
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
 from emblema.shared.kernel.ordering import seeded_rank  # noqa: E402
@@ -811,6 +818,104 @@ def test_a_network_reading_the_summaries_answers_on_the_accelerator_as_on_the_ho
             device=device,
         )
         outcome = runtime.adapt(alone, defined, SAMPLE, VALIDATION, retain=False)
+        answers[device] = [p.predicted for p in outcome.predictions]
+
+    assert answers["mps"] == pytest.approx(answers["cpu"], rel=1e-3)
+
+
+@pytest.mark.parametrize("cells", ["window", "corpus"])
+def test_the_encoder_reads_cells_where_the_plan_lays_the_window_out_in_bins(
+    published: Published, cells: str
+) -> None:
+    binned = plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(bins=4).tuned("cells", cells))
+
+    first, again = adapt(published, binned), adapt(published, binned)
+    raw = adapt(published, plan(TransferMode.FROM_SCRATCH))
+
+    assert first.predictions == again.predictions
+    assert first.predictions != raw.predictions
+    assert all(math.isfinite(p.predicted) for p in first.predictions)
+    assert first.plan.parameters()["bins"] == 4
+    assert first.plan.parameters()["cells"] == cells
+    received = published.backbones.built[0]
+    assert isinstance(received, SetEncoder)
+    assert received.value_projection.in_features == BinnedTokens.N_FEATURES
+
+
+def test_cells_over_the_corpus_and_over_the_window_answer_differently(
+    published: Published,
+) -> None:
+    over_window = adapt(published, plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(bins=4)))
+    over_corpus = adapt(
+        published,
+        plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(bins=4, cells=CellSet.CORPUS)),
+    )
+
+    assert over_window.predictions != over_corpus.predictions
+
+
+def test_a_candidate_over_the_corpus_cells_is_kept_without_a_graph_and_with_its_channels(
+    tmp_path: Path,
+) -> None:
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "scratch")
+    runtime = TorchAdaptationRuntime(
+        SmallBackbones(vocabulary_size=len(CHANNELS)),
+        PublishedCorpusBlocks(store, tmp_path / "workspace"),
+        device="cpu",
+        store=store,
+    )
+    defined = replace(task(), manifest=published.manifest, labels=RemainingLifeScheme(CEILING))
+    binned = plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(bins=4, cells=CellSet.CORPUS))
+
+    outcome = runtime.adapt(binned, defined, SAMPLE, VALIDATION, retain=True)
+
+    assert outcome.artifact is not None
+    kept = KeptCandidates(store).read(outcome.artifact)
+    assert [form.format for form in kept.representations] == [FittedCandidate.FORMAT]
+    fitted = FittedCandidate.read(store.get(kept.measured.artifact))
+    assert fitted.parameters["bins"] == 4
+    assert fitted.cell_channels == tuple(c.channel_id for c in CHANNELS if not c.timeless)
+    assert fitted.cell_statics == tuple(c.channel_id for c in CHANNELS if c.timeless)
+
+
+def test_a_learnt_time_and_several_queries_answer_the_task_and_are_recorded(
+    published: Published,
+) -> None:
+    stated = plan(
+        TransferMode.FROM_SCRATCH,
+        encoder=EncoderSetting(bins=4, time_encoding=TimeEncoding.LEARNED),
+        pooling=HeadPooling(pooling=PoolingScheme.ATTENTION, queries=3),
+    )
+
+    outcome = adapt(published, stated)
+
+    assert all(math.isfinite(p.predicted) for p in outcome.predictions)
+    assert outcome.plan.parameters()["time_encoding"] == "learned"
+    assert outcome.plan.pooling.queries == 3
+    received = published.backbones.built[0]
+    assert isinstance(received, SetEncoder)
+    assert isinstance(received.time_encoding, LearnedTimeEncoding)
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="runs on the accelerator")
+def test_a_network_over_cells_answers_on_the_accelerator_as_on_the_host(tmp_path: Path) -> None:
+    store = InMemoryArtifactStore()
+    manifest = publish(store, tmp_path / "scratch").manifest
+    defined = replace(task(), manifest=manifest, labels=RemainingLifeScheme(CEILING))
+    binned = plan(
+        TransferMode.FROM_SCRATCH,
+        encoder=EncoderSetting(bins=4, cells=CellSet.CORPUS),
+        pooling=HeadPooling(pooling=PoolingScheme.ATTENTION, queries=2),
+    )
+    answers = {}
+    for device in ("cpu", "mps"):
+        runtime = TorchAdaptationRuntime(
+            SmallBackbones(vocabulary_size=len(CHANNELS)),
+            PublishedCorpusBlocks(store, tmp_path / device),
+            device=device,
+        )
+        outcome = runtime.adapt(binned, defined, SAMPLE, VALIDATION, retain=False)
         answers[device] = [p.predicted for p in outcome.predictions]
 
     assert answers["mps"] == pytest.approx(answers["cpu"], rel=1e-3)

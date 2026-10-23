@@ -142,3 +142,13 @@ def test_the_tail_of_a_row_is_the_last_patches_alone() -> None:
 
     with torch.no_grad():
         assert whole(values, torch.ones_like(values)) != tail(values, torch.ones_like(values))
+
+
+def test_several_queries_widen_the_patch_models_head_by_their_count() -> None:
+    torch.manual_seed(3)
+    pooling = HeadPooling(pooling=PoolingScheme.ATTENTION, queries=2)
+    turned = PatchTransformer(patch_spec(), channels=3, steps=10, starting_at=0.5, pooling=pooling)
+    values = torch.randn(4, 3, 10)
+
+    assert turned.head.linear.in_features == 3 * patch_spec().width * 2
+    assert turned(values, torch.ones_like(values)).shape == (4,)

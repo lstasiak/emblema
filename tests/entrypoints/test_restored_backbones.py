@@ -7,13 +7,22 @@ from torch import nn  # noqa: E402
 from emblema.entrypoints.restored_backbones import RestoredBackbones  # noqa: E402
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory  # noqa: E402
 from emblema.evaluation.domain.exceptions import UnknownBackboneError  # noqa: E402
-from emblema.evaluation.domain.transfer.encoder_setting import ValueEmbedding  # noqa: E402
+from emblema.evaluation.domain.transfer.encoder_setting import (  # noqa: E402
+    TimeEncoding,
+    ValueEmbedding,
+)
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape  # noqa: E402
+from emblema.pretraining.adapters.encoder.fourier_time_encoding import (  # noqa: E402
+    FourierTimeEncoding,
+)
 from emblema.pretraining.adapters.encoder.grown_channel_embedding import (  # noqa: E402
     GrownChannelEmbedding,
 )
 from emblema.pretraining.adapters.encoder.learned_channel_embedding import (  # noqa: E402
     LearnedChannelEmbedding,
+)
+from emblema.pretraining.adapters.encoder.learned_time_encoding import (  # noqa: E402
+    LearnedTimeEncoding,
 )
 from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (  # noqa: E402
     NonlinearValueEmbedding,
@@ -29,6 +38,7 @@ from emblema.pretraining.adapters.training.exceptions import (  # noqa: E402
 from emblema.pretraining.adapters.training.trained_model import TrainedModel  # noqa: E402
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
 from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
+from emblema.shared.kernel.tokens import N_FEATURES  # noqa: E402
 from tests.support.experiments import CHANNELS, TINY, configuration  # noqa: E402
 
 pytestmark = pytest.mark.ml
@@ -159,3 +169,34 @@ def test_a_fresh_encoder_takes_a_shape_and_a_value_embedding_of_its_own() -> Non
     assert built.time_frequencies == TINY.time_frequencies
     assert isinstance(fresh.value_projection, NonlinearValueEmbedding)
     assert len(fresh.blocks) == 2
+
+
+def test_a_fresh_encoder_takes_a_learnt_time_and_a_wider_feature_axis_of_its_own() -> None:
+    store = InMemoryArtifactStore()
+    weights, _ = stored(store)
+    backbones = RestoredBackbones(store, weights)
+
+    fresh = backbones.fresh(
+        vocabulary_size=CHANNELS,
+        dropout=0.0,
+        time_encoding=TimeEncoding.LEARNED,
+        input_features=9,
+    )
+
+    assert isinstance(fresh, SetEncoder)
+    assert isinstance(fresh.time_encoding, LearnedTimeEncoding)
+    assert isinstance(fresh.value_projection, nn.Linear)
+    assert fresh.value_projection.in_features == 9
+    assert fresh.channel_embedding.vocabulary_size == CHANNELS
+    standard = backbones.fresh(vocabulary_size=CHANNELS, dropout=0.0)
+    assert isinstance(standard.time_encoding, FourierTimeEncoding)
+    assert isinstance(standard.value_projection, nn.Linear)
+    assert standard.value_projection.in_features == N_FEATURES
+    bent = backbones.fresh(
+        vocabulary_size=CHANNELS,
+        dropout=0.0,
+        value_embedding=ValueEmbedding.NONLINEAR,
+        input_features=9,
+    )
+    assert isinstance(bent.value_projection, NonlinearValueEmbedding)
+    assert bent.value_projection.layers[0].in_features == 9

@@ -55,9 +55,8 @@ class PatchTransformer(nn.Module):
         self.embedding = nn.Linear(2 * spec.patch_length, spec.width)
         patches = spec.patches_over(steps)
         self.position = nn.Parameter(torch.randn(patches, spec.width) * 0.02)
-        self.pooling: nn.Module = pooling_module(
-            HeadPooling.mean() if pooling is None else pooling, width=spec.width
-        )
+        pooled_by = HeadPooling.mean() if pooling is None else pooling
+        self.pooling: nn.Module = pooling_module(pooled_by, width=spec.width)
         # Declared as a tensor, since a buffer read back through the module's attribute lookup
         # is typed as either a tensor or a module.
         self.patch_times: Tensor
@@ -80,7 +79,9 @@ class PatchTransformer(nn.Module):
             # The fast path for nested tensors needs post-norm layers; these are pre-norm.
             enable_nested_tensor=False,
         )
-        self.head = RegressionHead(channels * spec.width, starting_at=starting_at)
+        self.head = RegressionHead(
+            channels * spec.width * pooled_by.width_factor, starting_at=starting_at
+        )
 
     def forward(self, values: Tensor, observed: Tensor) -> Tensor:
         """One answer per window out of its grid, ``[batch, channels, steps]`` twice.

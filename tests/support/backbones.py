@@ -11,13 +11,12 @@ from dataclasses import replace
 import torch
 from torch import nn
 
-from emblema.evaluation.domain.transfer.encoder_setting import ValueEmbedding
+from emblema.entrypoints.restored_backbones import RestoredBackbones
+from emblema.evaluation.domain.transfer.encoder_setting import TimeEncoding, ValueEmbedding
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
-from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (
-    NonlinearValueEmbedding,
-)
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.tokens import N_FEATURES
 from tests.support.encoders import SMALL
 from tests.support.token_tensors import VOCABULARY_SIZE
 
@@ -61,6 +60,8 @@ class SmallBackbones:
         dropout: float,
         value_embedding: ValueEmbedding = ValueEmbedding.LINEAR,
         shape: EncoderShape | None = None,
+        time_encoding: TimeEncoding = TimeEncoding.FOURIER,
+        input_features: int = N_FEATURES,
     ) -> nn.Module:
         architecture = SMALL
         if shape is not None:
@@ -71,13 +72,14 @@ class SmallBackbones:
                 layers=shape.layers,
                 feedforward_width=shape.feedforward_width,
             )
-        nonlinear = value_embedding is ValueEmbedding.NONLINEAR
         return self._kept(
-            SetEncoder.for_vocabulary(
+            RestoredBackbones.drawn(
                 architecture,
                 max(vocabulary_size, self._vocabulary_size),
                 dropout=dropout,
-                value_embedding=NonlinearValueEmbedding(architecture.width) if nonlinear else None,
+                value_embedding=value_embedding,
+                time_encoding=time_encoding,
+                input_features=input_features,
             )
         )
 
