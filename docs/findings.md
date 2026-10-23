@@ -30,8 +30,8 @@ Last updated 2026-10-23.
   network handed the trees' per-channel summaries reads above the trees at 20 and 50 stays
   (+0.023, +0.046; carried at 50) and leads the network on its tokens by 0.045 to 0.059 up to 200 stays. From 500 stays
   the network on its tokens matches it, and both stop 0.03 below the trees, as a linear head over
-  the summaries does: the rest is what trees make of that table
-  ([note](verification/gap-to-the-trees.md)).
+  the summaries does: the rest is what trees make of that table, not the network's training
+  (a penalty and every drawn stay change nothing) ([note](verification/gap-to-the-trees.md)).
 - **What transfers is the encoder's machinery, not its features for the task.** Fitting only the
   channel rows of a corpus the backbone never read, on its unlabelled windows, brings the pretext
   to within 0.006 of a backbone that read it, and carries part of a downstream task (+0.031 on
