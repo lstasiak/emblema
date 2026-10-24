@@ -6,6 +6,7 @@ they live together here.
 """
 
 import tomllib
+from dataclasses import replace
 from pathlib import Path
 from typing import Self
 
@@ -22,6 +23,7 @@ from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
+from emblema.pretraining.domain.training.observation_term import ObservationTerm
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.summary_term import SummaryTerm
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
@@ -64,6 +66,17 @@ class _Shape(_Section):
         )
 
 
+class _Input(_Section):
+    """What a token is at the encoder's input: one channel over one of ``bins`` spans of the window.
+
+    Stated apart from the shape because it changes what the encoder reads before it changes
+    what the encoder is; a file without the section reads one token per reading, as every run
+    before the input had a part.
+    """
+
+    bins: int
+
+
 class _Masking(_Section):
     """What the objective hides; a file that says nothing of a tail hides none."""
 
@@ -91,10 +104,10 @@ class _Objective(_Section):
     """What the objective counts a miss as, what it compares the prediction with, and what else.
 
     A file that says nothing is scored by the square against the token's value, with no second
-    term. The knobs of the latent target, of the contrast and of the summaries default to
-    nothing, as the knee
-    does under the square: a value target stating one, a latent target leaving one out, or a
-    temperature without a weight, is refused by the value object itself.
+    term. The knobs of the latent target, of the contrast, of the summaries and of the cells'
+    observation default to nothing, as the knee does under the square: a value target stating
+    one, a latent target leaving one out, or a temperature without a weight, is refused by the
+    value object itself.
     """
 
     kind: LossKind = LossKind.MSE
@@ -106,6 +119,8 @@ class _Objective(_Section):
     contrast_weight: float = 0.0
     contrast_temperature: float = 0.0
     summary_weight: float = 0.0
+    presence_weight: float = 0.0
+    count_weight: float = 0.0
 
     def loss(self) -> ObjectiveLoss:
         return ObjectiveLoss(kind=self.kind, huber_delta=self.huber_delta)
@@ -115,6 +130,9 @@ class _Objective(_Section):
 
     def summary_term(self) -> SummaryTerm:
         return SummaryTerm(weight=self.summary_weight)
+
+    def observation_term(self) -> ObservationTerm:
+        return ObservationTerm(presence_weight=self.presence_weight, count_weight=self.count_weight)
 
     def objective_target(self) -> ObjectiveTarget:
         return ObjectiveTarget(
@@ -187,15 +205,15 @@ class ExperimentFile(_Section):
         dropout: Dropout of the encoder and the decoder.
         decoder_layers: Blocks of the decoder thrown away when the run ends.
         shape: What the run overrides of the tier's shape, where it does.
+        input: What a token is at the encoder's input, where it is not one reading.
         passes: The corpora an epoch reads more than once, by name, and how many times; each
             one of ``corpora``. A corpus left out is read once.
         fraction: The corpora read at a share of their own, by name, and that share; each one
             of ``corpora``. A corpus left out is read at ``corpus_fraction``.
         masking: What the objective hides.
-        objective: What it counts a miss as, what it predicts and whether it also tells the
-            halves of a window apart: the squared error against the token's value and nothing
-            else unless the file says otherwise, which is what every run before any of the
-            knobs existed was scored by.
+        objective: What it counts a miss as, what it predicts and what else it asks beside:
+            the squared error against the token's value and nothing else unless the file says
+            otherwise, which is what every run before any of the knobs existed was scored by.
         budget: How long the run trains and in how large a step.
         checkpoint: How often resumable state is written.
         start: The stored model the run continues, where it does not draw its weights from the
@@ -211,6 +229,7 @@ class ExperimentFile(_Section):
     dropout: float
     decoder_layers: int
     shape: _Shape | None = None
+    input: _Input | None = None
     passes: dict[str, int] = {}
     fraction: dict[str, float] = {}
     masking: _Masking
@@ -248,7 +267,8 @@ class ExperimentFile(_Section):
             InvalidCorpusShareError: If the share of the corpus is not one a run could read.
             InvalidCorpusPassesError: If a corpus is stated to be read fewer than twice.
             InvalidCorpusFractionError: If a corpus's own share is not one a run could read.
-            InvalidEncoderArchitectureError: If the shape it states is not an architecture.
+            InvalidEncoderArchitectureError: If the shape it states is not an architecture, or
+                the bins of its input are negative.
             InvalidMaskingStrategyError: If the strategy hides everything or nothing.
             InvalidObjectiveLossError: If the reading states a knee it does not read, or none.
             InvalidObjectiveTargetError: If the latent target reads no block or its momentum is
@@ -257,6 +277,8 @@ class ExperimentFile(_Section):
             InvalidContrastiveTermError: If the contrast's weight is negative, a stated term
                 has no positive temperature, or a temperature is stated without a weight.
             InvalidSummaryTermError: If the summaries' weight is negative or not a number.
+            InvalidObservationTermError: If a weight of the cells' observation is negative or
+                not a number.
             InvalidTrainingBudgetError: If the budget is not one a run could follow.
             InvalidCheckpointPolicyError: If the interval is not positive.
             InvalidChecksumError: If the start's checksum is not one in canonical form.
@@ -264,13 +286,17 @@ class ExperimentFile(_Section):
         """
         profile = (ComputeTiers.load() if tiers is None else tiers).profile(self.tier)
         architecture = architecture_of(profile)
+        if self.shape is not None:
+            architecture = self.shape.over(architecture)
+        if self.input is not None:
+            architecture = replace(architecture, bins=self.input.bins)
         return ExperimentConfiguration(
             name=self.name,
             tier=self.tier,
             corpus_fraction=(
                 profile.corpus_fraction if self.corpus_fraction is None else self.corpus_fraction
             ),
-            architecture=architecture if self.shape is None else self.shape.over(architecture),
+            architecture=architecture,
             dropout=self.dropout,
             decoder_layers=self.decoder_layers,
             masking=self.masking.strategy(),
@@ -278,6 +304,7 @@ class ExperimentFile(_Section):
             target=self.objective.objective_target(),
             contrast=self.objective.contrastive_term(),
             summary=self.objective.summary_term(),
+            observation=self.objective.observation_term(),
             budget=self.budget.budget(),
             precision=self.precision,
             checkpoint=self.checkpoint.policy(),

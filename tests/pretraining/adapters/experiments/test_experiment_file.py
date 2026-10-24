@@ -10,15 +10,18 @@ from emblema.pretraining.domain.exceptions import (
     InvalidContrastiveTermError,
     InvalidCorpusFractionError,
     InvalidCorpusPassesError,
+    InvalidExperimentConfigurationError,
     InvalidMaskingStrategyError,
     InvalidObjectiveLossError,
     InvalidObjectiveTargetError,
+    InvalidObservationTermError,
     InvalidSummaryTermError,
     InvalidTrainingBudgetError,
 )
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
+from emblema.pretraining.domain.training.observation_term import ObservationTerm
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.summary_term import SummaryTerm
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
@@ -375,3 +378,49 @@ def test_a_start_without_its_checksum_and_parameters_nobody_can_train_are_refuse
         )
     with pytest.raises(ValidationError, match="trained"):
         ExperimentFile.load(written(STATED + '\ntrained = "the decoder"\n', tmp_path))
+
+
+def test_a_file_states_the_input_as_cells_of_so_many_bins(tmp_path: Path) -> None:
+    text = STATED + "\n[input]\nbins = 6\n"
+
+    stated = ExperimentFile.load(written(text, tmp_path)).configuration()
+
+    assert stated.architecture.bins == 6
+    assert stated.architecture.reads_cells
+    assert stated.observation == ObservationTerm.none()
+
+
+def test_a_file_without_an_input_reads_one_token_per_reading(tmp_path: Path) -> None:
+    assert ExperimentFile.load(written(STATED, tmp_path)).configuration().architecture.bins == 0
+
+
+def test_the_input_is_laid_over_the_shape_the_file_states(tmp_path: Path) -> None:
+    text = STATED + "\n[shape]\nwidth = 64\nheads = 16\n\n[input]\nbins = 6\n"
+
+    architecture = ExperimentFile.load(written(text, tmp_path)).configuration().architecture
+
+    assert (architecture.width, architecture.heads, architecture.bins) == (64, 16, 6)
+
+
+def test_a_file_states_the_observation_of_the_cells_with_its_weights(tmp_path: Path) -> None:
+    text = (
+        STATED + "\n[input]\nbins = 6\n\n[objective]\npresence_weight = 1.0\ncount_weight = 0.5\n"
+    )
+
+    stated = ExperimentFile.load(written(text, tmp_path)).configuration()
+
+    assert stated.observation == ObservationTerm.of(presence_weight=1.0, count_weight=0.5)
+
+
+def test_an_observation_without_cells_is_the_domain_s_to_refuse(tmp_path: Path) -> None:
+    text = STATED + "\n[objective]\npresence_weight = 1.0\n"
+
+    with pytest.raises(InvalidExperimentConfigurationError, match="one token per reading"):
+        ExperimentFile.load(written(text, tmp_path)).configuration()
+
+
+def test_the_observation_s_weights_are_the_domain_s_to_refuse(tmp_path: Path) -> None:
+    text = STATED + "\n[input]\nbins = 6\n\n[objective]\ncount_weight = -1\n"
+
+    with pytest.raises(InvalidObservationTermError):
+        ExperimentFile.load(written(text, tmp_path)).configuration()

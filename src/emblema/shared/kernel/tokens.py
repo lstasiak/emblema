@@ -23,6 +23,13 @@ PADDING_CHANNEL_ID = 0
 # representation rather than of any codec — an encoder's input width follows from it.
 N_FEATURES = 2
 
+# The continuous features of a token that stands for one channel over one span of a window
+# rather than for one reading: whether anything was measured in the span, how much, the level,
+# the extremes, the ends, where in the span the last reading fell and how long the channel has
+# gone unobserved. Stated beside the raw width because an encoder's input width follows from
+# whichever of the two it reads, and both Pretraining and Evaluation lay such tokens out.
+N_CELL_FEATURES = 9
+
 
 def canonical_key(
     channel_id: int, value: float, time: float, gap: float, timeless: bool

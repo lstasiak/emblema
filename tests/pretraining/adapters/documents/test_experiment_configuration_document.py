@@ -11,7 +11,16 @@ from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
-from tests.support.experiments import CONTRAST, LATENT, SUMMARY, WEIGHTS, budget, configuration
+from tests.support.experiments import (
+    CELLS,
+    CONTRAST,
+    LATENT,
+    OBSERVATION,
+    SUMMARY,
+    WEIGHTS,
+    budget,
+    configuration,
+)
 
 CODEC = ExperimentConfigurationDocument()
 
@@ -220,3 +229,37 @@ def test_a_document_naming_parameters_nobody_can_train_is_refused() -> None:
 
     with pytest.raises(ValueError, match="the decoder"):
         CODEC.decode(document)
+
+
+def test_the_bins_travel_inside_the_architecture_and_only_where_the_encoder_reads_cells() -> None:
+    over_cells = configuration(architecture=CELLS)
+
+    document = CODEC.encode(over_cells)
+
+    plain = CODEC.encode(configuration())["architecture"]
+    assert isinstance(plain, dict)
+    assert "bins" not in plain
+    assert document["architecture"]["bins"] == 3  # type: ignore[index]
+    assert CODEC.decode(json.loads(json.dumps(document))) == over_cells
+
+
+def test_a_document_written_before_the_input_had_a_part_reads_one_token_per_reading() -> None:
+    document = CODEC.encode(configuration())
+
+    assert CODEC.decode(document).architecture.bins == 0
+
+
+def test_the_observation_travels_inside_the_objective_and_only_where_it_is_stated() -> None:
+    observed = configuration(architecture=CELLS, observation=OBSERVATION)
+
+    document = CODEC.encode(observed)
+
+    assert document["objective"] == {
+        "kind": "mse",
+        "huber_delta": 0.0,
+        "observation": {"presence_weight": 1.0, "count_weight": 0.5},
+    }
+    plain = CODEC.encode(configuration(architecture=CELLS))["objective"]
+    assert isinstance(plain, dict)
+    assert "observation" not in plain
+    assert CODEC.decode(json.loads(json.dumps(document))) == observed

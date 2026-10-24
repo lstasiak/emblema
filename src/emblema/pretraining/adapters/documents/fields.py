@@ -35,6 +35,10 @@ class Fields:
             raise ValueError(f"{key!r} must be an integer, got {type(value).__name__}")
         return value
 
+    def optional_integer(self, key: str) -> int | None:
+        value = self._document.get(key)
+        return None if value is None else self.integer(key)
+
     def number(self, key: str) -> float:
         value = self._required(key)
         if isinstance(value, bool) or not isinstance(value, int | float):

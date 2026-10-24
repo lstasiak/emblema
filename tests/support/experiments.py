@@ -24,6 +24,7 @@ from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
+from emblema.pretraining.domain.training.observation_term import ObservationTerm
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.summary_term import SummaryTerm
 from emblema.pretraining.domain.training.training_budget import TrainingBudget
@@ -41,6 +42,10 @@ LATENT = ObjectiveTarget.latent(layers=1)
 # The contrastive term at the test's scale: a weight and a temperature, neither tuned.
 CONTRAST = ContrastiveTerm.of(weight=0.5, temperature=0.2)
 SUMMARY = SummaryTerm.of(weight=0.5)
+# The tiny encoder over cells of three bins, and the observation of those cells at the test's
+# scale: a presence and a count, neither weight tuned.
+CELLS = replace(TINY, bins=3)
+OBSERVATION = ObservationTerm.of(presence_weight=1.0, count_weight=0.5)
 CHANNELS = 3
 CHANNEL_NAMES = ("invented/a", "invented/b", "invented/c")
 

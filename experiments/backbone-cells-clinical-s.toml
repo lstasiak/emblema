@@ -1,0 +1,44 @@
+# The pilot of the pretext over cells on both intensive-care corpora at the tier a laptop runs,
+# for the cost of a step and of the loader alone: the 2019 stays are ten times the 2012 stays
+# and are read hourly, so this is the throughput the clinical composition of the next
+# pretraining will pay. A tenth of each corpus, the tier's share; the shape, the cells, the
+# masks and the terms of backbone-cells-physionet2012-s.toml.
+name = "backbone-cells-clinical-s"
+tier = "S"
+corpora = ["physionet2012", "physionet2019"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 6
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 2
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 200

@@ -1,0 +1,50 @@
+# How far the area of the small encoder over cells moves between seeds alone at 20, 50 and 200
+# stays, on the fifth of the tuning stays the registered least gains were read on, before the
+# least gains of the pretraining read on it are registered.
+#
+# The least gain at each of these budgets is the larger of one seed's spread of the network from
+# nothing and of the closed-form probe on this fifth (docs/preregistration.md, 2026-10-04), and
+# it was read for the 4.8M encoder over raw readings, whose spread this fifth therefore already
+# holds. The encoder pretraining is now read on is two blocks 64 wide over cells of six bins
+# (docs/verification/encoder-candidates.md), whose spread at these budgets no campaign has read
+# apart from the labels a seed draws on the half. The closed-form probe over the same encoder at
+# its initialisation runs beside it, the other half of the registered rule, on the same fifth
+# and seeds. Every seed is scored on the same fifth, fixed by seed 101, as the registered
+# reading was; the validation side is not read. A campaign divided this way chooses nothing.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "seed-spread-small-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 5
+division_seed = 101
+
+[candidates]
+competing = [
+    "untrained_ridge@bins=6,feedforward_width=128,heads=16,layers=2,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,width=64",
+]
+control = "untrained_ridge@bins=6,feedforward_width=128,heads=16,layers=2,width=64"
+endpoint = "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,width=64"
+
+[budgets]
+labels = ["20", "50", "200"]
+endpoint = "50"
+# Ten seeds, so that a standard deviation is read to about a quarter of itself.
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the spread over seeds is what this run is read for.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

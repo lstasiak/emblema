@@ -71,7 +71,11 @@ Last updated 2026-10-24.
   same 0.008 as on the half. The registered rule closes this direction
   ([note](verification/encoder-candidates.md)).
 - **Next:** pretraining read again on the small encoder over the same six-bin cells, with a
-  pretext over the cells, against the small encoder from scratch on the half.
+  pretext over the cells that hides them before the layout and asks for their presence and
+  count beside their summaries; audited without a model and piloted at tier S
+  ([note](verification/cell-pretext.md)); read against the small encoder from scratch on the
+  half, whose spread over seeds on the fixed fifth is 0.035 / 0.054 / 0.019 at 20 / 50 / 200
+  stays.
 
 ## Setup
 
@@ -141,6 +145,7 @@ pretrainings never read there (+0.014 against 0.021), and neither 20 nor 50 stay
 | Generated data with known shared structure | the pretrained encoder's error 0.094 [0.089; 0.099] below a fresh one's, at a window spanning the process | [synthetic-transfer](verification/synthetic-transfer.md) |
 | Published network (STraTS) on the same stays | 0.827; this network from scratch 0.818 once kept at its best epoch and shrunk to two blocks | [intensive-care-curve](verification/intensive-care-curve.md) |
 | The network from scratch in two campaigns | differs by at most 0.005 | [verdict-statistics](verification/verdict-statistics.md) |
+| A pretext over cells of channel × time bin, answered without a model | on the stays a linear stack reads a hidden cell's mean at 0.12 and its presence at 0.59, from the other channels in the same bin; under a hidden tail the presence at 0.22; on the gridded corpora the presence is constant and the mean interpolated at 0.53 to 0.80 | [cell-pretext](verification/cell-pretext.md) |
 
 ### What changes the backbone
 
@@ -226,7 +231,8 @@ pretraining against four, 0.021 for two.
 
 1. Bring the network trained from scratch up to the classical baselines: a small encoder over
    cells of channel and time bin now matches the trees at 200 stays and trails the tuned trees by
-   0.008 at every stay; next a pretext designed over the same cells and pretraining data sampled
-   like the intensive-care tasks; then read pretraining on it at 20, 50 and 200 stays.
+   0.008 at every stay; a pretext over the same cells is defined, audited and piloted; next two
+   pretrainings on the intensive-care corpora, then pretraining data sampled like the
+   intensive-care tasks, and the reading at 20, 50 and 200 stays.
 2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
 3. Open the frozen test side once.

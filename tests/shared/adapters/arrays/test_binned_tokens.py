@@ -207,3 +207,85 @@ def test_the_value_features_of_a_cell_are_its_mean_extremes_and_ends() -> None:
     names = BinnedTokens.FEATURE_NAMES[BinnedTokens(2).value_features]
 
     assert names == ("mean", "minimum", "maximum", "first", "last")
+
+
+def test_the_cell_width_is_the_kernel_s() -> None:
+    from emblema.shared.kernel.tokens import N_CELL_FEATURES
+
+    assert BinnedTokens.N_FEATURES == N_CELL_FEATURES == len(BinnedTokens.FEATURE_NAMES)
+
+
+def hidden_cells(layout: BinnedTokens, window: TokenWindow, *positions: int) -> NDArray[Any]:
+    hidden = np.zeros(len(layout.lay([window])[0]), dtype=bool)
+    hidden[list(positions)] = True
+    return hidden
+
+
+def test_without_a_cell_the_rows_bins_and_order_stay_the_full_layouts() -> None:
+    layout = BinnedTokens(4)
+    full = layout.lay([WINDOW])[0]
+
+    laid = layout.without(WINDOW, hidden_cells(layout, WINDOW, 1))
+
+    assert laid.channel_ids.tolist() == full.channel_ids.tolist()
+    assert laid.times.tolist() == full.times.tolist()
+    assert laid.timeless.tolist() == full.timeless.tolist()
+
+
+def test_a_hidden_cell_becomes_empty_and_its_neighbours_forget_its_readings() -> None:
+    layout = BinnedTokens(4)
+    # Cell 1 is channel 1's first bin, which held 3.0 and 5.0; cells 3 and 5 are its empty
+    # second and third bins, which in the full layout carry 5.0 forward.
+    laid = layout.without(WINDOW, hidden_cells(layout, WINDOW, 1)).features
+
+    assert laid[1].tolist() == pytest.approx([0.0] * 8 + [0.25])
+    assert laid[3].tolist() == pytest.approx([0.0] * 8 + [0.5])
+    assert laid[5][SINCE] == pytest.approx(0.75)
+    assert laid[5][LAST] == 0.0
+    # Channel 1's last bin still holds its own reading, and counts from itself.
+    assert laid[7][PRESENCE] == 1.0
+    assert laid[7][MEAN] == 7.0
+
+
+def test_hiding_an_empty_cell_changes_nothing_of_the_others() -> None:
+    layout = BinnedTokens(4)
+    full = layout.lay([WINDOW])[0].features
+
+    laid = layout.without(WINDOW, hidden_cells(layout, WINDOW, 3)).features
+
+    assert np.array_equal(laid, full)
+
+
+def test_without_a_static_cell_the_feature_stands_absent() -> None:
+    layout = BinnedTokens(4)
+
+    laid = layout.without(WINDOW, hidden_cells(layout, WINDOW, 0)).features
+
+    assert laid[0].tolist() == [0.0] * 9
+    assert laid[1][PRESENCE] == 1.0
+
+
+def test_without_every_cell_of_a_channel_the_row_stays_and_counts_from_the_start() -> None:
+    layout = BinnedTokens(4)
+
+    laid = layout.without(WINDOW, hidden_cells(layout, WINDOW, 2, 4, 6, 8))
+
+    assert laid.channel_ids.tolist() == [9, 1, 2, 1, 2, 1, 2, 1, 2]
+    channel_2 = laid.features[[2, 4, 6, 8]]
+    assert (channel_2[:, :SINCE] == 0).all()
+    assert channel_2[:, SINCE].tolist() == pytest.approx([0.25, 0.5, 0.75, 1.0])
+
+
+def test_without_nothing_hidden_is_the_full_layout() -> None:
+    layout = BinnedTokens(3, channels=[1, 2, 5], statics=[9])
+    full = layout.lay([WINDOW])[0]
+
+    laid = layout.without(WINDOW, np.zeros(len(full), dtype=bool))
+
+    assert np.array_equal(laid.features, full.features)
+    assert laid.channel_ids.tolist() == full.channel_ids.tolist()
+
+
+def test_hidden_cells_marked_over_another_count_are_refused() -> None:
+    with pytest.raises(ValueError, match="the window has 9 cells"):
+        BinnedTokens(4).without(WINDOW, np.zeros(8, dtype=bool))

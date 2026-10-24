@@ -47,6 +47,8 @@ class FittedCandidate:
         cell_channels: The measured channels a candidate over the corpus's cells gets a row
             for; empty for one over the window's own channels or over the raw readings.
         cell_statics: The static features such a candidate gets a cell for; empty likewise.
+        cell_bins: The spans a candidate over cells cut the window into, which a plan beside a
+            backbone over cells does not state; zero over the raw readings.
     """
 
     FORMAT: ClassVar[str] = "torch-state"
@@ -57,6 +59,7 @@ class FittedCandidate:
     weights: dict[str, Any]
     cell_channels: tuple[int, ...] = ()
     cell_statics: tuple[int, ...] = ()
+    cell_bins: int = 0
 
     @classmethod
     def of(
@@ -68,6 +71,7 @@ class FittedCandidate:
         link: TargetLink,
         cell_channels: tuple[int, ...] = (),
         cell_statics: tuple[int, ...] = (),
+        cell_bins: int = 0,
     ) -> Self:
         """The candidate as it ended, with its weights copied to the host.
 
@@ -83,6 +87,7 @@ class FittedCandidate:
             },
             cell_channels=cell_channels,
             cell_statics=cell_statics,
+            cell_bins=cell_bins,
         )
 
     def to_bytes(self) -> bytes:
@@ -97,6 +102,7 @@ class FittedCandidate:
                 "weights": self.weights,
                 "cell_channels": list(self.cell_channels),
                 "cell_statics": list(self.cell_statics),
+                "cell_bins": self.cell_bins,
             },
             buffer,
         )
@@ -120,6 +126,7 @@ class FittedCandidate:
                 weights=stored["weights"],
                 cell_channels=tuple(stored.get("cell_channels", ())),
                 cell_statics=tuple(stored.get("cell_statics", ())),
+                cell_bins=int(stored.get("cell_bins", 0)),
             )
         except UNREADABLE_BYTES as error:
             raise UnreadableFittedCandidateError(

@@ -8,9 +8,11 @@ from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from tests.support.experiments import (
+    CELLS,
     CHANNELS,
     CONTRAST,
     LATENT,
+    OBSERVATION,
     SUMMARY,
     configuration,
     windows,
@@ -19,6 +21,9 @@ from tests.support.experiments import (
 torch = pytest.importorskip("torch")
 
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
+from emblema.pretraining.adapters.objective.cell_reconstruction import (  # noqa: E402
+    CellReconstruction,
+)
 from emblema.pretraining.adapters.objective.contrastive_reconstruction import (  # noqa: E402
     ContrastiveReconstruction,
 )
@@ -33,7 +38,9 @@ from emblema.pretraining.adapters.objective.summary_reconstruction import (  # n
     SummaryReconstruction,
 )
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking  # noqa: E402
+from emblema.pretraining.adapters.training.cell_batches import CellBatches  # noqa: E402
 from emblema.pretraining.adapters.training.trained_model import TrainedModel  # noqa: E402
+from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens  # noqa: E402
 
 pytestmark = pytest.mark.ml
 
@@ -194,6 +201,40 @@ def test_the_bytes_of_a_model_without_the_summaries_hold_no_key_for_them() -> No
     )
 
     assert "summary_weight" not in stored
+    assert "bins" not in stored
+    assert "presence_weight" not in stored
+
+
+def test_a_model_over_cells_is_read_back_with_its_bins_and_its_observation() -> None:
+    stated = configuration(architecture=CELLS, observation=OBSERVATION)
+    torch.manual_seed(6)
+    trained = ObjectiveShape.of(stated, CHANNELS).build().eval()
+    batches = CellBatches(BinnedTokens(CELLS.bins))
+    collated = batches.collate(windows(3, seed=9))
+    masks = TokenMasking(stated.masking).draw(collated, torch.Generator().manual_seed(4))
+    batch = batches.scored(collated, masks)
+
+    stored = TrainedModel.read(TrainedModel.of(stated, CHANNELS, trained).to_bytes())
+    read = stored.build()
+
+    assert stored.architecture == CELLS
+    assert stored.observation == OBSERVATION
+    assert isinstance(read, CellReconstruction)
+    assert isinstance(trained, CellReconstruction)
+    with torch.no_grad():
+        assert torch.equal(read(batch, masks), trained(batch, masks))
+
+
+def test_stored_weights_over_cells_or_with_another_observation_are_not_continued() -> None:
+    over_cells = configuration(architecture=CELLS, observation=OBSERVATION)
+    torch.manual_seed(6)
+    stored = TrainedModel.of(over_cells, CHANNELS, ObjectiveShape.of(over_cells, CHANNELS).build())
+
+    with pytest.raises(IncompatibleStartError, match="shape"):
+        stored.require_shape_of(configuration())
+    with pytest.raises(IncompatibleStartError, match="observation"):
+        stored.require_shape_of(configuration(architecture=CELLS))
+    stored.require_shape_of(over_cells)
 
 
 TABLE = "encoder.channel_embedding.table.weight"

@@ -66,3 +66,25 @@ def test_the_width_is_a_multiple_of_the_heads() -> None:
 def test_a_vocabulary_has_at_least_one_channel(vocabulary_size: int) -> None:
     with pytest.raises(InvalidEncoderArchitectureError, match="vocabulary size"):
         SMALL.parameter_count(vocabulary_size)
+
+
+def test_an_encoder_reads_one_token_per_reading_unless_it_has_bins() -> None:
+    assert not SMALL.reads_cells
+    assert SMALL.bins == 0
+    assert SMALL.input_features == 2
+    over_cells = replace(SMALL, bins=6)
+    assert over_cells.reads_cells
+    assert over_cells.input_features == 9
+
+
+def test_the_bins_widen_the_value_projection_and_nothing_else() -> None:
+    over_cells = replace(SMALL, bins=6)
+
+    # Seven more inputs to a projection of the width: seven weights per output, no more biases.
+    assert over_cells.parameter_count(64) - SMALL.parameter_count(64) == 7 * SMALL.width
+    assert over_cells.parameter_count(64) == replace(SMALL, bins=12).parameter_count(64)
+
+
+def test_negative_bins_are_refused() -> None:
+    with pytest.raises(InvalidEncoderArchitectureError, match="bins"):
+        replace(SMALL, bins=-1)

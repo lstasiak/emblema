@@ -200,3 +200,61 @@ def test_a_fresh_encoder_takes_a_learnt_time_and_a_wider_feature_axis_of_its_own
     )
     assert isinstance(bent.value_projection, NonlinearValueEmbedding)
     assert bent.value_projection.layers[0].in_features == 9
+
+
+def test_the_bins_are_the_stored_architecture_s() -> None:
+    from dataclasses import replace
+
+    from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape
+    from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
+
+    store = InMemoryArtifactStore()
+    weights, _ = stored(store)
+    assert RestoredBackbones(store, weights).bins == 0
+
+    over_cells = configuration(architecture=replace(TINY, bins=6))
+    torch.manual_seed(4)
+    model = ObjectiveShape(
+        architecture=over_cells.architecture,
+        vocabulary_size=CHANNELS,
+        decoder_layers=1,
+        target=ObjectiveTarget.value(),
+    ).build()
+    cells = store.put(TrainedModel.of(over_cells, CHANNELS, model).to_bytes())
+    backbones = RestoredBackbones(store, cells)
+
+    assert backbones.bins == 6
+    pretrained = backbones.pretrained(cells, vocabulary_size=CHANNELS, dropout=0.0)
+    assert isinstance(pretrained, SetEncoder)
+    assert isinstance(pretrained.value_projection, nn.Linear)
+    assert pretrained.value_projection.in_features == 9
+
+
+def test_a_fresh_encoder_s_input_part_is_the_layout_s_not_the_stored_model_s() -> None:
+    from dataclasses import replace
+
+    from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape
+    from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
+
+    store = InMemoryArtifactStore()
+    over_cells = configuration(architecture=replace(TINY, bins=6))
+    torch.manual_seed(5)
+    model = ObjectiveShape(
+        architecture=over_cells.architecture,
+        vocabulary_size=CHANNELS,
+        decoder_layers=1,
+        target=ObjectiveTarget.value(),
+    ).build()
+    backbones = RestoredBackbones(
+        store, store.put(TrainedModel.of(over_cells, CHANNELS, model).to_bytes())
+    )
+
+    raw = backbones.fresh(vocabulary_size=CHANNELS, dropout=0.0)
+    binned = backbones.fresh(vocabulary_size=CHANNELS, dropout=0.0, input_features=9, bins=4)
+
+    assert isinstance(raw, SetEncoder)
+    assert isinstance(binned, SetEncoder)
+    assert raw.architecture.bins == 0
+    assert raw.value_projection.in_features == N_FEATURES
+    assert binned.architecture.bins == 4
+    assert binned.value_projection.in_features == 9

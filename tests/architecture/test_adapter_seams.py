@@ -16,6 +16,7 @@ PACKAGE = Path(__file__).resolve().parents[2] / "src" / "emblema"
 ADAPTER_SEAMS = {
     "emblema.evaluation.adapters.torch.backbone_factory.BackboneFactory",
     "emblema.evaluation.adapters.torch.layered_encoder.LayeredEncoder",
+    "emblema.pretraining.adapters.training.batch_layout.BatchLayout",
     "emblema.shared.adapters.arrays.window_layout.WindowLayout",
     "emblema.shared.adapters.tensors.grown_parameters.GrownParameters",
 }

@@ -875,6 +875,7 @@ def test_a_candidate_over_the_corpus_cells_is_kept_without_a_graph_and_with_its_
     assert [form.format for form in kept.representations] == [FittedCandidate.FORMAT]
     fitted = FittedCandidate.read(store.get(kept.measured.artifact))
     assert fitted.parameters["bins"] == 4
+    assert fitted.cell_bins == 4
     assert fitted.cell_channels == tuple(c.channel_id for c in CHANNELS if not c.timeless)
     assert fitted.cell_statics == tuple(c.channel_id for c in CHANNELS if c.timeless)
 
@@ -931,3 +932,66 @@ def test_a_clip_over_cells_bounds_their_values_and_changes_the_answers(
     received = published.backbones.built[-1]
     assert isinstance(received, SetEncoder)
     assert received.value_projection.in_features == BinnedTokens.N_FEATURES
+
+
+def test_a_backbone_pretrained_over_cells_is_adapted_over_the_cells_it_was_trained_on(
+    tmp_path: Path,
+) -> None:
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "scratch")
+    backbones = SmallBackbones(vocabulary_size=len(CHANNELS), bins=4)
+    runtime = TorchAdaptationRuntime(
+        backbones, PublishedCorpusBlocks(store, tmp_path / "workspace"), device="cpu", store=store
+    )
+    defined = replace(task(), manifest=published.manifest, labels=RemainingLifeScheme(CEILING))
+
+    first = runtime.adapt(
+        plan(TransferMode.FULL_FINE_TUNING), defined, SAMPLE, VALIDATION, retain=True
+    )
+    again = runtime.adapt(
+        plan(TransferMode.FULL_FINE_TUNING), defined, SAMPLE, VALIDATION, retain=False
+    )
+    probed = runtime.adapt(
+        plan(TransferMode.FROZEN_PROBE), defined, SAMPLE, VALIDATION, retain=False
+    )
+
+    assert first.predictions == again.predictions
+    assert all(math.isfinite(p.predicted) for p in first.predictions)
+    assert all(math.isfinite(p.predicted) for p in probed.predictions)
+    received = backbones.built[0]
+    assert isinstance(received, SetEncoder)
+    assert received.value_projection.in_features == BinnedTokens.N_FEATURES
+    # Kept in its measured form alone, as a network from nothing over cells is, with the bins
+    # the plan beside a backbone does not state.
+    assert first.artifact is not None
+    kept = KeptCandidates(store).read(first.artifact)
+    assert [form.format for form in kept.representations] == [FittedCandidate.FORMAT]
+    fitted = FittedCandidate.read(store.get(kept.measured.artifact))
+    assert fitted.cell_bins == 4
+
+
+def test_a_network_from_nothing_beside_a_cells_backbone_reads_the_raw_tokens_unless_it_states_bins(
+    tmp_path: Path,
+) -> None:
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "scratch")
+    backbones = SmallBackbones(vocabulary_size=len(CHANNELS), bins=4)
+    runtime = TorchAdaptationRuntime(
+        backbones, PublishedCorpusBlocks(store, tmp_path / "workspace"), device="cpu"
+    )
+    defined = replace(task(), manifest=published.manifest, labels=RemainingLifeScheme(CEILING))
+
+    runtime.adapt(plan(TransferMode.FROM_SCRATCH), defined, SAMPLE, VALIDATION, retain=False)
+    runtime.adapt(
+        plan(TransferMode.FROM_SCRATCH, encoder=EncoderSetting(bins=2)),
+        defined,
+        SAMPLE,
+        VALIDATION,
+        retain=False,
+    )
+
+    raw, binned = backbones.built
+    assert isinstance(raw, SetEncoder)
+    assert isinstance(binned, SetEncoder)
+    assert raw.value_projection.in_features == 2
+    assert binned.value_projection.in_features == BinnedTokens.N_FEATURES

@@ -1,16 +1,19 @@
 from dataclasses import dataclass
 
 from emblema.pretraining.domain.exceptions import InvalidEncoderArchitectureError
-from emblema.shared.kernel.tokens import N_FEATURES
+from emblema.shared.kernel.tokens import N_CELL_FEATURES, N_FEATURES
 
 
 @dataclass(frozen=True, kw_only=True)
 class EncoderArchitecture:
     """The shape of the encoder: what a trained backbone is identified by and its weights load into.
 
-    Invariants: every count is positive; ``width`` is a multiple of ``heads``. The vocabulary size
-    is an argument of ``parameter_count`` rather than a field, because the same architecture
-    trained over two vocabularies is the same architecture with two embedding tables.
+    Invariants: every count is positive; ``width`` is a multiple of ``heads``; ``bins`` is not
+    negative. The vocabulary size is an argument of ``parameter_count`` rather than a field,
+    because the same architecture trained over two vocabularies is the same architecture with two
+    embedding tables. The bins are part of the shape because they fix what a token is and how
+    wide the value projection is: weights trained over one token per reading do not load into
+    an encoder reading one token per channel and span, and the other way round.
 
     Attributes:
         width: Size of a token's representation throughout the encoder.
@@ -19,6 +22,9 @@ class EncoderArchitecture:
         feedforward_width: Hidden size of the feed-forward network inside each block.
         time_frequencies: Fourier frequencies the position of a token in its window is encoded
             with.
+        bins: Equal spans a window is cut into where a token is one channel over one span,
+            carrying what the span held; zero where a token is one reading, as every encoder
+            before the input had a part.
     """
 
     width: int
@@ -26,6 +32,7 @@ class EncoderArchitecture:
     layers: int
     feedforward_width: int
     time_frequencies: int
+    bins: int = 0
 
     def __post_init__(self) -> None:
         counts = (
@@ -42,6 +49,18 @@ class EncoderArchitecture:
             raise InvalidEncoderArchitectureError(
                 f"width must be a multiple of heads, got width {self.width} and {self.heads} heads"
             )
+        if self.bins < 0:
+            raise InvalidEncoderArchitectureError(f"bins must not be negative, got {self.bins}")
+
+    @property
+    def reads_cells(self) -> bool:
+        """Whether a token is one channel over one span of the window rather than one reading."""
+        return self.bins > 0
+
+    @property
+    def input_features(self) -> int:
+        """How wide a token's features are at the encoder's input: the raw pair, or a cell's."""
+        return N_CELL_FEATURES if self.reads_cells else N_FEATURES
 
     def parameter_count(self, vocabulary_size: int) -> int:
         """Parameters of the encoder in its standard composition over ``vocabulary_size`` channels.
@@ -58,7 +77,7 @@ class EncoderArchitecture:
             )
         width, hidden = self.width, self.feedforward_width
         channel_table = (vocabulary_size + 1) * width
-        value_projection = self._linear(N_FEATURES, width)
+        value_projection = self._linear(self.input_features, width)
         time_encoding = self._linear(2 * self.time_frequencies, width)
         attention = self._linear(width, 3 * width) + self._linear(width, width)
         feedforward = self._linear(width, hidden) + self._linear(hidden, width)

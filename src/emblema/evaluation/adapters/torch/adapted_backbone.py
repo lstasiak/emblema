@@ -14,6 +14,7 @@ from emblema.evaluation.adapters.torch.regression_head import RegressionHead
 from emblema.evaluation.adapters.torch.summary_branch import SummaryBranch
 from emblema.evaluation.domain.exceptions import InvalidAdaptationPlanError
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
+from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
 from emblema.shared.adapters.arrays.raw_tokens import RawTokens
 from emblema.shared.adapters.arrays.window_layout import WindowLayout
 from emblema.shared.adapters.tensors.grown_parameters import GrownParameters
@@ -120,6 +121,7 @@ class AdaptedBackbone(nn.Module):
                 shape=shape,
                 time_encoding=plan.encoder.time_encoding,
                 input_features=laid_out.features,
+                bins=laid_out.bins if isinstance(laid_out, BinnedTokens) else 0,
             )
         else:
             encoder = backbones.pretrained(

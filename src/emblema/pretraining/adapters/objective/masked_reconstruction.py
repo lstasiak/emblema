@@ -28,11 +28,13 @@ class MaskedReconstruction(PretrainingObjective):
         decoder: The part that is thrown away.
     """
 
-    def __init__(self, encoder: SetEncoder, *, decoder_layers: int, dropout: float = 0.0) -> None:
+    def __init__(
+        self, encoder: SetEncoder, *, decoder_layers: int, dropout: float = 0.0, outputs: int = 1
+    ) -> None:
         super().__init__()
         self.encoder = encoder
         self.decoder = ReconstructionDecoder(
-            encoder.architecture, layers=decoder_layers, dropout=dropout
+            encoder.architecture, layers=decoder_layers, dropout=dropout, outputs=outputs
         )
 
     def encoded(self, batch: TokenTensors, padding_mask: Tensor) -> Tensor:
