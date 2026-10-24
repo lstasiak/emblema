@@ -1,0 +1,54 @@
+# The pilot of the pretext over cells on the intensive-care stays alone, at the tier a laptop
+# runs: the small shape the stays chose from nothing (two blocks, 64 wide, feed-forward 128,
+# sixteen heads) over cells of six bins, the layout that reached the trees at 200 stays
+# (docs/verification/encoder-candidates.md). A pilot at this tier settles the mechanics — the
+# loss falls, nothing diverges, the three terms have a scale, a step has a cost — and nothing
+# about the representation; the stays are the one corpus where a cell's presence is a question.
+#
+# The masks are the mixture's four draws read over cells: a "token" is a cell timed at its bin's
+# centre, so the single-cell draw hides one bin of one channel and the block draw a run of them.
+# The presence of every hidden cell and the count where a reading was are asked beside the five
+# summaries, each weighed as one hidden cell's loss; the count at half, being nearly a repeat of
+# the presence on channels read every hour.
+name = "backbone-cells-physionet2012-s"
+tier = "S"
+corpora = ["physionet2012"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+# Every stay of set A: the tier's tenth is sized for the dense corpora, and the stays are few.
+corpus_fraction = 1.0
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 6
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+# Bounded at one standard deviation, as every clinical run since the satellite corpus was read so.
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 4
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 200

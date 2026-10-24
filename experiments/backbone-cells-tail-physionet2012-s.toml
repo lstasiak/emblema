@@ -1,0 +1,48 @@
+# The pilot of the pretext over cells with the window's tail hidden as well: half the stays lose
+# their last quarter to half, every channel at once, and the objective then asks which channels
+# will be measured in those bins and what they will hold — the schedule of measurements as a
+# target rather than a shortcut. Everything else is backbone-cells-physionet2012-s.toml to the
+# step, so the two pilots differ in the tail alone.
+name = "backbone-cells-tail-physionet2012-s"
+tier = "S"
+corpora = ["physionet2012"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+corpus_fraction = 1.0
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 6
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+horizon_rate = 0.5
+horizon_min_span = 0.25
+horizon_max_span = 0.5
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 4
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 200
