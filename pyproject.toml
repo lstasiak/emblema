@@ -172,6 +172,7 @@ allowed-confusables = ["×"]
 "tests/**" = ["D"]
 # Developer scripts that import a sibling package: the path is set up before the imports run.
 "scripts/corpus_facts.py" = ["E402"]
+"scripts/cell_pretext_audit.py" = ["E402"]
 "scripts/loader_throughput_report.py" = ["E402"]
 "scripts/window_sanity_report.py" = ["E402"]
 "scripts/token_view_report.py" = ["E402"]
