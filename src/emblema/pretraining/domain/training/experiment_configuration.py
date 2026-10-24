@@ -11,6 +11,7 @@ from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.pretraining.domain.training.objective_loss import ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
+from emblema.pretraining.domain.training.observation_term import ObservationTerm
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.summary_term import SummaryTerm
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
@@ -62,6 +63,8 @@ class ExperimentConfiguration:
             is every run before the term existed.
         summary: The term beside the loss at the hidden tokens that asks for each channel's
             level and extremes of the hidden part; none unless stated.
+        observation: The terms beside the loss at the hidden cells that ask whether and how
+            often a channel was measured there; none unless stated, and only over cells.
         budget: How long the run trains and in how large a step.
         precision: What the forward and backward pass are computed at.
         checkpoint: How often resumable state is written.
@@ -94,6 +97,7 @@ class ExperimentConfiguration:
     target: ObjectiveTarget = field(default_factory=ObjectiveTarget.value)
     contrast: ContrastiveTerm = field(default_factory=ContrastiveTerm.none)
     summary: SummaryTerm = field(default_factory=SummaryTerm.none)
+    observation: ObservationTerm = field(default_factory=ObservationTerm.none)
     passes: tuple[CorpusPasses, ...] = ()
     fractions: tuple[CorpusFraction, ...] = ()
     start: ArtifactRef | None = None
@@ -141,6 +145,17 @@ class ExperimentConfiguration:
             raise InvalidExperimentConfigurationError(
                 "the summary term and the contrastive term are not stated together"
             )
+        if self.observation.is_stated and not self.architecture.reads_cells:
+            raise InvalidExperimentConfigurationError(
+                "the observation term asks about cells, and the encoder reads one token per reading"
+            )
+        if self.architecture.reads_cells and (
+            self.target.is_latent or self.contrast.is_stated or self.summary.is_stated
+        ):
+            raise InvalidExperimentConfigurationError(
+                "an encoder over cells predicts their values, with no latent target, contrast or "
+                "summaries beside"
+            )
         # Building the share runs its invariant: a fraction no run could read is no configuration.
         _ = self.corpus_share
 
@@ -186,10 +201,11 @@ class ExperimentConfiguration:
         must digest to one signature. Passes and fractions are rendered last, by corpus name,
         and only where stated: a run that reads every corpus once, at the mixture's share,
         renders as it did before either knob existed. The tail is rendered only where it is
-        drawn, the target only where it is a state, the contrast and the summaries only where they
-        are stated, the start only where there is one and the trained parameters only where they
-        are not everything, for the same reason. The start renders as the checksum of the stored
-        model: what the run starts from is the weights, wherever they are kept.
+        drawn, the target only where it is a state, the contrast, the summaries and the
+        observation only where they are stated, the bins only where the encoder reads cells, the
+        start only where there is one and the trained parameters only where they are not
+        everything, for the same reason. The start renders as the checksum of the stored model:
+        what the run starts from is the weights, wherever they are kept.
         """
         passes = {
             f"passes.{stated.corpus}": stated.passes
@@ -230,6 +246,17 @@ class ExperimentConfiguration:
         summary: dict[str, str | int | float] = (
             {"summary_weight": float(self.summary.weight)} if self.summary.is_stated else {}
         )
+        observation: dict[str, str | int | float] = (
+            {
+                "presence_weight": float(self.observation.presence_weight),
+                "count_weight": float(self.observation.count_weight),
+            }
+            if self.observation.is_stated
+            else {}
+        )
+        bins: dict[str, str | int | float] = (
+            {"bins": self.architecture.bins} if self.architecture.reads_cells else {}
+        )
         start: dict[str, str | int | float] = (
             {} if self.start is None else {"start": str(self.start.checksum)}
         )
@@ -245,6 +272,7 @@ class ExperimentConfiguration:
             "layers": self.architecture.layers,
             "feedforward_width": self.architecture.feedforward_width,
             "time_frequencies": self.architecture.time_frequencies,
+            **bins,
             "dropout": float(self.dropout),
             "decoder_layers": self.decoder_layers,
             "channel_rate": float(masking.channel_rate),
@@ -258,6 +286,7 @@ class ExperimentConfiguration:
             **target,
             **contrast,
             **summary,
+            **observation,
             "epochs": self.budget.epochs,
             "batch_size": self.budget.batch_size,
             "accumulation_steps": self.budget.accumulation_steps,

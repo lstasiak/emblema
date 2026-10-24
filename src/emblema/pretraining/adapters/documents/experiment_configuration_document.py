@@ -10,6 +10,7 @@ from emblema.pretraining.domain.training.corpus_passes import CorpusPasses
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
+from emblema.pretraining.domain.training.observation_term import ObservationTerm
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.summary_term import SummaryTerm
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
@@ -75,12 +76,24 @@ class ExperimentConfigurationDocument:
             if configuration.contrast.is_stated
             else {}
         )
-        # So do the summaries.
+        # So do the summaries, and the observation of the cells.
         summary: Document = (
             {"summary": {"weight": configuration.summary.weight}}
             if configuration.summary.is_stated
             else {}
         )
+        observation: Document = (
+            {
+                "observation": {
+                    "presence_weight": configuration.observation.presence_weight,
+                    "count_weight": configuration.observation.count_weight,
+                }
+            }
+            if configuration.observation.is_stated
+            else {}
+        )
+        # And the bins: an encoder over one token per reading writes the shape it always wrote.
+        bins: Document = {"bins": architecture.bins} if architecture.reads_cells else {}
         # The start and the trained parameters too: a run from its seed moving everything
         # writes the document every run wrote before either knob existed.
         start: Document = (
@@ -101,6 +114,7 @@ class ExperimentConfigurationDocument:
                 "layers": architecture.layers,
                 "feedforward_width": architecture.feedforward_width,
                 "time_frequencies": architecture.time_frequencies,
+                **bins,
             },
             "dropout": configuration.dropout,
             "decoder_layers": configuration.decoder_layers,
@@ -117,6 +131,7 @@ class ExperimentConfigurationDocument:
                 **target,
                 **contrast,
                 **summary,
+                **observation,
             },
             "budget": {
                 "epochs": budget.epochs,
@@ -157,7 +172,10 @@ class ExperimentConfigurationDocument:
         target = objective.optional_fields("target")
         contrast = objective.optional_fields("contrast")
         summary = objective.optional_fields("summary")
+        observation = objective.optional_fields("observation")
         trained = fields.optional_text("trained")
+        # Absent from every document written before the input had a part: one token per reading.
+        bins = architecture.optional_integer("bins")
         return ExperimentConfiguration(
             name=fields.text("name"),
             tier=ComputeTier(fields.text("tier")),
@@ -168,6 +186,7 @@ class ExperimentConfigurationDocument:
                 layers=architecture.integer("layers"),
                 feedforward_width=architecture.integer("feedforward_width"),
                 time_frequencies=architecture.integer("time_frequencies"),
+                bins=0 if bins is None else bins,
             ),
             dropout=fields.number("dropout"),
             decoder_layers=fields.integer("decoder_layers"),
@@ -206,6 +225,12 @@ class ExperimentConfigurationDocument:
             summary=SummaryTerm.none()
             if summary is None
             else SummaryTerm.of(weight=summary.number("weight")),
+            observation=ObservationTerm.none()
+            if observation is None
+            else ObservationTerm.of(
+                presence_weight=observation.number("presence_weight"),
+                count_weight=observation.number("count_weight"),
+            ),
             budget=TrainingBudget(
                 epochs=budget.integer("epochs"),
                 batch_size=budget.integer("batch_size"),

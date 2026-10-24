@@ -13,8 +13,10 @@ from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from tests.support.experiments import (
+    CELLS,
     CONTRAST,
     LATENT,
+    OBSERVATION,
     SUMMARY,
     WEIGHTS,
     budget,
@@ -345,3 +347,46 @@ def test_the_rows_alone_may_be_moved_from_the_seed_as_well_as_from_stored_weight
 
     assert untrained.start is None
     assert untrained.differences_from(configuration()) == ("trained",)
+
+
+def test_the_bins_render_after_the_shape_and_only_where_the_encoder_reads_cells() -> None:
+    over_cells = configuration(architecture=CELLS)
+
+    parameters = list(over_cells.parameters())
+
+    assert "bins" not in configuration().parameters()
+    shape = parameters.index("time_frequencies") + 1
+    assert parameters[shape : shape + 2] == ["bins", "dropout"]
+    assert over_cells.parameters()["bins"] == 3
+    assert over_cells.differences_from(configuration()) == ("bins",)
+
+
+def test_the_observation_renders_after_the_summaries_and_only_where_it_is_stated() -> None:
+    observed = configuration(architecture=CELLS, observation=OBSERVATION)
+
+    parameters = list(observed.parameters())
+
+    assert "presence_weight" not in configuration(architecture=CELLS).parameters()
+    knee = parameters.index("huber_delta") + 1
+    assert parameters[knee : knee + 3] == ["presence_weight", "count_weight", "epochs"]
+    assert observed.parameters()["presence_weight"] == 1.0
+    assert observed.parameters()["count_weight"] == 0.5
+    assert observed.differences_from(configuration(architecture=CELLS)) == (
+        "presence_weight",
+        "count_weight",
+    )
+
+
+def test_the_observation_is_stated_over_cells_only() -> None:
+    with pytest.raises(InvalidExperimentConfigurationError, match="one token per reading"):
+        configuration(observation=OBSERVATION)
+
+
+@pytest.mark.parametrize(
+    "beside",
+    [{"target": LATENT}, {"contrast": CONTRAST}, {"summary": SUMMARY}],
+    ids=["latent", "contrast", "summaries"],
+)
+def test_an_encoder_over_cells_predicts_their_values_alone(beside: dict[str, object]) -> None:
+    with pytest.raises(InvalidExperimentConfigurationError, match="no latent target, contrast"):
+        configuration(architecture=CELLS, **beside)

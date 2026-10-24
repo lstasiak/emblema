@@ -73,6 +73,10 @@ class InvalidSummaryTermError(PretrainingError, ValueError):
     pass
 
 
+class InvalidObservationTermError(PretrainingError, ValueError):
+    pass
+
+
 class IncomparableFloorError(PretrainingError, ValueError):
     pass
 
