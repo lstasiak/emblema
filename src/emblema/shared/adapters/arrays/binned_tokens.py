@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import ClassVar
 
 import numpy as np
@@ -6,7 +7,7 @@ from numpy.typing import DTypeLike, NDArray
 
 from emblema.shared.adapters.arrays.laid_window import LaidWindow
 from emblema.shared.adapters.arrays.token_batch import TokenBatch
-from emblema.shared.kernel.tokens import PADDING_CHANNEL_ID, TokenWindow
+from emblema.shared.kernel.tokens import N_CELL_FEATURES, PADDING_CHANNEL_ID, TokenWindow
 
 
 class BinnedTokens:
@@ -28,11 +29,15 @@ class BinnedTokens:
     with the channels within a bin, so the batch is a ``TokenBatch`` whose feature axis is
     ``N_FEATURES`` wide rather than two.
 
+    A window may also be laid out ``without`` some of its cells: the readings that fell in them
+    are left out and the rest laid on the same rows and bins, so the cells around a hidden one
+    carry forward and count from what remains visible, never from what was hidden.
+
     Attributes:
         bins: Equal spans the window is cut into.
     """
 
-    N_FEATURES: ClassVar[int] = 9
+    N_FEATURES: ClassVar[int] = N_CELL_FEATURES
     FEATURE_NAMES: ClassVar[tuple[str, ...]] = (
         "presence",
         "log_count",
@@ -43,6 +48,13 @@ class BinnedTokens:
         "last",
         "last_offset",
         "since",
+    )
+    # Where on the feature axis the presence, the count and the five values stand: whoever
+    # scores or answers a cell reads these, never a literal.
+    PRESENCE: ClassVar[int] = FEATURE_NAMES.index("presence")
+    LOG_COUNT: ClassVar[int] = FEATURE_NAMES.index("log_count")
+    VALUE_FEATURES: ClassVar[slice] = slice(
+        FEATURE_NAMES.index("mean"), FEATURE_NAMES.index("last") + 1
     )
 
     def __init__(
@@ -85,7 +97,7 @@ class BinnedTokens:
     @property
     def value_features(self) -> slice:
         """The mean, minimum, maximum, first and last of a cell: what a clip bounds."""
-        return slice(2, 7)
+        return self.VALUE_FEATURES
 
     @property
     def over_the_corpus(self) -> bool:
@@ -110,33 +122,82 @@ class BinnedTokens:
         """
         return [self._cells(window) for window in windows]
 
+    def without(self, window: TokenWindow, hidden: NDArray[np.bool_]) -> LaidWindow:
+        """``window`` laid out as if the readings of its ``hidden`` cells had never been taken.
+
+        ``hidden`` marks cells in the order ``lay`` gives them for this window. The rows and the
+        static cells are the window's own, hidden or not, so the result stands cell for cell
+        beside the full layout; a hidden cell is then an empty one whose value features carry
+        the last reading still visible before it, and the cells after it count their "since"
+        from that reading too.
+
+        Raises:
+            ValueError: If ``hidden`` does not mark exactly this window's cells, or a window
+                holds a channel outside the corpus's.
+        """
+        columns = _Columns.of(window)
+        static_rows, rows = self._rows_of(columns)
+        expected = len(static_rows) + len(rows) * self.bins
+        if hidden.shape != (expected,):
+            raise ValueError(
+                f"the hidden cells are marked over {hidden.shape}, the window has {expected} cells"
+            )
+        static_at = np.searchsorted(static_rows, columns.static_ids)
+        timed_at = (
+            len(static_rows)
+            + self._bin_of(columns.times) * len(rows)
+            + np.searchsorted(rows, columns.timed_ids)
+        )
+        return self._laid(columns.kept(~hidden[static_at], ~hidden[timed_at]), static_rows, rows)
+
     def batch(self, laid: Sequence[LaidWindow], *, dtype: DTypeLike = np.float32) -> TokenBatch:
         return LaidWindow.padded(laid, features=self.N_FEATURES, dtype=dtype)
 
     def _cells(self, window: TokenWindow) -> LaidWindow:
-        ids = np.asarray(window.channel_ids, dtype=np.int64)
-        values = np.asarray(window.values, dtype=np.float64)
-        times = np.asarray(window.times, dtype=np.float64)
-        static = np.asarray(window.timeless, dtype=bool)
-        timed_cells = self._timed_cells(ids[~static], values[~static], times[~static])
-        static_cells = self._static_cells(ids[static], values[static])
+        columns = _Columns.of(window)
+        static_rows, rows = self._rows_of(columns)
+        return self._laid(columns, static_rows, rows)
+
+    def _rows_of(self, columns: "_Columns") -> tuple[NDArray[np.int64], NDArray[np.int64]]:
+        rows = self._rows(columns.timed_ids, self._channels, "channel")
+        static_rows = self._rows(
+            columns.static_ids, self._statics if self.over_the_corpus else None, "static feature"
+        )
+        return static_rows, rows
+
+    def _laid(
+        self, columns: "_Columns", static_rows: NDArray[np.int64], rows: NDArray[np.int64]
+    ) -> LaidWindow:
+        static_cells = self._static_cells(
+            columns.static_ids, columns.static_values, rows=static_rows
+        )
+        timed_cells = self._timed_cells(
+            columns.timed_ids, columns.timed_values, columns.times, rows=rows
+        )
         return LaidWindow(
-            features=np.concatenate((static_cells[0], timed_cells[0])),
-            channel_ids=np.concatenate((static_cells[1], timed_cells[1])),
-            times=np.concatenate((np.zeros(len(static_cells[1])), timed_cells[2])),
+            features=np.concatenate((static_cells, timed_cells)),
+            channel_ids=np.concatenate((static_rows, np.tile(rows, self.bins))),
+            times=np.concatenate(
+                (
+                    np.zeros(len(static_rows)),
+                    np.repeat((np.arange(self.bins) + 0.5) / self.bins, len(rows)),
+                )
+            ),
             timeless=np.concatenate(
                 (
-                    np.ones(len(static_cells[1]), dtype=bool),
-                    np.zeros(len(timed_cells[1]), dtype=bool),
+                    np.ones(len(static_rows), dtype=bool),
+                    np.zeros(len(rows) * self.bins, dtype=bool),
                 )
             ),
         )
 
+    def _bin_of(self, times: NDArray[np.float64]) -> NDArray[np.int64]:
+        return np.minimum(np.floor(times * self.bins).astype(np.int64), self.bins - 1)
+
     def _static_cells(
-        self, ids: NDArray[np.int64], values: NDArray[np.float64]
-    ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+        self, ids: NDArray[np.int64], values: NDArray[np.float64], *, rows: NDArray[np.int64]
+    ) -> NDArray[np.float64]:
         """One cell per static feature summarising what the window holds of it, present or not."""
-        rows = self._rows(ids, self._statics if self.over_the_corpus else None, "static feature")
         features = np.zeros((len(rows), self.N_FEATURES))
         # Timeless tokens stand in channel order, so a stable sort groups each feature's values
         # as they are, and a feature named more than once is summarised as a bin would be.
@@ -149,17 +210,19 @@ class BinnedTokens:
         features[at, 4] = np.maximum.reduceat(values, starts) if len(values) else 0.0
         features[at, 5] = values[starts]
         features[at, 6] = values[starts + counts - 1]
-        return features, rows
+        return features
 
     def _timed_cells(
-        self, ids: NDArray[np.int64], values: NDArray[np.float64], times: NDArray[np.float64]
-    ) -> tuple[NDArray[np.float64], NDArray[np.int64], NDArray[np.float64]]:
+        self,
+        ids: NDArray[np.int64],
+        values: NDArray[np.float64],
+        times: NDArray[np.float64],
+        *,
+        rows: NDArray[np.int64],
+    ) -> NDArray[np.float64]:
         """A row of bins per measured channel, bin by bin and channel by channel within a bin."""
-        rows = self._rows(ids, self._channels, "channel")
         bins = self.bins
-        row_of = np.searchsorted(rows, ids)
-        bin_of = np.minimum(np.floor(times * bins).astype(np.int64), bins - 1)
-        cell = row_of * bins + bin_of
+        cell = np.searchsorted(rows, ids) * bins + self._bin_of(times)
         # The window's tokens are in time order, so a stable sort by cell leaves every cell's
         # readings in time order: the first and last of a group are the bin's ends.
         order = np.argsort(cell, kind="stable")
@@ -172,12 +235,13 @@ class BinnedTokens:
         observed = count > 0
         with np.errstate(invalid="ignore"):
             mean, minimum, maximum, first, last, offset = (np.zeros(shape) for _ in range(6))
-            mean.flat[filled] = np.add.reduceat(values, starts) / counts
-            minimum.flat[filled] = np.minimum.reduceat(values, starts)
-            maximum.flat[filled] = np.maximum.reduceat(values, starts)
-            first.flat[filled] = values[starts]
-            last.flat[filled] = values[ends]
-            offset.flat[filled] = times[ends] * bins - filled % bins
+            if len(values):
+                mean.flat[filled] = np.add.reduceat(values, starts) / counts
+                minimum.flat[filled] = np.minimum.reduceat(values, starts)
+                maximum.flat[filled] = np.maximum.reduceat(values, starts)
+                first.flat[filled] = values[starts]
+                last.flat[filled] = values[ends]
+                offset.flat[filled] = times[ends] * bins - filled % bins
         # The bin a reading at the window's very end falls in is the last one, so its offset
         # may reach one; the bins before it never do.
         offset = np.minimum(offset, 1.0)
@@ -201,10 +265,8 @@ class BinnedTokens:
             axis=-1,
         )
         # Bin by bin, and channel by channel within a bin: the canonical order of timed tokens.
-        laid = features.transpose(1, 0, 2).reshape(-1, self.N_FEATURES)
-        channel_ids = np.tile(rows, bins)
-        centres = np.repeat((np.arange(bins) + 0.5) / bins, len(rows))
-        return laid, channel_ids, centres
+        laid: NDArray[np.float64] = features.transpose(1, 0, 2).reshape(-1, self.N_FEATURES)
+        return laid
 
     @staticmethod
     def _rows(
@@ -219,3 +281,31 @@ class BinnedTokens:
                 f"a window holds the {what} {int(outside[0])}, which the corpus does not name"
             )
         return named
+
+
+@dataclass(frozen=True)
+class _Columns:
+    """A window's columns split into its static and its timed readings, for the layout to read."""
+
+    static_ids: NDArray[np.int64]
+    static_values: NDArray[np.float64]
+    timed_ids: NDArray[np.int64]
+    timed_values: NDArray[np.float64]
+    times: NDArray[np.float64]
+
+    @classmethod
+    def of(cls, window: TokenWindow) -> "_Columns":
+        ids = np.asarray(window.channel_ids, dtype=np.int64)
+        values = np.asarray(window.values, dtype=np.float64)
+        times = np.asarray(window.times, dtype=np.float64)
+        static = np.asarray(window.timeless, dtype=bool)
+        return cls(ids[static], values[static], ids[~static], values[~static], times[~static])
+
+    def kept(self, statics: NDArray[np.bool_], timed: NDArray[np.bool_]) -> "_Columns":
+        return _Columns(
+            self.static_ids[statics],
+            self.static_values[statics],
+            self.timed_ids[timed],
+            self.timed_values[timed],
+            self.times[timed],
+        )
