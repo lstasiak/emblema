@@ -52,8 +52,13 @@ Last updated 2026-10-24.
   the trees; the 4.8M encoder on the same cells reads 0.68 and 0.64. The gap at few labels was
   the encoder's size, not what it read; dropout, weight decay, a clip and a class weight add
   nothing ([note](verification/encoder-candidates.md)).
-- **Next:** the small encoder at 500 and every stay of the half, then once on set B under the
-  registered parity with the trees; pretraining is read again on it afterwards.
+- **From 500 stays up the cells carry the gain and the trees keep 0.008.** On six-bin cells the
+  4.8M encoder and the small one read alike (0.83 at every stay of the half), 0.022 above the
+  network handed the trees' table and 0.008 below the trees, not distinguishable; the lower edge
+  of that pair (−0.023) lies below the registered margin of 0.015, so the single reading on set
+  B waits for a candidate that clears it on the half ([note](verification/encoder-candidates.md)).
+- **Next:** a candidate above the trees' margin at every stay of the half, then once on set B
+  under the registered parity; pretraining is read again on the small encoder afterwards.
 
 ## Setup
 
@@ -94,7 +99,8 @@ AUROC, higher is better.
 | Network from scratch | 0.65 | 0.75 | 0.79 | 0.79 |
 | Network from scratch, rerun beside the cells ([note](verification/encoder-candidates.md)) | 0.67 | | | |
 | Network from scratch over cells of channel × time bin, 6 / 12 bins ([note](verification/encoder-candidates.md)) | 0.69 / 0.67 | | | |
-| Small network from scratch (2 blocks, 64 wide) over 6-bin cells ([note](verification/encoder-candidates.md)) | 0.73 | | | |
+| Small network from scratch (2 blocks, 64 wide) over 6-bin cells ([note](verification/encoder-candidates.md)) | 0.73 | 0.78 | | 0.83 |
+| Network from scratch (4.8M) over 6-bin cells, 500 and every stay ([note](verification/encoder-candidates.md)) | | 0.77 | | 0.83 |
 | Full fine-tuning, mixture of four | 0.69 | 0.74 | 0.76 | 0.79 |
 | Probe, mixture of four | 0.65–0.67 | 0.69–0.71 | 0.72–0.74 | 0.74–0.76 |
 | Probe, untrained encoder | 0.64 | 0.69 | 0.75 | 0.78 |
