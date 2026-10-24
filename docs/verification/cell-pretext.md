@@ -97,3 +97,127 @@ towards that half; the scores do not, being read on the validation windows. The 
 the tables on a tenth of the windows the audit reads. The spread is read on a
 fifth of the tuning side, as the registered least gains were, so it is not the spread of the
 half the pretraining's reading will be scored on.
+
+## 2026-10-24 — M1 Pro, CPU and MPS, fp32: the hidden cells answered without a model, the pilots, and the small shape's spread
+
+**Question.** As declared above: how much of a hidden cell the strongest linear answer without
+a model reads, corpus by corpus; whether the objective trains at tier S and what a step costs;
+and the small shape's spread over seeds on the fixed fifth beside the probe's at initialisation.
+
+**Conditions.** Declaration committed as `7d517a89`; the audit, the trees and the exports on the
+M1 Pro's CPU, the pilots and the campaign's networks on MPS, fp32. Audit as declared, 7 to 130 s
+a corpus (`data/report/l32b3a/audit-*/`). Spread: campaign `a2aa2234-…`, 60 cells, about 9.5 min
+a budget; `campaign_pairs_report.py` then `seed_spread_report.py`. Pilots by the `pretrain`
+command line (`data/report/l32b3a/pilot.sh`; its parsing of the order's and the run's output
+failed twice and was fixed, each time resuming from the reference already placed, so nothing
+was ordered or run twice). The host layout timed apart over twenty batches of 32 stays.
+
+**The windows as cells.**
+
+| corpus | windows | rows / window | cells / window | hidden cells | held |
+| --- | --- | --- | --- | --- | --- |
+| physionet2012 | 2,000 | 26.8 | 160.7 | 149,443 | 0.62 |
+| physionet2019 | 2,000 | 21.3 | 127.9 | 119,849 | 0.52 |
+| cmapss | 2,000 | 98.2 | 589.0 | 547,082 | 0.78 |
+| skab | 768 | 8.0 | 48.0 | 16,920 | 0.99 |
+| esa_ad | 2,000 | 7.0 | 41.7 | 38,629 | 1.00 |
+
+**The stays of 2012, every hidden cell**, R² against the channel's mean (values) and log loss
+removed against the constant share (presence); `cells` is how many the target is defined on.
+
+| target | cells | carry | interpolation | cross | schedule | stacked |
+| --- | --- | --- | --- | --- | --- | --- |
+| presence | 149,443 | 0.082 | 0.082 | 0.537 | 0.238 | **0.593** |
+| log_count | 93,257 | 0.881 | 0.881 | 0.955 | 0.956 | **0.959** |
+| mean | 93,257 | 0.026 | 0.064 | 0.053 | 0.005 | **0.119** |
+| minimum | 93,257 | 0.046 | 0.129 | 0.239 | 0.130 | **0.405** |
+| maximum | 93,257 | 0.003 | 0.006 | 0.012 | 0.007 | 0.017 |
+
+**The stays of 2019, every hidden cell**, `stacked`: presence 0.653 (`cross` 0.623, `schedule`
+0.351, `carry` 0.125), log count 0.976, mean 0.376 (`interpolation` 0.250), minimum 0.385,
+maximum 0.406.
+
+**The grids**: the presence is a near certainty (held 0.78 to 1.00), so the constant share
+already sits at the clip's edge and every other answer loses to it (SKAB −2.5, ESA-AD −10⁴ and
+worse); the values are read as follows.
+
+| corpus | target | carry | interpolation | cross | stacked |
+| --- | --- | --- | --- | --- | --- |
+| cmapss | mean | 0.005 | −0.001 | 0.348 | **0.552** |
+| skab | mean | 0.367 | **0.530** | 0.189 | 0.224 |
+| esa_ad | mean | 0.618 | **0.804** | 0.047 | 0.442 |
+| esa_ad | minimum / maximum | 0.552 / 0.571 | 0.723 / 0.711 | 0.110 / 0.093 | 0.532 / −1.836 |
+
+**The stays of 2012 under the tail's masks, by kind of mask** (`horizon` = the window's last
+quarter to half, every channel at once).
+
+| kind | cells | presence: carry | cross | schedule | stacked | mean: carry | interpolation | stacked |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| channel | 57,306 | −0.020 | 0.435 | 0.194 | 0.460 | 0.000 | 0.000 | 0.139 |
+| block | 64,633 | 0.100 | 0.495 | 0.249 | 0.558 | 0.019 | 0.037 | 0.074 |
+| token | 14,322 | 0.069 | 0.532 | 0.251 | 0.597 | 0.190 | 0.384 | 0.501 |
+| horizon | 49,834 | 0.087 | 0.188 | 0.247 | **0.224** | 0.131 | 0.131 | **0.387** |
+| all | 186,095 | 0.057 | 0.395 | 0.232 | 0.440 | 0.031 | 0.050 | 0.118 |
+
+**The spread over seeds on the fixed fifth** (ten seeds, each drawing its labels; SD over the
+ten areas, and the standard error of one area over the fifth's 800 stays).
+
+| candidate | stays | mean area | SD over seeds | SE over stays |
+| --- | --- | --- | --- | --- |
+| small shape on six-bin cells, from nothing | 20 | 0.602 | **0.035** | 0.027 |
+| probe at initialisation, same shape and cells | 20 | 0.549 | 0.032 | 0.028 |
+| small shape, from nothing | 50 | 0.629 | **0.054** | 0.026 |
+| probe at initialisation | 50 | 0.578 | 0.053 | 0.027 |
+| small shape, from nothing | 200 | 0.706 | 0.019 | 0.024 |
+| probe at initialisation | 200 | 0.617 | **0.023** | 0.027 |
+
+By the registered reading (the larger of the two, rounded up to 0.005) the least gains over this
+encoder would be **0.035 / 0.055 / 0.025** at 20 / 50 / 200 stays, against 0.055 / 0.060 / 0.050
+registered for the 4.8M encoder; a register row before the pretraining's reading states which
+rule applies.
+
+**The pilots** (tier S, small shape, six bins, Huber 1.0, presence 1.0, count 0.5; validation on
+set A's held-out stays, each term as a share of its trivial predictor's cost).
+
+| pilot | epochs | s / epoch | s / step | reconstruction | presence | count | diverged |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| stays, the mixture's masks | 4 | 20–21 | 0.11–0.12 | 0.93 → 0.88 | 0.87 → 0.60 | 0.44 → 0.42 | no |
+| stays, with the tail | 4 | 20–21 | 0.11 | 0.93 → 0.88 | 0.85 → 0.74 | 0.39 → 0.36 | no |
+| 2012 + 2019, a tenth each | 2 | 40–41 | 0.10–0.11 | 2012: 1.04 → 1.00; 2019: 0.97 → 0.96 | 0.95 → 0.90; 0.73 → 0.71 | 0.87 → 0.65; 0.40 → 0.39 | no |
+
+The two host layouts of a batch of 32 stays cost 5.2 ms (`collate`) + 5.8 ms (`scored`) + 0.2 ms
+(masks) = 11 ms against a step of 110–120 ms on MPS, a tenth; the whole pilot of four epochs
+over 3,997 stays ran in 93 s. At a tenth of each clinical corpus the 2012 stays have 25 steps an
+epoch and reach their trivial cost only at the second epoch, the 2019 stays at the first.
+
+**Conclusions.**
+
+1. **On the stays the pretext leaves most of the values and about two fifths of the presence to
+   a model.** The stack reads the hidden mean at 0.12 (2012) and 0.38 (2019), below the 0.25–0.50
+   predicted for 2012; the presence at 0.59 and 0.65, inside the predicted [0.30, 0.60] on 2012;
+   the count at 0.96–0.98 from the schedule alone. By the declared rule the pilot's masks and the
+   presence term stand, and the count term is close to a shortcut.
+2. **What reads the presence is the other channels in the same bin** (`cross` 0.54 against the
+   schedule's 0.24 and the carry's 0.08): the clinic's protocol of co-measurement, not the
+   channel's own rhythm. Under the tail the maps read the presence at 0.22 and the mean at 0.39:
+   forecasting which channels are measured next is where a model has the most room.
+3. **On the grids the pretext is interpolation**, as predicted: the presence is constant and the
+   mean is carried or interpolated at 0.53 (SKAB) to 0.80 (ESA-AD); C-MAPSS per condition reads
+   its cells across channels (0.55), an artefact of one sensor standing as six channels. The
+   mixture of four is the control arm of the next pretraining, not its body.
+4. **The objective trains at tier S**: every term falls under its trivial cost from the first
+   epoch, no loss diverges, and the layout on the host is a tenth of an MPS step; on a GPU, where
+   the small shape's step is several times shorter, the layout will be a larger share and is to be
+   measured there before the next order.
+5. **The small shape's spread over seeds is the labels' draw at 50 stays** (0.054, as the 4.8M
+   network's), smaller at 20 (0.035) and 200 (0.019); the probe at initialisation moves as much.
+   Two predictions missed by a little: 0.054 against [0.02, 0.05] at 50, and the probe above the
+   network at 200 (0.023 against 0.019).
+
+**Limitations.** R² under the squared error is governed by the heaviest values: on 2012 the
+sum of squares of the hidden maxima is thirty times the minima's (2.8·10⁶ against 9.4·10⁴),
+so the maximum's 0.017 says that a few excursions dominate it, not that it is unread; the
+training loss bounds them (Huber), the audit does not. A stack fitted on another half can read
+below its parts where the cells are few or the target degenerate (ESA-AD's maximum, SKAB's
+channel kind). The pilots read mechanics alone. The spread is on a fifth of the tuning side, as
+the registered least gains were.
