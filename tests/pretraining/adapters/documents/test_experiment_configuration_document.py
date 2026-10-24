@@ -239,7 +239,9 @@ def test_the_bins_travel_inside_the_architecture_and_only_where_the_encoder_read
     plain = CODEC.encode(configuration())["architecture"]
     assert isinstance(plain, dict)
     assert "bins" not in plain
-    assert document["architecture"]["bins"] == 3  # type: ignore[index]
+    architecture = document["architecture"]
+    assert isinstance(architecture, dict)
+    assert architecture["bins"] == 3
     assert CODEC.decode(json.loads(json.dumps(document))) == over_cells
 
 
