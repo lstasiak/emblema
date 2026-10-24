@@ -79,3 +79,4 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0061](0061-the-windows-statistics-beside-or-instead-of-the-encoder.md) | The window's statistics per channel beside or instead of the encoder: a diagnostic of the network trained from nothing, never a candidate | accepted |
 | [0062](0062-tokens-as-cells-of-channel-and-time-bin.md) | Tokens as cells of channel × time bin, laid out on the host before the same set encoder; a learnt time encoding beside the fixed one | accepted |
 | [0063](0063-several-learnt-queries-in-the-attention-pooling.md) | Several learnt queries in the attention pooling: a readout per aspect of the window that stays free of the channel layout | accepted |
+| [0064](0064-a-pretext-over-cells-masked-before-the-layout.md) | A pretext over cells: masks drawn on the cell grid before the layout, presence and count beside the hidden cells' summaries; the bins as the input part of the architecture | accepted |
