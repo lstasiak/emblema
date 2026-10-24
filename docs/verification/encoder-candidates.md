@@ -458,3 +458,90 @@ from 500 stays up (at 500, ten epochs are 250 steps against a warm-up of 200), t
 network under it may stop early: in the trial on the M1 Pro (MPS), one point per family at
 seed 1 printing counts only, the small shape under the stop took 10 s at 500 and 34 s at every
 stay against 54 and 97 s without it; the 4.8M encoder on six bins took 28 and 95 s.
+
+## 2026-10-24 — Colab G4, fp32: at 500 and every stay the cells carry the gain, the small shape adds nothing, and the trees keep 0.008
+
+**Question.** The one declared above: whether the small shape on six bins keeps its standing at
+500 and every stay of the half, which rate it wants there, and which variant goes to set B.
+
+**Conditions.** Campaigns `c995ae4d…` (500) and `892f50a0…` (every stay) defined and ordered at
+`49452626`; 140 network cells on one Colab G4 under CUDA MPS in four lanes per order, 7.5 and
+11 minutes wall-clock per order (the card 90 % busy); the eight results accepted lane by lane
+(`data/report/l32b2/accept-large.sh`). Pairs by `scripts/campaign_pairs_report.py`
+(`pairs-capacity-large.sh`), CSV under `data/report/l32b2/capacity-large-pairs/`. The reused cells
+as declared.
+
+**Checks before reading.** Both held: the control reads 0.743 at 500 and 0.799 at every stay,
++0.006 and −0.003 from the gap's cells (0.749, 0.796) by the paired intervals; every stored
+description names its knobs.
+
+**Area under the ROC curve**, mean over seeds 1 to 10 (the stop with a fifth held out and a
+patience of ten epochs unless named; at every stay the registered rate 0.000333):
+
+| Candidate | 500 | every stay |
+|---|---|---|
+| Control, 4.8M on raw tokens | 0.743 | 0.799 |
+| 4.8M on six bins | 0.766 | 0.829 |
+| **Small shape on six bins, registered recipe** | **0.775** | **0.831** |
+| Small shape, rate 0.003 / 0.0003 (500); 0.001 / 0.003 (every stay) | 0.775 / 0.731 | 0.823 / 0.823 |
+| Small shape with dropout 0.2 | 0.772 | 0.829 |
+| Small shape, every drawn stay, no stop | 0.767 | 0.828 |
+| Network over the trees' table (reused) | 0.754 | 0.810 |
+| Trees per channel (reused; at every stay `learning_rate=0.1,rounds=300`) | 0.787 | 0.839 |
+| MiniRocket (reused) | 0.756 | 0.809 |
+
+**The pairs** (gain of the second over the first in area, 95 % interval over stays, seed by
+seed mean ± SE; **bold** = carried):
+
+| Pair | 500 | every stay |
+|---|---|---|
+| S: six bins → small shape (family, Holm over two) | +0.009 [+0.002; +0.017] ± 0.007 | +0.002 [−0.003; +0.007] ± 0.004 |
+| Control → small shape | **+0.032** [+0.017; +0.047] ± 0.009 | **+0.032** [+0.019; +0.046] ± 0.004 |
+| Small shape → other rates | −0.000 ± 0.004 (0.003); −0.044 ± 0.031 (0.0003) | −0.008 ± 0.004 (0.001); **−0.008** [−0.014; −0.001] ± 0.003 (0.003) |
+| Small shape → with dropout | −0.004 [−0.007; −0.000] ± 0.002 | −0.002 [−0.003; −0.001] ± 0.001 |
+| Small shape → no stop | −0.008 [−0.017; −0.000] ± 0.005 | −0.003 [−0.009; +0.002] ± 0.002 |
+| Bar: small shape → trees | +0.012 [−0.002; +0.025] ± 0.007 | +0.008 [−0.007; +0.023] ± 0.002 |
+| Bar: small shape → network over the table | **−0.022** [−0.040; −0.004] ± 0.006 | **−0.022** [−0.039; −0.005] ± 0.002 |
+| Bar: small shape → MiniRocket | **−0.019** [−0.036; −0.003] ± 0.008 | **−0.022** [−0.040; −0.005] ± 0.003 |
+| Bar: small shape at 0.001 / 0.003 → trees | | **+0.016** [+0.001; +0.030]; **+0.016** [+0.000; +0.031] |
+
+**Predictions.** 1 failed: S is +0.009 at 500 and +0.002 at every stay, neither carried; the
+4.8M encoder on six bins reaches the small shape from 500 stays up. 2 held: the small shape
+reads 0.008 below the trees at every stay, inside [−0.030; +0.003], and 0.022 above the table's
+network, carried. 3 held: at 500 it reads 0.012 below the trees, within T, and 0.022 above the
+table's network. 4 failed in its first part: both higher rates lose 0.008 at every stay, the
+registered rate is the best of three; dropout lies within ±T and learning from every drawn stay
+reads at or below the stop, as predicted.
+
+**Conclusions.**
+
+1. **From 500 stays up the cells carry the gain and the shape carries nothing.** Six bins lift
+   the 4.8M encoder by 0.023 and 0.030 (0.743 → 0.766, 0.799 → 0.829), and the small shape adds
+   0.009 and 0.002 on top, neither carried. At few labels the shape was the lever and the cells
+   were not; at many labels it is the other way round. The small shape on six bins is the one
+   candidate that holds at every budget: +0.041 / +0.078 / +0.032 / +0.032 over the control at
+   50 / 200 / 500 / every stay, all carried.
+2. **The cells close most of what the trees made of the table.** At every stay the table's
+   network read 0.030 below the trees (D1, `gap-to-the-trees.md`); the network on six bins reads
+   0.022 above the table's network, carried, and 0.008 below the trees, not distinguishable.
+   An encoder that reads the window as cells does hold more than ten statistics per channel,
+   which the declared outcome of L-32b1 asked for.
+3. **By the declared levels the step to set B is not taken from this reading.** The pair
+   against the trees at every stay is +0.008 in the trees' favour with an interval of
+   [−0.023; +0.007] for the network, so its lower edge lies below the margin of −0.015, and S
+   is not carried, which the declaration names *lost*; the word is wrong for a candidate that
+   reads 0.008 below the trees, and the level that fits is *below the margin*: the mechanism is
+   not the shape but the 0.008 the trees keep at every stay, at the point estimate within the
+   margin and at the interval's edge outside it. On set B (3,994 stays) the interval narrows to
+   about ±0.011; at a true difference of −0.008 the registered rule would pass about one time in
+   three. The declaration asks for a reading on the half that clears the margin before set B is
+   spent.
+4. The registered rate (0.000333) is the best of three at every stay for the small shape as it
+   was for the 4.8M encoder; dropout and a run without the stop cost 0.002 to 0.008.
+
+**Limitations.** The small shape was chosen on the half at 50 and 200 and read here at 500 and
+every stay without a choice, so this reading is a fresh one for it; the bar against the trees
+is read at the trees' setting chosen on these same stays. Two of the three rates at every stay
+are a two-point grid around the registered one; a rate between 0.000333 and 0.001 was not run.
+The candidates at every stay differ by 0.002 to 0.008, within the run-to-run noise of a mean
+over ten seeds (0.01 to 0.02 at 200; smaller here, the spread over seeds being 0.007 to 0.012).
