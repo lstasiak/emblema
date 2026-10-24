@@ -7,6 +7,7 @@ import torch
 from numpy.typing import NDArray
 from torch import Tensor
 
+from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
@@ -42,11 +43,16 @@ from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.transfer.adaptation_outcome import AdaptationOutcome
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
+from emblema.evaluation.domain.transfer.encoder_setting import CellSet
 from emblema.evaluation.domain.transfer.training_regime import (
     ClassWeight,
     StopDivision,
     TrainingRegime,
 )
+from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
+from emblema.shared.adapters.arrays.laid_window import LaidWindow
+from emblema.shared.adapters.arrays.raw_tokens import RawTokens
+from emblema.shared.adapters.arrays.window_layout import WindowLayout
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.ordering import seeded_rank
@@ -68,6 +74,8 @@ class TorchAdaptationRuntime:
     fetch it is not timed against the rest. A plan that reads the windows' statistics per channel
     has them read here from the raw readings, by the same reader the trees use, and handed to the
     candidate beside each batch, with the windows the stop holds out and the windows answered.
+    Every window is laid out once, as the raw readings or as the cells the plan names, and
+    batched from there on every step.
     """
 
     def __init__(
@@ -115,6 +123,10 @@ class TorchAdaptationRuntime:
         if steps is not None:
             grid = GriddedTokens(steps)
             tuning, stopping, held = grid.of(tuning), grid.of(stopping), grid.of(held)
+        layout = self._layout(plan, manifest)
+        laid_tuning, laid_stopping, laid_held = (
+            layout.lay(windows) for windows in (tuning, stopping, held)
+        )
         started = time.perf_counter()
         targets = self._taught(link, learnt)
         statistics = (
@@ -132,6 +144,7 @@ class TorchAdaptationRuntime:
             vocabulary_size=len(manifest.channels),
             starting_at=link.starting_at(sample.mean_target),
             summary_rows=None if summaries is None else np.concatenate(summaries[:2]),
+            layout=layout,
         ).to(self._device)
         learnt_rows, stopping_rows, held_rows = (
             (None, None, None)
@@ -139,7 +152,7 @@ class TorchAdaptationRuntime:
             else tuple(self._on_device(rows) for rows in summaries)
         )
         if plan.ridge is not None:
-            states = self._embedded(candidate, tuning, plan.schedule.batch_size)
+            states = self._embedded(candidate, layout, laid_tuning, plan.schedule.batch_size)
             self._solved(link, states, targets, plan.ridge).applied_to(candidate.head)
         if plan.mode.solves_the_head_in_closed_form:
             losses: list[float] = []
@@ -147,10 +160,12 @@ class TorchAdaptationRuntime:
             regime = plan.regime
             forward = (
                 self._over_windows(
-                    candidate, tuning, learnt_rows, regime.channel_dropout, plan.seed
+                    candidate, layout, laid_tuning, learnt_rows, regime.channel_dropout, plan.seed
                 )
                 if plan.encodes_in_the_loop
-                else self._over_stored_states(candidate, tuning, plan.schedule.batch_size)
+                else self._over_stored_states(
+                    candidate, layout, laid_tuning, plan.schedule.batch_size
+                )
             )
             epochs = plan.schedule.epochs_over(len(sample.windows))
             stop = self._stop(plan, len(learnt), epochs) if regime.stops else None
@@ -169,8 +184,9 @@ class TorchAdaptationRuntime:
                     else self._stopping(
                         stop,
                         candidate,
+                        layout,
                         link,
-                        stopping,
+                        laid_stopping,
                         stopping_rows,
                         self._taught(link, stopped),
                         plan,
@@ -180,7 +196,7 @@ class TorchAdaptationRuntime:
             if stop is not None:
                 stop.restore(candidate)
         predicted = link.answered(
-            self._answers(candidate, held, held_rows, plan.schedule.batch_size)
+            self._answers(candidate, layout, laid_held, held_rows, plan.schedule.batch_size)
         )
         return AdaptationOutcome(
             plan=plan,
@@ -198,16 +214,39 @@ class TorchAdaptationRuntime:
             ),
             seconds=time.perf_counter() - started,
             artifact=(
-                self._kept(plan, candidate, task, held, predicted, len(manifest.channels), link)
+                self._kept(
+                    plan, candidate, layout, task, held, predicted, len(manifest.channels), link
+                )
                 if retain
                 else None
             ),
+        )
+
+    @staticmethod
+    def _layout(plan: AdaptationPlan, manifest: PublishedCorpusManifest) -> WindowLayout:
+        """How the run lays windows out: the raw readings, or cells of the plan's bins.
+
+        Over the corpus's channels the rows are the manifest's entries of that corpus, the
+        channels it names, the measured and the static ones apart; a vocabulary continued from
+        another corpus's names channels this one never holds, and they get no row.
+        """
+        bins = plan.encoder.bins
+        if bins is None:
+            return RawTokens()
+        if plan.encoder.cells is CellSet.WINDOW:
+            return BinnedTokens(bins)
+        observed = [channel for channel in manifest.channels if channel.corpus == manifest.corpus]
+        return BinnedTokens(
+            bins,
+            channels=[channel.channel_id for channel in observed if not channel.timeless],
+            statics=[channel.channel_id for channel in observed if channel.timeless],
         )
 
     def _kept(
         self,
         plan: AdaptationPlan,
         candidate: AdaptedBackbone,
+        layout: WindowLayout,
         task: DownstreamTask,
         held: Sequence[TokenWindow],
         predicted: Tensor,
@@ -220,10 +259,11 @@ class TorchAdaptationRuntime:
         while the run still holds the candidate, and is checked against the answers the run just
         gave on the same windows before anything is stored: a graph that would answer otherwise
         than what the campaign scored is refused, not kept. A candidate fitted on gridded
-        readings, or reading the windows' statistics per channel, is kept in its measured form
-        alone: the graph takes the raw tokens a served model is handed, and would answer them as
-        something other than what was scored, so no graph is derived and serving refuses the
-        candidate as one it cannot run.
+        readings or on cells, or reading the windows' statistics per channel, is kept in its
+        measured form alone: the graph takes the raw tokens a served model is handed, and would
+        answer them as something other than what was scored, so no graph is derived and serving
+        refuses the candidate as one it cannot run. A candidate over the corpus's cells keeps
+        the channels its rows stand for, since its weights mean nothing without them.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep it.
@@ -234,9 +274,18 @@ class TorchAdaptationRuntime:
             raise CandidateNotRetainableError(
                 "this runtime was asked to keep what it fitted and was given no store"
             )
-        fitted = FittedCandidate.of(plan, candidate, vocabulary_size=vocabulary_size, link=link)
+        cells = layout if isinstance(layout, BinnedTokens) else None
+        fitted = FittedCandidate.of(
+            plan,
+            candidate,
+            vocabulary_size=vocabulary_size,
+            link=link,
+            cell_channels=() if cells is None else cells.channels,
+            cell_statics=() if cells is None else cells.statics,
+        )
         measured = RepresentationBytes(FittedCandidate.FORMAT, fitted.to_bytes())
-        if plan.encoder.grid_resolution is not None or plan.encoder.reads_summaries:
+        encoder = plan.encoder
+        if encoder.grid_resolution is not None or encoder.reads_summaries or encoder.reads_cells:
             return self._kept_candidates.keep(
                 CandidateKind.NEURAL, corpus_manifest=task.manifest, measured=measured
             )
@@ -254,7 +303,8 @@ class TorchAdaptationRuntime:
     def _over_windows(
         self,
         candidate: AdaptedBackbone,
-        windows: Sequence[TokenWindow],
+        layout: WindowLayout,
+        windows: Sequence[LaidWindow],
         summaries: Tensor | None,
         channel_dropout: float,
         seed: int,
@@ -266,11 +316,12 @@ class TorchAdaptationRuntime:
         """
         if channel_dropout <= 0.0:
             return lambda indices: candidate(
-                self._batch(windows, indices), self._rows(summaries, indices)
+                self._batch(layout, windows, indices), self._rows(summaries, indices)
             )
         dropout = ChannelDropout(channel_dropout, torch.Generator().manual_seed(seed))
         return lambda indices: candidate(
-            dropout.applied_to(self._batch(windows, indices)), self._rows(summaries, indices)
+            dropout.applied_to(self._batch(layout, windows, indices)),
+            self._rows(summaries, indices),
         )
 
     def _taught(self, link: TargetLink, windows: Sequence[LabelledWindow]) -> Tensor:
@@ -315,8 +366,9 @@ class TorchAdaptationRuntime:
         self,
         stop: EarlyStop,
         candidate: AdaptedBackbone,
+        layout: WindowLayout,
         link: TargetLink,
-        windows: Sequence[TokenWindow],
+        windows: Sequence[LaidWindow],
         summaries: Tensor | None,
         taught: Tensor,
         plan: AdaptationPlan,
@@ -324,7 +376,7 @@ class TorchAdaptationRuntime:
         """What is done after each epoch: score the held-out windows and ask whether to stop."""
 
         def after(epoch: int) -> bool:
-            answers = self._answers(candidate, windows, summaries, plan.schedule.batch_size)
+            answers = self._answers(candidate, layout, windows, summaries, plan.schedule.batch_size)
             return stop.observe(epoch, EarlyStop.score(link, answers, taught), candidate)
 
         return after
@@ -374,20 +426,30 @@ class TorchAdaptationRuntime:
         )
 
     def _over_stored_states(
-        self, candidate: AdaptedBackbone, windows: Sequence[TokenWindow], batch_size: int
+        self,
+        candidate: AdaptedBackbone,
+        layout: WindowLayout,
+        windows: Sequence[LaidWindow],
+        batch_size: int,
     ) -> Forward:
         """The head alone, over states the frozen encoder computed once for every window."""
-        states = self._embedded(candidate, windows, batch_size)
+        states = self._embedded(candidate, layout, windows, batch_size)
         return lambda indices: candidate.head(states[indices])
 
     def _embedded(
-        self, candidate: AdaptedBackbone, windows: Sequence[TokenWindow], batch_size: int
+        self,
+        candidate: AdaptedBackbone,
+        layout: WindowLayout,
+        windows: Sequence[LaidWindow],
+        batch_size: int,
     ) -> Tensor:
         candidate.eval()
         with torch.no_grad():
             states = [
                 candidate.embed(
-                    self._batch(windows, range(start, min(start + batch_size, len(windows))))
+                    self._batch(
+                        layout, windows, range(start, min(start + batch_size, len(windows)))
+                    )
                 )
                 for start in range(0, len(windows), batch_size)
             ]
@@ -412,7 +474,8 @@ class TorchAdaptationRuntime:
     def _answers(
         self,
         candidate: AdaptedBackbone,
-        windows: Sequence[TokenWindow],
+        layout: WindowLayout,
+        windows: Sequence[LaidWindow],
         summaries: Tensor | None,
         batch_size: int,
     ) -> Tensor:
@@ -424,15 +487,17 @@ class TorchAdaptationRuntime:
                 for start in range(0, len(windows), batch_size)
             ]
             answers = [
-                candidate(self._batch(windows, indices), self._rows(summaries, indices))
+                candidate(self._batch(layout, windows, indices), self._rows(summaries, indices))
                 for indices in batches
             ]
         # Moved before it is widened: an accelerator without double precision hands back zeros
         # when asked to do both at once.
         return torch.cat(answers).to("cpu").to(torch.float64)
 
-    def _batch(self, windows: Sequence[TokenWindow], indices: Sequence[int]) -> TokenTensors:
-        return TokenTensors.from_windows([windows[index] for index in indices]).to(self._device)
+    def _batch(
+        self, layout: WindowLayout, windows: Sequence[LaidWindow], indices: Sequence[int]
+    ) -> TokenTensors:
+        return TokenTensors.of(layout.batch([windows[index] for index in indices])).to(self._device)
 
     def _on_device(self, rows: NDArray[np.float64]) -> Tensor:
         # Narrowed on the host: an accelerator without double precision takes no float64 tensor.

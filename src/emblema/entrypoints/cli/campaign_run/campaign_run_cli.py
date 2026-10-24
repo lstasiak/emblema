@@ -12,6 +12,7 @@ from emblema.entrypoints.source_revision import SourceRevision
 from emblema.evaluation.application.use_cases.fulfil_campaign_order import (
     FulfilCampaignOrderCommand,
 )
+from emblema.evaluation.domain.handoff.order_lane import OrderLane
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 
@@ -27,7 +28,9 @@ class CampaignRunCli:
     which prints the reference of the result, to be accepted where the campaign is kept. Every
     cell answered is also reported at once and logged with its reference, so a session that is
     ended early is picked up with ``--resume <key> <checksum>`` from the last one logged and
-    runs only the cells that are left.
+    runs only the cells that are left. Several processes share one order with ``--lane i/N``,
+    each taking every N-th cell from the i-th; each prints its own reference and is resumed
+    and accepted on its own.
 
     It needs the store and the worker's settings of the order's pool; it needs no database and
     no broker, which is the whole of why it exists. Standard output is the reference and nothing
@@ -50,6 +53,7 @@ class CampaignRunCli:
                 order=self._ref(arguments.order),
                 git_commit=revision.current(),
                 resume=None if arguments.resume is None else self._ref(arguments.resume),
+                lane=arguments.lane,
             )
         )
 
@@ -94,5 +98,11 @@ class CampaignRunCli:
             nargs=2,
             metavar=("KEY", "CHECKSUM"),
             help="the last result an interrupted run of the same order logged",
+        )
+        parser.add_argument(
+            "--lane",
+            metavar="INDEX/COUNT",
+            type=OrderLane.parse,
+            help="run only every COUNT-th cell of the order from the INDEX-th, from zero",
         )
         return parser

@@ -10,6 +10,7 @@ recorded rather than from the start.
 
 import time
 from collections.abc import Mapping
+from itertools import combinations
 
 import pytest
 
@@ -70,6 +71,7 @@ from emblema.evaluation.domain.exceptions import (
     UnknownCampaignCellError,
 )
 from emblema.evaluation.domain.handoff.campaign_order_result import CampaignOrderResult
+from emblema.evaluation.domain.handoff.order_lane import OrderLane
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
@@ -585,3 +587,70 @@ class Counting:
     def evaluate(self, request: CandidateEvaluation) -> CellResult:
         self._asked.append(request.cell)
         return self._provider.evaluate(request)
+
+
+def test_the_lanes_of_an_order_answer_disjoint_cells_that_together_make_the_order(
+    running: Campaign,
+) -> None:
+    campaign_id = running.declared()
+    handoff = InMemoryCampaignHandoff()
+    order = ordered(running, handoff, campaign_id)
+    elsewhere = ElsewhereRun(running, handoff)
+    accept = AcceptCampaignOrderResult(handoff, running.record)
+    cells = running.campaigns.get(campaign_id).design.cells()
+
+    reported = [
+        elsewhere.fulfil(
+            FulfilCampaignOrderCommand(
+                order=order, git_commit="abc123", lane=OrderLane(index=index, count=3)
+            )
+        )
+        for index in range(3)
+    ]
+    accepted = [accept(AcceptCampaignOrderResultCommand(result=ref)) for ref in reported]
+
+    answered = [handoff.read_result(ref).cells for ref in reported]
+    assert all(a.isdisjoint(b) for a, b in combinations(answered, 2))
+    assert frozenset().union(*answered) == frozenset(cells)
+    assert sum(accepted) == len(cells)
+    assert running.campaigns.read(campaign_id).campaign.is_finished
+
+
+def test_a_lane_with_no_cell_to_run_is_refused_before_anything_runs(running: Campaign) -> None:
+    campaign_id = running.declared()
+    handoff = InMemoryCampaignHandoff()
+    order = ordered(running, handoff, campaign_id)
+    cells = len(running.campaigns.get(campaign_id).design.cells())
+
+    with pytest.raises(CampaignOrderRejectedError, match="nothing to run"):
+        ElsewhereRun(running, handoff).fulfil(
+            FulfilCampaignOrderCommand(
+                order=order, git_commit="abc123", lane=OrderLane(index=cells, count=cells + 1)
+            )
+        )
+
+    assert handoff.reported == []
+
+
+def test_a_lane_resumed_from_another_lanes_result_is_refused_before_anything_runs(
+    running: Campaign,
+) -> None:
+    campaign_id = running.declared()
+    handoff = InMemoryCampaignHandoff()
+    order = ordered(running, handoff, campaign_id)
+    elsewhere = ElsewhereRun(running, handoff)
+    first = elsewhere.fulfil(
+        FulfilCampaignOrderCommand(
+            order=order, git_commit="abc123", lane=OrderLane(index=0, count=2)
+        )
+    )
+    reported_before = len(handoff.reported)
+
+    with pytest.raises(CampaignOrderRejectedError, match="outside lane 1/2"):
+        elsewhere.fulfil(
+            FulfilCampaignOrderCommand(
+                order=order, git_commit="abc123", lane=OrderLane(index=1, count=2), resume=first
+            )
+        )
+
+    assert len(handoff.reported) == reported_before

@@ -44,6 +44,9 @@ class FittedCandidate:
         link: How the head's output reaches the task's answer; a candidate kept before the
             link was recorded answered a quantity in its scale.
         weights: State of the whole candidate, head included, on the host.
+        cell_channels: The measured channels a candidate over the corpus's cells gets a row
+            for; empty for one over the window's own channels or over the raw readings.
+        cell_statics: The static features such a candidate gets a cell for; empty likewise.
     """
 
     FORMAT: ClassVar[str] = "torch-state"
@@ -52,6 +55,8 @@ class FittedCandidate:
     vocabulary_size: int
     link: TargetLink
     weights: dict[str, Any]
+    cell_channels: tuple[int, ...] = ()
+    cell_statics: tuple[int, ...] = ()
 
     @classmethod
     def of(
@@ -61,6 +66,8 @@ class FittedCandidate:
         *,
         vocabulary_size: int,
         link: TargetLink,
+        cell_channels: tuple[int, ...] = (),
+        cell_statics: tuple[int, ...] = (),
     ) -> Self:
         """The candidate as it ended, with its weights copied to the host.
 
@@ -74,6 +81,8 @@ class FittedCandidate:
             weights={
                 key: value.detach().to("cpu") for key, value in candidate.state_dict().items()
             },
+            cell_channels=cell_channels,
+            cell_statics=cell_statics,
         )
 
     def to_bytes(self) -> bytes:
@@ -86,6 +95,8 @@ class FittedCandidate:
                 "target_kind": str(self.link.kind),
                 "target_scale": self.link.scale,
                 "weights": self.weights,
+                "cell_channels": list(self.cell_channels),
+                "cell_statics": list(self.cell_statics),
             },
             buffer,
         )
@@ -107,6 +118,8 @@ class FittedCandidate:
                     stored.get("target_kind", TargetKind.CONTINUOUS), stored["target_scale"]
                 ),
                 weights=stored["weights"],
+                cell_channels=tuple(stored.get("cell_channels", ())),
+                cell_statics=tuple(stored.get("cell_statics", ())),
             )
         except UNREADABLE_BYTES as error:
             raise UnreadableFittedCandidateError(

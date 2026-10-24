@@ -4,8 +4,10 @@ import pytest
 
 from emblema.evaluation.domain.exceptions import InvalidEncoderSettingError, UnknownKnobError
 from emblema.evaluation.domain.transfer.encoder_setting import (
+    CellSet,
     EncoderSetting,
     SummaryReading,
+    TimeEncoding,
     ValueEmbedding,
 )
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
@@ -72,7 +74,10 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
     assert EncoderSetting.standard().parameters() == {
         "encoder_dropout": 0.0,
         "grid_resolution": 0.0,
+        "bins": 0,
+        "cells": "window",
         "value_embedding": "linear",
+        "time_encoding": "fourier",
         "encoder_width": 0,
         "encoder_heads": 0,
         "encoder_layers": 0,
@@ -83,25 +88,29 @@ def test_a_run_records_every_column_whatever_was_turned() -> None:
     }
     turned = EncoderSetting(
         dropout=0.2,
-        grid_resolution=1.0,
+        bins=12,
+        cells=CellSet.CORPUS,
         value_embedding=ValueEmbedding.NONLINEAR,
+        time_encoding=TimeEncoding.LEARNED,
         width=64,
         heads=16,
         layers=2,
         feedforward_width=128,
-        value_clip=5.0,
         layer=LayerReading(layer=3),
         summaries=SummaryReading.BESIDE,
     )
     assert turned.parameters() == {
         "encoder_dropout": 0.2,
-        "grid_resolution": 1.0,
+        "grid_resolution": 0.0,
+        "bins": 12,
+        "cells": "corpus",
         "value_embedding": "nonlinear",
+        "time_encoding": "learned",
         "encoder_width": 64,
         "encoder_heads": 16,
         "encoder_layers": 2,
         "encoder_feedforward_width": 128,
-        "value_clip": 5.0,
+        "value_clip": 0.0,
         "encoder_layer": "3",
         "summaries": "beside",
     }
@@ -204,3 +213,59 @@ def test_the_standard_setting_reads_no_summaries_and_runs_the_encoder() -> None:
     assert not standard.reads_summaries
     assert standard.reads_tokens
     assert standard.tuned("summaries", "none") == standard
+
+
+def test_bins_lay_the_window_out_as_cells_and_build_the_encoder_anew() -> None:
+    binned = EncoderSetting.standard().tuned("bins", "12")
+
+    assert binned.bins == 12
+    assert binned.reads_cells
+    assert binned.cells is CellSet.WINDOW
+    assert binned.builds_its_own_encoder
+    assert binned.turned_away() == {"bins": 12}
+    assert not EncoderSetting.standard().reads_cells
+
+
+def test_the_cell_set_turns_only_over_bins_and_is_named_only_when_turned() -> None:
+    binned = EncoderSetting.standard().tuned("bins", "6")
+
+    over_corpus = binned.tuned("cells", "corpus")
+
+    assert over_corpus.cells is CellSet.CORPUS
+    assert over_corpus.turned_away() == {"bins": 6, "cells": "corpus"}
+    assert binned.tuned("cells", "window") == binned
+    with pytest.raises(UnknownKnobError, match="knob of the bins"):
+        EncoderSetting.standard().tuned("cells", "corpus")
+    with pytest.raises(InvalidEncoderSettingError, match="knob of the bins"):
+        EncoderSetting(cells=CellSet.CORPUS)
+
+
+@pytest.mark.parametrize("value", ["0", "-3", "1.5", "twelve"])
+def test_bins_that_are_not_a_positive_count_are_refused(value: str) -> None:
+    with pytest.raises(UnknownKnobError):
+        EncoderSetting.standard().tuned("bins", value)
+
+
+def test_a_clip_bounds_the_values_of_cells_as_it_bounds_a_reading() -> None:
+    clipped = EncoderSetting.standard().tuned("bins", "12").tuned("value_clip", "3")
+
+    assert clipped == EncoderSetting(bins=12, value_clip=3.0)
+    assert clipped.turned_away() == {"bins": 12, "value_clip": 3.0}
+
+
+def test_bins_and_a_grid_are_two_layouts_and_a_setting_takes_one() -> None:
+    with pytest.raises(UnknownKnobError, match="two layouts"):
+        EncoderSetting.standard().tuned("bins", "12").tuned("grid_resolution", "1")
+    with pytest.raises(UnknownKnobError, match="two layouts"):
+        EncoderSetting.standard().tuned("grid_resolution", "1").tuned("bins", "12")
+
+
+def test_the_learnt_time_encoding_builds_the_encoder_anew_and_is_named_only_when_turned() -> None:
+    learnt = EncoderSetting.standard().tuned("time_encoding", "learned")
+
+    assert learnt.time_encoding is TimeEncoding.LEARNED
+    assert learnt.builds_its_own_encoder
+    assert learnt.turned_away() == {"time_encoding": "learned"}
+    assert EncoderSetting.standard().tuned("time_encoding", "fourier") == EncoderSetting.standard()
+    with pytest.raises(UnknownKnobError):
+        EncoderSetting.standard().tuned("time_encoding", "sinusoidal")

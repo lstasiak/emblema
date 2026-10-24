@@ -2,9 +2,10 @@ from typing import Protocol
 
 from torch import nn
 
-from emblema.evaluation.domain.transfer.encoder_setting import ValueEmbedding
+from emblema.evaluation.domain.transfer.encoder_setting import TimeEncoding, ValueEmbedding
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.tokens import N_FEATURES
 
 
 class BackboneFactory(Protocol):
@@ -24,6 +25,10 @@ class BackboneFactory(Protocol):
 
     Every encoder is asked for with the share of activations it drops while it learns: dropout
     holds no weights, so the stored ones serve every share alike.
+
+    A fresh encoder may be asked for over a feature axis of another width than the raw tokens',
+    where the run lays windows out otherwise, and with a time encoding that learns; a pretrained
+    one never is, since its weights fix both.
     """
 
     @property
@@ -55,12 +60,15 @@ class BackboneFactory(Protocol):
         dropout: float,
         value_embedding: ValueEmbedding = ValueEmbedding.LINEAR,
         shape: EncoderShape | None = None,
+        time_encoding: TimeEncoding = TimeEncoding.FOURIER,
+        input_features: int = N_FEATURES,
     ) -> nn.Module:
         """An encoder with weights drawn anew from torch's generator.
 
         Over ``vocabulary_size`` channels, or the stored vocabulary where that is larger, so
         that a fresh encoder has the parameters a pretrained one has over the same task. Of the
-        stored shape and with a linear value unless ``shape`` and ``value_embedding`` say
-        otherwise; the time and channel modules stay the stored architecture's.
+        stored shape, with a linear value over the raw tokens' features and the fixed time
+        unless ``shape``, ``value_embedding``, ``input_features`` and ``time_encoding`` say
+        otherwise; the channel module stays the stored architecture's.
         """
         ...

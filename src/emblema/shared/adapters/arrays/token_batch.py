@@ -5,6 +5,7 @@ from typing import Self
 import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
+from emblema.shared.kernel.exceptions import InvalidTokenWindowError
 from emblema.shared.kernel.tokens import N_FEATURES, PADDING_CHANNEL_ID, Token, TokenWindow
 
 
@@ -18,8 +19,12 @@ class TokenBatch:
     window's canonical order. ``windows`` reverses the layout, so a batch round-trips to the
     windows it was built from up to the precision of ``dtype``.
 
+    A layout other than the raw one may lay a batch out with a wider feature axis; such a batch
+    carries the same five arrays and spells no windows.
+
     Attributes:
-        features: ``[batch, tokens, 2]`` — value and gap per token, floating.
+        features: ``[batch, tokens, 2]`` — value and gap per token, floating; wider under
+            another layout.
         channel_ids: ``[batch, tokens]`` — vocabulary entry per token, int64; ``PADDING_CHANNEL_ID``
             at padding positions.
         timestamps: ``[batch, tokens]`` — position within the window per token, floating; zero at
@@ -77,8 +82,13 @@ class TokenBatch:
 
         Raises:
             InvalidTokenWindowError: If a row does not hold a valid window, such as one without a
-                single observed token.
+                single observed token, or the batch is laid out otherwise than one token per
+                reading.
         """
+        if self.features.shape[-1] != N_FEATURES:
+            raise InvalidTokenWindowError(
+                f"a batch of {self.features.shape[-1]} features per token spells no windows"
+            )
         return tuple(self._window(row) for row in range(self.batch_size))
 
     def _window(self, row: int) -> TokenWindow:

@@ -1,0 +1,63 @@
+# The recipe and the capacity of an encoder trained from nothing at 200 stays of half the tuning
+# side, on cells of six bins, the layout that read best at 200 stays: the small shape of the
+# published regime (two blocks, 64 wide), a dropout of a fifth, a weight decay, a clip on the
+# cells' values, the outcomes weighed alike, and their combinations; the small shape on raw tokens
+# too; the published regime whole on cells. Each under its setting registered there (a rate of
+# 0.003) unless it turns the rate. Two candidates add a stop, a fifth of the stays held out and a
+# patience of 500 steps past the warm-up, since a patience in epochs ends inside the warm-up at
+# this budget. The network on its tokens runs again as the control.
+#
+# Scored on the half of the tuning stays held out by seed 101 over seeds 1 to 10, so the cells
+# pair by stay and seed with every other campaign on the half at the same budget. A campaign
+# divided this way chooses nothing; the reading is the pairs declared in
+# docs/verification/encoder-candidates.md. Defined under the mixture of four at its first
+# pretraining seed, whose shape the network from nothing borrows (ADR-0062).
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "capacity-200-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@learning_rate=0.003",
+    "from_scratch@bins=6,learning_rate=0.003",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.003,width=64",
+    "from_scratch@bins=6,dropout=0.2,learning_rate=0.003",
+    "from_scratch@bins=6,learning_rate=0.003,weight_decay=0.1",
+    "from_scratch@bins=6,learning_rate=0.003,value_clip=3",
+    "from_scratch@bins=6,class_weight=ratio,learning_rate=0.003",
+    "from_scratch@bins=6,dropout=0.2,feedforward_width=128,heads=16,layers=2,learning_rate=0.003,width=64",
+    "from_scratch@bins=6,class_weight=ratio,dropout=0.2,feedforward_width=128,heads=16,layers=2,learning_rate=0.003,weight_decay=0.1,width=64",
+    "from_scratch@bins=6,dropout=0.2,learning_rate=0.003,value_clip=3",
+    "from_scratch@feedforward_width=128,heads=16,layers=2,learning_rate=0.003,width=64",
+    "from_scratch@dropout=0.2,feedforward_width=128,heads=16,layers=2,learning_rate=0.003,width=64",
+    "from_scratch@bins=6,channel_dropout=0.2,class_weight=ratio,dropout=0.2,feedforward_width=128,final_lr_fraction=1,heads=16,layers=2,learning_rate=0.0005,warmup_fraction=0,width=64",
+    "from_scratch@bins=6,learning_rate=0.003,patience_steps=500,stop_share=0.2",
+    "from_scratch@bins=6,dropout=0.2,feedforward_width=128,heads=16,layers=2,learning_rate=0.003,patience_steps=500,stop_share=0.2,width=64",
+]
+control = "from_scratch@learning_rate=0.003"
+endpoint = "from_scratch@bins=6,dropout=0.2,feedforward_width=128,heads=16,layers=2,learning_rate=0.003,width=64"
+
+[budgets]
+labels = ["200"]
+endpoint = "200"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note.
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+secondary_family_size = 13
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

@@ -5,6 +5,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from torch import nn  # noqa: E402
+
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone  # noqa: E402
 from emblema.evaluation.adapters.torch.clipped_values import ClippedValues  # noqa: E402
 from emblema.evaluation.adapters.torch.layer_readout import LayerReadout  # noqa: E402
@@ -14,14 +16,20 @@ from emblema.evaluation.domain.heads.head_pooling import HeadPooling  # noqa: E4
 from emblema.evaluation.domain.transfer.encoder_setting import (  # noqa: E402
     EncoderSetting,
     SummaryReading,
+    TimeEncoding,
     ValueEmbedding,
 )
 from emblema.evaluation.domain.transfer.layer_reading import LayerReading  # noqa: E402
 from emblema.evaluation.domain.transfer.transfer_mode import TransferMode  # noqa: E402
+from emblema.pretraining.adapters.encoder.learned_time_encoding import (  # noqa: E402
+    LearnedTimeEncoding,
+)
 from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (  # noqa: E402
     NonlinearValueEmbedding,
 )
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa: E402
+from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens  # noqa: E402
+from emblema.shared.adapters.tensors.token_tensors import TokenTensors  # noqa: E402
 from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
 from tests.evaluation.support import WEIGHTS, plan  # noqa: E402
 from tests.support.backbones import SmallBackbones  # noqa: E402
@@ -351,3 +359,32 @@ def test_a_plan_reading_no_summaries_draws_its_head_and_encoder_as_it_always_did
     assert all(
         torch.equal(value, again.state_dict()[key]) for key, value in plain.state_dict().items()
     )
+
+
+def test_a_network_from_nothing_over_cells_reads_nine_features_and_may_learn_its_time() -> None:
+    torch.manual_seed(5)
+    built = AdaptedBackbone.under(
+        plan(
+            TransferMode.FROM_SCRATCH,
+            encoder=EncoderSetting(bins=4, time_encoding=TimeEncoding.LEARNED),
+        ),
+        SmallBackbones(),
+        vocabulary_size=VOCABULARY_SIZE,
+        starting_at=0.0,
+        layout=BinnedTokens(4),
+    )
+    batch = random_batch(3, 9, seed=2)
+    cells = TokenTensors(
+        torch.randn(3, 9, BinnedTokens.N_FEATURES),
+        batch.channel_ids,
+        batch.timestamps,
+        batch.timeless,
+        batch.padding_mask,
+    )
+
+    assert isinstance(built.encoder, SetEncoder)
+    assert isinstance(built.encoder.value_projection, nn.Linear)
+    assert built.encoder.value_projection.in_features == BinnedTokens.N_FEATURES
+    assert isinstance(built.encoder.time_encoding, LearnedTimeEncoding)
+    assert built(cells).shape == (3,)
+    assert torch.isfinite(built(cells)).all()

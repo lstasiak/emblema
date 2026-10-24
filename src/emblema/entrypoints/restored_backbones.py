@@ -3,14 +3,20 @@ from dataclasses import replace
 from torch import nn
 
 from emblema.evaluation.domain.exceptions import UnknownBackboneError
-from emblema.evaluation.domain.transfer.encoder_setting import ValueEmbedding
+from emblema.evaluation.domain.transfer.encoder_setting import TimeEncoding, ValueEmbedding
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
+from emblema.pretraining.adapters.encoder.learned_channel_embedding import (
+    LearnedChannelEmbedding,
+)
+from emblema.pretraining.adapters.encoder.learned_time_encoding import LearnedTimeEncoding
 from emblema.pretraining.adapters.encoder.nonlinear_value_embedding import (
     NonlinearValueEmbedding,
 )
 from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
+from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.tokens import N_FEATURES
 from emblema.shared.ports.artifact_store import ArtifactStore
 
 
@@ -58,6 +64,42 @@ class RestoredBackbones:
             )
         return self._trained.build(dropout=dropout).encoder.grown_to(vocabulary_size).eval()
 
+    @staticmethod
+    def drawn(
+        architecture: EncoderArchitecture,
+        vocabulary_size: int,
+        *,
+        dropout: float,
+        value_embedding: ValueEmbedding,
+        time_encoding: TimeEncoding,
+        input_features: int,
+    ) -> SetEncoder:
+        """An encoder of ``architecture`` with weights drawn anew, its input modules as asked.
+
+        The standard composition where the value is linear over the raw tokens' features and the
+        time fixed, so an encoder asked for as before is drawn exactly as before; otherwise the
+        modules Evaluation's knobs name take their places behind the same call.
+        """
+        width = architecture.width
+        value: nn.Module | None
+        if value_embedding is ValueEmbedding.NONLINEAR:
+            value = NonlinearValueEmbedding(width, inputs=input_features)
+        elif input_features != N_FEATURES:
+            value = nn.Linear(input_features, width)
+        else:
+            value = None
+        if time_encoding is TimeEncoding.FOURIER:
+            return SetEncoder.for_vocabulary(
+                architecture, vocabulary_size, dropout=dropout, value_embedding=value
+            )
+        return SetEncoder(
+            architecture,
+            channel_embedding=LearnedChannelEmbedding(vocabulary_size, width),
+            time_encoding=LearnedTimeEncoding(architecture.time_frequencies, width),
+            dropout=dropout,
+            value_embedding=value,
+        )
+
     def fresh(
         self,
         *,
@@ -65,6 +107,8 @@ class RestoredBackbones:
         dropout: float,
         value_embedding: ValueEmbedding = ValueEmbedding.LINEAR,
         shape: EncoderShape | None = None,
+        time_encoding: TimeEncoding = TimeEncoding.FOURIER,
+        input_features: int = N_FEATURES,
     ) -> nn.Module:
         architecture = self._trained.architecture
         if shape is not None:
@@ -75,13 +119,11 @@ class RestoredBackbones:
                 layers=shape.layers,
                 feedforward_width=shape.feedforward_width,
             )
-        return SetEncoder.for_vocabulary(
+        return self.drawn(
             architecture,
             max(vocabulary_size, self._trained.vocabulary_size),
             dropout=dropout,
-            value_embedding=(
-                NonlinearValueEmbedding(architecture.width)
-                if value_embedding is ValueEmbedding.NONLINEAR
-                else None
-            ),
+            value_embedding=value_embedding,
+            time_encoding=time_encoding,
+            input_features=input_features,
         )

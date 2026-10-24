@@ -36,4 +36,4 @@ def _scheme_module(pooling: HeadPooling, *, width: int) -> nn.Module:
         case PoolingScheme.TAIL:
             return TailPooling(pooling.tail_share)
         case PoolingScheme.ATTENTION:
-            return AttentionPooling(width)
+            return AttentionPooling(width, pooling.queries)

@@ -34,7 +34,8 @@ class AdaptationPlan:
     head's rate only where the mode trains them. The head reads the window's statistics per
     channel only in the network trained from nothing, with a head it trains, over the raw
     readings and every channel; where it reads them alone, nothing that only shapes the encoder
-    is turned, since the encoder is never run.
+    is turned, since the encoder is never run; a head over cells reads no statistics, which
+    describe the raw readings.
 
     Attributes:
         mode: What the backbone's weights do while the task is learnt.
@@ -178,6 +179,8 @@ class AdaptationPlan:
             )
         if encoder.grid_resolution is not None:
             return f"summaries {reading} are of the raw readings, not of readings laid on a grid"
+        if encoder.reads_cells:
+            return f"summaries {reading} are of the raw readings, not of cells"
         if regime.channel_dropout > 0.0:
             return f"summaries {reading} would still show the channels a batch withholds"
         if encoder.reads_tokens:
@@ -229,6 +232,7 @@ class AdaptationPlan:
             "final_lr_fraction": float(self.schedule.final_lr_fraction),
             **self.pooling.parameters(),
             "statics": str(self.pooling.statics),
+            "queries": self.pooling.queries,
             "lora_rank": 0 if self.lora is None else self.lora.rank,
             "lora_alpha": 0.0 if self.lora is None else float(self.lora.alpha),
             "lora_dropout": 0.0 if self.lora is None else float(self.lora.dropout),

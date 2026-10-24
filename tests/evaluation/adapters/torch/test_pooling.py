@@ -198,3 +198,54 @@ def test_set_apart_the_padding_and_the_order_of_tokens_change_nothing() -> None:
     torch.testing.assert_close(pool(apart, states[:, order], shuffled), pool(apart, states, batch))
     trimmed = TokenTensors(*(tensor[:, :7] for tensor in batch.args))
     torch.testing.assert_close(pool(apart, states[:, :7], trimmed), pool(apart, states, batch))
+
+
+def single_query(states: Tensor, batch: TokenTensors, query: Tensor) -> Tensor:
+    """The attention pooling as it was before it took several queries, one query at a time."""
+    scores = (states @ query) / WIDTH**0.5
+    scores = scores.masked_fill(batch.padding_mask, torch.finfo(states.dtype).min)
+    return (states * torch.softmax(scores, dim=1).unsqueeze(-1)).sum(dim=1)
+
+
+def test_one_query_pools_as_the_attention_always_did_bit_for_bit() -> None:
+    batch = random_batch(3, 12, seed=8, padding=5)
+    states = states_of(batch)
+    attention = AttentionPooling(WIDTH)
+    with torch.no_grad():
+        attention.query.add_(torch.randn(1, WIDTH))
+
+    assert torch.equal(
+        pool(attention, states, batch), single_query(states, batch, attention.query[0])
+    )
+
+
+def test_several_queries_start_as_the_mean_repeated_and_pool_each_on_their_own() -> None:
+    batch = random_batch(3, 12, seed=9, padding=5)
+    states = states_of(batch)
+    attention = AttentionPooling(WIDTH, queries=3)
+
+    mean = MaskedMeanPooling()(states, batch.padding_mask)
+    torch.testing.assert_close(pool(attention, states, batch), mean.repeat(1, 3))
+    with torch.no_grad():
+        attention.query.add_(torch.randn(3, WIDTH))
+    pooled = pool(attention, states, batch)
+    assert pooled.shape == (3, 3 * WIDTH)
+    for index in range(3):
+        torch.testing.assert_close(
+            pooled[:, index * WIDTH : (index + 1) * WIDTH],
+            single_query(states, batch, attention.query[index]),
+        )
+
+
+def test_the_plan_names_how_many_queries_the_attention_reads_under() -> None:
+    pooling = HeadPooling(pooling=PoolingScheme.ATTENTION, queries=4)
+
+    module = pooling_module(pooling, width=WIDTH)
+
+    assert isinstance(module, AttentionPooling)
+    assert module.query.shape == (4, WIDTH)
+    apart = pooling_module(pooling.tuned("statics", "apart"), width=WIDTH)
+    batch = random_batch(2, 10, seed=10, padding=2)
+    assert pool(apart, states_of(batch), batch).shape == (2, 5 * WIDTH)
+    with pytest.raises(ValueError, match="has queries"):
+        AttentionPooling(WIDTH, queries=0)

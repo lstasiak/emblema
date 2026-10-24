@@ -63,19 +63,27 @@ class HeadPooling:
     variant turns one knob at a time, and the tail has to exist before its share is set. Set
     apart, the static features leave whichever scheme pools the readings, a tail included.
 
-    Invariants: the share lies in ``(0, 1]``, and is one unless the scheme is a tail.
+    Under attention the head may read several queries at once, each a weighted mean of its own
+    laid beside the others, so one query can settle on the window's end and another on the
+    channel measured once; a query count under any other scheme is a knob recorded as turned
+    and changing nothing, so it is refused as a share is.
+
+    Invariants: the share lies in ``(0, 1]``, and is one unless the scheme is a tail; the
+    queries are positive, and one unless the scheme is attention.
 
     Attributes:
         pooling: Which scheme.
         tail_share: Share of the window's length a tail keeps, from its end; one otherwise.
         statics: Where the static features stand: among the readings unless a variant turns it.
+        queries: How many learnt queries the attention reads the window under; one otherwise.
     """
 
     pooling: PoolingScheme
     tail_share: float = 1.0
     statics: StaticsPlacement = StaticsPlacement.AMONG
+    queries: int = 1
 
-    KNOBS: ClassVar[tuple[str, ...]] = ("pooling", "tail_share", "statics")
+    KNOBS: ClassVar[tuple[str, ...]] = ("pooling", "tail_share", "statics", "queries")
 
     def __post_init__(self) -> None:
         if not isfinite(self.tail_share) or not 0.0 < self.tail_share <= 1.0:
@@ -83,6 +91,12 @@ class HeadPooling:
         if self.tail_share < 1.0 and self.pooling is not PoolingScheme.TAIL:
             raise InvalidHeadPoolingError(
                 f"{self.pooling} reads the whole window, so a share of it is no knob"
+            )
+        if self.queries < 1:
+            raise InvalidHeadPoolingError(f"queries must be positive, got {self.queries}")
+        if self.queries > 1 and self.pooling is not PoolingScheme.ATTENTION:
+            raise InvalidHeadPoolingError(
+                f"{self.pooling} reads the window under no query, so a count of them is no knob"
             )
 
     @classmethod
@@ -103,7 +117,7 @@ class HeadPooling:
     @property
     def width_factor(self) -> int:
         """How many states of the encoder's width the pooled state is made of."""
-        return 2 if self.statics is StaticsPlacement.APART else 1
+        return self.queries + (1 if self.statics is StaticsPlacement.APART else 0)
 
     def parameters(self) -> dict[str, str | float]:
         """The scheme and its share flattened to scalars, in a fixed order.
@@ -114,8 +128,11 @@ class HeadPooling:
         """
         return {"pooling": str(self.pooling), "tail_share": float(self.tail_share)}
 
-    def turned_away(self) -> dict[str, str]:
-        """The placement of the static features, named only where a variant turned it."""
-        if self.statics is StaticsPlacement.AMONG:
-            return {}
-        return {"statics": str(self.statics)}
+    def turned_away(self) -> dict[str, str | int]:
+        """The statics' placement and the queries, named only where a variant turned them."""
+        turned: dict[str, str | int] = {}
+        if self.statics is not StaticsPlacement.AMONG:
+            turned["statics"] = str(self.statics)
+        if self.queries > 1:
+            turned["queries"] = self.queries
+        return turned

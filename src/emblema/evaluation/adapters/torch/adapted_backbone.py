@@ -14,6 +14,8 @@ from emblema.evaluation.adapters.torch.regression_head import RegressionHead
 from emblema.evaluation.adapters.torch.summary_branch import SummaryBranch
 from emblema.evaluation.domain.exceptions import InvalidAdaptationPlanError
 from emblema.evaluation.domain.transfer.adaptation_plan import AdaptationPlan
+from emblema.shared.adapters.arrays.raw_tokens import RawTokens
+from emblema.shared.adapters.arrays.window_layout import WindowLayout
 from emblema.shared.adapters.tensors.grown_parameters import GrownParameters
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
@@ -68,14 +70,17 @@ class AdaptedBackbone(nn.Module):
         vocabulary_size: int,
         starting_at: float,
         summary_rows: NDArray[np.float64] | None = None,
+        layout: WindowLayout | None = None,
     ) -> Self:
         """The candidate ``plan`` describes, built on the host from torch's current generator.
 
         The head is drawn first, so under one seed every mode starts it from the same weights,
         whatever the encoder draws after it; its bias starts at ``starting_at``, where the task's
         link places a predictor that knows nothing of the labels the run holds. The encoder is
-        asked for over ``vocabulary_size``, the channels of the task's corpus; rows it grew for
-        channels it was never trained on are trained under every mode, as the head is, because
+        asked for over ``vocabulary_size``, the channels of the task's corpus, and over the
+        feature axis of ``layout``, the way the run lays windows out, which also says which
+        features a clip bounds; the raw readings unless given. Rows it grew for channels it was
+        never trained on are trained under every mode, as the head is, because
         there is nothing pretrained in them to freeze. A branch over the statistics per channel is
         drawn after everything else and prepared over ``summary_rows``, the statistics of the
         windows the run draws, so a plan that reads none draws exactly what it always did.
@@ -100,6 +105,7 @@ class AdaptedBackbone(nn.Module):
                 f"a plan reading summaries {reading.summaries} is given "
                 + ("none" if summary_rows is None else "some")
             )
+        laid_out = RawTokens() if layout is None else layout
         read = width * plan.pooling.width_factor if reading.reads_tokens else 0
         head = RegressionHead(
             read + (width if reading.reads_summaries else 0), starting_at=starting_at
@@ -112,6 +118,8 @@ class AdaptedBackbone(nn.Module):
                 dropout=dropout,
                 value_embedding=plan.encoder.value_embedding,
                 shape=shape,
+                time_encoding=plan.encoder.time_encoding,
+                input_features=laid_out.features,
             )
         else:
             encoder = backbones.pretrained(
@@ -127,7 +135,7 @@ class AdaptedBackbone(nn.Module):
         if not plan.encoder.layer.is_last:
             encoder = LayerReadout(encoder, plan.encoder.layer, blocks=blocks)
         if plan.encoder.value_clip is not None:
-            encoder = ClippedValues(encoder, plan.encoder.value_clip)
+            encoder = ClippedValues(encoder, plan.encoder.value_clip, laid_out.value_features)
         if not reading.reads_tokens:
             encoder.requires_grad_(False)
         return cls(

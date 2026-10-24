@@ -207,3 +207,26 @@ def test_a_run_of_an_order_assembles_either_pool_without_a_database(
     )
 
     assert candidates is not None
+
+
+def test_a_lane_runs_every_count_th_cell_from_its_index_and_prints_its_own_reference() -> None:
+    handoff = InMemoryCampaignHandoff()
+    order = placed(handoff)
+    cli = CampaignRunCli(Pinned())
+    cells = handoff.read_order(order).cells
+
+    printed = cli.execute(cli.parse(argv(order, "--lane", "1/2")), root(handoff).services)
+
+    key, checksum = printed.split()
+    answered = handoff.read_result(ArtifactRef(key, Checksum.parse(checksum)))
+    assert answered.cells == frozenset(cells[1::2])
+    assert cli.parse(argv(order)).command.lane is None
+
+
+def test_a_lane_that_cannot_be_read_is_a_usage_error_before_anything_is_asked() -> None:
+    handoff = InMemoryCampaignHandoff()
+    order = placed(handoff)
+
+    with pytest.raises(SystemExit):
+        CampaignRunCli(Pinned()).parse(argv(order, "--lane", "second of two"))
+    assert handoff.reported == []

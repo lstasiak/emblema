@@ -39,3 +39,29 @@ def test_the_wrapper_holds_no_weights_of_its_own() -> None:
     inner = nn.Linear(2, 2)
 
     assert list(ClippedValues(inner, 5.0).parameters()) == list(inner.parameters())
+
+
+def test_the_values_a_layout_names_are_bounded_and_the_rest_of_a_wide_token_is_not() -> None:
+    features = torch.tensor([[[1.0, 9.0, 8.0, -8.0, 7.0, 6.0, -9.0, 0.5, 0.25]]])
+    ones = torch.ones(1, 1)
+
+    fed = ClippedValues(Echo(), 5.0, slice(2, 7))(
+        features, ones.long(), ones, ones.bool(), ones.bool()
+    )
+
+    assert fed[0, :, :9].tolist() == [[1.0, 9.0, 5.0, -5.0, 5.0, 5.0, -5.0, 0.5, 0.25]]
+
+
+def test_a_slice_open_at_either_end_bounds_what_it_names_and_nothing_else() -> None:
+    features = torch.tensor([[[9.0, -9.0, 8.0]]])
+    ones = torch.ones(1, 1)
+
+    tail = ClippedValues(Echo(), 5.0, slice(1, None))(
+        features, ones.long(), ones, ones.bool(), ones.bool()
+    )
+    head = ClippedValues(Echo(), 5.0, slice(None, 1))(
+        features, ones.long(), ones, ones.bool(), ones.bool()
+    )
+
+    assert tail[0, :, :3].tolist() == [[9.0, -5.0, 5.0]]
+    assert head[0, :, :3].tolist() == [[5.0, -9.0, 8.0]]

@@ -605,3 +605,44 @@ def test_a_variant_reading_summaries_where_they_mean_nothing_is_refused(
 ) -> None:
     with pytest.raises(UnknownCandidateError, match=reason):
         BOTH_ARMS.describe(CandidateRef(name))
+
+
+@pytest.mark.parametrize(
+    ("name", "turned"),
+    [
+        ("from_scratch@bins=12", {"bins": "12"}),
+        ("from_scratch@bins=12,cells=corpus", {"bins": "12", "cells": "corpus"}),
+        ("from_scratch@time_encoding=learned", {"time_encoding": "learned"}),
+        ("from_scratch@pooling=attention,queries=4", {"pooling": "attention", "queries": "4"}),
+        ("from_scratch@bins=6,value_clip=3", {"bins": "6", "value_clip": "3.0"}),
+    ],
+)
+def test_a_network_from_nothing_over_cells_a_learnt_time_or_several_queries_names_that_alone(
+    name: str, turned: dict[str, object]
+) -> None:
+    base = BOTH_ARMS.describe(CandidateRef("from_scratch"))
+
+    variant = BOTH_ARMS.describe(CandidateRef(name))
+
+    stated = {p.name: p.value for p in variant.method.parameters}
+    before = {p.name: p.value for p in base.method.parameters}
+    assert {name: stated[name] for name in stated if stated[name] != before.get(name)} == turned
+    assert variant.budget == base.budget
+
+
+@pytest.mark.parametrize(
+    ("name", "reason"),
+    [
+        ("full_fine_tuning@bins=12", "fix its encoder's build"),
+        ("full_fine_tuning@time_encoding=learned", "fix its encoder's build"),
+        ("from_scratch@bins=12,summaries=only", "not of cells"),
+        ("from_scratch@bins=12,summaries=beside", "not of cells"),
+        ("from_scratch@bins=12,grid_resolution=1", "two layouts"),
+        ("from_scratch@cells=corpus", "knob of the bins"),
+        ("from_scratch@bins=0", "bins cannot be 0"),
+        ("from_scratch@pooling=tail,queries=4", "no knob"),
+    ],
+)
+def test_a_layout_a_time_or_queries_no_arm_can_take_is_refused(name: str, reason: str) -> None:
+    with pytest.raises(UnknownCandidateError, match=reason):
+        BOTH_ARMS.describe(CandidateRef(name))

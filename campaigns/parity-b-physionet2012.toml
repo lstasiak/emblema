@@ -1,0 +1,44 @@
+# The confirmation on set B: the small encoder from nothing on cells of six bins, named in the
+# register after the half's reading (two blocks, 64 wide, a stop with a fifth held out and a
+# patience of ten epochs, a rate of 0.000333), against the trees per channel at the setting the
+# tuning side chose at every stay, with the trees at their default setting read beside them. All
+# learn from every stay of set A and are scored on set B over seeds 1 to 10. The reading is the
+# registered rule of 2026-10-22: the paired interval of the network's area less the trees' lies
+# above a margin of 0.015 and that difference plus the margin exceeds twice its standard error;
+# only then superiority, the interval above zero.
+#
+# Defined under the mixture of four at its first pretraining seed, whose 4.8M shape nothing
+# here uses: the network states its own shape. Committed before the campaign runs, for the
+# reason every campaign file is.
+
+name = "parity-b-physionet2012"
+purpose = "tuning"
+tier = "M"
+measure = "auroc_shortfall"
+
+[candidates]
+competing = [
+    "boosted_trees_per_channel@learning_rate=0.1,rounds=300",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,patience=10,stop_share=0.2,width=64",
+    "boosted_trees_per_channel",
+]
+control = "boosted_trees_per_channel@learning_rate=0.1,rounds=300"
+endpoint = "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,patience=10,stop_share=0.2,width=64"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Not the reading: the campaign's verdict is read by the registered rule of non-inferiority
+# from the pairs, as docs/verification/encoder-candidates.md declares.
+minimum_absolute_reduction = 0.015
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

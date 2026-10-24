@@ -5,7 +5,7 @@ preliminary: each task's frozen test side is opened once, at the end. Each compa
 by a rule registered before its run ([preregistration](preregistration.md)); each row links the
 note that holds its evidence ([`verification/`](verification/README.md)).
 
-Last updated 2026-10-23.
+Last updated 2026-10-24.
 
 ## Status
 
@@ -19,8 +19,9 @@ Last updated 2026-10-23.
   network from 200 labels up on both tasks; on the intensive-care stays they lie 0.07 to 0.09 in
   area above the probe, and a logistic head over the same summaries about 0.07 above it, within
   0.006 of the trees at 200 stays (re-read on 2026-10-23 with its preparation corrected). The
-  network trained from scratch trails the trees by 0.077 at 200 stays and, against set B, by
-  0.05 at every stay: more than any gain pretraining has shown.
+  network trained from scratch on raw tokens trails the trees by 0.077 at 200 stays and, against
+  set B, by 0.05 at every stay: more than any gain pretraining has shown. A small encoder from
+  scratch over cells of channel and time bin closes most of that (below).
 - **The summaries are in the token states; the probe's average loses them.** A linear map
   recovers a median 86 % of a channel's level from the mean of its own tokens, in every block and
   as before training, but 15 % from the mean over the stay (31 % before training). Pooling per
@@ -38,9 +39,39 @@ Last updated 2026-10-23.
   sepsis at 4,000 patients).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
-- **Next:** the network trained from scratch brought up to the classical baselines, with an
-  encoder designed together with its pretext and pretraining data sampled like the
-  intensive-care tasks, before pretraining is read again at few labels.
+- **Reading the window as cells does not close the gap at few labels.** An encoder trained from
+  scratch over cells of channel and time bin, carrying each bin's count, level, extremes and
+  ends, reads within 0.01 of the same encoder on raw readings rerun beside it at 50 and 200
+  stays (0.67 at 200 in that rerun, 0.65 in the earlier campaign), and 0.03 to 0.05 below a
+  network handed the trees' table; the best of thirteen variants, six bins, gains 0.03 at 200
+  stays and still trails that network; a learnt time encoding, several pooling
+  queries and rows for the channels a stay never measured move nothing beyond the reader's
+  resolution ([note](verification/encoder-candidates.md)).
+- **A small encoder from scratch reaches the trees at 200 stays and leads them at 50.** Two
+  blocks 64 wide over cells of six bins read 0.73 at 200 stays, level with the trees (+0.003
+  [−0.011; +0.017]) and 0.027 above the network handed their table, and 0.66 at 50, 0.028 above
+  the trees; the 4.8M encoder on the same cells reads 0.68 and 0.64. The gap at few labels was
+  the encoder's size, not what it read; dropout, weight decay, a clip and a class weight add
+  nothing ([note](verification/encoder-candidates.md)).
+- **From 500 stays up the cells carry the gain and the trees keep 0.008.** On six-bin cells the
+  4.8M encoder and the small one read alike (0.83 at every stay of the half), 0.022 above the
+  network handed the trees' table and 0.008 below the trees, not distinguishable. The mean lies
+  within the 0.015 the register asks of the half; the lower edge of that pair (−0.023) does not,
+  so the set B rule would pass about one time in four at that standing
+  ([note](verification/encoder-candidates.md)).
+- **No input moves the small encoder at every stay.** Twelve and twenty-four bins, a learnt
+  time encoding and four pooling queries read within 0.004 of six bins at every stay of the
+  half, none carried; rows for the channels a stay never measured cost 0.009 [0.001; 0.018].
+  Six bins under the registered recipe go to set B against the trees
+  ([note](verification/encoder-candidates.md)).
+- **On set B the small encoder from scratch reads 0.008 below the tuned trees and is not shown
+  no worse by 0.015.** Learnt from every stay of set A, it reads 0.850 against the trees'
+  0.858 at `learning_rate=0.1,rounds=300` (−0.008 [−0.017; +0.001], the lower edge 0.002 past
+  the margin) and level with the trees at their default setting (+0.001 [−0.010; +0.011]); the
+  same 0.008 as on the half. The registered rule closes this direction
+  ([note](verification/encoder-candidates.md)).
+- **Next:** pretraining read again on the small encoder over the same six-bin cells, with a
+  pretext over the cells, against the small encoder from scratch on the half.
 
 ## Setup
 
@@ -79,6 +110,10 @@ AUROC, higher is better.
 | Labelled stays | 200 | 500 | 1,000 | all (2,000) |
 | --- | --- | --- | --- | --- |
 | Network from scratch | 0.65 | 0.75 | 0.79 | 0.79 |
+| Network from scratch, rerun beside the cells ([note](verification/encoder-candidates.md)) | 0.67 | | | |
+| Network from scratch over cells of channel × time bin, 6 / 12 bins ([note](verification/encoder-candidates.md)) | 0.69 / 0.67 | | | |
+| Small network from scratch (2 blocks, 64 wide) over 6-bin cells ([note](verification/encoder-candidates.md)) | 0.73 | 0.78 | | 0.83 |
+| Network from scratch (4.8M) over 6-bin cells, 500 and every stay ([note](verification/encoder-candidates.md)) | | 0.77 | | 0.83 |
 | Full fine-tuning, mixture of four | 0.69 | 0.74 | 0.76 | 0.79 |
 | Probe, mixture of four | 0.65–0.67 | 0.69–0.71 | 0.72–0.74 | 0.74–0.76 |
 | Probe, untrained encoder | 0.64 | 0.69 | 0.75 | 0.78 |
@@ -91,7 +126,9 @@ Pretraining's share changes sign with the budget: the probe gains 0.02 to 0.04 o
 encoder at 200 stays, nothing at 500 and loses 0.01 to 0.04 from 1,000 up. The classical rows
 were read at 200 and 500 stays only ([note](verification/head-and-representation.md)). On the full grid
 against set B, trees reach 0.76 at 200 stays and 0.86 at every stay, the network 0.68 and 0.81
-([note](verification/intensive-care-curve.md)). Under all four pretrainings, full fine-tuning
+([note](verification/intensive-care-curve.md)); the small encoder over six-bin cells, learnt from
+every stay of set A, reads 0.85 on set B against the tuned trees' 0.86 and the default trees'
+0.85 ([note](verification/encoder-candidates.md)). Under all four pretrainings, full fine-tuning
 reads 0.58, 0.62 and 0.68 at 20, 50 and 200 stays, and the network from scratch 0.60, 0.62 and
 0.66. The gain at 200 stays, +0.024 [+0.014; +0.033], is not replicated under the two
 pretrainings never read there (+0.014 against 0.021), and neither 20 nor 50 stays passes
@@ -187,8 +224,9 @@ pretraining against four, 0.021 for two.
 
 ## Next
 
-1. Bring the network trained from scratch up to the classical baselines, with an encoder designed
-   together with its pretext and pretraining data sampled like the intensive-care tasks; then read
-   pretraining on it at 20, 50 and 200 stays.
+1. Bring the network trained from scratch up to the classical baselines: a small encoder over
+   cells of channel and time bin now matches the trees at 200 stays and trails the tuned trees by
+   0.008 at every stay; next a pretext designed over the same cells and pretraining data sampled
+   like the intensive-care tasks; then read pretraining on it at 20, 50 and 200 stays.
 2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
 3. Open the frozen test side once.

@@ -95,8 +95,10 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
   gain, fine-tuning at 200 stays, did not replicate under two fresh pretrainings (+0.024 under
   all four, half the registered least gain), and fine-tuning gains nothing at 20 or 50 stays.
 - **Classical baselines lead at few labels.** Gradient-boosted trees over per-channel summaries
-  match or beat every network from 200 labels up. The network trained from scratch trails them
-  by 0.08 in area at 200 stays and 0.05 at every stay, more than any gain pretraining has shown.
+  match or beat every network from 200 labels up. The network trained from scratch on raw
+  readings trails them by 0.08 in area at 200 stays and 0.05 at every stay, more than any gain
+  pretraining has shown; a small encoder from scratch that reads each stay as cells of channel
+  and time bin matches the trees at 200 stays and trails the tuned trees by 0.008 at every stay.
   On the intensive-care stays, the encoder's average over a stay holds less of those summaries
   than before it was trained; each channel's own tokens still hold them, as they did before
   training, and no average over a stay's sensors keeps them.
@@ -105,8 +107,8 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** bring the network trained from scratch up to the classical baselines, with an
-  encoder designed together with its pretext. The pretraining data change too: so far only 4.5 %
+- **Next:** a pretext designed over the same cells, read against that small encoder trained from
+  scratch. The pretraining data change too: so far only 4.5 %
   of the mixture's windows were sampled like the intensive-care stays. Only then is pretraining
   read again at few labels.
 
