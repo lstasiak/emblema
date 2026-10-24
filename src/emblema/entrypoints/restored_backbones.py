@@ -50,6 +50,10 @@ class RestoredBackbones:
     def layers(self) -> int:
         return self._trained.architecture.layers
 
+    @property
+    def bins(self) -> int:
+        return self._trained.architecture.bins
+
     def pretrained(
         self, weights: ArtifactRef, *, vocabulary_size: int, dropout: float
     ) -> nn.Module:
@@ -109,8 +113,11 @@ class RestoredBackbones:
         shape: EncoderShape | None = None,
         time_encoding: TimeEncoding = TimeEncoding.FOURIER,
         input_features: int = N_FEATURES,
+        bins: int = 0,
     ) -> nn.Module:
-        architecture = self._trained.architecture
+        # The input part is the run's layout's, not the stored model's: a fresh encoder over
+        # the raw readings beside a backbone over cells reads two features, and says so.
+        architecture = replace(self._trained.architecture, bins=bins)
         if shape is not None:
             architecture = replace(
                 architecture,

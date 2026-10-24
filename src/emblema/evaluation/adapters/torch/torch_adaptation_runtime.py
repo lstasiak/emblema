@@ -222,14 +222,17 @@ class TorchAdaptationRuntime:
             ),
         )
 
-    @staticmethod
-    def _layout(plan: AdaptationPlan, manifest: PublishedCorpusManifest) -> WindowLayout:
-        """How the run lays windows out: the raw readings, or cells of the plan's bins.
+    def _layout(self, plan: AdaptationPlan, manifest: PublishedCorpusManifest) -> WindowLayout:
+        """How the run lays windows out: the raw readings, or cells of the plan's or backbone's.
 
-        Over the corpus's channels the rows are the manifest's entries of that corpus, the
-        channels it names, the measured and the static ones apart; a vocabulary continued from
-        another corpus's names channels this one never holds, and they get no row.
+        A pretrained encoder is fed what it was trained on, the cells of the window's own
+        channels where it read cells, and a plan beside it states no bins of its own. Over the
+        corpus's channels the rows are the manifest's entries of that corpus, the channels it
+        names, the measured and the static ones apart; a vocabulary continued from another
+        corpus's names channels this one never holds, and they get no row.
         """
+        if plan.backbone is not None and self._backbones.bins:
+            return BinnedTokens(self._backbones.bins)
         bins = plan.encoder.bins
         if bins is None:
             return RawTokens()
@@ -262,8 +265,9 @@ class TorchAdaptationRuntime:
         readings or on cells, or reading the windows' statistics per channel, is kept in its
         measured form alone: the graph takes the raw tokens a served model is handed, and would
         answer them as something other than what was scored, so no graph is derived and serving
-        refuses the candidate as one it cannot run. A candidate over the corpus's cells keeps
-        the channels its rows stand for, since its weights mean nothing without them.
+        refuses the candidate as one it cannot run. A candidate over cells keeps the bins it
+        cut the window into, and one over the corpus's cells the channels its rows stand for,
+        since its weights mean nothing without them.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep it.
@@ -282,10 +286,11 @@ class TorchAdaptationRuntime:
             link=link,
             cell_channels=() if cells is None else cells.channels,
             cell_statics=() if cells is None else cells.statics,
+            cell_bins=0 if cells is None else cells.bins,
         )
         measured = RepresentationBytes(FittedCandidate.FORMAT, fitted.to_bytes())
         encoder = plan.encoder
-        if encoder.grid_resolution is not None or encoder.reads_summaries or encoder.reads_cells:
+        if encoder.grid_resolution is not None or encoder.reads_summaries or cells is not None:
             return self._kept_candidates.keep(
                 CandidateKind.NEURAL, corpus_manifest=task.manifest, measured=measured
             )

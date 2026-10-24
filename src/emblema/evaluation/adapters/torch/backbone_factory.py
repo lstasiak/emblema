@@ -28,7 +28,8 @@ class BackboneFactory(Protocol):
 
     A fresh encoder may be asked for over a feature axis of another width than the raw tokens',
     where the run lays windows out otherwise, and with a time encoding that learns; a pretrained
-    one never is, since its weights fix both.
+    one never is, since its weights fix both. A pretrained encoder may itself read cells rather
+    than readings, and says so through ``bins``, so the run lays windows out as it was trained.
     """
 
     @property
@@ -39,6 +40,11 @@ class BackboneFactory(Protocol):
     @property
     def layers(self) -> int:
         """Number of blocks, which sizes the head of one reading every block side by side."""
+        ...
+
+    @property
+    def bins(self) -> int:
+        """Spans a pretrained encoder reads a channel's token over; zero for one per reading."""
         ...
 
     def pretrained(
@@ -62,6 +68,7 @@ class BackboneFactory(Protocol):
         shape: EncoderShape | None = None,
         time_encoding: TimeEncoding = TimeEncoding.FOURIER,
         input_features: int = N_FEATURES,
+        bins: int = 0,
     ) -> nn.Module:
         """An encoder with weights drawn anew from torch's generator.
 
@@ -69,6 +76,7 @@ class BackboneFactory(Protocol):
         that a fresh encoder has the parameters a pretrained one has over the same task. Of the
         stored shape, with a linear value over the raw tokens' features and the fixed time
         unless ``shape``, ``value_embedding``, ``input_features`` and ``time_encoding`` say
-        otherwise; the channel module stays the stored architecture's.
+        otherwise, and over the ``bins`` of the layout the run lays windows out as, zero for
+        the raw readings; the channel module stays the stored architecture's.
         """
         ...
