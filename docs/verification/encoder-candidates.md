@@ -526,16 +526,20 @@ reads at or below the stop, as predicted.
    0.022 above the table's network, carried, and 0.008 below the trees, not distinguishable.
    An encoder that reads the window as cells does hold more than ten statistics per channel,
    which the declared outcome of L-32b1 asked for.
-3. **By the declared levels the step to set B is not taken from this reading.** The pair
-   against the trees at every stay is +0.008 in the trees' favour with an interval of
-   [−0.023; +0.007] for the network, so its lower edge lies below the margin of −0.015, and S
-   is not carried, which the declaration names *lost*; the word is wrong for a candidate that
-   reads 0.008 below the trees, and the level that fits is *below the margin*: the mechanism is
-   not the shape but the 0.008 the trees keep at every stay, at the point estimate within the
-   margin and at the interval's edge outside it. On set B (3,994 stays) the interval narrows to
-   about ±0.011; at a true difference of −0.008 the registered rule would pass about one time in
-   three. The declaration asks for a reading on the half that clears the margin before set B is
-   spent.
+3. **By the declared levels the step to set B does not follow from this reading; by the
+   register's gate it may.** The pair against the trees at every stay is +0.008 in the trees'
+   favour with an interval of [−0.023; +0.007] for the network, so its lower edge lies below
+   −0.015, and S is not carried, which the declaration names *lost*; the word is wrong for a
+   candidate that reads 0.008 below the trees, and the level that fits is *below the margin*:
+   the mechanism is not the shape but the 0.008 the trees keep at every stay. The declaration's
+   bound on the half (the lower edge above −0.015) was its own and stricter than the register's:
+   the registered rule (2026-10-22) lets one configuration go on to set B when its mean at every
+   stay of the half lies within 0.015 of the trees', and 0.008 is within it. On set B (3,994
+   stays) the interval narrows to about ±0.011; at a true difference of −0.008 the registered
+   rule passes about one time in four, at −0.004 one in two, at zero four in five, before any
+   gain from learning on twice the stays. The declaration's *below the margin* branch closes the
+   ticket with the mechanism; whether to spend set B at these odds is decided in the next
+   section.
 4. The registered rate (0.000333) is the best of three at every stay for the small shape as it
    was for the 4.8M encoder; dropout and a run without the stop cost 0.002 to 0.008.
 
@@ -545,3 +549,82 @@ is read at the trees' setting chosen on these same stays. Two of the three rates
 are a two-point grid around the registered one; a rate between 0.000333 and 0.001 was not run.
 The candidates at every stay differ by 0.002 to 0.008, within the run-to-run noise of a mean
 over ten seeds (0.01 to 0.02 at 200; smaller here, the spread over seeds being 0.007 to 0.012).
+
+## 2026-10-24 — declared before the run: the inputs of the small encoder at every stay of the half
+
+**Question.** The inputs an encoder from nothing reads (how many bins, rows for the channels a
+stay never measured, a learnt time, several queries) were chosen at 50 and 200 stays, where the
+encoder's size moved the reading by 0.04 to 0.08 and every input by 0.01 or less. From 500
+stays up it is the other way round: the cells carry 0.023 and 0.030 and the shape nothing. Which
+input does the small encoder want at every stay of the half, where the input is the lever, and
+does any input lift it to the trees? The reading names the variant that goes to set B.
+
+**Why this step.** The reading above ended *below the margin* by its own levels, whose bound on
+the half (the lower edge against the trees above −0.015) was stricter than the register's: the
+registered rule lets one configuration go on when its mean at every stay of the half lies within
+0.015 of the trees', and the small shape's 0.008 does. The user chose (2026-10-24) to spend the
+single reading on set B, and to read the inputs first, where they matter, so that the variant
+named for set B is chosen in the regime it is tested in. The step costs 70 cells of a few seconds
+to a minute each.
+
+**Conditions.** As above, at the commit of this declaration; campaign
+`campaigns/inputs-all-physionet2012.toml` at every stay of the half, seven candidates under the
+registered recipe (a stop with a fifth held out, a patience of ten epochs, a rate of 0.000333):
+the small shape on six bins (the candidate as read, the control of this campaign), on twelve and
+on twenty-four bins; on six bins with a row for every channel the corpus measures
+(`cells=corpus`), with a learnt time encoding, and with four learnt queries in an attention
+pooling; and the 4.8M encoder on twelve bins. The trees (`learning_rate=0.1,rounds=300`), the
+network over the table and MiniRocket at every stay are read from the gap's campaign
+(`105c9081…`) on the same stays and seeds; the small shape on six bins and the 4.8M encoder on six
+bins as read above (`892f50a0…`). Network cells on one Colab G4 under CUDA MPS, four lanes; the
+trial on the M1 Pro (MPS).
+
+**Readings.** B: six → twelve bins and six → twenty-four bins, the small shape, the one family
+under Holm (two). Descriptively: twelve → twenty-four; each of the rows, the learnt time and the
+queries against six bins; the 4.8M encoder on twelve bins against the small shape on twelve
+(shape, in this campaign) and against the 4.8M encoder on six bins (bins at 4.8M, across
+campaigns); the variant with the highest mean against the trees, the table's network and
+MiniRocket. Rule as above. **The variant for set B** is the one with the highest mean at every
+stay of the half; on a tie within 0.005, six bins under the registered recipe, the candidate
+already read and the cheaper one. It is named in the register before the set B campaign is
+defined, with its own declaration. The best of seven chosen on the stays it is scored on reads
+high by one to two standard errors of a mean (0.002 to 0.004); set B is where it is tested.
+
+**Predictions.**
+
+1. Six → twelve bins lies within [−0.009; +0.018]: the lower edge is the upper edge of the
+   same pair's loss at 200 under the 4.8M encoder (−0.021 [−0.034; −0.009]), where the cost was
+   capacity, which the small shape at every stay no longer pays; the upper edge is T.
+   Twelve → twenty-four lies within [−0.016; +0.023], the pair's intervals at 200 and 50.
+2. The rows, the learnt time and the queries lie within ±T of six bins, as at 200 (A
+   [−0.014; +0.013], T [−0.002; +0.018], Q [−0.013; +0.010]).
+3. The 4.8M encoder on twelve bins lies within [−0.003; +0.007] of the small shape on twelve,
+   the shape's pair at every stay on six bins.
+4. The variant with the highest mean lies against the trees within [−0.023; +0.007], the pair's
+   interval above, and its point between −0.008 and +0.002: the standing as read plus what the
+   best of seven adds.
+
+**Levels of the outcome.** *Finer bins carry*: B is carried for twelve or twenty-four bins.
+*Noise*: B is not carried and no input is carried against six bins. *Level with the trees*: in
+either, some variant's pair against the trees has its point at or above zero.
+
+**What follows.** In every level the named variant goes to set B at every stay, learning from
+every stay of set A, against the trees at their chosen setting, ten seeds, under the registered
+rule (non-inferiority at δ = 0.015, then superiority), with a register row naming it before the
+campaign is defined. The forecast of that rule's pass, read from the half: at a true difference
+of −0.008 one time in four, at −0.004 one in two, at zero four in five (the half's half-width of
+0.015 over √2 for 3,994 stays, before any gain from learning on twice the stays). *Finer bins
+carry*: the carried bins become the layout the pretraining path reads (the next ticket). *Noise*:
+six bins stay, and the inputs are settled at every budget read. *Checks before reading*: the
+small shape on six bins within 0.01 of its reading above (0.831), as the control's rerun at every
+stay was (−0.003 [−0.006; −0.001]); every stored description names its knobs.
+
+**Limitations.** The recipe (rate, class weight) is not turned here; it was read at every stay
+above for six bins and is taken as it stands for twelve and twenty-four, whose cells hold two and
+four times the tokens. The bar against the trees is read at the trees' setting chosen on these
+same stays. The forecast for set B assumes the half's spread scales with the number of stays and
+no change of standing from twice the training stays; the network's and the trees' gains from 500
+to every stay of the half were alike (0.056 and 0.052), so the forecast is not tilted either way.
+A set B that fails the rule for the named variant does not close set B to a configuration of
+another kind (a pretrained encoder): the register confirms one configuration once, though
+every reading of set B spends it.

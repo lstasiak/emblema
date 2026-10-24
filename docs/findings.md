@@ -54,10 +54,12 @@ Last updated 2026-10-24.
   nothing ([note](verification/encoder-candidates.md)).
 - **From 500 stays up the cells carry the gain and the trees keep 0.008.** On six-bin cells the
   4.8M encoder and the small one read alike (0.83 at every stay of the half), 0.022 above the
-  network handed the trees' table and 0.008 below the trees, not distinguishable; the lower edge
-  of that pair (−0.023) lies below the registered margin of 0.015, so the single reading on set
-  B waits for a candidate that clears it on the half ([note](verification/encoder-candidates.md)).
-- **Next:** a candidate above the trees' margin at every stay of the half, then once on set B
+  network handed the trees' table and 0.008 below the trees, not distinguishable. The mean lies
+  within the 0.015 the register asks of the half; the lower edge of that pair (−0.023) does not,
+  so the set B rule would pass about one time in four at that standing
+  ([note](verification/encoder-candidates.md)).
+- **Next:** the small encoder's inputs read once more at every stay of the half (bins, rows for
+  unmeasured channels, a learnt time, several queries), then the named variant once on set B
   under the registered parity; pretraining is read again on the small encoder afterwards.
 
 ## Setup
