@@ -58,9 +58,14 @@ Last updated 2026-10-24.
   within the 0.015 the register asks of the half; the lower edge of that pair (−0.023) does not,
   so the set B rule would pass about one time in four at that standing
   ([note](verification/encoder-candidates.md)).
-- **Next:** the small encoder's inputs read once more at every stay of the half (bins, rows for
-  unmeasured channels, a learnt time, several queries), then the named variant once on set B
-  under the registered parity; pretraining is read again on the small encoder afterwards.
+- **No input moves the small encoder at every stay.** Twelve and twenty-four bins, a learnt
+  time encoding and four pooling queries read within 0.004 of six bins at every stay of the
+  half, none carried; rows for the channels a stay never measured cost 0.009 [0.001; 0.018].
+  Six bins under the registered recipe go to set B against the trees
+  ([note](verification/encoder-candidates.md)).
+- **Next:** the small encoder on six bins once on set B under the registered parity with the
+  trees (no worse by 0.015 in area, then better), forecast one pass in four at its standing on
+  the half; pretraining is read again on the small encoder over the same cells afterwards.
 
 ## Setup
 

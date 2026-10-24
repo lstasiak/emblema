@@ -628,3 +628,165 @@ to every stay of the half were alike (0.056 and 0.052), so the forecast is not t
 A set B that fails the rule for the named variant does not close set B to a configuration of
 another kind (a pretrained encoder): the register confirms one configuration once, though
 every reading of set B spends it.
+
+## 2026-10-24 — Colab G4, fp32: at every stay no input moves the small shape beyond noise, and rows for unmeasured channels cost 0.009
+
+**Question.** The one declared above: which input the small shape wants at every stay of the
+half, whether any lifts it to the trees, and which variant goes to set B.
+
+**Conditions.** Campaign `52b9f184…` defined and ordered at `0546196f`; 70 network cells on one
+Colab G4 under CUDA MPS in four lanes, 10 minutes wall-clock (the card 90 % busy); the four
+results accepted lane by lane (`data/report/l32b2/accept-inputs.sh`). Pairs by
+`scripts/campaign_pairs_report.py` (`pairs-inputs.sh`), CSV under
+`data/report/l32b2/inputs-pairs/`. The reused cells as declared. A cell on six bins took 13 s,
+on twelve 26 s, on twenty-four 79 s; the 4.8M encoder on twelve bins 44 s.
+
+**Checks before reading.** Both held. The control's rerun reads 0.831, identical at every seed
+to its reading above: the two orders ran the same encoder code, and a G4 run under one seed
+repeats itself, so the check holds but says nothing of run-to-run noise (the earlier rerun's
+−0.003 was read between orders from different commits). Every stored description
+names its knobs.
+
+**Area under the ROC curve** at every stay of the half, mean over seeds 1 to 10, the small shape
+under the registered recipe unless named:
+
+| Candidate | every stay |
+|---|---|
+| **Six bins (the control, rerun)** | **0.831** |
+| Twelve bins | 0.830 |
+| Twenty-four bins | 0.827 |
+| Six bins, a row for every channel the corpus measures | 0.822 |
+| Six bins, a learnt time encoding | 0.832 |
+| Six bins, four queries in an attention pooling | 0.828 |
+| 4.8M encoder on twelve bins | 0.829 |
+| 4.8M encoder on six bins (reused) | 0.829 |
+| Network over the trees' table (reused) | 0.810 |
+| Trees per channel, `learning_rate=0.1,rounds=300` (reused) | 0.839 |
+| MiniRocket (reused) | 0.809 |
+
+**The pairs** (gain of the second over the first in area, 95 % interval over stays, seed by
+seed mean ± SE; **bold** = carried):
+
+| Pair | every stay |
+|---|---|
+| B: six → twelve bins (family, Holm over two) | −0.001 [−0.005; +0.002] ± 0.002 |
+| B: six → twenty-four bins | −0.004 [−0.009; +0.001] ± 0.003 |
+| Twelve → twenty-four bins | −0.003 [−0.006; +0.000] ± 0.002 |
+| A: six bins → a row for every channel | **−0.009** [−0.018; −0.001] ± 0.001 |
+| T: six bins → a learnt time | +0.001 [−0.001; +0.002] ± 0.001 |
+| Q: six bins → four queries | −0.003 [−0.006; +0.001] ± 0.003 |
+| Shape on twelve bins: small → 4.8M | −0.001 [−0.006; +0.004] ± 0.005 |
+| Bins at 4.8M: six (reused) → twelve | −0.001 [−0.006; +0.004] ± 0.002 |
+| Check: six bins as read above → rerun | +0.000 [+0.000; +0.000] ± 0.000 |
+| Bar: six → trees | +0.008 [−0.007; +0.023] ± 0.002 |
+| Bar: a learnt time → trees | +0.007 [−0.008; +0.022] ± 0.003 |
+| Bar: twelve / twenty-four → trees | +0.009 [−0.006; +0.025] ± 0.003; +0.012 [−0.004; +0.028] ± 0.004 |
+| Bar: four queries / 4.8M on twelve → trees | +0.011 [−0.005; +0.026] ± 0.002; +0.011 [−0.004; +0.025] ± 0.003 |
+| Bar: a row for every channel → trees | **+0.018** [+0.001; +0.034] ± 0.002 |
+| Bar: every variant → the table's network | −0.012 to −0.022; carried for all but twenty-four bins and the rows |
+| Bar: every variant → MiniRocket | −0.013 to −0.023; carried for all but the rows |
+
+**Predictions.** All four held. 1: six → twelve is −0.001, within [−0.009; +0.018]; twelve
+→ twenty-four −0.003, within [−0.016; +0.023]. 2: the rows −0.009, the learnt time +0.001 and
+the queries −0.003 lie within their intervals at 200. 3: the 4.8M encoder on twelve bins
+reads −0.001 from the small shape there, within [−0.003; +0.007]. 4: the highest mean is the
+learnt time (0.832), which reads 0.007 below the trees, within [−0.023; +0.007] and its point
+within [−0.008; +0.002].
+
+**Level of the outcome.** *Noise*, in its consequence: B is not carried and no input is carried
+as a gain. The levels did not foresee a carried loss; the rows for every channel are one
+(−0.009), so the outcome is *noise* with one input ruled out rather than left open.
+
+**Conclusions.**
+
+1. **The inputs are settled at every budget read.** At every stay, as at 50 and 200, no input
+   moves the small shape by more than 0.004 in either direction, except the rows for the
+   channels a stay never measured, which cost 0.009, carried. Twelve and twenty-four bins cost
+   two and six times the time of six and gain nothing; the layout the pretraining path reads is
+   six bins over the channels of the window.
+2. **The gain from the cells does not depend on their count between six and twelve at either
+   size.** The 4.8M encoder on twelve bins reads level with the small shape on twelve (−0.001)
+   and with itself on six (−0.001).
+3. **The variant for set B is the small shape on six bins under the registered recipe.** By the
+   rule declared above the highest mean, the learnt time, lies within 0.005 of six bins (0.832
+   against 0.831), and the tie goes to six bins, the candidate already read and the cheaper one.
+   Its standing against the trees at every stay is the one read above, 0.008 below, not
+   distinguishable; the forecast of the register's rule at that standing is one pass in four.
+4. **A row for every channel the corpus measures hurts.** Cells for channels a stay never
+   measured carry nothing but their absence, and every stay gets the same number of tokens (a cell
+   took 21 s against 13); the pair against the trees for this variant is the one carried bar
+   (+0.018 in the trees' favour). Why the rows cost is not read here.
+5. A rerun of unchanged code on the G4 repeats to the bit, so an in-campaign control and a
+   reused one are equal when the code is unchanged between the orders; the cross-campaign
+   differences read earlier (0.003 at every stay, 0.018 at 200) were between orders from
+   different commits. What a different card or driver adds is not read.
+
+**Limitations.** The recipe was read for six bins and taken as it stands for twelve and
+twenty-four, whose cells hold more tokens; a rate or patience of their own was not run. The
+seven variants were read once each over ten seeds; the best of seven reads high by one to two
+standard errors of a mean (0.002 to 0.004), which the tie rule absorbs by naming the candidate
+read before this campaign. The bar is read at the trees' setting chosen on these same stays.
+
+## 2026-10-24 — declared before the run: the small shape on six bins against the trees on set B
+
+**Question.** Is the small encoder from nothing on cells of six bins, learnt from every stay of
+set A, no worse than the trees per channel on set B by the registered margin of 0.015 in area,
+and if it is, better than them?
+
+**The configuration named.** The register's row of 2026-10-24 names
+`from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,patience=10,stop_share=0.2,width=64`
+for set B, chosen on the half by the rule declared above: the highest mean at every stay, the
+learnt time's, lies within 0.005 of six bins', and the tie goes to six bins. Its mean at every
+stay of the half is 0.831 against the trees' 0.839, within the 0.015 the register's gate asks.
+It is the configuration the ticket read at 500 and every stay without a choice, and the one
+chosen at 50 and 200.
+
+**Conditions.** Campaign `campaigns/parity-b-physionet2012.toml`, at the commit of this
+declaration: `purpose = "tuning"`, so every candidate learns from every stay of set A (3,997,
+the network holding a fifth out for its stop) and is scored on set B (3,994 stays, 568 deaths);
+seeds 1 to 10; the trees at `learning_rate=0.1,rounds=300` as the control, the named network as
+the endpoint, the trees at their default setting read beside them. The network's ten cells on
+one Colab G4 under CUDA MPS in four lanes (the ml order); the trees' twenty cells on the M1 Pro's
+processor (the general order), the same commit in both. Trial on the M1 Pro before this
+declaration: seed 1 of each family under this purpose, three cells (the trees in 24 s on the
+processor, the network in 82 s on MPS), counts only; the trial's campaign is never read and is
+deleted with the other trials.
+
+**Reading.** The registered rule (2026-10-22): from the paired comparison of the network
+against the trees at `learning_rate=0.1,rounds=300`, the network is *no worse* when the 95 %
+interval of its area less the trees' lies above −0.015 and that difference plus 0.015 exceeds
+twice its standard error over seeds; only then is it read for superiority, *better* when the
+interval lies above zero and the difference exceeds twice its standard error. The pairs report
+(`scripts/campaign_pairs_report.py --pair`) gives the trees' gain over the network; the rule is
+read from its interval with the sign reversed. The pair against the trees at their default
+setting is reported beside, not judged. Nothing else on set B is read.
+
+**Predictions.** The network's area less the trees' on set B lies within [−0.023; +0.007], the
+pair's interval at every stay of the half, with its point near −0.008: the network's and the
+trees' gains from 500 to every stay of the half were alike (0.056 and 0.052), so learning from
+twice the stays tilts the pair neither way. The interval on set B has a half-width of about 0.011
+(the half's 0.015 over √2); the spread over seeds is about 0.01, as on the half.
+
+**Levels of the outcome.** *No worse*: the rule's first stage passes; forecast from the half,
+one time in four at a true −0.008, one in two at −0.004, four in five at zero. *Better*: both
+stages pass; forecast one in forty at a true zero and one in four only at the interval's upper
+edge (+0.007). *Not shown*: the first stage fails; forecast three times in four.
+
+**What follows.** *No worse* or *better*: a network from nothing on cells is the first encoder
+of this project to reach the trees at every stay on the validation side; the ticket closes with
+that standing, and the pretraining path reads the same cells (the next ticket). *Not shown*: the
+ticket closes with the half's reading as the encoder's standing, 0.008 below the trees and not
+distinguishable from them on the half; the pretraining path is read on the half; whether set B
+is spent again on a configuration of another kind is the register's decision, not this note's.
+In every level the register's row stands as the configuration confirmed or not. *Checks before
+reading*: the campaign's grid is complete (ten network cells, twenty of the trees); every stored
+description names its knobs; the trees at `learning_rate=0.1,rounds=300` read above the trees
+at their default setting on set B as they did on the half (0.839 against 0.832 in
+`105c9081…`), which guards the control's setting against a copying error.
+
+**Limitations.** One reading of set B, by one configuration, as the register allows; the chance of
+a pass at the predicted standing is one in four, and the reading is spent knowing it (the user's
+decision of 2026-10-24). The configuration was chosen on the half among seven at every stay and
+among thirteen at 50 and 200, so its standing on the half reads high by the selection; set B is
+where it is read without one. The trees' setting was chosen on the half too, so both sides of the
+pair carry a selection of the same kind.
