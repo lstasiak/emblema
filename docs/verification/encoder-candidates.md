@@ -790,3 +790,77 @@ decision of 2026-10-24). The configuration was chosen on the half among seven at
 among thirteen at 50 and 200, so its standing on the half reads high by the selection; set B is
 where it is read without one. The trees' setting was chosen on the half too, so both sides of the
 pair carry a selection of the same kind.
+
+## 2026-10-24 — Colab G4 and M1 Pro, fp32: on set B the small shape reads 0.008 below the trees, and the registered rule does not pass it
+
+**Question.** The one declared above: whether the small shape on six-bin cells, learnt from
+every stay of set A, is no worse than the trees on set B by 0.015, and if so better.
+
+**Conditions.** Campaign `a1dc0dbe…` defined and ordered at `111a521a`. The network's ten cells
+on one Colab G4 under CUDA MPS in four lanes, 86 s for the longest lane (21 s a cell); the
+trees' twenty cells on the M1 Pro's processor in 195 s (`data/report/l32b2/run-b-trees.sh`);
+the five results accepted (`accept-b.sh`). Pairs by `scripts/campaign_pairs_report.py`
+(`pairs-b.sh`), CSV under `data/report/l32b2/b-pairs/`.
+
+**Checks before reading.** All held: the grid is complete (ten network cells, twenty of the
+trees); every stored description names its knobs; the trees at `learning_rate=0.1,rounds=300`
+read above the trees at their default setting on set B by +0.009 [+0.001; +0.016], as on the
+half (+0.007).
+
+**Area under the ROC curve on set B** (3,994 stays), learnt from every stay of set A, mean over
+seeds 1 to 10, beside the same candidates' means at every stay of the half:
+
+| Candidate | set B | half of set A |
+|---|---|---|
+| Trees per channel, `learning_rate=0.1,rounds=300` (the control) | 0.858 (spread 0) | 0.839 |
+| **Small shape on six bins, registered recipe** | **0.850** (seeds 0.834 to 0.858) | 0.831 |
+| Trees per channel, default setting | 0.849 (spread 0) | 0.832 |
+
+**The pairs**, written as the rule reads them (the network's area less the other's; 95 %
+interval over stays; seed by seed mean ± SE):
+
+| Pair | set B |
+|---|---|
+| Network less the trees at `learning_rate=0.1,rounds=300` (judged) | −0.008 [−0.017; +0.001] ± 0.003 |
+| Network less the trees at their default setting (beside) | +0.001 [−0.010; +0.011] ± 0.003 |
+| Check: default trees → tuned trees (gain of the second) | +0.009 [+0.001; +0.016] ± 0.000 |
+
+**The registered rule.** *No worse* asks the interval to lie above −0.015 and the difference
+plus 0.015 to exceed twice its standard error. The second holds (0.007 against 0.006); the
+first does not: the lower edge is −0.017. The network is not shown no worse than the trees, and
+superiority is not read.
+
+**Predictions.** Held. The difference is −0.008, within [−0.023; +0.007] and at the predicted
+point; the interval's half-width is 0.009 against the predicted 0.011; the spread over seeds
+0.008 against about 0.01. Learning from every stay of set A instead of half lifted the network
+and the trees alike, 0.019 each (0.831 → 0.850, 0.839 → 0.858), as the predictions assumed.
+
+**Level of the outcome.** *Not shown*, the level forecast three times in four.
+
+**Conclusions.**
+
+1. **The small shape from nothing on six-bin cells is not shown no worse than the tuned trees
+   by 0.015 on set B.** It reads 0.850 against 0.858, −0.008 [−0.017; +0.001]; the rule fails
+   by 0.002 of the interval's lower edge. The same −0.008 was read on the half ([−0.023;
+   +0.007]), on stays disjoint from set B, so 0.008 is the encoder's standing against the trees
+   at every stay and not the half's noise.
+2. **It is level with the trees as shipped.** Against the trees at their default setting the
+   network reads +0.001 [−0.010; +0.011] on set B; the 0.008 the tuned trees keep is what their
+   rate and rounds, chosen on the half, buy them there (+0.009 on set B). The network's own
+   recipe was chosen on the half too.
+3. **By the register the configuration is not confirmed**, and the ticket closes with its
+   standing: a network from nothing over cells of six bins, two blocks 64 wide, reads within
+   0.008 of the tuned trees and level with the default trees at every stay on the validation
+   side, where the network on raw tokens read 0.81 against the trees' 0.86 on set B
+   (`intensive-care-curve.md`, a different campaign). What the cells and the small shape
+   closed on the half, they closed on set B.
+4. **What follows is the declared path.** The pretraining path reads the same cells, against the
+   small shape from nothing on the half; set B is not spent again by this ticket.
+
+**Limitations.** One reading of set B by one configuration; a rule with power 0.80 at a true
+zero passes a true −0.008 one time in four, and this reading is as likely under −0.008 as its
+forecast said. The two readings of 0.008 were scored on disjoint stays but learnt from
+overlapping ones (the half of set A, then all of it). The trees' tuned setting and the network's
+recipe were both chosen on the half, so the pair carries a selection on each side; the trees as
+shipped carry none. Nothing here says what the 0.008 is; a recipe for the network at every stay
+beyond its rate and stop was not read.

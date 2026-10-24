@@ -19,8 +19,9 @@ Last updated 2026-10-24.
   network from 200 labels up on both tasks; on the intensive-care stays they lie 0.07 to 0.09 in
   area above the probe, and a logistic head over the same summaries about 0.07 above it, within
   0.006 of the trees at 200 stays (re-read on 2026-10-23 with its preparation corrected). The
-  network trained from scratch trails the trees by 0.077 at 200 stays and, against set B, by
-  0.05 at every stay: more than any gain pretraining has shown.
+  network trained from scratch on raw tokens trails the trees by 0.077 at 200 stays and, against
+  set B, by 0.05 at every stay: more than any gain pretraining has shown. A small encoder from
+  scratch over cells of channel and time bin closes most of that (below).
 - **The summaries are in the token states; the probe's average loses them.** A linear map
   recovers a median 86 % of a channel's level from the mean of its own tokens, in every block and
   as before training, but 15 % from the mean over the stay (31 % before training). Pooling per
@@ -63,9 +64,14 @@ Last updated 2026-10-24.
   half, none carried; rows for the channels a stay never measured cost 0.009 [0.001; 0.018].
   Six bins under the registered recipe go to set B against the trees
   ([note](verification/encoder-candidates.md)).
-- **Next:** the small encoder on six bins once on set B under the registered parity with the
-  trees (no worse by 0.015 in area, then better), forecast one pass in four at its standing on
-  the half; pretraining is read again on the small encoder over the same cells afterwards.
+- **On set B the small encoder from scratch reads 0.008 below the tuned trees and is not shown
+  no worse by 0.015.** Learnt from every stay of set A, it reads 0.850 against the trees'
+  0.858 at `learning_rate=0.1,rounds=300` (−0.008 [−0.017; +0.001], the lower edge 0.002 past
+  the margin) and level with the trees at their default setting (+0.001 [−0.010; +0.011]); the
+  same 0.008 as on the half. The registered rule closes this direction
+  ([note](verification/encoder-candidates.md)).
+- **Next:** pretraining read again on the small encoder over the same six-bin cells, with a
+  pretext over the cells, against the small encoder from scratch on the half.
 
 ## Setup
 
@@ -120,7 +126,9 @@ Pretraining's share changes sign with the budget: the probe gains 0.02 to 0.04 o
 encoder at 200 stays, nothing at 500 and loses 0.01 to 0.04 from 1,000 up. The classical rows
 were read at 200 and 500 stays only ([note](verification/head-and-representation.md)). On the full grid
 against set B, trees reach 0.76 at 200 stays and 0.86 at every stay, the network 0.68 and 0.81
-([note](verification/intensive-care-curve.md)). Under all four pretrainings, full fine-tuning
+([note](verification/intensive-care-curve.md)); the small encoder over six-bin cells, learnt from
+every stay of set A, reads 0.85 on set B against the tuned trees' 0.86 and the default trees'
+0.85 ([note](verification/encoder-candidates.md)). Under all four pretrainings, full fine-tuning
 reads 0.58, 0.62 and 0.68 at 20, 50 and 200 stays, and the network from scratch 0.60, 0.62 and
 0.66. The gain at 200 stays, +0.024 [+0.014; +0.033], is not replicated under the two
 pretrainings never read there (+0.014 against 0.021), and neither 20 nor 50 stays passes
@@ -216,8 +224,9 @@ pretraining against four, 0.021 for two.
 
 ## Next
 
-1. Bring the network trained from scratch up to the classical baselines, with an encoder designed
-   together with its pretext and pretraining data sampled like the intensive-care tasks; then read
-   pretraining on it at 20, 50 and 200 stays.
+1. Bring the network trained from scratch up to the classical baselines: a small encoder over
+   cells of channel and time bin now matches the trees at 200 stays and trails the tuned trees by
+   0.008 at every stay; next a pretext designed over the same cells and pretraining data sampled
+   like the intensive-care tasks; then read pretraining on it at 20, 50 and 200 stays.
 2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
 3. Open the frozen test side once.
