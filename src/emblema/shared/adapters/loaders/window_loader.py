@@ -1,4 +1,4 @@
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from itertools import chain
 
 from torch.utils.data import DataLoader
@@ -35,6 +35,7 @@ class WindowLoader:
         turn: int = 0,
         drop_last: bool = False,
         num_workers: int = 0,
+        collate: Callable[[Sequence[TokenWindow]], TokenTensors] = TokenTensors.from_windows,
     ) -> None:
         """Draw batches of ``batch_size`` windows from ``windows``.
 
@@ -51,6 +52,8 @@ class WindowLoader:
             num_workers: How many processes collate batches; zero collates in the training process.
                 A worker is handed the whole dataset when it starts, which is cheap for a memory
                 map and expensive for windows held as objects.
+            collate: What turns the windows of a batch into its tensors; one token per reading
+                unless a run lays windows out otherwise. Importable in a worker process.
 
         Raises:
             ValueError: If no window is given.
@@ -68,7 +71,7 @@ class WindowLoader:
             # that persists, on windows held as Python objects. Torch rejects the flag without
             # workers to keep alive, so it is conditional rather than constant.
             persistent_workers=num_workers > 0,
-            collate_fn=TokenTensors.from_windows,
+            collate_fn=collate,
         )
 
     def batches_of(self, epoch: int) -> Iterator[TokenTensors]:

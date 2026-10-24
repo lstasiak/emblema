@@ -143,3 +143,58 @@ def test_the_objective_that_predicts_values_is_still_the_one_the_shape_builds_by
 
     assert type(built) is MaskedReconstruction
     assert not isinstance(built, ContrastiveReconstruction)
+
+
+def test_one_batch_of_control_windows_laid_out_as_cells_is_driven_to_nearly_zero_loss(
+    control: Control,
+) -> None:
+    """The objective over cells memorises a fixed batch: the summaries, the presence and the count.
+
+    The cells are laid out twice, from every reading and from the readings the masks leave
+    visible, so the claim covers the layout as well as the gradient: a hidden cell's summaries
+    are recovered from the cells around it with nothing of the cell itself in them.
+    """
+    from dataclasses import replace
+
+    from emblema.pretraining.adapters.objective.cell_reconstruction import COUNT, PRESENCE
+    from emblema.pretraining.adapters.training.cell_batches import CellBatches
+    from emblema.pretraining.domain.training.observation_term import ObservationTerm
+    from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
+
+    layout = CellBatches(BinnedTokens(4))
+    collated = layout.collate(
+        control.windows_of(0)[CONSECUTIVE] + control.windows_of(1)[CONSECUTIVE]
+    )
+    masks = TokenMasking(MIXTURE).draw(collated, torch.Generator().manual_seed(1))
+    batch = layout.scored(collated, masks)
+    assert all(masks.of_kind(kind).any() for kind in MaskKind if MIXTURE.draws(kind))
+    torch.manual_seed(1)
+    model = ObjectiveShape(
+        architecture=replace(SMALL, bins=4),
+        vocabulary_size=control.vocabulary_size,
+        decoder_layers=1,
+        target=ObjectiveTarget.value(),
+        observation=ObservationTerm.of(presence_weight=1.0, count_weight=1.0),
+    ).build()
+    optimiser = torch.optim.Adam(model.parameters(), lr=1e-2)
+
+    scores = []
+    for _ in range(STEPS):
+        optimiser.zero_grad()
+        score = model.score(batch, masks, SQUARED)
+        (score.error / score.tokens).backward()
+        optimiser.step()
+        scores.append(score)
+    reconstruction = [float(s.terms[RECONSTRUCTION] / s.tokens) for s in scores]
+    presence = [float(s.terms[PRESENCE] / s.tokens) for s in scores]
+    count = [float(s.terms[COUNT] / s.tokens) for s in scores]
+
+    # The control windows are dense, so every cell holds readings: the presence of a hidden
+    # cell is a certainty the model has to learn, and its count is nearly constant.
+    assert reconstruction[0] > 0.3
+    assert presence[0] > 0.1
+    assert min(reconstruction[-10:]) < NEARLY_ZERO, reconstruction[::30]
+    assert min(presence[-10:]) < NEARLY_ZERO, presence[::30]
+    assert min(count[-10:]) < NEARLY_ZERO, count[::30]
+    trivial = [float(s.trivial / s.tokens) for s in scores]
+    assert all(t == pytest.approx(trivial[0]) for t in trivial)

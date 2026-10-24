@@ -15,6 +15,7 @@ from emblema.pretraining.domain.exceptions import IncompatibleStartError
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
+from emblema.pretraining.domain.training.observation_term import ObservationTerm
 from emblema.pretraining.domain.training.summary_term import SummaryTerm
 
 # The one tensor a continued run carries over by rows rather than whole: the channel table,
@@ -33,8 +34,9 @@ class TrainedModel:
     rebuilds a model on its own, without the configuration that produced it; so do the target
     and the terms beside the values, which say which objective the weights are of. Bytes written
     before a target or a term could be stated are of the objective every run then had, the one
-    predicting values alone; the summaries' weight is written only where stated, so the bytes of
-    a run without it are those it wrote before the term existed.
+    predicting values alone; the summaries' weight and the cells' observation are written only
+    where stated, and the bins only where the encoder reads cells, so the bytes of a run without
+    them are those it wrote before any of them existed.
 
     Attributes:
         architecture: Shape of the encoder the weights load into.
@@ -44,6 +46,8 @@ class TrainedModel:
         target: What the objective predicted, which picks the objective the weights load into.
         contrast: The term the objective trained beside the values, where it did.
         summary: The summaries the objective trained beside the values, where it did.
+        observation: The presence and count of the hidden cells the objective trained beside
+            their values, where it did.
     """
 
     architecture: EncoderArchitecture
@@ -53,6 +57,7 @@ class TrainedModel:
     target: ObjectiveTarget = field(default_factory=ObjectiveTarget.value)
     contrast: ContrastiveTerm = field(default_factory=ContrastiveTerm.none)
     summary: SummaryTerm = field(default_factory=SummaryTerm.none)
+    observation: ObservationTerm = field(default_factory=ObservationTerm.none)
 
     @classmethod
     def of(
@@ -70,6 +75,7 @@ class TrainedModel:
             target=configuration.target,
             contrast=configuration.contrast,
             summary=configuration.summary,
+            observation=configuration.observation,
         )
 
     def to_bytes(self) -> bytes:
@@ -92,6 +98,15 @@ class TrainedModel:
                 "contrast_weight": self.contrast.weight,
                 "contrast_temperature": self.contrast.temperature,
                 **({"summary_weight": self.summary.weight} if self.summary.is_stated else {}),
+                **({"bins": self.architecture.bins} if self.architecture.reads_cells else {}),
+                **(
+                    {
+                        "presence_weight": self.observation.presence_weight,
+                        "count_weight": self.observation.count_weight,
+                    }
+                    if self.observation.is_stated
+                    else {}
+                ),
             },
             buffer,
         )
@@ -112,6 +127,7 @@ class TrainedModel:
                 layers=stored["layers"],
                 feedforward_width=stored["feedforward_width"],
                 time_frequencies=stored["time_frequencies"],
+                bins=stored.get("bins", 0),
             )
             return cls(
                 architecture=architecture,
@@ -129,6 +145,10 @@ class TrainedModel:
                     temperature=stored.get("contrast_temperature", 0.0),
                 ),
                 summary=SummaryTerm(weight=stored.get("summary_weight", 0.0)),
+                observation=ObservationTerm(
+                    presence_weight=stored.get("presence_weight", 0.0),
+                    count_weight=stored.get("count_weight", 0.0),
+                ),
             )
         except UNREADABLE_BYTES as error:
             raise UnreadableTrainedModelError(f"not a trained model this can read: {error}") from (
@@ -152,6 +172,7 @@ class TrainedModel:
             target=self.target,
             contrast=self.contrast,
             summary=self.summary,
+            observation=self.observation,
         )
         try:
             model = shape.build(dropout=dropout)
@@ -166,8 +187,8 @@ class TrainedModel:
         """Refuse a run of ``configuration`` that would continue these weights in another shape.
 
         Raises:
-            IncompatibleStartError: If the shape, the decoder, the target, the contrast or the
-                summaries stored with the weights are not the run's.
+            IncompatibleStartError: If the shape, the decoder, the target, the contrast, the
+                summaries or the observation stored with the weights are not the run's.
         """
         for label, stored, asked in (
             ("shape", self.architecture, configuration.architecture),
@@ -175,6 +196,7 @@ class TrainedModel:
             ("target", self.target, configuration.target),
             ("contrast", self.contrast, configuration.contrast),
             ("summaries", self.summary, configuration.summary),
+            ("observation", self.observation, configuration.observation),
         ):
             if stored != asked:
                 raise IncompatibleStartError(

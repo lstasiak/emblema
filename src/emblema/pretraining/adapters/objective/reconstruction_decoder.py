@@ -11,8 +11,10 @@ class ReconstructionDecoder(nn.Module):
     The encoder only ever saw the visible tokens; here the hidden ones re-enter as one learned
     vector each, told apart solely by the channel and time encodings added to every position, and
     a few blocks of the same kind the encoder is made of let them read the visible states. The
-    head is a single linear map to the value. Everything here is discarded after pretraining: the
-    backbone is the encoder, and nothing the encoder exports passes through this module.
+    head is a single linear map to the value, or to as many outputs as a token's target has where
+    a token is a cell with a presence, a count and five summaries. Everything here is discarded
+    after pretraining: the backbone is the encoder, and nothing the encoder exports passes through
+    this module.
 
     The blocks attend with the batch's own padding mask, not the encoder's: a hidden token is a
     token the encoder pretended was absent, but it is present to the decoder, which has to
@@ -20,18 +22,29 @@ class ReconstructionDecoder(nn.Module):
     """
 
     def __init__(
-        self, architecture: EncoderArchitecture, *, layers: int, dropout: float = 0.0
+        self,
+        architecture: EncoderArchitecture,
+        *,
+        layers: int,
+        dropout: float = 0.0,
+        outputs: int = 1,
     ) -> None:
         super().__init__()
         if layers < 1:
             raise ValueError(
                 f"the decoder needs at least one block to reach the visible tokens, got {layers}"
             )
+        if outputs < 1:
+            raise ValueError(f"the head predicts at least one output per token, got {outputs}")
         self.mask_token = nn.Parameter(torch.empty(architecture.width))
         nn.init.normal_(self.mask_token, std=0.02)
         self.blocks = nn.ModuleList(EncoderBlock(architecture, dropout) for _ in range(layers))
         self.norm = nn.LayerNorm(architecture.width)
-        self.head = nn.Linear(architecture.width, 1)
+        self.head = nn.Linear(architecture.width, outputs)
+
+    @property
+    def outputs(self) -> int:
+        return int(self.head.out_features)
 
     def forward(
         self, states: Tensor, hidden: Tensor, encodings: Tensor, padding_mask: Tensor
@@ -50,6 +63,10 @@ class ReconstructionDecoder(nn.Module):
         return normalised
 
     def valued(self, streamed: Tensor) -> Tensor:
-        """The value the head reads off each position's normalised state."""
-        value: Tensor = self.head(streamed).squeeze(-1)
-        return value
+        """What the head reads off each position's normalised state.
+
+        One value per position, ``[batch, tokens]``, under a head of one output; the outputs
+        side by side, ``[batch, tokens, outputs]``, under a wider one.
+        """
+        value: Tensor = self.head(streamed)
+        return value.squeeze(-1) if self.outputs == 1 else value

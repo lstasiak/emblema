@@ -2,6 +2,9 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from emblema.pretraining.adapters.objective.cell_reconstruction import (  # noqa: E402
+    CellReconstruction,
+)
 from emblema.pretraining.adapters.objective.contrastive_reconstruction import (  # noqa: E402
     ContrastiveReconstruction,
 )
@@ -19,7 +22,14 @@ from emblema.pretraining.adapters.objective.token_masking import TokenMasking  #
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm  # noqa: E402
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget  # noqa: E402
 from tests.support.encoders import SMALL  # noqa: E402
-from tests.support.experiments import CONTRAST, LATENT, SUMMARY, configuration  # noqa: E402
+from tests.support.experiments import (  # noqa: E402
+    CELLS,
+    CONTRAST,
+    LATENT,
+    OBSERVATION,
+    SUMMARY,
+    configuration,
+)
 from tests.support.token_tensors import VOCABULARY_SIZE, random_batch  # noqa: E402
 
 pytestmark = pytest.mark.ml
@@ -152,3 +162,73 @@ def test_the_same_seed_builds_the_same_objective_of_any_kind(built: ObjectiveSha
 
     torch.testing.assert_close(first.error, second.error, rtol=0, atol=0)
     torch.testing.assert_close(first.trivial, second.trivial, rtol=0, atol=0)
+
+
+def test_an_architecture_over_cells_builds_the_objective_that_hides_cells() -> None:
+    model = ObjectiveShape(
+        architecture=CELLS,
+        vocabulary_size=VOCABULARY_SIZE,
+        decoder_layers=1,
+        target=ObjectiveTarget.value(),
+        observation=OBSERVATION,
+    ).build()
+
+    assert isinstance(model, CellReconstruction)
+    assert model.term == OBSERVATION
+    assert model.encoder.value_projection.in_features == CELLS.input_features
+    held = sum(parameter.numel() for parameter in model.encoder.parameters())
+    assert held == CELLS.parameter_count(VOCABULARY_SIZE)
+
+
+def test_an_architecture_over_cells_takes_no_observation_to_build() -> None:
+    model = ObjectiveShape(
+        architecture=CELLS,
+        vocabulary_size=VOCABULARY_SIZE,
+        decoder_layers=1,
+        target=ObjectiveTarget.value(),
+    ).build()
+
+    assert isinstance(model, CellReconstruction)
+    assert not model.term.is_stated
+
+
+@pytest.mark.parametrize(
+    "beside",
+    [
+        {"target": ObjectiveTarget.latent(layers=1)},
+        {"contrast": CONTRAST},
+        {"summary": SUMMARY},
+    ],
+    ids=["latent", "contrast", "summaries"],
+)
+def test_a_target_or_a_term_beside_cells_is_refused(beside: dict[str, object]) -> None:
+    stated = {"target": ObjectiveTarget.value()} | beside
+    built = ObjectiveShape(
+        architecture=CELLS,
+        vocabulary_size=VOCABULARY_SIZE,
+        decoder_layers=1,
+        **stated,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(ValueError, match="values alone"):
+        built.build()
+
+
+def test_an_observation_beside_readings_is_refused() -> None:
+    built = ObjectiveShape(
+        architecture=SMALL,
+        vocabulary_size=VOCABULARY_SIZE,
+        decoder_layers=1,
+        target=ObjectiveTarget.value(),
+        observation=OBSERVATION,
+    )
+
+    with pytest.raises(ValueError, match="asks about cells"):
+        built.build()
+
+
+def test_the_observation_is_read_off_a_configuration() -> None:
+    observed = configuration(architecture=CELLS, observation=OBSERVATION)
+
+    assert ObjectiveShape.of(observed, 7).observation == OBSERVATION
+    assert ObjectiveShape.of(observed, 7).architecture == CELLS

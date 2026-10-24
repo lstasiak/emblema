@@ -10,11 +10,15 @@ import torch
 from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape
 from emblema.pretraining.adapters.objective.pretraining_objective import PretrainingObjective
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
+from emblema.pretraining.adapters.training.batch_layout import BatchLayout
+from emblema.pretraining.adapters.training.cell_batches import CellBatches
 from emblema.pretraining.adapters.training.device_generator import DeviceGenerator
 from emblema.pretraining.adapters.training.devices import available_device
+from emblema.pretraining.adapters.training.raw_batches import RawBatches
 from emblema.pretraining.adapters.training.torch_precision import TorchPrecision
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
 from emblema.pretraining.adapters.training.training_checkpoint import TrainingCheckpoint
+from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.exceptions import DivergedRunError, IncompatibleCheckpointError
 from emblema.pretraining.domain.training.corpus_validation import CorpusValidation
 from emblema.pretraining.domain.training.epoch_outcome import EpochOutcome
@@ -25,6 +29,7 @@ from emblema.pretraining.domain.training.run_signature import RunSignature
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.pretraining.domain.training.training_mixture import TrainingMixture
+from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
 from emblema.shared.adapters.loaders.interleaved_loader import InterleavedLoader
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -66,6 +71,7 @@ class _Session:
     scaler: torch.amp.GradScaler
     training: InterleavedLoader
     validation: tuple[tuple[TrainingCorpus, WindowLoader], ...]
+    layout: BatchLayout
     masking: TokenMasking
     draws: torch.Generator
     position: RunPosition
@@ -151,7 +157,9 @@ class TorchTrainingRuntime:
 
     Masks are drawn on the host and moved, as the batches are, so a run on any device hides the
     same tokens; the device is where the arithmetic happens, never where the randomness comes
-    from.
+    from. Where the encoder reads cells, the windows are laid out on the host as the cells the
+    masks are drawn over and, once they are, as the cells the readings left visible make; both
+    move together.
 
     A run that continues a backbone draws its objective from the seed as any run does and then
     carries the stored weights into it, so what the seed decides for it is the rows of channels
@@ -247,6 +255,7 @@ class TorchTrainingRuntime:
             stored.carried_into(model)
         model = model.to(self._device)
         self._restrict(model, configuration.trained)
+        layout = self._layout_of(configuration.architecture)
         # A corpus read more than once an epoch is that many loaders over its windows, each turn
         # in its own order, so its share of the steps grows by whole passes and the interleaving
         # treats a pass as it treats a corpus.
@@ -258,6 +267,7 @@ class TorchTrainingRuntime:
                     seed=budget.seed,
                     turn=turn,
                     num_workers=self._num_workers,
+                    collate=layout.collate,
                 )
                 for corpus in mixture.corpora
                 for turn in range(configuration.passes_of(corpus.name))
@@ -269,7 +279,11 @@ class TorchTrainingRuntime:
             (
                 corpus,
                 WindowLoader(
-                    corpus.validation, batch_size=budget.batch_size, seed=budget.seed, shuffle=False
+                    corpus.validation,
+                    batch_size=budget.batch_size,
+                    seed=budget.seed,
+                    shuffle=False,
+                    collate=layout.collate,
                 ),
             )
             for corpus in mixture.corpora
@@ -297,6 +311,7 @@ class TorchTrainingRuntime:
             scaler=precision.scaler(),
             training=training,
             validation=validation,
+            layout=layout,
             masking=TokenMasking(configuration.masking),
             draws=torch.Generator().manual_seed(budget.seed),
             position=RunPosition.start(),
@@ -305,6 +320,13 @@ class TorchTrainingRuntime:
         if resume_from is not None:
             self._resume(session, resume_from)
         return session
+
+    @staticmethod
+    def _layout_of(architecture: EncoderArchitecture) -> BatchLayout:
+        """How the run lays windows out: cells of the architecture's bins, or the raw readings."""
+        if architecture.reads_cells:
+            return CellBatches(BinnedTokens(architecture.bins))
+        return RawBatches()
 
     @staticmethod
     def _restrict(model: PretrainingObjective, trained: TrainedParameters) -> None:
@@ -418,7 +440,8 @@ class TorchTrainingRuntime:
             if index < skip:
                 continue
             masks = session.masking.draw(on_host, session.draws)
-            batch, drawn = on_host.to(self._device), masks.to(self._device)
+            batch = session.layout.scored(on_host, masks).to(self._device)
+            drawn = masks.to(self._device)
             with session.precision.autocast():
                 score = session.model.score(batch, drawn, session.loss)
             error, scored = score.error, score.tokens
@@ -542,7 +565,8 @@ class TorchTrainingRuntime:
                         session.configuration.budget.seed * VALIDATION_SEED_STRIDE + index
                     )
                     masks = session.masking.draw(on_host, draws)
-                    batch, drawn = on_host.to(self._device), masks.to(self._device)
+                    batch = session.layout.scored(on_host, masks).to(self._device)
+                    drawn = masks.to(self._device)
                     with session.precision.autocast():
                         score = session.model.score(batch, drawn, session.loss)
                     scored = int(score.tokens)

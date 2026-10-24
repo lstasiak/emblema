@@ -320,3 +320,20 @@ def test_a_value_module_over_a_wider_feature_axis_adds_exactly_its_extra_inputs(
 
     assert held == SMALL.parameter_count(VOCABULARY_SIZE) + (9 - N_FEATURES) * SMALL.width
     assert cells(*wider.args).shape == (2, 11, SMALL.width)
+
+
+def test_an_architecture_over_cells_counts_the_wider_value_module_itself() -> None:
+    from dataclasses import replace
+
+    over_cells = replace(SMALL, bins=6)
+    torch.manual_seed(1)
+    cells = SetEncoder.for_vocabulary(
+        over_cells,
+        VOCABULARY_SIZE,
+        value_embedding=nn.Linear(over_cells.input_features, SMALL.width),
+    )
+
+    held = sum(parameter.numel() for parameter in cells.parameters())
+
+    assert held == over_cells.parameter_count(VOCABULARY_SIZE)
+    assert held == SMALL.parameter_count(VOCABULARY_SIZE) + (9 - N_FEATURES) * SMALL.width

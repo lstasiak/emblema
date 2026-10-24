@@ -30,9 +30,11 @@ from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.retention import Retention
 from emblema.shared.kernel.tokens import Token, TokenWindow
 from tests.support.experiments import (
+    CELLS,
     CHANNEL_NAMES,
     CONTRAST,
     LATENT,
+    OBSERVATION,
     SUMMARY,
     budget,
     checksum_of,
@@ -45,6 +47,9 @@ from tests.support.experiments import (
 
 torch = pytest.importorskip("torch")
 
+from emblema.pretraining.adapters.objective.cell_reconstruction import (  # noqa: E402
+    CellReconstruction,
+)
 from emblema.pretraining.adapters.objective.contrastive_reconstruction import (  # noqa: E402
     ContrastiveReconstruction,
 )
@@ -73,14 +78,16 @@ pytestmark = pytest.mark.ml
 
 CORPUS = corpus(training=8, validation=4)
 MIXTURE = mixture(CORPUS)
-# What a run may train: the value at its hidden tokens, a teacher's state there, or the value
-# beside the contrast of the window's halves; what the runtime does is the same under each.
+# What a run may train: the value at its hidden tokens, a teacher's state there, the value
+# beside the contrast of the window's halves, or the cells of the window with their presence and
+# count; what the runtime does is the same under each.
 OBJECTIVES: list[dict[str, object]] = [
     {"target": ObjectiveTarget.value()},
     {"target": LATENT},
     {"contrast": CONTRAST},
+    {"architecture": CELLS, "observation": OBSERVATION},
 ]
-OBJECTIVE_IDS = ["value", "latent", "contrast"]
+OBJECTIVE_IDS = ["value", "latent", "contrast", "cells"]
 
 
 class RecordingStore(InMemoryArtifactStore):
@@ -217,7 +224,9 @@ def test_what_a_run_stored_is_what_it_trained(objective: dict[str, object]) -> N
     assert restored.encoder.architecture == stated.architecture
     assert not restored.training
     expected: type[PretrainingObjective] = MaskedReconstruction
-    if stated.target.is_latent:
+    if stated.architecture.reads_cells:
+        expected = CellReconstruction
+    elif stated.target.is_latent:
         expected = LatentPrediction
     elif stated.contrast.is_stated:
         expected = ContrastiveReconstruction
@@ -719,3 +728,52 @@ def test_a_continued_run_resumes_from_its_checkpoint_as_any_run_does() -> None:
     picked_up = weights_of(halved, resumed[-1].backbone)
     for key, value in trained.items():
         assert torch.equal(value, picked_up[key]), key
+
+
+def test_a_run_over_cells_logs_its_three_terms_and_is_validated_on_the_summaries_alone(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stated = configuration(
+        budget=budget(epochs=1, batch_size=2), architecture=CELLS, observation=OBSERVATION
+    )
+
+    with caplog.at_level("INFO", logger="emblema.pretraining"):
+        outcomes = list(
+            TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(stated, MIXTURE)
+        )
+
+    done = [m for m in (r.getMessage() for r in caplog.records) if m.startswith("epoch 1 of 1")]
+    assert len(done) == 1
+    assert re.search(
+        r"training [\d.]+ \(reconstruction [\d.]+, presence [\d.]+, count [\d.]+\)", done[0]
+    )
+    said = re.search(
+        r"invented validation ([\d.]+), ([\d.]+) of the trivial predictor's "
+        r"\(reconstruction ([\d.]+) of ([\d.]+), presence [\d.]+ of [\d.]+, "
+        r"count [\d.]+ of [\d.]+\)",
+        done[0],
+    )
+    assert said is not None
+    validation, _relative, reconstruction, trivial = said.groups()
+    assert validation == reconstruction
+    scored = outcomes[-1].validation[0]
+    assert f"{scored.loss:.5f}" == reconstruction
+    assert f"{scored.trivial:.5f}" == trivial
+    assert math.isfinite(outcomes[-1].training_loss)
+
+
+def test_a_run_over_cells_reads_corpora_of_both_regimes() -> None:
+    stays = irregular(name="stays", seed=5, training=6, validation=3)
+    mixed = TrainingMixture.of(CORPUS, stays)
+    stated = configuration(budget=budget(epochs=1, batch_size=2), architecture=CELLS)
+    store = InMemoryArtifactStore()
+    runtime = TorchTrainingRuntime(store, device="cpu")
+
+    outcomes = list(runtime.train(stated, mixed))
+
+    scored = outcomes[-1].validation
+    assert [entry.corpus for entry in scored] == ["invented", "stays"]
+    assert all(math.isfinite(entry.loss) and entry.tokens > 0 for entry in scored)
+    kept = outcomes[-1].backbone
+    assert kept is not None
+    assert isinstance(runtime.restore(kept), CellReconstruction)
