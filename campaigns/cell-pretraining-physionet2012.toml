@@ -1,0 +1,54 @@
+# Full fine-tuning of a backbone pretrained over cells against the network from nothing in the
+# same shape, at 20, 50 and 200 stays on the half of the tuning stays held out by seed 101: the
+# reading of the pretext over cells, run once under each of its pretrainings.
+#
+# Fine-tuning runs at the rate in force, 0.001, and at three more, a step of about three either
+# way, so that its rate is chosen by the registered rule on the same footing as the network's;
+# the rates of the network from nothing run in campaigns/cell-pretraining-scratch-physionet2012.toml.
+# The network at the rate in force runs here too: it reads no weights, so under every backbone it
+# should score the same, which checks the cards, and it is the control each campaign pairs with.
+# The shape is the backbone's own, which the evaluation lays its cells from; the network from
+# nothing states the same shape and the same six bins.
+#
+# Scored on the half over seeds 1 to 10, so the cells pair by stay and seed across campaigns. A
+# campaign divided this way chooses nothing; the reading is the pairs declared in the note.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+name = "cell-pretraining-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,width=64",
+    "full_fine_tuning",
+    "full_fine_tuning@learning_rate=0.0001",
+    "full_fine_tuning@learning_rate=0.000333",
+    "full_fine_tuning@learning_rate=0.003",
+]
+control = "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,width=64"
+endpoint = "full_fine_tuning"
+
+[budgets]
+labels = ["20", "50", "200"]
+endpoint = "200"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note under the register's
+# least gain of 0.02.
+minimum_absolute_reduction = 0.02
+absolute_floor = 0.02
+alpha = 0.05
+# Four contenders at three budgets, the endpoint's cell aside.
+secondary_family_size = 11
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

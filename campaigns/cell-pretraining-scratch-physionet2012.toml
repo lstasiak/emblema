@@ -1,0 +1,44 @@
+# The network from nothing in the shape the pretext over cells is pretrained in, at the three rates
+# beside the one in force, at 20, 50 and 200 stays on the half held out by seed 101: the other arm
+# of the registered choice of rate, which fine-tuning makes in
+# campaigns/cell-pretraining-physionet2012.toml. It reads no weights, so it runs once; the rate in
+# force runs here as well, as this campaign's control, and pairs with the same network under every
+# backbone's campaign.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+name = "cell-pretraining-scratch-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.0001,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.003,width=64",
+]
+control = "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,width=64"
+endpoint = "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,width=64"
+
+[budgets]
+labels = ["20", "50", "200"]
+endpoint = "200"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the rate is chosen by the registered rule from the pairs.
+minimum_absolute_reduction = 0.02
+absolute_floor = 0.02
+alpha = 0.05
+# Three contenders at three budgets, the endpoint's cell aside.
+secondary_family_size = 8
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
