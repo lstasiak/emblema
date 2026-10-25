@@ -91,9 +91,15 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
 
 - **On both tasks pretraining does not yet pay off.** On turbofan remaining life (NASA C-MAPSS)
   the network trained from scratch is the best candidate at every budget, 10 % better than the
-  fine-tuned encoder at 200 labelled windows. On death in hospital (PhysioNet 2012) the only
-  gain, fine-tuning at 200 stays, did not replicate under two fresh pretrainings (+0.024 under
-  all four, half the registered least gain), and fine-tuning gains nothing at 20 or 50 stays.
+  fine-tuned encoder at 200 labelled windows. On death in hospital (PhysioNet 2012) a small
+  encoder pretrained over cells gains 0.021 at 200 stays over the same network trained from
+  scratch at the shared learning rate, but nothing once that network has its own best rate;
+  at 50 stays 0.014 [0.006; 0.022] remains, below the least gain, and at 20 nothing. Published
+  work reports the same: a well-tuned network from scratch catches up once labels suffice.
+- **Pretraining now leaves a representation above its initialisation.** On that encoder a
+  linear probe on the frozen features gains 0.06 to 0.09 in area over the same encoder
+  untrained at 500 stays, the first pretraining on these stays to do so; it still reads 0.03
+  below the trees.
 - **Classical baselines lead at few labels.** Gradient-boosted trees over per-channel summaries
   match or beat every network from 200 labels up. The network trained from scratch on raw
   readings trails them by 0.08 in area at 200 stays and 0.05 at every stay, more than any gain
@@ -107,10 +113,9 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** a pretext designed over the same cells, read against that small encoder trained from
-  scratch. The pretraining data change too: so far only 4.5 %
-  of the mixture's windows were sampled like the intensive-care stays. Only then is pretraining
-  read again at few labels.
+- **Next:** pretraining data sampled like the tasks, including raw asynchronous spacecraft
+  telemetry, then anomaly detection on telemetry without labels, where the pretrained
+  representation is what a model has to work with.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 

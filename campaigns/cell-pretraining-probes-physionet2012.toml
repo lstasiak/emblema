@@ -1,0 +1,40 @@
+# The closed-form probe over the blocks side by side at 500 stays on the half held out by seed 101,
+# under a backbone pretrained over cells and over the same shape at its initialisation: the reader
+# of the stage, read beside fine-tuning and descriptively, since a probe's gain is not what the
+# claim over cells is judged by.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+name = "cell-pretraining-probes-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "untrained_ridge@layer=concat",
+    "frozen_ridge@layer=concat",
+]
+control = "untrained_ridge@layer=concat"
+endpoint = "frozen_ridge@layer=concat"
+
+[budgets]
+labels = ["500"]
+endpoint = "500"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is descriptive.
+minimum_absolute_reduction = 0.02
+absolute_floor = 0.02
+alpha = 0.05
+# One contender at one budget leaves no cell beside the endpoint; the rule asks for one.
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

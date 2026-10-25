@@ -392,3 +392,19 @@ class InferenceGraphDivergedError(EvaluationError):
 
 class InvalidCampaignOverviewError(EvaluationError, ValueError):
     """An overview of a campaign counts more cells than its grid holds, or too few to be done."""
+
+
+class InvalidPairedReadingError(EvaluationError, ValueError):
+    """A paired reading has a figure that is not finite, or a negative standard error."""
+
+
+class InvalidPretrainingSpreadError(EvaluationError, ValueError):
+    """A spread between pretrainings is read from no pair, or holds a figure out of range."""
+
+
+class InvalidDetectionThresholdError(EvaluationError, ValueError):
+    """A detection threshold is negative or not finite, or names no pretraining on a side."""
+
+
+class InvalidRateChoiceError(EvaluationError, ValueError):
+    """A choice of rate repeats a rate, or holds a figure that is not finite."""

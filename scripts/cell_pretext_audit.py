@@ -23,6 +23,18 @@ answers that learn nothing from the scored windows:
   the window's bins, which bins are hidden and the bin itself — no value enters;
 - ``stacked``: a ridge map over all of the above, the strongest linear answer without a model.
 
+With ``--model`` the backbone, pretrained over cells, answers too (``model``): its decoder's
+prediction for the same hidden cells under the same masks, the presence's logit read as a
+probability. ``--model trained`` reads the weights kept, ``--model initialisation`` the objective
+as the run drew it before a step, so what training added is read on the same cells. A corpus the
+backbone never read is taken from another backbone's inputs (``--windows-of``); the rows of its
+channels, which no pretraining set, are drawn or set to the mean of the learnt rows.
+
+A backbone that read only part of a corpus's training units leaves the rest unread: neither its
+training nor the validation that kept its epoch saw them. With ``--unread-units`` the answers are
+scored on those units' windows and the maps fitted on the units it read, so the model's column
+carries no optimism from the epoch chosen on the validation side.
+
 The ridge maps are fitted on one half of the training windows, their penalty chosen from a grid
 by the squared error on the other half, where the stack is then fitted, and every answer is
 scored on the validation windows, so nothing is scored where it was fitted. A
@@ -34,6 +46,11 @@ from it.
 
     uv run --env-file .env.r2 scripts/cell_pretext_audit.py --backbone <id>
         --masks experiments/<file>.toml [--corpus <name>] [--out DIR]
+    uv run --env-file .env.r2 scripts/cell_pretext_audit.py --backbone <id over cells>
+        --model trained [--masks experiments/<file>.toml] [--device mps]
+        [--corpus <name> --windows-of <id> --unset-rows mean]
+    uv run --env-file .env.r2 scripts/cell_pretext_audit.py --backbone <id over cells>
+        --model trained --corpus <name read in part> --unread-units
     uv run scripts/cell_pretext_audit.py --report-only data/report/cell-pretext/<run>
 """
 
@@ -58,17 +75,27 @@ from numpy.typing import NDArray
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
 from emblema.config.settings import Settings
 from emblema.entrypoints.configured import configured_store
 from emblema.entrypoints.source_revision import SourceRevision
 from emblema.pretraining.adapters.experiments.experiment_file import ExperimentFile
+from emblema.pretraining.adapters.objective.cell_reconstruction import CellReconstruction
+from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.adapters.training.cell_batches import CellBatches
+from emblema.pretraining.adapters.training.devices import available_device
+from emblema.pretraining.adapters.training.trained_model import TrainedModel
+from emblema.pretraining.domain.backbone.backbone import Backbone
 from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
+from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
 from emblema.shared.kernel.tokens import TokenWindow
+from emblema.shared.ports.artifact_store import ArtifactStore
 from scripts.corpus_saturation_report import BLOCKS
+from scripts.excursion_report import Side, fetched_block, sides_of
+from scripts.masked_reconstruction_report import DEVICES, device_available
 from scripts.pretext_triviality_report import (
     BATCH_SIZE,
     FIT_SEED,
@@ -78,13 +105,23 @@ from scripts.pretext_triviality_report import (
     CorpusWindows,
     _backbone_id,
     _registry,
+    channels_apart_of,
     corpora_of,
+    evenly_spaced,
+    grown,
+    own_channels,
+    supplied_by,
+    unset_rows_to_mean,
 )
 from scripts.reporting import machine, table
 
 WORKSPACE = REPO_ROOT / "data" / "report" / "cell-pretext"
 TARGETS = ("presence", "log_count", "mean", "minimum", "maximum")
 ANSWERS = ("carry", "interpolation", "cross", "schedule", "stacked")
+MODEL = "model"
+MODES = ("trained", "initialisation")
+OWN_MASKS = "the backbone's own"
+SCORED_ON = {False: "the validation side", True: "the training units the run left unread"}
 KINDS = (*(kind.value for kind in MaskKind), "all")
 SCORES, CELLS, SETTINGS = "scores.csv", "cells.csv", "settings.txt"
 PRESENCE, COUNT = BinnedTokens.PRESENCE, BinnedTokens.LOG_COUNT
@@ -108,7 +145,8 @@ class HiddenCells:
     Rows are cells; the columns of ``targets`` are ``TARGETS`` in order. The designs are what
     the ridge maps read: ``cross`` the other channels' visible presence and value in the same
     bin and the bin, ``schedule`` the channel's own visible presence and counts over the bins,
-    which of them are hidden, and the bin. ``carry`` and ``interpolation`` are answers already.
+    which of them are hidden, and the bin. ``carry`` and ``interpolation`` are answers already,
+    and so is ``model`` where the grids carried a model's prediction.
     """
 
     channel: list[int] = field(default_factory=list)
@@ -118,6 +156,7 @@ class HiddenCells:
     interpolation: list[NDArray[np.float64]] = field(default_factory=list)
     cross: list[NDArray[np.float64]] = field(default_factory=list)
     schedule: list[NDArray[np.float64]] = field(default_factory=list)
+    model: list[NDArray[np.float64]] = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.channel)
@@ -129,13 +168,18 @@ class HiddenCells:
 
 @dataclass(frozen=True)
 class Grid:
-    """One window as the grids an audit reads: full, visible, hidden and the kind of each cell."""
+    """One window as the grids an audit reads: full, visible, hidden and the kind of each cell.
+
+    ``predicted`` is a model's answer for every cell, the decoder's outputs in the order a cell's
+    features stand, where a model was asked; ``None`` otherwise.
+    """
 
     rows: NDArray[np.int64]
     full: NDArray[np.float64]
     visible: NDArray[np.float64]
     hidden: NDArray[np.bool_]
     kind: NDArray[np.str_]
+    predicted: NDArray[np.float64] | None = None
 
 
 def grids_of(
@@ -144,18 +188,30 @@ def grids_of(
     strategy: MaskingStrategy,
     *,
     seed: int,
+    model: CellReconstruction | None = None,
+    device: str = "cpu",
 ) -> list[Grid]:
     """Each window as its grids, under the masks the strategy draws from ``seed``, batch by batch.
 
-    The timeless cells are left aside: a static feature has no span to be hidden over.
+    The timeless cells are left aside: a static feature has no span to be hidden over. A
+    ``model`` is fed each batch on ``device`` under the masks drawn on the host, so its answers
+    stand cell for cell beside the answers without a model; they come back to the host before
+    they are widened.
     """
     batches = CellBatches(layout)
+    if model is not None:
+        model = model.to(device).eval()
     grids = []
     for start in range(0, len(windows), BATCH_SIZE):
         chunk = windows[start : start + BATCH_SIZE]
         collated = batches.collate(chunk)
         masks = TokenMasking(strategy).draw(collated, torch.Generator().manual_seed(seed + start))
         scored = batches.scored(collated, masks)
+        prediction = None
+        if model is not None:
+            with torch.no_grad():
+                on_host = model(scored.to(device), masks.to(device)).detach().to("cpu")
+            prediction = on_host.to(torch.float64).numpy()
         # Every kind, drawn or not: a channel can be left hidden whole by the other draws.
         kinds = {kind.value: masks.of_kind(kind).numpy() for kind in MaskKind}
         for row in range(len(chunk)):
@@ -178,6 +234,11 @@ def grids_of(
                     visible=visible.reshape(*shape, -1).transpose(1, 0, 2),
                     hidden=hidden.reshape(shape).T,
                     kind=kind.reshape(shape).T,
+                    predicted=(
+                        None
+                        if prediction is None
+                        else prediction[row, statics:cells].reshape(*shape, -1).transpose(1, 0, 2)
+                    ),
                 )
             )
     return grids
@@ -210,6 +271,11 @@ def hidden_cells_of(grids: Iterable[Grid], *, vocabulary_size: int, bins: int) -
                 cells.carry.append(np.array([rate, counts, carried, carried, carried]))
                 between = _interpolated(grid.visible[r], own_held, int(b), carried)
                 cells.interpolation.append(np.array([rate, counts, between, between, between]))
+                if grid.predicted is not None:
+                    answer = grid.predicted[r, b, list(TARGET_FEATURES)].copy()
+                    # The logistic through tanh, which no logit overflows.
+                    answer[0] = 0.5 * (1.0 + math.tanh(0.5 * answer[0]))
+                    cells.model.append(answer)
                 others = np.ones(vocabulary_size + 1, dtype=bool)
                 others[channel] = False
                 cells.cross.append(
@@ -338,7 +404,10 @@ def chosen_ridge(
 def answered(
     fitting: HiddenCells, stacking: HiddenCells, scoring: HiddenCells
 ) -> dict[str, NDArray[np.float64]]:
-    """Every answer for the scoring cells, ``[cells, targets]``, the ridge maps fitted apart."""
+    """Every answer for the scoring cells, ``[cells, targets]``, the ridge maps fitted apart.
+
+    A model's answer, where the scoring cells carry one, stands last and is fitted on nothing.
+    """
     answers: dict[str, NDArray[np.float64]] = {
         "carry": scoring.array("carry"),
         "interpolation": scoring.array("interpolation"),
@@ -390,6 +459,8 @@ def answered(
             index,
         )
     answers["stacked"] = stacked
+    if scoring.model:
+        answers[MODEL] = scoring.array(MODEL)
     return answers
 
 
@@ -429,8 +500,8 @@ def scored(
                 trivial = _log_loss(np.full(len(truth), presence_rate), truth)
             else:
                 trivial = float((truth**2).sum())
-            for answer in ANSWERS:
-                guess = answers[answer][defined, index]
+            for answer, given in answers.items():
+                guess = given[defined, index]
                 loss = (
                     _log_loss(guess, truth) if index == 0 else float(((guess - truth) ** 2).sum())
                 )
@@ -465,8 +536,12 @@ def audit_corpus(
     vocabulary_size: int,
     bins: int,
     strategy: MaskingStrategy,
+    model: CellReconstruction | None = None,
+    device: str = "cpu",
 ) -> tuple[list[ScoreRow], CellsRow]:
     """Every answer on every target of the corpus's hidden cells, scored on validation windows.
+
+    A ``model`` answers the validation windows' hidden cells alone: it is fitted on nothing here.
 
     Raises:
         ValueError: If the fitting, the stacking or the scoring windows hold no hidden cell.
@@ -475,7 +550,9 @@ def audit_corpus(
     half = len(training) // 2
     fitting_grids = grids_of(training[:half], layout, strategy, seed=FIT_SEED)
     stacking_grids = grids_of(training[half:], layout, strategy, seed=FIT_SEED + 1)
-    scoring_grids = grids_of(validation, layout, strategy, seed=VALIDATION_SEED)
+    scoring_grids = grids_of(
+        validation, layout, strategy, seed=VALIDATION_SEED, model=model, device=device
+    )
     fitting = hidden_cells_of(fitting_grids, vocabulary_size=vocabulary_size, bins=bins)
     stacking = hidden_cells_of(stacking_grids, vocabulary_size=vocabulary_size, bins=bins)
     scoring = hidden_cells_of(scoring_grids, vocabulary_size=vocabulary_size, bins=bins)
@@ -589,14 +666,15 @@ def answers_table(rows: Sequence[ScoreRow], corpus: str, kind: str = "all") -> s
             [target, str(cells)]
             + [
                 _fmt(of_target[answer].r_squared) if answer in of_target else "—"
-                for answer in ANSWERS
+                for answer in _answers_in(chosen)
             ]
         )
-    return table(["target", "cells", *ANSWERS], lines)
+    return table(["target", "cells", *_answers_in(chosen)], lines)
 
 
 def kinds_table(rows: Sequence[ScoreRow], corpus: str, target: str) -> str:
     """R² of every answer on one target, kind of mask by kind of mask, for one corpus."""
+    named = _answers_in([row for row in rows if row.corpus == corpus and row.target == target])
     lines = []
     for kind in KINDS:
         of_kind = {
@@ -609,9 +687,15 @@ def kinds_table(rows: Sequence[ScoreRow], corpus: str, target: str) -> str:
         cells = next(iter(of_kind.values())).cells
         lines.append(
             [kind, str(cells)]
-            + [_fmt(of_kind[a].r_squared) if a in of_kind else "—" for a in ANSWERS]
+            + [_fmt(of_kind[a].r_squared) if a in of_kind else "—" for a in named]
         )
-    return table(["kind", "cells", *ANSWERS], lines)
+    return table(["kind", "cells", *named], lines)
+
+
+def _answers_in(rows: Iterable[ScoreRow]) -> list[str]:
+    """The answers the rows hold, those without a model first, in the order they are named."""
+    held = {row.answer for row in rows}
+    return [answer for answer in (*ANSWERS, MODEL) if answer in held]
 
 
 def cells_table(rows: Sequence[CellsRow]) -> str:
@@ -654,6 +738,73 @@ def render(directory: Path) -> str:
     return "\n\n".join(parts)
 
 
+def split_by_share(
+    side: Side, training_units: Sequence[str], share: CorpusShare
+) -> tuple[Side, Side]:
+    """The training side's windows of the units the share reads, and of the units it leaves.
+
+    The share chooses among the units the manifest lists, as the run chose, so a unit that
+    yielded no window still counts towards the fraction.
+
+    Raises:
+        ValueError: If the share reads every unit, so none is left unread.
+    """
+    if share.is_whole:
+        raise ValueError("the run read every training unit; none is left unread")
+    read = set(share.select(training_units))
+    sides = []
+    for name, wanted in (("read", True), ("unread", False)):
+        kept = [i for i, unit in enumerate(side.units) if (unit in read) is wanted]
+        sides.append(
+            Side(name, [side.windows[i] for i in kept], tuple(side.units[i] for i in kept))
+        )
+    return sides[0], sides[1]
+
+
+def unread_corpus(
+    backbone: Backbone,
+    store: ArtifactStore,
+    blocks: Path,
+    corpus: str,
+    *,
+    training_windows: int,
+    validation_windows: int,
+) -> CorpusWindows:  # pragma: no cover - reads the registry's artifacts
+    """The corpus's windows as the audit reads them where the backbone read it in part.
+
+    The maps are fitted on windows of the units the run read and every answer is scored on
+    windows of the units it left, both from the training side.
+
+    Raises:
+        SystemExit: If the backbone did not read the corpus, its block is not the one read, or
+            it read every training unit.
+    """
+    stated = next((given for given in backbone.inputs if given.corpus == corpus), None)
+    if stated is None:
+        raise SystemExit(f"backbone {backbone.id} did not read {corpus}")
+    manifest = PublishedCorpusManifestJson().decode(store.get(stated.manifest))
+    if manifest.block.checksum != stated.block_checksum:
+        raise SystemExit(f"{corpus}: the manifest's block is not the block the backbone read")
+    training = sides_of(manifest, fetched_block(store, manifest.block, blocks))["training"]
+    try:
+        read, unread = split_by_share(
+            training, manifest.training_units, backbone.configuration.corpus_share_of(corpus)
+        )
+    except ValueError as error:
+        raise SystemExit(f"{corpus}: {error}") from error
+    kept = evenly_spaced(len(unread.windows), validation_windows)
+    return CorpusWindows(
+        corpus=corpus,
+        vocabulary_size=stated.vocabulary_size,
+        channels_apart=channels_apart_of(manifest),
+        training=[read.windows[i] for i in evenly_spaced(len(read.windows), training_windows)],
+        validation=[unread.windows[i] for i in kept],
+        validation_units=tuple(unread.units[i] for i in kept),
+        block_checksum=str(manifest.block.checksum),
+        channel_ids=frozenset(own_channels(manifest.channels, corpus)),
+    )
+
+
 def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -662,9 +813,35 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         "--backbone", help="registered backbone whose corpora are read as it read them"
     )
     parser.add_argument(
-        "--masks", type=Path, help="experiment file whose [input] bins and [masking] are drawn"
+        "--masks",
+        type=Path,
+        help="experiment file whose [input] bins and [masking] are drawn; with --model, the "
+        "backbone's own unless given",
     )
-    parser.add_argument("--corpus", help="one corpus of the backbone's inputs, instead of all")
+    parser.add_argument(
+        "--model",
+        choices=MODES,
+        help="score the backbone's decoder as well: the weights kept, or as the run drew them",
+    )
+    parser.add_argument("--device", choices=DEVICES, default=available_device())
+    parser.add_argument(
+        "--corpus", help="one corpus to read: the backbone's own, or with --windows-of another's"
+    )
+    parser.add_argument(
+        "--windows-of",
+        help="the backbone whose windows of --corpus are read, where this one never read it",
+    )
+    parser.add_argument(
+        "--unset-rows",
+        choices=("drawn", "mean"),
+        default="drawn",
+        help="rows of the channels the backbone never read: drawn, or the mean of the learnt rows",
+    )
+    parser.add_argument(
+        "--unread-units",
+        action="store_true",
+        help="score on the training units of --corpus the backbone's run left unread",
+    )
     parser.add_argument("--out", type=Path, help="directory the CSV files are written to")
     parser.add_argument("--training-windows", type=int, default=TRAINING_WINDOWS)
     parser.add_argument("--validation-windows", type=int, default=VALIDATION_WINDOWS)
@@ -672,9 +849,47 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         "--report-only", type=Path, help="render the tables of a directory already measured"
     )
     arguments = parser.parse_args(argv)
-    if arguments.report_only is None and (arguments.backbone is None or arguments.masks is None):
-        parser.error("--backbone and --masks are needed to measure; --report-only to render")
+    if arguments.report_only is None:
+        if arguments.backbone is None:
+            parser.error("--backbone is needed to measure; --report-only to render")
+        if arguments.masks is None and arguments.model is None:
+            parser.error("--masks is needed unless --model reads the backbone's own")
+        if arguments.windows_of is not None and arguments.corpus is None:
+            parser.error("--windows-of needs --corpus, the corpus that backbone supplies")
+        if arguments.windows_of is not None and arguments.model is None:
+            parser.error("--windows-of reads a corpus the backbone never read; it needs --model")
+        if arguments.unread_units and (arguments.corpus is None or arguments.windows_of):
+            parser.error("--unread-units needs --corpus, one the backbone read itself")
     return arguments
+
+
+def model_of(
+    backbone: Backbone, mode: str, store: ArtifactStore
+) -> CellReconstruction:  # pragma: no cover - reads the registry's artifacts
+    """The backbone's objective with the weights kept, or as its run drew it before a step.
+
+    Raises:
+        SystemExit: If the backbone is not ready, continued another's weights where its
+            initialisation is asked for, or was not pretrained over cells.
+    """
+    configuration = backbone.configuration
+    if mode == "initialisation":
+        if configuration.start is not None:
+            raise SystemExit(
+                f"backbone {backbone.id} continued another backbone's weights: its "
+                "initialisation is that backbone's weights"
+            )
+        torch.manual_seed(configuration.budget.seed)
+        model = ObjectiveShape.of(
+            configuration, max(stated.vocabulary_size for stated in backbone.inputs)
+        ).build()
+    else:
+        if backbone.artifact is None:
+            raise SystemExit(f"backbone {backbone.id} is not ready: it has no weights")
+        model = TrainedModel.read(store.get(backbone.artifact)).build()
+    if not isinstance(model, CellReconstruction):
+        raise SystemExit(f"backbone {backbone.id} was not pretrained over cells")
+    return model
 
 
 def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - the command line
@@ -682,21 +897,69 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - the c
     if arguments.report_only is not None:
         print(render(arguments.report_only))
         return
-    stated = ExperimentFile.load(arguments.masks).configuration()
-    if not stated.architecture.reads_cells:
-        raise SystemExit(f"{arguments.masks} states no [input] bins; the audit is over cells")
-    backbone = _registry().get(_backbone_id(arguments.backbone, "--backbone"))
+    registry = _registry()
+    backbone = registry.get(_backbone_id(arguments.backbone, "--backbone"))
     store = configured_store(Settings())
-    out = arguments.out or WORKSPACE / f"{arguments.backbone[:8]}-{arguments.masks.stem}"
+    if arguments.masks is not None:
+        stated = ExperimentFile.load(arguments.masks).configuration()
+        bins, strategy = stated.architecture.bins, stated.masking
+    else:
+        bins = backbone.configuration.architecture.bins
+        strategy = backbone.configuration.masking
+    if not bins:
+        raise SystemExit("no bins stated: the audit is over cells")
+    model = None
+    if arguments.model is not None:
+        if not device_available(arguments.device):
+            raise SystemExit(f"device {arguments.device} is not available on this machine")
+        if bins != backbone.configuration.architecture.bins:
+            raise SystemExit(
+                f"the masks lay {bins} bins, the backbone reads "
+                f"{backbone.configuration.architecture.bins}"
+            )
+        model = model_of(backbone, arguments.model, store)
+    source = backbone
+    if arguments.windows_of is not None and model is not None:
+        source = registry.get(_backbone_id(arguments.windows_of, "--windows-of"))
+        try:
+            supplied = supplied_by(source, backbone, arguments.corpus)
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
+        # The rows no pretraining set are drawn from one seed, so a reading repeats.
+        torch.manual_seed(VALIDATION_SEED)
+        grown(model, max(given.vocabulary_size for given in supplied))
+        if arguments.unset_rows == "mean":
+            manifest = PublishedCorpusManifestJson().decode(store.get(supplied[0].manifest))
+            unset_rows_to_mean(model, own_channels(manifest.channels, arguments.corpus))
+    name = arguments.masks.stem if arguments.masks is not None else "own"
+    if arguments.model is not None:
+        name += f"-{arguments.model}"
+    if arguments.windows_of is not None:
+        name += f"-{arguments.corpus}-{arguments.unset_rows}"
+    if arguments.unread_units:
+        name += f"-{arguments.corpus}-unread"
+    out = arguments.out or WORKSPACE / f"{arguments.backbone[:8]}-{name}"
     out.mkdir(parents=True, exist_ok=True)
-    corpora: list[CorpusWindows] = corpora_of(
-        backbone,
-        store,
-        BLOCKS,
-        training_windows=arguments.training_windows,
-        validation_windows=arguments.validation_windows,
-        corpus=arguments.corpus,
-    )
+    if arguments.unread_units:
+        corpora = [
+            unread_corpus(
+                backbone,
+                store,
+                BLOCKS,
+                arguments.corpus,
+                training_windows=arguments.training_windows,
+                validation_windows=arguments.validation_windows,
+            )
+        ]
+    else:
+        corpora = corpora_of(
+            source,
+            store,
+            BLOCKS,
+            training_windows=arguments.training_windows,
+            validation_windows=arguments.validation_windows,
+            corpus=arguments.corpus,
+        )
     scores: list[ScoreRow] = []
     counts: list[CellsRow] = []
     for corpus in corpora:
@@ -706,8 +969,10 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - the c
             corpus.training,
             corpus.validation,
             vocabulary_size=corpus.vocabulary_size,
-            bins=stated.architecture.bins,
-            strategy=stated.masking,
+            bins=bins,
+            strategy=strategy,
+            model=model,
+            device=arguments.device,
         )
         scores.extend(rows)
         counts.append(cells)
@@ -726,9 +991,14 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - the c
                 f"machine: {machine()}",
                 f"torch: {version('torch')}",
                 f"backbone: {arguments.backbone}",
-                f"masks: {arguments.masks}",
-                f"bins: {stated.architecture.bins}",
-                f"strategy: {stated.masking}",
+                f"masks: {arguments.masks or OWN_MASKS}",
+                f"bins: {bins}",
+                f"strategy: {strategy}",
+                f"model: {arguments.model or 'none'}",
+                f"device: {arguments.device if arguments.model else 'none'}",
+                f"windows of: {arguments.windows_of or 'the backbone'}",
+                f"unset rows: {arguments.unset_rows if arguments.windows_of else 'none'}",
+                f"scored on: {SCORED_ON[arguments.unread_units]}",
                 f"training windows: {arguments.training_windows}",
                 f"validation windows: {arguments.validation_windows}",
                 f"ridge penalties tried: {PENALTIES}, stack penalty: {STACK_PENALTY}",

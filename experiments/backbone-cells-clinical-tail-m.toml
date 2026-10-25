@@ -1,0 +1,53 @@
+# The base recipe with the window's tail hidden as well: half the windows lose their last quarter to
+# half, every channel at once, and the objective asks which channels will be measured in those bins
+# and what they will hold. On the 2012 stays the strongest answer without a model reads the tail's
+# presence at 0.22 and its mean at 0.39 (docs/verification/cell-pretext.md), the most a model has
+# room for. Everything else is backbone-cells-clinical-m.toml.
+name = "backbone-cells-clinical-tail-m"
+tier = "M"
+corpora = ["physionet2012", "physionet2019"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[fraction]
+physionet2012 = 0.5
+
+[passes]
+physionet2012 = 5
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 6
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+horizon_rate = 0.5
+horizon_min_span = 0.25
+horizon_max_span = 0.5
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 19
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000

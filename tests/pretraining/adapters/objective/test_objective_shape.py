@@ -1,3 +1,6 @@
+from collections.abc import Callable
+from dataclasses import replace
+
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -195,19 +198,22 @@ def test_an_architecture_over_cells_takes_no_observation_to_build() -> None:
 @pytest.mark.parametrize(
     "beside",
     [
-        {"target": ObjectiveTarget.latent(layers=1)},
-        {"contrast": CONTRAST},
-        {"summary": SUMMARY},
+        lambda shape: replace(shape, target=ObjectiveTarget.latent(layers=1)),
+        lambda shape: replace(shape, contrast=CONTRAST),
+        lambda shape: replace(shape, summary=SUMMARY),
     ],
     ids=["latent", "contrast", "summaries"],
 )
-def test_a_target_or_a_term_beside_cells_is_refused(beside: dict[str, object]) -> None:
-    stated = {"target": ObjectiveTarget.value()} | beside
-    built = ObjectiveShape(
-        architecture=CELLS,
-        vocabulary_size=VOCABULARY_SIZE,
-        decoder_layers=1,
-        **stated,  # type: ignore[arg-type]
+def test_a_target_or_a_term_beside_cells_is_refused(
+    beside: Callable[[ObjectiveShape], ObjectiveShape],
+) -> None:
+    built = beside(
+        ObjectiveShape(
+            architecture=CELLS,
+            vocabulary_size=VOCABULARY_SIZE,
+            decoder_layers=1,
+            target=ObjectiveTarget.value(),
+        )
     )
 
     with pytest.raises(ValueError, match="values alone"):

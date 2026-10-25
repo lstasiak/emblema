@@ -173,6 +173,7 @@ allowed-confusables = ["×"]
 # Developer scripts that import a sibling package: the path is set up before the imports run.
 "scripts/corpus_facts.py" = ["E402"]
 "scripts/cell_pretext_audit.py" = ["E402"]
+"scripts/pretraining_budget_report.py" = ["E402"]
 "scripts/loader_throughput_report.py" = ["E402"]
 "scripts/window_sanity_report.py" = ["E402"]
 "scripts/token_view_report.py" = ["E402"]
@@ -215,6 +216,10 @@ allowed-confusables = ["×"]
 "scripts/channel_set_pooling_report.py" = ["E402"]
 "scripts/summary_target_audit.py" = ["E402"]
 "scripts/regime_coverage_report.py" = ["E402"]
+"scripts/rate_choice_report.py" = ["E402"]
+"scripts/transduction_report.py" = ["E402"]
+"scripts/pretraining_screen_report.py" = ["E402"]
+"scripts/label_curve_figures.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

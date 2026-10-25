@@ -1,0 +1,62 @@
+# The run that sets how long the pretrainings over cells train, before any of them is ordered.
+# The base recipe of those pretrainings at a seed none of them uses, with a cap well past the
+# point the pilots stopped learning at: every term of the objective was still falling after four
+# epochs at tier S. The number of epochs the recipes then run is read off this run's validation
+# by a rule written down before it runs, and this backbone is read on no task, so the budget is
+# chosen from the pretext alone and no reading of a recipe depends on the seed that chose it.
+#
+# Half the stays of the intensive-care task's tuning side are read, ranked by the run's seed: a
+# task read on stays the pretraining never saw then sits beside one on stays it saw, within one
+# backbone. Those 2,000 stays take five passes an epoch, about 18 % of the steps against about
+# 1,445 steps of the 2019 stays, the share a sampling temperature of one half gives two corpora
+# of 2,000 and about 46,000 windows; read once, they would be 4 %.
+#
+# The small shape over cells of six bins, the masks and terms of the pilots, and their step:
+# 32 windows, one micro-batch a step, half an epoch warming up. Read in single precision, as the
+# pilots were: the shape is too small for half precision to pay, and the presence's
+# cross-entropy is kept off the edges it would round to.
+name = "backbone-cells-clinical-budget-m"
+tier = "M"
+corpora = ["physionet2012", "physionet2019"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[fraction]
+physionet2012 = 0.5
+
+[passes]
+physionet2012 = 5
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 6
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 24
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 0
+
+[checkpoint]
+every_steps = 2000
