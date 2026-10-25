@@ -214,10 +214,12 @@ def render(rows: Sequence[CostRow]) -> str:
         else f"budget: {budget.epochs} epochs"
     )
     kept = f"kept epoch (values alone): {budget.kept}"
-    if budget.lag is not None:
+    if budget.lag is not None and budget.lag > 0:
         kept += f", {budget.lag} before the presence stops learning"
         if budget.keeps_too_early:
             kept += f" — more than {KEPT_LAG}: the kept epoch would leave the presence unlearnt"
+    elif budget.lag is not None:
+        kept += f", {-budget.lag} after the presence stops learning"
     return "\n\n".join(
         [
             f"**Each term's validation cost, the mean over corpora of its loss over the trivial "

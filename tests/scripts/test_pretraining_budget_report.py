@@ -107,6 +107,20 @@ def test_the_budget_is_the_latest_stop_and_the_kept_epoch_follows_the_values() -
     assert not budget.keeps_too_early
 
 
+def test_a_kept_epoch_after_the_presence_stops_is_said_to_come_after_it() -> None:
+    values = [1.0, 0.9, 0.85, 0.84, 0.835, 0.833, 0.832, 0.831, 0.83]
+    presence = [1.0, 0.8, 0.7, 0.699, 0.698, 0.697, 0.697, 0.697, 0.697]
+    rows = costs_of(run(values, presence))
+
+    budget = budget_of(rows)
+
+    assert budget.kept == 9
+    assert budget.stops["presence"] == 3
+    assert budget.lag == -6
+    assert not budget.keeps_too_early
+    assert f"{-budget.lag} after the presence stops learning" in render(rows)
+
+
 def test_a_kept_epoch_long_before_the_presence_stops_is_named() -> None:
     values = [1.0, 0.9, 0.9, 0.9, 0.9, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96]
     presence = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.45, 0.449, 0.448, 0.447, 0.447]
