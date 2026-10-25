@@ -312,7 +312,7 @@
 | src/emblema/evaluation/domain/classical/minirocket\_spec.py                               |       18 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/classical/random\_convolutions.py                           |       22 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/domain/classical/ridge\_spec.py                                    |       14 |        0 |        2 |        0 |    100% |           |
-| src/emblema/evaluation/domain/exceptions.py                                               |      107 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/exceptions.py                                               |      111 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/campaign\_order.py                                  |       42 |        0 |       18 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/campaign\_order\_result.py                          |       22 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/order\_lane.py                                      |       21 |        0 |        6 |        0 |    100% |           |
@@ -344,15 +344,21 @@
 | src/emblema/evaluation/domain/statistics/bootstrap\_interval.py                           |       20 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/comparison\_rules.py                             |       45 |        0 |       20 |        1 |     98% |   58-\>60 |
 | src/emblema/evaluation/domain/statistics/comparison\_verdict.py                           |       10 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/contrast\_reading.py                             |       15 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/detection\_threshold.py                          |       21 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/error\_over\_repeats.py                          |       28 |        0 |       16 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/family\_correction.py                            |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/holm\_correction.py                              |       27 |        0 |       14 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/outcome\_level.py                                |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_difference.py                            |       24 |        0 |       10 |        1 |     97% |   49-\>51 |
+| src/emblema/evaluation/domain/statistics/paired\_reading.py                               |       28 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_unit\_bootstrap.py                       |       35 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_unit\_errors.py                          |       69 |        0 |       22 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_unit\_rankings.py                        |       53 |        1 |       12 |        0 |     98% |       100 |
 | src/emblema/evaluation/domain/statistics/paired\_units.py                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/practical\_floor.py                              |       23 |        0 |        8 |        1 |     97% |   50-\>52 |
+| src/emblema/evaluation/domain/statistics/pretraining\_spread.py                           |       21 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/rate\_choice.py                                  |       33 |        0 |       12 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/threshold\_kind.py                               |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/two\_level\_bootstrap.py                         |       46 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/uncertainty\_decomposition.py                    |       14 |        0 |        4 |        0 |    100% |           |
@@ -648,7 +654,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **18311** |  **105** | **3514** |   **95** | **99%** |           |
+| **TOTAL**                                                                                 | **18439** |  **105** | **3548** |   **95** | **99%** |           |
 
 130 empty files skipped.
 
