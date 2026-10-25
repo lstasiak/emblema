@@ -5,16 +5,22 @@ preliminary: each task's frozen test side is opened once, at the end. Each compa
 by a rule registered before its run ([preregistration](preregistration.md)); each row links the
 note that holds its evidence ([`verification/`](verification/README.md)).
 
-Last updated 2026-10-24.
+Last updated 2026-10-25.
 
 ## Status
 
-- **The claim is not supported so far.** No way of using the pretrained encoder beats the same
-  network trained from scratch beyond the instrument's resolution, on either task. Full
-  fine-tuning at 200 intensive-care stays, the one reading that did, is not replicated under the
-  two pretrainings it was not found on (+0.014 against a threshold of 0.021); under all four it
-  gains +0.024 [+0.014; +0.033] in area, half the registered least gain. At 20 and 50 stays it
-  gains nothing.
+- **The claim is not supported so far.** No way of using the pretrained encoder beats a
+  well-tuned network trained from scratch beyond the instrument's resolution, on either task.
+  On the small encoder over cells, fine-tuning gains +0.021 [+0.010; +0.031] at 200
+  intensive-care stays over the same network at the rate in force, at the registered least
+  gain; with each arm at the rate it keeps, the network from scratch gains +0.024 itself and the
+  gain at 200 stays is −0.004 [−0.015; +0.007]; at 50 stays +0.014 [+0.006; +0.022] remains,
+  below the least gain; at 20 nothing ([note](verification/cell-pretraining.md)).
+- **Pretraining over cells leaves a representation above its initialisation, a first on the
+  intensive-care stays.** A probe on the frozen encoder gains 0.060 to 0.091 over the same encoder untrained at
+  500 stays under every recipe (0.757 against 0.677; the trees read 0.787), and its pretext
+  reads unread stays above the best linear map. A forecast tail, the count term and added grids
+  move nothing ([note](verification/cell-pretraining.md)).
 - **Classical models lead at few labels.** Trees over per-channel summaries match or beat every
   network from 200 labels up on both tasks; on the intensive-care stays they lie 0.07 to 0.09 in
   area above the probe, and a logistic head over the same summaries about 0.07 above it, within
@@ -70,12 +76,10 @@ Last updated 2026-10-24.
   the margin) and level with the trees at their default setting (+0.001 [−0.010; +0.011]); the
   same 0.008 as on the half. The registered rule closes this direction
   ([note](verification/encoder-candidates.md)).
-- **Next:** pretraining read again on the small encoder over the same six-bin cells, with a
-  pretext over the cells that hides them before the layout and asks for their presence and
-  count beside their summaries; audited without a model and piloted at tier S
-  ([note](verification/cell-pretext.md)); read against the small encoder from scratch on the
-  half, whose spread over seeds on the fixed fifth is 0.035 / 0.054 / 0.019 at 20 / 50 / 200
-  stays.
+- **Next:** data in the tasks' regime for both legs (raw asynchronous telemetry, open
+  intensive-care sources), then anomaly tasks on telemetry without labels, read on the
+  representation pretraining now gives. The clinical confirmation is declared as a curve
+  against the network from scratch at its chosen rate.
 
 ## Setup
 
@@ -138,6 +142,16 @@ reads 0.58, 0.62 and 0.68 at 20, 50 and 200 stays, and the network from scratch 
 pretrainings never read there (+0.014 against 0.021), and neither 20 nor 50 stays passes
 ([note](verification/few-label-fine-tuning.md)).
 
+The small encoder over six-bin cells, pretrained without labels on the intensive-care stays
+(eight pretrainings), on the same half and seeds ([note](verification/cell-pretraining.md)):
+
+| Labelled stays | 20 | 50 | 200 | 500 |
+| --- | --- | --- | --- | --- |
+| Full fine-tuning | 0.62 | 0.66 | 0.74 | |
+| Network from scratch, rate in force / its chosen rate | 0.62 / 0.62 | 0.65 / 0.65 | 0.72 / 0.74 | |
+| Probe, pretrained / untrained encoder | | | | 0.76 / 0.68 |
+| Trees per channel | 0.62 | 0.63 | 0.74 | **0.79** |
+
 ### Is the pipeline sound?
 
 | Check | Result | Source |
@@ -145,6 +159,7 @@ pretrainings never read there (+0.014 against 0.021), and neither 20 nor 50 stay
 | Generated data with known shared structure | the pretrained encoder's error 0.094 [0.089; 0.099] below a fresh one's, at a window spanning the process | [synthetic-transfer](verification/synthetic-transfer.md) |
 | Published network (STraTS) on the same stays | 0.827; this network from scratch 0.818 once kept at its best epoch and shrunk to two blocks | [intensive-care-curve](verification/intensive-care-curve.md) |
 | The network from scratch in two campaigns | differs by at most 0.005 | [verdict-statistics](verification/verdict-statistics.md) |
+| Fine-tuning's gain on scored stays the backbone read, less on those it did not | −0.007 / −0.003 / −0.010 at 20 / 50 / 200 stays: no gain from having read them | [cell-pretraining](verification/cell-pretraining.md) |
 | A pretext over cells of channel × time bin, answered without a model | on the stays a linear stack reads a hidden cell's mean at 0.12 and its presence at 0.59, from the other channels in the same bin; under a hidden tail the presence at 0.22; on the gridded corpora the presence is constant and the mean interpolated at 0.53 to 0.80 | [cell-pretext](verification/cell-pretext.md) |
 
 ### What changes the backbone
@@ -224,15 +239,16 @@ pretraining against four, 0.021 for two.
 - **Two main tasks.** Transfer across corpora is read at the pretext and on sepsis within one
   pretraining; the intensive-care task learns from set A only, so its levels are not comparable
   with published benchmarks.
+- **Controls' rates.** The network from scratch chose the lowest rate on its grid, as did
+  fine-tuning; a lower one was not read. Between two runs it moved by 0.011 at 200 stays.
 - **Accelerators.** Arms ran on Colab G4, A100 and Kaggle T4; between accelerators an arm drifts
   by up to 0.7 RMSE.
 
 ## Next
 
-1. Bring the network trained from scratch up to the classical baselines: a small encoder over
-   cells of channel and time bin now matches the trees at 200 stays and trails the tuned trees by
-   0.008 at every stay; a pretext over the same cells is defined, audited and piloted; next two
-   pretrainings on the intensive-care corpora, then pretraining data sampled like the
-   intensive-care tasks, and the reading at 20, 50 and 200 stays.
+1. Pretraining data in the tasks' regime for both legs, then anomaly tasks on telemetry
+   without labels and channels added without labels, read on the representation that
+   pretraining over cells now gives; the clinical confirmation as a declared curve against the
+   network from scratch at its chosen rate.
 2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
 3. Open the frozen test side once.
