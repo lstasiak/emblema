@@ -20,6 +20,7 @@ from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.readers.tep import TennesseeEastmanCorpusReader
 from emblema.catalog.adapters.readers.utsd import UtsdCorpusReader
+from emblema.catalog.adapters.readers.wqp import WaterQualityPortalCorpusReader
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.time_extent import TimeExtent
@@ -137,6 +138,7 @@ def test_a_unit_is_counted_within_its_part() -> None:
         ("physionet2012", lambda: Physionet2012CorpusReader(SAMPLES / "physionet2012")),
         ("physionet2019", lambda: Physionet2019CorpusReader(SAMPLES / "physionet2019")),
         ("tep", lambda: TennesseeEastmanCorpusReader(SAMPLES / "tep")),
+        ("wqp", lambda: WaterQualityPortalCorpusReader(SAMPLES / "wqp")),
         (
             SCP1,
             lambda: UtsdCorpusReader(

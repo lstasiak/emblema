@@ -48,6 +48,7 @@ from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusRe
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.tep import TennesseeEastmanCorpusReader
 from emblema.catalog.adapters.readers.utsd import UtsdCorpusReader, UtsdReading
+from emblema.catalog.adapters.readers.wqp import WaterQualityPortalCorpusReader
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
 from emblema.catalog.ports.corpus_reader import CorpusReader
@@ -131,6 +132,12 @@ SOURCES: tuple[Source, ...] = (
     _utsd(f"{UTSD_PREFIX}Web_kaggle_web_traffic_dataset_without_missing_values", 803.0),
 )
 
+# Corpora read in the tasks' regime that no pretraining of the scale curve reads; a location of the
+# water quality portal is windowed whole here, since only its unit measures are read.
+TASK_REGIME_SOURCES: tuple[Source, ...] = (
+    Source("wqp", "wqp", WindowSpec(122_712.0, 122_712.0), WaterQualityPortalCorpusReader),
+)
+
 # The regime each reader declares in its description. Stated here so that the exposure of a
 # pretraining is read without its corpora on the machine; the test holds it to the readers.
 REGIMES: Mapping[str, SamplingRegime] = {
@@ -141,6 +148,7 @@ REGIMES: Mapping[str, SamplingRegime] = {
     "esa_ad": SamplingRegime.IRREGULAR,
     "physionet2012": SamplingRegime.IRREGULAR,
     "physionet2019": SamplingRegime.IRREGULAR,
+    "wqp": SamplingRegime.IRREGULAR,
 }
 
 
@@ -641,14 +649,15 @@ def main() -> None:  # pragma: no cover - the command line
     measuring.add_argument("--units", type=int, default=100, help="units read per corpus")
     measuring.add_argument("--windows", type=int, default=20, help="windows kept per unit")
     measuring.add_argument("--seed", type=int, default=1)
-    measuring.add_argument("--corpus", nargs="*", help="only these corpora")
+    measuring.add_argument("--corpus", nargs="*", help="only these corpora, the portal included")
     exposing = commands.add_parser("exposure", help="each regime's share of each pretraining")
     exposing.add_argument("--out", type=Path, default=REPO_ROOT / "data/report/regime-coverage")
     exposing.add_argument("--manifests", type=Path, required=True)
     exposing.add_argument("--experiments", type=Path, nargs="+", required=True)
     arguments = parser.parse_args()
     if arguments.command == "measure":
-        chosen = [s for s in SOURCES if not arguments.corpus or s.corpus in arguments.corpus]
+        named = (*SOURCES, *TASK_REGIME_SOURCES)
+        chosen = [s for s in named if s.corpus in arguments.corpus] if arguments.corpus else SOURCES
         measure(arguments.out, chosen, arguments.units, arguments.windows, arguments.seed)
     else:
         exposure(arguments.out, read_published(arguments.manifests), arguments.experiments)
