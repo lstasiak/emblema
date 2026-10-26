@@ -14,8 +14,11 @@ the pickled one a channel without rows, a month without telemetry and instants a
 resolution.
 """
 
+import csv
+import io
 import math
 import shutil
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -31,6 +34,7 @@ from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.readers.tep import TennesseeEastmanCorpusReader
 from emblema.catalog.adapters.readers.utsd import UtsdCorpusReader
+from emblema.catalog.adapters.readers.wqp import WaterQualityPortalCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.domain.exceptions import UnknownUnitError
 from emblema.catalog.domain.identifiers import UnitKey
@@ -289,6 +293,40 @@ def utsd(tmp_path: Path) -> Harness:
     return Harness(UtsdCorpusReader(root, dataset), change_one_value)
 
 
+def wqp(tmp_path: Path) -> Harness:
+    root = tmp_path / "wqp"
+    shutil.copytree(sample("wqp"), root)
+    second = root / "batches" / "batch-00001.zip"
+    # The portal ends its lines with a line feed; a batch saved on Windows would not, and the
+    # carriage return belongs to the ending rather than to the last field.
+    rewrite_member(second, lambda text: text.replace("\n", "\r\n"))
+    first = root / "batches" / "batch-00000.zip"
+
+    def change_one_value() -> CorpusReader:
+        def nudged(text: str) -> str:
+            header, *rows = list(csv.reader(io.StringIO(text)))
+            value = header.index("ResultMeasureValue")
+            row = next(r for r in rows if r[value].replace(".", "", 1).isdigit())
+            row[value] = str(float(row[value]) + 1.0)
+            out = io.StringIO()
+            csv.writer(out, lineterminator="\n").writerows([header, *rows])
+            return out.getvalue()
+
+        rewrite_member(first, nudged)
+        return WaterQualityPortalCorpusReader(root)
+
+    return Harness(WaterQualityPortalCorpusReader(root), change_one_value)
+
+
+def rewrite_member(archive: Path, transform: Callable[[str], str]) -> None:
+    """Replace the one member of a zip with what ``transform`` makes of its text."""
+    with zipfile.ZipFile(archive) as opened:
+        [member] = opened.namelist()
+        text = opened.read(member).decode("utf-8")
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as opened:
+        opened.writestr(member, transform(text))
+
+
 def synthetic(tmp_path: Path) -> Harness:
     def change_the_specification() -> CorpusReader:
         noisier = HOSTILE.with_dials(noise=HOSTILE.noise * 2)
@@ -309,6 +347,7 @@ ADAPTERS: dict[str, Callable[[Path], Harness]] = {
     "tep": tep,
     "utsd": utsd,
     "synthetic": synthetic,
+    "wqp": wqp,
 }
 
 
