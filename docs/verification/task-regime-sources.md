@@ -148,3 +148,45 @@ two channels. ZTF's draw took 82 of its 100 units from the quadrant in field 591
 the units were drawn from the five quadrants pooled. Whether data the portal holds from states and
 other organisations may be republished is nowhere stated outright. If the portal fails rule 5, no
 candidate is left and the arm is not run.
+
+## 2026-10-26 — declared before the publication: how the portal is read, windowed and checked
+
+**Question.** The portal passed the rules its raw files decide. How is it read into a corpus, how
+are its windows cut, and what must the published corpus still show before the shortcut audit
+(rule 5) is read on it?
+
+**The reader** (`src/emblema/catalog/adapters/readers/wqp.py`, ADR-0065). A unit is a location over
+the fetched years, 2010-01-01 to 2024-01-01 UTC, the same extent for every location. A reading is a
+result taken in water by the location's main organisation, not a quality-control sample or a
+statistic of other results, with a finite number and an instant of its own: results dated alone are
+dropped (the timed-only row above), and so are those of an activity that reports one characteristic,
+fraction and depth more than once, a logger's readings all stamped with its start. Of the readings
+of one channel at one instant one is kept, the water as taken, then the shallowest, then the first.
+A characteristic is read in its most frequent unit, codes compared regardless of case. The 64
+characteristics measured at the most locations are kept, about 84 % of the audit's readings; a
+location enters with at least 50 readings on them. The corpus is the prefix of the frame's seeded
+order, fetched by `scripts/wqp_fetch.py` a hundred locations at a time and lengthened by whole
+batches until the reader counts at least 12 million readings. These rules drop about half of what
+the audit's frame read, so the check below is made on what the reader keeps.
+
+**Windows.** One window length for every location, the shortest of 14, 7 and 3.5 years (122,712,
+61,356 and 30,678 hours, stride equal to length) whose median tokens per window in the
+publication lie within the stays' range, 135 to 616. A longer window holds more tokens and a
+coarser cell; the shortest that keeps the token range is the one nearest the stays' resolution.
+The length is chosen on the publication's token counts alone, before the shortcut audit runs.
+
+**The publication is measured again.** Filtering and the cap on channels change what the audit
+measured, so the published corpus is measured by the coverage report through its reader (100
+units, seed 1) and must still pass rules 1 and 2: co-observed ≤ 0.661, gap variation ≥ 0.163,
+rate spread ≥ 0.577 and at least 3 channels per unit, at the median. A failure here ends the arm,
+as a failure of rule 5 does; the check can only exclude the portal.
+
+**Predicted from the audit's 100 locations under the cap of 64**, before the reader's further rules
+were applied to them. Windows of 7 years held a median of about 170 tokens (14 years: about 225; 3.5
+years: about 130, below the range); the reader keeps about half of those readings, so the choice may
+fall to 14 years. The regime of the timed-only row: co-observed about 0.57, gap variation about
+0.67, rate spread about 0.65. Dropping repeats at one instant leaves the instants a channel is read
+at, so the gap variation and the spread of rates should move little; dropping the loggers removes
+instants of their own, in a direction not measured. The margins were 0.07 to 0.12, so the check is
+not foregone; the regime of the reader's output was not measured before this section was
+committed.
