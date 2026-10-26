@@ -190,3 +190,60 @@ at, so the gap variation and the spread of rates should move little; dropping th
 instants of their own, in a direction not measured. The margins were 0.07 to 0.12, so the check is
 not foregone; the regime of the reader's output was not measured before this section was
 committed.
+
+## 2026-10-26 — M1 Pro, CPU: the portal as read fails the regime check; the arm goes on as a question of data, not of regime
+
+**Question.** Does the corpus the reader keeps still pass rules 1 and 2, how long are its windows,
+and does it hold 12 million readings?
+
+**Conditions.** Commit `829d9572`, M1 Pro, CPU; the batches of the first 37,000 locations of the
+frame. The check is the declared command; the decomposition re-reads the same 100 locations with
+the reader's rules added one at a time.
+
+    uv run scripts/regime_coverage_report.py measure --corpus wqp --out data/report/wqp-regime-gate
+
+**The check** (median [10th; 90th percentile] over 100 locations, seed 1).
+
+| Co-observed ≤ 0.661 | Gap variation ≥ 0.163 | Rate spread ≥ 0.577 | Channels ≥ 3 |
+|---|---|---|---|
+| **0.68** [0.33; 0.95] | 0.62 [0.14; 2.33] | **0.36** [0.00; 1.63] | 15 |
+
+**The same locations, rule by rule** (medians).
+
+| Read as | Co-observed | Gap variation | Rate spread | Channels |
+|---|---|---|---|---|
+| the audit's timed-only frame | 0.63 | 0.78 | 0.48 | 22 |
+| water only, no quality-control samples | 0.66 | 0.71 | 0.47 | 22 |
+| no statistics of other results | 0.66 | 0.71 | 0.47 | 22 |
+| no repeats within an activity | 0.67 | 0.71 | 0.45 | 22 |
+| one reading per channel and instant | 0.67 | 0.71 | 0.45 | 22 |
+| one unit per characteristic, 64 channels (the reader) | 0.68 | 0.62 | 0.36 | 15 |
+
+**Volume and windows.** 22,281 locations kept, 11,520,684 readings, 64 channels: 4 % short of 12
+million, so the prefix is lengthened by whole batches. Median tokens per window: 174 at 14 years
+(p10 69, p90 1,094), 133 at 7 years, 96 at 3.5 years; the window is 14 years.
+
+**Conclusions.**
+
+1. **The portal as read fails rule 1** on co-observation and the spread of rates; by the rule
+   declared above, the arm as a test of another domain in the stays' regime ends.
+2. **No setting of the reader would pass it.** Without the cap on channels the same locations read
+   0.67 and 0.45, both past the thresholds, and a cap only removes channels; even the audit's
+   frame reads a spread of rates of 0.48 here. The audit's 0.65 to 0.68 came from another draw of
+   100 locations, and the spread between locations (0.03 to 2.5) makes a median of 100 move by
+   that much: the margin it showed was the draw's.
+3. **A typical location is a visit at which many characteristics are measured together at a
+   similar rhythm**: between a grid and the stays, nearer the grid on the spread of rates.
+4. **The arm goes on as a question of data.** The regime rule decided what the arm could claim, not
+   whether its reading is sound: whether adding the portal helps the stays is read on the stays'
+   held-out side by the arm itself, under the readout declared with the pretraining. The arm now
+   asks whether a large, irregular source of another domain, sampled between a grid and the
+   stays, helps the intensive-care tasks. The shortcut audit (rule 5) and the reader's cleaning
+   stay, since they protect what the model learns; no corpus of another domain that pretraining
+   has read so far was other than a grid.
+
+**Limitations.** A median over 100 units moves by more than the margins the rule asked for, so the
+regime rule decided on the draw as much as on the source; a rule of this kind needs more units or
+an interval. A result of the arm within its threshold says only that the portal, at this capacity,
+moves the stays by less than about 0.02; it does not settle whether another domain in the stays'
+regime would.
