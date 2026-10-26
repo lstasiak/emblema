@@ -19,6 +19,7 @@ MARKERS = {
     "physionet2019": "training_setA",
     "tep": "TEP_FaultFree_Training.RData",
     "utsd": "UTSD-12G/data-00000-of-00080.arrow",
+    "wqp": "batches",
 }
 
 

@@ -76,6 +76,16 @@ CORPORA = [
             find_spec("rdata") is None, reason="the corpora extra is not installed"
         ),
     ),
+    # A location of the portal is windowed whole, over the fourteen years every location spans;
+    # the location held out measures three characteristics, which the others measure too.
+    (
+        "wqp",
+        (),
+        5,
+        64,
+        WindowSpec(length=122_712.0, stride=122_712.0),
+        NamedSplit.of([UnitKey("STORET/CHESAPEAKEMONITORINGCOOP-CMC.WSR.WASPRU002")]),
+    ),
     pytest.param(
         "utsd/Health_SelfRegulationSCP1",
         (),
@@ -119,6 +129,7 @@ def corpus_root(corpus: str) -> Path:
         "physionet2012",
         "physionet2019",
         "tep",
+        "wqp",
         "utsd-scp1",
         "utsd-rain",
     ],

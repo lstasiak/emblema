@@ -146,6 +146,21 @@ class KnownCorpora:
                     url="https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/6C3JR1",
                 ),
             ),
+            # The portal's record in the federal data catalogue gives the U.S. Public Domain
+            # licence; results of states and other organisations carry no terms of their own, and
+            # the portal asks for a citation of its DOI.
+            KnownCorpus(
+                "wqp",
+                CorpusSource(
+                    "Water Quality Portal (National Water Quality Monitoring Council, USGS, EPA)",
+                    "https://doi.org/10.5066/P9QRKUVJ",
+                ),
+                Licence(
+                    "U.S. Public Domain",
+                    permits_derivatives=True,
+                    url="https://www.usa.gov/publicdomain/label/1.0/",
+                ),
+            ),
             *(
                 KnownCorpus(
                     dataset.corpus_name, UTSD_SOURCE, UTSD_LICENCE, raw_directory="utsd/UTSD-12G"

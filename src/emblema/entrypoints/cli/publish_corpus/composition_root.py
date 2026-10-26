@@ -11,6 +11,7 @@ from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.readers.tep import TennesseeEastmanCorpusReader
 from emblema.catalog.adapters.readers.utsd import UtsdCorpusReader, UtsdReading
+from emblema.catalog.adapters.readers.wqp import WaterQualityPortalCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
@@ -247,6 +248,10 @@ class CompositionRoot:
                 return TennesseeEastmanCorpusReader(
                     root, subsets or TennesseeEastmanCorpusReader.SUBSETS
                 )
+            case "wqp":
+                if subsets:
+                    raise ValueError(f"the Water Quality Portal has no subsets, got {subsets!r}")
+                return WaterQualityPortalCorpusReader(root)
             case dataset if dataset.startswith(UtsdCorpusReader.CORPUS_PREFIX):
                 return UtsdCorpusReader(root, UtsdCorpusReader.dataset_named(dataset), reading)
             case generated if generated in LAYOUTS:
