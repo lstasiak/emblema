@@ -55,7 +55,7 @@ def grid(*channels: str, times: list[float]) -> dict[str, np.ndarray]:
 
 
 def test_channels_read_together_on_one_grid_are_fully_co_observed_and_even() -> None:
-    row = unit_row("c", unit(), grid("a", "b", "c", times=[0, 1, 2, 3]), 3)
+    row = unit_row("c", "set-a/1", grid("a", "b", "c", times=[0, 1, 2, 3]), 3)
 
     assert row.co_observation == 1.0
     assert row.gap_variation == 0.0
@@ -68,7 +68,7 @@ def test_channels_read_together_on_one_grid_are_fully_co_observed_and_even() -> 
 def test_channels_that_never_share_an_instant_are_co_observed_one_at_a_time() -> None:
     times = {"a": np.asarray([0.0, 3.0, 6.0]), "b": np.asarray([1.0, 4.0, 7.0])}
 
-    row = unit_row("c", unit(), times, 4)
+    row = unit_row("c", "set-a/1", times, 4)
 
     assert row.co_observation == pytest.approx(0.5)
     assert row.channel_share == 0.5
@@ -77,21 +77,21 @@ def test_channels_that_never_share_an_instant_are_co_observed_one_at_a_time() ->
 def test_a_channel_at_twice_the_rate_spreads_the_rates_by_its_ratio() -> None:
     times = {"fast": np.asarray([0.0, 1.0, 2.0, 3.0, 4.0]), "slow": np.asarray([0.0, 2.0, 4.0])}
 
-    row = unit_row("c", unit(), times, 2)
+    row = unit_row("c", "set-a/1", times, 2)
 
     assert row.rate_spread == pytest.approx(math.log10(2.0))
 
 
 def test_uneven_spacing_raises_the_variation_of_the_gaps() -> None:
-    even = unit_row("c", unit(), {"a": np.asarray([0.0, 1.0, 2.0, 3.0])}, 1)
-    uneven = unit_row("c", unit(), {"a": np.asarray([0.0, 0.1, 3.0, 3.1])}, 1)
+    even = unit_row("c", "set-a/1", {"a": np.asarray([0.0, 1.0, 2.0, 3.0])}, 1)
+    uneven = unit_row("c", "set-a/1", {"a": np.asarray([0.0, 0.1, 3.0, 3.1])}, 1)
 
     assert even.gap_variation == 0.0
     assert uneven.gap_variation > 1.0
 
 
 def test_a_channel_read_once_has_no_spacing_to_measure() -> None:
-    row = unit_row("c", unit(), {"a": np.asarray([5.0])}, 1)
+    row = unit_row("c", "set-a/1", {"a": np.asarray([5.0])}, 1)
 
     assert math.isnan(row.gap_variation)
     assert math.isnan(row.rate_spread)
@@ -123,8 +123,8 @@ def test_windows_kept_per_unit_are_bounded_and_drawn_by_seed() -> None:
 
 
 def test_a_unit_is_counted_within_its_part() -> None:
-    assert group_of(unit("ESA-Mission1/2001-01")) == "ESA-Mission1"
-    assert group_of(unit("lonely")) == ""
+    assert group_of("ESA-Mission1/2001-01") == "ESA-Mission1"
+    assert group_of("lonely") == ""
 
 
 @pytest.mark.parametrize(

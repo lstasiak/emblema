@@ -222,23 +222,40 @@ def chosen_units(reader: CorpusReader, units: int, seed: int) -> list[CorpusUnit
     satellite missions) reads each file once.
     """
     every = list(reader.read_units())
-    ranked = sorted(every, key=lambda unit: seeded_rank(seed, str(unit.key)))
-    kept = {str(unit.key) for unit in ranked[:units]}
+    kept = chosen_keys((str(unit.key) for unit in every), units, seed)
     return [unit for unit in every if str(unit.key) in kept]
 
 
-def group_of(unit: CorpusUnit) -> str:
+def chosen_keys(keys: Iterable[str], units: int, seed: int) -> set[str]:
+    """At most ``units`` of the keys, by seed; the same keys draw the same units anywhere."""
+    return set(sorted(keys, key=lambda key: seeded_rank(seed, key))[:units])
+
+
+def group_of(key: str) -> str:
     """The part of the corpus a unit belongs to: a subset, a mission, a set of stays.
 
     The parts of one corpus may measure different channels (a mission its own, a C-MAPSS subset
     read per condition six times as many), so a unit's share of channels is counted within its
     part.
     """
-    key = str(unit.key)
     return key.split("/", 1)[0] if "/" in key else ""
 
 
-def unit_row(corpus: str, unit: CorpusUnit, times: Times, group_channels: int) -> UnitRow:
+def group_widths(read: Iterable[tuple[str, Times]]) -> dict[str, int]:
+    """The channels each part's units measure at all, by part."""
+    channels: dict[str, set[str]] = defaultdict(set)
+    for key, times in read:
+        channels[group_of(key)].update(times)
+    return {group: len(held) for group, held in channels.items()}
+
+
+def unit_rows_of(corpus: str, read: Sequence[tuple[str, Times]]) -> list[UnitRow]:
+    """A row per unit, its share of channels counted against its part's units in ``read``."""
+    widths = group_widths(read)
+    return [unit_row(corpus, key, times, widths[group_of(key)]) for key, times in read]
+
+
+def unit_row(corpus: str, key: str, times: Times, group_channels: int) -> UnitRow:
     observed = {channel: t for channel, t in times.items() if t.size}
     instants: Counter[float] = Counter()
     variation: list[float] = []
@@ -255,8 +272,8 @@ def unit_row(corpus: str, unit: CorpusUnit, times: Times, group_channels: int) -
     count = len(observed)
     return UnitRow(
         corpus=corpus,
-        group=group_of(unit),
-        unit=str(unit.key),
+        group=group_of(key),
+        unit=key,
         span=float(every.max() - every.min()) if every.size else 0.0,
         channels=count,
         channel_share=count / group_channels,
@@ -334,16 +351,13 @@ def measure_source(
     reader = source.reader(root)
     drawn = [(unit, times_by_channel(reader, unit)) for unit in chosen_units(reader, units, seed)]
     read = [(unit, times) for unit, times in drawn if times]
-    channels: dict[str, set[str]] = defaultdict(set)
-    for unit, times in read:
-        channels[group_of(unit)].update(times)
-    unit_rows: list[UnitRow] = []
+    keyed = [(str(unit.key), times) for unit, times in read]
+    widths = group_widths(keyed)
     rows: list[WindowRow] = []
     for unit, times in read:
-        width = len(channels[group_of(unit)])
-        unit_rows.append(unit_row(source.corpus, unit, times, width))
+        width = widths[group_of(str(unit.key))]
         rows.extend(window_rows(source.corpus, unit, times, source.window, width, windows, seed))
-    return unit_rows, rows, len(drawn) - len(read), from_sample
+    return unit_rows_of(source.corpus, keyed), rows, len(drawn) - len(read), from_sample
 
 
 def quantiles(values: Iterable[float]) -> tuple[float, float, float]:
