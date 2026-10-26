@@ -51,7 +51,12 @@ from it.
         [--corpus <name> --windows-of <id> --unset-rows mean]
     uv run --env-file .env.r2 scripts/cell_pretext_audit.py --backbone <id over cells>
         --model trained --corpus <name read in part> --unread-units
+    uv run [--env-file .env.r2] scripts/cell_pretext_audit.py --manifest <key> <checksum>
+        --corpus <name> --masks experiments/<file>.toml
     uv run scripts/cell_pretext_audit.py --report-only data/report/cell-pretext/<run>
+
+A corpus no backbone has read yet is read from its published manifest (``--manifest``), its
+windows as the publication cut them; only the answers without a model are scored then.
 """
 
 import argparse
@@ -91,6 +96,8 @@ from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.corpus_share import CorpusShare
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
+from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.tokens import TokenWindow
 from emblema.shared.ports.artifact_store import ArtifactStore
 from scripts.corpus_saturation_report import BLOCKS
@@ -761,6 +768,76 @@ def split_by_share(
     return sides[0], sides[1]
 
 
+def published_corpus(
+    store: ArtifactStore,
+    blocks: Path,
+    manifest: ArtifactRef,
+    corpus: str,
+    *,
+    training_windows: int,
+    validation_windows: int,
+) -> CorpusWindows:  # pragma: no cover - reads the store
+    """A corpus no backbone has read, its windows as its publication cut them."""
+    published = PublishedCorpusManifestJson().decode(store.get(manifest))
+    return CorpusWindows.of(
+        corpus,
+        len(published.channels),
+        published,
+        fetched_block(store, published.block, blocks),
+        training_windows=training_windows,
+        validation_windows=validation_windows,
+    )
+
+
+def measure_published(
+    arguments: argparse.Namespace, store: ArtifactStore
+) -> None:  # pragma: no cover - the command line and the store
+    """Score the answers without a model on one published corpus under the masks given."""
+    stated = ExperimentFile.load(arguments.masks).configuration()
+    if not stated.architecture.bins:
+        raise SystemExit("no bins stated: the audit is over cells")
+    key, checksum = arguments.manifest
+    corpus = published_corpus(
+        store,
+        BLOCKS,
+        ArtifactRef(key=key, checksum=Checksum.parse(checksum)),
+        arguments.corpus,
+        training_windows=arguments.training_windows,
+        validation_windows=arguments.validation_windows,
+    )
+    rows, cells = audit_corpus(
+        corpus.corpus,
+        corpus.training,
+        corpus.validation,
+        vocabulary_size=corpus.vocabulary_size,
+        bins=stated.architecture.bins,
+        strategy=stated.masking,
+        model=None,
+        device="cpu",
+    )
+    out = arguments.out or WORKSPACE / f"{arguments.corpus}-{arguments.masks.stem}"
+    out.mkdir(parents=True, exist_ok=True)
+    write_scores(out / SCORES, rows)
+    write_cells(out / CELLS, [cells])
+    (out / SETTINGS).write_text(
+        "\n".join(
+            [
+                f"measured: {datetime.now():%Y-%m-%d %H:%M}",
+                f"commit: {SourceRevision().current()}",
+                f"machine: {machine()}",
+                f"manifest: {key} {checksum}",
+                f"masks: {arguments.masks}",
+                f"bins: {stated.architecture.bins}",
+                f"strategy: {stated.masking}",
+                f"training windows: {arguments.training_windows}",
+                f"validation windows: {arguments.validation_windows}",
+            ]
+        )
+        + "\n"
+    )
+    print(render(out))
+
+
 def unread_corpus(
     backbone: Backbone,
     store: ArtifactStore,
@@ -813,6 +890,12 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         "--backbone", help="registered backbone whose corpora are read as it read them"
     )
     parser.add_argument(
+        "--manifest",
+        nargs=2,
+        metavar=("KEY", "CHECKSUM"),
+        help="a published corpus no backbone has read, by its manifest; needs --corpus, --masks",
+    )
+    parser.add_argument(
         "--masks",
         type=Path,
         help="experiment file whose [input] bins and [masking] are drawn; with --model, the "
@@ -849,6 +932,12 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         "--report-only", type=Path, help="render the tables of a directory already measured"
     )
     arguments = parser.parse_args(argv)
+    if arguments.report_only is None and arguments.manifest is not None:
+        if arguments.backbone is not None or arguments.model is not None:
+            parser.error("--manifest reads a corpus no backbone read; it takes no --backbone")
+        if arguments.corpus is None or arguments.masks is None:
+            parser.error("--manifest needs --corpus, the corpus it holds, and --masks")
+        return arguments
     if arguments.report_only is None:
         if arguments.backbone is None:
             parser.error("--backbone is needed to measure; --report-only to render")
@@ -897,9 +986,12 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - the c
     if arguments.report_only is not None:
         print(render(arguments.report_only))
         return
+    store = configured_store(Settings())
+    if arguments.manifest is not None:
+        measure_published(arguments, store)
+        return
     registry = _registry()
     backbone = registry.get(_backbone_id(arguments.backbone, "--backbone"))
-    store = configured_store(Settings())
     if arguments.masks is not None:
         stated = ExperimentFile.load(arguments.masks).configuration()
         bins, strategy = stated.architecture.bins, stated.masking
