@@ -82,3 +82,69 @@ co-observation, and C-MAPSS per condition on the spread of rates.
 
 **Not decided here.** What the arm is compared with, its prediction and how it is read are
 declared with the pretraining that runs it. The source enters only pretraining, never a task.
+
+## 2026-10-26 — M1 Pro, CPU: the Water Quality Portal passes the rules read from raw files, ZTF and Mars Express do not
+
+**Question.** Which candidate, in the declared order, passes the rules that the raw files decide
+(regime, channels, volume) and the licence, before a reader is written?
+
+**Conditions.** Commit `23d22403`, M1 Pro, CPU, seed 1, 100 units (all 69 months of Mars Express).
+ZTF: the five quadrants drawn lie in fields 567, 875, 711, 591 and 629, their 15 files checked
+against the release's MD5 list. Water Quality Portal: the Station listing of 2026-10-26 (114,340
+locations); results fetched one location at a time. Every location kept was reported by one
+organisation alone, so reading through the main one left no result out. Mars Express: Zenodo record
+6327379, MD5 checked.
+
+    uv run scripts/ztf_light_curve_table.py table --root data/raw/ztf \
+        --checksums data/raw/ztf/checksum.md5 --out data/report/raw-regime-audit/ztf
+    uv run scripts/wqp_result_table.py --stations data/raw/wqp/station.csv \
+        --cache data/raw/wqp/results --out data/report/raw-regime-audit/wqp [--timed-only]
+    uv run scripts/raw_regime_audit.py --name <source> --root data/report/raw-regime-audit/<source> \
+        --pattern readings.csv --unit unit --channel channel --time time
+    uv run scripts/mex_power_audit.py --root data/raw/mex/mars-express-power-3years \
+        --out data/report/raw-regime-audit
+
+**Rules 1 to 3** (median [10th; 90th percentile] over units; a rule failed in bold).
+
+| Candidate | Co-observed ≤ 0.661 | Gap variation ≥ 0.163 | Rate spread ≥ 0.577 | Channels ≥ 3 | Readings / unit | Volume ≥ 12 M |
+|---|---|---|---|---|---|---|
+| ZTF DR24 | 0.33 [0.33; 0.50] | 2.85 [1.72; 3.60] | **0.30** [0.19; 2.18] | 3 | 1,040 | 5.3 billion curves |
+| Water Quality Portal | 0.54 [0.30; 0.96] | 0.67 [0.23; 2.10] | 0.68 [0.03; 2.54] | 29 | 288 | over 265 million results |
+| Mars Express | 0.61 [0.49; 0.68] | **0.08** [0.01; 3.07] | **0.19** [0.03; 0.27] | 37 | 2,882,160 | about 190 million readings |
+
+**The portal without results dated alone.** A quarter of the portal's readings (24.5 %) carry a
+date and no time, which the frame places at midnight. The second row applies the frame to the
+timed readings alone (124 locations fetched, 100 kept, 85 shared with the first draw):
+
+| Water Quality Portal | Co-observed | Gap variation | Rate spread | Channels |
+|---|---|---|---|---|
+| dated results at midnight (the declared frame) | 0.54 [0.30; 0.96] | 0.67 [0.23; 2.10] | 0.68 [0.03; 2.54] | 29 |
+| timed results only | 0.57 [0.31; 0.95] | 0.67 [0.24; 1.94] | 0.65 [0.03; 2.26] | 30 |
+
+**Licence (rule 4).** The portal's record in the federal catalogue (catalog.data.gov) gives the
+U.S. Public Domain licence and public access; the portal's user guide asks for a citation with
+DOI 10.5066/P9QRKUVJ; EPA's data licence covers what EPA produces and leaves data of others to
+their own terms, which the portal does not state. Organisations submit their data to the portal
+to make it publicly accessible. Read as passing, with the citation and the list of reporting
+organisations carried by the published block.
+
+**Conclusions.**
+
+1. **The Water Quality Portal passes rules 1 to 4** and is the source a reader is written for;
+   rule 5 is read on its publication.
+2. **ZTF fails on the spread of rates alone.** Its bands are taken in separate exposures and
+   unevenly, but at similar rates (about twice apart at the median, 29 % of sources past the
+   threshold against 91 % and 97 % of the stays), where C-MAPSS per condition also sits.
+3. **Mars Express is a grid with a second packet.** The 33 power lines share their instants at a
+   near constant spacing; the solar angles run apart, which keeps co-observation under one.
+4. **Midnight stamps do not decide the portal's result.** Dropping the results dated alone moves the
+   median of each regime measure by at most 0.03; the reader is to drop them, since a block of
+   midnights would give a pretext a clock to read.
+
+**Limitations.** The portal passes co-observation and the spread of rates by 0.07 to 0.12: its
+regime lies near the middle between a grid and the less irregular stays, not at the stays. Its
+channels are names as published; one quantity under two names within one organisation still reads as
+two channels. ZTF's draw took 82 of its 100 units from the quadrant in field 591, the densest, since
+the units were drawn from the five quadrants pooled. Whether data the portal holds from states and
+other organisations may be republished is nowhere stated outright. If the portal fails rule 5, no
+candidate is left and the arm is not run.
