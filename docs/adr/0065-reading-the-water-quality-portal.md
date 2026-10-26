@@ -27,6 +27,8 @@ the reader:
   part separator, so an identifier may hold its own.
 - **The extent is the fetched years** for every location, 2010-01-01 to 2024-01-01 UTC, in hours
   since the epoch, so one window length cuts every location alike.
+- **Instants are read to the minute.** A window of fourteen years stores a token's place in single
+  precision, about a quarter of a minute apart, so readings seconds apart could swap places.
 - **A reading** is a result taken in water, not a quality-control sample, measured rather than
   computed (statistical base blank, `MPN` or `Instantaneous`; a mean, maximum, ratio or recovery
   is not), with a finite number, reported by the organisation with most of the location's rows.

@@ -484,6 +484,25 @@ def test_a_batch_that_is_not_utf8_is_refused(tmp_path: Path) -> None:
         WaterQualityPortalCorpusReader(tmp_path, least=1).describe()
 
 
+def test_an_instant_is_read_to_the_minute(tmp_path: Path) -> None:
+    batch(
+        tmp_path,
+        0,
+        [
+            result(name="pH", value="1", clock="10:00:05"),
+            result(name="Nitrate", value="2", clock="10:00:50", unit="mg/L"),
+            result(name="pH", value="3", clock="10:00:40", activity="OTHER"),
+        ],
+    )
+
+    reader = WaterQualityPortalCorpusReader(tmp_path, least=1)
+
+    assert observations(reader, "STORET/SITE-1") == [
+        ("Nitrate", hours("2015-06-01T10:00"), 2.0),
+        ("pH", hours("2015-06-01T10:00"), 1.0),
+    ]
+
+
 def test_the_sample_is_read_in_time_order_on_its_channels() -> None:
     reader = WaterQualityPortalCorpusReader(sample("wqp"))
 

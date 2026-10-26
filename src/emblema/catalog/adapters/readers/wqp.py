@@ -168,7 +168,8 @@ class WaterQualityPortalCorpusReader:
     values are normalised together. Names are kept as published, fractions not told apart. The
     ``channels`` characteristics measured at the most locations of all fetched are kept, so that
     every channel is measured widely enough to be normalised on any side of a split, and a
-    location enters with at least ``least`` readings on them. Times are hours since the epoch, UTC.
+    location enters with at least ``least`` readings on them. Times are hours since the epoch, UTC,
+    to the minute.
 
     The checksum covers the batch files in name order. The batches are indexed when the corpus is
     described or first read, and the batch last read is kept, so its locations are served from
@@ -409,9 +410,11 @@ class WaterQualityPortalCorpusReader:
                 raise ValueError(day)
             hours, minutes, seconds = (int(part or 0) for part in stamp.groups())
             taken = date.fromisoformat(day)
+            # Read to the minute: a fourteen-year window stores a token's place in single
+            # precision, about half a minute apart, so seconds would reorder its tokens.
             moment = datetime(
                 taken.year, taken.month, taken.day, hours, minutes, seconds, tzinfo=UTC
-            ) - timedelta(hours=_ZONES.get(zone, 0.0))
+            ).replace(second=0) - timedelta(hours=_ZONES.get(zone, 0.0))
         except (ValueError, OverflowError) as error:
             raise MalformedCorpusDataError(
                 f"{where}: {day!r} {clock!r} is not an instant"
