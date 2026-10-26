@@ -247,3 +247,52 @@ regime rule decided on the draw as much as on the source; a rule of this kind ne
 an interval. A result of the arm within its threshold says only that the portal, at this capacity,
 moves the stays by less than about 0.02; it does not settle whether another domain in the stays'
 regime would.
+
+## 2026-10-26 — M1 Pro, CPU: the portal's cells hold no clock; its values are hard to answer without a model
+
+**Question.** Does the published portal pass the shortcut audit (rule 5), and what volume and
+windows does its publication hold?
+
+**Conditions.** Commit `0b1a6102`, M1 Pro, CPU. The batches of the first 38,700 locations, read to
+the minute (ADR-0065) and published to the local stack's bucket with windows of 14 years (122,712
+hours), stride equal, a seeded split of a fifth: manifest `sha256:d854f2cf…`. The audit reads the
+publication by its manifest under the masks the stays' values were read with, 2,000 training and
+2,000 validation windows.
+
+    uv run python -m emblema.entrypoints.cli.publish_corpus --corpus wqp \
+        --window 122712 --stride 122712
+    uv run scripts/cell_pretext_audit.py --manifest <key> <checksum> --corpus wqp \
+        --masks experiments/backbone-cells-physionet2012-s.toml
+
+**The publication.** 23,293 locations, every one a window; 11,674,718 readings over 64 channels,
+2.7 % short of 12 million once readings within one minute were merged; cells held 0.41 of the time
+(the stays: 0.52 and 0.62).
+
+**Presence of a hidden cell** (log loss removed against the constant share), against the stays
+under the same masks.
+
+| Answer | Portal | Rule 5 | Stays 2012 | Stays 2019 |
+|---|---|---|---|---|
+| `schedule` | 0.027 | ≤ 0.351 | 0.238 | 0.351 |
+| `cross` | 0.481 | — | 0.537 | 0.623 |
+| `stacked` | 0.543 | ≤ 0.653 | 0.593 | 0.653 |
+
+**Values** (R² against the channel's mean, every hidden cell): mean −0.249 / −0.036 / 0.041 /
+−0.000 / −0.120 for carry, interpolation, cross, schedule and the stack; maximum −0.932 for the
+stack; the count 0.904 from the carry and 0.914 from the stack, as on the stays.
+
+**Conclusions.**
+
+1. **The portal passes rule 5.** Its schedule answers presence at 0.027, a tenth of the stays',
+   so the programmes' calendars give no clock; presence is read from the other channels of the
+   same bin, as on the stays.
+2. **Its values are almost unanswerable without a model**, and the stack does worse than the
+   mean: raw values over units and sites with heavy tails, which the value terms of the pretext
+   will weigh. Robust normalisation of values, parked so far, bears on this corpus.
+3. **The count is a shortcut here as on the stays** (0.90 to 0.91), so the count term carries
+   little the corpus could teach.
+
+**Limitations.** The publication used for the audit is local; the one the pretraining reads is
+published later, last in the chain of vocabularies, from a prefix lengthened past 12 million
+readings. The audit scores answers without a model; whether the portal helps the stays is read by
+the arm.
