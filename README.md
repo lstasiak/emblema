@@ -12,6 +12,7 @@
 | src/emblema/catalog/adapters/persistence/corpus\_version\_record.py                       |       45 |        0 |        2 |        0 |    100% |           |
 | src/emblema/catalog/adapters/persistence/orm.py                                           |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/cmapss.py                                            |      129 |        0 |       44 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/eicu\_demo.py                                        |      211 |        0 |       70 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/esa\_ad.py                                           |      169 |        0 |       44 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/physionet2012.py                                     |      125 |        0 |       44 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/physionet2019.py                                     |      116 |        0 |       40 |        0 |    100% |           |
@@ -22,6 +23,7 @@
 | src/emblema/catalog/adapters/readers/text.py                                              |       21 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/unit\_files.py                                       |       48 |        1 |       20 |        0 |     99% |        55 |
 | src/emblema/catalog/adapters/readers/utsd.py                                              |      198 |        0 |       64 |        0 |    100% |           |
+| src/emblema/catalog/adapters/readers/wqp.py                                               |      197 |        0 |       52 |        0 |    100% |           |
 | src/emblema/catalog/adapters/synthetic/synthetic\_corpus\_reader.py                       |       91 |        0 |       12 |        0 |    100% |           |
 | src/emblema/catalog/adapters/tokenisation/published\_window\_tokeniser.py                 |       34 |        0 |        2 |        0 |    100% |           |
 | src/emblema/catalog/adapters/tokenisation/sliding\_window.py                              |      117 |        0 |       32 |        0 |    100% |           |
@@ -119,7 +121,7 @@
 | src/emblema/entrypoints/cli/pretrain/pretrain\_invocation.py                              |       12 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/pretrain/services.py                                          |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/adapters.py                                   |        9 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/publish\_corpus/composition\_root.py                          |       85 |        0 |       28 |        0 |    100% |           |
+| src/emblema/entrypoints/cli/publish\_corpus/composition\_root.py                          |       95 |        0 |       36 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/known\_corpora.py                             |       26 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_cli.py                       |       69 |        0 |       16 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_invocation.py                |        9 |        0 |        0 |        0 |    100% |           |
@@ -654,7 +656,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **18439** |  **105** | **3548** |   **95** | **99%** |           |
+| **TOTAL**                                                                                 | **18857** |  **105** | **3678** |   **95** | **99%** |           |
 
 130 empty files skipped.
 
