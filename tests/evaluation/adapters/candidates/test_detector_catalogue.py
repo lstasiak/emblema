@@ -1,0 +1,140 @@
+"""What the detectors are called and set to, read out of their names alone."""
+
+import pytest
+
+from emblema.evaluation.adapters.candidates.detector_arm import DetectorArm
+from emblema.evaluation.adapters.candidates.detector_catalogue import DetectorCatalogue
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
+from emblema.evaluation.contracts.identifiers import CandidateRef
+from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
+from emblema.evaluation.domain.exceptions import (
+    InvalidDetectorRecipeError,
+    UnknownCandidateError,
+    UnknownKnobError,
+)
+from emblema.evaluation.domain.transfer.layer_reading import LayerReading
+from tests.evaluation.support import WEIGHTS
+
+FROZEN = DetectorArm(
+    ref=CandidateRef("frozen_knn"),
+    features=DetectorFeatures.ENCODER_STATES,
+    architecture=WEIGHTS,
+    backbone=WEIGHTS,
+)
+UNTRAINED = DetectorArm(
+    ref=CandidateRef("untrained_knn"),
+    features=DetectorFeatures.ENCODER_STATES,
+    architecture=WEIGHTS,
+    backbone=None,
+)
+SUMMARIES = DetectorArm(
+    ref=CandidateRef("summaries_knn"),
+    features=DetectorFeatures.SUMMARIES,
+    architecture=None,
+    backbone=None,
+)
+CATALOGUE = DetectorCatalogue((FROZEN, UNTRAINED, SUMMARIES))
+
+
+def test_a_detector_declares_no_compute_budget_and_names_the_weights_it_reads() -> None:
+    frozen = CATALOGUE.describe(CandidateRef("frozen_knn"))
+    summaries = CATALOGUE.describe(CandidateRef("summaries_knn"))
+
+    assert (frozen.kind, frozen.budget, frozen.starts_from) == (
+        CandidateKind.DETECTOR,
+        None,
+        WEIGHTS,
+    )
+    assert CATALOGUE.describe(CandidateRef("untrained_knn")).starts_from is None
+    assert summaries.starts_from is None
+    assert {p.name for p in summaries.method.parameters} == {
+        "features",
+        "neighbours",
+        "contamination",
+    }
+    assert {p.name for p in frozen.method.parameters} >= {"architecture", "layer", "pooling"}
+
+
+def test_a_variant_turns_the_detectors_knobs_and_the_encoders_reading() -> None:
+    turned = CATALOGUE.arm_of(
+        CandidateRef("frozen_knn@contamination=0.05,layer=concat,neighbours=10")
+    )
+
+    assert (turned.neighbours, turned.contamination) == (10, 0.05)
+    assert turned.encoder.layer == LayerReading.of("concat")
+    assert turned.ref == CandidateRef("frozen_knn@contamination=0.05,layer=concat,neighbours=10")
+
+
+def test_the_description_of_a_variant_records_the_knobs_turned() -> None:
+    described = CATALOGUE.describe(CandidateRef("summaries_knn@neighbours=3"))
+
+    assert described.ref == CandidateRef("summaries_knn@neighbours=3")
+    assert {p.name: p.value for p in described.method.parameters}["neighbours"] == "3"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "frozen_knn@neighbours=0",
+        "frozen_knn@contamination=1",
+        "frozen_knn@neighbours=five",
+        "summaries_knn@layer=concat",
+        "frozen_knn@pooling=attention",
+        "frozen_knn@dropout=0.1",
+        "frozen_knn@neighbours=5",
+        "trees_knn",
+        "frozen_knn@epochs=3",
+    ],
+    ids=[
+        "no neighbour",
+        "all contamination",
+        "not a count",
+        "a layer for the summaries",
+        "a pooling that learns",
+        "a dropout",
+        "the default under another name",
+        "unknown base",
+        "unknown knob",
+    ],
+)
+def test_a_name_that_is_no_detector_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError):
+        CATALOGUE.arm_of(CandidateRef(name))
+
+
+def test_an_arm_over_the_summaries_turns_no_knob_of_an_encoder() -> None:
+    with pytest.raises(UnknownKnobError, match="nothing else"):
+        SUMMARIES.tuned("pooling", "tail")
+
+
+def test_an_arm_whose_features_and_encoder_disagree_is_refused() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="names an encoder"):
+        DetectorArm(
+            ref=CandidateRef("x"),
+            features=DetectorFeatures.SUMMARIES,
+            architecture=WEIGHTS,
+            backbone=None,
+        )
+    with pytest.raises(InvalidDetectorRecipeError, match="names no encoder"):
+        DetectorArm(
+            ref=CandidateRef("x"),
+            features=DetectorFeatures.ENCODER_STATES,
+            architecture=None,
+            backbone=None,
+        )
+    with pytest.raises(InvalidDetectorRecipeError, match="no shape"):
+        DetectorArm(
+            ref=CandidateRef("x"),
+            features=DetectorFeatures.SUMMARIES,
+            architecture=None,
+            backbone=WEIGHTS,
+        )
+
+
+def test_the_recipe_of_an_arm_carries_the_cells_seed_and_the_encoders_reading() -> None:
+    recipe = FROZEN.recipe(seed=4)
+
+    assert recipe.seed == 4
+    assert recipe.reading is not None
+    assert (recipe.reading.architecture, recipe.reading.backbone) == (WEIGHTS, WEIGHTS)
+    assert SUMMARIES.recipe(seed=1).reading is None
