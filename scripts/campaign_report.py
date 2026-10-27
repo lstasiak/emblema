@@ -160,7 +160,10 @@ def windows_of(budget: LabelBudget, everything: int | None) -> int:
 
 def by_area(reading: CampaignReading) -> bool:
     """Whether the campaign reads its candidates by how they rank, not by an error."""
-    return reading.campaign.design.measure is ErrorMeasure.AUROC_SHORTFALL
+    return reading.campaign.design.measure in (
+        ErrorMeasure.AUROC_SHORTFALL,
+        ErrorMeasure.PR_AUC_SHORTFALL,
+    )
 
 
 def natural(reading: CampaignReading, error: float) -> float:
