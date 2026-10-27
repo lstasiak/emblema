@@ -1,4 +1,4 @@
-# ADR-0066: Reading the eICU demo as 2012 frames a stay — 48 hours from admission to the unit, the charted variables in the 2012 names
+# ADR-0066: Reading the eICU demo as 2012 frames a stay — stays of 48 hours on the unit, the charted variables in the 2012 names
 
 - Status: accepted
 - Date: 2026-10-27
@@ -27,10 +27,10 @@ the Celsius cell; ages above 89 are written `> 89`.
 
 ## Decision
 
-- **A unit stay is the unit**, keyed `<hospital>/<stay>`, over 48 hours from admission to the
-  unit as the 2012 challenge frames a stay. A reading before admission, after the patient left the
-  unit or after hour 48 is not the stay's; a shorter stay keeps the extent and leaves its tail
-  empty. Every stay of the patient table is a unit, one without a reading too.
+- **A unit stay of at least 48 hours on the unit is the unit**, as in the 2012 challenge, keyed
+  `<hospital>/<stay>`, over its first 48 hours; one without a reading too. A reading before
+  admission to the unit or after hour 48 is not the stay's. This keeps 932 stays of 803 patients
+  in 181 hospitals.
 - **The variables are the 2012 ones the demo charts**, 36 of 37 (the ventilation flag is not
   read): vital signs and coma score from the nurse's charting, laboratory results by name (serum
   bicarbonate, arterial saturation), urine output from the output cells holding a volume (named
@@ -47,12 +47,10 @@ the Celsius cell; ages above 89 are written `> 89`.
 
 ## Consequences
 
-- The demo's stays sit in the 2012 regime: read through the reader, 0.21, 0.42 and 0.90 against
-  0.22, 0.46 and 1.38 (`docs/verification/task-regime-sources.md`).
-- A stay holds fewer readings than a 2012 one (median 100 tokens a window against 417), because
-  most stays leave the unit before hour 48; a stay of 48 hours charts its vital signs about as
-  densely as a 2012 one (heart rate 51 readings against 56).
-- The empty tail of a short stay, which the 2012 stays lack, reads as channels not measured.
+- The demo's stays sit in the 2012 regime: read through the reader, 0.21, 0.42 and 1.37 against
+  0.22, 0.46 and 1.38 (`docs/verification/task-regime-sources.md`), with a median of 310 tokens a
+  window against 417.
+- 60 % of the readings in the first 48 hours are kept; the rest belong to shorter stays.
 - A split draws stays, not patients; the demo feeds only a pretraining, whose held-out side gives
   a loss, not a reading.
 - A key names the hospital, so hospitals can be held out as parts.
@@ -64,8 +62,9 @@ the Celsius cell; ages above 89 are written `> 89`.
 - **The monitor's vital signs.** Rejected: a five-minute grid is another regime (gap variation
   0.21), four times the readings of a 2012 stay, and a schedule a pretext could read as a clock.
 - **Every charted and laboratory label.** Rejected: further from the 2012 regime.
-- **The extent ending when the stay leaves the unit.** Rejected: a window is cut only where it
-  fits, so two thirds of the stays would yield no 48-hour window.
+- **Every stay, a shorter one leaving the end of its window empty.** Rejected: whole empty bins
+  make presence easy to answer without a model (the shortcut audit's stack at 0.671, past the 0.653
+  the 2019 stays reach; 0.635 on stays of 48 hours), and no stay of the tasks ends early. A
+  sequence of the stay's own length would keep them; the windows of this pipeline do not have one.
 - **The oxygen fraction as published.** Rejected: fractions would sit a hundred times too low.
-- **One stay per patient, or stays of 48 hours only.** Rejected: a quarter or two thirds of the
-  stays lost for a held-out loss.
+- **One stay per patient.** Rejected: 129 of the 932 stays lost for a held-out loss.
