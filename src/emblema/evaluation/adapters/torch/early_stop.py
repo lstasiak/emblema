@@ -5,6 +5,7 @@ import torch
 from torch import Tensor, nn
 
 from emblema.evaluation.adapters.torch.target_link import TargetLink
+from emblema.evaluation.domain.exceptions import UnsupportedTargetKindError
 from emblema.evaluation.domain.labels.target_kind import TargetKind
 
 
@@ -51,6 +52,8 @@ class EarlyStop:
                 return -float(((answers - targets) ** 2).mean())
             case TargetKind.BINARY:
                 return _roc_area(answers, targets) + _precision_recall_area(answers, targets)
+            case TargetKind.ANOMALY:
+                raise UnsupportedTargetKindError("no training stops on an event's number")
 
     def observe(self, epoch: int, score: float, model: nn.Module) -> bool:
         """Record the epoch's score and the weights if it is the best; whether to stop now."""
