@@ -231,8 +231,8 @@ def draw(report: Report, path: Path, *, caption: str = CAPTION, task: str = TASK
         rows = [r for r in report.comparisons if r.candidate == candidate]
         if not rows:
             continue
-        rows.sort(key=lambda r: r.windows)
-        shifted = [r.windows * offsets[candidate] for r in rows]
+        rows.sort(key=lambda r: _count(r.windows))
+        shifted = [_count(r.windows) * offsets[candidate] for r in rows]
         lower.errorbar(
             shifted,
             [r.reduction for r in rows],
@@ -355,7 +355,14 @@ def _draw_baselines(
 
 
 def _windows(report: Report, budget: str) -> int:
-    return next(c.windows for c in report.cells if c.budget == budget)
+    return _count(next(c.windows for c in report.cells if c.budget == budget))
+
+
+def _count(windows: int | None) -> int:
+    """The labelled windows of a budget; a campaign that spent none draws no curve."""
+    if windows is None:
+        raise SystemExit("the curve runs over budgets of labels, and this campaign spent none")
+    return windows
 
 
 def _line(

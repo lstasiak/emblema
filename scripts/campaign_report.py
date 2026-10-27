@@ -41,56 +41,57 @@ from emblema.evaluation.ports.evaluation_campaign_repository import (
 from scripts.reporting import table
 
 CELLS, COMPARISONS, VERDICT = "cells.csv", "comparisons.csv", "verdict.md"
-CELL_COLUMNS = ("candidate", "kind", "budget", "windows", "seed", "units", "rmse", "seconds")
-CELL_COLUMNS_BY_AREA = (
-    "candidate",
-    "kind",
-    "budget",
-    "windows",
-    "seed",
-    "units",
-    "auroc",
-    "brier",
-    "seconds",
-)
-COMPARISON_COLUMNS = (
-    "candidate",
-    "budget",
-    "windows",
-    "repeats",
-    "control_rmse",
-    "control_sd",
-    "candidate_rmse",
-    "candidate_sd",
-    "reduction",
-    "relative_reduction",
-    "low",
-    "high",
-    "p_value",
-    "floor",
-    "primary",
-    "verdict",
-)
-# The same figures read by area: the scores are areas, and the reduction of one minus the area is
+# What a cell scored, named by the measure: an error in the task's unit, or an area, the one
+# under the ROC curve with its Brier score beside, or the event-weighted one under the
+# precision-recall curve. A campaign read by area states the reduction of one minus the area as
 # the gain in area, so the interval and the floor are the gain's.
-COMPARISON_COLUMNS_BY_AREA = (
-    "candidate",
-    "budget",
-    "windows",
-    "repeats",
-    "control_auroc",
-    "control_sd",
-    "candidate_auroc",
-    "candidate_sd",
-    "gain",
-    "share_of_shortfall",
-    "low",
-    "high",
-    "p_value",
-    "floor",
-    "primary",
-    "verdict",
-)
+SCORE = {
+    ErrorMeasure.RMSE: "rmse",
+    ErrorMeasure.AUROC_SHORTFALL: "auroc",
+    ErrorMeasure.PR_AUC_SHORTFALL: "pr_auc",
+}
+SCORE_SHOWN = {
+    ErrorMeasure.RMSE: "RMSE",
+    ErrorMeasure.AUROC_SHORTFALL: "AUROC",
+    ErrorMeasure.PR_AUC_SHORTFALL: "PR-AUC",
+}
+
+
+def cell_columns(measure: ErrorMeasure) -> tuple[str, ...]:
+    head = ("candidate", "kind", "budget", "windows", "seed", "units", SCORE[measure])
+    if measure is ErrorMeasure.AUROC_SHORTFALL:
+        return (*head, "brier", "seconds")
+    return (*head, "seconds")
+
+
+def comparison_columns(measure: ErrorMeasure) -> tuple[str, ...]:
+    score = SCORE[measure]
+    return (
+        "candidate",
+        "budget",
+        "windows",
+        "repeats",
+        f"control_{score}",
+        "control_sd",
+        f"candidate_{score}",
+        "candidate_sd",
+        "reduction" if measure is ErrorMeasure.RMSE else "gain",
+        "relative_reduction" if measure is ErrorMeasure.RMSE else "share_of_shortfall",
+        "low",
+        "high",
+        "p_value",
+        "floor",
+        "primary",
+        "verdict",
+    )
+
+
+# What the files are called when the campaign is read by the area under the ROC curve; kept for
+# the readers that name the columns.
+CELL_COLUMNS = cell_columns(ErrorMeasure.RMSE)
+CELL_COLUMNS_BY_AREA = cell_columns(ErrorMeasure.AUROC_SHORTFALL)
+COMPARISON_COLUMNS = comparison_columns(ErrorMeasure.RMSE)
+COMPARISON_COLUMNS_BY_AREA = comparison_columns(ErrorMeasure.AUROC_SHORTFALL)
 
 
 class CellRow(NamedTuple):
@@ -103,7 +104,7 @@ class CellRow(NamedTuple):
     candidate: str
     kind: str
     budget: str
-    windows: int
+    windows: int | None
     seed: int
     units: int
     score: float
@@ -126,7 +127,7 @@ class ComparisonRow(NamedTuple):
 
     candidate: str
     budget: str
-    windows: int
+    windows: int | None
     repeats: int
     control_score: float
     control_sd: float
@@ -142,12 +143,14 @@ class ComparisonRow(NamedTuple):
     verdict: str
 
 
-def windows_of(budget: LabelBudget, everything: int | None) -> int:
-    """The count a budget resolved to.
+def windows_of(budget: LabelBudget, everything: int | None, measure: ErrorMeasure) -> int | None:
+    """The count a budget resolved to; none for a campaign that spends no labels.
 
     Raises:
-        SystemExit: If the budget is every window and the count was not given.
+        SystemExit: If the budget is every labelled window and the count was not given.
     """
+    if measure is ErrorMeasure.PR_AUC_SHORTFALL:
+        return None
     if budget.windows is not None:
         return budget.windows
     if everything is None:
@@ -180,11 +183,13 @@ def export_cells(reading: CampaignReading, everything: int | None) -> list[CellR
             candidate=str(cell.candidate),
             kind=str(design.get_candidate(cell.candidate).kind),
             budget=cell.budget.text(),
-            windows=windows_of(cell.budget, everything),
+            windows=windows_of(cell.budget, everything, design.measure),
             seed=cell.seed,
             units=len(recorded[cell].errors),
             score=natural(reading, recorded[cell].error_under(design.measure)),
-            brier=recorded[cell].mean_squared_error if by_area(reading) else None,
+            brier=recorded[cell].mean_squared_error
+            if design.measure is ErrorMeasure.AUROC_SHORTFALL
+            else None,
             seconds=recorded[cell].seconds,
         )
         for cell in design.cells()
@@ -200,7 +205,7 @@ def export_comparisons(
         ComparisonRow(
             candidate=str(compared.candidate),
             budget=compared.budget.text(),
-            windows=windows_of(compared.budget, everything),
+            windows=windows_of(compared.budget, everything, reading.campaign.design.measure),
             repeats=compared.control_error.repeats,
             control_score=natural(reading, compared.control_error.pooled),
             control_sd=compared.control_error.spread,
@@ -236,7 +241,7 @@ def render(
     judged = {(row.candidate, row.budget): row for row in comparisons}
     design = reading.campaign.design
     area = by_area(reading)
-    score = "AUROC" if area else "RMSE"
+    score = SCORE_SHOWN[design.measure]
     parts = [verdict.sentence(), ""]
     for budget in design.budgets:
         rows = []
@@ -263,7 +268,12 @@ def render(
                     compared.verdict + (" (endpoint)" if compared.primary == "yes" else ""),
                 )
             )
-        parts.append(f"**{budget.text()} labelled windows**, {score} mean ± SD over the repeats.")
+        spent = (
+            "every window of the fitting side, no label spent"
+            if design.measure is ErrorMeasure.PR_AUC_SHORTFALL
+            else f"{budget.text()} labelled windows"
+        )
+        parts.append(f"**{spent}**, {score} mean ± SD over the repeats.")
         parts.append("")
         change = "gain in area vs control" if area else "reduction vs control"
         parts.append(table(("candidate", score, change, "95 % interval", "verdict"), rows))
@@ -311,15 +321,9 @@ def main(
     comparisons = export_comparisons(verdict, reading, arguments.everything)
     out: Path = arguments.out
     out.mkdir(parents=True, exist_ok=True)
-    area = by_area(reading)
-    write_rows(
-        out / CELLS, CELL_COLUMNS_BY_AREA if area else CELL_COLUMNS, [c.written() for c in cells]
-    )
-    write_rows(
-        out / COMPARISONS,
-        COMPARISON_COLUMNS_BY_AREA if area else COMPARISON_COLUMNS,
-        [tuple(row) for row in comparisons],
-    )
+    measure = reading.campaign.design.measure
+    write_rows(out / CELLS, cell_columns(measure), [c.written() for c in cells])
+    write_rows(out / COMPARISONS, comparison_columns(measure), [tuple(row) for row in comparisons])
     rendered = render(reading, verdict, cells, comparisons)
     (out / VERDICT).write_text(rendered + "\n")
     print(rendered)
