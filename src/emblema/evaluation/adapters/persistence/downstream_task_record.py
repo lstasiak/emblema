@@ -12,7 +12,9 @@ from emblema.evaluation.adapters.persistence.task_unit_record import (
     TaskUnitRecord,
 )
 from emblema.evaluation.contracts.identifiers import TaskId
+from emblema.evaluation.domain.exceptions import InvalidLabelSchemeError
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
 from emblema.evaluation.domain.labels.class_strata import ClassStrata
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_scheme import LabelScheme
@@ -28,7 +30,7 @@ from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
 
-REMAINING_LIFE, FORECAST, OUTCOME = "remaining_life", "forecast", "outcome"
+REMAINING_LIFE, FORECAST, OUTCOME, ANOMALY = "remaining_life", "forecast", "outcome", "anomaly"
 
 
 class DownstreamTaskRecord(Base):
@@ -37,9 +39,10 @@ class DownstreamTaskRecord(Base):
     The label scheme is spread over columns rather than kept as a document: which scheme a task
     reads and under what ceiling is asked about whenever results are compared, and a check
     constraint then keeps each scheme to the parameters it has. A protocol that spends no labels
-    carries no scheme at all, and the constraints say that too, so the invariant the aggregate
-    holds is held by the database as well. A task over outcomes is spread over its two outcomes,
-    which has no parameter to store: the number of strata is kept for a quantity's bins only.
+    reads the events its windows overlap and nothing else, and the constraints say that too, so
+    the invariant the aggregate holds is held by the database as well. A task over outcomes is
+    spread over its two outcomes, which has no parameter to store: the number of strata is kept
+    for a quantity's bins only.
     Which windows a task reads defaults to every one in the database too, so the tasks stored
     before the choice existed read as they always did.
     """
@@ -52,12 +55,11 @@ class DownstreamTaskRecord(Base):
             name="protocol_known",
         ),
         CheckConstraint(
-            f"label_scheme IS NULL OR label_scheme IN ('{REMAINING_LIFE}', '{FORECAST}', "
-            f"'{OUTCOME}')",
+            f"label_scheme IN ('{REMAINING_LIFE}', '{FORECAST}', '{OUTCOME}', '{ANOMALY}')",
             name="label_scheme_known",
         ),
         CheckConstraint(
-            f"(protocol = '{EvaluationProtocol.LABEL_BUDGET}') = (label_scheme IS NOT NULL)",
+            f"(protocol = '{EvaluationProtocol.ANOMALY_DETECTION}') = (label_scheme = '{ANOMALY}')",
             name="labels_match_protocol",
         ),
         CheckConstraint(
@@ -94,7 +96,7 @@ class DownstreamTaskRecord(Base):
     manifest_digest: Mapped[str] = mapped_column(Text)
     protocol: Mapped[str] = mapped_column(Text)
     test_source: Mapped[str] = mapped_column(Text)
-    label_scheme: Mapped[str | None] = mapped_column(Text)
+    label_scheme: Mapped[str] = mapped_column(Text)
     label_ceiling: Mapped[float | None] = mapped_column(Float)
     label_channel: Mapped[str | None] = mapped_column(Text)
     label_horizon: Mapped[float | None] = mapped_column(Float)
@@ -164,7 +166,9 @@ class DownstreamTaskRecord(Base):
             return ClassStrata()
         return None
 
-    def _labels(self) -> LabelScheme | None:
+    def _labels(self) -> LabelScheme:
+        if self.label_scheme == ANOMALY:
+            return AnomalyScheme()
         if self.label_scheme == REMAINING_LIFE and self.label_ceiling is not None:
             return RemainingLifeScheme(self.label_ceiling)
         if (
@@ -175,10 +179,12 @@ class DownstreamTaskRecord(Base):
             return ForecastScheme(self.label_channel, self.label_horizon)
         if self.label_scheme == OUTCOME and self.label_outcome is not None:
             return OutcomeScheme(self.label_outcome)
-        return None
+        raise InvalidLabelSchemeError(
+            f"task {self.id} is stored under {self.label_scheme!r} without its parameters"
+        )
 
     @staticmethod
-    def _scheme_name(labels: LabelScheme | None) -> str | None:
+    def _scheme_name(labels: LabelScheme) -> str:
         match labels:
             case RemainingLifeScheme():
                 return REMAINING_LIFE
@@ -186,5 +192,5 @@ class DownstreamTaskRecord(Base):
                 return FORECAST
             case OutcomeScheme():
                 return OUTCOME
-            case None:
-                return None
+            case AnomalyScheme():
+                return ANOMALY

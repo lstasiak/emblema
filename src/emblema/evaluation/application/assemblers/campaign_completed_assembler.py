@@ -33,10 +33,21 @@ class CampaignCompletedAssembler:
         ERROR: The metric name a squared-error campaign publishes its figures under.
         AUROC: The metric name of the area a campaign read by ranking publishes.
         BRIER: The metric name of the Brier score published beside the area.
+        PR_AUC: The metric name of the event-weighted area under the precision-recall curve a
+            detection campaign publishes.
+        EVENT_RECALL: The metric name of the share of events found at the published share of
+            false alarms, beside that area.
+        EVENT_F_HALF: The metric name of the benchmark's corrected event-wise F0.5 at the alarm
+            each detector set, beside that area.
+        FALSE_ALARM_SHARE: The share of normal windows the event recall is read at.
     """
 
     ERROR: ClassVar[str] = "rmse"
     AUROC: ClassVar[str] = "auroc"
+    PR_AUC: ClassVar[str] = "pr_auc"
+    EVENT_RECALL: ClassVar[str] = "event_recall_at_1pct_false_alarms"
+    EVENT_F_HALF: ClassVar[str] = "event_f0.5"
+    FALSE_ALARM_SHARE: ClassVar[float] = 0.01
     BRIER: ClassVar[str] = "brier"
 
     # What the context's own taxonomy amounts to for a reader who has not seen the registration
@@ -109,6 +120,15 @@ class CampaignCompletedAssembler:
                 return (
                     (cls.AUROC, 1.0 - reading.error_of(candidate, budget)),
                     (cls.BRIER, reading.mean_squared_error_of(candidate, budget)),
+                )
+            case ErrorMeasure.PR_AUC_SHORTFALL:
+                return (
+                    (cls.PR_AUC, 1.0 - reading.error_of(candidate, budget)),
+                    (
+                        cls.EVENT_RECALL,
+                        reading.event_recall_of(candidate, budget, cls.FALSE_ALARM_SHARE),
+                    ),
+                    (cls.EVENT_F_HALF, reading.event_fbeta_of(candidate, budget, 0.5)),
                 )
 
     @classmethod

@@ -4,6 +4,7 @@ from typing import Self
 
 from emblema.evaluation.domain.campaign.campaign_cell import CampaignCell
 from emblema.evaluation.domain.exceptions import InvalidCellResultError, PredictionsNotKeptError
+from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
 from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
 from emblema.evaluation.domain.scoring.unit_error import UnitError
@@ -91,12 +92,26 @@ class CellResult:
         Raises:
             PredictionsNotKeptError: If the measure reads the answers and the cell kept none.
             InvalidWindowRankingError: If the answers hold one outcome only.
+            InvalidAnomalyRankingError: If the answers hold no event or no normal window.
         """
         match measure:
             case ErrorMeasure.RMSE:
                 return self.rmse
             case ErrorMeasure.AUROC_SHORTFALL:
                 return 1.0 - self.ranking().auroc
+            case ErrorMeasure.PR_AUC_SHORTFALL:
+                return 1.0 - self.anomaly_ranking().average_precision
+
+    def anomaly_ranking(self) -> AnomalyRanking:
+        """The run's scores in order, for a measure read from how they set the events apart.
+
+        Raises:
+            PredictionsNotKeptError: If the cell kept no answers.
+            InvalidAnomalyRankingError: If the answers hold no event or no normal window.
+        """
+        if not self.predictions:
+            raise PredictionsNotKeptError(f"{self.cell} was recorded without its answers")
+        return AnomalyRanking.of(self.predictions)
 
     def ranking(self) -> WindowRanking:
         """The run's answers in order, for a measure read from how they rank.

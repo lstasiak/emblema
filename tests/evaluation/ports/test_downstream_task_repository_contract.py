@@ -16,6 +16,7 @@ from emblema.evaluation.adapters.persistence.downstream_task_repository import (
     SqlAlchemyDownstreamTaskRepository,
 )
 from emblema.evaluation.domain.exceptions import TaskNotFoundError
+from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.task_windows import TaskWindows
 from emblema.evaluation.ports.downstream_task_repository import DownstreamTaskRepository
@@ -98,18 +99,20 @@ def test_a_task_nobody_stored_is_refused(tasks: DownstreamTaskRepository) -> Non
         tasks.get(TASK)
 
 
-def test_a_detection_task_comes_back_reading_no_label_per_window(
+def test_a_detection_task_comes_back_reading_events_and_no_stratification(
     tasks: DownstreamTaskRepository,
 ) -> None:
-    # The protocol that spends no labels stores no scheme and no stratification; read back as
-    # anything else it would claim a budget axis it does not have.
-    detection = task(protocol=EvaluationProtocol.ANOMALY_DETECTION, labels=None, strata=None)
+    # The protocol that spends no labels stores the events' scheme and no stratification; read
+    # back as anything else it would claim a budget axis it does not have.
+    detection = task(
+        protocol=EvaluationProtocol.ANOMALY_DETECTION, labels=AnomalyScheme(), strata=None
+    )
     tasks.save(detection)
 
     read = tasks.get(TASK)
 
     assert read == detection
-    assert (read.labels, read.strata) == (None, None)
+    assert (read.labels, read.strata) == (AnomalyScheme(), None)
 
 
 def test_a_task_reading_the_first_window_of_each_unit_comes_back_reading_it(

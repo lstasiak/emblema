@@ -109,6 +109,18 @@ class CampaignVerdict:
                     f"({1.0 - endpoint.control_error.pooled:.3g} → "
                     f"{1.0 - endpoint.candidate_error.pooled:.3g}, {closing}, {stated_at}"
                 )
+            case ErrorMeasure.PR_AUC_SHORTFALL:
+                closing = (
+                    "the control finding every event before any false alarm"
+                    if share is None
+                    else f"closing {share:.1%} of its shortfall from a perfect detection"
+                )
+                return (
+                    f"{endpoint.candidate} raises the event-weighted PR-AUC of {self.control} "
+                    f"by {difference.reduction:.3g} "
+                    f"({1.0 - endpoint.control_error.pooled:.3g} → "
+                    f"{1.0 - endpoint.candidate_error.pooled:.3g}, {closing}, {stated_at}"
+                )
 
     def _spread_clause(self) -> str:
         control, candidate = self.endpoint.control_error, self.endpoint.candidate_error

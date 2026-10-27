@@ -26,7 +26,8 @@ class DefineDownstreamTaskCommand:
             task's worth, and which of them answer this question is a fact about the task.
         test: Units held for the final run, and where they come from.
         protocol: Which question the task asks.
-        labels: How a window's target is read; ``None`` where the protocol spends no labels.
+        labels: How a window's target is read; for a detection task, which event a window
+            overlaps.
         strata: How a budget is spread over the pool; ``None`` where the protocol spends no
             labels.
         windows: Which of a unit's windows the task reads.
@@ -36,7 +37,7 @@ class DefineDownstreamTaskCommand:
     units: frozenset[UnitKey]
     test: FrozenTestSplit
     protocol: EvaluationProtocol
-    labels: LabelScheme | None
+    labels: LabelScheme
     strata: Stratification | None
     windows: TaskWindows = TaskWindows.EVERY
 

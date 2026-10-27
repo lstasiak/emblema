@@ -25,6 +25,7 @@ class BlockCorpusWindows:
             corpus=published.corpus,
             training=frozenset(UnitKey(key) for key in published.training_units),
             validation=frozenset(UnitKey(key) for key in published.validation_units),
+            window_length=published.window_length,
         )
 
     def windows_of(

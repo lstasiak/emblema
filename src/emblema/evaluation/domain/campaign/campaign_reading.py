@@ -21,6 +21,7 @@ from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVerdict
 from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
+from emblema.evaluation.domain.statistics.paired_anomaly_rankings import PairedAnomalyRankings
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
 from emblema.evaluation.domain.statistics.paired_unit_rankings import PairedUnitRankings
@@ -125,17 +126,44 @@ class CampaignReading:
 
         Pooled as a comparison pools the side: squared errors and window counts added over the
         repeats before the root is taken, so a repeat that answered more windows weighs more; an
-        area under the ROC curve averaged over the repeats, each its own model.
+        area under a curve averaged over the repeats, each its own model.
 
         Raises:
             UnknownCandidateError: If no repeat of that pairing has run.
         """
         results = self._ran(candidate, budget)
-        match self.campaign.design.measure:
+        measure = self.campaign.design.measure
+        match measure:
             case ErrorMeasure.RMSE:
                 return sqrt(self.mean_squared_error_of(candidate, budget))
-            case ErrorMeasure.AUROC_SHORTFALL:
-                return fmean(result.error_under(ErrorMeasure.AUROC_SHORTFALL) for result in results)
+            case ErrorMeasure.AUROC_SHORTFALL | ErrorMeasure.PR_AUC_SHORTFALL:
+                return fmean(result.error_under(measure) for result in results)
+
+    def event_recall_of(self, candidate: CandidateRef, budget: LabelBudget, share: float) -> float:
+        """The share of events the candidate finds at ``share`` of false alarms, over its repeats.
+
+        Raises:
+            UnknownCandidateError: If no repeat of that pairing has run.
+            PredictionsNotKeptError: If a repeat kept no answers.
+            InvalidAnomalyRankingError: If a repeat's answers hold no event or no normal window.
+        """
+        return fmean(
+            result.anomaly_ranking().event_recall_at_false_alarm_share(share)
+            for result in self._ran(candidate, budget)
+        )
+
+    def event_fbeta_of(self, candidate: CandidateRef, budget: LabelBudget, beta: float) -> float:
+        """The benchmark's event-wise score at the alarm each repeat set, averaged over them.
+
+        Raises:
+            UnknownCandidateError: If no repeat of that pairing has run.
+            PredictionsNotKeptError: If a repeat kept no answers.
+            InvalidAnomalyRankingError: If a repeat's answers hold no event or no normal window.
+        """
+        return fmean(
+            result.anomaly_ranking().corrected_event_fbeta(beta)
+            for result in self._ran(candidate, budget)
+        )
 
     def mean_squared_error_of(self, candidate: CandidateRef, budget: LabelBudget) -> float:
         """The mean squared error of the candidate's answers at one budget, over its repeats.
@@ -228,7 +256,13 @@ class CampaignReading:
             if not design.is_endpoint(candidate.ref, budget)
         )
         measured = tuple(self._measured(candidate, budget) for candidate, budget in pairings)
-        rejections = rules.secondary_rejections([cell.difference.p_value for cell in measured])
+        # A grid of one budget and two candidates holds no secondary cell, and a family of none
+        # is nothing to correct.
+        rejections = (
+            rules.secondary_rejections([cell.difference.p_value for cell in measured])
+            if measured
+            else ()
+        )
         return CampaignVerdict(
             control=design.control,
             read_on=campaign.purpose,
@@ -281,4 +315,9 @@ class CampaignReading:
                 return PairedUnitRankings(
                     control=tuple(result.ranking() for result in control),
                     candidate=tuple(result.ranking() for result in contender),
+                )
+            case ErrorMeasure.PR_AUC_SHORTFALL:
+                return PairedAnomalyRankings(
+                    control=tuple(result.anomaly_ranking() for result in control),
+                    candidate=tuple(result.anomaly_ranking() for result in contender),
                 )

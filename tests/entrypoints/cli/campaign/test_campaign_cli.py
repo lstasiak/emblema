@@ -112,6 +112,7 @@ class Process:
                 corpus="cmapss",
                 training=frozenset(UnitKey(name) for name in ENGINES[:6]),
                 validation=frozenset(UnitKey(name) for name in ENGINES[6:]),
+                window_length=50.0,
             ),
             {UnitKey(name): [60.0, 120.0] for name in ENGINES},
             MANIFEST,
