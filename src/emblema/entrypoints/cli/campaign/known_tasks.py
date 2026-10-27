@@ -17,6 +17,7 @@ from emblema.evaluation.application.use_cases.define_downstream_task import (
     DefineDownstreamTaskCommand,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
 from emblema.evaluation.domain.labels.class_strata import ClassStrata
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_scheme import LabelScheme
@@ -96,33 +97,37 @@ class HeldOutShare:
 
 @dataclass(frozen=True, kw_only=True)
 class KnownTask:
-    """What a supervised task is made of, as far as no adapter can read it off the corpus.
+    """What a task is made of, as far as no adapter can read it off the corpus.
 
     Attributes:
         name: What the task is called in the reports.
         corpus: Name the corpus was published under.
         unit_prefix: What the keys of the task's units start with, inside that corpus.
         labels: How a window's target is read: the remaining life under a ceiling, the exact
-            reading of a sensor a fixed time past the window, or the outcome a unit recorded.
+            reading of a sensor a fixed time past the window, the outcome a unit recorded, or
+            the event a window overlaps.
         strata: How a budget is spread over the pool: bins of the target's rank, or the two
-            outcomes in proportion.
+            outcomes in proportion; ``None`` for a detection task, which draws no budget.
         units_called: What the task's units are called in prose, engines, units or stays.
         test: How the frozen test side is made; a task over part of a corpus keeps the frozen
             units its prefix names.
         windows: Which of a unit's windows the task reads.
         ineligible: Keys of units the prefix names that cannot answer the question, such as a
             stay too short for the window it is asked at or whose label has turned inside it.
+        window_length: The length of the corpus's windows the task's ground truth assumes, in
+            the corpus's unit of time; ``None`` where the truth is a fact about the unit.
     """
 
     name: str
     corpus: str
     unit_prefix: str
     labels: LabelScheme
-    strata: Stratification
+    strata: Stratification | None
     units_called: str
     test: NamedTestUnits | HeldOutShare
     windows: TaskWindows = TaskWindows.EVERY
     ineligible: frozenset[str] = frozenset()
+    window_length: float | None = None
 
     def units_of(self, keys: Sequence[str]) -> frozenset[UnitKey]:
         """The task's units among the keys a published corpus names."""
@@ -149,18 +154,34 @@ class KnownTask:
         several subsets holds more than one task's worth, and which of them answer this question
         is what the prefix says. The frozen side is cut from the held-out units alone, and comes
         off the rest, so no unit is both learnt from and held for the final run.
+
+        Raises:
+            ValueError: If the corpus is windowed otherwise than the task's ground truth assumes,
+                so its events would be placed against the wrong hours.
         """
+        if self.window_length is not None and sides.window_length != self.window_length:
+            raise ValueError(
+                f"{self.name} reads events against windows of {self.window_length:g}, and the "
+                f"corpus is published with windows of {sides.window_length:g}"
+            )
         named = sorted(str(unit) for unit in sides.training | sides.validation)
         test = self.frozen_test(self.units_of(sorted(str(unit) for unit in sides.validation)))
         return DefineDownstreamTaskCommand(
             manifest=manifest,
             units=self.units_of(named) - test.units,
             test=test,
-            protocol=EvaluationProtocol.LABEL_BUDGET,
+            protocol=self.protocol,
             labels=self.labels,
             strata=self.strata,
             windows=self.windows,
         )
+
+    @property
+    def protocol(self) -> EvaluationProtocol:
+        """Which question the task asks, which its label scheme decides."""
+        if isinstance(self.labels, AnomalyScheme):
+            return EvaluationProtocol.ANOMALY_DETECTION
+        return EvaluationProtocol.LABEL_BUDGET
 
     @property
     def labels_text(self) -> str:
@@ -177,6 +198,8 @@ class KnownTask:
                 return f"whether {self.labels.outcome} turned after each unit's first window"
             case OutcomeScheme():
                 return f"the outcome {self.labels.outcome} each unit recorded"
+            case AnomalyScheme():
+                return "which annotated event, if any, each window overlaps"
 
 
 class KnownTasks:
@@ -277,6 +300,52 @@ class KnownTasks:
         PHYSIONET2019_SEPSIS, name="physionet2019-sepsis-hospital-b", unit_prefix="training_setB/"
     )
 
+    # The satellite telemetry's events, one task per mission: the months of a mission's first
+    # half are the corpus's training side and the detectors' fitting side, as the benchmark
+    # trains; the months of its second half are held out, and one in three of them is frozen
+    # for the final run, the rest validate. Anomalies and rare nominal events are events alike;
+    # a window over a gap in the downlink is not scored.
+    ESA_MISSION1_EVENTS = KnownTask(
+        name="esa-mission1-events",
+        corpus=KnownGroundTruths.ESA_AD_RAW,
+        unit_prefix="ESA-Mission1/",
+        labels=AnomalyScheme(),
+        strata=None,
+        units_called="months",
+        test=HeldOutShare(source="esa_ad_raw/ESA-Mission1/second-half", one_in=3, seed=1),
+        window_length=KnownGroundTruths.ESA_AD_RAW_WINDOW_HOURS,
+    )
+    ESA_MISSION2_EVENTS = replace(
+        ESA_MISSION1_EVENTS,
+        name="esa-mission2-events",
+        unit_prefix="ESA-Mission2/",
+        test=HeldOutShare(source="esa_ad_raw/ESA-Mission2/second-half", one_in=3, seed=1),
+    )
+    # The testbed's anomalies: the anomaly-free recording is the corpus's training side and the
+    # detectors' fitting side, the experiments are held out, and one in three of them is frozen.
+    SKAB_ANOMALIES = KnownTask(
+        name="skab-anomalies",
+        corpus=KnownGroundTruths.SKAB,
+        unit_prefix="",
+        labels=AnomalyScheme(),
+        strata=None,
+        units_called="experiments",
+        test=HeldOutShare(source="skab/experiments", one_in=3, seed=1),
+        window_length=KnownGroundTruths.SKAB_WINDOW_SECONDS,
+    )
+    # The telemetry fragments: the authors' training part is the corpus's training side and the
+    # detectors' fitting side, their test part is held out, and one in three of it is frozen.
+    OPSSAT_ANOMALIES = KnownTask(
+        name="opssat-anomalies",
+        corpus=KnownGroundTruths.OPSSAT_AD,
+        unit_prefix="",
+        labels=AnomalyScheme(),
+        strata=None,
+        units_called="fragments",
+        test=HeldOutShare(source="opssat_ad/test", one_in=3, seed=1),
+        window_length=KnownGroundTruths.OPSSAT_AD_WINDOW_SECONDS,
+    )
+
     @classmethod
     def default(cls) -> KnownTask:
         return cls.TURBOFAN_FD001
@@ -293,6 +362,10 @@ class KnownTasks:
             cls.PHYSIONET_IN_HOSPITAL_DEATH,
             cls.PHYSIONET2019_SEPSIS,
             cls.PHYSIONET2019_SEPSIS_HOSPITAL_B,
+            cls.ESA_MISSION1_EVENTS,
+            cls.ESA_MISSION2_EVENTS,
+            cls.SKAB_ANOMALIES,
+            cls.OPSSAT_ANOMALIES,
         )
 
     @classmethod

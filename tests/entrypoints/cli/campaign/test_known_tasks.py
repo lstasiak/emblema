@@ -7,10 +7,12 @@ import pytest
 
 from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
 from emblema.evaluation.domain.labels.class_strata import ClassStrata
 from emblema.evaluation.domain.labels.outcome_scheme import OutcomeScheme
 from emblema.evaluation.domain.labels.target_bins import TargetBins
 from emblema.evaluation.domain.task.corpus_sides import CorpusSides
+from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.task_windows import TaskWindows
 from tests.evaluation.support import MANIFEST
 
@@ -22,6 +24,7 @@ def sides(*training: str, validation: tuple[str, ...]) -> CorpusSides:
         corpus=DEATH.corpus,
         training=frozenset(map(UnitKey, training)),
         validation=frozenset(map(UnitKey, validation)),
+        window_length=48.0,
     )
 
 
@@ -53,6 +56,7 @@ def test_a_task_over_a_quantity_is_still_spread_over_ranks_of_its_target() -> No
             corpus=fd001.corpus,
             training=frozenset({UnitKey("FD001/1")}),
             validation=frozenset({UnitKey("FD001/2")}),
+            window_length=50.0,
         ),
     )
 
@@ -77,6 +81,7 @@ def stays(*training: str, validation: tuple[str, ...]) -> CorpusSides:
         corpus=SEPSIS.corpus,
         training=frozenset(map(UnitKey, training)),
         validation=frozenset(map(UnitKey, validation)),
+        window_length=24.0,
     )
 
 
@@ -157,3 +162,57 @@ def test_the_frozen_sepsis_side_holds_a_fifth_of_each_hospital_and_outcome_and_n
     assert len(frozen) == 6077
     assert sum(unit.startswith("training_setB/") for unit in frozen) == 2947
     assert not frozen & SEPSIS.ineligible
+
+
+def test_the_detection_tasks_read_events_draw_no_budget_and_freeze_a_third_of_the_held_out() -> (
+    None
+):
+    for named in (
+        "esa-mission1-events",
+        "esa-mission2-events",
+        "skab-anomalies",
+        "opssat-anomalies",
+    ):
+        known = KnownTasks.named(named)
+        assert isinstance(known.labels, AnomalyScheme)
+        assert known.strata is None
+        assert known.protocol is EvaluationProtocol.ANOMALY_DETECTION
+
+
+def test_a_missions_task_covers_its_own_months_alone_and_freezes_one_in_three_of_the_later() -> (
+    None
+):
+    first = KnownTasks.ESA_MISSION1_EVENTS
+    training = tuple(f"ESA-Mission1/2000-0{month}" for month in range(1, 7))
+    later = tuple(f"ESA-Mission1/2007-0{month}" for month in range(1, 7))
+    other = ("ESA-Mission2/2000-01", "ESA-Mission2/2001-10")
+
+    command = first.defined_over(
+        MANIFEST,
+        CorpusSides(
+            corpus=first.corpus,
+            training=frozenset(map(UnitKey, (*training, other[0]))),
+            validation=frozenset(map(UnitKey, (*later, other[1]))),
+            window_length=1.0,
+        ),
+    )
+
+    assert command.protocol is EvaluationProtocol.ANOMALY_DETECTION
+    assert command.strata is None
+    assert len(command.test.units) == 2
+    assert all(str(unit).startswith("ESA-Mission1/") for unit in command.test.units)
+    assert command.units == frozenset(map(UnitKey, (*training, *later))) - command.test.units
+    assert command.test.source == "esa_ad_raw/ESA-Mission1/second-half"
+
+
+def test_a_detection_task_refuses_a_corpus_windowed_otherwise_than_its_truth_assumes() -> None:
+    first = KnownTasks.ESA_MISSION1_EVENTS
+    divided = CorpusSides(
+        corpus=first.corpus,
+        training=frozenset({UnitKey("ESA-Mission1/2000-01")}),
+        validation=frozenset({UnitKey("ESA-Mission1/2007-01")}),
+        window_length=2.0,
+    )
+
+    with pytest.raises(ValueError, match="windows of 1, and the corpus"):
+        first.defined_over(MANIFEST, divided)
