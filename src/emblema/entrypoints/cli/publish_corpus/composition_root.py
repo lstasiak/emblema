@@ -6,6 +6,8 @@ from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCor
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
+from emblema.catalog.adapters.readers.esa_ad_raw import EsaAdRawCorpusReader
+from emblema.catalog.adapters.readers.opssat_ad import OpssatAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
@@ -239,6 +241,10 @@ class CompositionRoot:
                 return SmdCorpusReader(root, subsets or SmdCorpusReader.SUBSETS)
             case "esa_ad":
                 return EsaAdCorpusReader(root, subsets or EsaAdCorpusReader.SUBSETS)
+            case "esa_ad_raw":
+                return EsaAdRawCorpusReader(root, subsets or EsaAdRawCorpusReader.SUBSETS)
+            case "opssat_ad":
+                return OpssatAdCorpusReader(root, subsets or OpssatAdCorpusReader.SUBSETS)
             case "physionet2012":
                 return Physionet2012CorpusReader(root, subsets or Physionet2012CorpusReader.SUBSETS)
             case "eicu_demo":

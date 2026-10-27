@@ -305,6 +305,80 @@ name = "h12s6"
 count = 27863
 tokens = 3005333
 
+[corpora.esa_ad_raw]
+name = "ESA Anomaly Dataset, raw"
+role = "the satellite telemetry as sent: asynchronous packets of channels, every reading at its own instant, both halves of each mission; an ingredient of the next screen and the anomaly task"
+regime = "irregular"
+publisher = "European Space Agency (De Canio, Kotowski, Haskamp)"
+source = "https://zenodo.org/records/15237121"
+download_size = "11.6 GB (three mission zips), the same files as esa_ad"
+epochs = 1
+pretraining_split = "the first half of each mission by time may be pretrained on, as the benchmark trains; the second half holds the task's validation and frozen test months"
+verdict = "candidate"
+decision = "Another reading of the same files, not another download: 48 target channels of Mission1 from three packets and one group and the 11 lightweight channels of Mission2, 618M readings; priced apart from the mix the reference shape was sized on."
+
+[corpora.esa_ad_raw.licence]
+terms = "CC BY 3.0 IGO (Zenodo record, version 2 of 2025-04-17): attribution required, derivatives and redistribution allowed."
+url = "https://zenodo.org/records/15237121"
+checked_on = 2026-09-11
+publish_results = "yes"
+sample_in_repo = "yes"
+derivatives = "yes"
+
+# Readings counted from the archives (esa-channel-packets, 2026-10-26): Mission1's 48 channels
+# hold 537M readings over 14 years, Mission2's 11 hold 81M over 3.5 years; no channel reaches the
+# cap of 20M, so nothing is thinned.
+[corpora.esa_ad_raw.estimate]
+units = 2
+channels = 59
+series_length = 76650
+observations_per_unit = 309000000
+native_observations = 618000000
+basis = "channels.csv of the packet measurement: readings per channel summed over the policy's channels; 14 and 3.5 years of hours"
+
+[[corpora.esa_ad_raw.windows]]
+name = "h1s1"
+unit = "hours"
+length = 1
+stride = 1
+default = true
+
+[corpora.opssat_ad]
+name = "OPSSAT-AD"
+role = "satellite telemetry fragments with anomalies, irregular, anomaly-detection task only; never an ingredient"
+regime = "irregular"
+publisher = "European Space Agency and KP Labs (Ruszczak, Kotowski, Evans, Nalepa)"
+source = "https://zenodo.org/records/12588359"
+download_size = "18.5 MB (two csv files)"
+epochs = 1
+pretraining_split = "none: the authors' training part is the detectors' fitting side and the test part is split into the validation and the frozen test sides; no backbone pretrains on it"
+verdict = "downstream-only"
+decision = "A task corpus only: 2,123 single-channel fragments of 0.6 to 22 minutes, 434 anomalous, with the authors' split; too small and too short to teach a backbone anything, published so that a zero-label detector is read against the benchmark's own numbers."
+
+[corpora.opssat_ad.licence]
+terms = "CC BY 4.0 (Zenodo record 12588359): attribution required, derivatives and redistribution allowed."
+url = "https://zenodo.org/records/12588359"
+checked_on = 2026-10-27
+publish_results = "yes"
+sample_in_repo = "yes"
+derivatives = "yes"
+
+# Fragments differ in length (8 to 1,040 rows, 0.6 to 22.3 minutes, sampled every 1 s or 5 s with
+# gaps), so one window of the longest fragment's length is laid over each, anchored at its start.
+[corpora.opssat_ad.estimate]
+units = 1594
+channels = 9
+series_length = 143
+observations_per_unit = 141
+basis = "Ruszczak et al. 2025: 2,123 fragments over 9 channels, 1,594 in the training part; mean rows per fragment measured on the downloaded file"
+
+[[corpora.opssat_ad.windows]]
+name = "w1340s1340"
+unit = "samples"
+length = 1340
+stride = 1340
+default = true
+
 [corpora.esa_ad]
 name = "ESA Anomaly Dataset"
 role = "second irregular system: satellite telemetry with varying rates per channel, anomaly-detection task"

@@ -17,7 +17,7 @@ from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusR
 from emblema.catalog.domain.exceptions import MissingChannelStatisticsError
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.tokenisation.split_policy import NamedSplit, PartSplit, SplitPolicy
-from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
+from emblema.catalog.domain.tokenisation.window_spec import ShortUnits, WindowSpec
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -40,6 +40,19 @@ CORPORA = [
         ("ESA-Mission1", "ESA-Mission2"),
         22,
         17,
+        WindowSpec(length=240.0, stride=120.0),
+        DRAWN,
+        marks=pytest.mark.skipif(
+            find_spec("pandas") is None, reason="the corpora extra is not installed"
+        ),
+    ),
+    # The same satellites read raw: every reading of 59 channels over both halves of each
+    # mission, whose months are the units; the sample keeps one row in two days.
+    pytest.param(
+        "esa_ad_raw",
+        ("ESA-Mission1", "ESA-Mission2"),
+        85,
+        59,
         WindowSpec(length=240.0, stride=120.0),
         DRAWN,
         marks=pytest.mark.skipif(
@@ -74,6 +87,16 @@ CORPORA = [
         39,
         WindowSpec(length=12.0, stride=12.0),
         NamedSplit.of([UnitKey("training_setA/p000001")]),
+    ),
+    # A satellite's telemetry fragments differ in length, so every one yields one window of the
+    # length of the longest; the authors' test part is held out whole.
+    (
+        "opssat_ad",
+        ("train", "test"),
+        7,
+        9,
+        WindowSpec(length=40.0, stride=40.0, short_units=ShortUnits.ONE_WINDOW),
+        PartSplit("test"),
     ),
     pytest.param(
         "tep",
@@ -125,6 +148,8 @@ def corpus_root(corpus: str) -> Path:
     """Where a corpus's sample sits: a dataset of the collection sits under its volume."""
     if corpus.startswith("utsd/"):
         return sample("utsd") / "UTSD-12G"
+    if corpus == "esa_ad_raw":
+        return sample("esa_ad")
     return sample(corpus)
 
 
@@ -136,9 +161,11 @@ def corpus_root(corpus: str) -> Path:
         "skab",
         "smd",
         "esa_ad",
+        "esa_ad_raw",
         "physionet2012",
         "eicu_demo",
         "physionet2019",
+        "opssat_ad",
         "tep",
         "wqp",
         "utsd-scp1",
