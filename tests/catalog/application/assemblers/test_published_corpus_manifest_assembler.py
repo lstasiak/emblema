@@ -14,7 +14,7 @@ from emblema.catalog.domain.tokenisation.archived_corpus import ArchivedCorpus
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.tokenisation.unit_split import UnitSplit
-from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
+from emblema.catalog.domain.tokenisation.window_spec import ShortUnits, WindowSpec
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 from tests.catalog.domain.support import CORPUS, OTHER_SCHEMA, SCHEMA, version_id
@@ -83,3 +83,14 @@ def test_a_description_the_catalog_rejects_does_not_restore(
 
     with pytest.raises(InvalidUnitSplitError):
         assembler.restore(message)
+
+
+def test_the_policy_for_short_units_travels_in_the_published_form_and_back(
+    assembler: PublishedCorpusManifestAssembler,
+) -> None:
+    stated = replace(MANIFEST, window=WindowSpec(10.0, 5.0, ShortUnits.ONE_WINDOW))
+
+    message = assembler.assemble(stated)
+
+    assert message.window_short_units == "one_window"
+    assert assembler.restore(message) == stated

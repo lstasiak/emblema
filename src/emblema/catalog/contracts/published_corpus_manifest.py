@@ -7,6 +7,12 @@ from emblema.catalog.contracts.published_channel import PublishedChannel
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 
+# What a unit shorter than one window yielded: nothing, or one window of the nominal length
+# starting with the unit. The vocabulary the Catalog's window policy is published under.
+SHORT_UNITS_DROPPED = "dropped"
+SHORT_UNITS_ONE_WINDOW = "one_window"
+SHORT_UNITS = (SHORT_UNITS_DROPPED, SHORT_UNITS_ONE_WINDOW)
+
 
 @dataclass(frozen=True, kw_only=True)
 class PublishedCorpusManifest:
@@ -39,6 +45,8 @@ class PublishedCorpusManifest:
             of the corpus held out.
         window_count: How many windows the block holds.
         token_count: How many tokens the block holds in all.
+        window_short_units: What a unit shorter than one window yielded: ``dropped``, nothing;
+            ``one_window``, one window of the nominal length starting with the unit.
     """
 
     corpus: str
@@ -55,8 +63,14 @@ class PublishedCorpusManifest:
     split_seed: int | None
     window_count: int
     token_count: int
+    window_short_units: str = SHORT_UNITS_DROPPED
 
     def __post_init__(self) -> None:
+        if self.window_short_units not in SHORT_UNITS:
+            raise InvalidPublishedCorpusManifestError(
+                f"a unit shorter than a window yields one of {SHORT_UNITS}, not "
+                f"{self.window_short_units!r}"
+            )
         identifiers = [channel.channel_id for channel in self.channels]
         if identifiers != list(range(1, len(identifiers) + 1)):
             raise InvalidPublishedCorpusManifestError(

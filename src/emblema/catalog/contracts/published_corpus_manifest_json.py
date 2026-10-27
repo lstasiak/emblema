@@ -7,7 +7,10 @@ from emblema.catalog.contracts.exceptions import MalformedManifestError
 from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.contracts.published_channel import PublishedChannel
 from emblema.catalog.contracts.published_channel_statistics import PublishedChannelStatistics
-from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
+from emblema.catalog.contracts.published_corpus_manifest import (
+    SHORT_UNITS_DROPPED,
+    PublishedCorpusManifest,
+)
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
 
@@ -37,7 +40,7 @@ class PublishedCorpusManifestJson:
                 "key": manifest.block.key,
                 "checksum": self._checksum_document(manifest.block.checksum),
             },
-            "window": {"length": manifest.window_length, "stride": manifest.window_stride},
+            "window": self._window_document(manifest),
             "channels": [self._channel_document(channel) for channel in manifest.channels],
             "units": list(manifest.units),
             "empty_units": list(manifest.empty_units),
@@ -84,6 +87,7 @@ class PublishedCorpusManifestJson:
             block=ArtifactRef(block.text("key"), self._checksum(block.fields("checksum"))),
             window_length=window.number("length"),
             window_stride=window.number("stride"),
+            window_short_units=self._short_units(window),
             channels=tuple(self._channel(channel) for channel in fields.each("channels")),
             units=fields.texts("units"),
             empty_units=fields.texts("empty_units"),
@@ -93,6 +97,25 @@ class PublishedCorpusManifestJson:
             window_count=fields.integer("window_count"),
             token_count=fields.integer("token_count"),
         )
+
+    @staticmethod
+    def _window_document(manifest: PublishedCorpusManifest) -> _Document:
+        """The window, its policy for short units stated only where it is not the usual one.
+
+        Every manifest written before the policy existed keeps its bytes, and so its checksum.
+        """
+        document: _Document = {
+            "length": manifest.window_length,
+            "stride": manifest.window_stride,
+        }
+        if manifest.window_short_units != SHORT_UNITS_DROPPED:
+            document["short_units"] = manifest.window_short_units
+        return document
+
+    @staticmethod
+    def _short_units(window: _Fields) -> str:
+        stated = window.optional_text("short_units")
+        return SHORT_UNITS_DROPPED if stated is None else stated
 
     @staticmethod
     def _channel_document(channel: PublishedChannel) -> _Document:

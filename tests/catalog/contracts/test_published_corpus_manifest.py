@@ -56,3 +56,8 @@ def test_an_empty_unit_is_still_a_unit_of_the_split() -> None:
 def test_counts_cannot_be_negative(windows: int, tokens: int) -> None:
     with pytest.raises(InvalidPublishedCorpusManifestError, match="negative"):
         manifest(window_count=windows, token_count=tokens)
+
+
+def test_what_a_short_unit_yields_is_one_of_the_two_policies() -> None:
+    with pytest.raises(InvalidPublishedCorpusManifestError, match="shorter than a window"):
+        manifest(window_short_units="two_windows")

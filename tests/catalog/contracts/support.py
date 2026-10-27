@@ -5,7 +5,10 @@ from uuid import UUID
 from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.contracts.published_channel import PublishedChannel
 from emblema.catalog.contracts.published_channel_statistics import PublishedChannelStatistics
-from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
+from emblema.catalog.contracts.published_corpus_manifest import (
+    SHORT_UNITS_DROPPED,
+    PublishedCorpusManifest,
+)
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 
@@ -30,6 +33,7 @@ def manifest(
     validation: tuple[str, ...] = ("u2",),
     window_count: int = 3,
     token_count: int = 8,
+    window_short_units: str = SHORT_UNITS_DROPPED,
 ) -> PublishedCorpusManifest:
     return PublishedCorpusManifest(
         corpus="alpha",
@@ -46,4 +50,5 @@ def manifest(
         split_seed=1,
         window_count=window_count,
         token_count=token_count,
+        window_short_units=window_short_units,
     )
