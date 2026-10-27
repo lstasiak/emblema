@@ -23,6 +23,7 @@ from emblema.config.worker_settings import WorkerSettings
 from emblema.entrypoints.workers.declared_worker import DeclaredWorker
 from emblema.entrypoints.workers.known_arms import KnownArms
 from emblema.entrypoints.workers.known_baselines import KnownBaselines
+from emblema.entrypoints.workers.known_detectors import KnownDetectors
 from emblema.entrypoints.workers.known_patch_models import KnownPatchModels
 from emblema.evaluation.adapters.campaigns.campaign_file import CampaignFile
 from emblema.evaluation.adapters.candidates.routed_candidate_catalogue import (
@@ -97,6 +98,7 @@ CATALOGUE = RoutedCandidateCatalogue(
             KnownPatchModels.refs(),
             KnownPatchModels.catalogue(DECLARED.patch(), DECLARED.schedule()),
         ),
+        **dict.fromkeys(KnownDetectors.refs(), KnownDetectors.catalogue(WEIGHTS)),
     }
 )
 
