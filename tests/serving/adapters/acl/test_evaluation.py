@@ -5,11 +5,14 @@ aggregate, not written by hand: a hand-built message would agree with the transl
 construction, and the point is that the two contexts agree through the published language.
 """
 
+from dataclasses import replace
+
 import pytest
 
 from emblema.evaluation.application.assemblers.campaign_completed_assembler import (
     CampaignCompletedAssembler,
 )
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.candidate_standing import CandidateStanding
 from emblema.evaluation.contracts.events import CampaignCompleted
 from emblema.serving.adapters.acl.evaluation import EvaluationAntiCorruptionLayer
@@ -108,6 +111,25 @@ def test_a_competitor_the_campaign_kept_nothing_of_is_not_recorded(heard: Heard)
     assert control.artifact is None
     (command,) = heard.record.commands
     assert [artifact.origin.candidate for artifact in command.artifacts] == [CONTENDER]
+
+
+def test_a_detector_the_campaign_kept_is_not_recorded_since_nothing_serves_it(
+    heard: Heard,
+) -> None:
+    event = heard.announced()
+    detectors = tuple(
+        replace(candidate, kind=CandidateKind.DETECTOR) for candidate in event.candidates
+    )
+    heard.promotables = InMemoryPromotableArtifactRepository()
+    heard.record = WatchedRecord(heard.promotables)
+    layer = EvaluationAntiCorruptionLayer(heard.record)
+
+    layer.on_campaign_completed(replace(event, candidates=detectors))
+
+    assert any(candidate.artifact is not None for candidate in detectors)
+    (command,) = heard.record.commands
+    assert command.artifacts == ()
+    assert heard.promotables.find_by_checksum(heard.kept.checksum) == ()
 
 
 def test_an_announcement_heard_twice_is_recorded_once(heard: Heard) -> None:
