@@ -5,7 +5,7 @@ preliminary: each task's frozen test side is opened once, at the end. Each compa
 by a rule registered before its run ([preregistration](preregistration.md)); each row links the
 note that holds its evidence ([`verification/`](verification/README.md)).
 
-Last updated 2026-10-25.
+Last updated 2026-10-27.
 
 ## Status
 
@@ -161,6 +161,8 @@ The small encoder over six-bin cells, pretrained without labels on the intensive
 | The network from scratch in two campaigns | differs by at most 0.005 | [verdict-statistics](verification/verdict-statistics.md) |
 | Fine-tuning's gain on scored stays the backbone read, less on those it did not | −0.007 / −0.003 / −0.010 at 20 / 50 / 200 stays: no gain from having read them | [cell-pretraining](verification/cell-pretraining.md) |
 | A pretext over cells of channel × time bin, answered without a model | on the stays a linear stack reads a hidden cell's mean at 0.12 and its presence at 0.59, from the other channels in the same bin; under a hidden tail the presence at 0.22; on the gridded corpora the presence is constant and the mean interpolated at 0.53 to 0.80 | [cell-pretext](verification/cell-pretext.md) |
+| Data added to the pretraining, measured as the stays are | the eICU demo, read through the nurse's charting in the 2012 variables, matches the 2012 stays (co-observed 0.21, gap variation 0.42, rate spread 1.37 against 0.22, 0.46, 1.38); the Water Quality Portal through its reader lies nearer a grid (0.68, 0.62, 0.36) and joins as a question of data, not of regime | [task-regime-sources](verification/task-regime-sources.md) |
+| The same pretext answered without a model on the added corpora | presence of a hidden cell from the schedule and from the stack: the portal 0.027 and 0.543; the eICU demo's stays of 48 hours on the unit 0.257 and 0.635, every stay 0.671 (past the 0.653 the 2019 stays reach), since a stay that leaves early leaves empty bins | [task-regime-sources](verification/task-regime-sources.md) |
 
 ### What changes the backbone
 
@@ -246,9 +248,9 @@ pretraining against four, 0.021 for two.
 
 ## Next
 
-1. Pretraining data in the tasks' regime for both legs, then anomaly tasks on telemetry
-   without labels and channels added without labels, read on the representation that
-   pretraining over cells now gives; the clinical confirmation as a declared curve against the
-   network from scratch at its chosen rate.
+1. Anomaly tasks on telemetry without labels and channels added without labels, then the
+   screen over the stays, the eICU demo and raw telemetry, with the Water Quality Portal as one
+   arm, the recipe chosen by fine-tuning, the probe and the anomaly tasks together; the clinical
+   confirmation as a declared curve against the network from scratch at its chosen rate.
 2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
 3. Open the frozen test side once.
