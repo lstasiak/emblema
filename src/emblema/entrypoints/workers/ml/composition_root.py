@@ -6,9 +6,13 @@ from emblema.entrypoints.restored_backbones import RestoredBackbones
 from emblema.entrypoints.workers.campaign_process import CampaignProcess
 from emblema.entrypoints.workers.declared_worker import DeclaredWorker
 from emblema.entrypoints.workers.known_arms import KnownArms
+from emblema.entrypoints.workers.known_detectors import KnownDetectors
 from emblema.entrypoints.workers.known_patch_models import KnownPatchModels
 from emblema.evaluation.adapters.candidates.backbone_candidate_provider import (
     BackboneCandidateProvider,
+)
+from emblema.evaluation.adapters.candidates.detector_candidate_provider import (
+    DetectorCandidateProvider,
 )
 from emblema.evaluation.adapters.candidates.patch_candidate_provider import (
     PatchCandidateProvider,
@@ -16,9 +20,17 @@ from emblema.evaluation.adapters.candidates.patch_candidate_provider import (
 from emblema.evaluation.adapters.candidates.routed_candidate_provider import (
     RoutedCandidateProvider,
 )
+from emblema.evaluation.adapters.detection.feature_routed_detection_runtime import (
+    FeatureRoutedDetectionRuntime,
+)
+from emblema.evaluation.adapters.detection.summaries_detection_runtime import (
+    SummariesDetectionRuntime,
+)
 from emblema.evaluation.adapters.torch.torch_adaptation_runtime import TorchAdaptationRuntime
+from emblema.evaluation.adapters.torch.torch_detection_runtime import TorchDetectionRuntime
 from emblema.evaluation.adapters.torch.torch_patch_runtime import TorchPatchRuntime
 from emblema.evaluation.application.use_cases.run_adaptation import RunAdaptation
+from emblema.evaluation.application.use_cases.run_detection import RunDetection
 from emblema.evaluation.application.use_cases.run_patch_training import RunPatchTraining
 from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.patching.patch_model_spec import PatchModelSpec
@@ -46,7 +58,9 @@ class CompositionRoot:
 
     Two kinds of network come from here: the arms made out of a backbone, and a patch model
     trained from nothing on a grid. They share the compute budget and the stack, which is why one
-    image runs both, and the process routes each name to whichever supplies it.
+    image runs both, and the process routes each name to whichever supplies it. The detectors
+    come from here too: two of them read the backbone's encoder, and the one over the summaries
+    rides along so that a detection campaign is one pool's order.
 
     The process is told which backbone it serves, holds it, and refuses a cell of a campaign
     that was run over other weights. Holding it is the reason this root exists apart from the
@@ -213,15 +227,23 @@ class CompositionRoot:
                 "penalties the process needs its candidates given, not built"
             )
         on = device or available_device()
+        restored = RestoredBackbones(process.store, backbone)
         arms = BackboneCandidateProvider(
             KnownArms.catalogue(backbone, lora, schedule, ridge),
             RunAdaptation(
                 process.draw_run_labels,
-                TorchAdaptationRuntime(
-                    RestoredBackbones(process.store, backbone),
-                    process.blocks,
-                    device=on,
-                    store=process.store,
+                TorchAdaptationRuntime(restored, process.blocks, device=on, store=process.store),
+            ),
+        )
+        detectors = DetectorCandidateProvider(
+            KnownDetectors.catalogue(backbone),
+            RunDetection(
+                process.draw_detection_windows,
+                FeatureRoutedDetectionRuntime(
+                    states=TorchDetectionRuntime(
+                        restored, process.blocks, device=on, store=process.store
+                    ),
+                    summaries=SummariesDetectionRuntime(process.blocks, store=process.store),
                 ),
             ),
         )
@@ -236,5 +258,6 @@ class CompositionRoot:
             {
                 **dict.fromkeys(KnownArms.refs(), arms),
                 **dict.fromkeys(KnownPatchModels.refs(), patched),
+                **dict.fromkeys(KnownDetectors.refs(), detectors),
             }
         )

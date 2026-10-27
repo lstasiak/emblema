@@ -19,6 +19,7 @@ from emblema.evaluation.application.assemblers.campaign_completed_assembler impo
 from emblema.evaluation.application.use_cases.advance_campaign import AdvanceCampaign
 from emblema.evaluation.application.use_cases.complete_campaign import CompleteCampaign
 from emblema.evaluation.application.use_cases.define_campaign import DefineCampaign
+from emblema.evaluation.application.use_cases.draw_detection_windows import DrawDetectionWindows
 from emblema.evaluation.application.use_cases.draw_label_budget import DrawLabelBudget
 from emblema.evaluation.application.use_cases.draw_run_labels import DrawRunLabels
 from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit
@@ -87,6 +88,7 @@ class CampaignProcess:
         open_test_split: The operation that records the asking for the frozen side.
         draw_label_budget: One budget of labels, drawn from a task's tuning side.
         draw_run_labels: What a run of any candidate is given before anything is fitted.
+        draw_detection_windows: What a run of a detector is given: windows, and no label.
     """
 
     def __init__(
@@ -143,6 +145,9 @@ class CampaignProcess:
         self.draw_label_budget = DrawLabelBudget(self.tasks, self.corpus, truth)
         self.draw_run_labels = DrawRunLabels(
             self.tasks, self.corpus, truth, self.draw_label_budget, self.open_test_split
+        )
+        self.draw_detection_windows = DrawDetectionWindows(
+            self.tasks, self.corpus, truth, self.open_test_split
         )
 
     def assemble(self, candidates: CandidateProvider) -> tuple[Adapters, Services]:

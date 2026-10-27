@@ -15,6 +15,7 @@ import pytest
 from emblema.entrypoints.cli.campaign.composition_root import CompositionRoot
 from emblema.entrypoints.workers.known_arms import KnownArms
 from emblema.entrypoints.workers.known_baselines import KnownBaselines
+from emblema.entrypoints.workers.known_detectors import KnownDetectors
 from emblema.entrypoints.workers.known_patch_models import KnownPatchModels
 from emblema.evaluation.adapters.blocks.block_corpus_windows import BlockCorpusWindows
 from emblema.evaluation.adapters.persistence.downstream_task_repository import (
@@ -87,6 +88,8 @@ def test_every_registered_candidate_is_reachable_and_nothing_else_is(tmp_path: P
         assert held.describe(ref).kind is CandidateKind.CLASSICAL
     for ref in KnownPatchModels.refs():
         assert held.describe(ref).kind is CandidateKind.NEURAL
+    for ref in KnownDetectors.refs():
+        assert held.describe(ref).kind is CandidateKind.DETECTOR
     with pytest.raises(UnknownCandidateError):
         held.describe(CandidateRef("absent"))
 
