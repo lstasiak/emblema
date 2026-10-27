@@ -402,6 +402,19 @@ def test_selecting_subsets_of_a_dataset_of_the_collection_is_refused(tmp_path: P
         )
 
 
+@pytest.mark.parametrize("corpus", ["wqp", "eicu_demo"])
+def test_selecting_subsets_of_a_corpus_read_whole_is_refused(tmp_path: Path, corpus: str) -> None:
+    with pytest.raises(ValueError, match="has no subsets"):
+        CompositionRoot.over(
+            corpora=InMemoryCorpusRepository(),
+            store=InMemoryArtifactStore(),
+            corpus=corpus,
+            corpus_root=tmp_path / "raw",
+            workspace=tmp_path / "workspace",
+            subsets=("set-a",),
+        )
+
+
 def test_a_reading_of_the_collection_reaches_the_reader_of_the_dataset_named(
     tmp_path: Path,
 ) -> None:

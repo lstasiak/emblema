@@ -4,6 +4,7 @@ from typing import Self
 from emblema.catalog.adapters.archive.block_corpus_archive import BlockCorpusArchive
 from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
@@ -11,6 +12,7 @@ from emblema.catalog.adapters.readers.skab import SkabCorpusReader
 from emblema.catalog.adapters.readers.smd import SmdCorpusReader
 from emblema.catalog.adapters.readers.tep import TennesseeEastmanCorpusReader
 from emblema.catalog.adapters.readers.utsd import UtsdCorpusReader, UtsdReading
+from emblema.catalog.adapters.readers.wqp import WaterQualityPortalCorpusReader
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
 from emblema.catalog.application.assemblers.corpus_version_ref_assembler import (
@@ -239,6 +241,10 @@ class CompositionRoot:
                 return EsaAdCorpusReader(root, subsets or EsaAdCorpusReader.SUBSETS)
             case "physionet2012":
                 return Physionet2012CorpusReader(root, subsets or Physionet2012CorpusReader.SUBSETS)
+            case "eicu_demo":
+                if subsets:
+                    raise ValueError(f"the eICU demo has no subsets, got {subsets!r}")
+                return EicuDemoCorpusReader(root)
             case "physionet2019":
                 return Physionet2019CorpusReader(
                     root, subsets or Physionet2019CorpusReader.SUBSETS, excluded=excluded_units
@@ -247,6 +253,10 @@ class CompositionRoot:
                 return TennesseeEastmanCorpusReader(
                     root, subsets or TennesseeEastmanCorpusReader.SUBSETS
                 )
+            case "wqp":
+                if subsets:
+                    raise ValueError(f"the Water Quality Portal has no subsets, got {subsets!r}")
+                return WaterQualityPortalCorpusReader(root)
             case dataset if dataset.startswith(UtsdCorpusReader.CORPUS_PREFIX):
                 return UtsdCorpusReader(root, UtsdCorpusReader.dataset_named(dataset), reading)
             case generated if generated in LAYOUTS:

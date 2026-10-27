@@ -15,10 +15,12 @@ MARKERS = {
     "skab": "data/valve1",
     "smd": "train/machine-1-1.txt",
     "esa_ad": "ESA-Mission1",
+    "eicu_demo": "patient.csv.gz",
     "physionet2012": "set-a",
     "physionet2019": "training_setA",
     "tep": "TEP_FaultFree_Training.RData",
     "utsd": "UTSD-12G/data-00000-of-00080.arrow",
+    "wqp": "batches",
 }
 
 

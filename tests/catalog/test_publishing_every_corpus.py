@@ -54,6 +54,16 @@ CORPORA = [
         WindowSpec(length=48.0, stride=48.0),
         NamedSplit.of([UnitKey("set-a/132539"), UnitKey("set-a/140501")]),
     ),
+    # The demo's stays are read as 2012 frames one, so they are windowed whole too; the stay held
+    # out measures only variables the others measure.
+    (
+        "eicu_demo",
+        (),
+        4,
+        47,
+        WindowSpec(length=48.0, stride=48.0),
+        NamedSplit.of([UnitKey("120/376041")]),
+    ),
     # The 2019 stays differ in length, so they are windowed by the half day rather than whole;
     # the split names the one stay whose every channel the other three measure too, since a
     # channel measured only on the held-out side has no statistics to be normalised by.
@@ -75,6 +85,16 @@ CORPORA = [
         marks=pytest.mark.skipif(
             find_spec("rdata") is None, reason="the corpora extra is not installed"
         ),
+    ),
+    # A location of the portal is windowed whole, over the fourteen years every location spans;
+    # the location held out measures three characteristics, which the others measure too.
+    (
+        "wqp",
+        (),
+        5,
+        64,
+        WindowSpec(length=122_712.0, stride=122_712.0),
+        NamedSplit.of([UnitKey("STORET/CHESAPEAKEMONITORINGCOOP-CMC.WSR.WASPRU002")]),
     ),
     pytest.param(
         "utsd/Health_SelfRegulationSCP1",
@@ -117,8 +137,10 @@ def corpus_root(corpus: str) -> Path:
         "smd",
         "esa_ad",
         "physionet2012",
+        "eicu_demo",
         "physionet2019",
         "tep",
+        "wqp",
         "utsd-scp1",
         "utsd-rain",
     ],
@@ -269,3 +291,31 @@ def test_two_datasets_of_the_collection_publish_as_two_corpora_of_one_vocabulary
         opening.scheme.vocabulary.entries
     )
     assert len(continuing.scheme.vocabulary.entries_of(second)) == 1
+
+
+def test_readings_seconds_apart_publish_in_a_window_of_fourteen_years(tmp_path: Path) -> None:
+    """A long window stores a token's place in single precision, which seconds would reorder."""
+    from tests.catalog.adapters.readers.test_wqp import batch, result
+
+    rows = [
+        result(location=f"SITE-{site}", name=name, value=str(minute), clock=f"10:{minute:02d}:{s}")
+        for site in range(3)
+        for minute in range(60)
+        for name, s in (("pH", "05"), ("Nitrate", "08"))
+    ]
+    batch(tmp_path / "wqp", 0, rows)
+    process = CompositionRoot(
+        unreachable_store(),
+        corpus="wqp",
+        corpus_root=tmp_path / "wqp",
+        workspace=tmp_path / "blocks",
+        corpora=InMemoryCorpusRepository(),
+        store=LocalDirectoryArtifactStore(tmp_path / "store"),
+    )
+    command = publish_command(
+        corpus="wqp", window=WindowSpec(length=122_712.0, stride=122_712.0), split=DRAWN
+    )
+
+    ref = process.services.publish_corpus(command)
+
+    assert process.adapters.archive.read_manifest(ref).archived.window_count == 3

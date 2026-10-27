@@ -496,3 +496,19 @@ def test_the_unread_units_are_of_one_corpus_the_backbone_read_itself() -> None:
                 "--unread-units",
             ]
         )
+
+
+def test_a_published_corpus_no_backbone_read_is_named_by_its_manifest() -> None:
+    stated = parse_arguments(
+        ["--manifest", "corpora/wqp.json", "sha256:00", "--corpus", "wqp", "--masks", "a.toml"]
+    )
+
+    assert stated.manifest == ["corpora/wqp.json", "sha256:00"]
+    for wrong in (
+        ["--manifest", "k", "c", "--masks", "a.toml"],
+        ["--manifest", "k", "c", "--corpus", "wqp"],
+        ["--manifest", "k", "c", "--corpus", "wqp", "--masks", "a.toml", "--backbone", "x"],
+        ["--manifest", "k", "c", "--corpus", "wqp", "--masks", "a.toml", "--model", "trained"],
+    ):
+        with pytest.raises(SystemExit):
+            parse_arguments(wrong)

@@ -116,6 +116,20 @@ class KnownCorpora:
                     url="https://opendatacommons.org/licenses/by/1-0/",
                 ),
             ),
+            # PhysioNet publishes the demo under the Open Database License, so a derivative
+            # database may be redistributed with attribution, under the same licence.
+            KnownCorpus(
+                "eicu_demo",
+                CorpusSource(
+                    "PhysioNet (Johnson, Pollard, Badawi, Raffa)",
+                    "https://doi.org/10.13026/4mxk-na84",
+                ),
+                Licence(
+                    "ODbL-1.0",
+                    permits_derivatives=True,
+                    url="https://opendatacommons.org/licenses/odbl/1-0/",
+                ),
+            ),
             # PhysioNet publishes the 2019 challenge data under CC BY 4.0, so a derivative may be
             # redistributed with attribution.
             KnownCorpus(
@@ -144,6 +158,21 @@ class KnownCorpora:
                     "Public Domain Dedication",
                     permits_derivatives=True,
                     url="https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/6C3JR1",
+                ),
+            ),
+            # The portal's record in the federal data catalogue gives the U.S. Public Domain
+            # licence; results of states and other organisations carry no terms of their own, and
+            # the portal asks for a citation of its DOI.
+            KnownCorpus(
+                "wqp",
+                CorpusSource(
+                    "Water Quality Portal (National Water Quality Monitoring Council, USGS, EPA)",
+                    "https://doi.org/10.5066/P9QRKUVJ",
+                ),
+                Licence(
+                    "U.S. Public Domain",
+                    permits_derivatives=True,
+                    url="https://www.usa.gov/publicdomain/label/1.0/",
                 ),
             ),
             *(
