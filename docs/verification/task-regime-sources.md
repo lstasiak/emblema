@@ -296,3 +296,69 @@ stack; the count 0.904 from the carry and 0.914 from the stack, as on the stays.
 published later, last in the chain of vocabularies, from a prefix lengthened past 12 million
 readings. The audit scores answers without a model; whether the portal helps the stays is read by
 the arm.
+
+## 2026-10-27 — M1 Pro, CPU: the eICU demo read as 2012 frames a stay keeps the stays' regime and holds no clock
+
+**Question.** Which tables of the eICU Collaborative Research Database demo (version 2.0.1) are read
+so that its stays join the pretraining in the regime of the 2012 stays, and does its publication
+pass the shortcut audit the portal passed (rule 5)?
+
+**Conditions.** Commit `d6784854`, M1 Pro, CPU. The variants were measured before the reader was
+written: long tables of the first 48 hours of every unit stay (numeric values, offsets in hours),
+built from the demo's tables outside the repository and read by the raw audit (100 stays, seed 1),
+which reproduces the 2012 reference row from 2012's raw files to the hundredth. The reader
+(ADR-0066) was then measured by the coverage report, and its publication to the local stack's
+bucket (windows of 48 hours, stride equal, a seeded split of a fifth; manifest `sha256:75a73b1b…`)
+by the shortcut audit under the masks the stays' values were read with.
+
+    uv run scripts/raw_regime_audit.py --name eicu-<variant> --root <long table> \
+        --pattern long.csv --unit unit --channel channel --time time --skip _stay
+    uv run scripts/regime_coverage_report.py measure --corpus eicu_demo physionet2012 \
+        --out data/report/l32b4/eicu-reader
+    uv run python -m emblema.entrypoints.cli.publish_corpus --corpus eicu_demo \
+        --window 48 --stride 48
+    uv run scripts/cell_pretext_audit.py --manifest <key> <checksum> --corpus eicu_demo \
+        --masks experiments/backbone-cells-physionet2012-s.toml
+
+**Regime** (median [10th; 90th percentile] over 100 stays, seed 1).
+
+| Read as | Co-observed | Gap variation | Rate spread | Readings / stay |
+|---|---|---|---|---|
+| Stays 2012 (reference) | 0.22 [0.18; 0.34] | 0.46 [0.29; 0.66] | 1.38 [1.06; 1.89] | 417 |
+| monitor (`vitalPeriodic`) and laboratory | 0.14 [0.08; 0.51] | 0.21 [0.00; 0.65] | 2.45 [0.00; 2.51] | 1,609 |
+| charting, `vitalAperiodic` and laboratory, every label | 0.13 [0.09; 0.32] | 0.42 [0.17; 0.68] | 1.42 [0.65; 2.02] | 343 |
+| charting, laboratory and urine in the 2012 variables | 0.24 [0.18; 0.52] | 0.43 [0.12; 0.90] | 1.07 [0.44; 1.97] | 134 |
+| the reader: stays of 48 hours on the unit | 0.21 [0.15; 0.29] | 0.42 [0.17; 0.74] | 1.37 [0.61; 1.95] | 310 tokens a window |
+
+**Presence of a hidden cell** (log loss removed against the constant share), against the stays
+under the same masks. The first column is the publication of every stay at commit `2a7b3e03`, the
+shorter ones leaving the end of their window empty; the reader keeps stays of 48 hours on the unit.
+
+| Answer | Every stay | The reader | Rule 5 | Stays 2012 | Stays 2019 |
+|---|---|---|---|---|---|
+| `schedule` | 0.251 | 0.257 | ≤ 0.351 | 0.238 | 0.351 |
+| `cross` | 0.627 | 0.589 | — | 0.537 | 0.623 |
+| `stacked` | **0.671** | 0.635 | ≤ 0.653 | 0.593 | 0.653 |
+| cells held | 0.41 | 0.52 | — | 0.52 | 0.62 |
+
+**The publication.** 932 stays of 803 patients in 181 of the demo's 186 hospitals; 930 hold a
+window (two hold no reading), 308,105 tokens, 186 stays on the validation side. Values (R² against
+the channel's mean, the stack): 0.033 over every hidden cell, 0.446 under block masks and 0.631
+under token masks, where neighbouring readings remain; the count 0.931 from the stack.
+
+**Conclusions.**
+
+1. **The nurse's charting, in the 2012 variables, is the stays' regime**; the five-minute monitor
+   is another (gap variation 0.21, rate spread 2.45, four times the readings), and is not read.
+2. **Through the reader the demo matches 2012 on all three measures** (0.21, 0.42, 1.37 against
+   0.22, 0.46, 1.38), so it adds stays of a second hospital system without adding a regime.
+3. **Short stays fail the shortcut audit and stays of 48 hours pass it.** Read whole, a stay that
+   leaves the unit early leaves whole bins empty, which the other channels of the bin answer
+   without a model (stack 0.671); stays of 48 hours on the unit, the 2012 challenge's own rule,
+   answer at 0.635 and hold cells as often as the 2012 stays.
+4. **The schedule gives no clock** in either reading (0.251, 0.257).
+
+**Limitations.** The stays kept hold 60 % of the demo's readings in the first 48 hours; a pipeline
+whose units may be shorter than a window would keep the rest. The validation side holds 186 stays,
+so the audit's figures move by more than on the 2012 stays. The publication is local; the one the
+pretraining reads is published to the shared bucket before the run.
