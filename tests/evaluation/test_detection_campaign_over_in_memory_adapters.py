@@ -195,7 +195,9 @@ def test_the_message_names_each_detectors_area_events_found_and_event_wise_score
     assert control_by_name["event_recall_at_1pct_false_alarms"] == 0.0
     assert control_by_name["event_f0.5"] == 0.0
     assert {m.budget for m in contender.metrics} == {None}
-    assert "raises the event-weighted PR-AUC" in completed.verdict
+    assert "at every window, no label spent frozen_knn raises the event-weighted PR-AUC" in (
+        completed.verdict
+    )
 
 
 def test_a_detection_campaign_over_budgets_of_labels_is_refused(running: Campaign) -> None:

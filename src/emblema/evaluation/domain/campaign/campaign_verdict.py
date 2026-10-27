@@ -71,7 +71,12 @@ class CampaignVerdict:
     def sentence(self) -> str:
         """The verdict in one sentence, for whoever reads the outcome rather than the grid."""
         endpoint = self.endpoint
-        found = f"at {_labels(endpoint.budget)} {self._finding()}{self._spread_clause()})"
+        spent = (
+            "every window, no label spent"
+            if self.measure is ErrorMeasure.PR_AUC_SHORTFALL
+            else _labels(endpoint.budget)
+        )
+        found = f"at {spent} {self._finding()}{self._spread_clause()})"
         if endpoint.verdict is ComparisonVerdict.CONFIRMED:
             opening = f"Confirmed on the registered endpoint: {found}"
         else:
