@@ -42,6 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
@@ -132,9 +133,16 @@ SOURCES: tuple[Source, ...] = (
     _utsd(f"{UTSD_PREFIX}Web_kaggle_web_traffic_dataset_without_missing_values", 803.0),
 )
 
-# Corpora read in the tasks' regime that no pretraining of the scale curve reads; a location of the
-# water quality portal is windowed whole here, since only its unit measures are read.
+# Corpora read in the tasks' regime that no pretraining of the scale curve reads; a stay of the
+# eICU demo and a location of the water quality portal are windowed whole here, since only their
+# unit measures are read.
 TASK_REGIME_SOURCES: tuple[Source, ...] = (
+    Source(
+        "eicu_demo",
+        "eicu_demo",
+        WindowSpec(48.0 + 1.0 / 60.0, 48.0 + 1.0 / 60.0),
+        EicuDemoCorpusReader,
+    ),
     Source("wqp", "wqp", WindowSpec(122_712.0, 122_712.0), WaterQualityPortalCorpusReader),
 )
 
@@ -148,6 +156,7 @@ REGIMES: Mapping[str, SamplingRegime] = {
     "esa_ad": SamplingRegime.IRREGULAR,
     "physionet2012": SamplingRegime.IRREGULAR,
     "physionet2019": SamplingRegime.IRREGULAR,
+    "eicu_demo": SamplingRegime.IRREGULAR,
     "wqp": SamplingRegime.IRREGULAR,
 }
 

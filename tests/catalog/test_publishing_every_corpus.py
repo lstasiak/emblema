@@ -54,6 +54,16 @@ CORPORA = [
         WindowSpec(length=48.0, stride=48.0),
         NamedSplit.of([UnitKey("set-a/132539"), UnitKey("set-a/140501")]),
     ),
+    # The demo's stays are read as 2012 frames one, so they are windowed whole too; the stay held
+    # out measures only variables the others measure.
+    (
+        "eicu_demo",
+        (),
+        4,
+        47,
+        WindowSpec(length=48.0, stride=48.0),
+        NamedSplit.of([UnitKey("120/376041")]),
+    ),
     # The 2019 stays differ in length, so they are windowed by the half day rather than whole;
     # the split names the one stay whose every channel the other three measure too, since a
     # channel measured only on the held-out side has no statistics to be normalised by.
@@ -127,6 +137,7 @@ def corpus_root(corpus: str) -> Path:
         "smd",
         "esa_ad",
         "physionet2012",
+        "eicu_demo",
         "physionet2019",
         "tep",
         "wqp",

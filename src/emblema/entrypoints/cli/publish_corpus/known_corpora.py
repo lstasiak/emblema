@@ -116,6 +116,20 @@ class KnownCorpora:
                     url="https://opendatacommons.org/licenses/by/1-0/",
                 ),
             ),
+            # PhysioNet publishes the demo under the Open Database License, so a derivative
+            # database may be redistributed with attribution, under the same licence.
+            KnownCorpus(
+                "eicu_demo",
+                CorpusSource(
+                    "PhysioNet (Johnson, Pollard, Badawi, Raffa)",
+                    "https://doi.org/10.13026/4mxk-na84",
+                ),
+                Licence(
+                    "ODbL-1.0",
+                    permits_derivatives=True,
+                    url="https://opendatacommons.org/licenses/odbl/1-0/",
+                ),
+            ),
             # PhysioNet publishes the 2019 challenge data under CC BY 4.0, so a derivative may be
             # redistributed with attribution.
             KnownCorpus(

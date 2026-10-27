@@ -15,6 +15,7 @@ resolution.
 """
 
 import csv
+import gzip
 import io
 import math
 import shutil
@@ -27,6 +28,7 @@ import pytest
 
 from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReader
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
@@ -318,6 +320,38 @@ def wqp(tmp_path: Path) -> Harness:
     return Harness(WaterQualityPortalCorpusReader(root), change_one_value)
 
 
+def eicu_demo(tmp_path: Path) -> Harness:
+    root = tmp_path / "eicu_demo"
+    shutil.copytree(sample("eicu_demo"), root)
+    laboratory = root / "lab.csv.gz"
+    # The database ends its lines with a line feed; a table saved on Windows would not, and the
+    # carriage return belongs to the ending rather than to the last field.
+    rewrite_gzip(laboratory, lambda text: text.replace("\n", "\r\n"))
+    charting = root / "nurseCharting.csv.gz"
+
+    def change_one_value() -> CorpusReader:
+        def nudged(text: str) -> str:
+            header, *rows = list(csv.reader(io.StringIO(text)))
+            value = header.index("nursingchartvalue")
+            name = header.index("nursingchartcelltypevalname")
+            row = next(r for r in rows if r[name] == "Heart Rate")
+            row[value] = str(float(row[value]) + 1.0)
+            out = io.StringIO()
+            csv.writer(out, lineterminator="\n").writerows([header, *rows])
+            return out.getvalue()
+
+        rewrite_gzip(charting, nudged)
+        return EicuDemoCorpusReader(root)
+
+    return Harness(EicuDemoCorpusReader(root), change_one_value)
+
+
+def rewrite_gzip(table: Path, transform: Callable[[str], str]) -> None:
+    """Replace a gzipped table with what ``transform`` makes of its text."""
+    text = gzip.decompress(table.read_bytes()).decode("utf-8")
+    table.write_bytes(gzip.compress(transform(text).encode("utf-8"), mtime=0))
+
+
 def rewrite_member(archive: Path, transform: Callable[[str], str]) -> None:
     """Replace the one member of a zip with what ``transform`` makes of its text."""
     with zipfile.ZipFile(archive) as opened:
@@ -342,6 +376,7 @@ ADAPTERS: dict[str, Callable[[Path], Harness]] = {
     "skab": skab,
     "smd": smd,
     "esa_ad": esa_ad,
+    "eicu_demo": eicu_demo,
     "physionet2012": physionet2012,
     "physionet2019": physionet2019,
     "tep": tep,

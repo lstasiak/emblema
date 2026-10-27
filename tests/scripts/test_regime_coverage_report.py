@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
@@ -138,6 +139,7 @@ def test_a_unit_is_counted_within_its_part() -> None:
         ("physionet2012", lambda: Physionet2012CorpusReader(SAMPLES / "physionet2012")),
         ("physionet2019", lambda: Physionet2019CorpusReader(SAMPLES / "physionet2019")),
         ("tep", lambda: TennesseeEastmanCorpusReader(SAMPLES / "tep")),
+        ("eicu_demo", lambda: EicuDemoCorpusReader(SAMPLES / "eicu_demo")),
         ("wqp", lambda: WaterQualityPortalCorpusReader(SAMPLES / "wqp")),
         (
             SCP1,
