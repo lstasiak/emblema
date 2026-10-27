@@ -298,15 +298,16 @@ Declared now, so that no task's protocol is chosen once its numbers are visible.
 | Task | Protocol | Primary metric | Label-budget axis |
 |---|---|---|---|
 | Remaining useful life, turbofan (FD001) | supervised, label budget | RMSE | yes |
-| Anomaly detection, industrial testbed | unsupervised: fitted on normal data, scored on the rest | PR-AUC, F1 at a fixed threshold | no |
-| Anomaly detection, server machines | unsupervised | PR-AUC | no |
+| Anomaly detection, industrial testbed | unsupervised: fitted on the anomaly-free recording, scored on the experiments (the detection tasks' section) | event-weighted PR-AUC | no |
+| Anomaly detection, satellite telemetry fragments (OPS-SAT; from 2026-10-27, in place of the server machines) | unsupervised: fitted on the authors' training fragments, scored on their test fragments | event-weighted PR-AUC, the benchmark's own segment-level area | no |
 | Binary classification, intensive-care stays | supervised, label budget | AUROC with calibration | yes |
 | Binary classification, sepsis after the first day of a stay | supervised, label budget | AUROC with calibration | yes |
-| Anomaly detection, satellite telemetry | unsupervised, the benchmark's own protocol | the benchmark's metrics | no |
+| Anomaly detection, satellite telemetry (ESA) | unsupervised: fitted on the first half of each mission, scored on months of the second, as the benchmark trains | event-weighted PR-AUC; the benchmark's corrected event-wise F0.5 beside (from 2026-10-27; the row said "the benchmark's metrics", which are threshold-bound and, below a window's resolution, measure the window) | no |
 
 The anomaly-detection tasks measure whether pretraining improves detection, which is a different
 quantity from label efficiency. They never share an axis, a panel or a summary sentence with the
-curve.
+curve. The server machines leave the protocol: their events are criticised in the literature and
+the corpus left the pretraining mixture; the OPS-SAT fragments take their place.
 
 ## The intensive-care task
 
@@ -433,6 +434,26 @@ From 2026-10-25 the claim is read in the regime the tasks sample in, over the en
 | Setting of fine-tuning | From 2026-10-27 fine-tuning's setting is chosen among the rates above and the encoder's weights learning at a tenth or a hundredth of the rate in force with the head solved first (`full_fine_tuning@encoder_rate=0.1,head_start=solved` and `@encoder_rate=0.01,head_start=solved`; Kumar et al. 2022), by the rule of the rates: a setting replaces the rate in force when its mean area over the three budgets exceeds it by more than one standard error. The setting chosen is the one confirmed. The shares were read once, under backbones whose probe gained nothing over their initialisation (`fine-tuning-recipe.md`); the pretraining over cells gains 0.06 to 0.09 there (`cell-pretraining.md`, 2026-10-25). |
 | Repeat on credentialed data | Run only if access to MIMIC-IV or the full eICU database is granted before the stage closes. The recipe confirmed over the composition above is pretrained again with the credentialed stays in place of the eICU demo, in the same shape and number of steps, then screened and confirmed by the rules in force and reported beside the open reading, which stands. Before the run the credentialed corpus is checked for stays of the tasks' held-out and test sides, which it may not hold. The data stay on machines and storage their data use agreement allows, never in the repository or a public bucket. |
 
+## The anomaly-detection tasks
+
+Four tasks over three corpora of telemetry with annotated events, declared here before any
+detector is read on any of them (2026-10-27). They answer the product's third claim: a
+pretrained encoder's features set the events apart better than the same encoder's at its
+initialisation and than the summaries of the channels, with no label spent.
+
+| | |
+|---|---|
+| Tasks | `esa-mission1-events` and `esa-mission2-events` over the raw ESA telemetry (`esa_ad_raw`: 48 target channels of Mission1 from three packets and one group, the eleven lightweight channels of Mission2, every reading at its own instant, hours since 2000-01-01T00:00Z; ADR-0025's thinned reading stays for the backbones that read it), `skab-anomalies` over the testbed, `opssat-anomalies` over the OPS-SAT fragments. |
+| Units and windows | A month of a mission, windows of one hour every hour; an experiment of the testbed, windows of 100 seconds every ten; a fragment of OPS-SAT, one window of 1,340 seconds, the longest fragment's length, anchored at its start (a fragment shorter than the window yields that one window). |
+| Sides | Fitting: the corpus's training side, read as windows without a label — the months of each mission's first half, the anomaly-free recording, the authors' 1,594 training fragments. The benchmarks fit the same way, with the contamination they publish (1.8 % of Mission1's time, 0.6 % of Mission2's, 20 % of the fragments). Held out: the months of the second half, the 34 experiments, the 529 test fragments. Frozen: one held-out unit in three, ranked by seed 1 and rounded up, opened once in the final run; the rest validate. |
+| Label | The event a window overlaps: zero for none, the event's number otherwise. On the satellites, anomalies and rare nominal events are events alike, as the benchmark scores them by default; a window overlapping a gap in the downlink and no event is not scored; a window overlapping several events carries the lowest number. On the testbed every experiment is one event, the rows it marks anomalous. A fragment marked anomalous is an event whole. |
+| Detectors | Three, declared by name: `frozen_knn` over the pooled states of the pretrained encoder read at every block side by side, `untrained_knn` over the same encoder at its initialisation, `summaries_knn` over the per-channel summaries the trees read. Each scores a window by its mean Euclidean distance to its five nearest fitting windows, every feature standardised over the fitting side, and answers the distance above the alarm set where 2 % of the fitting windows, each scored against the others, would be flagged. The neighbours and the share are knobs of the name and are not selected on any task. |
+| Campaign | One budget, every window of the fitting side; seeds repeat the fit, which the encoder at its initialisation draws from. Control `untrained_knn`, endpoint `frozen_knn`, `summaries_knn` beside as the classical bar. No selection run. |
+| Measure | One minus the area under the precision-recall curve over the scored windows, swept from the highest score down, every event weighing one spread evenly over its windows and every normal window weighing one; ties swept as one group. Reported as the area. A reduction is a gain in area. The paired bootstrap over units in two strata, units holding an event's window and units holding none, 10,000 resamples, 95 %, as for the stays. |
+| Reported beside | The share of events found with at most 1 % of the normal windows flagged; the benchmark's corrected event-wise F0.5 at the alarm each detector set, a run of consecutive flagged windows of one unit touching no event counting as one false alarm and the precision scaled by the share of normal windows left quiet; anomalies alone on the satellites, descriptively. The benchmark's timing and range metrics are not computed at a window's resolution. |
+| Thresholds and power | The least gain that counts is 0.05 in event-weighted area on each of the four tasks and the floor's fixed part 0.01, from the power simulated over each task's validation events before any reading (`anomaly-tasks.md`, 2026-10-27): at a gain of 0.02 the rule confirms a fifth of the simulated worlds or fewer at the lower level on every task, at 0.05 at least 0.99 of them. A gain within ±0.05 is less than about 0.05, not none. |
+| First use | The backbones pretrained over cells on the intensive-care stays (`cell-pretraining.md`) read each of the three corpora zero-shot, with rows drawn at random for every channel they never saw, against their initialisation: a reading of the machinery, since neither arm knows the channels. The reading that bears on the claim comes with the next screen, whose base pretrains on the first half of the satellites' months. |
+
 ## The test set
 
 The official test engines are frozen when the task is created and are used **once**, at the end,
@@ -460,6 +481,7 @@ them.
   (`docs/verification/intensive-care-curve.md`, `docs/findings.md`).
 - The scale of pretraining: registered, no point read.
 - Sepsis endpoint: registered, nothing read.
+- The anomaly-detection tasks: registered (2026-10-27), nothing read.
 - The single test run: not made.
 
 ## Register of amendments
