@@ -7,6 +7,8 @@ than left to whichever process happened to build the register last.
 from emblema.entrypoints.workers.known_detectors import KnownDetectors
 from emblema.evaluation.adapters.candidates.detector_arm import DetectorArm
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
+from emblema.evaluation.domain.heads.head_pooling import HeadPooling
+from emblema.evaluation.domain.transfer.layer_reading import LayerReading
 from tests.evaluation.support import WEIGHTS
 
 
@@ -24,6 +26,8 @@ def test_the_two_over_an_encoder_share_its_shape_and_differ_in_its_weights_alone
     assert (frozen.architecture, frozen.backbone) == (WEIGHTS, WEIGHTS)
     assert (untrained.architecture, untrained.backbone) == (WEIGHTS, None)
     assert (frozen.encoder, frozen.pooling) == (untrained.encoder, untrained.pooling)
+    assert frozen.encoder.layer == LayerReading.of("concat")
+    assert frozen.pooling == HeadPooling.mean()
     assert (frozen.neighbours, frozen.contamination) == (
         untrained.neighbours,
         untrained.contamination,
