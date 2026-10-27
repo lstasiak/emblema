@@ -6,7 +6,7 @@ import io
 import sys
 from pathlib import Path
 
-STAYS = ("258915", "301185", "1817131", "376041", "3035602")
+STAYS = ("2858139", "2848323", "1843889", "376041", "1817131")
 TABLES = ("patient", "nurseCharting", "lab", "intakeOutput")
 STAY_COLUMN = "patientunitstayid"
 

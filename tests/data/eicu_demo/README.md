@@ -7,10 +7,10 @@ the parser's lines, so a quoted field holding a comma or a line break stays whol
 
 | Stay | Hospital | Why it is here |
 |---|---|---|
-| `258915`, `301185` | 93 | two stays of one hospital, each with 30 of the variables read; the first has no gender recorded |
-| `1817131` | 268 | a stay of another hospital, with 28 variables |
+| `2858139`, `2848323` | 382 | two stays of one hospital, in a cardiac surgery and a coronary unit, with 29 and 22 of the variables read |
+| `1843889` | 268 | a stay of another hospital, with 31 variables |
 | `376041` | 120 | a patient older than 89, whom the database records as `> 89`; its 18 variables are measured by the others too, so it can be held out |
-| `3035602` | 420 | a stay of a surgical unit without a single reading, which is still a unit |
+| `1817131` | 268 | a stay that leaves the unit after 770 minutes, short of 48 hours, so it is no unit and its 42 charted and laboratory numbers are not read |
 
 Source of record: `https://physionet.org/content/eicu-crd-demo/2.0.1/`, tables
 `patient.csv.gz` (136,791 bytes, SHA-256
@@ -30,5 +30,6 @@ rerun on the same tables gives the same bytes.
 
     uv run python tests/data/eicu_demo/make_sample.py data/raw/eicu_demo tests/data/eicu_demo
 
-The sample holds no repeated reading; 34 of its numbers were taken before the stay began on the
-unit, and are not the stay's. The reader's tests build repeats, and every other rule, by hand.
+The sample holds no repeated reading; 96 charted and laboratory numbers of the four long stays lie
+outside their first 48 hours on the unit, and are not the stays'. The reader's tests build repeats,
+and every other rule, by hand.

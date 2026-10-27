@@ -151,23 +151,15 @@ def test_a_reading_is_the_stays_from_admission_to_hour_48(tmp_path: Path) -> Non
     assert [o.time for o in observations(reader)] == [0.0, 48.0]
 
 
-def test_a_reading_after_the_patient_left_the_unit_is_not_the_stays(tmp_path: Path) -> None:
+def test_a_stay_shorter_than_48_hours_on_the_unit_is_no_unit(tmp_path: Path) -> None:
     reader = demo(
         tmp_path,
-        patients=[patient(discharge="600")],
-        nurse=[charted(600), charted(601)],
-        labs=[lab(900)],
+        patients=[patient("1", discharge="2880"), patient("2", discharge="2879", unit_type="?")],
+        nurse=[charted(600), charted(600, stay="2")],
     )
 
+    assert [unit.key for unit in reader.read_units()] == [STAY]
     assert observations(reader) == [Observation("HR", 10.0, 80.0)]
-    assert next(reader.read_units()).extent.end == 48.0 + 1 / 60
-
-
-def test_a_stay_that_leaves_before_it_arrives_is_refused(tmp_path: Path) -> None:
-    reader = demo(tmp_path, patients=[patient(discharge="-5")])
-
-    with pytest.raises(MalformedCorpusDataError, match="leaves before it arrives"):
-        reader.describe()
 
 
 def test_the_latest_revision_of_a_laboratory_result_is_kept(tmp_path: Path) -> None:
@@ -416,15 +408,15 @@ def test_the_sample_is_read_whole_in_the_2012_variables() -> None:
 
     assert description.sampling_regime is SamplingRegime.IRREGULAR
     assert description.channel_schema == EicuDemoCorpusReader.SCHEMA
-    assert (description.content.unit_count, description.content.observation_count) == (5, 179)
+    assert (description.content.unit_count, description.content.observation_count) == (4, 217)
     assert [str(unit.key) for unit in units] == [
         "120/376041",
-        "268/1817131",
-        "420/3035602",
-        "93/258915",
-        "93/301185",
+        "268/1843889",
+        "382/2848323",
+        "382/2858139",
     ]
-    assert observations(reader, UnitKey("420/3035602")) == []
+    with pytest.raises(UnknownUnitError):
+        reader.read_observations(UnitKey("268/1817131"))
 
 
 @pytest.mark.skipif(raw_root("eicu_demo") is None, reason="the raw corpus is not on this machine")
@@ -435,4 +427,4 @@ def test_the_downloaded_demo_is_read_whole() -> None:
 
     content = reader.describe().content
 
-    assert (content.unit_count, content.observation_count) == (2520, 510_050)
+    assert (content.unit_count, content.observation_count) == (932, 304_480)

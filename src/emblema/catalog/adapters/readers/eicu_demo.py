@@ -119,7 +119,7 @@ class _Reading:
 
 @dataclass(frozen=True)
 class _Index:
-    """What a pass over the tables yields: every stay with its descriptors and observations."""
+    """What a pass over the tables yields: each stay kept, its descriptors and observations."""
 
     units: Mapping[UnitKey, CorpusUnit]
     observations: Mapping[UnitKey, tuple[Observation, ...]]
@@ -129,12 +129,12 @@ class EicuDemoCorpusReader:
     """Reads the unit stays of the eICU Collaborative Research Database demo, as 2012 frames one.
 
     The root holds the database's tables as it publishes them; four are read. A unit stay is a
-    unit, keyed ``<hospital>/<stay>``, over 48 hours from admission to the unit, as the 2012
-    challenge frames a stay, and its variables are read as the 2012 variables they are (ADR-0066):
-    the vital signs and coma score a nurse charted, the laboratory results, and the urine output.
-    Readings before admission, after the patient left the unit or after hour 48 are not the stay's,
-    so a stay shorter than 48 hours keeps the extent and leaves its tail empty. Every stay of the
-    patient table is a unit, one without a reading too.
+    unit, keyed ``<hospital>/<stay>``, over its first 48 hours on the unit, and its variables are
+    read as the 2012 variables they are (ADR-0066): the vital signs and coma score a nurse charted,
+    the laboratory results, and the urine output. As in the 2012 challenge, only a stay of at least
+    48 hours on the unit is a unit, one without a reading too: a shorter one would leave the end of
+    its window empty, a pattern no stay of the tasks has. Readings before admission to the unit or
+    after hour 48 are not the stay's.
 
     A reading is a finite number. Of two readings of one variable at one minute, one is kept: a
     laboratory result's latest revision, otherwise the first row of its table. Values are read as
@@ -298,25 +298,24 @@ class EicuDemoCorpusReader:
 
     @classmethod
     def _index_of(cls, contents: Sequence[bytes]) -> _Index:
-        """Every stay of the patient table, with its descriptors and its readings in time order.
+        """Every stay of 48 hours on the unit, with its descriptors and its readings in time order.
 
         Raises:
-            MalformedCorpusDataError: If a table names a stay the patient table does not, a stay
-                twice, or a stay that leaves the unit before it arrives.
+            MalformedCorpusDataError: If a table names a stay the patient table does not, or a
+                stay twice.
         """
         patients, nursing, laboratory, output = contents
+        stays: set[str] = set()
         units: dict[str, CorpusUnit] = {}
-        last: dict[str, int] = {}
         weights: dict[str, float] = {}
         for where, _, row in cls._rows_of(patients, _PATIENT):
             stay = row["patientunitstayid"]
-            if stay in units:
+            if stay in stays:
                 raise MalformedCorpusDataError(f"{where}: stay {stay} given twice")
+            stays.add(stay)
+            if cls._offset_of(where, row["unitdischargeoffset"]) < _LAST_MINUTE:
+                continue
             units[stay] = CorpusUnit(cls._key_of(where, row), _STAY, cls._features_of(where, row))
-            discharge = cls._offset_of(where, row["unitdischargeoffset"])
-            if discharge < 0:
-                raise MalformedCorpusDataError(f"{where}: stay {stay} leaves before it arrives")
-            last[stay] = min(discharge, _LAST_MINUTE)
             weight = cls._number(row["admissionweight"])
             if weight is not None:
                 weights[stay] = weight
@@ -326,9 +325,9 @@ class EicuDemoCorpusReader:
             *cls._laboratory(laboratory),
             *cls._urine(output),
         ):
-            if stay not in units:
+            if stay not in stays:
                 raise MalformedCorpusDataError(f"a reading of stay {stay}, which no patient has")
-            if reading.minute > last[stay]:
+            if stay not in units:
                 continue
             slot = (stay, reading.channel, reading.minute)
             if slot not in chosen or reading.precedence < chosen[slot].precedence:
