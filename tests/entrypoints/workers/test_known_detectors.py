@@ -45,6 +45,18 @@ def test_the_one_over_the_summaries_reads_no_encoder_under_the_same_knobs() -> N
     )
 
 
+def test_the_one_over_the_counts_reads_the_sampling_alone_under_the_same_knobs() -> None:
+    counts, frozen = over()["counts_knn"], over()["frozen_knn"]
+
+    assert counts.features is DetectorFeatures.READING_COUNTS
+    assert (counts.architecture, counts.backbone) == (None, None)
+    assert (counts.neighbours, counts.contamination, counts.reference) == (
+        frozen.neighbours,
+        frozen.contamination,
+        frozen.reference,
+    )
+
+
 def test_every_detector_stands_up_as_a_recipe() -> None:
     for arm in over().values():
         assert arm.recipe(seed=1).neighbours == arm.neighbours
