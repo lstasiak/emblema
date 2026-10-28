@@ -304,3 +304,130 @@ the fitting side's spread; units none of which holds two windows are refused. Th
 computed from the first reading's export by the same arithmetic; they are not, before this
 section is committed, and after the run they are recomputed so as a check that the code reads
 what the declaration says. M2 resolves no gain below its floor of about 0.15 (above).
+
+## 2026-10-28 — measured: each unit as its own reference, and the counts of readings
+
+**Question.** Does reading each distance against its own unit stop the alarm from flooding the
+first mission and the testbed? Does the frozen encoder then gain over its initialisation? And how
+much of what the detectors find is told by the sampling alone?
+
+**Conditions.**
+
+- *Commit*: `50054807` (every order carries it). *Machine*, tier, backbones, tasks and sides
+  as in the first reading. Validation side only; preliminary.
+- *Campaigns*: 14, as declared (M1 under `base1` and `base2`; SKAB, M2 and OPS-SAT under all
+  four). Run by `data/report/l33/second/run.sh` under `caffeinate`, 2026-10-28 17:45 to 22:16:
+  per backbone M1 84 to 100 min, M2 8 to 12 min, SKAB about a minute, OPS-SAT about half a minute.
+- *Restart*: the run script resumes a campaign from the last result in its log, and the trial
+  had left logs under two of the labels (`base1-skab-anomalies`, `base1-opssat-anomalies`).
+  `campaign_run` refused the trial's result as another order's answer, and both campaigns were
+  run again from the start. No trial cell entered the reading.
+- *Reading*: `read.sh` (verdicts, export, the declared pairs at 10,000 resamples), `beside.py`,
+  `flagged.py` (share of windows above the alarm, every seed and backbone) and `crosscheck.py`
+  (the check named in the declaration), all in `data/report/l33/second/`.
+
+**Check of the code.** `crosscheck.py` reads the first reading's exported answers by hand,
+unit by unit: each unit's median taken off and the result divided by 1.4826 × its median
+absolute deviation. For every arm, campaign and seed this equals the second reading's area to
+the fourth decimal. On M2 and OPS-SAT, every area of the first reading's three detectors comes
+back identical.
+
+**Windows above the alarm**, the range over the arms and backbones, the seeds pooled:
+
+| Task | Normal windows, first reading | Normal windows, this reading | Event windows, this reading |
+|---|---|---|---|
+| `esa-mission1-events` | 0.64–0.98 | 0.015–0.024 | 0.04–0.15 |
+| `skab-anomalies` | 0.92–0.97 | 0.007–0.041 | 0.07–0.25 |
+| `esa-mission2-events` | 0.002–0.11 | the same; counts 0.001 | 0.46–0.58; counts 0.00 |
+| `opssat-anomalies` | 0.007–0.022 | the same; counts 0.011 | 0.06–0.13; counts 0.05 |
+
+**Event-weighted PR-AUC**, mean over the three seeds (frozen encoder per backbone, base1 /
+base2 / tail1 / tail2; M1 and SKAB per unit, M2 and OPS-SAT as first registered; the first
+reading in brackets):
+
+| Task | Chance | Untrained encoder | Frozen encoder | Summaries | Counts |
+|---|---|---|---|---|---|
+| `esa-mission1-events` | 0.002 | 0.077 (0.032) | 0.094 / 0.075 (0.058 / 0.072) | 0.021 (0.021) | 0.006 |
+| `skab-anomalies` | 0.017 | 0.084 (0.024) | 0.096 / 0.093 / 0.090 / 0.094 (0.022–0.024) | 0.222 (0.212) | 0.059; 0.025 against the fitting side |
+| `esa-mission2-events` | 0.024 | 0.488 | 0.527 / 0.593 / 0.414 / 0.307 | 0.532 | 0.024 |
+| `opssat-anomalies` | 0.236 | 0.482 | 0.420 / 0.406 / 0.420 / 0.414 | 0.396 | 0.387 |
+
+**Per-campaign verdict** on the endpoint (frozen against untrained). M1: +0.017 and −0.002,
+both indistinguishable, where the first reading had both distinguishable below 0.05. SKAB:
++0.006 to +0.012, indistinguishable. M2 and OPS-SAT: unchanged from the first reading.
+
+**The declared pairs**, two backbones of a recipe pooled, gain in area with the 95 % interval:
+
+| Task | Recipe | Frozen − untrained | Summaries − untrained | Frozen − summaries | Frozen − counts | Untrained − counts |
+|---|---|---|---|---|---|---|
+| M1 | base | +0.007 [−0.011; +0.037] | **−0.056** [−0.139; −0.003] | **+0.063** [+0.011; +0.148] | **+0.079** [+0.023; +0.169] | |
+| SKAB | base | +0.011 [−0.044; +0.138] | +0.138 [−0.001; +0.237] | −0.127 [−0.214; +0.038] | +0.035 [−0.046; +0.257] | |
+| | tail | +0.008 [−0.046; +0.132] | +0.138 [−0.001; +0.237] | −0.130 [−0.220; +0.031] | +0.033 [−0.051; +0.251] | |
+| M2 | base | as first read | as first read | as first read | **+0.537** [+0.461; +0.645] | **+0.465** [+0.392; +0.646] |
+| | tail | as first read | as first read | as first read | **+0.337** [+0.266; +0.527] | **+0.465** [+0.392; +0.646] |
+| OPS-SAT | base | as first read | as first read | as first read | +0.027 [−0.073; +0.130] | +0.095 [−0.010; +0.192] |
+| | tail | as first read | as first read | as first read | +0.030 [−0.070; +0.133] | +0.095 [−0.010; +0.192] |
+
+Bold: past the least gain of 0.05 with the interval clear of zero. SKAB's counts are read per
+unit.
+
+**Readings beside the area**, mean over seeds and backbones: share of events found with at most
+1 % of normal windows flagged / corrected event-wise F0.5 at the detector's alarm; the first
+reading in brackets.
+
+| Task | Untrained encoder | Frozen encoder | Summaries | Counts |
+|---|---|---|---|---|
+| M1 | 0.19 / 0.29 (0.19 / 0.007) | 0.21 / 0.50 (0.20 / 0.004) | 0.08 / 0.22 (0.13 / 0.018) | 0.08 / 0.13 |
+| SKAB | 0.35 / 0.64 (0.21 / 0.057) | 0.34 / 0.77 (0.20 / 0.044) | 0.45 / 0.69 (0.45 / 0.040) | 0.18 / 0.52 |
+| M2 | as first read | as first read | as first read | 0.00 / 0.00 |
+| OPS-SAT | as first read | as first read | as first read | 0.04 / 0.18 |
+
+**Predictions against the reading.**
+
+| Declared | Read | Held |
+|---|---|---|
+| Every cell answers; M2 and OPS-SAT return the first reading's areas | 186 of 186 cells; identical to the fourth decimal | yes |
+| Normal windows above the alarm at most 0.10 on M1 and SKAB | 0.007 to 0.041 | yes |
+| SKAB, frozen − untrained within ±0.05 | +0.011 and +0.008; the intervals reach −0.046 and +0.138 | yes, in point |
+| SKAB, summaries lead both encoder arms by more than 0.05 | by 0.13 to 0.14, the intervals reaching −0.001 and −0.038 | in point, not confirmed |
+| M1, frozen − untrained +0.005 to +0.09, below 0.05 confirmed | +0.007 [−0.011; +0.037] | yes |
+| OPS-SAT, `counts_knn` within [0.40; 0.60], within 0.05 of the untrained encoder or above it | 0.387, 0.095 below it | no |
+
+**Conclusions.**
+
+1. Drift was what flooded the alarm. With each unit as its own reference, 1 to 4 % of normal
+   windows lie above it. Under the encoder and summary arms, event-wise F0.5 rises from
+   0.004–0.018 to 0.22–0.50 on M1 and from 0.040–0.057 to 0.64–0.77 on SKAB. The encoder
+   arms' areas rise 1.0 to 2.4 times on M1 and 3.5 to 4.3 times on SKAB; the summaries' barely
+   move.
+   The code reads what the declaration says (the check above). By the declared rule, the
+   per-unit reference becomes the reading of M1 and SKAB in the next screen.
+2. No task confirms a gain of 0.05 over the initialisation. On M1 the first reading's +0.033
+   shrinks to +0.007 [−0.011; +0.037]. The per-unit reference lifts the initialised encoder
+   (+0.045) more than the frozen one (+0.003 to +0.036), so the first gain lay mostly in how
+   months differ, not in what sets an event apart within its month. Every channel row of these
+   corpora is still drawn under both arms, so nothing here is read against the claim.
+3. On M1 both encoder arms now lead the summaries: the frozen one by +0.063 [+0.011; +0.148],
+   the initialised one by +0.056 [+0.003; +0.139]. The lead comes from the encoder's machinery,
+   not from its pretraining. On SKAB the summaries keep a lead of 0.13 to 0.14, with the
+   interval now reaching zero, as the declared limitation on the testbed's long events allows.
+4. On M1, M2 and SKAB the sampling tells little. Counts read 0.006 against a chance level of
+   0.002 on M1, 0.024 (chance itself) on M2, and 0.025 to 0.059 on SKAB against 0.017, where
+   both encoder arms reach about 0.09. On M2 every encoder arm beats the counts by 0.34 to
+   0.54, so its events lie in what the channels read, not in how they are sampled.
+5. On OPS-SAT, `counts_knn` (0.387) matches the frozen encoder (+0.03, indistinguishable) and
+   the summaries (0.396), and lies 0.095 below the initialised encoder [−0.010; +0.192]. By
+   the declared rule a representation is held there to the sampling's bar. The higher bar is
+   the plain count of readings (0.508, first reading): a neighbour distance over counts is not
+   a ranking by count.
+
+**Limitations.**
+
+- Validation side, tier M backbones on one machine; M1 under the base recipe only.
+- The per-unit reading is retrospective within a unit: a month or an experiment is read whole
+  before any of its windows is scored. An online detector would need a trailing reference.
+  That form is not measured here.
+- On SKAB an event covers about 46 % of its experiment, so each event is read over a spread its
+  own windows widen. The summaries' smaller lead may come from this as much as from the arms.
+- M2 resolves no gain below its floor (0.166 per campaign, 0.148 pooled); three seeds do not
+  lower it.

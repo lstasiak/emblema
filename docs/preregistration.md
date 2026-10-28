@@ -481,7 +481,9 @@ them.
   (`docs/verification/intensive-care-curve.md`, `docs/findings.md`).
 - The scale of pretraining: registered, no point read.
 - Sepsis endpoint: registered, nothing read.
-- The anomaly-detection tasks: registered (2026-10-27), first read (2026-10-28, `anomaly-tasks.md`): no task reaches the least gain over the initialisation; a second reading declared.
+- The anomaly-detection tasks: registered (2026-10-27), read twice (2026-10-28, the second
+  with each month or experiment as its own reference on M1 and SKAB; `anomaly-tasks.md`): no
+  task reaches the least gain over the initialisation.
 - The single test run: not made.
 
 ## Register of amendments
