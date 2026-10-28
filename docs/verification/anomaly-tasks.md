@@ -177,7 +177,7 @@ flagged / corrected event-wise F0.5 at the detector's alarm.
 |---|---|---|---|
 | `esa-mission1-events` | 0.19 / 0.007 | 0.20 (0.18–0.22) / 0.005 | 0.13 / 0.018 |
 | `esa-mission2-events` | 0.68 / 0.83 | 0.63 (0.40–0.82) / 0.70 | 0.72 / 0.84 |
-| `skab-anomalies` | 0.21 / 0.057 | 0.20 (0.18–0.23) / 0.044 | 0.46 / 0.040 |
+| `skab-anomalies` | 0.21 / 0.057 | 0.20 (0.18–0.23) / 0.044 | 0.45 / 0.040 |
 | `opssat-anomalies` | 0.16 / 0.41 | 0.04 (0.02–0.06) / 0.27 | 0.01 / 0.20 |
 
 **Predictions against the reading.**
