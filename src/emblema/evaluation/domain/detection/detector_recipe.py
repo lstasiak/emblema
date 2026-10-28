@@ -3,6 +3,7 @@ from math import isfinite
 
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import InvalidDetectorRecipeError
 
 
@@ -14,7 +15,8 @@ class DetectorRecipe:
     window by its mean distance to the nearest fitted windows, every feature standardised over
     the fitting side. Its alarm is set where a stated share of the fitting windows, each scored
     against the others, would be flagged, so the score a run answers is the distance above that
-    alarm: positive is an alarm, and the alarm is set without a label.
+    alarm: positive is an alarm, and the alarm is set without a label. The distance may first be
+    read against the window's own unit, the alarm then set over the fitting windows read so.
 
     Invariants: an encoder is read exactly when the features are an encoder's states; the
     neighbours are at least one; the contamination lies strictly between zero and one.
@@ -26,6 +28,7 @@ class DetectorRecipe:
         neighbours: How many nearest fitted windows a score is the mean distance to.
         contamination: The share of fitting windows the alarm is set to flag.
         seed: Seed of the fit, which decides what an encoder at its initialisation draws.
+        reference: What a window's distance is read against before the alarm.
     """
 
     features: DetectorFeatures
@@ -33,6 +36,7 @@ class DetectorRecipe:
     neighbours: int
     contamination: float
     seed: int
+    reference: ScoreReference = ScoreReference.FITTING_SIDE
 
     def __post_init__(self) -> None:
         if (self.reading is None) == self.features.reads_an_encoder:

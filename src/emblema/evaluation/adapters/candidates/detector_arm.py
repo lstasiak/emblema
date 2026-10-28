@@ -5,6 +5,7 @@ from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import InvalidDetectorRecipeError, UnknownKnobError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
@@ -16,10 +17,10 @@ class DetectorArm:
     """One detector a campaign competes, under a name of its own.
 
     What separates one of these from another is what a window is read as — an encoder's
-    states, pretrained or at their initialisation, or the summaries per channel — and the two
-    knobs of the detector itself, the neighbours a score is the distance to and the share of
-    the fitting side the alarm flags. A variant of an arm is the arm with one of those turned,
-    or the encoder's layer or pooling turned.
+    states, pretrained or at their initialisation, the summaries per channel or their counts of
+    readings — and the knobs of the detector itself: the neighbours a score is the distance to,
+    the share of the fitting side the alarm flags and what a distance is read against. A variant
+    of an arm is the arm with one of those turned, or the encoder's layer or pooling turned.
 
     Invariants: an arm over an encoder's states names the model whose shape it reads; one over
     the summaries names none.
@@ -35,9 +36,10 @@ class DetectorArm:
         pooling: How the states of a window become the one state the detector reads.
         neighbours: How many nearest fitted windows a score is the mean distance to.
         contamination: The share of fitting windows the alarm is set to flag.
+        reference: What a window's distance is read against before the alarm.
     """
 
-    KNOBS = ("neighbours", "contamination")
+    KNOBS = ("neighbours", "contamination", "reference")
 
     ref: CandidateRef
     features: DetectorFeatures
@@ -47,6 +49,7 @@ class DetectorArm:
     pooling: HeadPooling = field(default_factory=HeadPooling.mean)
     neighbours: int = 5
     contamination: float = 0.02
+    reference: ScoreReference = ScoreReference.FITTING_SIDE
 
     def __post_init__(self) -> None:
         if (self.architecture is None) == self.features.reads_an_encoder:
@@ -70,6 +73,13 @@ class DetectorArm:
             return replace(self, neighbours=self._count(knob, value))
         if knob == "contamination":
             return replace(self, contamination=self._share(knob, value))
+        if knob == "reference":
+            try:
+                return replace(self, reference=ScoreReference(value))
+            except ValueError as error:
+                raise UnknownKnobError(
+                    f"{knob} takes one of {[str(r) for r in ScoreReference]}, not {value!r}"
+                ) from error
         if not self.features.reads_an_encoder:
             raise UnknownKnobError(
                 f"a detector over {self.features} turns {self.KNOBS} and nothing else"
@@ -101,6 +111,7 @@ class DetectorArm:
             neighbours=self.neighbours,
             contamination=self.contamination,
             seed=seed,
+            reference=self.reference,
         )
 
     @staticmethod

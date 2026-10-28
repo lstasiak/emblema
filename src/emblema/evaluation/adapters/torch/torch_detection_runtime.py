@@ -17,6 +17,7 @@ from emblema.evaluation.adapters.torch.frozen_embedding import FrozenEmbedding
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
@@ -96,12 +97,17 @@ class TorchDetectionRuntime:
             layout=layout,
         ).to(self._device)
         embedding.eval()
+        per_unit = recipe.reference is ScoreReference.OWN_UNIT
         detector = NearestNeighbourDetector.fitted_on(
             self._states(embedding, layout, fitted_windows),
             neighbours=recipe.neighbours,
             contamination=recipe.contamination,
+            units=[str(window.unit) for window in fitting] if per_unit else None,
         )
-        answers = detector.scores(self._states(embedding, layout, scored_windows))
+        answers = detector.scores(
+            self._states(embedding, layout, scored_windows),
+            units=[str(labelled.window.unit) for labelled in scored] if per_unit else None,
+        )
         return ScoredOutcome(
             predictions=tuple(
                 WindowPrediction(

@@ -12,6 +12,7 @@ from emblema.evaluation.adapters.features.per_channel_features import PerChannel
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
+from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
@@ -30,10 +31,13 @@ class SummariesDetectionRuntime:
     """Fits a detector over the statistics of every channel of a window, in this process.
 
     The classical bar for a representation: the same table the trees read, standardised over
-    the fitting side and scored by the distance to the nearest fitting windows. Nothing here
-    reaches an encoder, so a process without the machine-learning stack can run it. The
-    seconds an outcome reports start once the block is at hand.
+    the fitting side and scored by the distance to the nearest fitting windows; or that table's
+    counts of readings alone, the bar of the sampling. Nothing here reaches an encoder, so a
+    process without the machine-learning stack can run it. The seconds an outcome reports start
+    once the block is at hand.
     """
+
+    FEATURES = frozenset({DetectorFeatures.SUMMARIES, DetectorFeatures.READING_COUNTS})
 
     def __init__(
         self, blocks: PublishedCorpusBlocks, *, store: ArtifactStore | None = None
@@ -50,9 +54,10 @@ class SummariesDetectionRuntime:
         *,
         retain: bool,
     ) -> ScoredOutcome:
-        if recipe.features is not DetectorFeatures.SUMMARIES:
+        if recipe.features not in self.FEATURES:
             raise UnsupportedDetectorFeaturesError(
-                f"this runtime reads the summaries per channel, not {recipe.features}"
+                "this runtime reads the summaries per channel or their counts, "
+                f"not {recipe.features}"
             )
         if not fitting:
             raise InvalidScoredOutcomeError("a detector needs a window to fit on")
@@ -60,13 +65,23 @@ class SummariesDetectionRuntime:
             raise InvalidScoredOutcomeError("there is no window to answer")
         read = ReadCorpus.every(self._blocks, (task,))[task.manifest]
         features = PerChannelFeatures(read.channels)
+        rows_of = (
+            features.counts_of
+            if recipe.features is DetectorFeatures.READING_COUNTS
+            else features.of
+        )
+        per_unit = recipe.reference is ScoreReference.OWN_UNIT
         started = time.perf_counter()
         detector = NearestNeighbourDetector.fitted_on(
-            features.of(read.windows(fitting)),
+            rows_of(read.windows(fitting)),
             neighbours=recipe.neighbours,
             contamination=recipe.contamination,
+            units=[str(window.unit) for window in fitting] if per_unit else None,
         )
-        answers = detector.scores(features.of(read.windows([w.window for w in scored])))
+        answers = detector.scores(
+            rows_of(read.windows([w.window for w in scored])),
+            units=[str(w.window.unit) for w in scored] if per_unit else None,
+        )
         return ScoredOutcome(
             predictions=tuple(
                 WindowPrediction(

@@ -7,6 +7,7 @@ from emblema.evaluation.adapters.candidates.detector_catalogue import DetectorCa
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
+from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     InvalidDetectorRecipeError,
     UnknownCandidateError,
@@ -84,6 +85,8 @@ def test_the_description_of_a_variant_records_the_knobs_turned() -> None:
         "frozen_knn@neighbours=5",
         "trees_knn",
         "frozen_knn@epochs=3",
+        "frozen_knn@reference=month",
+        "frozen_knn@reference=fitting",
     ],
     ids=[
         "no neighbour",
@@ -95,6 +98,8 @@ def test_the_description_of_a_variant_records_the_knobs_turned() -> None:
         "the default under another name",
         "unknown base",
         "unknown knob",
+        "an unknown reference",
+        "the default reference under another name",
     ],
 )
 def test_a_name_that_is_no_detector_is_refused(name: str) -> None:
@@ -138,3 +143,16 @@ def test_the_recipe_of_an_arm_carries_the_cells_seed_and_the_encoders_reading() 
     assert recipe.reading is not None
     assert (recipe.reading.architecture, recipe.reading.backbone) == (WEIGHTS, WEIGHTS)
     assert SUMMARIES.recipe(seed=1).reading is None
+
+
+def test_a_detector_read_against_its_unit_says_so_and_one_against_the_fit_says_nothing() -> None:
+    turned = CATALOGUE.arm_of(CandidateRef("summaries_knn@reference=unit"))
+    described = CATALOGUE.describe(CandidateRef("summaries_knn@reference=unit"))
+
+    assert turned.recipe(seed=1).reference is ScoreReference.OWN_UNIT
+    assert {p.name: p.value for p in described.method.parameters}["reference"] == "unit"
+    # A campaign declared before the reference was a knob keeps the design it was stored with.
+    assert "reference" not in {
+        p.name for p in CATALOGUE.describe(CandidateRef("summaries_knn")).method.parameters
+    }
+    assert FROZEN.recipe(seed=1).reference is ScoreReference.FITTING_SIDE

@@ -6,6 +6,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
+from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     InvalidCandidateVariantError,
     InvalidDetectorRecipeError,
@@ -69,14 +70,18 @@ class DetectorCatalogue:
     def _method(arm: DetectorArm) -> CandidateMethod:
         """What the detector was set to, beyond the seed each cell of the grid supplies itself.
 
-        An arm over the summaries names what it reads and its two knobs; one over an encoder's
-        states names the model it is shaped like too, the layer and the pooling it reads at.
+        An arm over the summaries or their counts names what it reads and the detector's knobs,
+        the reference only where it is not the fitting side's, so the campaigns declared before
+        it was a knob read as they were stored; one over an encoder's states names the model it
+        is shaped like too, the layer and the pooling it reads at.
         """
         stated: dict[str, object] = {
             "features": arm.features,
             "neighbours": arm.neighbours,
             "contamination": arm.contamination,
         }
+        if arm.reference is not ScoreReference.FITTING_SIDE:
+            stated["reference"] = arm.reference
         if arm.architecture is not None:
             stated["architecture"] = arm.architecture.key
             stated["layer"] = arm.encoder.layer

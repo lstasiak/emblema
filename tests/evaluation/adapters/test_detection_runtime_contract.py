@@ -9,6 +9,7 @@ to keep it.
 
 from collections.abc import Callable
 from dataclasses import replace
+from math import isfinite
 from pathlib import Path
 from typing import NamedTuple
 
@@ -20,6 +21,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
@@ -37,6 +39,12 @@ from tests.evaluation.support import WEIGHTS, labelled, task, window
 # held-out one is scored.
 FITTING = (window("a", 0, 10.0), window("a", 1, 15.0), window("b", 3, 10.0))
 SCORED = (labelled("c", 2, 10.0, 1.0),)
+# Scored windows of two units, one of which holds two, so each can be read against its unit.
+OF_TWO_UNITS = (
+    labelled("c", 2, 10.0, 1.0),
+    labelled("a", 0, 10.0, 0.0),
+    labelled("a", 1, 15.0, 0.0),
+)
 SUMMARIES = DetectorRecipe(
     features=DetectorFeatures.SUMMARIES, reading=None, neighbours=2, contamination=0.1, seed=1
 )
@@ -129,6 +137,36 @@ def recipe_for(adapted: Adapted) -> DetectorRecipe:
     return SUMMARIES
 
 
+def test_a_detector_read_against_its_units_answers_the_same_windows(adapted: Adapted) -> None:
+    recipe = replace(recipe_for(adapted), reference=ScoreReference.OWN_UNIT)
+
+    outcome = adapted.runtime.fit(recipe, adapted.task, FITTING, OF_TWO_UNITS, retain=False)
+
+    assert [p.window for p in outcome.predictions] == [w.window for w in OF_TWO_UNITS]
+    assert all(isfinite(p.predicted) for p in outcome.predictions)
+
+
+def test_a_detector_read_against_its_units_scores_otherwise_than_against_the_fit(
+    adapted: Adapted,
+) -> None:
+    if isinstance(adapted.runtime, InMemoryDetectionRuntime):
+        pytest.skip("the fake reads nothing and scores by the windows' ends alone")
+    whole = recipe_for(adapted)
+
+    against_the_fit = adapted.runtime.fit(whole, adapted.task, FITTING, OF_TWO_UNITS, retain=False)
+    against_the_unit = adapted.runtime.fit(
+        replace(whole, reference=ScoreReference.OWN_UNIT),
+        adapted.task,
+        FITTING,
+        OF_TWO_UNITS,
+        retain=False,
+    )
+
+    assert [p.predicted for p in against_the_unit.predictions] != [
+        p.predicted for p in against_the_fit.predictions
+    ]
+
+
 def test_every_scored_window_is_answered_once_in_the_order_given(adapted: Adapted) -> None:
     outcome = adapted.runtime.fit(recipe_for(adapted), adapted.task, FITTING, SCORED, retain=False)
 
@@ -169,3 +207,18 @@ def test_a_runtime_refuses_features_it_cannot_produce(adapted: Adapted) -> None:
 
     with pytest.raises(UnsupportedDetectorFeaturesError):
         adapted.runtime.fit(other, adapted.task, FITTING, SCORED, retain=False)
+
+
+def test_the_counts_of_readings_are_read_where_the_summaries_are_and_nowhere_else(
+    adapted: Adapted,
+) -> None:
+    if isinstance(adapted.runtime, InMemoryDetectionRuntime):
+        pytest.skip("the fake reads nothing and refuses no features")
+    counts = replace(SUMMARIES, features=DetectorFeatures.READING_COUNTS)
+
+    if recipe_for(adapted) is SUMMARIES:
+        outcome = adapted.runtime.fit(counts, adapted.task, FITTING, SCORED, retain=False)
+        assert [p.window for p in outcome.predictions] == [w.window for w in SCORED]
+    else:
+        with pytest.raises(UnsupportedDetectorFeaturesError):
+            adapted.runtime.fit(counts, adapted.task, FITTING, SCORED, retain=False)
