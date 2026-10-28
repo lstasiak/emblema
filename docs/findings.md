@@ -5,7 +5,7 @@ preliminary: each task's frozen test side is opened once, at the end. Each compa
 by a rule registered before its run ([preregistration](preregistration.md)); each row links the
 note that holds its evidence ([`verification/`](verification/README.md)).
 
-Last updated 2026-10-27.
+Last updated 2026-10-28.
 
 ## Status
 
@@ -76,10 +76,13 @@ Last updated 2026-10-27.
   the margin) and level with the trees at their default setting (+0.001 [−0.010; +0.011]); the
   same 0.008 as on the half. The registered rule closes this direction
   ([note](verification/encoder-candidates.md)).
-- **Next:** data in the tasks' regime for both legs (raw asynchronous telemetry, open
-  intensive-care sources), then anomaly tasks on telemetry without labels, read on the
-  representation pretraining now gives. The clinical confirmation is declared as a curve
-  against the network from scratch at its chosen rate.
+- **The anomaly tasks run, and read nothing yet for the claim.** Four tasks of events on
+  telemetry, fitted without a label and read by an event-weighted area: under the stays'
+  backbones, whose rows for these channels are drawn, the frozen encoder gains at most 0.04 over
+  its initialisation and loses 0.07 on OPS-SAT ([note](verification/anomaly-tasks.md)).
+- **Next:** pretraining on the tasks' regime for both legs (the satellites' first halves, open
+  intensive-care sources), with the anomaly tasks read on that representation. The clinical
+  confirmation is declared as a curve against the network from scratch at its chosen rate.
 
 ## Setup
 
@@ -204,6 +207,8 @@ pretraining against four, 0.021 for two.
 | Pretext, only the channel rows fitted on unlabelled windows | within 0.006 of the backbone that read the corpus (2012, C-MAPSS); 0.02 behind on 2019 | [zero-shot-pretext](verification/zero-shot-pretext.md) |
 | Pretext, rows copied from the same quantity in another corpus, no fit | within 0.01 to 0.02 of the fitted rows | [zero-shot-pretext](verification/zero-shot-pretext.md) |
 | Sepsis task at 4,000 patients, rows fitted | +0.031 [+0.015; +0.047] over drawn rows; none at 500 stays on 2012 | [task-transfer](verification/task-transfer.md) |
+| Events in telemetry without a label, nearest neighbours over the frozen encoder against its initialisation, channel rows drawn (two satellite missions, SKAB, OPS-SAT; four backbones) | M1 +0.033 [+0.005; +0.090], below the least gain 0.05; OPS-SAT **−0.069** [−0.110; −0.026], where a fragment's count of readings alone (0.51) beats every detector; M2 and SKAB indistinguishable, M2 unable to resolve 0.05 at three seeds | [anomaly-tasks](verification/anomaly-tasks.md) |
+| The same detector over the channels' summaries against the untrained encoder | SKAB **+0.188** [+0.057; +0.340], where both encoder arms read at chance; M1 and M2 indistinguishable; OPS-SAT −0.086 [−0.160; −0.002] | [anomaly-tasks](verification/anomaly-tasks.md) |
 
 ### What the failures have in common
 

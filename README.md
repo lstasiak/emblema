@@ -113,9 +113,10 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** pretraining data sampled like the tasks, including raw asynchronous spacecraft
-  telemetry, then anomaly detection on telemetry without labels, where the pretrained
-  representation is what a model has to work with.
+- **Next:** pretraining on data sampled like the tasks, including raw asynchronous spacecraft
+  telemetry, read by anomaly detection on telemetry without labels. Those tasks now run; under
+  backbones that never read these sensors the pretrained encoder does not beat its
+  initialisation.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 

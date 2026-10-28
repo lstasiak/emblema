@@ -107,3 +107,141 @@ is one for every task, so on the fragments, whose fitting side is a fifth anomal
 authors' count, the readings beside the area are taken at an alarm the benchmark would not
 set; the area itself is alarm-free. A run of flagged windows that crosses a window the task
 does not score, or an hour with no reading, counts as two false alarms in the event-wise score.
+
+## 2026-10-28 — measured: the first reading under the cell screen's backbones
+
+**Question.** Under the four backbones of the cell screen, does the nearest-neighbour detector
+over the frozen encoder's states set the annotated events apart better than the same detector
+over the encoder at its initialisation, and than over the channels' summaries, on four tasks
+none of the backbones read? On this first use the reading is of the instrument, not of the claim.
+
+**Conditions.**
+
+- *Commit*: `46ebac47` (every order carries it; `campaign_run` refused any other tree).
+  *Machine*: M1 Pro; the encoders on MPS, fp32; the distances and the summaries on the CPU;
+  tier M backbones. Validation side only; preliminary.
+- *Campaigns*: 16, one per task and backbone (`base1`, `base2`, `tail1`, `tail2`, as declared),
+  each three detectors × three seeds at every window, defined by `data/report/l33/define.sh`, run
+  by `run.sh` under `caffeinate` (2026-10-28 00:40 to 05:09; per backbone M1 about 55 min, M2
+  6 min, SKAB and OPS-SAT under a minute; no cell retried), read by
+  `SET=all bash data/report/l33/read.sh` (`scripts/campaign_report.py` per campaign,
+  `scripts/campaign_pairs_report.py --resamples 10000 --seed 1 --level 0.95 --floor-area 0.01`
+  over the two backbones of a recipe pooled), and `data/report/l33/beside.py all` for the
+  readings beside the area.
+- *Encoder reading*: every block side by side, mean over the window, as the campaign declares.
+  A first run read the last block alone through a wiring error; it was stopped, kept as a
+  diagnostic and is not reported.
+- *Validation sides as scored*: M1 41,088 windows, 4,759 positive, 62 events; M2 10,223 (the
+  mission's last hour has no reading), 475, 236; SKAB 2,350, 1,091, 22; OPS-SAT 352, 83, 83.
+
+**Event-weighted PR-AUC**, mean over the three seeds (base1 / base2 / tail1 / tail2; the
+untrained encoder and the summaries do not depend on the pretrained weights):
+
+| Task | Chance | Untrained encoder (control) | Frozen encoder (endpoint) | Summaries |
+|---|---|---|---|---|
+| `esa-mission1-events` | 0.002 | 0.032 | 0.058 / 0.072 / 0.058 / 0.067 | 0.021 |
+| `esa-mission2-events` | 0.024 | 0.488 | 0.527 / 0.593 / 0.414 / 0.307 | 0.532 |
+| `skab-anomalies` | 0.017 | 0.024 | 0.024 / 0.022 / 0.023 / 0.022 | 0.212 |
+| `opssat-anomalies` | 0.236 | 0.482 | 0.420 / 0.406 / 0.420 / 0.414 | 0.396 |
+
+**Per-campaign verdict** on the endpoint (frozen against untrained; least gain 0.05):
+
+| Task | base1 | base2 | tail1 | tail2 |
+|---|---|---|---|---|
+| `esa-mission1-events` | +0.026, distinguishable, below 0.05 | +0.040, distinguishable, below 0.05 | +0.026, distinguishable, below 0.05 | +0.035, distinguishable, below 0.05 |
+| `esa-mission2-events` | +0.039, indistinguishable | +0.105, indistinguishable | −0.074, indistinguishable | −0.182, indistinguishable |
+| `skab-anomalies` | −0.001, indistinguishable | −0.002, indistinguishable | −0.001, indistinguishable | −0.002, indistinguishable |
+| `opssat-anomalies` | −0.062, worse | −0.076, worse | −0.062, worse | −0.067, worse |
+
+**The declared pairs**, two backbones of a recipe pooled, gain in area with the 95 % interval
+(the floor 0.010 to 0.011, on M2 0.148 where the control's spread over seeds enters it):
+
+| Task | Recipe | Frozen − untrained | Summaries − untrained | Frozen − summaries |
+|---|---|---|---|---|
+| `esa-mission1-events` | base | +0.033 [+0.005; +0.090] | −0.011 [−0.037; +0.006] | +0.044 [+0.008; +0.115] |
+| | tail | +0.030 [+0.004; +0.086] | −0.011 [−0.037; +0.006] | +0.041 [+0.006; +0.113] |
+| `esa-mission2-events` | base | +0.072 [−0.068; +0.152] | +0.044 [−0.162; +0.145] | +0.028 [−0.039; +0.141] |
+| | tail | −0.128 [−0.310; +0.073] | +0.044 [−0.162; +0.145] | −0.172 [−0.267; +0.016] |
+| `skab-anomalies` | base | −0.001 [−0.007; +0.026] | **+0.188** [+0.057; +0.340] | **−0.189** [−0.335; −0.050] |
+| | tail | −0.001 [−0.006; +0.023] | **+0.188** [+0.057; +0.340] | **−0.189** [−0.336; −0.052] |
+| `opssat-anomalies` | base | **−0.069** [−0.110; −0.026] | **−0.086** [−0.160; −0.002] | +0.017 [−0.063; +0.094] |
+| | tail | **−0.065** [−0.101; −0.027] | **−0.086** [−0.160; −0.002] | +0.021 [−0.058; +0.096] |
+
+Bold: past the least gain of 0.05 with the interval clear of zero.
+
+**Readings beside the area**, mean over seeds and the four backbones (the frozen encoder's
+range over backbones in brackets): share of events found with at most 1 % of normal windows
+flagged / corrected event-wise F0.5 at the detector's alarm.
+
+| Task | Untrained encoder | Frozen encoder | Summaries |
+|---|---|---|---|
+| `esa-mission1-events` | 0.19 / 0.007 | 0.20 (0.18–0.22) / 0.005 | 0.13 / 0.018 |
+| `esa-mission2-events` | 0.68 / 0.83 | 0.63 (0.40–0.82) / 0.70 | 0.72 / 0.84 |
+| `skab-anomalies` | 0.21 / 0.057 | 0.20 (0.18–0.23) / 0.044 | 0.46 / 0.040 |
+| `opssat-anomalies` | 0.16 / 0.41 | 0.04 (0.02–0.06) / 0.27 | 0.01 / 0.20 |
+
+**Predictions against the reading.**
+
+| Declared | Read | Held |
+|---|---|---|
+| Every cell answers | 144 of 144 cells, no refusal, no retry | yes |
+| Frozen and summary detectors repeat over seeds | summaries exactly; frozen exactly on SKAB only, elsewhere a spread up to 0.03 (M1, OPS-SAT) and 0.36 (M2) | in part |
+| Frozen − untrained within ±0.05 on every task | M1 and SKAB yes; OPS-SAT −0.065 to −0.069; M2 −0.18 to +0.11, indistinguishable | in part |
+| Summaries lead both encoder arms by more than 0.05 on the satellites and the testbed | SKAB by 0.19; M1 0.01 to 0.05 behind; M2 within the noise | SKAB only |
+| `summaries_knn` on OPS-SAT within [0.4; 0.8] | 0.396 | no, by 0.004 |
+
+**Conclusions.**
+
+1. The instrument runs end to end on all four tasks under every backbone: 16 campaigns, 144
+   cells, verdicts out of the registry. The two arms that do not depend on the pretrained
+   weights read the same area in all four campaigns of a task.
+2. No task reaches the registered gain over the initialisation. On M1 the frozen encoder gains
+   0.026 to 0.040 under every backbone, distinguishable, below 0.05. On OPS-SAT it loses 0.06 to
+   0.08 under every backbone. On M2 the control's spread over seeds (0.31 to 0.64) leaves every
+   comparison indistinguishable. On SKAB it moves nothing.
+3. The frozen arm varies over seeds where the vocabulary grows. SKAB's channels have rows in
+   the checkpoint (identifiers 127–134 of the vocabulary the backbones were built over, never
+   trained, since the backbones read only the 2012 and 2019 stays). The raw satellite channels
+   (377–435) and the fragments' channels (436–444) get rows drawn per seed. The declared prediction overlooked this; the declaration's
+   own statement that the rows are random implies it.
+4. The summaries lead only on SKAB, and there both encoder arms read near chance (0.022 to
+   0.024 against 0.017). Within one experiment, the encoder arms score its event windows above its
+   normal windows in 15 to 18 of 22 experiments, the summaries in all 22 (base campaigns, every
+   seed). Across experiments the shift from the fitting recording dominates: 93 to 98 % of all
+   windows lie above the alarm under every arm, so the pooled ranking of the encoder arms sits
+   near chance. M1 shifts the same way between the mission's halves: the alarm set on the first
+   half flags 92 to 97 % of the second half's normal windows under the encoder arms and 64 %
+   under the summaries (base1, seed 1, `flagged.py` in the run's directory), which is why its
+   areas stay low; on M2 and OPS-SAT it flags 0 to 3 %.
+5. On OPS-SAT a count beats every detector. Scoring each validation fragment by its number of
+   readings alone, with no model, reads 0.508, above the untrained encoder (0.482), the frozen
+   one (0.41 to 0.42) and the summaries (0.396); its duration reads 0.418 (a diagnostic after
+   the run, `opssat_shortcut.py` in the run's directory; the best of nine of the authors'
+   features, chosen on this side, reads 0.63). Under the window of 1,340 s that holds a whole
+   fragment, the task rewards how much of the window is filled, and the encoder arms read
+   mostly that.
+6. Nothing here is read against the claim. Every channel row of these corpora is untrained
+   under both arms, so the comparison measures the encoder's machinery over random identities.
+   The reading that bears on the claim needs backbones pretrained on the satellites' first
+   halves (the next screen).
+
+**Limitations.**
+
+- Validation side, tier M backbones on one machine; the test sides are untouched.
+- The power simulation used the testbed's structure from the raw annotations (2,191 windows,
+  1,060 positive); the published corpus scores 2,350 and 1,091: five or six more windows at the
+  end of every experiment, 11 to 16 in four. The structure was cut from the annotations, not
+  from the published block, and the simulation was not rerun at the scored counts; the other
+  three tasks match it to the window (M2 one fewer).
+- The power simulation modelled the sampling of units and events, not the spread of a drawn
+  encoder over seeds. On M2 that spread (0.31 to 0.64 for the control) sets the floor at 0.148,
+  three times the least gain. The floor is the control's standard deviation over its repeats,
+  not its standard error, so more seeds do not lower it: M2 resolves no gain below about 0.15
+  while a drawn encoder spreads so.
+- On M2 one anomaly sits among 236 events, so its PR-AUC over anomalies alone (about 0.00 under
+  every arm) says nothing; on M1 it reads 0.023 to 0.035 under every arm.
+- On M2 the 18-hour channel never has two readings in an hour, so some of its summaries are
+  undefined on the whole fitting side and are held constant.
+- The OPS-SAT fitting side carries the authors' anomalous fragments (about a fifth), so the
+  detectors fit on contaminated data, as the benchmark's unsupervised ones do. The benchmark's
+  0.78 comes from tuned detectors over handcrafted features and is not reproduced here.
