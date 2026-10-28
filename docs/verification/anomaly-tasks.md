@@ -245,3 +245,62 @@ flagged / corrected event-wise F0.5 at the detector's alarm.
 - The OPS-SAT fitting side carries the authors' anomalous fragments (about a fifth), so the
   detectors fit on contaminated data, as the benchmark's unsupervised ones do. The benchmark's
   0.78 comes from tuned detectors over handcrafted features and is not reproduced here.
+
+## 2026-10-28 — declared before the run: each unit as its own reference, and the counts of readings
+
+**Questions.** (1) On the first mission and the testbed, where the alarm set on the fitting side
+flagged 64 to 98 % of the normal windows, does reading each distance against its own unit (its
+month, its experiment) let the events stand out, and does the frozen encoder then gain over its
+initialisation? (2) On every task, how much of what the detectors find does the sampling alone
+tell, read by a detector over the counts of readings per channel?
+
+**Conditions.**
+
+- *Commit*: the one that adds this section. *Machine*, tier, backbones, tasks and the fitting
+  and validation sides as in the measured section above.
+- *Campaigns* (register, 2026-10-28): `campaigns/detection-events-per-unit.toml` over
+  `esa-mission1-events` (under `base1` and `base2` only: its cells take six minutes each) and
+  `skab-anomalies` (all four backbones); `campaigns/detection-events-counts.toml` over
+  `esa-mission2-events` and `opssat-anomalies` (all four). Seeds 1 to 3, the least gain 0.05 and
+  the floor's fixed part 0.01 unchanged. Defined and ordered by `data/report/l33/second/define.sh`
+  from `plan.txt`, run by `run.sh`, read by `read.sh` and `beside.py`.
+- *Reference per unit*: a window's distance less the median of its unit's distances, over their
+  median absolute deviation times 1.4826 (one where it is zero); the alarm is the 98th
+  percentile of the fitting windows read so within their own units. No label is read. A unit's
+  windows are read together, so the detection is retrospective within a unit.
+- *Counts*: `counts_knn` reads one number per channel, the readings the window holds, with the
+  same five neighbours and alarm.
+- *Trial*: one campaign of each file (`base1-skab-anomalies`, `base1-opssat-anomalies`), run and
+  accepted before this section was committed (15 and 12 cells, 71 s and 49 s), its measures not
+  read.
+
+**Predictions, from the first reading's intervals.**
+
+| | Predicted | Source |
+|---|---|---|
+| Mechanics | Every cell answers. On M2 and OPS-SAT the three detectors of the first reading return its areas to the third decimal (untrained 0.488 / 0.482, summaries 0.532 / 0.396). | first reading |
+| Alarm, M1 and SKAB | Normal windows above the alarm fall from 0.64–0.98 to at most 0.10 under every arm | the construction: every unit read as the fitting units were |
+| SKAB, frozen − untrained | Within ±0.05 | first reading −0.001 [−0.007; +0.026]; rows of SKAB's channels untrained in both arms |
+| SKAB, summaries − both encoder arms | More than +0.05 | within one experiment the summaries ranked the event above the normal windows in 22 of 22 experiments, the encoder arms in 15 to 18 |
+| M1, frozen − untrained | +0.005 to +0.09, below 0.05 confirmed | first reading +0.033 [+0.005; +0.090] |
+| OPS-SAT, counts | `counts_knn` within [0.40; 0.60], within 0.05 of the untrained encoder (0.482) or above it | a fragment's count of readings alone read 0.508, its duration 0.418 |
+| M1, M2, counts | No prediction; descriptive | no earlier reading |
+
+**Levels and what each outcome would mean.** As registered: a gain at or above 0.05 is real; a
+loss beyond 0.05 is harm. If the per-unit reference brings the alarm to the predicted share and
+lifts the areas of M1 and SKAB, it becomes the reading of those tasks in the next screen; if
+not, drift is not what holds them down and the next screen reads them as first registered. If
+`counts_knn` matches or beats the encoder arms on a task, the task's events are told by the
+sampling, and a representation is held to that bar there.
+
+**Limitations declared.** A unit is read whole, so an event that fills most of its month (some
+of the first mission's last up to forty days) is read against itself and can vanish. The
+testbed's events cover about 46 % of each experiment: the order within an experiment is kept,
+but its event windows are read over a spread their own share widens, about two spreads above
+the median where an experiment with few events would put them nine, so pooled with the other
+experiments they lose standing, and an experiment more than half event would read its events
+as the norm. A unit without a spread of its own, a lone window or windows alike, is read over
+the fitting side's spread; units none of which holds two windows are refused. The per-unit areas of the encoder and summary arms could be
+computed from the first reading's export by the same arithmetic; they are not, before this
+section is committed, and after the run they are recomputed so as a check that the code reads
+what the declaration says. M2 resolves no gain below its floor of about 0.15 (above).
