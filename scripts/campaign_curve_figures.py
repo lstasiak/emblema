@@ -137,6 +137,8 @@ def read(directory: Path) -> Report:
                 score=float(row[score]),
                 brier=float(row["brier"]) if area else None,
                 seconds=float(row["seconds"]),
+                # Exports written before the area under the precision-recall curve hold none.
+                precision_recall=float(row["pr_auc"]) if area and row.get("pr_auc") else None,
             )
             for row in csv.DictReader(handle)
         )

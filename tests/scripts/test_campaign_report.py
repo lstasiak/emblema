@@ -129,7 +129,7 @@ def binary_campaign() -> CampaignReading:
     return grid.complete(CLOSED_AT)
 
 
-def test_a_campaign_read_by_area_reports_areas_and_brier_scores(tmp_path: Path) -> None:
+def test_a_campaign_read_by_area_reports_areas_and_the_two_scores_beside(tmp_path: Path) -> None:
     registry = InMemoryEvaluationCampaignRepository()
     store(registry, binary_campaign())
 
@@ -137,8 +137,11 @@ def test_a_campaign_read_by_area_reports_areas_and_brier_scores(tmp_path: Path) 
 
     cells = (tmp_path / CELLS).read_text().splitlines()
     comparisons = (tmp_path / COMPARISONS).read_text().splitlines()
-    assert cells[0] == "candidate,kind,budget,windows,seed,units,auroc,brier,seconds"
+    assert cells[0] == "candidate,kind,budget,windows,seed,units,auroc,brier,pr_auc,seconds"
     assert cells[1].startswith("from_scratch,neural,50,50,1,6,0.0,")
+    # The area under the precision-recall curve beside: a perfect ranking holds all of it.
+    assert all(0.0 < float(row.split(",")[8]) <= 1.0 for row in cells[1:])
+    assert any(float(row.split(",")[8]) == 1.0 for row in cells[1:] if ",1.0," in row)
     assert comparisons[0].startswith("candidate,budget,windows,repeats,control_auroc,")
     assert comparisons[1].startswith("full_fine_tuning,200,200,2,0.0,0.0,1.0,0.0,1.0,1.0,")
     rendered = (tmp_path / VERDICT).read_text()
