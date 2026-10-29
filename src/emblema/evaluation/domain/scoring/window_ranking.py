@@ -111,3 +111,28 @@ class WindowRanking:
         if positives == 0 or negatives == 0:
             raise InvalidWindowRankingError("the weights leave one outcome only")
         return area / (positives * negatives)
+
+    @property
+    def average_precision(self) -> float:
+        """The area under the precision-recall curve over every window, each unit counted once.
+
+        Swept from the highest answer down, a group of equal answers taken whole: every positive
+        of the group adds the precision once the group is in, so a tie earns neither the order a
+        sort happened to give it nor the order against it. Reported beside the ROC area; it
+        moves with the share of positives, which the ROC area does not.
+        """
+        found = taken = 0
+        area = 0.0
+        found_in_group = taken_in_group = 0
+        last = len(self.sequence) - 1
+        for place in range(last, -1, -1):
+            found_in_group += self.positive[place]
+            taken_in_group += 1
+            # In ascending order a group ends at the window that closes its tie, so going down
+            # a group is whole once the window below closes one, or no window is left.
+            if place == 0 or self.closes_tie[place - 1]:
+                found += found_in_group
+                taken += taken_in_group
+                area += found_in_group * found / taken
+                found_in_group = taken_in_group = 0
+        return area / found
