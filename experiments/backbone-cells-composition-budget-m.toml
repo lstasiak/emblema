@@ -1,0 +1,62 @@
+# The run that sets how long the pretrainings of the composition train, before any of them is
+# ordered: the base recipe over the intensive-care stays and the raw satellite telemetry at a seed
+# none of them uses, capped at 24 epochs as the screen over cells was. The epochs are read off
+# this run's validation by the rule that screen used (scripts/pretraining_budget_report.py: every
+# term stopped learning), and the backbone is read on no task.
+#
+# Half the 2012 and half the 2019 training stays, each ranked by the run's seed, so a task reads
+# stays the pretraining saw and stays it did not; the eICU demo's stays of 48 hours; the first
+# half of each mission's months. Each corpus is read as often as a sampling temperature of one
+# half gives it, the rule that weighed 2012 against 2019 before, in whole passes: about 2,000,
+# 23,000, 740 and 77,000 training windows take 6, 2, 10 and 1 passes, about 8, 32, 5 and 54 % of
+# the steps (55 % for the telemetry at the exact temperature).
+#
+# The shape, cells, masks, terms and step of the base recipe over cells.
+name = "backbone-cells-composition-budget-m"
+tier = "M"
+corpora = ["physionet2012", "physionet2019", "eicu_demo", "esa_ad_raw"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[fraction]
+physionet2012 = 0.5
+physionet2019 = 0.5
+
+[passes]
+physionet2012 = 6
+physionet2019 = 2
+eicu_demo = 10
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 6
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 24
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 0
+
+[checkpoint]
+every_steps = 2000
