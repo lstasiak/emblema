@@ -9,11 +9,19 @@ unpacked, and fetched again; any other failure is reported at the end without st
     uv run scripts/fetch_corpora.py cmapss skab    # a selection
     uv run scripts/fetch_corpora.py --recheck      # hash the files again, trusting nothing
     uv run scripts/fetch_corpora.py --list
+    uv run --env-file .env.r2 scripts/fetch_corpora.py --mirror           # copy to the store
+    uv run scripts/fetch_corpora.py --from-store physionet2012             # read the copy
 
-No mirrors: the source of record carries the licence and version; GitHub sources are commit-pinned.
+The source of record carries the licence and version; GitHub sources are commit-pinned. A corpus
+under an open licence may also be mirrored in the artifact store, because its source can stall a
+transfer for hours and a paid accelerator waits on it: ``--mirror`` copies the files there and
+pins each copy's SHA-256 in ``raw_mirror.sha256``, and ``--from-store`` reads a pinned copy before
+the source, which a missing or failing copy falls back to. A listing travels as one tarball of its
+files. Every file of a mirrored corpus is checked against its pin, whichever way it arrived.
 """
 
 import argparse
+import gzip
 import hashlib
 import html.parser
 import json
@@ -28,7 +36,10 @@ import zlib
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    from emblema.shared.ports.artifact_store import ArtifactStore
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data" / "raw"
 CHUNK = 8 * 1024 * 1024
@@ -39,6 +50,8 @@ RANGE_NOT_SATISFIABLE = 416
 # What arrived stays in the partial file, so the next run resumes from it.
 SILENCE = 60.0
 DIGEST_CACHE = ".digests.json"
+# The copies of open corpora in the artifact store, as `sha256sum` lines over `<corpus>/<file>`.
+MIRROR_PINS = Path(__file__).resolve().parent / "raw_mirror.sha256"
 # Compression method 9, Deflate64 (PKWARE "enhanced deflate"): zlib has no decompressor for it, so
 # zipfile raises NotImplementedError on such a member. The ESA mission archives use it for one
 # metadata CSV each, everything else in them is stored or deflated.
@@ -92,11 +105,13 @@ class Corpus:
         key: Directory name under ``data/raw/`` and the command-line selector.
         title: Human-readable name with the publisher.
         archives: Files or listings to download, in order.
+        mirrored: Whether its licence lets the files be copied to the artifact store.
     """
 
     key: str
     title: str
     archives: tuple[Archive | Listing, ...]
+    mirrored: bool = False
 
 
 # master of each repository on 2026-09-11; the archive URL below is immutable for a commit.
@@ -173,11 +188,13 @@ CORPORA: tuple[Corpus, ...] = (
             Archive(url=f"{PHYSIONET}/Outcomes-b.txt", filename="Outcomes-b.txt"),
             Archive(url=f"{PHYSIONET}/Outcomes-c.txt", filename="Outcomes-c.txt"),
         ),
+        mirrored=True,
     ),
     Corpus(
         key="physionet2019",
         title="PhysioNet/CinC Challenge 2019 (physionet.org)",
         archives=(Listing(url=PHYSIONET_2019, directory="training"),),
+        mirrored=True,
     ),
     Corpus(
         key="tep",
@@ -496,16 +513,31 @@ def write_deflate64(archive: Path, member: zipfile.ZipInfo, into: Path) -> Path:
     return target
 
 
-def fetch(corpus: Corpus, *, recheck: bool = False) -> Iterator[Fetched]:
+def fetch(
+    corpus: Corpus, *, recheck: bool = False, store: "ArtifactStore | None" = None
+) -> Iterator[Fetched]:
+    """Every archive of the corpus, from the store's pinned copy first when a store is given."""
     directory = DATA_ROOT / corpus.key
     directory.mkdir(parents=True, exist_ok=True)
+    pins = mirror_pins() if corpus.mirrored else {}
     for archive in corpus.archives:
         name = archive.filename if isinstance(archive, Archive) else archive.directory
         try:
             if isinstance(archive, Listing):
-                yield fetch_listing(corpus, archive, directory, recheck=recheck)
+                yield fetch_listing(
+                    corpus,
+                    archive,
+                    directory,
+                    recheck=recheck,
+                    store=store,
+                    pin=pins.get(f"{corpus.key}/{bundle_name(archive)}"),
+                    contents_pin=pins.get(f"{corpus.key}/{archive.directory}/"),
+                )
             else:
-                yield fetch_archive(corpus, archive, directory, recheck=recheck)
+                pin = pins.get(f"{corpus.key}/{archive.filename}")
+                yield fetch_archive(
+                    corpus, archive, directory, recheck=recheck, store=store, pin=pin
+                )
         except Exception as error:
             # One archive is one file of one corpus. The rest of the run is still worth doing, and
             # the checksums of what did arrive are still worth reporting.
@@ -513,47 +545,220 @@ def fetch(corpus: Corpus, *, recheck: bool = False) -> Iterator[Fetched]:
             yield Fetched(corpus.key, name, 0, "", "not verified", f"{error}")
 
 
-def fetch_listing(corpus: Corpus, listing: Listing, directory: Path, *, recheck: bool) -> Fetched:
+def fetch_listing(
+    corpus: Corpus,
+    listing: Listing,
+    directory: Path,
+    *,
+    recheck: bool,
+    store: "ArtifactStore | None" = None,
+    pin: str | None = None,
+    contents_pin: str | None = None,
+) -> Fetched:
     """Download every file of the listing; report the listing as one row.
 
     The files of a listing are small and many, so each is hashed as it is checked rather than
     remembered: the note of digests is kept for archives of gigabytes, and rewriting it once per
-    file would cost more than hashing a few kilobytes.
+    file would cost more than hashing a few kilobytes. A listing unpacked from the store's tarball
+    is reported from the files on disk, without asking the source what it lists; the pin of its
+    contents, checked whichever way the files came, turns a file missing, cut short or left over
+    into a mismatch rather than a quieter digest.
     """
     root = directory / listing.directory
-    paths = sorted(listed(listing.url))
-    present = sum(1 for path in paths if (root / path).exists())
-    note(f"{listing.directory}: {len(paths):,} files, {present:,} already downloaded")
+    tarball = directory / bundle_name(listing)
+    marker = directory / f".unpacked-{tarball.name}"
+    if (
+        store is not None
+        and pin is not None
+        and not marker.exists()
+        and from_store(store, pin, tarball)
+    ):
+        unpack(tarball, directory)
+    if marker.exists():
+        paths = sorted(path.relative_to(root).as_posix() for path in listing_files(root))
+        note(f"{listing.directory}: {len(paths):,} files from the mirror")
+    else:
+        paths = sorted(listed(listing.url))
+        present = sum(1 for path in paths if (root / path).exists())
+        note(f"{listing.directory}: {len(paths):,} files, {present:,} already downloaded")
+        for path in paths:
+            download(urllib.parse.urljoin(listing.url, path), root / path, quiet=True)
+    size, digest = listing_contents(root, paths)
+    verdict = "none published"
+    if contents_pin is not None and digest != contents_pin:
+        verdict = (
+            f"MISMATCH with the mirror's pin (got {digest}); "
+            f"remove {root} and its .unpacked marker, then fetch again"
+        )
+    return Fetched(corpus.key, listing.directory, size, digest, verdict)
+
+
+def listing_contents(root: Path, paths: Iterable[str]) -> tuple[int, str]:
+    """Bytes and digest of a listing: the digest of every file's digest and path, in order."""
     size = 0
     digest = hashlib.sha256()
     for path in paths:
         target = root / path
-        download(urllib.parse.urljoin(listing.url, path), target, quiet=True)
         sha256, _ = digests(target)
         size += target.stat().st_size
         digest.update(f"{sha256}  {path}\n".encode())
-    return Fetched(corpus.key, listing.directory, size, digest.hexdigest(), "none published")
+    return size, digest.hexdigest()
 
 
-def fetch_archive(corpus: Corpus, archive: Archive, directory: Path, *, recheck: bool) -> Fetched:
+def fetch_archive(
+    corpus: Corpus,
+    archive: Archive,
+    directory: Path,
+    *,
+    recheck: bool,
+    store: "ArtifactStore | None" = None,
+    pin: str | None = None,
+) -> Fetched:
     target = directory / archive.filename
-    download(archive.url, target)
+    mirrored = (
+        store is not None
+        and pin is not None
+        and not target.exists()
+        and from_store(store, pin, target)
+    )
+    if not mirrored:
+        download(archive.url, target)
     sha256, md5 = checksums(target, recheck=recheck)
-    row = Fetched(
-        corpus.key,
-        archive.filename,
-        target.stat().st_size,
-        sha256,
+    verdict = (
         checksum_status(archive.md5, md5)
         if archive.sha256 is None
-        else checksum_status(archive.sha256, sha256),
+        else checksum_status(archive.sha256, sha256)
     )
+    if pin is not None and sha256 != pin and not verdict.startswith("MISMATCH"):
+        verdict = f"MISMATCH with the mirror's pin (got {sha256})"
+    row = Fetched(corpus.key, archive.filename, target.stat().st_size, sha256, verdict)
     if not row.ok:
         forget(target)
         target.replace(target.with_suffix(target.suffix + ".bad"))
     elif archive.filename.endswith((".zip", ".tar.gz")):
         unpack(target, directory)
     return row
+
+
+def bundle_name(listing: Listing) -> str:
+    """The name the store's copy of a listing goes by: one tarball of its directory."""
+    return f"{listing.directory}.tar.gz"
+
+
+def listing_files(root: Path) -> list[Path]:
+    """The files of a listing on disk, without notes, metadata or interrupted downloads."""
+    return sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file()
+        and path.suffix != ".part"
+        and not any(part.startswith(".") for part in path.relative_to(root).parts)
+    )
+
+
+def bundle(root: Path, target: Path) -> Path:
+    """One gzipped tarball of a listing's files.
+
+    Names, owners, modes and times are fixed and the members sorted, so the same files tar to the
+    same bytes under the same zlib; the listing's identity is still the pin of its contents, not
+    of the tarball, which another zlib may compress differently.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_suffix(target.suffix + ".part")
+    with (
+        partial.open("wb") as sink,
+        gzip.GzipFile(filename="", mode="wb", fileobj=sink, mtime=0) as zipped,
+        tarfile.open(fileobj=zipped, mode="w", format=tarfile.PAX_FORMAT) as tarball,
+    ):
+        for path in listing_files(root):
+            member = tarfile.TarInfo(f"{root.name}/{path.relative_to(root).as_posix()}")
+            member.size = path.stat().st_size
+            member.mode = 0o644
+            with path.open("rb") as source:
+                tarball.addfile(member, source)
+    partial.replace(target)
+    return target
+
+
+def from_store(store: "ArtifactStore", pin: str, target: Path) -> bool:
+    """Lay the store's copy pinned to ``pin`` at ``target``; False when it cannot be had.
+
+    The store verifies the bytes against the pin before the file appears, so a copy that is
+    missing, damaged or unreachable leaves nothing behind and the source of record is asked
+    instead.
+    """
+    from emblema.shared.adapters.storage.layout import address_of
+    from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
+    from emblema.shared.kernel.retention import Retention
+
+    ref = address_of(Checksum(HashAlgorithm.SHA256, pin), Retention.DURABLE)
+    try:
+        store.get_file(ref, target)
+    except Exception as error:
+        # Whatever went wrong with the copy, the source still has the file and the pin still
+        # checks what arrives from it.
+        note(f"{target.name}: not in the mirror ({error}), from the source")
+        return False
+    note(f"{target.name}: from the mirror")
+    return True
+
+
+def mirror_pins(path: Path | None = None) -> dict[str, str]:
+    """The digest each mirrored copy must hash to, by ``<corpus>/<file>``; none before a mirror."""
+    pins = MIRROR_PINS if path is None else path
+    if not pins.exists():
+        return {}
+    entries = {}
+    for line in pins.read_text(encoding="utf-8").splitlines():
+        digest, _, name = line.partition("  ")
+        entries[name] = digest
+    return entries
+
+
+def write_mirror_pins(entries: dict[str, str], path: Path | None = None) -> None:
+    pins = MIRROR_PINS if path is None else path
+    lines = "".join(f"{entries[name]}  {name}\n" for name in sorted(entries))
+    pins.write_text(lines, encoding="utf-8")
+
+
+def mirror(corpus: Corpus, store: "ArtifactStore") -> dict[str, str]:
+    """Copy a corpus's files to the store and return the pins of the copies.
+
+    The files are fetched and checked first, against the pins already written too, so a copy is
+    only ever made of bytes that passed; a corpus mirrored for the first time is trusted as its
+    source serves it, since no publisher checksum exists to check it by. A listing is tarred
+    from the files on disk only when they are exactly the files the source lists, and pinned
+    twice: by its contents, which a later mirror must match, and by its tarball, which the store
+    addresses.
+
+    Raises:
+        SystemExit: If the corpus is not one whose licence lets it be copied, a file did not
+            pass its checks, or the files on disk are not the listing's.
+    """
+    if not corpus.mirrored:
+        raise SystemExit(f"{corpus.key} is not marked for the mirror: its licence was not cleared")
+    rows = list(fetch(corpus))
+    failed = [row for row in rows if not row.ok]
+    if failed:
+        raise SystemExit(f"not mirrored, fetch {corpus.key} again first:\n{problems(failed)}")
+    directory = DATA_ROOT / corpus.key
+    entries: dict[str, str] = {}
+    for archive, row in zip(corpus.archives, rows, strict=True):
+        if isinstance(archive, Listing):
+            root = directory / archive.directory
+            on_disk = [path.relative_to(root).as_posix() for path in listing_files(root)]
+            if listing_contents(root, on_disk)[1] != row.sha256:
+                raise SystemExit(f"{root} holds files the listing does not; remove them first")
+            entries[f"{corpus.key}/{archive.directory}/"] = row.sha256
+            source = bundle(root, directory / bundle_name(archive))
+            key = f"{corpus.key}/{source.name}"
+        else:
+            source = directory / archive.filename
+            key = f"{corpus.key}/{archive.filename}"
+        digest = store.put_file(source).checksum.digest
+        note(f"{key}: mirrored as {digest}")
+        entries[key] = digest
+    return entries
 
 
 def report(rows: Iterable[Fetched]) -> str:
@@ -575,6 +780,14 @@ def problems(rows: Iterable[Fetched]) -> str:
     return "\n".join(lines)
 
 
+def configured_store_from_environment() -> "ArtifactStore":
+    """The artifact store the environment names; the package is needed for the mirror alone."""
+    from emblema.config.settings import Settings
+    from emblema.entrypoints.configured import configured_store
+
+    return configured_store(Settings())
+
+
 def select(keys: list[str]) -> tuple[Corpus, ...]:
     if not keys:
         return CORPORA
@@ -594,14 +807,40 @@ def main() -> None:
         action="store_true",
         help="hash every file again instead of trusting the remembered checksums",
     )
+    parser.add_argument(
+        "--mirror",
+        action="store_true",
+        help="copy the corpora to the configured artifact store and pin the copies; "
+        "default: every corpus marked for the mirror",
+    )
+    parser.add_argument(
+        "--from-store",
+        action="store_true",
+        help="read each pinned copy from the configured artifact store before the source",
+    )
     args = parser.parse_args()
     if args.list:
         for corpus in CORPORA:
-            print(f"{corpus.key:14} {corpus.title}")
+            mirrored = ", mirrored" if corpus.mirrored else ""
+            print(f"{corpus.key:14} {corpus.title}{mirrored}")
             for archive in corpus.archives:
                 print(f"{'':14} {archive.url}")  # a listing's one index page, a file's address
         return
-    rows = [row for corpus in select(args.corpora) for row in fetch(corpus, recheck=args.recheck)]
+    if args.mirror:
+        target = configured_store_from_environment()
+        corpora = select(args.corpora) if args.corpora else tuple(c for c in CORPORA if c.mirrored)
+        entries = mirror_pins()
+        for corpus in corpora:
+            entries.update(mirror(corpus, target))
+        write_mirror_pins(entries)
+        print(MIRROR_PINS.read_text(encoding="utf-8"), end="")
+        return
+    store = configured_store_from_environment() if args.from_store else None
+    rows = [
+        row
+        for corpus in select(args.corpora)
+        for row in fetch(corpus, recheck=args.recheck, store=store)
+    ]
     print(f"\nData root: {DATA_ROOT}\n")
     print(report(rows))
     failed = [row for row in rows if not row.ok]

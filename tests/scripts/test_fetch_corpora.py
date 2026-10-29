@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import os
 import re
 import struct
 import tarfile
@@ -15,6 +16,10 @@ from urllib.parse import urlparse
 
 import pytest
 
+from emblema.shared.adapters.storage.layout import address_of
+from emblema.shared.adapters.storage.local_directory import LocalDirectoryArtifactStore
+from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
+from emblema.shared.kernel.retention import Retention
 from scripts import fetch_corpora
 from scripts.corpus_budget_report import DEFAULT_CONFIG, Budget
 from scripts.fetch_corpora import (
@@ -25,17 +30,22 @@ from scripts.fetch_corpora import (
     Corpus,
     Fetched,
     Listing,
+    bundle,
+    bundle_name,
     checksum_status,
     checksums,
     download,
     extract,
     fetch,
     listed,
+    mirror,
+    mirror_pins,
     problems,
     report,
     select,
     unpack,
     utsd_archives,
+    write_mirror_pins,
 )
 
 LOCAL_HEADER = "<4sHHHHHIIIHH"
@@ -623,3 +633,305 @@ def test_fetch_downloads_every_file_of_a_listing_and_reports_it_as_one_row(
         content = f"https://example.org/training/{path}".encode()
         digest.update(f"{hashlib.sha256(content).hexdigest()}  {path}\n".encode())
     assert row.sha256 == digest.hexdigest()
+
+
+def sha256_of(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def stored(store: LocalDirectoryArtifactStore, content: bytes) -> str:
+    return store.put(content).checksum.digest
+
+
+def refuse_the_source(*args: object, **kwargs: object) -> None:
+    raise AssertionError("the source of record was asked")
+
+
+@pytest.fixture
+def mirrored_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setattr(fetch_corpora, "DATA_ROOT", tmp_path / "raw")
+    monkeypatch.setattr(fetch_corpora, "MIRROR_PINS", tmp_path / "pins.sha256")
+    return tmp_path
+
+
+def archive_corpus(*, mirrored: bool = True) -> Corpus:
+    return Corpus(
+        key="x",
+        title="x",
+        archives=(Archive(url="https://example.org/a.txt", filename="a.txt"),),
+        mirrored=mirrored,
+    )
+
+
+def listing_corpus() -> Corpus:
+    return Corpus(
+        key="x",
+        title="x",
+        archives=(Listing(url="https://example.org/training/", directory="training"),),
+        mirrored=True,
+    )
+
+
+def lay_listing(root: Path, files: dict[str, bytes]) -> None:
+    for name, content in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_bytes(content)
+
+
+def test_a_pinned_copy_is_read_from_the_store_without_asking_the_source(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    store = LocalDirectoryArtifactStore(mirrored_root / "store")
+    write_mirror_pins({"x/a.txt": stored(store, b"data")})
+    monkeypatch.setattr(fetch_corpora, "download", lambda url, target: None)
+
+    (row,) = fetch(archive_corpus(), store=store)
+
+    assert (row.ok, row.sha256) == (True, sha256_of(b"data"))
+    assert (mirrored_root / "raw" / "x" / "a.txt").read_bytes() == b"data"
+
+
+def test_a_copy_missing_from_the_store_falls_back_to_the_source(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    store = LocalDirectoryArtifactStore(mirrored_root / "store")
+    write_mirror_pins({"x/a.txt": sha256_of(b"data")})
+    monkeypatch.setattr(fetch_corpora, "download", lambda url, target: target.write_bytes(b"data"))
+
+    (row,) = fetch(archive_corpus(), store=store)
+
+    assert (row.ok, row.sha256) == (True, sha256_of(b"data"))
+
+
+def test_a_file_from_the_source_that_misses_its_pin_is_set_aside(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    write_mirror_pins({"x/a.txt": sha256_of(b"data")})
+    monkeypatch.setattr(fetch_corpora, "download", lambda url, target: target.write_bytes(b"other"))
+
+    (row,) = fetch(archive_corpus())
+
+    assert not row.ok
+    assert row.verdict.startswith("MISMATCH with the mirror's pin")
+    assert (mirrored_root / "raw" / "x" / "a.txt.bad").read_bytes() == b"other"
+
+
+def test_a_corpus_not_marked_for_the_mirror_ignores_the_pins(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    write_mirror_pins({"x/a.txt": sha256_of(b"data")})
+    monkeypatch.setattr(fetch_corpora, "download", lambda url, target: target.write_bytes(b"other"))
+
+    (row,) = fetch(archive_corpus(mirrored=False))
+
+    assert row.ok
+
+
+def test_the_same_files_tar_to_the_same_bytes_whatever_their_times_and_order(tmp_path: Path):
+    files = {"training_setA/p1.psv": b"1", "training_setB/p2.psv": b"22"}
+    lay_listing(tmp_path / "one" / "training", files)
+    lay_listing(tmp_path / "two" / "training", dict(reversed(files.items())))
+    (tmp_path / "two" / "training" / ".DS_Store").write_bytes(b"finder")
+    os.utime(tmp_path / "two" / "training" / "training_setA" / "p1.psv", (0, 0))
+
+    first = bundle(tmp_path / "one" / "training", tmp_path / "one.tar.gz")
+    second = bundle(tmp_path / "two" / "training", tmp_path / "two.tar.gz")
+
+    assert first.read_bytes() == second.read_bytes()
+    with tarfile.open(first) as tarball:
+        assert tarball.getnames() == [
+            "training/training_setA/p1.psv",
+            "training/training_setB/p2.psv",
+        ]
+
+
+def test_a_mirrored_listing_unpacks_from_the_store_and_reports_as_the_source_would(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    files = {"training_setA/p1.psv": b"1", "training_setB/p2.psv": b"22"}
+    lay_listing(mirrored_root / "source" / "training", files)
+    store = LocalDirectoryArtifactStore(mirrored_root / "store")
+    tarball = bundle(mirrored_root / "source" / "training", mirrored_root / "training.tar.gz")
+    write_mirror_pins({"x/training.tar.gz": store.put_file(tarball).checksum.digest})
+    monkeypatch.setattr(fetch_corpora, "listed", refuse_the_source)
+    monkeypatch.setattr(fetch_corpora, "download", refuse_the_source)
+
+    (row,) = fetch(listing_corpus(), store=store)
+    (again,) = fetch(listing_corpus(), store=store)
+
+    root = mirrored_root / "raw" / "x" / "training"
+    assert {path: (root / path).read_bytes() for path in files} == files
+    assert (row.ok, row.size, row.sha256) == (True, 3, contents_of(files))
+    assert again == row
+
+
+def contents_of(files: dict[str, bytes]) -> str:
+    digest = hashlib.sha256()
+    for path, content in sorted(files.items()):
+        digest.update(f"{sha256_of(content)}  {path}\n".encode())
+    return digest.hexdigest()
+
+
+def unpacked_listing(mirrored_root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A listing of two files laid from the store's tarball, both its pins written."""
+    files = {"training_setA/p1.psv": b"1", "training_setB/p2.psv": b"22"}
+    lay_listing(mirrored_root / "source" / "training", files)
+    store = LocalDirectoryArtifactStore(mirrored_root / "store")
+    tarball = bundle(mirrored_root / "source" / "training", mirrored_root / "training.tar.gz")
+    write_mirror_pins(
+        {
+            "x/training.tar.gz": store.put_file(tarball).checksum.digest,
+            "x/training/": contents_of(files),
+        }
+    )
+    monkeypatch.setattr(fetch_corpora, "listed", refuse_the_source)
+    monkeypatch.setattr(fetch_corpora, "download", refuse_the_source)
+    (row,) = fetch(listing_corpus(), store=store)
+    assert row.ok
+    return mirrored_root / "raw" / "x" / "training"
+
+
+def test_a_file_of_a_listing_lost_after_it_was_unpacked_is_a_mismatch(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    root = unpacked_listing(mirrored_root, monkeypatch)
+    (root / "training_setA" / "p1.psv").unlink()
+
+    (row,) = fetch(listing_corpus())
+
+    assert not row.ok
+    assert row.verdict.startswith("MISMATCH with the mirror's pin")
+
+
+def test_a_file_left_over_in_a_listing_is_a_mismatch_but_an_interrupted_download_is_not(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    root = unpacked_listing(mirrored_root, monkeypatch)
+    (root / "training_setA" / "p9.psv.part").write_bytes(b"half")
+
+    (with_partial,) = fetch(listing_corpus())
+    (root / "training_setA" / "p9.psv").write_bytes(b"stray")
+    (with_stray,) = fetch(listing_corpus())
+
+    assert with_partial.ok
+    assert not with_stray.ok
+
+
+def test_a_listing_from_the_source_is_checked_against_the_pin_of_its_contents(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    write_mirror_pins({"x/training/": contents_of({"p1.psv": b"pinned"})})
+    monkeypatch.setattr(fetch_corpora, "listed", lambda url: iter(["p1.psv"]))
+
+    def download(url: str, target: Path, *, quiet: bool = False) -> None:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"served now")
+
+    monkeypatch.setattr(fetch_corpora, "download", download)
+
+    (row,) = fetch(listing_corpus())
+
+    assert not row.ok
+    assert row.verdict.startswith("MISMATCH with the mirror's pin")
+
+
+def test_mirror_copies_each_file_and_tarball_and_returns_their_pins(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    corpus = Corpus(
+        key="x",
+        title="x",
+        archives=(
+            Archive(url="https://example.org/a.txt", filename="a.txt"),
+            Listing(url="https://example.org/training/", directory="training"),
+        ),
+        mirrored=True,
+    )
+    lay_listing(mirrored_root / "raw" / "x" / "training", {"p1.psv": b"1"})
+    monkeypatch.setattr(fetch_corpora, "listed", lambda url: iter(["p1.psv"]))
+    monkeypatch.setattr(fetch_corpora, "download", lambda url, target, quiet=False: None)
+    (mirrored_root / "raw" / "x" / "a.txt").write_bytes(b"data")
+    store = LocalDirectoryArtifactStore(mirrored_root / "store")
+
+    pins = mirror(corpus, store)
+
+    tarball = mirrored_root / "raw" / "x" / "training.tar.gz"
+    assert pins == {
+        "x/a.txt": sha256_of(b"data"),
+        "x/training.tar.gz": sha256_of(tarball.read_bytes()),
+        "x/training/": contents_of({"p1.psv": b"1"}),
+    }
+    for key in ("x/a.txt", "x/training.tar.gz"):
+        digest = pins[key]
+        assert store.exists(address_of(Checksum(HashAlgorithm.SHA256, digest), Retention.DURABLE))
+
+
+def test_mirror_refuses_a_corpus_whose_licence_was_not_cleared(mirrored_root: Path):
+    store = LocalDirectoryArtifactStore(mirrored_root / "store")
+
+    with pytest.raises(SystemExit, match="not marked for the mirror"):
+        mirror(archive_corpus(mirrored=False), store)
+
+
+def test_mirror_refuses_a_file_that_did_not_pass_its_checks(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    write_mirror_pins({"x/a.txt": sha256_of(b"data")})
+    monkeypatch.setattr(fetch_corpora, "download", lambda url, target: target.write_bytes(b"other"))
+    store = LocalDirectoryArtifactStore(mirrored_root / "store")
+
+    with pytest.raises(SystemExit, match="fetch x again"):
+        mirror(archive_corpus(), store)
+    assert not (mirrored_root / "store").exists()
+
+
+def test_mirror_refuses_a_listing_that_changed_since_it_was_pinned(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    lay_listing(mirrored_root / "raw" / "x" / "training", {"p1.psv": b"changed"})
+    monkeypatch.setattr(fetch_corpora, "listed", lambda url: iter(["p1.psv"]))
+    monkeypatch.setattr(fetch_corpora, "download", lambda url, target, quiet=False: None)
+    write_mirror_pins({"x/training/": contents_of({"p1.psv": b"pinned before"})})
+    store = LocalDirectoryArtifactStore(mirrored_root / "store")
+
+    with pytest.raises(SystemExit, match="fetch x again"):
+        mirror(listing_corpus(), store)
+    assert not (mirrored_root / "store").exists()
+
+
+def test_mirror_refuses_to_tar_files_the_listing_does_not_hold(
+    mirrored_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    lay_listing(mirrored_root / "raw" / "x" / "training", {"p1.psv": b"1", "mine.psv": b"2"})
+    monkeypatch.setattr(fetch_corpora, "listed", lambda url: iter(["p1.psv"]))
+    monkeypatch.setattr(fetch_corpora, "download", lambda url, target, quiet=False: None)
+    store = LocalDirectoryArtifactStore(mirrored_root / "store")
+
+    with pytest.raises(SystemExit, match="files the listing does not"):
+        mirror(listing_corpus(), store)
+    assert not (mirrored_root / "store").exists()
+
+
+def test_the_pins_name_only_files_of_corpora_marked_for_the_mirror():
+    names = {
+        name
+        for corpus in CORPORA
+        if corpus.mirrored
+        for archive in corpus.archives
+        for name in (
+            (f"{corpus.key}/{archive.filename}",)
+            if isinstance(archive, Archive)
+            else (f"{corpus.key}/{bundle_name(archive)}", f"{corpus.key}/{archive.directory}/")
+        )
+    }
+
+    assert set(mirror_pins()) <= names
+
+
+def test_the_pins_round_trip_through_their_file(tmp_path: Path):
+    pins = {"b/x.zip": "1" * 64, "a/training.tar.gz": "2" * 64}
+
+    write_mirror_pins(pins, tmp_path / "pins")
+
+    assert mirror_pins(tmp_path / "pins") == pins
+    assert (tmp_path / "pins").read_text().splitlines()[0].endswith("a/training.tar.gz")
