@@ -17,10 +17,13 @@ class KnownDetectors:
     of nearest fitting windows under the same alarm, so a campaign of them reads what the
     representation adds and nothing else, and whether the sampling alone tells as much. Both
     encoders are read at every block side by side, the reading the probes found the states
-    worth most under, and pooled by the mean over the window's tokens. The neighbours, the
-    alarm's share and what a distance is read against are knobs of the name, declared with the
-    campaign. A register rather than a table read from configuration, for the reason the arms
-    are one: the names are what a stored campaign refers to.
+    worth most under, and pooled by the mean over the window's tokens. Beside them, three scored
+    by the error of what is filled in where the backbone's own masks hide a window's cells: by
+    the backbone's pretext, by a ridge per channel over the same visible cells, and by each
+    channel's line between its visible bins. The neighbours or the draws, the alarm's share and
+    what a score is read against are knobs of the name, declared with the campaign. A register
+    rather than a table read from configuration, for the reason the arms are one: the names are
+    what a stored campaign refers to.
     """
 
     READING: ClassVar[EncoderSetting] = EncoderSetting.standard().tuned("layer", "concat")
@@ -29,10 +32,13 @@ class KnownDetectors:
     UNTRAINED = CandidateRef("untrained_knn")
     SUMMARIES = CandidateRef("summaries_knn")
     COUNTS = CandidateRef("counts_knn")
+    PRETEXT = CandidateRef("pretext_error")
+    LINEAR_ANSWER = CandidateRef("linear_answer_error")
+    INTERPOLATION = CandidateRef("interpolation_error")
 
     @classmethod
     def over(cls, backbone: ArtifactRef) -> tuple[DetectorArm, ...]:
-        """Every detector, the two over an encoder shaped like ``backbone``, in reporting order."""
+        """Every detector, those over ``backbone``'s shape or masks among them, in order."""
         return (
             DetectorArm(
                 ref=cls.FROZEN,
@@ -60,12 +66,38 @@ class KnownDetectors:
                 architecture=None,
                 backbone=None,
             ),
+            DetectorArm(
+                ref=cls.PRETEXT,
+                features=DetectorFeatures.PRETEXT_ERROR,
+                architecture=None,
+                backbone=backbone,
+            ),
+            DetectorArm(
+                ref=cls.LINEAR_ANSWER,
+                features=DetectorFeatures.LINEAR_ANSWER_ERROR,
+                architecture=None,
+                backbone=backbone,
+            ),
+            DetectorArm(
+                ref=cls.INTERPOLATION,
+                features=DetectorFeatures.INTERPOLATION_ERROR,
+                architecture=None,
+                backbone=backbone,
+            ),
         )
 
     @classmethod
     def refs(cls) -> tuple[CandidateRef, ...]:
         """What the detectors are called, in reporting order."""
-        return (cls.FROZEN, cls.UNTRAINED, cls.SUMMARIES, cls.COUNTS)
+        return (
+            cls.FROZEN,
+            cls.UNTRAINED,
+            cls.SUMMARIES,
+            cls.COUNTS,
+            cls.PRETEXT,
+            cls.LINEAR_ANSWER,
+            cls.INTERPOLATION,
+        )
 
     @classmethod
     def catalogue(cls, backbone: ArtifactRef) -> DetectorCatalogue:
