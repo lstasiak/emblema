@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -5,8 +6,12 @@ torch = pytest.importorskip("torch")
 from torch import nn  # noqa: E402
 
 from emblema.entrypoints.restored_backbones import RestoredBackbones  # noqa: E402
+from emblema.evaluation.adapters.detection.pretext_source import PretextSource  # noqa: E402
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory  # noqa: E402
-from emblema.evaluation.domain.exceptions import UnknownBackboneError  # noqa: E402
+from emblema.evaluation.domain.exceptions import (  # noqa: E402
+    UnknownBackboneError,
+    UnreadablePretextError,
+)
 from emblema.evaluation.domain.transfer.encoder_setting import (  # noqa: E402
     TimeEncoding,
     ValueEmbedding,
@@ -32,6 +37,8 @@ from emblema.pretraining.adapters.encoder.set_encoder import SetEncoder  # noqa:
 from emblema.pretraining.adapters.objective.masked_reconstruction import (  # noqa: E402
     MaskedReconstruction,
 )
+from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape  # noqa: E402
+from emblema.pretraining.adapters.objective.pretext_reading import PretextReading  # noqa: E402
 from emblema.pretraining.adapters.training.exceptions import (  # noqa: E402
     UnreadableTrainedModelError,
 )
@@ -39,7 +46,14 @@ from emblema.pretraining.adapters.training.trained_model import TrainedModel  # 
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
 from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
 from emblema.shared.kernel.tokens import N_FEATURES  # noqa: E402
-from tests.support.experiments import CHANNELS, TINY, configuration  # noqa: E402
+from tests.support.experiments import (  # noqa: E402
+    CELLS,
+    CHANNELS,
+    OBSERVATION,
+    TINY,
+    configuration,
+    windows,
+)
 
 pytestmark = pytest.mark.ml
 
@@ -258,3 +272,64 @@ def test_a_fresh_encoder_s_input_part_is_the_layout_s_not_the_stored_model_s() -
     assert raw.value_projection.in_features == N_FEATURES
     assert binned.architecture.bins == 4
     assert binned.value_projection.in_features == 9
+
+
+def stored_over_cells(store: InMemoryArtifactStore) -> tuple[ArtifactRef, TrainedModel]:
+    stated = configuration(architecture=CELLS, observation=OBSERVATION)
+    torch.manual_seed(6)
+    trained = TrainedModel.of(stated, CHANNELS, ObjectiveShape.of(stated, CHANNELS).build())
+    return store.put(trained.to_bytes()), trained
+
+
+def test_the_pretext_is_asked_over_the_draws_the_stored_objective_makes() -> None:
+    store = InMemoryArtifactStore()
+    weights, trained = stored_over_cells(store)
+    # Annotated with the seam it implements, so the type checker holds it to that shape of call.
+    source: PretextSource = RestoredBackbones(store, weights)
+    read = windows(2, seed=8)
+
+    masked = source.masked(weights, read, [4, 5], answered=True, device="cpu")
+    expected = PretextReading.of(TrainedModel.read(trained.to_bytes())).drawn(
+        read, [4, 5], answered=True
+    )
+
+    assert source.bins == CELLS.bins
+    assert source.huber_delta == 0.0
+    for got, wanted in zip(masked, expected, strict=True):
+        assert np.array_equal(got.hidden, wanted.hidden)
+        assert np.array_equal(got.full, wanted.full)
+        assert got.answers is not None
+        assert wanted.answers is not None
+        assert np.array_equal(got.answers, wanted.answers)
+
+
+def test_the_pretext_of_other_weights_is_refused() -> None:
+    store = InMemoryArtifactStore()
+    weights, _ = stored_over_cells(store)
+    other, _ = stored(store)
+
+    with pytest.raises(UnknownBackboneError, match="serves the backbone"):
+        RestoredBackbones(store, weights).masked(
+            other, windows(1, seed=8), [1], answered=False, device="cpu"
+        )
+
+
+def test_a_backbone_that_cannot_say_what_it_hid_is_refused_in_this_context_s_terms() -> None:
+    store = InMemoryArtifactStore()
+    weights, _ = stored(store)
+
+    with pytest.raises(UnreadablePretextError, match="does not say what it hid"):
+        RestoredBackbones(store, weights).masked(
+            weights, windows(1, seed=8), [1], answered=False, device="cpu"
+        )
+
+
+def test_a_caller_s_error_is_not_passed_off_as_the_backbone_s() -> None:
+    store = InMemoryArtifactStore()
+    weights, _ = stored_over_cells(store)
+
+    with pytest.raises(ValueError, match="outside") as raised:
+        RestoredBackbones(store, weights).masked(
+            weights, windows(1, seed=8), [2**64], answered=False, device="cpu"
+        )
+    assert not isinstance(raised.value, UnreadablePretextError)
