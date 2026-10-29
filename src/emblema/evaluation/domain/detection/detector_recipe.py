@@ -3,6 +3,7 @@ from math import isfinite
 
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import InvalidDetectorRecipeError
 
@@ -11,32 +12,40 @@ from emblema.evaluation.domain.exceptions import InvalidDetectorRecipeError
 class DetectorRecipe:
     """How a detector is made: what it reads a window as, and how it scores one from the rest.
 
-    A detector is fitted on the windows of a task's fitting side without a label, and scores a
-    window by its mean distance to the nearest fitted windows, every feature standardised over
-    the fitting side. Its alarm is set where a stated share of the fitting windows, each scored
-    against the others, would be flagged, so the score a run answers is the distance above that
-    alarm: positive is an alarm, and the alarm is set without a label. The distance may first be
-    read against the window's own unit, the alarm then set over the fitting windows read so.
+    A detector is fitted on the windows of a task's fitting side without a label. One that reads
+    features scores a window by its mean distance to the nearest fitted windows, every feature
+    standardised over the fitting side; one that asks the pretext scores it by the error of what
+    is filled in where a backbone's masks hide its cells. Its alarm is set where a stated share
+    of the fitting windows, each scored as the rest are, would be flagged, so the score a run
+    answers is the score above that alarm: positive is an alarm, and the alarm is set without a
+    label. The score may first be read against the window's own unit, the alarm then set over
+    the fitting windows read so.
 
-    Invariants: an encoder is read exactly when the features are an encoder's states; the
-    neighbours are at least one; the contamination lies strictly between zero and one.
+    Invariants: an encoder is read exactly when the features are an encoder's states; a
+    backbone's masks are named exactly when the pretext is asked; neighbours are named, at least
+    one, exactly when a distance is the score; the contamination lies strictly between zero and
+    one.
 
     Attributes:
         features: What a window is read as.
         reading: The encoder the states come from and how they are pooled, for features that
             are an encoder's; ``None`` for the summaries.
-        neighbours: How many nearest fitted windows a score is the mean distance to.
+        neighbours: How many nearest fitted windows a score is the mean distance to; ``None``
+            where the score is an error.
         contamination: The share of fitting windows the alarm is set to flag.
         seed: Seed of the fit, which decides what an encoder at its initialisation draws.
-        reference: What a window's distance is read against before the alarm.
+        reference: What a window's score is read against before the alarm.
+        pretext: Whose masks hide the cells, and how often, for a detector that asks the
+            pretext; ``None`` otherwise.
     """
 
     features: DetectorFeatures
     reading: EncoderReading | None
-    neighbours: int
+    neighbours: int | None
     contamination: float
     seed: int
     reference: ScoreReference = ScoreReference.FITTING_SIDE
+    pretext: PretextAsking | None = None
 
     def __post_init__(self) -> None:
         if (self.reading is None) == self.features.reads_an_encoder:
@@ -48,7 +57,17 @@ class DetectorRecipe:
                     else "names an encoder it does not read"
                 )
             )
-        if self.neighbours < 1:
+        if (self.pretext is None) == self.features.asks_the_pretext:
+            raise InvalidDetectorRecipeError(
+                f"a detector over {self.features} "
+                + ("names no masks" if self.pretext is None else "names masks it does not ask")
+            )
+        if (self.neighbours is None) != self.features.asks_the_pretext:
+            raise InvalidDetectorRecipeError(
+                f"a detector over {self.features} "
+                + ("names no neighbours" if self.neighbours is None else "reads no neighbours")
+            )
+        if self.neighbours is not None and self.neighbours < 1:
             raise InvalidDetectorRecipeError(
                 f"a score is the distance to at least one neighbour, got {self.neighbours}"
             )
@@ -56,3 +75,27 @@ class DetectorRecipe:
             raise InvalidDetectorRecipeError(
                 f"the contamination lies strictly between zero and one, got {self.contamination}"
             )
+
+    def nearest(self) -> int:
+        """How many nearest fitted windows a distance is the mean to.
+
+        Raises:
+            InvalidDetectorRecipeError: If the detector scores by an error, not a distance.
+        """
+        if self.neighbours is None:
+            raise InvalidDetectorRecipeError(
+                f"a detector over {self.features} scores by an error, not a distance"
+            )
+        return self.neighbours
+
+    def asked(self) -> PretextAsking:
+        """Whose masks hide the cells, and how often.
+
+        Raises:
+            InvalidDetectorRecipeError: If the detector reads features, not the pretext.
+        """
+        if self.pretext is None:
+            raise InvalidDetectorRecipeError(
+                f"a detector over {self.features} reads features, not the pretext"
+            )
+        return self.pretext
