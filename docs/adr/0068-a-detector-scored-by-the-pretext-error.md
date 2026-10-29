@@ -48,16 +48,17 @@ not in its artifact, and a cell run from an order reaches no database.
   trained under; one written before does not, and the detector refuses it.
 - **Refusals.** A backbone without cells; a corpus with channels beyond the vocabulary the
   backbone learnt, whose rows would be random. Cells without a time are not scored. A window
-  with no hidden cell holding a reading in any draw scores no error, and their number is
-  reported.
+  with no hidden cell holding a reading in any draw has no error to read: it scores the fitting
+  side's median, and their number is logged.
 
 ## Consequences
 
 - The detectors are `pretext_error` and `linear_answer_error`, with `interpolation_error`
   beside; each takes `draws`, `contamination` and `reference`, and each is tied to one
-  backbone's masks, the control included.
-- They are read on the first mission alone, secondary, stated in the register first.
-- One window costs K passes through encoder and decoder. Nothing is retained for serving.
+  backbone's masks.
+- They are read on the first mission alone, secondary, registered first.
+- One window costs K passes through encoder and decoder. A fit keeps its alarm and the ridge's
+  weights; nothing serves them.
 - The backbone and the ridge both learnt from the fitting side, so the share flagged at their
   alarm is optimistic; the area under the precision-recall curve, which ranks, is not moved by
   the alarm.
@@ -68,6 +69,6 @@ not in its artifact, and a cell run from an order reaches no database.
 
 - *The whole pretext loss*: its ranking would rest on weights set for training.
 - *Masks within a channel only*: the model still reads the other channels, as a regression would.
-- *The pretext audit's stacked answer*: two stages for the same value features.
-- *Masks and loss carried by the order*: the order would speak of one backbone's training.
+- *The audit's stacked answer*: two stages for the same features.
+- *Masks carried by the order*: it would speak of one backbone's training.
 - *A published language of Pretraining*: a contract package for one detector.
