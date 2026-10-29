@@ -18,6 +18,7 @@ from scripts.rate_choice_report import (
     parse_arguments,
     rate_of,
     render,
+    setting_of,
     write_choices,
 )
 
@@ -229,3 +230,48 @@ def test_an_arm_needs_its_campaigns_the_rate_in_force_and_another_rate() -> None
         )
     ]
     assert arguments.budgets == ["20", "50", "200"]
+
+
+LPFT = "full_fine_tuning@encoder_rate=0.1,head_start=solved"
+
+
+def test_a_setting_is_what_a_candidate_states_beside_its_rate_that_the_one_in_force_does_not() -> (
+    None
+):
+    shape = "from_scratch@bins=6,width=64"
+
+    assert setting_of(LPFT, IN_FORCE) == "encoder_rate=0.1,head_start=solved"
+    assert setting_of(SLOW, IN_FORCE) == ""
+    assert setting_of("from_scratch@bins=6,learning_rate=0.0001,width=64", shape) == ""
+
+
+def test_a_setting_at_the_rate_in_force_competes_with_the_rates_and_lies_at_no_edge() -> None:
+    answers = grid({IN_FORCE: 0.5, SLOW: 0.5, LPFT: 2.5})
+
+    choice = choose(
+        answers, arm(SLOW, LPFT), rate_in_force=0.001, budgets=BUDGETS, bootstrap=BOOTSTRAP
+    )
+
+    assert choice.chosen.candidate == LPFT
+    assert choice.chosen.setting == "encoder_rate=0.1,head_start=solved"
+    assert not choice.at_edge
+
+
+def test_a_choice_at_one_budget_reads_that_budget_s_repeats_alone() -> None:
+    # The slow rate wins at 200 stays and loses at 20, so the budgets disagree.
+    answers = Answers(
+        row
+        for candidate, signals in {IN_FORCE: (1.0, 1.0), SLOW: (0.0, 3.0)}.items()
+        for budget, signal in zip(BUDGETS, signals, strict=True)
+        for seed in SEEDS
+        for row in answers_of(FIRST, candidate, budget, seed, signal=signal)
+    )
+
+    at = {
+        budget: choose(
+            answers, arm(SLOW), rate_in_force=0.001, budgets=(budget,), bootstrap=BOOTSTRAP
+        ).chosen.candidate
+        for budget in BUDGETS
+    }
+
+    assert at == {"20": IN_FORCE, "200": SLOW}

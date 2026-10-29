@@ -14,6 +14,11 @@ budgets, seeds and backbones that share stays share their noise rather than coun
 independent. Where several rates clear the bar, the one with the largest gain is chosen. A
 choice at either end of the grid is named as such: the best rate may lie beyond it.
 
+A candidate may state a setting beside its rate — the parameters it names that the candidate in
+force does not, such as the encoder learning at a share of the rate with the head solved first —
+and is read by the same rule as a rate. A choice at each budget apart is a run per budget
+(``--budgets 50``).
+
 The rule replaces the rule of one standard error over repeats, which needs repeats that score
 different units; on a fixed half every repeat scores the same stays.
 
@@ -48,6 +53,7 @@ CHOICE_COLUMNS = (
     "arm",
     "candidate",
     "rate",
+    "setting",
     "repeats",
     "area",
     "gain",
@@ -71,7 +77,7 @@ class Arm:
 
 @dataclass(frozen=True, kw_only=True)
 class RateReading:
-    """One rate of an arm beside the rate in force, over every repeat of the arm."""
+    """One rate or setting of an arm beside the rate in force, over every repeat of the arm."""
 
     arm: str
     candidate: str
@@ -80,10 +86,16 @@ class RateReading:
     area: float
     gain: float
     standard_error: float
+    setting: str = ""
 
     @property
     def option(self) -> RateOption:
-        return RateOption(rate=self.rate, gain=self.gain, standard_error=self.standard_error)
+        return RateOption(
+            rate=self.rate,
+            gain=self.gain,
+            standard_error=self.standard_error,
+            setting=self.setting,
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -102,8 +114,14 @@ class ArmChoice:
 
     @property
     def chosen(self) -> RateReading:
-        rate = self.rule.chosen
-        return next(each for each in (self.in_force, *self.others) if each.rate == rate)
+        option = self.rule.chosen_option
+        if option is None:
+            return self.in_force
+        return next(
+            each
+            for each in self.others
+            if (each.rate, each.setting) == (option.rate, option.setting)
+        )
 
     @property
     def at_edge(self) -> bool:
@@ -125,6 +143,16 @@ def rate_of(candidate: str, in_force: float) -> float:
             except ValueError as error:
                 raise ValueError(f"{candidate} states its rate as {value!r}") from error
     return in_force
+
+
+def setting_of(candidate: str, in_force: str) -> str:
+    """What a candidate states beside its rate that the candidate in force does not."""
+
+    def parameters(name: str) -> set[str]:
+        _, _, stated = name.partition("@")
+        return {each for each in stated.split(",") if each and each.partition("=")[0] != RATE_KEY}
+
+    return ",".join(sorted(parameters(candidate) - parameters(in_force)))
 
 
 def repeats_of(arm: Arm, candidate: str, budgets: Sequence[str]) -> list[Side]:
@@ -190,6 +218,7 @@ def choose(
             area=fmean(ranking.auroc for ranking in rankings),
             gain=gain,
             standard_error=error,
+            setting=setting_of(candidate, arm.in_force),
         )
 
     others = []
@@ -212,6 +241,7 @@ def write_choices(path: Path, choices: Sequence[ArmChoice]) -> None:
                         each.arm,
                         each.candidate,
                         repr(each.rate),
+                        each.setting,
                         each.repeats,
                         repr(each.area),
                         repr(each.gain),
@@ -228,13 +258,14 @@ def render(choices: Sequence[ArmChoice]) -> str:
         rows = [
             [
                 f"{each.rate:g}" + (" (in force)" if each is choice.in_force else ""),
+                each.setting or "—",
                 str(each.repeats),
                 f"{each.area:.4f}",
                 "—" if each is choice.in_force else f"{each.gain:+.4f}",
                 "—" if each is choice.in_force else f"{each.standard_error:.4f}",
                 "—" if each is choice.in_force else ("yes" if each.option.clears else "no"),
             ]
-            for each in sorted((choice.in_force, *choice.others), key=lambda r: r.rate)
+            for each in sorted((choice.in_force, *choice.others), key=lambda r: (r.setting, r.rate))
         ]
         chosen = choice.chosen
         verdict = f"chosen rate: {chosen.rate:g}" + (
@@ -244,7 +275,10 @@ def render(choices: Sequence[ArmChoice]) -> str:
             verdict += " — at an edge of the grid"
         sections.append(
             f"**{choice.arm}**\n\n"
-            + table(["rate", "repeats", "mean area", "gain", "standard error", "clears"], rows)
+            + table(
+                ["rate", "setting", "repeats", "mean area", "gain", "standard error", "clears"],
+                rows,
+            )
             + f"\n\n{verdict}."
         )
     return "\n\n".join(sections)
