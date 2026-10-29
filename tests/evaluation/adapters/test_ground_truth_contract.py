@@ -12,17 +12,22 @@ the other at hour 6.
 from collections.abc import Mapping
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from emblema.catalog.adapters.readers.esa_ad_raw import ORIGIN_SECONDS
 from emblema.evaluation.adapters.in_memory.ground_truth import InMemoryGroundTruth
 from emblema.evaluation.adapters.readers.cmapss_ground_truth import CmapssGroundTruth
 from emblema.evaluation.adapters.readers.corpus_ground_truths import CorpusGroundTruths
+from emblema.evaluation.adapters.readers.esa_ad_raw_ground_truth import EsaAdRawGroundTruth
+from emblema.evaluation.adapters.readers.opssat_ad_ground_truth import OpssatAdGroundTruth
 from emblema.evaluation.adapters.readers.physionet2012_ground_truth import (
     Physionet2012GroundTruth,
 )
 from emblema.evaluation.adapters.readers.physionet2019_ground_truth import (
     Physionet2019GroundTruth,
 )
+from emblema.evaluation.adapters.readers.skab_ground_truth import SkabGroundTruth
 from emblema.evaluation.adapters.synthetic.synthetic_ground_truth import SyntheticGroundTruth
 from emblema.evaluation.domain.exceptions import (
     UnknownGroundTruthError,
@@ -57,6 +62,28 @@ STAYS = (
 )
 SEPSIS = OutcomeScheme("SepsisLabel")
 FIRST_DAYS = (window("training_setA/p000001", 0, 25.0), window("training_setB/p100006", 1, 30.0))
+# The satellite sample's label files hold the first three events touching the lightweight
+# channels; Mission1's first runs over the first week of December 2004.
+HOURS_TO_2004_12_02 = (
+    np.datetime64("2004-12-02T00:00:00") - np.datetime64(ORIGIN_SECONDS, "s")
+) / np.timedelta64(1, "h")
+# On those channels Mission1's first event runs from 03:07 on 2 December 2004 to 8 December,
+# so the window ending at 03:00 lies before it and the one ending at 04:00 overlaps it.
+MONTHS = (
+    window("ESA-Mission1/2004-12", 0, float(HOURS_TO_2004_12_02) + 3.0),
+    window("ESA-Mission1/2004-12", 1, float(HOURS_TO_2004_12_02) + 4.0),
+    window("ESA-Mission1/2000-01", 2, 1.0),
+)
+EXPERIMENTS = (
+    window("valve1/0", 0, 100.0),
+    window("valve1/0", 1, 110.0),
+    window("other/1", 2, 100.0),
+)
+FRAGMENTS = (
+    window("train/1", 0, 1340.0),
+    window("test/5", 1, 1340.0),
+    window("train/1069", 2, 1340.0),
+)
 
 
 class Case:
@@ -76,9 +103,33 @@ class Case:
 
 
 @pytest.fixture(
-    params=["in memory", "C-MAPSS", "synthetic", "by corpus", "PhysioNet", "PhysioNet 2019"]
+    params=[
+        "in memory",
+        "C-MAPSS",
+        "synthetic",
+        "by corpus",
+        "PhysioNet",
+        "PhysioNet 2019",
+        "ESA raw",
+        "SKAB",
+        "OPS-SAT",
+    ]
 )
 def case(request: pytest.FixtureRequest) -> Case:
+    if request.param == "ESA raw":
+        events = EsaAdRawGroundTruth(
+            sample("esa_ad"),
+            channels={"ESA-Mission1": tuple(range(41, 47))},
+            origin_seconds=ORIGIN_SECONDS,
+            window_hours=1.0,
+        )
+        return Case(events, MONTHS, window("ESA-Mission3/2004-12", 3, 1.0), "esa_ad_raw")
+    if request.param == "SKAB":
+        testbed = SkabGroundTruth(sample("skab"), window_seconds=100.0)
+        return Case(testbed, EXPERIMENTS, window("valve1/9", 3, 100.0), "skab")
+    if request.param == "OPS-SAT":
+        fragments = OpssatAdGroundTruth(sample("opssat_ad"))
+        return Case(fragments, FRAGMENTS, window("train/999", 3, 1340.0), "opssat_ad")
     if request.param == "in memory":
         return Case(InMemoryGroundTruth(FAILURES), WINDOWS, window("FD001/999", 3, 10.0))
     if request.param == "C-MAPSS":
@@ -308,3 +359,16 @@ def test_a_stay_file_that_is_not_one_is_refused(tmp_path: Path, content: str, me
 
     with pytest.raises(UnreadableGroundTruthError, match=message):
         sepsis(tmp_path, "training_setA/p1", 25.0)
+
+
+def test_the_satellites_first_event_numbers_the_windows_it_spans_and_no_other() -> None:
+    events = EsaAdRawGroundTruth(
+        sample("esa_ad"),
+        channels={"ESA-Mission1": tuple(range(41, 47))},
+        origin_seconds=ORIGIN_SECONDS,
+        window_hours=1.0,
+    )
+
+    answered = events.truths_of("esa_ad_raw", MONTHS)
+
+    assert [answered[w] for w in MONTHS] == [0.0, 1.0, 0.0]

@@ -53,11 +53,13 @@ from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.exceptions import InvalidPairedUnitRankingsError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.task_window import TaskWindow
+from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
 from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.scoring.window_ranking import WindowRanking
 from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
+from emblema.evaluation.domain.statistics.paired_anomaly_rankings import PairedAnomalyRankings
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
@@ -215,6 +217,10 @@ class Side(NamedTuple):
         return f"{self.candidate} at {self.budget} of {named}"
 
 
+# The measures read from how the answers rank, whose cells export their answers.
+BY_AREA = frozenset({ErrorMeasure.AUROC_SHORTFALL, ErrorMeasure.PR_AUC_SHORTFALL})
+
+
 class Answers:
     """Every exported answer, looked up by the repeat of a side it belongs to.
 
@@ -247,6 +253,19 @@ class Answers:
                 f"no answer of {side} under seed {seed} among the exported predictions"
             )
         return WindowRanking.of(answers)
+
+    def anomaly_ranking(self, side: Side, seed: int) -> AnomalyRanking:
+        """One repeat of a side, its windows ranked by their scores against the events.
+
+        Raises:
+            ValueError: If no answer of that repeat was exported.
+        """
+        answers = self._by_repeat.get((side.campaign, side.candidate, side.budget, seed))
+        if not answers:
+            raise ValueError(
+                f"no answer of {side} under seed {seed} among the exported predictions"
+            )
+        return AnomalyRanking.of(answers)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -345,7 +364,7 @@ def export_predictions(readings: Iterable[CampaignReading]) -> list[PredictionRo
             predicted=prediction.predicted,
         )
         for reading in readings
-        if reading.campaign.design.measure is ErrorMeasure.AUROC_SHORTFALL
+        if reading.campaign.design.measure in BY_AREA
         for result in reading.results
         for prediction in result.predictions
     ]
@@ -354,8 +373,9 @@ def export_predictions(readings: Iterable[CampaignReading]) -> list[PredictionRo
 def export_scores(readings: Iterable[CampaignReading]) -> list[ScoreRow]:
     """Every recorded cell of ``readings`` scored whole, as its campaign's measure scores it.
 
-    A cell read by area is its ranking's area over every window it answered; any other is the
-    root of its mean squared error over the windows of its units.
+    A cell read by area is its ranking's area over every window it answered, under the ROC
+    curve or, for a detection campaign, under the event-weighted precision-recall curve; any
+    other is the root of its mean squared error over the windows of its units.
     """
     found = []
     for reading in readings:
@@ -363,6 +383,8 @@ def export_scores(readings: Iterable[CampaignReading]) -> list[ScoreRow]:
         for result in reading.results:
             if measure is ErrorMeasure.AUROC_SHORTFALL:
                 score = WindowRanking.of(result.predictions).auroc
+            elif measure is ErrorMeasure.PR_AUC_SHORTFALL:
+                score = AnomalyRanking.of(result.predictions).average_precision
             else:
                 score = _rmse(result.errors)
             found.append(
@@ -515,6 +537,24 @@ def pair(
             control_spread = [_rmse(r) for r in control_repeats]
             candidate_spread = [_rmse(r) for r in candidate_repeats]
             floor_part, threshold = floor_share, ThresholdKind.RELATIVE
+        case ErrorMeasure.PR_AUC_SHORTFALL:
+            pairing = "area-pooled"
+            found = Answers(()) if answers is None else answers
+            paired = PairedAnomalyRankings(
+                control=tuple(
+                    found.anomaly_ranking(control.of_campaign(campaign), seed)
+                    for campaign in control.campaigns
+                    for seed in seeds
+                ),
+                candidate=tuple(
+                    found.anomaly_ranking(candidate.of_campaign(campaign), seed)
+                    for campaign in candidate.campaigns
+                    for seed in seeds
+                ),
+            )
+            control_spread = list(paired.per_repeat_control())
+            candidate_spread = list(paired.per_repeat_candidate())
+            floor_part, threshold = floor_area, ThresholdKind.ABSOLUTE
         case ErrorMeasure.AUROC_SHORTFALL:
             pairing = "area-pooled"
             found = Answers(()) if answers is None else answers
@@ -593,7 +633,7 @@ def _comparable(
             if sorted({row.seed for row in cells if row.campaign == campaign}) != seeds:
                 raise ValueError(f"{control} and {candidate} were not run on the same seeds")
     grouped = len(control.campaigns) > 1 or len(candidate.campaigns) > 1
-    if grouped and measure is not ErrorMeasure.AUROC_SHORTFALL:
+    if grouped and measure not in BY_AREA:
         raise ValueError(
             f"a side of several campaigns is read by area alone, not by {measure.value}: "
             f"{control} against {candidate}"
@@ -669,7 +709,10 @@ def render(comparisons: Sequence[Comparison]) -> str:
     measures = {comparison.measure for comparison in comparisons}
     if len(measures) > 1:
         raise ValueError(f"one table holds one measure, and these are read by {len(measures)}")
-    error = "1 - AUROC" if measures == {ErrorMeasure.AUROC_SHORTFALL} else "RMSE"
+    error = {
+        ErrorMeasure.AUROC_SHORTFALL: "1 - AUROC",
+        ErrorMeasure.PR_AUC_SHORTFALL: "1 - PR-AUC",
+    }.get(next(iter(measures)), "RMSE")
     rows = [
         (
             str(comparison.control),

@@ -40,6 +40,7 @@ SIDES = CorpusSides(
     corpus=CORPUS,
     training=frozenset({TRAINING, EMPTY, OTHER}),
     validation=frozenset({VALIDATION}),
+    window_length=10.0,
 )
 # The block holds the two windows of the training unit first, then the one of the held-out unit,
 # then the one of the other training unit.

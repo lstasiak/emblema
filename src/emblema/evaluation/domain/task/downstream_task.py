@@ -12,8 +12,10 @@ from emblema.evaluation.domain.exceptions import (
     UnknownGroundTruthError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
 from emblema.evaluation.domain.labels.class_strata import ClassStrata
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
+from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.label_scheme import LabelScheme
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
@@ -40,11 +42,12 @@ class DownstreamTask:
     which windows a budget draws, so either one chosen per run is a knob that can be turned once
     the numbers are visible.
 
-    Invariants: the label scheme and the stratification are present exactly when the protocol
-    spends labels — a detection task has no target to read per window, and a supervised one
-    cannot draw a budget without knowing how to read one; a binary target is spread over its
-    outcomes and any other over ranks of the target, since bins of ranks cut through the middle
-    of an outcome and outcomes do not exist on a scale.
+    Invariants: a task that spends labels reads its target by a scheme of a quantity or an
+    outcome and carries a stratification, since it cannot draw a budget without knowing how to
+    read a label or how to spread it; a detection task reads the events its windows overlap and
+    carries no stratification, since it draws no budget and its fitting side reads no label; a
+    binary target is spread over its outcomes and a quantity over ranks of the target, since
+    bins of ranks cut through the middle of an outcome and outcomes do not exist on a scale.
 
     Attributes:
         task_id: Identity of the task.
@@ -52,8 +55,8 @@ class DownstreamTask:
         manifest: Reference to the manifest the task was defined against.
         protocol: Which question the task asks, and so which quantity a campaign measures on it.
         split: Which units tune, which validate and which are held for the final run.
-        labels: How a window's target is read from what the ground truth says about it;
-            ``None`` where the protocol spends no labels.
+        labels: How a window's target is read from what the ground truth says about it; for a
+            detection task, which event a scored window overlaps.
         strata: How a budget is spread over the pool; ``None`` where the protocol spends no
             labels.
         windows: Which of a unit's windows the task reads; every one unless the question is
@@ -65,16 +68,20 @@ class DownstreamTask:
     manifest: ArtifactRef
     protocol: EvaluationProtocol
     split: TaskSplit
-    labels: LabelScheme | None
+    labels: LabelScheme
     strata: Stratification | None
     windows: TaskWindows = TaskWindows.EVERY
 
     def __post_init__(self) -> None:
-        for named, part in (("label scheme", self.labels), ("stratification", self.strata)):
-            if (part is None) == self.protocol.spends_labels:
-                carries = "carries no" if part is None else "carries a"
-                raise ProtocolMismatchError(f"a task under {self.protocol} {carries} {named}")
-        if self.labels is not None and (self.labels.kind is TargetKind.BINARY) != isinstance(
+        detects = self.protocol is EvaluationProtocol.ANOMALY_DETECTION
+        if (self.labels.kind is TargetKind.ANOMALY) != detects:
+            raise ProtocolMismatchError(
+                f"a task under {self.protocol} does not read its windows by {self.labels.kind}"
+            )
+        if (self.strata is None) == self.protocol.spends_labels:
+            carries = "carries no" if self.strata is None else "carries a"
+            raise ProtocolMismatchError(f"a task under {self.protocol} {carries} stratification")
+        if self.strata is not None and (self.labels.kind is TargetKind.BINARY) != isinstance(
             self.strata, ClassStrata
         ):
             raise MismatchedStratificationError(
@@ -100,13 +107,7 @@ class DownstreamTask:
         return self.windows.chosen_from(windows)
 
     def label_scheme(self) -> LabelScheme:
-        """How this task's targets are read.
-
-        Raises:
-            ProtocolMismatchError: If the protocol spends no labels, so there is no scheme.
-        """
-        if self.labels is None:
-            raise ProtocolMismatchError(f"a task under {self.protocol} reads no label per window")
+        """How this task's targets are read."""
         return self.labels
 
     def stratification(self) -> Stratification:
@@ -124,45 +125,54 @@ class DownstreamTask:
     ) -> tuple[LabelledWindow, ...]:
         """Those windows with the target the task's scheme reads for each, in the order given.
 
+        A detection task leaves out the windows its ground truth marks as not scored, such as
+        those over a gap in the downlink: they carry no target and enter no reading.
+
         Raises:
-            ProtocolMismatchError: If the protocol spends no labels.
             UnknownGroundTruthError: If ``truths`` says nothing about one of the windows.
             UnlabelledWindowError: If a window carries no label under the scheme.
         """
         scheme = self.label_scheme()
-        return tuple(self._labelled(scheme, window, truths) for window in windows)
+        labelled = []
+        for window in windows:
+            if window not in truths:
+                raise UnknownGroundTruthError(
+                    f"no ground truth known for unit {window.unit} at {window.position}"
+                )
+            target = self._target(scheme, window, truths[window])
+            if target is not None:
+                labelled.append(LabelledWindow(window=window, target=target))
+        return tuple(labelled)
 
     @staticmethod
-    def _labelled(
-        scheme: LabelScheme,
-        window: TaskWindow,
-        truths: Mapping[TaskWindow, float],
-    ) -> LabelledWindow:
-        if window not in truths:
-            raise UnknownGroundTruthError(
-                f"no ground truth known for unit {window.unit} at {window.position}"
-            )
+    def _target(scheme: LabelScheme, window: TaskWindow, truth: float) -> float | None:
+        """What the scheme reads for the window; ``None`` for a window the task does not score."""
         match scheme:
             case RemainingLifeScheme():
-                target = scheme.target(failed_at=truths[window], ends_at=window.ends_at)
+                return scheme.target(failed_at=truth, ends_at=window.ends_at)
             case ForecastScheme():
-                target = scheme.target(exact=truths[window])
+                return scheme.target(exact=truth)
             case OutcomeScheme():
-                target = scheme.target(recorded=truths[window])
-        return LabelledWindow(window=window, target=target)
+                return scheme.target(recorded=truth)
+            case AnomalyScheme():
+                return scheme.target(event=truth) if scheme.scores(truth) else None
 
-    def accept_campaign(self) -> None:
-        """Refuse a campaign over a task that spends no labels.
+    def accept_campaign(self, budgets: Iterable[LabelBudget]) -> None:
+        """Refuse a campaign whose budgets of labels the task cannot spread its candidates over.
 
-        A campaign spreads its candidates over budgets of labels, so a task that reads no label
-        per window offers it no axis to spread them over and no curve to read off the result.
+        A campaign spreads its candidates over budgets of labels. A task that spends none has
+        no such axis: its one cell fits on every window of the fitting side, so the only budget
+        it can run at is the one of every window, and a grid of several would read a curve off
+        an axis that does not exist.
 
         Raises:
-            ProtocolMismatchError: If the protocol spends no labels.
+            ProtocolMismatchError: If the task spends no labels and the budgets are anything
+                but the single budget of every window.
         """
-        if not self.protocol.spends_labels:
+        if not self.protocol.spends_labels and tuple(budgets) != (LabelBudget.everything(),):
             raise ProtocolMismatchError(
-                f"a task under {self.protocol} has no budget of labels to spread a campaign over"
+                f"a task under {self.protocol} has no budget of labels to spread a campaign "
+                "over; its one cell fits on every window of the fitting side"
             )
 
     def accept_sample(self, sample: LabelSample) -> None:
@@ -189,6 +199,11 @@ class DownstreamTask:
             MixedTargetKindsError: If the source's target is of another kind than this task's.
             ProtocolMismatchError: If either task spends no labels.
         """
+        for named in (self, source):
+            if not named.protocol.spends_labels:
+                raise ProtocolMismatchError(
+                    f"task {named.task_id} spends no labels and lends none to another task"
+                )
         own, theirs = self.label_scheme().kind, source.label_scheme().kind
         if own is not theirs:
             raise MixedTargetKindsError(

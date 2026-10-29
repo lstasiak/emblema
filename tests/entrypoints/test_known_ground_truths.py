@@ -22,8 +22,8 @@ WINDOW = TaskWindow(unit=UnitKey("FD001/1"), position=0, ends_at=1.0)
 def test_a_corpus_nothing_here_reads_is_refused_by_name(tmp_path: Path) -> None:
     truths = KnownGroundTruths.under(tmp_path)
 
-    with pytest.raises(UnknownGroundTruthError, match="knows no ground truth of corpus 'skab'"):
-        truths.truths_of("skab", [WINDOW])
+    with pytest.raises(UnknownGroundTruthError, match="knows no ground truth of corpus 'smd'"):
+        truths.truths_of("smd", [WINDOW])
 
 
 def test_the_turbofans_are_read_from_the_raw_corpora_the_process_was_given(

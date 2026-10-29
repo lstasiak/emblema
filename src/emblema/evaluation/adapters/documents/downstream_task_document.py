@@ -2,6 +2,7 @@ from typing import Any
 
 from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
 from emblema.evaluation.domain.labels.class_strata import ClassStrata
 from emblema.evaluation.domain.labels.forecast_scheme import ForecastScheme
 from emblema.evaluation.domain.labels.label_scheme import LabelScheme
@@ -25,7 +26,8 @@ class DownstreamTaskDocument:
     side travels as the units it names and nothing more: the machine that runs a tuning order
     has to know which units it may not read, not what they hold. The strata travel as the count
     of a quantity's bins; a task over outcomes is spread over its outcomes, which has nothing to
-    count, and its scheme says so. Which windows the task reads travels only when it is not every
+    count, and its scheme says so; a detection task is spread over nothing. Which windows the task
+    reads travels only when it is not every
     window, so a task written before the choice existed is written as it always was.
     """
 
@@ -82,7 +84,7 @@ class DownstreamTaskDocument:
         return sorted(str(unit) for unit in units)
 
     @staticmethod
-    def _labels(labels: LabelScheme | None) -> dict[str, Any] | None:
+    def _labels(labels: LabelScheme) -> dict[str, Any]:
         match labels:
             case RemainingLifeScheme():
                 return {"scheme": "remaining_life", "ceiling": labels.ceiling}
@@ -90,13 +92,11 @@ class DownstreamTaskDocument:
                 return {"scheme": "forecast", "channel": labels.channel, "horizon": labels.horizon}
             case OutcomeScheme():
                 return {"scheme": "outcome", "outcome": labels.outcome}
-            case None:
-                return None
+            case AnomalyScheme():
+                return {"scheme": "anomaly"}
 
     @staticmethod
-    def _scheme(labels: dict[str, Any] | None) -> LabelScheme | None:
-        if labels is None:
-            return None
+    def _scheme(labels: dict[str, Any]) -> LabelScheme:
         match labels["scheme"]:
             case "remaining_life":
                 return RemainingLifeScheme(labels["ceiling"])
@@ -104,13 +104,15 @@ class DownstreamTaskDocument:
                 return ForecastScheme(labels["channel"], labels["horizon"])
             case "outcome":
                 return OutcomeScheme(labels["outcome"])
+            case "anomaly":
+                return AnomalyScheme()
             case unknown:
                 raise ValueError(f"no label scheme is called {unknown!r}")
 
     @staticmethod
-    def _strata(count: int | None, labels: dict[str, Any] | None) -> Stratification | None:
+    def _strata(count: int | None, labels: dict[str, Any]) -> Stratification | None:
         if count is not None:
             return TargetBins(count)
-        if labels is not None and labels["scheme"] == "outcome":
+        if labels["scheme"] == "outcome":
             return ClassStrata()
         return None

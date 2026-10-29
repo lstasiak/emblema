@@ -55,6 +55,16 @@ class PerChannelFeatures:
             rows[index] = self._row(WindowStatistics.of(window))
         return rows
 
+    def counts_of(self, windows: Sequence[TokenWindow]) -> NDArray[np.float64]:
+        """How many readings each channel of every window holds, one row each, in the order given.
+
+        Raises:
+            UnreadableTaskCorpusError: If a window holds a channel the corpus does not name.
+        """
+        return self.of(windows)[
+            :, WindowStatistics.NAMES.index("count") :: len(WindowStatistics.NAMES)
+        ]
+
     def _row(self, statistics: WindowStatistics) -> NDArray[np.float64]:
         highest = int(statistics.channels[-1])
         if highest > self._channels:

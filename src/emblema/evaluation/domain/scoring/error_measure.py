@@ -20,10 +20,18 @@ class ErrorMeasure(StrEnum):
             counting half. Reported as the area itself. Read from how the answers rank and not
             from their values, so a candidate is not credited for calibration here; the squared
             error of its probabilities, the Brier score, is reported beside it.
+        PR_AUC_SHORTFALL: One minus the area under the precision-recall curve over the windows,
+            every event weighing one, spread evenly over its windows, and every normal window
+            weighing one: the precision at each event window as the sweep reaches it, averaged
+            by those weights. Reported as the area itself. Read from how
+            the scores rank, so a candidate is not credited for where it set its alarm; the
+            events found at a fixed share of false alarms and the benchmark's event-wise score
+            at the alarm it set are reported beside it.
     """
 
     RMSE = "rmse"
     AUROC_SHORTFALL = "auroc_shortfall"
+    PR_AUC_SHORTFALL = "pr_auc_shortfall"
 
     @classmethod
     def of(cls, kind: TargetKind) -> "ErrorMeasure":
@@ -33,14 +41,16 @@ class ErrorMeasure(StrEnum):
                 return cls.RMSE
             case TargetKind.BINARY:
                 return cls.AUROC_SHORTFALL
+            case TargetKind.ANOMALY:
+                return cls.PR_AUC_SHORTFALL
 
     def accept(self, kind: TargetKind) -> None:
         """Refuse to read targets of ``kind`` by this measure where it does not apply to them.
 
         Raises:
             MismatchedErrorMeasureError: If the measure is not the one for that kind: a ranking
-                needs two outcomes, and a squared error of a probability is a calibration, not
-                the task's error.
+                needs two outcomes, a squared error of a probability is a calibration, not the
+                task's error, and an area over events needs events.
         """
         if self is not type(self).of(kind):
             raise MismatchedErrorMeasureError(f"a {kind} target is not read by {self}")

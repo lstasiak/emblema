@@ -1,3 +1,6 @@
+from typing import ClassVar
+
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.evaluated_candidate import EvaluatedCandidate
 from emblema.evaluation.contracts.events import CampaignCompleted
 from emblema.serving.application.use_cases.record_promotable_artifacts import (
@@ -16,12 +19,21 @@ class EvaluationAntiCorruptionLayer:
 
     The one message it listens to is a campaign finishing, and it keeps from it only what can be
     served: a competitor the campaign kept no artifact of is dropped here rather than recorded
-    as a promotable thing with nothing behind it. The verdict sentence is dropped too, since it
-    is written for a person reading the campaign and nothing here acts on it.
+    as a promotable thing with nothing behind it, and so is one of a kind nothing here serves,
+    such as a detector, whose artifact no served model could run. The verdict sentence is
+    dropped too, since it is written for a person reading the campaign and nothing here acts
+    on it.
+
+    Attributes:
+        SERVED_KINDS: The kinds of candidate a served model can be made of.
 
     It is the only module of this context that reads Evaluation's messages, so a change to them
     is absorbed here and reaches no other part of Serving.
     """
+
+    SERVED_KINDS: ClassVar[frozenset[CandidateKind]] = frozenset(
+        {CandidateKind.NEURAL, CandidateKind.CLASSICAL}
+    )
 
     def __init__(self, record: RecordPromotableArtifacts) -> None:
         self._record = record
@@ -36,7 +48,8 @@ class EvaluationAntiCorruptionLayer:
                 artifacts=tuple(
                     self._promotable(event, candidate, artifact)
                     for candidate in event.candidates
-                    if (artifact := candidate.artifact) is not None
+                    if candidate.kind in self.SERVED_KINDS
+                    and (artifact := candidate.artifact) is not None
                 )
             )
         )

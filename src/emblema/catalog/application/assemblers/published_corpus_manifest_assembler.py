@@ -10,7 +10,7 @@ from emblema.catalog.domain.tokenisation.archived_corpus import ArchivedCorpus
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
 from emblema.catalog.domain.tokenisation.tokenisation_scheme import TokenisationScheme
 from emblema.catalog.domain.tokenisation.unit_split import UnitSplit
-from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
+from emblema.catalog.domain.tokenisation.window_spec import ShortUnits, WindowSpec
 
 
 class PublishedCorpusManifestAssembler:
@@ -29,6 +29,7 @@ class PublishedCorpusManifestAssembler:
             block=manifest.block,
             window_length=manifest.window.length,
             window_stride=manifest.window.stride,
+            window_short_units=str(manifest.window.short_units),
             channels=tuple(
                 self._channel(entry, statistics)
                 for entry, statistics in zip(
@@ -63,7 +64,11 @@ class PublishedCorpusManifestAssembler:
                 window_count=message.window_count,
                 token_count=message.token_count,
             ),
-            window=WindowSpec(message.window_length, message.window_stride),
+            window=WindowSpec(
+                message.window_length,
+                message.window_stride,
+                ShortUnits(message.window_short_units),
+            ),
             scheme=self.restore_scheme(message.channels),
             split=UnitSplit(
                 training=frozenset(UnitKey(key) for key in message.training_units),

@@ -102,6 +102,35 @@ class KnownCorpora:
                     url="https://creativecommons.org/licenses/by/3.0/igo/",
                 ),
             ),
+            # The same telemetry read as the satellites sent it, over each whole mission, from
+            # the same files; another reading of the data is another corpus.
+            KnownCorpus(
+                "esa_ad_raw",
+                CorpusSource(
+                    "European Space Agency (De Canio, Kotowski, Haskamp)",
+                    "https://zenodo.org/records/15237121",
+                ),
+                Licence(
+                    "CC-BY-3.0-IGO",
+                    permits_derivatives=True,
+                    url="https://creativecommons.org/licenses/by/3.0/igo/",
+                ),
+                raw_directory="esa_ad",
+            ),
+            # The Zenodo record states CC BY 4.0, so a derivative may be redistributed with
+            # attribution.
+            KnownCorpus(
+                "opssat_ad",
+                CorpusSource(
+                    "European Space Agency and KP Labs (Ruszczak, Kotowski, Nalepa et al.)",
+                    "https://zenodo.org/records/12588359",
+                ),
+                Licence(
+                    "CC-BY-4.0",
+                    permits_derivatives=True,
+                    url="https://creativecommons.org/licenses/by/4.0/",
+                ),
+            ),
             # PhysioNet publishes the challenge data under the Open Data Commons Attribution
             # licence, so a derivative may be redistributed with attribution.
             KnownCorpus(

@@ -33,6 +33,7 @@ from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
     InvalidTrainingRegimeError,
+    UnsupportedTargetKindError,
 )
 from emblema.evaluation.domain.heads.ridge_penalties import RidgePenalties
 from emblema.evaluation.domain.identifiers import UnitKey
@@ -475,6 +476,8 @@ class TorchAdaptationRuntime:
                 return RidgeSolution.fitted(states, taught, penalties)
             case TargetKind.BINARY:
                 return LogisticSolution.fitted(states, taught, penalties)
+            case TargetKind.ANOMALY:
+                raise UnsupportedTargetKindError("no head is solved towards an event's number")
 
     def _answers(
         self,

@@ -7,7 +7,10 @@ import torch
 from torch import Tensor
 from torch.nn.functional import binary_cross_entropy_with_logits, mse_loss
 
-from emblema.evaluation.domain.exceptions import InvalidTrainingRegimeError
+from emblema.evaluation.domain.exceptions import (
+    InvalidTrainingRegimeError,
+    UnsupportedTargetKindError,
+)
 from emblema.evaluation.domain.labels.label_scheme import LabelScheme
 from emblema.evaluation.domain.labels.target_kind import TargetKind
 
@@ -61,6 +64,8 @@ class TargetLink:
                 return target / self.scale
             case TargetKind.BINARY:
                 return target
+            case TargetKind.ANOMALY:
+                raise UnsupportedTargetKindError("no network is taught an event's number")
 
     def starting_at(self, mean_target: float) -> float:
         """Where the head's bias starts, for labels whose mean is ``mean_target``."""
@@ -70,6 +75,8 @@ class TargetLink:
             case TargetKind.BINARY:
                 share = min(max(mean_target, self._SMALLEST_SHARE), 1.0 - self._SMALLEST_SHARE)
                 return log(share / (1.0 - share))
+            case TargetKind.ANOMALY:
+                raise UnsupportedTargetKindError("no head starts towards an event's number")
 
     def loss(self, raw: Tensor, taught: Tensor) -> Tensor:
         """What the network descends: the negative log-likelihood of the target's family."""
@@ -78,6 +85,8 @@ class TargetLink:
                 return mse_loss(raw, taught)
             case TargetKind.BINARY:
                 return binary_cross_entropy_with_logits(raw, taught)
+            case TargetKind.ANOMALY:
+                raise UnsupportedTargetKindError("no loss descends towards an event's number")
 
     def weighted(self, positive_weight: float) -> Loss:
         """The loss with the positive outcome weighing ``positive_weight`` against a negative.
@@ -101,3 +110,5 @@ class TargetLink:
                 return raw * self.scale
             case TargetKind.BINARY:
                 return torch.sigmoid(raw)
+            case TargetKind.ANOMALY:
+                raise UnsupportedTargetKindError("no head answers an event's number")

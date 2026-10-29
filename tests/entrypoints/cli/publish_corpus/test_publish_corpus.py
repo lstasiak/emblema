@@ -20,6 +20,7 @@ from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import Synthetic
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
 from emblema.catalog.domain.exceptions import InvalidUnitSplitError
 from emblema.catalog.domain.tokenisation.split_policy import PartSplit, SeededSplit
+from emblema.catalog.domain.tokenisation.window_spec import ShortUnits
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
 from emblema.entrypoints.cli.publish_corpus.publish_corpus_cli import (
@@ -259,6 +260,12 @@ def test_the_command_line_states_the_window_it_was_given() -> None:
     assert invocation.command.vocabulary_from is None
     assert invocation.corpus_root == Path("data/raw/cmapss")
     assert invocation.subsets == ()
+
+
+def test_the_command_line_states_what_a_short_unit_yields() -> None:
+    assert PublishCorpusCli().parse(ARGUMENTS).command.window.short_units is ShortUnits.DROPPED
+    stated = PublishCorpusCli().parse([*ARGUMENTS, "--short-units", "one_window"])
+    assert stated.command.window.short_units is ShortUnits.ONE_WINDOW
 
 
 def test_a_corpus_is_looked_for_under_its_own_name_unless_a_root_is_given() -> None:

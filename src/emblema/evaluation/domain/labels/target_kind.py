@@ -15,7 +15,12 @@ class TargetKind(StrEnum):
         BINARY: One of two outcomes, answered as the probability of the positive one: the
             candidate descends the negative log-likelihood of that probability, and the
             comparison reads how well the answers rank the outcomes apart.
+        ANOMALY: Which event, if any, a window overlaps, answered as a score that rises with
+            how unlike the normal data the window is: no candidate is taught it, since the
+            fitting side carries no label, and the comparison reads how well the scores rank
+            the events' windows above the normal ones.
     """
 
     CONTINUOUS = "continuous"
     BINARY = "binary"
+    ANOMALY = "anomaly"

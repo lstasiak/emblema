@@ -1,0 +1,46 @@
+# A detection campaign over one of the telemetry's event tasks, named at the command line: the
+# same file serves each mission of the satellites, the testbed and the OPS-SAT fragments, so the
+# four readings differ in nothing but the task.
+#
+# Three detectors, one cell each at the budget of every window of the fitting side, no label
+# spent: the nearest-neighbour detector over the pretrained encoder's states read at every
+# block side by side (the endpoint), over the same encoder at its initialisation (the control)
+# and over the summaries per channel the trees read (the classical bar, beside). The seeds
+# repeat the fit; the encoder at its initialisation draws its weights from them, the other two
+# repeat exactly. Five neighbours and an alarm at the fitting side's 2 % are the names'
+# defaults, declared with the register's section on these tasks and selected on nothing.
+#
+# Run once under each backbone the task is read under: the detectors read the backbone's
+# weights, so the comparison is a comparison of that pretraining with its initialisation.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+
+name = "detection-events"
+purpose = "tuning"
+tier = "M"
+measure = "pr_auc_shortfall"
+
+[candidates]
+competing = ["untrained_knn", "frozen_knn", "summaries_knn"]
+control = "untrained_knn"
+endpoint = "frozen_knn"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3]
+
+[rules]
+# The least gain in event-weighted area that counts and the floor's fixed part, as the register
+# states them for these tasks from the power simulated over each task's events
+# (docs/verification/anomaly-tasks.md, 2026-10-27): 0.05 is the smallest gain the rule confirms
+# with power 0.8 at the lower level on every task.
+minimum_absolute_reduction = 0.05
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

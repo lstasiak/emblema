@@ -15,7 +15,11 @@ from emblema.evaluation.adapters.grid.regular_grid import RegularGrid
 from emblema.evaluation.adapters.minirocket.minirocket_transform import MiniRocketTransform
 from emblema.evaluation.domain.classical.classical_recipe import ClassicalRecipe
 from emblema.evaluation.domain.classical.random_convolutions import RandomConvolutions
-from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError, UnsolvableHeadError
+from emblema.evaluation.domain.exceptions import (
+    UnreadableFittedCandidateError,
+    UnsolvableHeadError,
+    UnsupportedTargetKindError,
+)
 from emblema.evaluation.domain.heads.outcome_folds import OutcomeFolds
 from emblema.evaluation.domain.labels.target_kind import TargetKind
 from emblema.shared.kernel.tokens import TokenWindow
@@ -126,6 +130,10 @@ class FittedConvolutions:
                     weights, intercept, penalty = cls._logistic(
                         features / scale, targets, method.ridge.penalties
                     )
+                case TargetKind.ANOMALY:
+                    raise UnsupportedTargetKindError(
+                        "convolutions are not fitted towards an event's number"
+                    )
         return cls(
             parameters=recipe.parameters(),
             grid_steps=steps,
@@ -152,6 +160,8 @@ class FittedConvolutions:
             case TargetKind.BINARY:
                 # The logistic function written through a log-sum, so no log-odds overflows it.
                 return np.asarray(np.exp(-np.logaddexp(0.0, -answers)), dtype=np.float64)
+            case TargetKind.ANOMALY:
+                raise UnsupportedTargetKindError("convolutions answer no event's number")
 
     @classmethod
     def _logistic(

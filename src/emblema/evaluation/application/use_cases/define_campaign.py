@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from emblema.evaluation.contracts.identifiers import CampaignId, CandidateRef, TaskId
 from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
 from emblema.evaluation.domain.campaign.evaluation_campaign import EvaluationCampaign
-from emblema.evaluation.domain.exceptions import TunedChoiceMismatchError
+from emblema.evaluation.domain.exceptions import ProtocolMismatchError, TunedChoiceMismatchError
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.comparison_rules import ComparisonRules
@@ -94,8 +94,9 @@ class DefineCampaign:
 
         Raises:
             TaskNotFoundError: If the task is unknown.
-            ProtocolMismatchError: If the task spends no labels, so it has no budget axis to
-                spread a grid over.
+            ProtocolMismatchError: If the task spends no labels and the budgets are anything
+                but the one of every window, since it has no budget axis to spread a grid over;
+                or a candidate fits on labels the task does not spend, or on none where it does.
             UnknownCandidateError: If the provider supplies none of that name.
             InvalidCampaignDesignError: If the design contradicts itself.
             CampaignNotFoundError: If a tuned choice names a selection that is not stored.
@@ -106,7 +107,7 @@ class DefineCampaign:
             MismatchedErrorMeasureError: If the measure named does not read the task's target.
         """
         task = self._tasks.get(command.task)
-        task.accept_campaign()
+        task.accept_campaign(command.budgets)
         kind = task.label_scheme().kind
         measure = ErrorMeasure.of(kind) if command.measure is None else command.measure
         measure.accept(kind)
@@ -116,6 +117,15 @@ class DefineCampaign:
                 (*command.candidates, *(choice.variant for choice in command.tuned))
             )
         }
+        for ref, candidate in described.items():
+            if candidate.kind.fits_on_labels == task.protocol.spends_labels:
+                continue
+            raise ProtocolMismatchError(
+                f"{ref} is a {candidate.kind} candidate, which "
+                + ("fits on labels" if candidate.kind.fits_on_labels else "fits on none")
+                + f", and task {task.task_id} under {task.protocol} "
+                + ("spends them" if task.protocol.spends_labels else "spends none")
+            )
         for choice in command.tuned:
             self._check(choice, task.task_id, measure)
         campaign = EvaluationCampaign.designed(

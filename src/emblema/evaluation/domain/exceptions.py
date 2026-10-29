@@ -138,6 +138,26 @@ class InvalidWindowRankingError(EvaluationError, ValueError):
     """A ranking of answers holds no window, a target that is not an outcome, or one outcome."""
 
 
+class InvalidAnomalyRankingError(EvaluationError, ValueError):
+    """The answers of a detection run cannot be ranked for lack of an event or a normal window."""
+
+
+class InvalidPairedAnomalyRankingsError(EvaluationError, ValueError):
+    """Two detection runs' rankings do not pair: different units, windows or events."""
+
+
+class InvalidDetectorRecipeError(EvaluationError, ValueError):
+    """A detector recipe contradicts itself."""
+
+
+class UnsupportedDetectorFeaturesError(EvaluationError):
+    """A runtime was handed a detector reading features it cannot produce."""
+
+
+class UnsupportedTargetKindError(EvaluationError):
+    """A candidate was asked to learn a target of a kind it is not taught."""
+
+
 class InvalidPairedUnitRankingsError(EvaluationError, ValueError):
     """Two candidates' rankings do not pair: other units, other windows or other outcomes."""
 

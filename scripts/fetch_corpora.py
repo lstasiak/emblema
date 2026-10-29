@@ -105,6 +105,7 @@ OMNIANOMALY_COMMIT = "7fb0e0acf89ea49908896bcc9f9e80fcfff6baf4"
 PHYSIONET = "https://physionet.org/files/challenge-2012/1.0.0"
 PHYSIONET_2019 = "https://physionet.org/files/challenge-2019/1.0.0/training/"
 ZENODO_ESA_AD_V2 = "https://zenodo.org/api/records/15237121/files"
+ZENODO_OPSSAT_AD = "https://zenodo.org/api/records/12588359/files"
 DATAVERSE = "https://dataverse.harvard.edu/api/access/datafile"
 # The collection's repository on 2025-06-19; a file resolved at a revision is immutable.
 UTSD_REVISION = "7326ff5f4578da73d843fd675d760c6c6054017f"
@@ -218,6 +219,22 @@ CORPORA: tuple[Corpus, ...] = (
                 url=f"{ZENODO_ESA_AD_V2}/ESA-Mission3.zip/content",
                 filename="ESA-Mission3.zip",
                 md5="d63943f09c81378acd9fc5e565ecc66e",
+            ),
+        ),
+    ),
+    Corpus(
+        key="opssat_ad",
+        title="OPSSAT-AD, the OPS-SAT anomaly detection benchmark (Zenodo 10.5281/zenodo.12588359)",
+        archives=(
+            Archive(
+                url=f"{ZENODO_OPSSAT_AD}/segments.csv/content",
+                filename="segments.csv",
+                md5="1f4b6ffd0359efac96a6698ff557e0f9",
+            ),
+            Archive(
+                url=f"{ZENODO_OPSSAT_AD}/dataset.csv/content",
+                filename="dataset.csv",
+                md5="c12fb83863afa4463dec07303a20bb14",
             ),
         ),
     ),

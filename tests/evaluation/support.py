@@ -90,8 +90,12 @@ def units(*names: str) -> frozenset[UnitKey]:
     return frozenset(UnitKey(name) for name in names)
 
 
-def sides(training: frozenset[UnitKey], validation: frozenset[UnitKey]) -> CorpusSides:
-    return CorpusSides(corpus=CORPUS, training=training, validation=validation)
+def sides(
+    training: frozenset[UnitKey], validation: frozenset[UnitKey], window_length: float = 50.0
+) -> CorpusSides:
+    return CorpusSides(
+        corpus=CORPUS, training=training, validation=validation, window_length=window_length
+    )
 
 
 def window(unit: str, position: int, ends_at: float) -> TaskWindow:
@@ -102,7 +106,7 @@ def task(
     tuning: frozenset[UnitKey] = units("a", "b"),
     validation: frozenset[UnitKey] = units("c"),
     test: FrozenTestSplit = TEST_SIDE,
-    labels: LabelScheme | None = SCHEME,
+    labels: LabelScheme = SCHEME,
     protocol: EvaluationProtocol = EvaluationProtocol.LABEL_BUDGET,
     strata: Stratification | None = STRATA,
     windows: TaskWindows = TaskWindows.EVERY,

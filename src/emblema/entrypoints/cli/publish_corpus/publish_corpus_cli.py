@@ -11,7 +11,7 @@ from emblema.catalog.domain.tokenisation.split_policy import (
     SeededSplit,
     SplitPolicy,
 )
-from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
+from emblema.catalog.domain.tokenisation.window_spec import ShortUnits, WindowSpec
 from emblema.config.settings import Settings
 from emblema.entrypoints.cli.publish_corpus.composition_root import CompositionRoot
 from emblema.entrypoints.cli.publish_corpus.known_corpora import KnownCorpora
@@ -78,7 +78,9 @@ class PublishCorpusCli:
                 name=known.name,
                 source=known.source,
                 licence=known.licence,
-                window=WindowSpec(arguments.window, arguments.stride),
+                window=WindowSpec(
+                    arguments.window, arguments.stride, ShortUnits(arguments.short_units)
+                ),
                 split=self._split(arguments),
                 vocabulary_from=self._vocabulary_from(arguments.vocabulary_from),
             ),
@@ -164,6 +166,14 @@ class PublishCorpusCli:
         )
         parser.add_argument("--window", type=float, required=True, help="window length, in time")
         parser.add_argument("--stride", type=float, required=True, help="stride between windows")
+        parser.add_argument(
+            "--short-units",
+            choices=[str(policy) for policy in ShortUnits],
+            default=str(ShortUnits.DROPPED),
+            help="what a unit shorter than one window yields: nothing, or one window of the "
+            "nominal length starting with the unit, for records whose length is part of what "
+            f"they say; {ShortUnits.DROPPED} unless given",
+        )
         # These default to nothing rather than to their values, so that a fraction or a seed
         # given beside named units is a contradiction the command line can refuse rather than
         # quietly drop.

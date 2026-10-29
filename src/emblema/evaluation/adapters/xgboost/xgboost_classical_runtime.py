@@ -21,6 +21,7 @@ from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
     UnsupportedClassicalMethodError,
+    UnsupportedTargetKindError,
 )
 from emblema.evaluation.domain.labels.label_sample import LabelSample
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
@@ -166,6 +167,8 @@ class XgboostClassicalRuntime:
                 classifier = xgboost.XGBClassifier(objective="binary:logistic", **stated)
                 classifier.fit(rows, targets.astype(np.int64))
                 return classifier
+            case TargetKind.ANOMALY:
+                raise UnsupportedTargetKindError("trees are not grown towards an event's number")
 
     @staticmethod
     def _answers(
@@ -177,6 +180,8 @@ class XgboostClassicalRuntime:
                 return np.asarray(model.predict(rows), dtype=np.float64) * scale
             case TargetKind.BINARY:
                 return np.asarray(model.predict_proba(rows)[:, 1], dtype=np.float64)
+            case TargetKind.ANOMALY:
+                raise UnsupportedTargetKindError("trees answer no event's number")
 
     def _kept(
         self,

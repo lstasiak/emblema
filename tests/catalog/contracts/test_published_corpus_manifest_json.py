@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from emblema.catalog.contracts.exceptions import MalformedManifestError
+from emblema.catalog.contracts.published_corpus_manifest import SHORT_UNITS_ONE_WINDOW
 from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
 from tests.catalog.contracts.support import manifest
 
@@ -143,4 +144,22 @@ def test_a_seed_that_is_neither_a_whole_number_nor_absent_is_refused() -> None:
     document["split"]["seed"] = "seven"
 
     with pytest.raises(MalformedManifestError, match="integer or null"):
+        JSON.decode(encoded(document))
+
+
+def test_the_policy_for_short_units_is_written_only_where_it_is_not_the_usual_one() -> None:
+    # A manifest written before the policy existed keeps its bytes, and so its checksum.
+    assert "short_units" not in document_of()["window"]
+
+    stated = replace(MANIFEST, window_short_units=SHORT_UNITS_ONE_WINDOW)
+    document = json.loads(JSON.encode(stated))
+    assert document["window"]["short_units"] == SHORT_UNITS_ONE_WINDOW
+    assert JSON.decode(JSON.encode(stated)) == stated
+
+
+def test_a_policy_for_short_units_the_manifest_does_not_know_is_refused() -> None:
+    document = document_of()
+    document["window"]["short_units"] = "two_windows"
+
+    with pytest.raises(MalformedManifestError, match="shorter than a window"):
         JSON.decode(encoded(document))

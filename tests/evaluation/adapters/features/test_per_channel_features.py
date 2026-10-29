@@ -80,3 +80,11 @@ def test_nothing_is_left_uninitialised_between_two_windows_of_different_channels
     rows = features.of([window(RISING), window(ONCE)])
 
     assert np.array_equal(rows[:, column(features, 2, "count")], [3.0, 0.0])
+
+
+def test_the_counts_are_the_count_column_of_every_channel_and_nothing_else() -> None:
+    features = PerChannelFeatures(3)
+
+    counts = features.counts_of([window(RISING, ONCE), window(RISING)])
+
+    assert counts.tolist() == [[0.0, 3.0, 1.0], [0.0, 3.0, 0.0]]

@@ -1,0 +1,37 @@
+# A detection campaign over a task whose alarm holds on its validation side, named at the
+# command line: the second satellite mission and the OPS-SAT fragments.
+#
+# The three detectors of detection-events as they were, and beside them the detector over the
+# counts of readings per channel alone, nothing of their values: on the fragments a count of
+# readings ranked the events above every detector, so the bar a representation has to pass
+# there is what the sampling tells, and it is read as a candidate of the campaign.
+#
+# Run once under each backbone the task is read under; committed before the campaign runs.
+
+name = "detection-events-counts"
+purpose = "tuning"
+tier = "M"
+measure = "pr_auc_shortfall"
+
+[candidates]
+competing = ["untrained_knn", "frozen_knn", "summaries_knn", "counts_knn"]
+control = "untrained_knn"
+endpoint = "frozen_knn"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3]
+
+[rules]
+# As registered for these tasks (docs/verification/anomaly-tasks.md, 2026-10-27); the 2
+# comparisons beside the endpoint form the family the secondary ones are corrected over.
+minimum_absolute_reduction = 0.05
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

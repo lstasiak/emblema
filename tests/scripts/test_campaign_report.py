@@ -67,10 +67,14 @@ def test_every_comparison_becomes_a_row_the_endpoint_first() -> None:
 
 
 def test_the_budget_of_every_window_needs_its_count() -> None:
-    assert windows_of(LabelBudget.of(50), None) == 50
-    assert windows_of(LabelBudget.everything(), 2568) == 2568
+    assert windows_of(LabelBudget.of(50), None, ErrorMeasure.RMSE) == 50
+    assert windows_of(LabelBudget.everything(), 2568, ErrorMeasure.AUROC_SHORTFALL) == 2568
     with pytest.raises(SystemExit, match="--everything"):
-        windows_of(LabelBudget.everything(), None)
+        windows_of(LabelBudget.everything(), None, ErrorMeasure.RMSE)
+
+
+def test_a_campaign_that_spends_no_labels_has_no_count_to_give() -> None:
+    assert windows_of(LabelBudget.everything(), None, ErrorMeasure.PR_AUC_SHORTFALL) is None
 
 
 def test_the_rendering_holds_the_sentence_and_a_table_per_budget() -> None:

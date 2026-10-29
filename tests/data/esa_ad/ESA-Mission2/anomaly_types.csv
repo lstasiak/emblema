@@ -1,0 +1,4 @@
+ID,Class,Subclass,Category,Dimensionality,Locality,Length
+id_1,class_30,unknown,Rare Event,Multivariate,Global,Subsequence
+id_2,class_8,unknown,Rare Event,Multivariate,Global,Subsequence
+id_3,class_19,unknown,Rare Event,Multivariate,Global,Subsequence

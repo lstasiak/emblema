@@ -15,6 +15,7 @@ from emblema.config.lora_settings import LoraSettings
 from emblema.config.schedule_settings import ScheduleSettings
 from emblema.entrypoints.workers.campaign_worker import CampaignWorker
 from emblema.entrypoints.workers.known_arms import KnownArms
+from emblema.entrypoints.workers.known_detectors import KnownDetectors
 from emblema.entrypoints.workers.known_patch_models import KnownPatchModels
 from emblema.entrypoints.workers.ml.composition_root import CompositionRoot
 from emblema.evaluation.adapters.in_memory.candidate_provider import (
@@ -35,6 +36,7 @@ from emblema.evaluation.adapters.persistence.evaluation_campaign_repository impo
 )
 from emblema.evaluation.application.use_cases.advance_campaign import AdvanceCampaignCommand
 from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplitCommand
+from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.events import FrozenTestSplitOpened
 from emblema.evaluation.domain.exceptions import (
     FrozenTestSplitClosedError,
@@ -251,3 +253,13 @@ def test_left_to_build_its_own_candidates_the_process_serves_the_backbone_it_was
     assert patched.starts_from is None
     # One schedule for every network is what holds them to one compute budget.
     assert patched.budget == described.budget
+    # The detectors ride along: the two over the encoder name the same weights and shape, and
+    # none declares a compute budget.
+    frozen = root.adapters.candidates.describe(KnownDetectors.FROZEN)
+    summaries = root.adapters.candidates.describe(KnownDetectors.SUMMARIES)
+    assert (frozen.kind, frozen.starts_from, frozen.budget) == (
+        CandidateKind.DETECTOR,
+        weights,
+        None,
+    )
+    assert (summaries.kind, summaries.starts_from) == (CandidateKind.DETECTOR, None)

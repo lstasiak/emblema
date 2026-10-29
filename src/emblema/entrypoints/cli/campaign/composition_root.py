@@ -8,6 +8,7 @@ from emblema.entrypoints.workers.campaign_process import CampaignProcess
 from emblema.entrypoints.workers.declared_worker import DeclaredWorker
 from emblema.entrypoints.workers.known_arms import KnownArms
 from emblema.entrypoints.workers.known_baselines import KnownBaselines
+from emblema.entrypoints.workers.known_detectors import KnownDetectors
 from emblema.entrypoints.workers.known_patch_models import KnownPatchModels
 from emblema.evaluation.adapters.candidates.routed_candidate_catalogue import (
     RoutedCandidateCatalogue,
@@ -162,10 +163,12 @@ class CompositionRoot:
         arms = KnownArms.catalogue(backbone, lora, schedule, ridge)
         baselines = KnownBaselines.catalogue(boosting, convolutions)
         patched = KnownPatchModels.catalogue(patch, schedule)
+        detectors = KnownDetectors.catalogue(backbone)
         return RoutedCandidateCatalogue(
             {
                 **dict.fromkeys(KnownArms.refs(), arms),
                 **dict.fromkeys(KnownBaselines.refs(), baselines),
                 **dict.fromkeys(KnownPatchModels.refs(), patched),
+                **dict.fromkeys(KnownDetectors.refs(), detectors),
             }
         )

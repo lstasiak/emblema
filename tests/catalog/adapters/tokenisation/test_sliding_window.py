@@ -10,8 +10,11 @@ import pytest
 
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
+from emblema.catalog.domain.identifiers import UnitKey
+from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
-from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
+from emblema.catalog.domain.measurements.time_extent import TimeExtent
+from emblema.catalog.domain.tokenisation.window_spec import ShortUnits, WindowSpec
 from tests.catalog.domain.support import CORPUS, scheme_for
 from tests.support.corpora import BUDGET, SAMPLE, raw_root
 
@@ -39,6 +42,25 @@ def test_a_constant_channel_has_exactly_zero_spread() -> None:
     )
 
     assert scheme.statistics_of(scheme.vocabulary.id_of(CORPUS, "pressure")).std == 0.0
+
+
+def test_a_unit_shorter_than_the_window_yields_one_window_of_the_nominal_length() -> None:
+    # The readings fill the beginning of a window that reaches past the unit's end, so their
+    # positions are fractions of the nominal length, not of the unit's.
+    readings = [Observation("pressure", float(t), float(t)) for t in range(3)]
+    scheme = TOKENISER.fit(CORPUS, readings, (), scheme_for())
+    unit = CorpusUnit(UnitKey("short"), TimeExtent(0.0, 3.0))
+
+    dropped = list(TOKENISER.tokenise(CORPUS, unit, readings, scheme, WindowSpec(10.0, 10.0)))
+    kept = list(
+        TOKENISER.tokenise(
+            CORPUS, unit, readings, scheme, WindowSpec(10.0, 10.0, ShortUnits.ONE_WINDOW)
+        )
+    )
+
+    assert dropped == []
+    assert [placed.extent for placed in kept] == [TimeExtent(0.0, 10.0)]
+    assert [token.time for token in kept[0].window] == pytest.approx([0.0, 0.1, 0.2])
 
 
 def tokenise_corpus(root: Path, subsets: tuple[str, ...], window: WindowSpec) -> tuple[int, int]:

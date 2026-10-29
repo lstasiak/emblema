@@ -6,7 +6,7 @@ from hypothesis import strategies as st
 
 from emblema.catalog.domain.exceptions import InvalidWindowSpecError
 from emblema.catalog.domain.measurements.time_extent import TimeExtent
-from emblema.catalog.domain.tokenisation.window_spec import WindowSpec
+from emblema.catalog.domain.tokenisation.window_spec import ShortUnits, WindowSpec
 
 
 def windows(spec: WindowSpec, extent: TimeExtent) -> list[TimeExtent]:
@@ -65,3 +65,21 @@ def test_the_count_is_the_closed_form_of_the_data_spike(
     assert len(laid) == expected
     assert all(window.length == length for window in laid)
     assert all(window.start >= 1.0 and window.end <= 1.0 + span for window in laid)
+
+
+def test_a_unit_shorter_than_a_window_yields_one_of_the_nominal_length_under_the_policy() -> None:
+    laid = windows(WindowSpec(5, 1, ShortUnits.ONE_WINDOW), TimeExtent(2.0, 4.9))
+
+    assert laid == [TimeExtent(2.0, 7.0)]
+
+
+def test_the_policy_for_short_units_changes_nothing_for_a_unit_that_holds_a_window() -> None:
+    extent = TimeExtent(1.0, 129.0)
+
+    assert windows(WindowSpec(50, 5, ShortUnits.ONE_WINDOW), extent) == windows(
+        WindowSpec(50, 5), extent
+    )
+
+
+def test_the_policy_is_dropped_unless_stated() -> None:
+    assert WindowSpec(5, 1).short_units is ShortUnits.DROPPED
