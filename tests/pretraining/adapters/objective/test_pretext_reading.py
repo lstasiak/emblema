@@ -9,6 +9,9 @@ from tests.support.experiments import CELLS, CHANNELS, OBSERVATION, configuratio
 
 torch = pytest.importorskip("torch")
 
+from emblema.pretraining.adapters.objective.cell_reconstruction import (  # noqa: E402
+    CellReconstruction,
+)
 from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape  # noqa: E402
 from emblema.pretraining.adapters.objective.pretext_reading import PretextReading  # noqa: E402
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking  # noqa: E402
@@ -71,6 +74,38 @@ def test_the_seed_beside_a_window_decides_its_masks() -> None:
     assert np.array_equal(first.hidden, again.hidden)
     assert not np.array_equal(first.hidden, other.hidden)
     assert first.answers is None
+
+
+def test_a_window_read_under_several_seeds_across_batches_is_read_as_each_seed_alone() -> None:
+    stored = trained()
+    model = stored.build()
+    assert isinstance(model, CellReconstruction)
+    assert stored.masking is not None
+    reading = PretextReading(
+        model, stored.masking, vocabulary_size=stored.vocabulary_size, batch_size=2
+    )
+    read, other = window(3, 9, seed=4), window(2, 5, seed=5)
+
+    together = reading.drawn([read, other, read, read, other], [1, 2, 3, 4, 5], answered=True)
+
+    for got, (fresh, seed) in zip(
+        together,
+        [
+            (window(3, 9, seed=4), 1),
+            (window(2, 5, seed=5), 2),
+            (window(3, 9, seed=4), 3),
+            (window(3, 9, seed=4), 4),
+            (window(2, 5, seed=5), 5),
+        ],
+        strict=True,
+    ):
+        (alone,) = reading.drawn([fresh], [seed], answered=True)
+        assert np.array_equal(got.full, alone.full)
+        assert np.array_equal(got.visible, alone.visible)
+        assert np.array_equal(got.hidden, alone.hidden)
+        assert got.answers is not None
+        assert alone.answers is not None
+        assert np.allclose(got.answers, alone.answers, atol=1e-5)
 
 
 def test_a_draw_without_answers_hides_what_one_with_them_does() -> None:

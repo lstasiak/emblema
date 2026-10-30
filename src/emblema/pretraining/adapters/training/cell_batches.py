@@ -7,6 +7,7 @@ from emblema.pretraining.adapters.objective.cell_tensors import CellTensors
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
 from emblema.pretraining.adapters.training.cell_windows import CellWindows
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
+from emblema.shared.adapters.arrays.laid_window import LaidWindow
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.tokens import TokenWindow
 
@@ -30,7 +31,21 @@ class CellBatches:
         self.layout = layout
 
     def collate(self, windows: Sequence[TokenWindow]) -> CellWindows:
-        cells = TokenTensors.of(self.layout.batch(self.layout.lay(windows)))
+        return self.collate_laid(windows, self.layout.lay(windows))
+
+    def collate_laid(
+        self, windows: Sequence[TokenWindow], laid: Sequence[LaidWindow]
+    ) -> CellWindows:
+        """The batch of ``windows`` from their cells already laid out, one per window in order.
+
+        A reader that asks the same window several times lays it out once and batches it again.
+
+        Raises:
+            ValueError: If the cells are not one layout per window.
+        """
+        if len(laid) != len(windows):
+            raise ValueError(f"{len(laid)} layouts were given for {len(windows)} windows")
+        cells = TokenTensors.of(self.layout.batch(laid))
         return CellWindows(
             cells.features,
             cells.channel_ids,
