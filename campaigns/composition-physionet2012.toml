@@ -1,0 +1,58 @@
+# Fine-tuning a backbone pretrained over the composition against the network from nothing in the
+# same shape, at 20, 50, 100 and 200 stays on the half of the tuning side held out by seed 101:
+# the screen over the composition, run once under each of its pretrainings.
+#
+# Fine-tuning runs at the rate in force, 0.001, and at the rest of the grid down to 0.00001, and
+# with the encoder learning at a tenth or a hundredth of the rate in force once the head is solved,
+# so that its setting is chosen at each budget by the registered rule; the network from nothing
+# runs its own grid in campaigns/composition-scratch-physionet2012.toml. The network at the rate in
+# force runs here too: it reads no weights, so under every backbone it should score the same,
+# which checks the cards, and it is the control each campaign pairs with. 100 stays is read beside
+# the three budgets of the claim, as a point of the curve.
+#
+# Scored on the half over seeds 1 to 10, so the cells pair by stay and seed across campaigns. A
+# campaign divided this way chooses nothing; the reading is the pairs declared in the note.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+name = "composition-physionet2012"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,width=64",
+    "full_fine_tuning",
+    "full_fine_tuning@learning_rate=0.00001",
+    "full_fine_tuning@learning_rate=0.00003",
+    "full_fine_tuning@learning_rate=0.0001",
+    "full_fine_tuning@learning_rate=0.000333",
+    "full_fine_tuning@learning_rate=0.003",
+    "full_fine_tuning@encoder_rate=0.1,head_start=solved",
+    "full_fine_tuning@encoder_rate=0.01,head_start=solved",
+]
+control = "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,width=64"
+endpoint = "full_fine_tuning"
+
+[budgets]
+labels = ["20", "50", "100", "200"]
+endpoint = "200"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+# Nothing here is judged; the reading is the pairs declared in the note under the register's
+# least gain of 0.02.
+minimum_absolute_reduction = 0.02
+absolute_floor = 0.02
+alpha = 0.05
+# Eight contenders at four budgets, the endpoint's cell aside.
+secondary_family_size = 31
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
