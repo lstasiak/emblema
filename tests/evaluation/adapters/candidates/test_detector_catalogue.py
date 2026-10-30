@@ -156,3 +156,49 @@ def test_a_detector_read_against_its_unit_says_so_and_one_against_the_fit_says_n
         p.name for p in CATALOGUE.describe(CandidateRef("summaries_knn")).method.parameters
     }
     assert FROZEN.recipe(seed=1).reference is ScoreReference.FITTING_SIDE
+
+
+PRETEXT = DetectorArm(
+    ref=CandidateRef("pretext_error"),
+    features=DetectorFeatures.PRETEXT_ERROR,
+    architecture=None,
+    backbone=WEIGHTS,
+)
+ASKING = DetectorCatalogue((PRETEXT, SUMMARIES))
+
+
+def test_a_detector_scored_by_an_error_names_its_draws_and_masks_and_no_neighbours() -> None:
+    described = ASKING.describe(CandidateRef("pretext_error@draws=4"))
+    stated = {p.name: p.value for p in described.method.parameters}
+
+    assert stated["draws"] == "4"
+    assert stated["masks"] == WEIGHTS.key
+    assert "neighbours" not in stated
+    assert ASKING.arm_of(CandidateRef("pretext_error@draws=4")).recipe(seed=1).asked().draws == 4
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["pretext_error@neighbours=3", "summaries_knn@draws=3", "pretext_error@draws=0"],
+    ids=["neighbours of an error", "draws of a distance", "no draw"],
+)
+def test_a_knob_the_score_does_not_have_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError):
+        ASKING.arm_of(CandidateRef(name))
+
+
+def test_an_arm_that_asks_the_pretext_names_a_backbone_and_no_shape() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="no backbone to ask"):
+        DetectorArm(
+            ref=CandidateRef("x"),
+            features=DetectorFeatures.PRETEXT_ERROR,
+            architecture=None,
+            backbone=None,
+        )
+    with pytest.raises(InvalidDetectorRecipeError, match="names an encoder"):
+        DetectorArm(
+            ref=CandidateRef("x"),
+            features=DetectorFeatures.LINEAR_ANSWER_ERROR,
+            architecture=WEIGHTS,
+            backbone=WEIGHTS,
+        )

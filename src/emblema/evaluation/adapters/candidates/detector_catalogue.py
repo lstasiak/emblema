@@ -73,13 +73,16 @@ class DetectorCatalogue:
         An arm over the summaries or their counts names what it reads and the detector's knobs,
         the reference only where it is not the fitting side's, so the campaigns declared before
         it was a knob read as they were stored; one over an encoder's states names the model it
-        is shaped like too, the layer and the pooling it reads at.
+        is shaped like too, the layer and the pooling it reads at; one that asks the pretext
+        names the draws in place of the neighbours, and the backbone whose masks it asks under.
         """
-        stated: dict[str, object] = {
-            "features": arm.features,
-            "neighbours": arm.neighbours,
-            "contamination": arm.contamination,
-        }
+        stated: dict[str, object] = {"features": arm.features}
+        if arm.features.asks_the_pretext and arm.backbone is not None:
+            stated["draws"] = arm.draws
+            stated["masks"] = arm.backbone.key
+        else:
+            stated["neighbours"] = arm.neighbours
+        stated["contamination"] = arm.contamination
         if arm.reference is not ScoreReference.FITTING_SIDE:
             stated["reference"] = arm.reference
         if arm.architecture is not None:

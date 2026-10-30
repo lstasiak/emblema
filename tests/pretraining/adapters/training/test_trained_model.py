@@ -5,6 +5,7 @@ import pytest
 from emblema.pretraining.adapters.training.exceptions import UnreadableTrainedModelError
 from emblema.pretraining.domain.exceptions import IncompatibleStartError
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from tests.support.experiments import (
@@ -223,6 +224,67 @@ def test_a_model_over_cells_is_read_back_with_its_bins_and_its_observation() -> 
     assert isinstance(trained, CellReconstruction)
     with torch.no_grad():
         assert torch.equal(read(batch, masks), trained(batch, masks))
+
+
+def test_a_model_over_cells_is_read_back_with_the_masks_it_drew_and_how_it_scored_a_miss() -> None:
+    stated = configuration(architecture=CELLS, observation=OBSERVATION)
+    torch.manual_seed(6)
+    trained = ObjectiveShape.of(stated, CHANNELS).build()
+
+    stored = TrainedModel.read(TrainedModel.of(stated, CHANNELS, trained).to_bytes())
+
+    assert stored.masking == stated.masking
+    assert stored.loss == stated.loss
+
+
+def test_a_bounded_loss_is_read_back_with_its_knee() -> None:
+    stated = configuration(
+        architecture=CELLS,
+        observation=OBSERVATION,
+        loss=ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.5),
+    )
+    torch.manual_seed(6)
+    trained = ObjectiveShape.of(stated, CHANNELS).build()
+
+    stored = TrainedModel.read(TrainedModel.of(stated, CHANNELS, trained).to_bytes())
+
+    assert stored.loss == ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.5)
+
+
+def test_bytes_over_cells_written_before_the_masks_were_kept_read_back_without_them() -> None:
+    stated = configuration(architecture=CELLS, observation=OBSERVATION)
+    torch.manual_seed(6)
+    written = TrainedModel.of(stated, CHANNELS, ObjectiveShape.of(stated, CHANNELS).build())
+    stored = torch.load(io.BytesIO(written.to_bytes()), weights_only=True)
+    for key in (
+        "channel_rate",
+        "block_rate",
+        "block_span",
+        "token_rate",
+        "horizon_rate",
+        "horizon_min_span",
+        "horizon_max_span",
+        "loss",
+        "huber_delta",
+    ):
+        del stored[key]
+    older = io.BytesIO()
+    torch.save(stored, older)
+
+    read = TrainedModel.read(older.getvalue())
+
+    assert (read.masking, read.loss) == (None, None)
+    assert read.architecture == CELLS
+
+
+def test_a_model_over_readings_keeps_no_masks_so_its_bytes_are_as_they_were() -> None:
+    stored = torch.load(
+        io.BytesIO(TrainedModel.of(configuration(), CHANNELS, objective()).to_bytes()),
+        weights_only=True,
+    )
+
+    assert "channel_rate" not in stored
+    assert "loss" not in stored
 
 
 def test_stored_weights_over_cells_or_with_another_observation_are_not_continued() -> None:

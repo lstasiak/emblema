@@ -23,16 +23,23 @@ context's; what is here is which rows they read and the shape of a note.
 - *Null pairs.* The network from nothing does not read the backbone, so its pairs between
   campaigns must lie within a bound; one outside stops the reading until it is explained.
 
+Each arm is read at one candidate, or at the one its rule chose at each budget
+(``--tuned 20=CANDIDATE 50=CANDIDATE ...``); the network from nothing may then be read from a
+campaign of its own (``--scratch-campaign``), since its rates run once, and the null pairs at the
+candidate every campaign holds (``--null-candidate``).
+
     uv run scripts/pretraining_screen_report.py --comparisons DIR
         --gain LABEL CAMPAIGNS [--gain ...] --contrast LABEL CAMPAIGNS_A CAMPAIGNS_B [...]
         --spread CAMPAIGN CAMPAIGN [--spread ...] --null CAMPAIGN CAMPAIGN [--null ...]
         --scratch CANDIDATE --tuned CANDIDATE [--budgets 20 50 200] [--deciding 50 200]
+        [--scratch-campaign CAMPAIGN] [--null-candidate CANDIDATE]
 """
 
 import argparse
 import csv
+import re
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -137,6 +144,45 @@ def count(campaigns: str) -> int:
     return len(campaigns.split(GROUPED_BY))
 
 
+# One candidate for every budget, or the one chosen at each budget.
+Choice = str | Mapping[str, str]
+
+
+def chosen_at(choice: Choice, budget: str) -> str:
+    """The candidate read at ``budget``.
+
+    Raises:
+        ValueError: If the choice names none at that budget.
+    """
+    if isinstance(choice, str):
+        return choice
+    if budget not in choice:
+        raise ValueError(f"no candidate chosen at budget {budget}")
+    return choice[budget]
+
+
+_AT_BUDGET = re.compile(r"^(\d+|all)=(.+)$")
+
+
+def parse_choice(values: Sequence[str]) -> Choice:
+    """One candidate, or ``BUDGET=CANDIDATE`` once for each budget.
+
+    Raises:
+        ValueError: If several values are given and one names no budget, or a budget twice.
+    """
+    if len(values) == 1 and _AT_BUDGET.match(values[0]) is None:
+        return values[0]
+    chosen: dict[str, str] = {}
+    for value in values:
+        found = _AT_BUDGET.match(value)
+        if found is None:
+            raise ValueError(f"{value} names no budget; give BUDGET=CANDIDATE for each")
+        if found.group(1) in chosen:
+            raise ValueError(f"budget {found.group(1)} is chosen twice")
+        chosen[found.group(1)] = found.group(2)
+    return chosen
+
+
 @dataclass(frozen=True, kw_only=True)
 class Gain:
     """Fine-tuning less the network from nothing under n pretrainings at one budget."""
@@ -200,33 +246,55 @@ class Screen:
 def screen(
     pairs: Pairs,
     *,
-    scratch: str,
-    tuned: str,
+    scratch: Choice,
+    tuned: Choice,
     gains: Sequence[tuple[str, str]],
     contrasts: Sequence[tuple[str, str, str]],
     spreads: Sequence[tuple[str, str]],
     nulls: Sequence[tuple[str, str]],
     budgets: Sequence[str],
     deciding: Sequence[str],
+    scratch_campaign: str | None = None,
+    null_candidate: str | None = None,
 ) -> Screen:
     """Every declared pair read by the rule.
 
+    The gains read the network from nothing under ``scratch_campaign`` where one is given, and
+    under the gain's own campaigns otherwise; the null pairs read ``null_candidate``, or the
+    network from nothing where one candidate stands for every budget.
+
     Raises:
-        ValueError: If a declared pair was not compared, or no spread pair is given.
+        ValueError: If a declared pair was not compared, no spread pair is given, a budget read
+            has no candidate chosen, or null pairs are asked for with no candidate to read.
     """
+    if nulls and null_candidate is None and not isinstance(scratch, str):
+        raise ValueError("null pairs over a network chosen per budget need a null candidate")
+    null = null_candidate if null_candidate is not None else scratch
     spread = PretrainingSpread.of(
-        [pairs.find(a, tuned, b, tuned, budget).reading for budget in budgets for a, b in spreads],
+        [
+            pairs.find(a, chosen_at(tuned, budget), b, chosen_at(tuned, budget), budget).reading
+            for budget in budgets
+            for a, b in spreads
+        ],
         floor=FLOOR,
     )
     return Screen(
         spread=spread,
         nulls=tuple(
-            pairs.find(a, scratch, b, scratch, budget) for budget in budgets for a, b in nulls
+            pairs.find(a, chosen_at(null, budget), b, chosen_at(null, budget), budget)
+            for budget in budgets
+            for a, b in nulls
         ),
         gains=tuple(
             Gain(
                 label=label,
-                pair=pairs.find(campaigns, scratch, campaigns, tuned, budget),
+                pair=pairs.find(
+                    scratch_campaign or campaigns,
+                    chosen_at(scratch, budget),
+                    campaigns,
+                    chosen_at(tuned, budget),
+                    budget,
+                ),
                 n=count(campaigns),
                 spread=spread,
             )
@@ -236,7 +304,7 @@ def screen(
         contrasts=tuple(
             Contrast(
                 label=label,
-                pair=pairs.find(a, tuned, b, tuned, budget),
+                pair=pairs.find(a, chosen_at(tuned, budget), b, chosen_at(tuned, budget), budget),
                 n_a=count(a),
                 n_b=count(b),
                 spread=spread,
@@ -301,10 +369,22 @@ def render(result: Screen) -> str:
     if not result.nulls_hold:
         sections.append("A null pair lies outside its bound: the reading stops here.")
         return "\n\n".join(sections)
+    read_at = [
+        list(row)
+        for row in dict.fromkeys(
+            (g.pair.budget, g.pair.candidate, g.pair.control, g.pair.control_campaign[:8])
+            for g in result.gains
+        )
+    ]
     sections += [
         f"**Gains of fine-tuning over the network from nothing** (least gain {LEAST_GAIN}).\n\n"
         + table(["budget", "recipe", "n", "gain ± SE", "interval", "T", "level"], gains),
     ]
+    elsewhere = any(g.pair.control_campaign != g.pair.candidate_campaign for g in result.gains)
+    if elsewhere or len({(g.pair.candidate, g.pair.control) for g in result.gains}) > 1:
+        sections.append(
+            "**Read at.**\n\n" + table(["budget", "fine-tuning", "from nothing", "under"], read_at)
+        )
     if contrasts:
         sections += [
             "**Contrasts of fine-tuning between recipes.**\n\n"
@@ -324,8 +404,22 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         required=True,
         help=f"directory holding the {COMPARISONS} the pairs report wrote",
     )
-    parser.add_argument("--scratch", required=True, help="the network from nothing")
-    parser.add_argument("--tuned", required=True, help="fine-tuning of the backbone")
+    parser.add_argument(
+        "--scratch",
+        nargs="+",
+        required=True,
+        help="the network from nothing, or BUDGET=CANDIDATE for each budget",
+    )
+    parser.add_argument(
+        "--tuned",
+        nargs="+",
+        required=True,
+        help="fine-tuning of the backbone, or BUDGET=CANDIDATE for each budget",
+    )
+    parser.add_argument(
+        "--scratch-campaign", help="the campaign the gains read the network from nothing under"
+    )
+    parser.add_argument("--null-candidate", help="the candidate the null pairs read")
     parser.add_argument(
         "--gain", nargs=2, action="append", default=[], metavar=("LABEL", "CAMPAIGNS")
     )
@@ -349,6 +443,20 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         parser.error("give a gain or a contrast to read")
     if not set(arguments.deciding) <= set(arguments.budgets):
         parser.error("the deciding budgets must be among the budgets read")
+    for name in ("scratch", "tuned"):
+        try:
+            choice = parse_choice(getattr(arguments, name))
+        except ValueError as error:
+            parser.error(f"--{name}: {error}")
+        if not isinstance(choice, str) and set(choice) != set(arguments.budgets):
+            parser.error(f"--{name} must choose at every budget read and no other")
+        setattr(arguments, name, choice)
+    if (
+        arguments.null
+        and arguments.null_candidate is None
+        and not isinstance(arguments.scratch, str)
+    ):
+        parser.error("null pairs over a network chosen per budget need --null-candidate")
     return arguments
 
 
@@ -364,6 +472,8 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - the c
         nulls=[(a, b) for a, b in arguments.null],
         budgets=arguments.budgets,
         deciding=arguments.deciding,
+        scratch_campaign=arguments.scratch_campaign,
+        null_candidate=arguments.null_candidate,
     )
     print(render(result))
 

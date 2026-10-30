@@ -25,3 +25,11 @@ UNREADABLE_BYTES = (
 
 class UnreadableTrainedModelError(PretrainingError):
     """Raised where stored bytes are not a trained model this can rebuild."""
+
+
+class UnanswerablePretextError(PretrainingError):
+    """Raised where a stored objective cannot be asked what it fills in.
+
+    It reads no cells, its bytes do not say what it hid, or a window holds a channel it learnt
+    no row for.
+    """

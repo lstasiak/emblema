@@ -21,6 +21,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
@@ -32,6 +33,7 @@ from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.ports.detection_runtime import DetectionRuntime
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
+from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.ports.artifact_store import ArtifactStore
 from tests.evaluation.support import WEIGHTS, labelled, task, window
 
@@ -56,13 +58,25 @@ STATES = DetectorRecipe(
     seed=1,
 )
 
+# The masks of the stored pretext, which ``over_the_pretext`` puts under this reference.
+ASKED = PretextAsking(backbone=WEIGHTS, draws=2)
+PRETEXT = DetectorRecipe(
+    features=DetectorFeatures.PRETEXT_ERROR,
+    reading=None,
+    neighbours=None,
+    contamination=0.1,
+    seed=1,
+    pretext=ASKED,
+)
+
 
 class Adapted(NamedTuple):
-    """An adapter, the task it answers for, and where what it fits would be kept."""
+    """An adapter, its task, where what it fits would be kept, and whose masks it asks under."""
 
     runtime: DetectionRuntime
     task: DownstreamTask
     store: ArtifactStore
+    pretext: ArtifactRef | None = None
 
 
 def detection_task() -> DownstreamTask:
@@ -107,7 +121,34 @@ def over_encoder_states(tmp_path: Path, *, keeping: bool) -> Adapted:
     return Adapted(runtime, replace(detection_task(), manifest=manifest), store)
 
 
-ADAPTERS: list[Callable[..., Adapted]] = [in_memory, over_summaries, over_encoder_states]
+def over_the_pretext(tmp_path: Path, *, keeping: bool) -> Adapted:
+    pytest.importorskip("torch")
+    from emblema.entrypoints.restored_backbones import RestoredBackbones
+    from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
+    from emblema.evaluation.adapters.detection.pretext_error_detection_runtime import (
+        PretextErrorDetectionRuntime,
+    )
+    from tests.support.pretexts import stored_pretext
+    from tests.support.published import publish
+
+    store = InMemoryArtifactStore()
+    manifest = publish(store, tmp_path / "scratch").manifest
+    pretext = stored_pretext(store)
+    runtime = PretextErrorDetectionRuntime(
+        RestoredBackbones(store, pretext),
+        PublishedCorpusBlocks(store, tmp_path / "workspace"),
+        device="cpu",
+        store=store if keeping else None,
+    )
+    return Adapted(runtime, replace(detection_task(), manifest=manifest), store, pretext)
+
+
+ADAPTERS: list[Callable[..., Adapted]] = [
+    in_memory,
+    over_summaries,
+    over_encoder_states,
+    over_the_pretext,
+]
 
 
 @pytest.fixture(params=ADAPTERS, ids=lambda adapter: adapter.__name__)
@@ -134,6 +175,8 @@ def recipe_for(adapted: Adapted) -> DetectorRecipe:
         return SUMMARIES
     if isinstance(adapted.runtime, TorchDetectionRuntime):
         return STATES
+    if adapted.pretext is not None:
+        return replace(PRETEXT, pretext=replace(ASKED, backbone=adapted.pretext))
     return SUMMARIES
 
 

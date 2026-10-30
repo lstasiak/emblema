@@ -74,7 +74,7 @@ class SummariesDetectionRuntime:
         started = time.perf_counter()
         detector = NearestNeighbourDetector.fitted_on(
             rows_of(read.windows(fitting)),
-            neighbours=recipe.neighbours,
+            neighbours=recipe.nearest(),
             contamination=recipe.contamination,
             units=[str(window.unit) for window in fitting] if per_unit else None,
         )
