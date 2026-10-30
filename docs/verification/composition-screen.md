@@ -107,8 +107,9 @@ is read again on the eight fresh pretrainings by the same rule.
 **Limitations.** Two pretrainings an arm give a coarse spread, bounded below by the floor. The
 budget is a bound from above: the run that set it decayed its rate over 24 epochs, these over 17.
 Of ESA's readings, 0.06 % of the first mission's and 0.05 % of the second's lie beyond ten
-deviations on the months the pretraining read, at most 226; on the held-out months 0.14 % and
-0.05 %, up to 26,360 on the first mission and one reading of 5·10¹¹ on the second. They dominate
-its validation loss, under seed 2 entirely, so the kept epoch answers the clinical corpora more than ESA. The
-network from nothing is not reproduced across runs; it is read against fine-tuning within this run
-only. Validation side, tier M.
+deviations on the months the pretraining read, at most 226; on the held-out months the detection
+tasks validate on, 0.14 % and 0.05 %, up to about 26,000 on the first mission and one reading of
+5·10¹¹ on the second. Such readings dominate ESA's validation loss in the pretraining, which reads
+these months among the held-out ones, under seed 2 entirely, so the kept epoch answers the
+clinical corpora more than ESA. The network from nothing is not reproduced across runs; it is read
+against fine-tuning within this run only. Validation side, tier M.
