@@ -9,6 +9,7 @@ from emblema.pretraining.adapters.objective.cell_reconstruction import CellRecon
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
 from emblema.pretraining.adapters.training.cell_batches import CellBatches
+from emblema.pretraining.adapters.training.cell_windows import CellWindows
 from emblema.pretraining.adapters.training.exceptions import UnanswerablePretextError
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
@@ -107,15 +108,22 @@ class PretextReading:
         if outside:
             raise ValueError(f"a seed lies outside [0, 2**63): {outside[0]}")
         read: list[ReadCells] = []
+        # A window asked under several seeds is laid out alone once, not once a draw.
+        alone: dict[int, CellWindows] = {}
         for start in range(0, len(windows), self._batch_size):
             chunk = windows[start : start + self._batch_size]
             read.extend(
-                self._read(chunk, seeds[start : start + self._batch_size], answered=answered)
+                self._read(chunk, seeds[start : start + self._batch_size], alone, answered=answered)
             )
         return read
 
     def _read(
-        self, windows: Sequence[TokenWindow], seeds: Sequence[int], *, answered: bool
+        self,
+        windows: Sequence[TokenWindow],
+        seeds: Sequence[int],
+        alone: dict[int, CellWindows],
+        *,
+        answered: bool,
     ) -> list[ReadCells]:
         for window in windows:
             beyond = [c for c in window.channel_ids if c > self._vocabulary_size]
@@ -128,7 +136,7 @@ class PretextReading:
         tokens = batch.padding_mask.shape[1]
         masks = self._stacked(
             [
-                self._drawn_alone(window, seed, tokens)
+                self._drawn_alone(window, seed, tokens, alone)
                 for window, seed in zip(windows, seeds, strict=True)
             ]
         )
@@ -141,26 +149,33 @@ class PretextReading:
             answers = (
                 prediction[..., BinnedTokens.VALUE_FEATURES].to("cpu").to(torch.float64).numpy()
             )
+        # Widened and taken off torch once for the batch: a call per row cost more than the model.
         hidden = masks.hidden.numpy()
-        read = []
-        for row in range(len(windows)):
-            length = int((~batch.padding_mask[row]).sum())
-            read.append(
-                ReadCells(
-                    full=cells.features[row, :length].to(torch.float64).numpy(),
-                    visible=cells.visible[row, :length].to(torch.float64).numpy(),
-                    hidden=hidden[row, :length].copy(),
-                    channel_ids=cells.channel_ids[row, :length].numpy().astype(np.int64),
-                    timeless=cells.timeless[row, :length].numpy().astype(np.bool_),
-                    answers=None if answers is None else answers[row, :length].copy(),
-                )
+        full = cells.features.to(torch.float64).numpy()
+        visible = cells.visible.to(torch.float64).numpy()
+        channel_ids = cells.channel_ids.numpy().astype(np.int64)
+        timeless = cells.timeless.numpy().astype(np.bool_)
+        lengths = (~batch.padding_mask).sum(dim=1).tolist()
+        return [
+            ReadCells(
+                full=full[row, :length].copy(),
+                visible=visible[row, :length].copy(),
+                hidden=hidden[row, :length].copy(),
+                channel_ids=channel_ids[row, :length].copy(),
+                timeless=timeless[row, :length].copy(),
+                answers=None if answers is None else answers[row, :length].copy(),
             )
-        return read
+            for row, length in enumerate(lengths)
+        ]
 
-    def _drawn_alone(self, window: TokenWindow, seed: int, tokens: int) -> TokenMasks:
+    def _drawn_alone(
+        self, window: TokenWindow, seed: int, tokens: int, alone: dict[int, CellWindows]
+    ) -> TokenMasks:
         """The masks of one window drawn over it alone, padded to the batch's ``tokens``."""
-        alone = self._cells.collate([window])
-        drawn = self._masking.draw(alone, torch.Generator().manual_seed(seed))
+        laid = alone.get(id(window))
+        if laid is None:
+            laid = alone[id(window)] = self._cells.collate([window])
+        drawn = self._masking.draw(laid, torch.Generator().manual_seed(seed))
         own = drawn.channel.shape[1]
 
         def padded(mask: torch.Tensor) -> torch.Tensor:
