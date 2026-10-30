@@ -22,10 +22,10 @@ the other three telemetry tasks.
 
 | | |
 | --- | --- |
-| Code | the commit that adds this section; pretrainings ordered from `7c46829f` |
+| Code | `378ba707`, which adds this section and places the campaigns' orders; pretrainings ordered from `7c46829f` |
 | Tasks | in-hospital death `a6a9c653…` and sepsis `03c3a159…` on the half of the tuning side held out by seed 101, seeds 1 to 10; `esa-mission1-events` (the leg's endpoint), `esa-mission2-events`, `skab-anomalies`, `opssat-anomalies`, every fitting window, seeds 1 to 3; tier M |
 | Pretrainings | the small shape (2 blocks × 64, 16 heads) over six-bin cells; *base*: half of the 2012 and of the 2019 training stays, each drawn by the run's seed, the eICU demo's stays of 48 hours and the first half of each mission's months of raw ESA telemetry, read 6, 2, 10 and 1 times an epoch; *wqp*: the same plus the portal's 24,095 locations once an epoch; seeds 1 and 2 each; 17 epochs, read off a run at seed 0 by the rule written before it (`scripts/pretraining_budget_report.py`, `5d8d1ab2`) |
-| Platform | the pretrainings on one Colab G4 (RTX PRO 6000) in four lanes under CUDA MPS, fp32, 6,803 to 7,218 s; the campaigns on Kaggle T4 cards, fp32 |
+| Platform | the pretrainings on one Colab G4 (RTX PRO 6000) in four lanes under CUDA MPS, fp32, 6,803 to 7,218 s; the campaigns on one Colab G4 in 24 lanes under CUDA MPS, fp32 |
 | Campaigns, per backbone | `composition-physionet2012` (the network from nothing at the rate in force; fine-tuning at 0.00001, 0.00003, 0.0001, 0.000333, 0.001 and 0.003, and with the encoder at a tenth or a hundredth of the rate once the head is solved; 20, 50, 100, 200); `cell-pretraining-probes-physionet2012` (500); `reader-probes-physionet2019` (400, 4,000, every patient); `composition-mission1` (the states and their initialisation, the pretext's error); `detection-events-per-unit` on SKAB, `detection-events-counts` on the second mission and OPS-SAT |
 | Campaigns, once | `composition-scratch-physionet2012` (the network from nothing at the six rates); `composition-mission1-bars` (summaries, counts, the ridge and the interpolation, under `base1`'s masks, which every backbone draws by one rule) |
 | Worker | `data/report/t42c/worker-env.sh` (the rate in force 0.001), the backbone's weights per campaign |
@@ -106,7 +106,9 @@ is read again on the eight fresh pretrainings by the same rule.
 
 **Limitations.** Two pretrainings an arm give a coarse spread, bounded below by the floor. The
 budget is a bound from above: the run that set it decayed its rate over 24 epochs, these over 17.
-0.42 % of ESA's raw readings lie beyond ten deviations, up to 26,358; they dominate its validation
-loss, under seed 2 entirely, so the kept epoch answers the clinical corpora more than ESA. The
+Of ESA's readings, 0.06 % of the first mission's and 0.05 % of the second's lie beyond ten
+deviations on the months the pretraining read, at most 226; on the held-out months 0.14 % and
+0.05 %, up to 26,360 on the first mission and one reading of 5·10¹¹ on the second. They dominate
+its validation loss, under seed 2 entirely, so the kept epoch answers the clinical corpora more than ESA. The
 network from nothing is not reproduced across runs; it is read against fine-tuning within this run
 only. Validation side, tier M.
