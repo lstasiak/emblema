@@ -250,7 +250,8 @@ class PretextErrorDetectionRuntime:
         """Every draw of every window beside its place in ``windows``, a chunk at a time."""
         for start in range(0, len(windows), _CHUNK):
             chunk = windows[start : start + _CHUNK]
-            tokens = read.windows(chunk)
+            # Read once a chunk: the block reads a window again at every index asked of it.
+            tokens = list(read.windows(chunk))
             asked = [
                 (start + at, tokens[at], self._seed(recipe.seed, window, draw))
                 for draw in range(asking.draws)
