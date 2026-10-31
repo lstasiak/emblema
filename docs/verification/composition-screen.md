@@ -113,3 +113,132 @@ tasks validate on, 0.14 % and 0.05 %, up to about 26,000 on the first mission an
 these months among the held-out ones, under seed 2 entirely, so the kept epoch answers the
 clinical corpora more than ESA. The network from nothing is not reproduced across runs; it is read
 against fine-tuning within this run only. Validation side, tier M.
+
+## 2026-10-31 — Colab G4, fp32: fine-tuning gains 0.016 at 20 and 50 stays, the portal stays out, and the satellites' states lose the readings' size
+
+**Question.** As declared above: the gain of fine-tuning over the best network from nothing at
+each budget, whether the portal replaces the base, and whether the first mission's events are
+found without a label by the encoder's states and by the pretext's error.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `378ba707` for every cell (each order carries it); the reading at `3902a4e0`, whose scripts are those of `378ba707` |
+| Machine | one Colab G4 (RTX PRO 6000), 24 lanes under CUDA MPS, fp32; 219 pieces of the 30 orders, none retried, 4,184 s |
+| Cells | 2,207, accepted lane by lane (`data/report/l32b5a/accept-campaigns.sh`) |
+| Reading | `data/report/l32b5a/read.sh`, every step as declared, exit 0 |
+
+**Areas** under the four pretrainings, at each arm's chosen setting (AUROC, mean over seeds):
+
+| Stays | Fine-tuning (setting) | Network from nothing (rate) | Trees per channel |
+| --- | --- | --- | --- |
+| 20 | 0.631 (0.0001) | 0.615 (0.001) | 0.621 |
+| 50 | 0.670 (0.001) | 0.654 (0.001) | 0.628 |
+| 100 | 0.711 (0.001) | 0.695 (0.000333) | |
+| 200 | 0.745 (0.001) | 0.741 (0.0001) | 0.736 |
+
+The encoder at a tenth or a hundredth of the rate never clears the bar (−0.003 to −0.021).
+
+**Gains of fine-tuning over the network from nothing** (`pretraining_screen_report.py`;
+s = 0.014, the floor; the pairs' own spread 0.009):
+
+| Stays | Four pretrainings | Base (n = 2) | Portal (n = 2) | Level, four |
+| --- | --- | --- | --- | --- |
+| 20 | +0.016 [+0.007; +0.025] | +0.025 [+0.015; +0.036] | +0.007 [−0.002; +0.016] | noise (T 0.030) |
+| 50 | +0.016 [+0.007; +0.025] | +0.025 [+0.015; +0.034] | +0.007 [−0.003; +0.016] | real and small (T 0.015) |
+| 200 | +0.004 [−0.007; +0.015] | +0.011 [−0.001; +0.022] | −0.003 [−0.014; +0.008] | noise (T 0.015) |
+| 200, rate in force | +0.022 [+0.012; +0.032] | +0.031 [+0.020; +0.043] | +0.013 [+0.002; +0.024] | at the least gain |
+
+**Choice of the recipe.** The portal less the base: fine-tuning −0.018, −0.018 and −0.014 at 20,
+50 and 200 stays, each within ±T (0.025, 0.027, 0.021); the probe at 500 −0.014 (T 0.020); the
+first mission's states +0.005 [−0.004; +0.016]. Worse past T on none, better on none: **the base
+stays**.
+
+**Representation.** The probe at 500 stays: base 0.762 against 0.673 untrained, +0.090
+[+0.067; +0.113]; portal +0.061 [+0.039; +0.083]. The sepsis reader at 4,000 patients, base:
++0.009 [−0.002; +0.019]; at every patient +0.013 [+0.002; +0.025].
+
+**The first mission** (event-weighted PR-AUC; reduction of 1 − PR-AUC, 10,000 resamples):
+
+| Pair | Base | Portal |
+| --- | --- | --- |
+| States less their initialisation (endpoint) | +0.018 [−0.008; +0.045] | +0.011 [−0.011; +0.036] |
+| States less the summaries | **+0.074** [+0.011; +0.158] | **+0.080** [+0.013; +0.165] |
+| Pretext's error less the ridge | −0.026 [−0.050; +0.019] | −0.017 [−0.048; +0.065] |
+| Pretext's error less the summaries | **+0.106** [+0.048; +0.194] | **+0.114** [+0.059; +0.225] |
+| Pretext's error less the interpolation | +0.040 [+0.012; +0.102] | +0.048 [+0.015; +0.143] |
+
+PR-AUC: the ridge 0.152, the pretext's error 0.127 / 0.135, the states 0.096 / 0.101, their
+initialisation 0.077, the interpolation 0.087, the summaries 0.021. Neither leg's condition
+holds: the states do not pass their initialisation, the pretext's error does not pass the ridge.
+
+**The other telemetry tasks.** SKAB: states less initialisation +0.005 / −0.021, the summaries
+ahead by 0.13 to 0.15. OPS-SAT: the states below their initialisation, −0.052 [−0.091; −0.014]
+and −0.029 [−0.071; +0.006]. The second mission: the states far below their initialisation,
+−0.432 [−0.594; −0.312] and −0.393 [−0.545; −0.238] (PR-AUC 0.06 / 0.10 against 0.49), where
+backbones that never read ESA lay between 0.31 and 0.59 (`anomaly-tasks.md`).
+
+**Predictions.**
+
+| Reading | Predicted | Observed | Held |
+| --- | --- | --- | --- |
+| Spread s | [0.014, 0.025] | 0.014 (own 0.009) | yes |
+| Gain, four, 20 | noise, in [−0.005, +0.010] | noise, +0.016 | level yes, range no (above) |
+| Gain, four, 50 | noise, in [−0.001, +0.015] | real and small, +0.016 | no (above) |
+| Gain, four, 200 | noise, in [−0.015, +0.007] | noise, +0.004 | yes |
+| Gain at the rate in force, 200 | in [+0.010, +0.031] | +0.022 | yes |
+| Settings | network from nothing at 0.0001 or below at 200; fine-tuning within 0.003 of the rate in force | 0.0001; within 0.0016 | yes |
+| Curve | the gain changes sign between 50 and 200 | +0.016 to +0.004, no change | no |
+| Portal less base | within T on all three; the base stays | within T; the base stays | yes |
+| Probe at 500 | above its threshold for each recipe, in [+0.044, +0.091] | +0.090, +0.061 | yes |
+| M1 states less initialisation | in [−0.011, +0.037], below 0.05 | +0.018, +0.011 | yes |
+| M1 states less summaries | in [+0.011, +0.148] | +0.074, +0.080 | yes |
+| M1 pretext above the summaries | above | +0.106, +0.114 | yes |
+| Sepsis reader, 4,000 | above initialisation, in [0.000, +0.091] | +0.009 [−0.002; +0.019] | no (not clear of zero) |
+| Transduction | gap in [−0.025, +0.009] | −0.010 to −0.005, intervals [−0.023; +0.009] | yes |
+| Null pairs | within ±0.002 | base 0.000; portal +0.013, −0.008, +0.004 | no for the portal |
+| SKAB; OPS-SAT | states within ±0.05, summaries ahead; states below | as predicted | yes |
+
+The null pairs of the portal's campaigns differ because the network from nothing is drawn over
+the larger of the task's and the backbone's vocabularies: 508 channels under the portal, 435
+under the base, so its initial weights differ. Every gain reads the network from nothing in one
+campaign (`48ef3714`, 435 channels), so no gain moves. The draw alone moves that network by up to
+0.013 at 20 stays, the size of the floor on s.
+
+**After the results (not declared; window-level AUROC, each seed).** The events of the first
+mission split by whether their window holds a reading beyond ten deviations (13 % of them;
+none of the normal windows on the second mission):
+
+| Detector, base | M1 beyond 10 | M1 within 10 | M2 beyond 10 | M2 within 10 |
+| --- | --- | --- | --- | --- |
+| Initialisation, seeds 1–3 | 0.77–0.83 | 0.49–0.51 | 0.95–0.99 | 0.75–0.79 |
+| States | 0.73–0.75 | 0.50–0.52 | 0.67–0.75 | 0.55–0.59 |
+| Pretext's error | 0.81–0.83 | 0.54–0.55 | | |
+| Ridge | 0.82–0.83 | 0.58–0.59 | | |
+| Summaries | 0.83 | 0.57 | 0.93 | 0.70 |
+
+The largest |z| of a window, ranked alone, reads 0.60 on M1 and 0.85 on M2. Scripts and tables:
+`data/report/l32b5a/posthoc/`.
+
+**Conclusions.**
+
+1. Fine-tuning over the base gains about 0.016 at 20 and 50 stays over the best network from
+   nothing, with intervals clear of zero, and nothing at 200; above the predictions, at the
+   literature's level, from a screen: a confirmation on fresh pretrainings, predicted from the
+   lower edge, decides it.
+2. The portal joins nowhere: the base stays the recipe.
+3. The representation stands above its initialisation on the stays (probe +0.090) and only
+   faintly on sepsis.
+4. On the first mission neither the states nor the pretext's error meet their condition. Outside
+   the 13 % of events with a reading beyond ten deviations every detector is near chance (0.59 at
+   best), so the task resolves mainly whether a reading's size is seen.
+5. After the results: pretraining over the satellites lowers the states' sensitivity to large
+   readings (0.05 to 0.07 on M1, 0.2 to 0.3 on M2, below a random encoder of the same shape).
+   The mechanism is not shown; a test of the states under scaled inputs comes first.
+
+**Limitations.** Two pretrainings a recipe; the base was chosen as the better, so its own
++0.025 is optimistic. The analysis after the results uses another measure than the register's,
+on the same windows that chose it, and its third subgroup on M2 (56 windows, 45 of one class) is
+too small to read. The trees come from another run on the same half and seeds. Validation side,
+tier M.

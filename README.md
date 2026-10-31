@@ -92,10 +92,14 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
 - **On both tasks pretraining does not yet pay off.** On turbofan remaining life (NASA C-MAPSS)
   the network trained from scratch is the best candidate at every budget, 10 % better than the
   fine-tuned encoder at 200 labelled windows. On death in hospital (PhysioNet 2012) a small
-  encoder pretrained over cells gains 0.021 at 200 stays over the same network trained from
-  scratch at the shared learning rate, but nothing once that network has its own best rate;
-  at 50 stays 0.014 [0.006; 0.022] remains, below the least gain, and at 20 nothing. Published
-  work reports the same: a well-tuned network from scratch catches up once labels suffice.
+  encoder pretrained over cells of the stays, the eICU demo and raw satellite telemetry gains
+  0.016 [0.007; 0.025] in area at 20 and at 50 stays over the best network trained from
+  scratch, each at its own best setting, and nothing at 200. It is a screen of four
+  pretrainings; fresh pretrainings confirm it or not. Published work reports the same at 200:
+  a well-tuned network from scratch catches up once labels suffice.
+- **On satellite telemetry the pretrained encoder does not find events without labels.** Its
+  features do not beat the same encoder untrained, nor its pretext's error a linear model over
+  the same readings, and the features read large readings less well than the untrained ones.
 - **Pretraining now leaves a representation above its initialisation.** On that encoder a
   linear probe on the frozen features gains 0.06 to 0.09 in area over the same encoder
   untrained at 500 stays, the first pretraining on these stays to do so; it still reads 0.03
