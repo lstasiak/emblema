@@ -4,6 +4,7 @@ from emblema.evaluation.domain.detection.detector_features import DetectorFeatur
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
+from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.exceptions import InvalidDetectorRecipeError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
@@ -164,3 +165,27 @@ def test_the_masks_are_read_off_a_detector_that_asks_the_pretext_alone() -> None
     assert asked.asked() is ASKING
     with pytest.raises(InvalidDetectorRecipeError, match="reads features, not the pretext"):
         recipe().asked()
+
+
+def test_the_whitened_distance_reads_no_neighbours() -> None:
+    whitened = recipe(distance=ScoreDistance.WHITENED, neighbours=None)
+
+    assert not whitened.scores_by_nearest_neighbours
+    assert recipe().scores_by_nearest_neighbours
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
+        whitened.nearest()
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
+        recipe(distance=ScoreDistance.WHITENED)
+    with pytest.raises(InvalidDetectorRecipeError, match="names no neighbours"):
+        recipe(neighbours=None)
+
+
+def test_a_detector_scored_by_an_error_has_no_distance_to_choose() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="no distance to choose"):
+        recipe(
+            features=DetectorFeatures.PRETEXT_ERROR,
+            reading=None,
+            neighbours=None,
+            pretext=PretextAsking(backbone=WEIGHTS, draws=2),
+            distance=ScoreDistance.WHITENED,
+        )

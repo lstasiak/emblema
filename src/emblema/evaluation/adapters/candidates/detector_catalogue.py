@@ -6,6 +6,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
+from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     InvalidCandidateVariantError,
@@ -71,15 +72,18 @@ class DetectorCatalogue:
         """What the detector was set to, beyond the seed each cell of the grid supplies itself.
 
         An arm over the summaries or their counts names what it reads and the detector's knobs,
-        the reference only where it is not the fitting side's, so the campaigns declared before
-        it was a knob read as they were stored; one over an encoder's states names the model it
-        is shaped like too, the layer and the pooling it reads at; one that asks the pretext
-        names the draws in place of the neighbours, and the backbone whose masks it asks under.
+        the reference and the distance only where they are not the defaults, so the campaigns
+        declared before they were knobs read as they were stored; one over an encoder's states
+        names the model it is shaped like too, the layer and the pooling it reads at; one that
+        asks the pretext names the draws in place of the neighbours, and the backbone whose
+        masks it asks under; one by the whitened distance names no neighbours.
         """
         stated: dict[str, object] = {"features": arm.features}
         if arm.features.asks_the_pretext and arm.backbone is not None:
             stated["draws"] = arm.draws
             stated["masks"] = arm.backbone.key
+        elif arm.distance is ScoreDistance.WHITENED:
+            stated["distance"] = arm.distance
         else:
             stated["neighbours"] = arm.neighbours
         stated["contamination"] = arm.contamination

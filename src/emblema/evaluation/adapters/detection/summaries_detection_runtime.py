@@ -2,12 +2,10 @@ import time
 from collections.abc import Sequence
 
 from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
-from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.blocks.read_corpus import ReadCorpus
-from emblema.evaluation.adapters.detection.nearest_neighbour_detector import (
-    NearestNeighbourDetector,
-)
+from emblema.evaluation.adapters.detection.feature_detector import FeatureDetector
+from emblema.evaluation.adapters.detection.feature_detectors import FeatureDetectors
 from emblema.evaluation.adapters.features.per_channel_features import PerChannelFeatures
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
@@ -31,10 +29,10 @@ class SummariesDetectionRuntime:
     """Fits a detector over the statistics of every channel of a window, in this process.
 
     The classical bar for a representation: the same table the trees read, standardised over
-    the fitting side and scored by the distance to the nearest fitting windows; or that table's
-    counts of readings alone, the bar of the sampling. Nothing here reaches an encoder, so a
-    process without the machine-learning stack can run it. The seconds an outcome reports start
-    once the block is at hand.
+    the fitting side and scored by the distance the recipe names, to the nearest fitting windows
+    or whitened; or that table's counts of readings alone, the bar of the sampling. Nothing here
+    reaches an encoder, so a process without the machine-learning stack can run it. The seconds
+    an outcome reports start once the block is at hand.
     """
 
     FEATURES = frozenset({DetectorFeatures.SUMMARIES, DetectorFeatures.READING_COUNTS})
@@ -72,10 +70,9 @@ class SummariesDetectionRuntime:
         )
         per_unit = recipe.reference is ScoreReference.OWN_UNIT
         started = time.perf_counter()
-        detector = NearestNeighbourDetector.fitted_on(
+        detector = FeatureDetectors.fitted(
+            recipe,
             rows_of(read.windows(fitting)),
-            neighbours=recipe.nearest(),
-            contamination=recipe.contamination,
             units=[str(window.unit) for window in fitting] if per_unit else None,
         )
         answers = detector.scores(
@@ -93,7 +90,7 @@ class SummariesDetectionRuntime:
             artifact=self._kept(detector, task) if retain else None,
         )
 
-    def _kept(self, detector: NearestNeighbourDetector, task: DownstreamTask) -> ArtifactRef:
+    def _kept(self, detector: FeatureDetector, task: DownstreamTask) -> ArtifactRef:
         """The detector this fit produced, stored under a manifest, for the campaign.
 
         Raises:
@@ -106,5 +103,5 @@ class SummariesDetectionRuntime:
         return self._kept_candidates.keep(
             CandidateKind.DETECTOR,
             corpus_manifest=task.manifest,
-            measured=RepresentationBytes(NearestNeighbourDetector.FORMAT, detector.to_bytes()),
+            measured=detector.kept(),
         )

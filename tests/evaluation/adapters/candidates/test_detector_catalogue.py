@@ -7,6 +7,7 @@ from emblema.evaluation.adapters.candidates.detector_catalogue import DetectorCa
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
+from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     InvalidDetectorRecipeError,
@@ -202,3 +203,37 @@ def test_an_arm_that_asks_the_pretext_names_a_backbone_and_no_shape() -> None:
             architecture=WEIGHTS,
             backbone=WEIGHTS,
         )
+
+
+def test_a_detector_by_the_whitened_distance_says_so_and_names_no_neighbours() -> None:
+    turned = CATALOGUE.arm_of(CandidateRef("frozen_knn@distance=whitened"))
+    described = CATALOGUE.describe(CandidateRef("frozen_knn@distance=whitened"))
+    stated = {p.name: p.value for p in described.method.parameters}
+
+    assert turned.recipe(seed=1).distance is ScoreDistance.WHITENED
+    assert turned.recipe(seed=1).neighbours is None
+    assert stated["distance"] == "whitened"
+    assert "neighbours" not in stated
+    # A campaign declared before the distance was a knob keeps the design it was stored with.
+    assert "distance" not in {
+        p.name for p in CATALOGUE.describe(CandidateRef("frozen_knn")).method.parameters
+    }
+    assert (
+        CATALOGUE.arm_of(CandidateRef("summaries_knn@distance=whitened")).recipe(seed=1).distance
+        is ScoreDistance.WHITENED
+    )
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "pretext_error@distance=whitened",
+        "frozen_knn@distance=cosine",
+        "frozen_knn@distance=whitened,neighbours=10",
+        "frozen_knn@neighbours=10,distance=whitened",
+    ],
+    ids=["distance of an error", "no such distance", "neighbours after", "neighbours before"],
+)
+def test_a_distance_the_score_does_not_have_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError):
+        ASKING.arm_of(CandidateRef(name))

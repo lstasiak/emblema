@@ -7,11 +7,9 @@ from numpy.typing import NDArray
 
 from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
-from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
-from emblema.evaluation.adapters.detection.nearest_neighbour_detector import (
-    NearestNeighbourDetector,
-)
+from emblema.evaluation.adapters.detection.feature_detector import FeatureDetector
+from emblema.evaluation.adapters.detection.feature_detectors import FeatureDetectors
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.frozen_embedding import FrozenEmbedding
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
@@ -48,9 +46,10 @@ class TorchDetectionRuntime:
 
     Every window of the fitting side and of the scored side is laid out as the encoder was
     trained to read it, embedded once under no gradient, and the detector is fitted and scored
-    over the states on the host in double precision: the arithmetic of a distance to the nearest
-    neighbours is numpy's, as it is for the summaries, so the two detectors differ in what they
-    read and in nothing else. The seconds an outcome reports start once the block is at hand.
+    over the states on the host in double precision: the arithmetic of the distance, to the
+    nearest neighbours or whitened, is numpy's, as it is for the summaries, so the detectors
+    over states and over summaries differ in what they read and in nothing else. The seconds an
+    outcome reports start once the block is at hand.
     """
 
     def __init__(
@@ -98,10 +97,9 @@ class TorchDetectionRuntime:
         ).to(self._device)
         embedding.eval()
         per_unit = recipe.reference is ScoreReference.OWN_UNIT
-        detector = NearestNeighbourDetector.fitted_on(
+        detector = FeatureDetectors.fitted(
+            recipe,
             self._states(embedding, layout, fitted_windows),
-            neighbours=recipe.nearest(),
-            contamination=recipe.contamination,
             units=[str(window.unit) for window in fitting] if per_unit else None,
         )
         answers = detector.scores(
@@ -150,7 +148,7 @@ class TorchDetectionRuntime:
             states.append(embedding.embed(batch).to("cpu").to(torch.float64).numpy())
         return np.concatenate(states)
 
-    def _kept(self, detector: NearestNeighbourDetector, task: DownstreamTask) -> ArtifactRef:
+    def _kept(self, detector: FeatureDetector, task: DownstreamTask) -> ArtifactRef:
         """The detector this fit produced, stored under a manifest, for the campaign.
 
         The states it was fitted over are the measured form; the encoder they came from is named
@@ -166,5 +164,5 @@ class TorchDetectionRuntime:
         return self._kept_candidates.keep(
             CandidateKind.DETECTOR,
             corpus_manifest=task.manifest,
-            measured=RepresentationBytes(NearestNeighbourDetector.FORMAT, detector.to_bytes()),
+            measured=detector.kept(),
         )

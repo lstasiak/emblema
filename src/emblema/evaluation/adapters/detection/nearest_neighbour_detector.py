@@ -6,7 +6,9 @@ from typing import ClassVar, Self
 import numpy as np
 from numpy.typing import NDArray
 
+from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
+from emblema.evaluation.adapters.detection.standardisation import Standardisation
 from emblema.evaluation.domain.exceptions import UnreadableFittedCandidateError
 
 # Scored rows are compared with the fitted ones this many at a time, so the matrix of distances
@@ -26,8 +28,7 @@ class NearestNeighbourDetector:
     with the unit of every row, the alarm reads each distance against its own unit first.
 
     Attributes:
-        centre: The fitting mean of every feature.
-        scale: The fitting spread of every feature, one where there was none.
+        standardisation: How every row is centred and scaled before it is read.
         fitted: The fitting rows, standardised.
         neighbours: How many nearest fitted rows a score is the mean distance to.
         alarm: Where a distance raises an alarm.
@@ -35,8 +36,7 @@ class NearestNeighbourDetector:
 
     FORMAT: ClassVar[str] = "nearest-neighbour-npz"
 
-    centre: NDArray[np.float64]
-    scale: NDArray[np.float64]
+    standardisation: Standardisation
     fitted: NDArray[np.float64]
     neighbours: int
     alarm: ScoreAlarm
@@ -61,12 +61,8 @@ class NearestNeighbourDetector:
             InvalidScoredOutcomeError: If units are given and none holds two rows, so no row
                 has anything of its unit to be read against.
         """
-        rows = np.asarray(rows, dtype=np.float64)
-        with np.errstate(invalid="ignore"):
-            centre = np.nan_to_num(np.nanmean(rows, axis=0), nan=0.0)
-            scale = np.nan_to_num(np.nanstd(rows, axis=0), nan=0.0)
-        scale = np.where(scale > 0.0, scale, 1.0)
-        standardised = cls._standardised(rows, centre, scale)
+        standardisation = Standardisation.fitted_on(np.asarray(rows, dtype=np.float64))
+        standardised = standardisation.of(rows)
         kept = min(neighbours, max(len(standardised) - 1, 1))
         # Each fitting row's nearest neighbour is itself at no distance, so one more is asked
         # for and the first dropped; a lone fitting row scores zero and the alarm stays there.
@@ -76,8 +72,7 @@ class NearestNeighbourDetector:
             else np.zeros((1, 1))
         )
         return cls(
-            centre=centre,
-            scale=scale,
+            standardisation=standardisation,
             fitted=standardised,
             neighbours=kept,
             alarm=ScoreAlarm.set_over(own.mean(axis=1), contamination=contamination, units=units),
@@ -97,17 +92,9 @@ class NearestNeighbourDetector:
             InvalidScoredOutcomeError: If units are given and none holds two rows.
         """
         self.alarm.require(units)
-        standardised = self._standardised(
-            np.asarray(rows, dtype=np.float64), self.centre, self.scale
-        )
+        standardised = self.standardisation.of(rows)
         distances = self._distances(standardised, self.fitted, self.neighbours).mean(axis=1)
         return self.alarm.above(distances, units=units)
-
-    @staticmethod
-    def _standardised(
-        rows: NDArray[np.float64], centre: NDArray[np.float64], scale: NDArray[np.float64]
-    ) -> NDArray[np.float64]:
-        return np.nan_to_num((rows - centre) / scale, nan=0.0)
 
     @staticmethod
     def _distances(
@@ -129,13 +116,17 @@ class NearestNeighbourDetector:
             kept.append(np.sqrt(np.sort(nearest_squared, axis=1)))
         return np.concatenate(kept)
 
+    def kept(self) -> RepresentationBytes:
+        """The detector as it is kept, under the format ``from_bytes`` reads back."""
+        return RepresentationBytes(self.FORMAT, self.to_bytes())
+
     def to_bytes(self) -> bytes:
         """The detector as numpy's archive of its arrays, the form it is kept in."""
         buffer = io.BytesIO()
         np.savez(
             buffer,
-            centre=self.centre,
-            scale=self.scale,
+            centre=self.standardisation.centre,
+            scale=self.standardisation.scale,
             fitted=self.fitted,
             neighbours=np.asarray(self.neighbours),
             alarm=np.asarray(self.alarm.level),
@@ -154,8 +145,10 @@ class NearestNeighbourDetector:
         try:
             with np.load(io.BytesIO(content), allow_pickle=False) as archive:
                 return cls(
-                    centre=np.asarray(archive["centre"], dtype=np.float64),
-                    scale=np.asarray(archive["scale"], dtype=np.float64),
+                    standardisation=Standardisation(
+                        centre=np.asarray(archive["centre"], dtype=np.float64),
+                        scale=np.asarray(archive["scale"], dtype=np.float64),
+                    ),
                     fitted=np.asarray(archive["fitted"], dtype=np.float64),
                     neighbours=int(archive["neighbours"]),
                     alarm=ScoreAlarm(

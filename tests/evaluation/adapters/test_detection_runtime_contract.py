@@ -22,6 +22,7 @@ from emblema.evaluation.domain.detection.detector_features import DetectorFeatur
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
+from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
@@ -265,3 +266,22 @@ def test_the_counts_of_readings_are_read_where_the_summaries_are_and_nowhere_els
     else:
         with pytest.raises(UnsupportedDetectorFeaturesError):
             adapted.runtime.fit(counts, adapted.task, FITTING, SCORED, retain=False)
+
+
+def test_the_whitened_distance_answers_the_same_windows_and_scores_them_otherwise(
+    adapted: Adapted,
+) -> None:
+    nearest = recipe_for(adapted)
+    if nearest.features.asks_the_pretext:
+        pytest.skip("a detector scored by an error has no distance to choose")
+    whitened = replace(nearest, distance=ScoreDistance.WHITENED, neighbours=None)
+
+    by_nearest = adapted.runtime.fit(nearest, adapted.task, FITTING, OF_TWO_UNITS, retain=False)
+    by_whitened = adapted.runtime.fit(whitened, adapted.task, FITTING, OF_TWO_UNITS, retain=False)
+
+    assert [p.window for p in by_whitened.predictions] == [p.window for p in by_nearest.predictions]
+    assert all(isfinite(p.predicted) for p in by_whitened.predictions)
+    if not isinstance(adapted.runtime, InMemoryDetectionRuntime):
+        assert [p.predicted for p in by_whitened.predictions] != [
+            p.predicted for p in by_nearest.predictions
+        ]
