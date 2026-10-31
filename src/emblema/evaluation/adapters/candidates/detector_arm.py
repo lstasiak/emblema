@@ -5,6 +5,7 @@ from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
@@ -22,9 +23,9 @@ class DetectorArm:
     states, pretrained or at their initialisation, the summaries per channel or their counts of
     readings, or the error of what is filled in under a backbone's masks — and the knobs of the
     detector itself: which distance from the fitted windows it scores by and the neighbours that
-    distance is taken to, or the draws an error is averaged over, the share of the fitting side
-    the alarm flags and what a score is read against. A variant of an arm is the arm with one of
-    those turned, or the encoder's layer or pooling turned.
+    distance is taken to, or the draws an error is averaged over and how the errors are read, the
+    share of the fitting side the alarm flags and what a score is read against. A variant of an
+    arm is the arm with one of those turned, or the encoder's layer or pooling turned.
 
     Invariants: an arm over an encoder's states names the model whose shape it reads; an arm
     that asks the pretext names the backbone whose masks it asks under and no shape; one over
@@ -45,9 +46,10 @@ class DetectorArm:
         contamination: The share of fitting windows the alarm is set to flag.
         reference: What a window's score is read against before the alarm.
         draws: How many draws of the backbone's masks an error is averaged over.
+        normalisation: How the cells' errors become a window's score.
     """
 
-    KNOBS = ("distance", "neighbours", "contamination", "reference", "draws")
+    KNOBS = ("distance", "neighbours", "contamination", "reference", "draws", "error")
     DEFAULT_NEIGHBOURS = 5
 
     ref: CandidateRef
@@ -61,6 +63,7 @@ class DetectorArm:
     contamination: float = 0.02
     reference: ScoreReference = ScoreReference.FITTING_SIDE
     draws: int = PretextAsking.STANDARD_DRAWS
+    normalisation: ErrorNormalisation = ErrorNormalisation.RAW
 
     def __post_init__(self) -> None:
         if (self.architecture is None) == self.features.reads_an_encoder:
@@ -102,6 +105,13 @@ class DetectorArm:
             return replace(self, neighbours=self._count(knob, value))
         if knob == "draws" and self.features.asks_the_pretext:
             return replace(self, draws=self._count(knob, value))
+        if knob == "error" and self.features.asks_the_pretext:
+            try:
+                return replace(self, normalisation=ErrorNormalisation(value))
+            except ValueError as error:
+                raise UnknownKnobError(
+                    f"{knob} takes one of {[str(n) for n in ErrorNormalisation]}, not {value!r}"
+                ) from error
         if knob == "contamination":
             return replace(self, contamination=self._share(knob, value))
         if knob == "reference":
@@ -112,7 +122,9 @@ class DetectorArm:
                     f"{knob} takes one of {[str(r) for r in ScoreReference]}, not {value!r}"
                 ) from error
         if not self.features.reads_an_encoder:
-            turned = ("draws",) if self.features.asks_the_pretext else ("distance", "neighbours")
+            turned = (
+                ("draws", "error") if self.features.asks_the_pretext else ("distance", "neighbours")
+            )
             raise UnknownKnobError(
                 f"a detector over {self.features} turns "
                 f"{(*turned, 'contamination', 'reference')} and nothing else"
@@ -145,6 +157,7 @@ class DetectorArm:
             contamination=self.contamination,
             seed=seed,
             distance=self.distance,
+            normalisation=self.normalisation,
             reference=self.reference,
             pretext=(
                 PretextAsking(backbone=self.backbone, draws=self.draws)

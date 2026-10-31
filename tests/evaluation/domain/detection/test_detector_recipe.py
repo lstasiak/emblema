@@ -3,6 +3,7 @@ import pytest
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.exceptions import InvalidDetectorRecipeError
@@ -189,3 +190,18 @@ def test_a_detector_scored_by_an_error_has_no_distance_to_choose() -> None:
             pretext=PretextAsking(backbone=WEIGHTS, draws=2),
             distance=ScoreDistance.WHITENED,
         )
+
+
+def test_only_a_detector_scored_by_an_error_reads_its_errors_per_channel() -> None:
+    asked = recipe(
+        features=DetectorFeatures.PRETEXT_ERROR,
+        reading=None,
+        neighbours=None,
+        pretext=PretextAsking(backbone=WEIGHTS, draws=2),
+        normalisation=ErrorNormalisation.PER_CHANNEL,
+    )
+
+    assert asked.normalisation is ErrorNormalisation.PER_CHANNEL
+    assert recipe().normalisation is ErrorNormalisation.RAW
+    with pytest.raises(InvalidDetectorRecipeError, match="no errors to read"):
+        recipe(normalisation=ErrorNormalisation.PER_CHANNEL)

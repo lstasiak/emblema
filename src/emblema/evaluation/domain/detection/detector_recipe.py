@@ -3,6 +3,7 @@ from math import isfinite
 
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
@@ -26,8 +27,8 @@ class DetectorRecipe:
     Invariants: an encoder is read exactly when the features are an encoder's states; a
     backbone's masks are named exactly when the pretext is asked; neighbours are named, at least
     one, exactly when the distance to the nearest fitted windows is the score; a detector scored
-    by an error has no distance to choose; the contamination lies strictly between zero and
-    one.
+    by an error has no distance to choose, and only such a detector reads its errors per
+    channel; the contamination lies strictly between zero and one.
 
     Attributes:
         features: What a window is read as.
@@ -38,6 +39,7 @@ class DetectorRecipe:
         contamination: The share of fitting windows the alarm is set to flag.
         seed: Seed of the fit, which decides what an encoder at its initialisation draws.
         distance: Which distance from the fitted windows a detector over features scores by.
+        normalisation: How the cells' errors become the score of a detector scored by an error.
         reference: What a window's score is read against before the alarm.
         pretext: Whose masks hide the cells, and how often, for a detector that asks the
             pretext; ``None`` otherwise.
@@ -49,6 +51,7 @@ class DetectorRecipe:
     contamination: float
     seed: int
     distance: ScoreDistance = ScoreDistance.NEAREST_NEIGHBOURS
+    normalisation: ErrorNormalisation = ErrorNormalisation.RAW
     reference: ScoreReference = ScoreReference.FITTING_SIDE
     pretext: PretextAsking | None = None
 
@@ -70,6 +73,11 @@ class DetectorRecipe:
         if self.features.asks_the_pretext and self.distance is not ScoreDistance.NEAREST_NEIGHBOURS:
             raise InvalidDetectorRecipeError(
                 f"a detector over {self.features} scores by an error; it has no distance to choose"
+            )
+        if self.normalisation is not ErrorNormalisation.RAW and not self.features.asks_the_pretext:
+            raise InvalidDetectorRecipeError(
+                f"a detector over {self.features} scores by a distance; it has no errors to read "
+                f"{self.normalisation}"
             )
         if (self.neighbours is None) != (not self.scores_by_nearest_neighbours):
             raise InvalidDetectorRecipeError(

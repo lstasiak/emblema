@@ -7,6 +7,7 @@ from emblema.evaluation.adapters.candidates.detector_catalogue import DetectorCa
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
+from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
@@ -235,5 +236,30 @@ def test_a_detector_by_the_whitened_distance_says_so_and_names_no_neighbours() -
     ids=["distance of an error", "no such distance", "neighbours after", "neighbours before"],
 )
 def test_a_distance_the_score_does_not_have_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError):
+        ASKING.arm_of(CandidateRef(name))
+
+
+def test_a_detector_reading_its_errors_per_channel_says_so() -> None:
+    turned = ASKING.arm_of(CandidateRef("pretext_error@error=channel"))
+    stated = {
+        p.name: p.value
+        for p in ASKING.describe(CandidateRef("pretext_error@error=channel")).method.parameters
+    }
+
+    assert turned.recipe(seed=1).normalisation is ErrorNormalisation.PER_CHANNEL
+    assert stated["error"] == "channel"
+    # A campaign declared before the reading was a knob keeps the design it was stored with.
+    assert "error" not in {
+        p.name for p in ASKING.describe(CandidateRef("pretext_error")).method.parameters
+    }
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["summaries_knn@error=channel", "pretext_error@error=quantile"],
+    ids=["errors of a distance", "no such reading"],
+)
+def test_a_reading_of_errors_the_score_does_not_have_is_refused(name: str) -> None:
     with pytest.raises(UnknownCandidateError):
         ASKING.arm_of(CandidateRef(name))
