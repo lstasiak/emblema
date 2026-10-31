@@ -68,7 +68,10 @@ Last updated 2026-10-31.
   first mission (+0.018 [−0.008; +0.045]), nor the pretext's error a ridge over the same cells,
   and on the second mission they read far below it. After the results, at the window level:
   87 % of the first mission's events hold no reading beyond ten deviations, and every detector
-  is near chance on them ([note](verification/composition-screen.md)).
+  is near chance on them ([note](verification/composition-screen.md)). The states do not lose a
+  reading's size: raised normal windows move them as far as their initialisation's. The normal
+  windows lie farther apart under them, so a raised channel adds less to the detector's distance
+  ([note](verification/magnitude-in-states.md)).
 
 ## Setup
 
@@ -208,6 +211,7 @@ pretraining against four, 0.021 for two.
 | Events in telemetry without a label, nearest neighbours over the frozen encoder against its initialisation, channel rows drawn (two satellite missions, SKAB, OPS-SAT; four backbones) | M1 +0.033 [+0.005; +0.090], below the least gain 0.05; OPS-SAT **−0.069** [−0.110; −0.026], where a fragment's count of readings alone (0.51) beats every detector; M2 and SKAB indistinguishable, M2 unable to resolve 0.05 because a drawn encoder's area varies so much over seeds (floor 0.15) | [anomaly-tasks](verification/anomaly-tasks.md) |
 | The same detector over the channels' summaries against the untrained encoder | SKAB **+0.188** [+0.057; +0.340], where both encoder arms read at chance; M1 and M2 indistinguishable; OPS-SAT −0.086 [−0.160; −0.002] | [anomaly-tasks](verification/anomaly-tasks.md) |
 | The encoder and summary detectors, each month or experiment read as its own reference (M1, SKAB) | alarm on 1–4 % of normal windows, from 64–98 %; frozen against initialisation M1 +0.007 [−0.011; +0.037], SKAB +0.011 [−0.044; +0.138]; on M1 both encoder arms lead the summaries (frozen **+0.063** [+0.011; +0.148]) | [anomaly-tasks](verification/anomaly-tasks.md) |
+| Normal windows raised around their largest reading, pretrained states against their initialisation (both missions, two backbones, three initialisations) | size kept: on the channel the states move 0.85 to 1.41 times as far as the initialisations' at ×3, tilt to ×10 0.88 to 1.24, none falls; the detector's distance rises 0.13 to 0.53 times as much, the fitting windows lying 2.3 to 3 times as far apart on M1 and M2's held-out months twice as far from the fitting ones | [magnitude-in-states](verification/magnitude-in-states.md) |
 | A detector over the counts of readings alone | near chance on M1 and M2 and 0.03–0.06 on SKAB (chance 0.017), every encoder arm **+0.34 to +0.54** above it on M2; OPS-SAT 0.387, level with the frozen encoder, below the plain count (0.51) | [anomaly-tasks](verification/anomaly-tasks.md) |
 
 ### What the failures have in common
@@ -253,10 +257,8 @@ pretraining against four, 0.021 for two.
 
 ## Next
 
-1. Test whether pretraining on telemetry loses the size of a reading, and read telemetry under
-   an input that keeps it if so.
-2. Confirm the gain at 50 stays on fresh pretrainings of the base recipe, in a design with power
+1. Confirm the gain at 50 stays on fresh pretrainings of the base recipe, in a design with power
    at the screen's lower edge.
-3. Read channels added without labels on their tasks (sepsis), across pretrainings that never
+2. Read channels added without labels on their tasks (sepsis), across pretrainings that never
    read 2019.
-4. Open the frozen test side once.
+3. Open the frozen test side once.

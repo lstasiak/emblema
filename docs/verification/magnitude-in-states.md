@@ -93,3 +93,98 @@ are scaled, not shifted, so a channel near its mean barely moves. The cell is on
 hundreds under the mean pooling, so its rise is small for every encoder and its ratio noisy. The
 trial's glimpse of the first rule's words on 5 windows is named above. Two
 pretrainings, one recipe. Validation side, tier M.
+
+## 2026-10-31 — M1 Pro, MPS, fp32: the states keep a reading's size; the detector's distance loses it to the normal windows' spread
+
+**Question.** As declared above.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `eab58ac0`, the declaration's commit, clean tree |
+| Machine | MacBook Pro M1 Pro, MPS, fp32; about 8 s an encoder on the second mission, 170 s on the first |
+| Windows | second mission: 15,335 fitting, 10,223 scored (475 in events); first: 61,363 and 41,088 (4,759); 300 normal windows of each raised 2,700 ways, drawn by seed 2 |
+| Command | `data/report/l34a/run.sh` (both tasks' `measure`, then `read` with the campaigns' predictions) |
+
+**Check.** On the second mission every encoder's scores match its campaign's on all 10,223
+windows, the largest difference 8·10⁻⁶. On the first mission each score is read against its
+month and scaled by the month's spread, up to 119. The largest difference is 2.5·10⁻³, on a score
+of 114 (2·10⁻⁵ of it), the median 8·10⁻⁵, the correlation 1.000000 for every encoder. The
+declared 10⁻⁴ did not allow for that scaling; the device's precision, scaled, accounts for it.
+The events' areas match the reading after the screen on both missions (table below).
+
+**Rule: displacement on the channel scope** (sensitivity against the initialisations, 95 %
+interval over windows; an initialisation against the other two).
+
+| Mission | Encoder | ×3 | ×10 | Tilt ×10 / ×3 |
+| --- | --- | --- | --- | --- |
+| M1 | base1 | 1.10 [1.07; 1.14] | 0.97 [0.95; 1.00] | 0.88 [0.86; 0.90] |
+| M1 | base2 | 1.41 [1.36; 1.46] | 1.34 [1.30; 1.37] | 0.95 [0.93; 0.96] |
+| M1 | initialisations | 0.63 to 1.42 | 0.63 to 1.51 | 0.93 to 1.07 |
+| M2 | base1 | 0.85 [0.80; 0.91] | 0.93 [0.90; 0.95] | 1.09 [1.03; 1.14] |
+| M2 | base2 | 0.97 [0.96; 0.99] | 1.20 [1.19; 1.22] | 1.24 [1.21; 1.25] |
+| M2 | initialisations | 0.76 to 1.17 | 0.70 to 1.27 | 0.92 to 1.08 |
+
+Verdict on both missions: **size lost: no; duller: no.** No tilt reaches 0.75, and every
+pretrained point at ×3 lies within or above the initialisations' range. The rule was never void.
+
+**Descriptive.** The cell scope: the pretrained states move further than their initialisation,
+1.1 to 1.5 times on M1 and 1.8 to 2.7 on M2. The whole window: the pretrained states keep pace on
+M1 (tilt 0.87 to 1.00). On M2 they lag, 0.59 and 0.76 at ×3, 0.43 and 0.48 at ×30 (tilt 0.84,
+0.78). Raising the whole window is not what the events look like.
+
+**Descriptive: the detector's distance on the channel scope**, with what lies behind it.
+
+| Mission | Encoder | Distance sensitivity ×3 | ×10 | Fitting distance | Normal validation distance | Ratio | Directions, standardised |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| M1 | base1 | 0.14 | 0.13 | 1.010 | 3.567 | 3.53 | 2.0 |
+| M1 | base2 | 0.38 | 0.34 | 0.906 | 2.992 | 3.30 | 2.1 |
+| M1 | initialisations | 0.68 to 1.20 | 0.71 to 1.23 | 0.33 to 0.39 | 0.96 to 1.22 | 2.88 to 3.15 | 1.2 |
+| M2 | base1 | 0.47 | 0.30 | 1.081 | 4.441 | 4.11 | 4.5 |
+| M2 | base2 | 0.53 | 0.53 | 1.228 | 4.375 | 3.56 | 5.3 |
+| M2 | initialisations | 0.72 to 1.17 | 0.69 to 1.22 | 1.10 to 1.26 | 2.17 to 2.25 | 1.76 to 2.04 | 2.3 to 2.6 |
+
+**Events against normal windows** (window-level AUROC, the campaign's scores).
+
+| Mission | Encoder | Beyond ten deviations | Within ten |
+| --- | --- | --- | --- |
+| M1 | base1 / base2 | 0.729 / 0.748 | 0.499 / 0.516 |
+| M1 | initialisations | 0.774 to 0.829 | 0.492 to 0.510 |
+| M2 | base1 / base2 | 0.671 / 0.747 | 0.549 / 0.594 |
+| M2 | initialisations | 0.945 to 0.990 | 0.749 to 0.785 |
+
+**Predictions.**
+
+| Reading | Predicted | Observed | Held |
+| --- | --- | --- | --- |
+| M1, channel | size lost; not duller | not lost; not duller | no; yes |
+| M2, channel | size lost and duller | neither | no |
+| Initialisations against each other | tilt in [0.8, 1.25], rule not void | 0.92 to 1.08; not void | yes |
+| M2 reference | ratio higher under both pretrained encoders | 4.11 and 3.56 against 1.76 to 2.04 | yes |
+| Check | scores within 10⁻⁴; areas within 0.005 | M2 8·10⁻⁶; M1 2.5·10⁻³ on scores up to 119; areas as before | M2 yes; M1 no as worded |
+
+**Conclusions.**
+
+1. The pretrained states keep a reading's size. When one channel or one cell is raised they
+   move as far as their initialisation's, or further, on both missions, and no more slowly as
+   the reading grows. An input that keeps the size is not called for by this test.
+2. What the detector loses is contrast, not response. The same move adds a seventh to a third as
+   much distance on M1, and a third to a half on M2. Under the pretrained states the fitting
+   windows lie 2.3 to 3 times as far apart on M1 (0.91–1.01 against 0.33–0.39). Their
+   variation also spreads over more directions (2.0 against 1.2 on M1; 4.5–5.3 against 2.3–2.6
+   on M2), so a raised channel stands out less among them.
+3. On the second mission the held-out months lie twice as far from the fitting months under the
+   pretrained states as under their initialisation (ratio 3.6–4.1 against 1.8–2.0). Every
+   window there, normal or not, starts far from its neighbours. This matches the area within
+   ten deviations falling from 0.75–0.79 to 0.55–0.59 there, and not on the first mission,
+   whose windows are read against their own month.
+4. The initialisation's states vary along about one standardised direction on M1 (1.2), so its
+   distance reads little beyond one direction of variation, along which large readings stand
+   out. Read after the results, not tested.
+
+**Limitations.** The raised windows are a model of an event: readings scaled around their
+largest, not the shapes the missions' events take. The intervals resample windows, not the draw
+of weights; the initialisations' own range stands in for it. Two pretrainings, one recipe. The
+mechanism in conclusions 2 and 3 is read after the results and is not tested here. Validation
+side, tier M.
