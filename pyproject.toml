@@ -227,6 +227,7 @@ allowed-confusables = ["×"]
 "scripts/transduction_report.py" = ["E402"]
 "scripts/pretraining_screen_report.py" = ["E402"]
 "scripts/label_curve_figures.py" = ["E402"]
+"scripts/magnitude_response_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

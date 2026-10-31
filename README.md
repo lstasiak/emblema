@@ -110,8 +110,9 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** confirm the gain at few labels on fresh pretrainings, and test whether pretraining
-  on telemetry loses the size of a reading.
+- **Next:** confirm the gain at few labels on fresh pretrainings. Pretraining on telemetry does
+  not lose the size of a reading; its states spread normal windows wider, so events stand out
+  less.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
