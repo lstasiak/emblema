@@ -89,38 +89,29 @@ budget by the same declared procedure as the classical baselines.
 
 Preliminary, on validation data. Each task's test data is used once, at the end.
 
-- **On both tasks pretraining does not yet pay off.** On turbofan remaining life (NASA C-MAPSS)
-  the network trained from scratch is the best candidate at every budget, 10 % better than the
-  fine-tuned encoder at 200 labelled windows. On death in hospital (PhysioNet 2012) a small
-  encoder pretrained over cells of the stays, the eICU demo and raw satellite telemetry gains
-  0.016 [0.007; 0.025] in area at 20 and at 50 stays over the best network trained from
-  scratch, each at its own best setting, and nothing at 200. It is a screen of four
-  pretrainings; fresh pretrainings confirm it or not. Published work reports the same at 200:
-  a well-tuned network from scratch catches up once labels suffice.
+- **Pretraining has not yet been shown to pay off.** On turbofan remaining life (NASA C-MAPSS)
+  the network trained from scratch is the best candidate at every budget. On death in hospital
+  (PhysioNet 2012) a small encoder pretrained over cells of the stays, the eICU demo and raw
+  satellite telemetry gains 0.016 [0.007; 0.025] in area at 50 stays over the same network
+  trained from scratch at its own best rate, the same at 20 within the noise threshold, and
+  nothing at 200. It is a screen of four pretrainings; fresh pretrainings confirm it or not.
 - **On satellite telemetry the pretrained encoder does not find events without labels.** Its
   features do not beat the same encoder untrained, nor its pretext's error a linear model over
-  the same readings, and the features read large readings less well than the untrained ones.
-- **Pretraining now leaves a representation above its initialisation.** On that encoder a
-  linear probe on the frozen features gains 0.06 to 0.09 in area over the same encoder
-  untrained at 500 stays, the first pretraining on these stays to do so; it still reads 0.03
-  below the trees.
+  the same readings.
+- **Pretraining now leaves a representation above its initialisation.** On the encoder over
+  cells a linear probe on the frozen features gains 0.06 to 0.09 in area over the same encoder
+  untrained at 500 stays; it still reads 0.03 below the trees.
 - **Classical baselines lead at few labels.** Gradient-boosted trees over per-channel summaries
-  match or beat every network from 200 labels up. The network trained from scratch on raw
-  readings trails them by 0.08 in area at 200 stays and 0.05 at every stay, more than any gain
-  pretraining has shown; a small encoder from scratch that reads each stay as cells of channel
-  and time bin matches the trees at 200 stays and trails the tuned trees by 0.008 at every stay.
-  On the intensive-care stays, the encoder's average over a stay holds less of those summaries
-  than before it was trained; each channel's own tokens still hold them, as they did before
-  training, and no average over a stay's sensors keeps them.
+  match or beat every network from 200 labels up. A small encoder from scratch that reads each
+  stay as cells of channel and time bin matches the trees at 200 stays and trails the tuned
+  trees by 0.008 at every stay.
 - **Ruled out:** more pretraining data (up to about 10⁹ values), a five times larger model,
   continuing on the task's own domain, the adaptation recipe and six variants of the pretext.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** pretraining on data sampled like the tasks, including raw asynchronous spacecraft
-  telemetry, read by anomaly detection on telemetry without labels. Those tasks now run; under
-  backbones that never read these sensors the pretrained encoder does not beat its
-  initialisation.
+- **Next:** confirm the gain at few labels on fresh pretrainings, and test whether pretraining
+  on telemetry loses the size of a reading.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 

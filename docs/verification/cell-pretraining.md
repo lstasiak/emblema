@@ -271,8 +271,8 @@ The bar at each budget, from this screen's rate grid (area of the network from n
 
 **Conclusions.**
 1. Seeds and pretrainings bound the power, not the stays scored: set B's 3,994 stays, simulated
-   as 4,000, add 0.02 to 0.06. Eight fresh pretrainings at 30 seeds on set B confirm 0.02 with 0.95 at 200 stays and
-   0.72 at 50.
+   as 4,000, add 0.02 to 0.06. Eight fresh pretrainings at 30 seeds on set B confirm 0.02 with
+   0.95 at 200 stays and 0.72 at 50.
 2. No design confirms 0.01: 0.41 at 200 stays at the largest one simulated. A gain of the size
    this screen read against the network at its chosen rate (−0.004 [−0.015; +0.007] at 200) is
    below what the confirmation can tell from zero; it is designed for the least gain.
