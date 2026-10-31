@@ -23,6 +23,9 @@ from emblema.evaluation.adapters.candidates.routed_candidate_provider import (
 from emblema.evaluation.adapters.detection.feature_routed_detection_runtime import (
     FeatureRoutedDetectionRuntime,
 )
+from emblema.evaluation.adapters.detection.pretext_error_detection_runtime import (
+    PretextErrorDetectionRuntime,
+)
 from emblema.evaluation.adapters.detection.summaries_detection_runtime import (
     SummariesDetectionRuntime,
 )
@@ -244,6 +247,9 @@ class CompositionRoot:
                         restored, process.blocks, device=on, store=process.store
                     ),
                     summaries=SummariesDetectionRuntime(process.blocks, store=process.store),
+                    pretext=PretextErrorDetectionRuntime(
+                        restored, process.blocks, device=on, store=process.store
+                    ),
                 ),
             ),
         )

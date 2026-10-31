@@ -7,6 +7,7 @@ than left to whichever process happened to build the register last.
 from emblema.entrypoints.workers.known_detectors import KnownDetectors
 from emblema.evaluation.adapters.candidates.detector_arm import DetectorArm
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
+from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling
 from emblema.evaluation.domain.transfer.layer_reading import LayerReading
 from tests.evaluation.support import WEIGHTS
@@ -59,4 +60,27 @@ def test_the_one_over_the_counts_reads_the_sampling_alone_under_the_same_knobs()
 
 def test_every_detector_stands_up_as_a_recipe() -> None:
     for arm in over().values():
-        assert arm.recipe(seed=1).neighbours == arm.neighbours
+        recipe = arm.recipe(seed=1)
+        if arm.features.asks_the_pretext:
+            assert recipe.asked() == PretextAsking(backbone=WEIGHTS, draws=arm.draws)
+        else:
+            assert recipe.nearest() == arm.neighbours
+
+
+def test_the_three_scored_by_an_error_ask_under_the_same_masks_and_knobs() -> None:
+    pretext, linear, interpolation = (
+        over()["pretext_error"],
+        over()["linear_answer_error"],
+        over()["interpolation_error"],
+    )
+
+    assert pretext.features is DetectorFeatures.PRETEXT_ERROR
+    assert linear.features is DetectorFeatures.LINEAR_ANSWER_ERROR
+    assert interpolation.features is DetectorFeatures.INTERPOLATION_ERROR
+    for arm in (pretext, linear, interpolation):
+        assert (arm.architecture, arm.backbone) == (None, WEIGHTS)
+        assert (arm.draws, arm.contamination, arm.reference) == (
+            PretextAsking.STANDARD_DRAWS,
+            over()["frozen_knn"].contamination,
+            over()["frozen_knn"].reference,
+        )

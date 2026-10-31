@@ -3,6 +3,7 @@ import pytest
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.exceptions import InvalidDetectorRecipeError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
@@ -106,3 +107,60 @@ def test_the_neighbours_and_the_contamination_are_bounded(
 ) -> None:
     with pytest.raises(InvalidDetectorRecipeError, match=reason):
         recipe(**overrides)
+
+
+ASKING = PretextAsking(backbone=WEIGHTS)
+
+
+@pytest.mark.parametrize(
+    "features",
+    [
+        DetectorFeatures.PRETEXT_ERROR,
+        DetectorFeatures.LINEAR_ANSWER_ERROR,
+        DetectorFeatures.INTERPOLATION_ERROR,
+    ],
+)
+def test_a_detector_scored_by_an_error_names_the_masks_and_no_neighbours(
+    features: DetectorFeatures,
+) -> None:
+    asked = recipe(features=features, reading=None, neighbours=None, pretext=ASKING)
+
+    assert asked.pretext is ASKING
+    assert features.asks_the_pretext
+    assert not features.reads_an_encoder
+    with pytest.raises(InvalidDetectorRecipeError, match="scores by an error"):
+        asked.nearest()
+
+
+def test_masks_named_or_missing_against_the_features_are_refused() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="names no masks"):
+        recipe(features=DetectorFeatures.PRETEXT_ERROR, reading=None, neighbours=None)
+    with pytest.raises(InvalidDetectorRecipeError, match="names masks it does not ask"):
+        recipe(pretext=ASKING)
+
+
+def test_neighbours_named_or_missing_against_the_score_are_refused() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
+        recipe(features=DetectorFeatures.PRETEXT_ERROR, reading=None, pretext=ASKING)
+    with pytest.raises(InvalidDetectorRecipeError, match="names no neighbours"):
+        recipe(neighbours=None)
+
+
+def test_a_distance_reads_the_neighbours_it_names() -> None:
+    assert recipe(neighbours=3).nearest() == 3
+
+
+def test_a_window_is_hidden_at_least_once() -> None:
+    assert ASKING.draws == 8
+    with pytest.raises(InvalidDetectorRecipeError, match="at least once"):
+        PretextAsking(backbone=WEIGHTS, draws=0)
+
+
+def test_the_masks_are_read_off_a_detector_that_asks_the_pretext_alone() -> None:
+    asked = recipe(
+        features=DetectorFeatures.PRETEXT_ERROR, reading=None, neighbours=None, pretext=ASKING
+    )
+
+    assert asked.asked() is ASKING
+    with pytest.raises(InvalidDetectorRecipeError, match="reads features, not the pretext"):
+        recipe().asked()

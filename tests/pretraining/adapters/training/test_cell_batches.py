@@ -51,6 +51,28 @@ def test_collated_cells_are_the_layout_s_batch_and_keep_their_windows() -> None:
         assert torch.equal(ours, theirs)
 
 
+def test_cells_laid_out_once_batch_again_as_the_windows_collated_afresh() -> None:
+    windows = irregular_windows(3, seed=1, channels=4)
+    laid = LAYOUT.lay(windows)
+    batches = CellBatches(LAYOUT)
+
+    first = batches.collate_laid([*windows, windows[0]], [*laid, laid[0]])
+    again = batches.collate_laid([*windows, windows[0]], [*laid, laid[0]])
+
+    expected = TokenTensors.of(LAYOUT.batch(LAYOUT.lay([*windows, windows[0]])))
+    for batch in (first, again):
+        assert batch.windows == (*windows, windows[0])
+        for ours, theirs in zip(batch.args, expected.args, strict=True):
+            assert torch.equal(ours, theirs)
+
+
+def test_cells_that_are_not_one_layout_per_window_are_refused() -> None:
+    windows = irregular_windows(2, seed=1, channels=4)
+
+    with pytest.raises(ValueError, match="1 layouts were given for 2 windows"):
+        CellBatches(LAYOUT).collate_laid(windows, LAYOUT.lay(windows[:1]))
+
+
 def test_moving_the_collated_cells_keeps_the_windows_and_retypes_the_tensors() -> None:
     collated = CellBatches(LAYOUT).collate([WINDOW, SHORT])
 

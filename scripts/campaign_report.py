@@ -42,9 +42,9 @@ from scripts.reporting import table
 
 CELLS, COMPARISONS, VERDICT = "cells.csv", "comparisons.csv", "verdict.md"
 # What a cell scored, named by the measure: an error in the task's unit, or an area, the one
-# under the ROC curve with its Brier score beside, or the event-weighted one under the
-# precision-recall curve. A campaign read by area states the reduction of one minus the area as
-# the gain in area, so the interval and the floor are the gain's.
+# under the ROC curve with its Brier score and its area under the precision-recall curve beside,
+# or the event-weighted one under the precision-recall curve. A campaign read by area states the
+# reduction of one minus the area as the gain in area, so the interval and the floor are the gain's.
 SCORE = {
     ErrorMeasure.RMSE: "rmse",
     ErrorMeasure.AUROC_SHORTFALL: "auroc",
@@ -60,7 +60,7 @@ SCORE_SHOWN = {
 def cell_columns(measure: ErrorMeasure) -> tuple[str, ...]:
     head = ("candidate", "kind", "budget", "windows", "seed", "units", SCORE[measure])
     if measure is ErrorMeasure.AUROC_SHORTFALL:
-        return (*head, "brier", "seconds")
+        return (*head, "brier", "pr_auc", "seconds")
     return (*head, "seconds")
 
 
@@ -98,7 +98,8 @@ class CellRow(NamedTuple):
     """One cell under one seed: what it scored, in the measure's natural terms, and what it cost.
 
     The score is the error for a measure that is one, and the area for a ranking; the Brier score
-    is there only for the latter.
+    and the area under the precision-recall curve are there only for the area under the ROC
+    curve, beside it and judged by nothing.
     """
 
     candidate: str
@@ -110,13 +111,14 @@ class CellRow(NamedTuple):
     score: float
     brier: float | None
     seconds: float
+    precision_recall: float | None = None
 
     def written(self) -> tuple[object, ...]:
-        """The row as its file holds it, without the column its measure does not have."""
+        """The row as its file holds it, without the columns its measure does not have."""
         head = (self.candidate, self.kind, self.budget, self.windows, self.seed, self.units)
         if self.brier is None:
             return (*head, self.score, self.seconds)
-        return (*head, self.score, self.brier, self.seconds)
+        return (*head, self.score, self.brier, self.precision_recall, self.seconds)
 
 
 class ComparisonRow(NamedTuple):
@@ -191,6 +193,9 @@ def export_cells(reading: CampaignReading, everything: int | None) -> list[CellR
             if design.measure is ErrorMeasure.AUROC_SHORTFALL
             else None,
             seconds=recorded[cell].seconds,
+            precision_recall=recorded[cell].ranking().average_precision
+            if design.measure is ErrorMeasure.AUROC_SHORTFALL
+            else None,
         )
         for cell in design.cells()
         if cell in recorded

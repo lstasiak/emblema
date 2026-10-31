@@ -116,3 +116,39 @@ def test_a_monotone_transform_of_the_answers_leaves_the_area_where_it_was(
         ).auroc
 
     assert ranking_of(0.0) == ranking_of(-2.0)
+
+
+def test_the_precision_recall_area_is_the_mean_precision_at_each_positive() -> None:
+    # Answers 0.9 (positive), 0.8 (negative), 0.7 (positive), 0.1 (negative):
+    # precision 1 at the first positive, 2/3 at the second.
+    ranking = WindowRanking.of(
+        [
+            prediction("a", 0, 1.0, 0.9),
+            prediction("b", 0, 0.0, 0.8),
+            prediction("c", 0, 1.0, 0.7),
+            prediction("d", 0, 0.0, 0.1),
+        ]
+    )
+
+    assert ranking.average_precision == pytest.approx((1.0 + 2 / 3) / 2)
+
+
+def test_a_tie_is_taken_whole_in_the_precision_recall_area() -> None:
+    # A positive and a negative tied on top: both are taken at once, precision 1/2 for the
+    # positive whichever order a sort gave them.
+    first = WindowRanking.of([prediction("a", 0, 1.0, 0.5), prediction("b", 0, 0.0, 0.5)])
+    second = WindowRanking.of([prediction("b", 0, 0.0, 0.5), prediction("a", 0, 1.0, 0.5)])
+
+    assert first.average_precision == pytest.approx(0.5)
+    assert second.average_precision == pytest.approx(0.5)
+
+
+def test_a_perfect_ranking_has_the_whole_precision_recall_area() -> None:
+    ranking = WindowRanking.of(
+        [
+            prediction(unit, 0, float(index < 2), 1.0 - index / 10)
+            for index, unit in enumerate("abcde")
+        ]
+    )
+
+    assert ranking.average_precision == pytest.approx(1.0)

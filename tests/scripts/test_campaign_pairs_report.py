@@ -302,6 +302,7 @@ def by_area(
     campaign_id: CampaignId,
     contender: tuple[float, ...],
     purpose: RunPurpose = RunPurpose.TUNING,
+    measure: ErrorMeasure = ErrorMeasure.AUROC_SHORTFALL,
 ) -> CampaignReading:
     """A campaign read by area whose grid ran whole on the same six stays under every seed."""
     grid = reading(
@@ -313,7 +314,7 @@ def by_area(
                 seeds=(1, 2, 3),
                 inner_holdout=InnerHoldout(one_in=5) if purpose is RunPurpose.SELECTION else None,
             ),
-            measure=ErrorMeasure.AUROC_SHORTFALL,
+            measure=measure,
         ),
     )
     for cell in grid.campaign.design.cells():
@@ -621,3 +622,21 @@ def test_every_cell_is_scored_whole_in_its_measure_and_reads_back(tmp_path: Path
     )
     write_scores(tmp_path / SCORES, rows)
     assert read_scores(tmp_path / SCORES) == rows
+
+
+def test_a_side_fitted_once_pairs_by_event_weighted_area_with_a_side_of_two_seed_by_seed() -> None:
+    """The control fitted once, the contender under two backbones: one ranks the events perfectly,
+    the other as the control does, so each seed gains half of what the perfect one gains."""
+    events = ErrorMeasure.PR_AUC_SHORTFALL
+    first = by_area(BY_AREA, CONTROL_ANSWERS, measure=events)
+    second = by_area(BY_AREA_TOO, PERFECT_ANSWERS, measure=events)
+
+    read = paired_by_area(
+        [first, second], side(BY_AREA, CONTROL), grouped(BY_AREA, BY_AREA_TOO, ref=CONTENDER)
+    )
+
+    assert read.measure is ErrorMeasure.PR_AUC_SHORTFALL
+    assert read.repeats == 3
+    assert read.candidate_error.pooled == pytest.approx(read.control_error.pooled / 2)
+    assert read.per_seed == pytest.approx((read.difference.reduction,) * 3)
+    assert read.difference.reduction > 0

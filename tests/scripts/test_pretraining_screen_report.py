@@ -12,7 +12,9 @@ from scripts.pretraining_screen_report import (
     FLOOR,
     Pair,
     Pairs,
+    chosen_at,
     parse_arguments,
+    parse_choice,
     read_pairs,
     render,
     screen,
@@ -208,3 +210,195 @@ def test_the_spread_pools_the_pairs_of_every_budget_read() -> None:
 
     assert result.spread.own == pytest.approx(sqrt((0.05**2 - 2 * noise) / 2))
     assert {g.spread for g in result.gains} == {result.spread}
+
+
+LOW = "full_fine_tuning@learning_rate=0.0001"
+SCRATCH_LOW = "from_scratch@bins=6,learning_rate=0.0001,width=64"
+OWN = "scratch"
+
+
+def chosen_rows() -> list[Pair]:
+    two = f"{A1}+{A2}"
+    return [
+        pair(0.03, budget="50", control_campaign=OWN, candidate_campaign=two),
+        pair(
+            -0.01,
+            budget="200",
+            control=SCRATCH_LOW,
+            candidate=LOW,
+            control_campaign=OWN,
+            candidate_campaign=two,
+        ),
+        pair(0.002, budget="50", control=TUNED, control_campaign=A1, candidate_campaign=A2),
+        pair(
+            0.0,
+            budget="200",
+            control=LOW,
+            candidate=LOW,
+            control_campaign=A1,
+            candidate_campaign=A2,
+        ),
+        pair(0.001, budget="50", candidate=SCRATCH, control_campaign=A1, candidate_campaign=A2),
+        pair(0.001, budget="200", candidate=SCRATCH, control_campaign=A1, candidate_campaign=A2),
+    ]
+
+
+def test_each_arm_is_read_at_the_candidate_chosen_at_each_budget_from_its_own_campaign() -> None:
+    result = screen(
+        Pairs(chosen_rows()),
+        scratch={"50": SCRATCH, "200": SCRATCH_LOW},
+        tuned={"50": TUNED, "200": LOW},
+        gains=[("a", f"{A1}+{A2}")],
+        contrasts=[],
+        spreads=[(A1, A2)],
+        nulls=[(A1, A2)],
+        budgets=["50", "200"],
+        deciding=["200"],
+        scratch_campaign=OWN,
+        null_candidate=SCRATCH,
+    )
+
+    assert [(g.pair.budget, g.pair.control, g.pair.candidate) for g in result.gains] == [
+        ("50", SCRATCH, TUNED),
+        ("200", SCRATCH_LOW, LOW),
+    ]
+    assert {g.pair.control_campaign for g in result.gains} == {OWN}
+    assert [p.control for p in result.nulls] == [SCRATCH, SCRATCH]
+    assert f"| 200 | {LOW} | {SCRATCH_LOW} | {OWN} |" in render(result)
+
+
+def test_null_pairs_over_a_network_chosen_per_budget_need_a_candidate_to_read() -> None:
+    with pytest.raises(ValueError, match="need a null candidate"):
+        screen(
+            Pairs(chosen_rows()),
+            scratch={"50": SCRATCH, "200": SCRATCH_LOW},
+            tuned={"50": TUNED, "200": LOW},
+            gains=[("a", f"{A1}+{A2}")],
+            contrasts=[],
+            spreads=[(A1, A2)],
+            nulls=[(A1, A2)],
+            budgets=["50", "200"],
+            deciding=["200"],
+            scratch_campaign=OWN,
+        )
+
+
+def test_a_budget_read_with_no_candidate_chosen_is_refused() -> None:
+    assert chosen_at(TUNED, "20") == TUNED
+    with pytest.raises(ValueError, match="no candidate chosen at budget 20"):
+        chosen_at({"50": TUNED}, "20")
+
+
+def test_a_choice_is_one_candidate_or_one_per_budget() -> None:
+    assert parse_choice([LOW]) == LOW
+    assert parse_choice(["50=" + LOW, "all=" + TUNED]) == {"50": LOW, "all": TUNED}
+    with pytest.raises(ValueError, match="names no budget"):
+        parse_choice(["50=" + LOW, TUNED])
+    with pytest.raises(ValueError, match="chosen twice"):
+        parse_choice(["50=" + LOW, "50=" + TUNED])
+
+
+def test_the_command_line_chooses_at_every_budget_read_and_no_other() -> None:
+    common = ["--comparisons", "d", "--spread", A1, A2, "--gain", "a", A1, "--budgets", "50", "200"]
+    with pytest.raises(SystemExit):
+        parse_arguments(
+            [*common, "--deciding", "200", "--scratch", SCRATCH, "--tuned", f"50={LOW}"]
+        )
+    with pytest.raises(SystemExit):
+        parse_arguments([*common, "--deciding", "200", "--scratch", SCRATCH, "--tuned", LOW, TUNED])
+
+    arguments = parse_arguments(
+        [
+            *common,
+            "--deciding",
+            "200",
+            "--scratch",
+            SCRATCH,
+            "--tuned",
+            f"50={TUNED}",
+            f"200={LOW}",
+            "--scratch-campaign",
+            OWN,
+            "--null-candidate",
+            SCRATCH,
+        ]
+    )
+
+    assert arguments.scratch == SCRATCH
+    assert arguments.tuned == {"50": TUNED, "200": LOW}
+    assert arguments.scratch_campaign == OWN
+
+
+def test_a_contrast_reads_each_budget_at_its_chosen_candidate() -> None:
+    two_a, two_b = f"{A1}+{A2}", f"{B1}+{B2}"
+    rows = [
+        pair(0.0, budget="50", control=TUNED, control_campaign=A1, candidate_campaign=A2),
+        pair(
+            0.0,
+            budget="200",
+            control=LOW,
+            candidate=LOW,
+            control_campaign=A1,
+            candidate_campaign=A2,
+        ),
+        pair(0.05, budget="50", control=TUNED, control_campaign=two_b, candidate_campaign=two_a),
+        pair(
+            -0.06,
+            budget="200",
+            control=LOW,
+            candidate=LOW,
+            control_campaign=two_b,
+            candidate_campaign=two_a,
+        ),
+    ]
+
+    result = screen(
+        Pairs(rows),
+        scratch=SCRATCH,
+        tuned={"50": TUNED, "200": LOW},
+        gains=[],
+        contrasts=[("a over b", two_b, two_a)],
+        spreads=[(A1, A2)],
+        nulls=[],
+        budgets=["50", "200"],
+        deciding=["50", "200"],
+    )
+
+    assert [(c.pair.budget, c.pair.candidate) for c in result.contrasts] == [
+        ("50", TUNED),
+        ("200", LOW),
+    ]
+    assert not result.moved("a over b")
+
+
+def test_one_candidate_in_one_campaign_renders_no_table_of_where_it_was_read() -> None:
+    result = screen(
+        Pairs(comparisons()),
+        scratch=SCRATCH,
+        tuned=TUNED,
+        gains=[("a", f"{A1}+{A2}")],
+        contrasts=[],
+        spreads=[(A1, A2)],
+        nulls=[],
+        budgets=["50", "200"],
+        deciding=["200"],
+    )
+
+    assert "Read at" not in render(result)
+
+
+def test_the_command_line_refuses_an_extra_budget_and_nulls_with_nothing_to_read() -> None:
+    common = ["--comparisons", "d", "--spread", A1, A2, "--gain", "a", A1, "--budgets", "50", "200"]
+    per_budget = ["--scratch", f"50={SCRATCH}", f"200={SCRATCH_LOW}", "--tuned", TUNED]
+    extra = ["--scratch", SCRATCH, "--tuned", f"50={LOW}", f"200={LOW}", f"20={LOW}"]
+    with pytest.raises(SystemExit):
+        parse_arguments([*common, *extra])
+    with pytest.raises(SystemExit):
+        parse_arguments([*common, *per_budget, "--null", A1, B1])
+
+    arguments = parse_arguments(
+        [*common, *per_budget, "--null", A1, B1, "--null-candidate", SCRATCH]
+    )
+
+    assert arguments.scratch == {"50": SCRATCH, "200": SCRATCH_LOW}
+    assert arguments.null_candidate == SCRATCH

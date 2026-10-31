@@ -241,3 +241,47 @@ at the grid's lowest rate. The network from nothing is not reproduced across run
 0.04, while within this run its campaigns agree within 0.0015; the cause is not identified. Two
 pretrainings a recipe; s rests on the floor; the probe's base recipe has seeds 0.030 apart. The
 ESA-AD audit reads a prepared grid, not the raw asynchronous telemetry. Validation side, tier M.
+
+## 2026-10-29 — Mac M1 Pro, CPU: the confirmation's power, and the bar each budget sets
+
+**Question.** How many fresh pretrainings, seeds and scored stays does the confirmation of the
+next screen need to confirm a gain of 0.02 over the network from nothing, and what does the rule
+choosing that network's rate do to the bar?
+
+**Conditions.** `scripts/comparison_power_report.py` over this screen's answers
+(`read/export/predictions.csv`), the eight clinical pretrainings' pairs of fine-tuning and the
+network from nothing at the rate in force, at 20, 50 and 200 stays; 2,000 stays (the half) and
+4,000 (set B's size); the spread between pretrainings s/√(2n) for four and eight of them, s at
+its floor of 0.014; the normal model of the seed, stay and interaction parts. Commit `a1b76eef`;
+`comparison_power_report.py --budgets 20 50 200 --stays 2000 4000 --seeds 10 20 30
+--gains 0.0 0.01 0.015 0.02 0.03 --seed-gap n4 0.0049 --seed-gap n8 0.0035`.
+
+| Power of the rule at a gain of 0.02 (median over pairs) | 50 stays | 200 stays |
+| --- | --- | --- |
+| 4 pretrainings, 30 seeds: half / set B | 0.63 / 0.65 | 0.83 / 0.89 |
+| 8 pretrainings, 20 seeds: half / set B | 0.54 / 0.57 | 0.81 / 0.87 |
+| 8 pretrainings, 30 seeds: half / set B | 0.69 / 0.72 | 0.89 / 0.95 |
+| 8 pretrainings, 30 seeds, set B, at a gain of 0.01 | 0.23 | 0.41 |
+
+The bar at each budget, from this screen's rate grid (area of the network from nothing):
+
+| Rate | 20 | 50 | 200 |
+| --- | --- | --- | --- |
+| 0.001 / 0.000333 / 0.0001 | 0.623 / 0.620 / 0.619 | 0.653 / **0.655** / 0.648 | 0.718 / 0.720 / **0.742** |
+
+**Conclusions.**
+1. Seeds and pretrainings bound the power, not the stays scored: set B's 3,994 stays, simulated
+   as 4,000, add 0.02 to 0.06. Eight fresh pretrainings at 30 seeds on set B confirm 0.02 with
+   0.95 at 200 stays and 0.72 at 50.
+2. No design confirms 0.01: 0.41 at 200 stays at the largest one simulated. A gain of the size
+   this screen read against the network at its chosen rate (−0.004 [−0.015; +0.007] at 200) is
+   below what the confirmation can tell from zero; it is designed for the least gain.
+3. One rate over the three budgets held the network from nothing at 50 stays to 0.648 where its
+   own best rate read 0.655; fine-tuning's secondary +0.014 there is about +0.007 against that
+   network at its best. A bar chosen at each budget is the best network from nothing the
+   product's claim names.
+4. That network still rises at the grid's lowest rate at 200 stays (0.718 to 0.742), so the grid
+   needs rates below it before the bar can be called the best.
+
+**Limitations.** The variance parts come from fine-tuning at the rate in force; a rate chosen at
+each budget may move them. The simulation assumes set B's stays as noisy as the half's.

@@ -214,6 +214,14 @@ class UnknownBackboneError(EvaluationError):
     """A plan names pretrained weights the runtime was not given and cannot supply."""
 
 
+class UnreadablePretextError(EvaluationError):
+    """A backbone was asked what it fills in and cannot say.
+
+    It reads no cells, its stored model does not say what it hid, or a window holds a channel
+    it learnt no row for.
+    """
+
+
 class CandidateMismatchError(EvaluationError):
     """A campaign recorded a candidate as something other than what a process supplies."""
 

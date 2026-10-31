@@ -100,7 +100,7 @@ class TorchDetectionRuntime:
         per_unit = recipe.reference is ScoreReference.OWN_UNIT
         detector = NearestNeighbourDetector.fitted_on(
             self._states(embedding, layout, fitted_windows),
-            neighbours=recipe.neighbours,
+            neighbours=recipe.nearest(),
             contamination=recipe.contamination,
             units=[str(window.unit) for window in fitting] if per_unit else None,
         )

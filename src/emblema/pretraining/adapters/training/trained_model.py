@@ -12,8 +12,10 @@ from emblema.pretraining.adapters.training.exceptions import (
 )
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
 from emblema.pretraining.domain.exceptions import IncompatibleStartError
+from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.experiment_configuration import ExperimentConfiguration
+from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget, TargetKind
 from emblema.pretraining.domain.training.observation_term import ObservationTerm
 from emblema.pretraining.domain.training.summary_term import SummaryTerm
@@ -36,7 +38,9 @@ class TrainedModel:
     before a target or a term could be stated are of the objective every run then had, the one
     predicting values alone; the summaries' weight and the cells' observation are written only
     where stated, and the bins only where the encoder reads cells, so the bytes of a run without
-    them are those it wrote before any of them existed.
+    them are those it wrote before any of them existed. A run over cells also writes the masks it
+    drew and how it scored a miss, so its error can be asked of it where its configuration
+    cannot be read; bytes of cells written before hold neither.
 
     Attributes:
         architecture: Shape of the encoder the weights load into.
@@ -48,6 +52,8 @@ class TrainedModel:
         summary: The summaries the objective trained beside the values, where it did.
         observation: The presence and count of the hidden cells the objective trained beside
             their values, where it did.
+        masking: What the run hid, where the encoder reads cells and the bytes say.
+        loss: How the run scored a miss, where the encoder reads cells and the bytes say.
     """
 
     architecture: EncoderArchitecture
@@ -58,6 +64,8 @@ class TrainedModel:
     contrast: ContrastiveTerm = field(default_factory=ContrastiveTerm.none)
     summary: SummaryTerm = field(default_factory=SummaryTerm.none)
     observation: ObservationTerm = field(default_factory=ObservationTerm.none)
+    masking: MaskingStrategy | None = None
+    loss: ObjectiveLoss | None = None
 
     @classmethod
     def of(
@@ -76,6 +84,8 @@ class TrainedModel:
             contrast=configuration.contrast,
             summary=configuration.summary,
             observation=configuration.observation,
+            masking=configuration.masking if configuration.architecture.reads_cells else None,
+            loss=configuration.loss if configuration.architecture.reads_cells else None,
         )
 
     def to_bytes(self) -> bytes:
@@ -105,6 +115,24 @@ class TrainedModel:
                         "count_weight": self.observation.count_weight,
                     }
                     if self.observation.is_stated
+                    else {}
+                ),
+                **(
+                    {
+                        "channel_rate": self.masking.channel_rate,
+                        "block_rate": self.masking.block_rate,
+                        "block_span": self.masking.block_span,
+                        "token_rate": self.masking.token_rate,
+                        "horizon_rate": self.masking.horizon_rate,
+                        "horizon_min_span": self.masking.horizon_min_span,
+                        "horizon_max_span": self.masking.horizon_max_span,
+                    }
+                    if self.masking is not None
+                    else {}
+                ),
+                **(
+                    {"loss": str(self.loss.kind), "huber_delta": self.loss.huber_delta}
+                    if self.loss is not None
                     else {}
                 ),
             },
@@ -148,6 +176,24 @@ class TrainedModel:
                 observation=ObservationTerm(
                     presence_weight=stored.get("presence_weight", 0.0),
                     count_weight=stored.get("count_weight", 0.0),
+                ),
+                masking=(
+                    MaskingStrategy(
+                        channel_rate=stored["channel_rate"],
+                        block_rate=stored["block_rate"],
+                        block_span=stored["block_span"],
+                        token_rate=stored["token_rate"],
+                        horizon_rate=stored["horizon_rate"],
+                        horizon_min_span=stored["horizon_min_span"],
+                        horizon_max_span=stored["horizon_max_span"],
+                    )
+                    if "channel_rate" in stored
+                    else None
+                ),
+                loss=(
+                    ObjectiveLoss(kind=LossKind(stored["loss"]), huber_delta=stored["huber_delta"])
+                    if "loss" in stored
+                    else None
                 ),
             )
         except UNREADABLE_BYTES as error:

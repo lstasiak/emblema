@@ -552,8 +552,10 @@ def pair(
                     for seed in seeds
                 ),
             )
-            control_spread = list(paired.per_repeat_control())
-            candidate_spread = list(paired.per_repeat_candidate())
+            # A repeat is a seed, as under the ROC area below, so that a side fitted once pairs
+            # with a side of several backbones seed by seed.
+            control_spread = [_event_shortfall_at(found, control, seed) for seed in seeds]
+            candidate_spread = [_event_shortfall_at(found, candidate, seed) for seed in seeds]
             floor_part, threshold = floor_area, ThresholdKind.ABSOLUTE
         case ErrorMeasure.AUROC_SHORTFALL:
             pairing = "area-pooled"
@@ -645,6 +647,14 @@ def _shortfall_at(answers: Answers, side: Side, seed: int) -> float:
     """One seed's shortfall of a side: the mean over its campaigns of one minus the area."""
     return mean(
         1.0 - answers.ranking(side.of_campaign(campaign), seed).auroc for campaign in side.campaigns
+    )
+
+
+def _event_shortfall_at(answers: Answers, side: Side, seed: int) -> float:
+    """One seed's shortfall of a side in event-weighted area, the mean over its campaigns."""
+    return mean(
+        1.0 - answers.anomaly_ranking(side.of_campaign(campaign), seed).average_precision
+        for campaign in side.campaigns
     )
 
 

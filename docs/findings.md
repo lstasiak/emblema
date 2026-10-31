@@ -5,22 +5,25 @@ preliminary: each task's frozen test side is opened once, at the end. Each compa
 by a rule registered before its run ([preregistration](preregistration.md)); each row links the
 note that holds its evidence ([`verification/`](verification/README.md)).
 
-Last updated 2026-10-28.
+Last updated 2026-10-31.
 
 ## Status
 
-- **The claim is not supported so far.** No way of using the pretrained encoder beats a
-  well-tuned network trained from scratch beyond the instrument's resolution, on either task.
-  On the small encoder over cells, fine-tuning gains +0.021 [+0.010; +0.031] at 200
-  intensive-care stays over the same network at the rate in force, at the registered least
-  gain; with each arm at the rate it keeps, the network from scratch gains +0.024 itself and the
-  gain at 200 stays is −0.004 [−0.015; +0.007]; at 50 stays +0.014 [+0.006; +0.022] remains,
-  below the least gain; at 20 nothing ([note](verification/cell-pretraining.md)).
+- **The claim is not confirmed; a screen of four pretrainings gains 0.016 at 50 stays.**
+  Pretrained without labels on intensive-care stays, the eICU demo and raw satellite telemetry,
+  the small encoder over cells gains +0.016 [+0.007; +0.025] at 50 stays over the network from
+  scratch at the rate its rule chose for that budget (real and small), the same at 20 within
+  the noise threshold, and +0.004 [−0.007; +0.015] at 200; the predictions expected noise at 20
+  and 50. At the lower edge the registered confirmation has power below 0.25
+  ([note](verification/composition-screen.md)). A screen over the stays alone read +0.014 at 50
+  stays, against one rate for all budgets ([note](verification/cell-pretraining.md)).
 - **Pretraining over cells leaves a representation above its initialisation, a first on the
-  intensive-care stays.** A probe on the frozen encoder gains 0.060 to 0.091 over the same encoder untrained at
-  500 stays under every recipe (0.757 against 0.677; the trees read 0.787), and its pretext
-  reads unread stays above the best linear map. A forecast tail, the count term and added grids
-  move nothing ([note](verification/cell-pretraining.md)).
+  intensive-care stays.** A probe on the frozen encoder gains 0.060 to 0.091 over the same
+  encoder untrained at 500 stays under every recipe (0.757 against 0.677; the trees read
+  0.787), and its pretext reads unread stays above the best linear map. A forecast tail, the
+  count term and added grids move nothing ([note](verification/cell-pretraining.md)). Under the
+  composition with the satellites the probe gains +0.090
+  ([note](verification/composition-screen.md)).
 - **Classical models lead at few labels.** Trees over per-channel summaries match or beat every
   network from 200 labels up on both tasks; on the intensive-care stays they lie 0.07 to 0.09 in
   area above the probe, and a logistic head over the same summaries about 0.07 above it, within
@@ -35,56 +38,37 @@ Last updated 2026-10-28.
   pretraining has no share in that lift; no average over a stay's channels keeps it.
 - **Below 500 labels the network's gap is representation; above it, the trees' table.** A
   network handed the trees' per-channel summaries reads above the trees at 20 and 50 stays
-  (+0.023, +0.046; carried at 50) and leads the network on its tokens by 0.045 to 0.059 up to 200 stays. From 500 stays
-  the network on its tokens matches it, and both stop 0.03 below the trees, as a linear head over
-  the summaries does: the rest is what trees make of that table, not the network's training
-  (a penalty and every drawn stay change nothing) ([note](verification/gap-to-the-trees.md)).
+  (+0.023, +0.046; carried at 50) and leads the network on its tokens by 0.045 to 0.059 up to
+  200 stays. From 500 stays the network on its tokens matches it, and both stop 0.03 below the
+  trees, as a linear head over the summaries does: the rest is what trees make of that table,
+  not the network's training (a penalty and every drawn stay change nothing)
+  ([note](verification/gap-to-the-trees.md)).
 - **What transfers is the encoder's machinery, not its features for the task.** Fitting only the
   channel rows of a corpus the backbone never read, on its unlabelled windows, brings the pretext
   to within 0.006 of a backbone that read it, and carries part of a downstream task (+0.031 on
   sepsis at 4,000 patients).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
-- **Reading the window as cells does not close the gap at few labels.** An encoder trained from
-  scratch over cells of channel and time bin, carrying each bin's count, level, extremes and
-  ends, reads within 0.01 of the same encoder on raw readings rerun beside it at 50 and 200
-  stays (0.67 at 200 in that rerun, 0.65 in the earlier campaign), and 0.03 to 0.05 below a
-  network handed the trees' table; the best of thirteen variants, six bins, gains 0.03 at 200
-  stays and still trails that network; a learnt time encoding, several pooling
-  queries and rows for the channels a stay never measured move nothing beyond the reader's
-  resolution ([note](verification/encoder-candidates.md)).
-- **A small encoder from scratch reaches the trees at 200 stays and leads them at 50.** Two
-  blocks 64 wide over cells of six bins read 0.73 at 200 stays, level with the trees (+0.003
-  [−0.011; +0.017]) and 0.027 above the network handed their table, and 0.66 at 50, 0.028 above
-  the trees; the 4.8M encoder on the same cells reads 0.68 and 0.64. The gap at few labels was
-  the encoder's size, not what it read; dropout, weight decay, a clip and a class weight add
-  nothing ([note](verification/encoder-candidates.md)).
-- **From 500 stays up the cells carry the gain and the trees keep 0.008.** On six-bin cells the
-  4.8M encoder and the small one read alike (0.83 at every stay of the half), 0.022 above the
-  network handed the trees' table and 0.008 below the trees, not distinguishable. The mean lies
-  within the 0.015 the register asks of the half; the lower edge of that pair (−0.023) does not,
-  so the set B rule would pass about one time in four at that standing
-  ([note](verification/encoder-candidates.md)).
-- **No input moves the small encoder at every stay.** Twelve and twenty-four bins, a learnt
-  time encoding and four pooling queries read within 0.004 of six bins at every stay of the
-  half, none carried; rows for the channels a stay never measured cost 0.009 [0.001; 0.018].
-  Six bins under the registered recipe go to set B against the trees
+- **A small encoder from scratch over cells reaches the trees at 200 stays and leads them at
+  50.** Two blocks 64 wide over six-bin cells read 0.73 at 200 stays, level with the trees
+  (+0.003 [−0.011; +0.017]), and 0.66 at 50, 0.028 above them; from 500 stays the cells carry
+  the gain and the trees keep 0.008. The gap at few labels was the encoder's size, not what it
+  read: cells on the 4.8M encoder, more bins, a learnt time encoding, pooling queries and
+  regularisation move nothing beyond the reader's resolution
   ([note](verification/encoder-candidates.md)).
 - **On set B the small encoder from scratch reads 0.008 below the tuned trees and is not shown
-  no worse by 0.015.** Learnt from every stay of set A, it reads 0.850 against the trees'
-  0.858 at `learning_rate=0.1,rounds=300` (−0.008 [−0.017; +0.001], the lower edge 0.002 past
-  the margin) and level with the trees at their default setting (+0.001 [−0.010; +0.011]); the
-  same 0.008 as on the half. The registered rule closes this direction
+  no worse by 0.015.** It reads 0.850 against 0.858 (−0.008 [−0.017; +0.001]) and level with
+  the default trees (+0.001); the registered rule closes this direction
   ([note](verification/encoder-candidates.md)).
-- **The anomaly tasks run, and read nothing yet for the claim.** Four tasks of events on
-  telemetry, fitted without a label and read by an event-weighted area: under the stays'
-  backbones, whose rows for these channels are drawn, no task confirms a gain of 0.05 of the
-  frozen encoder over its initialisation, and it loses 0.07 on OPS-SAT. Reading each month or
-  experiment against itself removes the drift that flooded the alarm. The counts of readings
-  tell little on the satellites and the testbed ([note](verification/anomaly-tasks.md)).
-- **Next:** pretraining on the tasks' regime for both legs (the satellites' first halves, open
-  intensive-care sources), with the anomaly tasks read on that representation. The clinical
-  confirmation is declared as a curve against the network from scratch at its chosen rate.
+- **On satellite telemetry the pretrained encoder does not find events without a label.** Four
+  tasks of events, fitted without a label and read by an event-weighted area. Under backbones
+  that never read these sensors no task confirms a gain of 0.05 over the encoder's
+  initialisation, and OPS-SAT loses 0.07 ([note](verification/anomaly-tasks.md)). Pretrained on
+  the satellites' own first halves, the states still do not beat their initialisation on the
+  first mission (+0.018 [−0.008; +0.045]), nor the pretext's error a ridge over the same cells,
+  and on the second mission they read far below it. After the results, at the window level:
+  87 % of the first mission's events hold no reading beyond ten deviations, and every detector
+  is near chance on them ([note](verification/composition-screen.md)).
 
 ## Setup
 
@@ -157,6 +141,17 @@ The small encoder over six-bin cells, pretrained without labels on the intensive
 | Probe, pretrained / untrained encoder | | | | 0.76 / 0.68 |
 | Trees per channel | 0.62 | 0.63 | 0.74 | **0.79** |
 
+The same encoder pretrained over the stays, the eICU demo and the satellites' first halves
+(four pretrainings, two with the Water Quality Portal), each arm at its chosen setting
+([note](verification/composition-screen.md)):
+
+| Labelled stays | 20 | 50 | 200 | 500 |
+| --- | --- | --- | --- | --- |
+| Full fine-tuning | 0.63 | 0.67 | 0.74 | |
+| Network from scratch, its chosen rate | 0.62 | 0.65 | 0.74 | |
+| Probe, pretrained / untrained encoder (base) | | | | 0.76 / 0.67 |
+| Trees per channel | 0.62 | 0.63 | 0.74 | **0.79** |
+
 ### Is the pipeline sound?
 
 | Check | Result | Source |
@@ -185,6 +180,7 @@ pretraining against four, 0.021 for two.
 | The stays four times as often in the mixture | 1 | +0.012 ± 0.003 | [layer-readout](verification/layer-readout.md) |
 | Masks over three quarters of a window | 1 | +0.008 ± 0.005 | [layer-readout](verification/layer-readout.md) |
 | Masks over the forecast tail | 1 | −0.019 ± 0.005 | [layer-readout](verification/layer-readout.md) |
+| The Water Quality Portal added to stays and satellites, against that composition without it | 2 | −0.014 on the probe (threshold 0.020); fine-tuning −0.014 to −0.018, within its threshold | [composition-screen](verification/composition-screen.md) |
 | Decoder of four blocks | 2 | **−0.037** | [pretext-variants](verification/pretext-variants.md) |
 | Predicting a teacher's states instead of values | 2 | **−0.055** | [pretext-variants](verification/pretext-variants.md) |
 | Contrast between a window's two halves | 2 | **−0.103** [−0.125; −0.081] | [pretext-variants](verification/pretext-variants.md) |
@@ -257,9 +253,10 @@ pretraining against four, 0.021 for two.
 
 ## Next
 
-1. Anomaly tasks on telemetry without labels and channels added without labels, then the
-   screen over the stays, the eICU demo and raw telemetry, with the Water Quality Portal as one
-   arm, the recipe chosen by fine-tuning, the probe and the anomaly tasks together; the clinical
-   confirmation as a declared curve against the network from scratch at its chosen rate.
-2. Read transfer to corpora the backbone never read on their tasks, across pretrainings.
-3. Open the frozen test side once.
+1. Test whether pretraining on telemetry loses the size of a reading, and read telemetry under
+   an input that keeps it if so.
+2. Confirm the gain at 50 stays on fresh pretrainings of the base recipe, in a design with power
+   at the screen's lower edge.
+3. Read channels added without labels on their tasks (sepsis), across pretrainings that never
+   read 2019.
+4. Open the frozen test side once.
