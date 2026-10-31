@@ -43,6 +43,8 @@ from emblema.evaluation.adapters.detection.nearest_neighbour_detector import (
     NearestNeighbourDetector,
 )
 from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
+from emblema.evaluation.adapters.detection.shrunk_covariance import ShrunkCovariance
+from emblema.evaluation.adapters.detection.standardisation import Standardisation
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
@@ -93,41 +95,9 @@ CONTROLS = (DISTANCE, PER_UNIT)
 # --- statistics ------------------------------------------------------------------------------
 
 
-def shrunk_covariance(rows: Floats) -> Floats:
-    """The Ledoit-Wolf shrinkage of the rows' covariance towards a scaled identity.
-
-    The shrinkage intensity is Ledoit and Wolf's closed form (2004), the one scikit-learn's
-    ``LedoitWolf`` computes, so a covariance of fewer rows than dimensions still inverts.
-
-    Raises:
-        ValueError: If there are fewer than two rows.
-    """
-    if len(rows) < 2:
-        raise ValueError(f"a covariance needs two rows, got {len(rows)}")
-    centred = rows - rows.mean(axis=0)
-    count, width = centred.shape
-    sample = centred.T @ centred / count
-    mu = float(np.trace(sample)) / width
-    squared = centred**2
-    beta_sum = float((squared.T @ squared).sum()) / count - float((sample**2).sum())
-    delta = float(((sample - mu * np.eye(width)) ** 2).sum())
-    beta = min(beta_sum / count, delta) if delta > 0 else 0.0
-    shrinkage = 0.0 if delta == 0 else beta / delta
-    shrunk: Floats = (1 - shrinkage) * sample + shrinkage * mu * np.eye(width)
-    return shrunk
-
-
-def inverse_root(covariance: Floats) -> Floats:
-    """The symmetric inverse square root of a covariance, whitening what it multiplies."""
-    eigenvalues, vectors = np.linalg.eigh(covariance)
-    eigenvalues = np.clip(eigenvalues, np.finfo(float).tiny, None)
-    root: Floats = vectors @ np.diag(1.0 / np.sqrt(eigenvalues)) @ vectors.T
-    return root
-
-
-def mahalanobis(rows: Floats, centre: Floats, covariance: Floats) -> Floats:
+def mahalanobis(rows: Floats, centre: Floats, covariance: ShrunkCovariance) -> Floats:
     """Each row's squared Mahalanobis distance from ``centre`` under ``covariance``."""
-    whitened = (rows - centre) @ inverse_root(covariance)
+    whitened = (rows - centre) @ covariance.inverse_root()
     squared: Floats = np.einsum("ij,ij->i", whitened, whitened)
     return squared
 
@@ -236,7 +206,7 @@ def scorers_of(
         fitting, neighbours=NEIGHBOURS, contamination=CONTAMINATION
     )
     standardised_fitting = detector.fitted
-    standardised_scored = (scored - detector.centre) / detector.scale
+    standardised_scored = detector.standardisation.of(scored)
     width = standardised_fitting.shape[1]
     scores: dict[str, Floats] = {DISTANCE: detector.scores(scored)}
     per_unit = NearestNeighbourDetector.fitted_on(
@@ -244,10 +214,10 @@ def scorers_of(
     )
     scores[PER_UNIT] = per_unit.scores(scored, units=scored_units)
 
-    covariance = shrunk_covariance(standardised_fitting)
+    covariance = ShrunkCovariance.of(standardised_fitting)
     centre = standardised_fitting.mean(axis=0)
     scores[MAHALANOBIS] = mahalanobis(standardised_scored, centre, covariance)
-    eigenvalues, vectors = np.linalg.eigh(covariance)
+    eigenvalues, vectors = np.linalg.eigh(covariance.matrix)
     descending = np.argsort(eigenvalues)[::-1]
     eigenvalues, vectors = eigenvalues[descending], vectors[:, descending]
     share = eigenvalues / eigenvalues.sum()
@@ -258,10 +228,9 @@ def scorers_of(
     scores[RESIDUAL] = whitened_squares[:, top:].sum(axis=1)
     separation = np.array([auroc(np.abs(projected[:, j]), positive) for j in range(width)])
 
-    root = inverse_root(covariance)
+    root = covariance.inverse_root()
     whitened = NearestNeighbourDetector(
-        centre=np.zeros(width),
-        scale=np.ones(width),
+        standardisation=Standardisation(centre=np.zeros(width), scale=np.ones(width)),
         fitted=(standardised_fitting - centre) @ root,
         neighbours=detector.neighbours,
         alarm=ScoreAlarm(level=0.0, per_unit=False, unit_spread=1.0),

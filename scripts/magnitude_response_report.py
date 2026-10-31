@@ -252,7 +252,7 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - torch,
         raised_distances = distance.scores(raised_states)
         moved = np.linalg.norm(
             (raised_states - scored_states[[index for index, _, _ in raised_keys]])
-            / detector.scale,
+            / detector.standardisation.scale,
             axis=1,
         )
         for (index, scope, factor), value, shift in zip(

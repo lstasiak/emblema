@@ -25,10 +25,8 @@ from scripts.state_geometry_report import (
     auroc,
     check_against_campaign,
     enters,
-    inverse_root,
     main,
     scorers_of,
-    shrunk_covariance,
 )
 
 Floats = NDArray[np.float64]
@@ -45,28 +43,6 @@ QUIET = ROTATION[:, 3]
 def normal_states(draws: np.random.Generator, count: int) -> Floats:
     states: Floats = (draws.normal(size=(count, 4)) * SPREAD) @ ROTATION.T
     return states
-
-
-def test_the_shrunk_covariance_is_scikit_learn_s() -> None:
-    sklearn_covariance = pytest.importorskip("sklearn.covariance")
-    rows = np.random.default_rng(0).normal(size=(30, 6)) * np.arange(1, 7)
-
-    ours = shrunk_covariance(rows)
-    theirs = sklearn_covariance.LedoitWolf().fit(rows).covariance_
-
-    np.testing.assert_allclose(ours, theirs, rtol=1e-10, atol=1e-12)
-
-
-def test_a_covariance_needs_two_rows() -> None:
-    with pytest.raises(ValueError, match="two rows"):
-        shrunk_covariance(np.ones((1, 3)))
-
-
-def test_the_inverse_root_whitens() -> None:
-    rows = normal_states(np.random.default_rng(1), 20000)
-    whitened = (rows - rows.mean(axis=0)) @ inverse_root(np.cov(rows, rowvar=False))
-
-    np.testing.assert_allclose(np.cov(whitened, rowvar=False), np.eye(4), atol=0.05)
 
 
 def test_the_area_counts_ties_half_and_weights_as_repeats() -> None:
