@@ -1,6 +1,6 @@
 # ADR-0068: A detector scored by the pretext's error, against a linear answer from the same cells
 
-- Status: proposed
+- Status: accepted (2026-10-31)
 - Date: 2026-10-29
 
 ## Context
@@ -15,20 +15,20 @@ answer that learnt nothing, and that answer must see what the model sees. The ma
 channels and the window's tail as well as single cells; interpolation over a channel's own bins
 cannot answer the first, where a model reading the other channels wins by construction.
 
-The decoder is stored with every backbone, but the seam Evaluation reads weights through returns
-the encoder only; the pretext loss exists only summed over a batch, and one draw of masks spans
-the batch. The masks and the loss a backbone was trained under are in Pretraining's register,
+The decoder is stored with every backbone, but the port through which Evaluation loads weights
+returns the encoder only; the pretext loss exists only summed over a batch, and one draw of masks
+spans the batch. The masks and the loss a backbone was trained under are in Pretraining's register,
 not in its artifact, and a cell run from an order reaches no database.
 
 ## Decision
 
 - **The score of a window is the error of its values.** Each window is masked by the backbone's
-  own strategy K times (K = 8, a knob of the name, set before any reading); the decoder answers
-  the five summaries of every hidden timed cell that held a reading, scored by the backbone's
-  loss in normalised units, and the score is the mean over those cells and draws. Presence and
-  count are not scored: their weights, set for training, would rank the windows. The divisor
-  is the hidden cells that held a reading, not every hidden cell as in training, lest a sparser
-  window score lower.
+  own strategy K times (K = 8, a parameter of the detector's name, set before any reading); the
+  decoder answers the five summaries of every hidden timed cell that held a reading, scored by
+  the backbone's loss in normalised units, and the score is the mean over those cells and draws.
+  Presence and count are not scored: their weights, set for training, would rank the windows.
+  The divisor is the hidden cells that held a reading, not every hidden cell as in training,
+  lest a sparser window score lower.
 - **Masks are drawn per window**, from a generator seeded by the campaign's seed and the
   window's unit, position and draw (`seeded_rank`), so a score does not depend on its batch.
 - **The control is a linear answer from the same visible cells** under the same masks: a ridge
@@ -58,17 +58,16 @@ not in its artifact, and a cell run from an order reaches no database.
   backbone's masks.
 - They are read on the first mission alone, secondary, registered first.
 - One window costs K passes through encoder and decoder. A fit keeps its alarm and the ridge's
-  weights; nothing serves them.
+  weights.
 - The backbone and the ridge both learnt from the fitting side, so the share flagged at their
   alarm is optimistic; the area under the precision-recall curve, which ranks, is not moved by
   the alarm.
-- A gain over the linear answer says what pretraining learnt beyond a linear map of the same
-  cells; the nearest-neighbour arm reads the gain over the initialisation.
+- A gain over the linear answer is what pretraining learnt beyond a linear map of the same cells.
 
 ## Alternatives considered
 
 - *The whole pretext loss*: its ranking would rest on weights set for training.
 - *Masks within a channel only*: the model still reads the other channels, as a regression would.
-- *The audit's stacked answer*: two stages for the same features.
-- *Masks carried by the order*: it would speak of one backbone's training.
+- *The pretext audit's stacked linear answer*: two stages for the same features.
+- *Masks named in the campaign's order*: the order would then speak of one backbone's training.
 - *A published language of Pretraining*: a contract package for one detector.
