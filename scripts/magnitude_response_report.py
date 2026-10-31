@@ -113,12 +113,6 @@ def raised(window: TokenWindow, *, scope: str, factor: float, bins: int) -> Toke
     )
 
 
-def largest_reading(window: TokenWindow) -> float:
-    """The magnitude of the window's largest timed reading."""
-    values = np.abs(np.asarray(window.values, dtype=np.float64))
-    return float(values[~np.asarray(window.timeless, dtype=bool)].max())
-
-
 def drawn_normals(positions: Sequence[int], *, seed: int, count: int) -> list[int]:
     """``count`` of ``positions`` in the order ``seed`` ranks them, all of them if fewer."""
     ranked = sorted(positions, key=lambda position: (seeded_rank(seed, position), position))
@@ -155,98 +149,51 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - torch,
     import torch
 
     from emblema.config.settings import Settings
-    from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
     from emblema.entrypoints.configured import configured_store
-    from emblema.entrypoints.known_ground_truths import KnownGroundTruths
-    from emblema.entrypoints.restored_backbones import RestoredBackbones
     from emblema.entrypoints.source_revision import SourceRevision
-    from emblema.entrypoints.workers.known_detectors import KnownDetectors
-    from emblema.evaluation.adapters.blocks.block_corpus_windows import BlockCorpusWindows
-    from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
     from emblema.evaluation.adapters.detection.nearest_neighbour_detector import (
         NearestNeighbourDetector,
     )
     from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
-    from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
-        InMemoryDownstreamTaskRepository,
-    )
-    from emblema.evaluation.adapters.torch.frozen_embedding import FrozenEmbedding
-    from emblema.evaluation.application.use_cases.define_downstream_task import (
-        DefineDownstreamTask,
-    )
-    from emblema.evaluation.application.use_cases.draw_detection_windows import (
-        DrawDetectionWindows,
-        DrawDetectionWindowsCommand,
-    )
-    from emblema.evaluation.application.use_cases.open_test_split import OpenTestSplit
-    from emblema.evaluation.domain.detection.score_reference import ScoreReference
     from emblema.pretraining.adapters.training.devices import available_device
     from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
-    from emblema.shared.adapters.arrays.laid_window import LaidWindow
-    from emblema.shared.adapters.in_memory.event_publisher import InMemoryEventPublisher
-    from emblema.shared.adapters.in_memory.event_subscriber import InMemoryEventSubscriber
-    from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
-    from emblema.shared.adapters.system.clock import SystemClock
-    from emblema.shared.adapters.tensors.token_tensors import TokenTensors
-    from emblema.shared.kernel.artifacts import ArtifactRef
-    from emblema.shared.kernel.checksums import Checksum
+    from scripts.detection_states import (
+        FrozenStates,
+        detection_sides,
+        detector_recipe,
+        encoders_to_read,
+        ref_of,
+        shared_shape,
+    )
 
-    def ref_of(key: str, checksum: str) -> ArtifactRef:
-        return ArtifactRef(key, Checksum.parse(checksum))
-
-    known = KnownTasks.named(arguments.task)
     device = available_device() if arguments.device is None else arguments.device
     store = configured_store(Settings())
     manifest = ref_of(*arguments.manifest)
-    blocks = PublishedCorpusBlocks(store, arguments.workspace)
-    corpus = BlockCorpusWindows(blocks)
-    tasks = InMemoryDownstreamTaskRepository()
-    ids = SequentialIdGenerator()
-    task_id = DefineDownstreamTask(tasks, corpus, ids)(
-        known.defined_over(manifest, corpus.describe(manifest))
+    layout = BinnedTokens(shared_shape(store, arguments.weights).bins)
+    sides = detection_sides(
+        arguments.task,
+        manifest,
+        store=store,
+        layout=layout,
+        workspace=arguments.workspace,
+        corpora=arguments.corpora,
     )
-    # The use case the campaign's worker draws a detector's windows by, so the sides are its own.
-    drawn = DrawDetectionWindows(
-        tasks,
-        corpus,
-        KnownGroundTruths.under(arguments.corpora),
-        OpenTestSplit(tasks, ids, SystemClock(), InMemoryEventPublisher(InMemoryEventSubscriber())),
-    )(DrawDetectionWindowsCommand(task=task_id))
-    published = blocks.manifest_of(manifest)
-    block = blocks.block_of(published)
-    fitting = block.at([window.position for window in drawn.fitting])
-    scored = block.at([labelled.window.position for labelled in drawn.scored])
-    largest = np.array([largest_reading(window) for window in scored])
-    targets = np.array([labelled.target for labelled in drawn.scored])
+    targets, largest = sides.targets, sides.largest
     normals = drawn_normals(
-        [index for index in range(len(scored)) if targets[index] == 0 and largest[index] <= FAR],
+        [
+            index
+            for index in range(len(sides.scored))
+            if targets[index] == 0 and largest[index] <= FAR
+        ],
         seed=arguments.draw_seed,
         count=arguments.normal,
     )
     per_unit = arguments.reference == "unit"
-    fitting_units = [str(window.unit) for window in drawn.fitting] if per_unit else None
-    scored_units = [str(labelled.window.unit) for labelled in drawn.scored] if per_unit else None
-
-    architecture = ref_of(*arguments.weights[0][1:])
-    backbones = RestoredBackbones(store, architecture)
-    if not backbones.bins:
-        raise SystemExit("the backbone reads raw tokens; this script lays windows out as cells")
-    # The initialisations and the layout are the first backbone's, as each campaign's are its
-    # own backbone's; that holds for every backbone only while they share one shape.
-    for label, key, checksum in arguments.weights[1:]:
-        other = RestoredBackbones(store, ref_of(key, checksum))
-        if (other.bins, other.width, other.layers) != (
-            backbones.bins,
-            backbones.width,
-            backbones.layers,
-        ):
-            raise SystemExit(f"{label} has another shape than {arguments.weights[0][0]}")
-    layout = BinnedTokens(backbones.bins)
+    fitting_units = sides.fitting_units if per_unit else None
+    scored_units = sides.scored_units if per_unit else None
     factors = sorted(set(arguments.factors) | {1.0})
     # Every window is laid out once and its cells kept, so each encoder reads the same arrays;
     # a raised window is laid out as soon as it is made and only its cells are kept.
-    laid_fitting = layout.lay(fitting)
-    laid_scored = layout.lay(scored)
     raised_keys: list[tuple[int, str, float]] = []
     laid_raised = []
     for index in normals:
@@ -254,57 +201,27 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - torch,
             for factor in factors:
                 if factor == 1.0:
                     continue
-                window = raised(scored[index], scope=scope, factor=factor, bins=layout.bins)
+                window = raised(sides.scored[index], scope=scope, factor=factor, bins=layout.bins)
                 raised_keys.append((index, scope, factor))
                 laid_raised.extend(layout.lay([window]))
     print(
-        f"{len(fitting)} fitting, {len(scored)} scored ({int((targets > 0).sum())} in events), "
+        f"{len(sides.fitting)} fitting, {len(sides.scored)} scored "
+        f"({int((targets > 0).sum())} in events), "
         f"{len(normals)} normal windows raised {len(raised_keys)} ways; {device}",
         flush=True,
     )
-
-    def states(embedding: FrozenEmbedding, laid: Sequence[LaidWindow]) -> Floats:
-        rows = []
-        for start in range(0, len(laid), arguments.batch_size):
-            batch = TokenTensors.of(layout.batch(laid[start : start + arguments.batch_size]))
-            # Moved before it is widened: an accelerator without double precision hands back
-            # zeros when asked to do both at once.
-            rows.append(embedding.embed(batch.to(device)).to("cpu").to(torch.float64).numpy())
-        return np.concatenate(rows)
-
-    encoders: list[tuple[str, int, ArtifactRef | None, ArtifactRef]] = [
-        (INITIALISATION, seed, None, architecture) for seed in arguments.seeds
-    ]
-    for label, key, checksum in arguments.weights:
-        encoders.append((label, 1, ref_of(key, checksum), ref_of(key, checksum)))
+    frozen = FrozenStates(store, sides, device=device, batch_size=arguments.batch_size)
     arguments.out.mkdir(parents=True, exist_ok=True)
     scored_rows: list[list[object]] = []
     response_rows: list[list[object]] = []
     geometry_rows: list[list[object]] = []
     seconds: dict[str, float] = {}
-    for label, seed, weights, shape in encoders:
+    for encoder in encoders_to_read(arguments.weights, arguments.seeds):
         started = time.perf_counter()
-        arm = next(
-            arm
-            for arm in KnownDetectors.over(shape)
-            if arm.ref == (KnownDetectors.UNTRAINED if weights is None else KnownDetectors.FROZEN)
-        )
-        if per_unit:
-            arm = arm.tuned("reference", "unit")
-        recipe = arm.recipe(seed=seed)
-        if recipe.reading is None or recipe.reading.encoder.bins is not None:
-            raise SystemExit("the detector's reading is not the one this script lays out")
-        if (recipe.reference is ScoreReference.OWN_UNIT) != per_unit:
-            raise SystemExit("the reference is not the one asked for")
-        torch.manual_seed(recipe.seed)
-        embedding = FrozenEmbedding.under(
-            recipe.reading,
-            RestoredBackbones(store, shape),
-            vocabulary_size=len(published.channels),
-            layout=layout,
-        ).to(device)
-        embedding.eval()
-        fitted_states = states(embedding, laid_fitting)
+        label, seed = encoder.label, encoder.seed
+        recipe = detector_recipe(encoder, per_unit=per_unit)
+        embedding = frozen.embedding(encoder, recipe)
+        fitted_states = frozen.states(embedding, sides.laid_fitting)
         detector = NearestNeighbourDetector.fitted_on(
             fitted_states,
             neighbours=recipe.nearest(),
@@ -314,24 +231,24 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - torch,
         # The same rows, neighbours and standardisation with the alarm at zero and no unit: the
         # mean distance itself, which a raised window and its original are compared by.
         distance = replace(detector, alarm=ScoreAlarm(level=0.0, per_unit=False, unit_spread=1.0))
-        scored_states = states(embedding, laid_scored)
+        scored_states = frozen.states(embedding, sides.laid_scored)
         campaign_scores = detector.scores(scored_states, units=scored_units)
         raw = distance.scores(scored_states)
-        for index, labelled in enumerate(drawn.scored):
+        for index in range(len(sides.scored)):
             scored_rows.append(
                 [
                     label,
                     seed,
-                    labelled.window.position,
-                    str(labelled.window.unit),
-                    labelled.window.ends_at,
-                    labelled.target,
+                    int(sides.positions[index]),
+                    sides.scored_units[index],
+                    float(sides.ends_at[index]),
+                    float(targets[index]),
                     f"{largest[index]:.6g}",
                     f"{campaign_scores[index]:.10g}",
                     f"{raw[index]:.10g}",
                 ]
             )
-        raised_states = states(embedding, laid_raised)
+        raised_states = frozen.states(embedding, laid_raised)
         raised_distances = distance.scores(raised_states)
         moved = np.linalg.norm(
             (raised_states - scored_states[[index for index, _, _ in raised_keys]])
@@ -345,7 +262,7 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - torch,
                 [
                     label,
                     seed,
-                    drawn.scored[index].window.position,
+                    int(sides.positions[index]),
                     scope,
                     factor,
                     f"{value:.10g}",
@@ -355,7 +272,7 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - torch,
         # A fitting window's distance to the others: one more neighbour asked for, itself at no
         # distance among them, and the mean put back over the others.
         drawn_fitting = drawn_normals(
-            list(range(len(fitting))), seed=arguments.draw_seed, count=FITTING_DRAWN
+            list(range(len(sides.fitting))), seed=arguments.draw_seed, count=FITTING_DRAWN
         )
         among = (
             replace(distance, neighbours=distance.neighbours + 1).scores(
@@ -375,8 +292,8 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - torch,
                 f"{float(np.mean(np.linalg.norm(fitted_states, axis=1))):.6g}",
             ]
         )
-        seconds[f"{label}-{seed}"] = time.perf_counter() - started
-        print(f"{label} seed {seed}: {seconds[f'{label}-{seed}']:.0f} s", flush=True)
+        seconds[encoder.name] = time.perf_counter() - started
+        print(f"{label} seed {seed}: {seconds[encoder.name]:.0f} s", flush=True)
     write_csv(
         arguments.out / SCORED,
         [
@@ -414,17 +331,17 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - torch,
         "commit": SourceRevision().current(),
         "device": device,
         "torch": torch.__version__,
-        "task": known.name,
+        "task": sides.task,
         "manifest": f"{manifest.key}@{manifest.checksum}",
         "weights": {label: f"{key}@{checksum}" for label, key, checksum in arguments.weights},
         "initialisation_seeds": list(arguments.seeds),
         "reference": arguments.reference,
         "bins": layout.bins,
-        "vocabulary": len(published.channels),
+        "vocabulary": sides.vocabulary,
         "factors": factors,
         "normal_windows": len(normals),
         "draw_seed": arguments.draw_seed,
-        "windows": {"fitting": len(fitting), "scored": len(scored)},
+        "windows": {"fitting": len(sides.fitting), "scored": len(sides.scored)},
         "seconds": seconds,
     }
     (arguments.out / CONDITIONS).write_text(json.dumps(conditions, indent=2) + "\n")

@@ -18,7 +18,6 @@ from scripts.magnitude_response_report import (
     auroc,
     check_against_campaign,
     drawn_normals,
-    largest_reading,
     main,
     participation_ratio,
     raised,
@@ -90,10 +89,6 @@ def test_raising_keeps_the_window_in_canonical_order() -> None:
 def test_an_unknown_scope_is_refused() -> None:
     with pytest.raises(ValueError, match="scope"):
         raised(WINDOW, scope="unit", factor=2.0, bins=2)
-
-
-def test_the_largest_reading_ignores_static_features() -> None:
-    assert largest_reading(WINDOW) == 4.0
 
 
 def test_normal_windows_are_drawn_by_the_seed_alone() -> None:
