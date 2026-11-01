@@ -21,11 +21,17 @@ share of simulated sides the rule confirms.
     uv run scripts/detection_power_report.py simulate --structure DIR/structure.csv --out DIR
         [--level 0.3 ...] [--gains 0.02 0.05 0.1] [--minimum 0.02] [--worlds 200]
         [--resamples 1000]
+    uv run scripts/detection_power_report.py interaction --structure DIR/structure.csv --out DIR
+        [--level 0.1 ...] [--teaching 0.05] [--gains 0.02 0.05 0.1] [--minimum 0.02]
+        [--worlds 200] [--resamples 1000]
 
 ``structure`` writes one row per validation window of the task, with its unit and the event it
 overlaps, from the raw files under ``data/raw``; ``simulate`` writes ``power.csv`` and prints
-the table a note pastes. The areas are computed by the same sweep the harness reads, checked
-against it on a small case.
+the table a note pastes. ``interaction`` simulates a grid of two detectors by two teachings:
+both sides lift by the teaching gain when taught, the candidate by the interaction gain more,
+and the rule confirms the difference of the two paired reductions, every side on one noise and
+one draw of the units; it writes ``interaction-power.csv``. The areas are computed by the same
+sweep the harness reads, checked against it on a small case.
 """
 
 import argparse
@@ -59,7 +65,7 @@ from emblema.evaluation.ports.ground_truth import GroundTruth
 from scripts.raw_corpora import raw_root
 from scripts.reporting import table
 
-STRUCTURE, POWER = "structure.csv", "power.csv"
+STRUCTURE, POWER, INTERACTION_POWER = "structure.csv", "power.csv", "interaction-power.csv"
 STRUCTURE_COLUMNS = ("unit", "position", "event")
 Floats = NDArray[np.float64]
 Ints = NDArray[np.int64]
@@ -225,6 +231,103 @@ def confirms(
     return bool(np.quantile(reductions, 0.025) > 0.0)
 
 
+def _unit_weights(structure: Structure, draws: np.random.Generator) -> Floats:
+    """One resample of the units, each stratum on its own, as a weight per window."""
+    holding, quiet = structure.strata
+    picks = np.concatenate(
+        (
+            draws.choice(holding, size=len(holding), replace=True),
+            draws.choice(quiet, size=len(quiet), replace=True),
+        )
+    )
+    counted: Floats = np.bincount(picks, minlength=structure.unit_count).astype(np.float64)[
+        structure.units
+    ]
+    return counted
+
+
+def confirms_interaction(
+    structure: Structure,
+    sides: tuple[Floats, Floats, Floats, Floats],
+    *,
+    minimum: float,
+    resamples: int,
+    draws: np.random.Generator,
+) -> bool:
+    """Whether the rule confirms the interaction on this world.
+
+    ``sides`` are the scores of the untaught control, the untaught candidate, the taught
+    control and the taught candidate; the interaction is the taught pair's reduction less the
+    untaught pair's, every resample of the units moving all four together.
+    """
+    weights = structure.weights
+
+    def interaction(unit_weights: Floats) -> float:
+        areas = [
+            average_precision(scores, structure.events, weights, unit_weights) for scores in sides
+        ]
+        return (areas[3] - areas[2]) - (areas[1] - areas[0])
+
+    if interaction(np.ones(len(structure.units))) < minimum:
+        return False
+    resampled = np.array([interaction(_unit_weights(structure, draws)) for _ in range(resamples)])
+    return bool(np.quantile(resampled, 0.025) > 0.0)
+
+
+def simulate_interaction(
+    structure: Structure,
+    *,
+    levels: Sequence[float],
+    teaching: float,
+    gains: Sequence[float],
+    minimum: float,
+    worlds: int,
+    resamples: int,
+    seed: int,
+) -> list[dict[str, str]]:
+    """The power of the interaction's rule: both sides lifted by ``teaching``, one by more."""
+    draws = np.random.default_rng(seed)
+    rows = []
+    for level in levels:
+        base = shift_for(structure, level, draws, 50)
+        lifted = shift_for(structure, min(level + teaching, 0.999), draws, 50)
+        for gain in gains:
+            raised = shift_for(structure, min(level + teaching + gain, 0.999), draws, 50)
+            confirmed = 0
+            for _ in range(worlds):
+                noise = draws.standard_normal(len(structure.events))
+                per_event = draws.normal(base, base / 2.0, size=int(structure.events.max()) + 1)
+                per_event[0] = 0.0
+                control = noise + per_event[structure.events]
+                in_events = structure.events > 0
+                sides = (
+                    control,
+                    control,
+                    control + np.where(in_events, lifted - base, 0.0),
+                    control + np.where(in_events, raised - base, 0.0),
+                )
+                if confirms_interaction(
+                    structure, sides, minimum=minimum, resamples=resamples, draws=draws
+                ):
+                    confirmed += 1
+            rows.append(
+                {
+                    "level": f"{level:g}",
+                    "teaching": f"{teaching:g}",
+                    "gain": f"{gain:g}",
+                    "minimum": f"{minimum:g}",
+                    "worlds": str(worlds),
+                    "power": f"{confirmed / worlds:.2f}",
+                }
+            )
+            print(
+                f"level {level:g} teaching {teaching:g} interaction {gain:g}: "
+                f"power {confirmed / worlds:.2f}",
+                flush=True,
+            )
+    return rows
+
+
 def simulate(
     structure: Structure,
     *,
@@ -288,11 +391,11 @@ def structure_of(task_name: str, corpora: Path) -> list[tuple[str, int, int]]:
             "ESA-Mission1": ("2007-01", "2013-12"),
             "ESA-Mission2": ("2001-10", "2003-06"),
         }[mission]
-        held = _months(mission, first, last)
+        held = months_between(mission, first, last)
         windows = [
             TaskWindow(unit=UnitKey(key), position=position, ends_at=hour)
             for key in _validation(task, held)
-            for position, hour in enumerate(_hours_of(key))
+            for position, hour in enumerate(window_ends_of(key))
         ]
         truths = truth.truths_of(task.corpus, windows)
         return [
@@ -352,7 +455,7 @@ def _validation(task: KnownTask, held: Sequence[str]) -> list[str]:
     return [key for key in held if key not in frozen]
 
 
-def _months(mission: str, first: str, last: str) -> list[str]:
+def months_between(mission: str, first: str, last: str) -> list[str]:
     year, month = (int(part) for part in first.split("-"))
     last_year, last_month = (int(part) for part in last.split("-"))
     keys = []
@@ -364,7 +467,7 @@ def _months(mission: str, first: str, last: str) -> list[str]:
     return keys
 
 
-def _hours_of(key: str) -> list[float]:
+def window_ends_of(key: str) -> list[float]:
     """The ends of the hourly windows of a month, in hours since the raw reader's origin."""
     _, _, stamp = key.partition("/")
     year, month = (int(part) for part in stamp.split("-"))
@@ -392,6 +495,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     simulate_.add_argument("--worlds", type=int, default=200)
     simulate_.add_argument("--resamples", type=int, default=1000)
     simulate_.add_argument("--seed", type=int, default=1)
+    interaction_ = what.add_parser("interaction")
+    interaction_.add_argument("--structure", type=Path, required=True)
+    interaction_.add_argument("--out", type=Path, required=True)
+    interaction_.add_argument("--level", type=float, nargs="+", default=[0.1, 0.3])
+    interaction_.add_argument("--teaching", type=float, default=0.05)
+    interaction_.add_argument("--gains", type=float, nargs="+", default=[0.02, 0.05, 0.1])
+    interaction_.add_argument("--minimum", type=float, default=0.02)
+    interaction_.add_argument("--worlds", type=int, default=200)
+    interaction_.add_argument("--resamples", type=int, default=1000)
+    interaction_.add_argument("--seed", type=int, default=1)
     arguments = parser.parse_args(argv)
     arguments.out.mkdir(parents=True, exist_ok=True)
     if arguments.what == "structure":
@@ -413,20 +526,34 @@ def main(argv: Sequence[str] | None = None) -> None:
     print(f"chance level {chance:.3f}; levels read {levels}")
     if not levels:
         raise SystemExit(f"every level asked for lies at or below the chance level {chance:.3f}")
-    rows = simulate(
-        read,
-        levels=levels,
-        gains=arguments.gains,
-        minimum=arguments.minimum,
-        worlds=arguments.worlds,
-        resamples=arguments.resamples,
-        seed=arguments.seed,
-    )
-    with (arguments.out / POWER).open("w", newline="") as handle:
+    if arguments.what == "interaction":
+        rows = simulate_interaction(
+            read,
+            levels=levels,
+            teaching=arguments.teaching,
+            gains=arguments.gains,
+            minimum=arguments.minimum,
+            worlds=arguments.worlds,
+            resamples=arguments.resamples,
+            seed=arguments.seed,
+        )
+        written_to = arguments.out / INTERACTION_POWER
+    else:
+        rows = simulate(
+            read,
+            levels=levels,
+            gains=arguments.gains,
+            minimum=arguments.minimum,
+            worlds=arguments.worlds,
+            resamples=arguments.resamples,
+            seed=arguments.seed,
+        )
+        written_to = arguments.out / POWER
+    with written_to.open("w", newline="") as handle:
         written = csv.DictWriter(handle, fieldnames=list(rows[0]))
         written.writeheader()
         written.writerows(rows)
-    print(table(("level", "gain", "minimum", "worlds", "power"), [tuple(r.values()) for r in rows]))
+    print(table(tuple(rows[0]), [tuple(r.values()) for r in rows]))
 
 
 if __name__ == "__main__":

@@ -24,12 +24,16 @@ models' answers are never ranked together.
     uv run scripts/campaign_pairs_report.py --campaign ID [--campaign ID ...] --out DIR
     uv run scripts/campaign_pairs_report.py --out DIR
         --pair CONTROL_ID CONTROL_CANDIDATE BUDGET CANDIDATE_ID CANDIDATE BUDGET [--pair ...]
+    uv run scripts/campaign_pairs_report.py --out DIR
+        --interaction ID TAUGHT_CANDIDATE TAUGHT_CONTROL CANDIDATE CONTROL BUDGET [...]
 
 The first form writes ``cells.csv``, ``predictions.csv`` for campaigns read by area, and
 ``scores.csv``, one row per cell with what it scored in its measure's own terms (the area under
 the ROC curve, or the error in the task's unit), for whoever draws a curve over the cells; the
-second reads the first two, writes ``comparisons.csv`` and prints the table a note pastes. Both
-may be given at once.
+second reads the first two, writes ``comparisons.csv`` and prints the table a note pastes; the
+third reads an interaction off one campaign or group read by event-weighted area, the taught
+pair's reduction less the untaught pair's under one draw of the units, writes
+``interactions.csv`` and prints its table. All may be given at once.
 """
 
 import argparse
@@ -58,6 +62,7 @@ from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.scoring.unit_error import UnitError
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.scoring.window_ranking import WindowRanking
+from emblema.evaluation.domain.statistics.anomaly_interaction import AnomalyInteraction
 from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
 from emblema.evaluation.domain.statistics.paired_anomaly_rankings import PairedAnomalyRankings
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
@@ -119,6 +124,25 @@ COMPARISON_COLUMNS = (
     "measure",
     "seed_reduction_mean",
     "seed_reduction_se",
+)
+INTERACTIONS = "interactions.csv"
+INTERACTION_COLUMNS = (
+    "campaign",
+    "taught_candidate",
+    "taught_control",
+    "candidate",
+    "control",
+    "budget",
+    "repeats",
+    "units",
+    "reduction_taught",
+    "reduction_untaught",
+    "interaction",
+    "low",
+    "high",
+    "p_value",
+    "seed_interaction_mean",
+    "seed_interaction_se",
 )
 PREDICTION_COLUMNS = (
     "campaign",
@@ -322,6 +346,57 @@ class Comparison:
             repr(self.difference.p_value),
             repr(self.floor.value),
             self.measure.value,
+            repr(self.seed_mean),
+            repr(self.seed_se),
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Interaction:
+    """One grid of two detectors by two teachings read: how much more the candidate gains taught.
+
+    The interval resamples the units with all four sides moving together; the interaction is
+    also stated seed by seed, each seed's taught pair less its untaught pair, with the mean and
+    standard error over the seeds beside the interval.
+    """
+
+    campaign: str
+    taught_candidate: str
+    taught_control: str
+    candidate: str
+    control: str
+    budget: str
+    repeats: int
+    units: int
+    reduction_taught: float
+    reduction_untaught: float
+    difference: PairedDifference
+    per_seed: tuple[float, ...]
+
+    @property
+    def seed_mean(self) -> float:
+        return mean(self.per_seed)
+
+    @property
+    def seed_se(self) -> float:
+        return stdev(self.per_seed) / sqrt(len(self.per_seed)) if len(self.per_seed) > 1 else 0.0
+
+    def row(self) -> tuple[str, ...]:
+        return (
+            self.campaign,
+            self.taught_candidate,
+            self.taught_control,
+            self.candidate,
+            self.control,
+            self.budget,
+            str(self.repeats),
+            str(self.units),
+            repr(self.reduction_taught),
+            repr(self.reduction_untaught),
+            repr(self.difference.reduction),
+            repr(self.difference.interval.low),
+            repr(self.difference.interval.high),
+            repr(self.difference.p_value),
             repr(self.seed_mean),
             repr(self.seed_se),
         )
@@ -609,6 +684,92 @@ def pair(
     )
 
 
+def interact(
+    rows: Sequence[CellRow],
+    campaign: str,
+    *,
+    taught: tuple[str, str],
+    untaught: tuple[str, str],
+    budget: str,
+    bootstrap: PairedUnitBootstrap,
+    answers: Answers,
+) -> Interaction:
+    """The taught pair's reduction less the untaught pair's, over ``campaign`` or a group of them.
+
+    ``taught`` and ``untaught`` each name a candidate and its control; the four sides are read
+    by event-weighted area on the same seeds, every repeat a seed and a side of several
+    campaigns their mean, as a pair is.
+
+    Raises:
+        ValueError: If a side has no cell, the sides were run for different purposes or seeds,
+            or any side is read by a measure other than the event-weighted area.
+    """
+    sides = {
+        name: Side(campaign, candidate, budget)
+        for name, candidate in zip(
+            ("taught_candidate", "taught_control", "candidate", "control"),
+            (*taught, *untaught),
+            strict=True,
+        )
+    }
+    cells = {name: _cells_of(rows, side) for name, side in sides.items()}
+    purposes = {row.purpose for found in cells.values() for row in found}
+    measure, seeds = _comparable(
+        sides["taught_control"],
+        cells["taught_control"],
+        sides["taught_candidate"],
+        cells["taught_candidate"],
+        purposes,
+    )
+    plain_measure, plain_seeds = _comparable(
+        sides["control"], cells["control"], sides["candidate"], cells["candidate"], purposes
+    )
+    if measure is not ErrorMeasure.PR_AUC_SHORTFALL or plain_measure is not measure:
+        raise ValueError("an interaction is read by event-weighted area alone")
+    if plain_seeds != seeds:
+        raise ValueError("the taught and the untaught pairs were not run on the same seeds")
+
+    def rankings(side: Side) -> tuple[AnomalyRanking, ...]:
+        return tuple(
+            answers.anomaly_ranking(side.of_campaign(each), seed)
+            for each in side.campaigns
+            for seed in seeds
+        )
+
+    paired_taught = PairedAnomalyRankings(
+        control=rankings(sides["taught_control"]), candidate=rankings(sides["taught_candidate"])
+    )
+    paired_untaught = PairedAnomalyRankings(
+        control=rankings(sides["control"]), candidate=rankings(sides["candidate"])
+    )
+    interaction = AnomalyInteraction(taught=paired_taught, untaught=paired_untaught)
+    per_seed = tuple(
+        (
+            _event_shortfall_at(answers, sides["taught_control"], seed)
+            - _event_shortfall_at(answers, sides["taught_candidate"], seed)
+        )
+        - (
+            _event_shortfall_at(answers, sides["control"], seed)
+            - _event_shortfall_at(answers, sides["candidate"], seed)
+        )
+        for seed in seeds
+    )
+    return Interaction(
+        campaign=campaign,
+        taught_candidate=taught[0],
+        taught_control=taught[1],
+        candidate=untaught[0],
+        control=untaught[1],
+        budget=budget,
+        repeats=len(seeds),
+        units=len(interaction.units),
+        reduction_taught=paired_taught.reduction,
+        reduction_untaught=paired_untaught.reduction,
+        difference=bootstrap.compare(interaction),
+        per_seed=per_seed,
+    )
+
+
 def _comparable(
     control: Side,
     control_cells: Sequence[CellRow],
@@ -702,6 +863,48 @@ def write_comparisons(path: Path, comparisons: Sequence[Comparison]) -> None:
             writer.writerow(comparison.row())
 
 
+def write_interactions(path: Path, interactions: Sequence[Interaction]) -> None:
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(INTERACTION_COLUMNS)
+        for interaction in interactions:
+            writer.writerow(interaction.row())
+
+
+def render_interactions(interactions: Sequence[Interaction]) -> str:
+    """The table a note pastes: each pair's reduction, their difference and where it lies."""
+    rows = [
+        (
+            GROUPED_BY.join(each[:8] for each in interaction.campaign.split(GROUPED_BY)),
+            f"{interaction.taught_candidate} less {interaction.taught_control}",
+            f"{interaction.reduction_taught:+.3f}",
+            f"{interaction.candidate} less {interaction.control}",
+            f"{interaction.reduction_untaught:+.3f}",
+            f"{interaction.difference.reduction:+.3f}",
+            str(interaction.difference.interval),
+            f"{interaction.difference.p_value:.3f}",
+            f"{interaction.seed_mean:+.3f} ± {interaction.seed_se:.3f}",
+            f"{interaction.repeats} repeats, {interaction.units} units",
+        )
+        for interaction in interactions
+    ]
+    return table(
+        (
+            "campaign",
+            "taught pair",
+            "reduction",
+            "untaught pair",
+            "reduction",
+            "interaction",
+            "95 % interval",
+            "p",
+            "per seed, mean ± SE",
+            "paired",
+        ),
+        rows,
+    )
+
+
 def share_of(difference: PairedDifference) -> str:
     """The relative reduction as a table shows it; a control without error has no share."""
     if difference.relative_reduction is None:
@@ -776,6 +979,17 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
             "campaigns joined by '+' are one side read as their mean, by area alone"
         ),
     )
+    parser.add_argument(
+        "--interaction",
+        action="append",
+        default=[],
+        nargs=6,
+        metavar=("ID", "TAUGHT_CANDIDATE", "TAUGHT_CONTROL", "CANDIDATE", "CONTROL", "BUDGET"),
+        help=(
+            "a grid of two detectors by two teachings in one campaign, or in several joined by "
+            "'+': the taught pair's reduction less the untaught pair's; repeatable"
+        ),
+    )
     parser.add_argument("--resamples", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=1, help="seed of the bootstrap's draws")
     parser.add_argument("--level", type=float, default=0.95)
@@ -789,8 +1003,8 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         help="fixed part of the floor in area, for campaigns read by area",
     )
     arguments = parser.parse_args(argv)
-    if not arguments.campaign and not arguments.pair:
-        parser.error("give a campaign to export, a pair to read, or both")
+    if not arguments.campaign and not arguments.pair and not arguments.interaction:
+        parser.error("give a campaign to export, a pair or an interaction to read, or several")
     return arguments
 
 
@@ -839,6 +1053,26 @@ def main(
         ]
         write_comparisons(out / COMPARISONS, comparisons)
         print(render(comparisons))
+    if arguments.interaction:
+        rows = read_cells(out / CELLS)
+        found = Answers(read_predictions(out / PREDICTIONS))
+        bootstrap = PairedUnitBootstrap(
+            resamples=arguments.resamples, seed=arguments.seed, level=arguments.level
+        )
+        interactions = [
+            interact(
+                rows,
+                each[0],
+                taught=(each[1], each[2]),
+                untaught=(each[3], each[4]),
+                budget=each[5],
+                bootstrap=bootstrap,
+                answers=found,
+            )
+            for each in arguments.interaction
+        ]
+        write_interactions(out / INTERACTIONS, interactions)
+        print(render_interactions(interactions))
 
 
 def _registry() -> EvaluationCampaignRepository:  # pragma: no cover - environment

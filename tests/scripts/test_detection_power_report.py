@@ -6,12 +6,14 @@ import numpy as np
 import pytest
 
 from scripts.detection_power_report import (
+    INTERACTION_POWER,
     POWER,
     STRUCTURE,
     Structure,
     average_precision,
     check_against_the_harness,
     confirms,
+    confirms_interaction,
     main,
 )
 
@@ -79,3 +81,50 @@ def test_the_report_writes_the_power_per_level_and_gain(tmp_path: Path) -> None:
     assert written[0] == "level,gain,minimum,worlds,power"
     assert written[1].startswith("0.3,0.1,0.02,4,")
     assert STRUCTURE == "structure.csv"
+
+
+def test_an_equal_lift_on_both_sides_is_no_interaction_and_a_lift_on_one_side_is(
+    tmp_path: Path,
+) -> None:
+    structure = Structure.read(write_structure(tmp_path / "s.csv", units=12, windows=4, events=4))
+    draws = np.random.default_rng(2)
+    control = draws.standard_normal(48)
+    lifted = control + np.where(structure.events > 0, 1.0, 0.0)
+    raised = control + np.where(structure.events > 0, 4.0, 0.0)
+
+    assert not confirms_interaction(
+        structure, (control, control, lifted, lifted), minimum=0.02, resamples=50, draws=draws
+    )
+    assert confirms_interaction(
+        structure, (control, control, lifted, raised), minimum=0.02, resamples=50, draws=draws
+    )
+
+
+def test_the_interaction_report_writes_the_power_per_level_teaching_and_gain(
+    tmp_path: Path,
+) -> None:
+    structure = write_structure(tmp_path / "s.csv", units=12, windows=4, events=4)
+
+    main(
+        [
+            "interaction",
+            "--structure",
+            str(structure),
+            "--out",
+            str(tmp_path),
+            "--level",
+            "0.3",
+            "--teaching",
+            "0.1",
+            "--gains",
+            "0.2",
+            "--worlds",
+            "4",
+            "--resamples",
+            "20",
+        ]
+    )
+
+    written = (tmp_path / INTERACTION_POWER).read_text().splitlines()
+    assert written[0] == "level,teaching,gain,minimum,worlds,power"
+    assert written[1].startswith("0.3,0.1,0.2,0.02,4,")
