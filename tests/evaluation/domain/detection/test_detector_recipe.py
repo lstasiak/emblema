@@ -215,3 +215,22 @@ def test_a_tail_is_hidden_exactly_once() -> None:
     assert PretextAsking(backbone=WEIGHTS).hidden is HiddenCellsChoice.OWN
     with pytest.raises(InvalidDetectorRecipeError, match="hidden once"):
         PretextAsking(backbone=WEIGHTS, draws=2, hidden=HiddenCellsChoice.TAIL)
+
+
+def test_the_cells_are_laid_out_as_the_states_are_and_read_no_encoder() -> None:
+    cells = recipe(features=DetectorFeatures.RAW_CELLS, reading=None)
+
+    assert DetectorFeatures.RAW_CELLS.lays_out_cells
+    assert DetectorFeatures.ENCODER_STATES.lays_out_cells
+    assert not DetectorFeatures.SUMMARIES.lays_out_cells
+    assert not DetectorFeatures.RAW_CELLS.reads_an_encoder
+    assert cells.reading is None
+
+
+@pytest.mark.parametrize(
+    "distance", [ScoreDistance.CENTRE, ScoreDistance.FARTHEST, ScoreDistance.SUBSPACE]
+)
+def test_a_distance_from_the_fitting_side_reads_no_neighbours(distance: ScoreDistance) -> None:
+    assert recipe(distance=distance, neighbours=None).neighbours is None
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
+        recipe(distance=distance)

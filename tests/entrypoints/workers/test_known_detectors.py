@@ -84,3 +84,13 @@ def test_the_three_scored_by_an_error_ask_under_the_same_masks_and_knobs() -> No
             over()["frozen_knn"].contamination,
             over()["frozen_knn"].reference,
         )
+
+
+def test_the_one_over_the_cells_reads_no_encoder_and_lays_them_out_as_the_states_are() -> None:
+    cells = next(arm for arm in KnownDetectors.over(WEIGHTS) if arm.ref == KnownDetectors.CELLS)
+
+    assert cells.features is DetectorFeatures.RAW_CELLS
+    assert cells.architecture is None
+    assert cells.backbone is None
+    assert cells.recipe(seed=1).reading is None
+    assert KnownDetectors.CELLS in KnownDetectors.refs()

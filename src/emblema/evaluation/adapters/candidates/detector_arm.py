@@ -21,13 +21,13 @@ class DetectorArm:
     """One detector a campaign competes, under a name of its own.
 
     What separates one of these from another is what a window is read as — an encoder's
-    states, pretrained or at their initialisation, the summaries per channel or their counts of
-    readings, or the error of what is filled in under a backbone's masks — and the knobs of the
-    detector itself: which distance from the fitted windows it scores by and the neighbours that
-    distance is taken to, or which cells are hidden, the draws an error is averaged over and how
-    the errors are read, the share of the fitting side the alarm flags and what a score is read
-    against. A variant of an arm is the arm with one of those turned, or the encoder's layer or
-    pooling turned.
+    states, pretrained or at their initialisation, the cells the encoder would read, the
+    summaries per channel or their counts of readings, or the error of what is filled in under a
+    backbone's masks — and the knobs of the detector itself: which distance from the fitted
+    windows it scores by and the neighbours that distance is taken to, or which cells are hidden,
+    the draws an error is averaged over and how the errors are read, the share of the fitting
+    side the alarm flags and what a score is read against. A variant of an arm is the arm with
+    one of those turned, or the encoder's layer or pooling turned.
 
     Invariants: an arm over an encoder's states names the model whose shape it reads; an arm
     that asks the pretext names the backbone whose masks it asks under and no shape; one over
@@ -87,9 +87,9 @@ class DetectorArm:
     def tuned(self, knob: str, value: str) -> Self:
         """This arm with ``knob`` turned to ``value``, on the detector, the pooling or the encoder.
 
-        The whitened distance reads no neighbours and a hidden tail is asked once, so a name
-        that turns both of such a pair is refused whichever comes first, as is a knob turned to
-        the value it already has: two names would otherwise denote one detector.
+        Only the distance to the nearest neighbours reads neighbours and a hidden tail is asked
+        once, so a name that turns both of such a pair is refused whichever comes first, as is a
+        knob turned to the value it already has: two names would otherwise denote one detector.
 
         Raises:
             UnknownKnobError: If none has such a knob, or it cannot take that value.
@@ -101,12 +101,15 @@ class DetectorArm:
                 raise UnknownKnobError(
                     f"{knob} takes one of {[str(d) for d in ScoreDistance]}, not {value!r}"
                 ) from error
-            if distance is ScoreDistance.WHITENED and self.neighbours != self.DEFAULT_NEIGHBOURS:
-                raise UnknownKnobError("the whitened distance reads no neighbours")
+            if (
+                distance is not ScoreDistance.NEAREST_NEIGHBOURS
+                and self.neighbours != self.DEFAULT_NEIGHBOURS
+            ):
+                raise UnknownKnobError(f"the {distance} distance reads no neighbours")
             return replace(self, distance=distance)
         if knob == "neighbours" and not self.features.asks_the_pretext:
-            if self.distance is ScoreDistance.WHITENED:
-                raise UnknownKnobError("the whitened distance reads no neighbours")
+            if self.distance is not ScoreDistance.NEAREST_NEIGHBOURS:
+                raise UnknownKnobError(f"the {self.distance} distance reads no neighbours")
             return replace(self, neighbours=self._turned(knob, value, self.neighbours))
         if knob == "draws" and self.features.asks_the_pretext:
             if self.hidden is HiddenCellsChoice.TAIL:
@@ -174,7 +177,7 @@ class DetectorArm:
                     pooling=self.pooling,
                 )
             ),
-            neighbours=None if self._scores_by_an_error_or_whitened else self.neighbours,
+            neighbours=self.neighbours if self._scores_by_nearest_neighbours else None,
             contamination=self.contamination,
             seed=seed,
             distance=self.distance,
@@ -188,8 +191,10 @@ class DetectorArm:
         )
 
     @property
-    def _scores_by_an_error_or_whitened(self) -> bool:
-        return self.features.asks_the_pretext or self.distance is ScoreDistance.WHITENED
+    def _scores_by_nearest_neighbours(self) -> bool:
+        return (
+            not self.features.asks_the_pretext and self.distance is ScoreDistance.NEAREST_NEIGHBOURS
+        )
 
     @classmethod
     def _turned(cls, knob: str, value: str, current: int) -> int:

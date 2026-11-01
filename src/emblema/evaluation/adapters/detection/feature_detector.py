@@ -11,7 +11,7 @@ class FeatureDetector(Protocol):
     """What a runtime asks of a detector fitted over features, whatever distance it scores by.
 
     A seam between the runtimes that fit a detector and the detectors themselves, typed in the
-    arrays they exchange: the nearest-neighbour and the whitened detector both answer it.
+    arrays they exchange: one detector a distance answers it.
     """
 
     def scores(

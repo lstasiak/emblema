@@ -14,6 +14,13 @@ from tests.evaluation.support import WEIGHTS, labelled, task, window
 FITTING = (window("a", 0, 10.0),)
 SCORED = (labelled("c", 2, 10.0, 1.0),)
 RECIPES = {
+    "cells": DetectorRecipe(
+        features=DetectorFeatures.RAW_CELLS,
+        reading=None,
+        neighbours=5,
+        contamination=0.02,
+        seed=1,
+    ),
     "states": DetectorRecipe(
         features=DetectorFeatures.ENCODER_STATES,
         reading=EncoderReading(architecture=WEIGHTS, backbone=WEIGHTS),
@@ -39,9 +46,13 @@ RECIPES = {
 }
 
 
+# The cells go where the states go: the runtime that lays windows out on the backbone's spans.
+ROUTES = {"cells": "states", "states": "states", "summaries": "summaries", "pretext": "pretext"}
+
+
 @pytest.mark.parametrize("route", list(RECIPES))
 def test_a_recipe_goes_to_the_runtime_its_features_need(route: str) -> None:
-    runtimes = {name: InMemoryDetectionRuntime() for name in RECIPES}
+    runtimes = {name: InMemoryDetectionRuntime() for name in ROUTES.values()}
     routed = FeatureRoutedDetectionRuntime(
         states=runtimes["states"], summaries=runtimes["summaries"], pretext=runtimes["pretext"]
     )
@@ -49,7 +60,7 @@ def test_a_recipe_goes_to_the_runtime_its_features_need(route: str) -> None:
     routed.fit(RECIPES[route], task(), FITTING, SCORED, retain=False)
 
     assert {name: len(runtime.detections) for name, runtime in runtimes.items()} == {
-        name: int(name == route) for name in RECIPES
+        name: int(name == ROUTES[route]) for name in runtimes
     }
 
 

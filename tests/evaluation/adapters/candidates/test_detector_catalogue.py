@@ -309,3 +309,28 @@ def test_a_detector_asked_for_the_tail_says_so_and_asks_once() -> None:
 def test_a_hiding_the_score_does_not_have_is_refused(name: str) -> None:
     with pytest.raises(UnknownCandidateError):
         ASKING.arm_of(CandidateRef(name))
+
+
+@pytest.mark.parametrize("distance", ["centre", "farthest", "subspace"])
+def test_a_bar_of_the_field_names_its_distance_and_no_neighbours(distance: str) -> None:
+    cells = DetectorArm(
+        ref=CandidateRef("cells_knn"),
+        features=DetectorFeatures.RAW_CELLS,
+        architecture=None,
+        backbone=None,
+    )
+    bars = DetectorCatalogue((cells,))
+    stated = {
+        p.name: p.value
+        for p in bars.describe(CandidateRef(f"cells_knn@distance={distance}")).method.parameters
+    }
+
+    assert stated["distance"] == distance
+    assert stated["features"] == "raw_cells"
+    assert "neighbours" not in stated
+    assert (
+        bars.arm_of(CandidateRef(f"cells_knn@distance={distance}")).recipe(seed=1).neighbours
+        is None
+    )
+    with pytest.raises(UnknownCandidateError):
+        bars.arm_of(CandidateRef(f"cells_knn@distance={distance},neighbours=3"))

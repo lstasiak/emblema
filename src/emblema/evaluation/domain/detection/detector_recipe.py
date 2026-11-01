@@ -35,7 +35,7 @@ class DetectorRecipe:
         reading: The encoder the states come from and how they are pooled, for features that
             are an encoder's; ``None`` for the summaries.
         neighbours: How many nearest fitted windows a score is the mean distance to; ``None``
-            where the score is an error or the whitened distance.
+            where the score is an error or a distance other than the nearest neighbours'.
         contamination: The share of fitting windows the alarm is set to flag.
         seed: Seed of the fit, which decides what an encoder at its initialisation draws.
         distance: Which distance from the fitted windows a detector over features scores by.
@@ -104,8 +104,8 @@ class DetectorRecipe:
         """How many nearest fitted windows a distance is the mean to.
 
         Raises:
-            InvalidDetectorRecipeError: If the detector scores by an error or by the whitened
-                distance, which reads no neighbours.
+            InvalidDetectorRecipeError: If the detector scores by an error or by a distance that
+                reads no neighbours.
         """
         if self.neighbours is None:
             raise InvalidDetectorRecipeError(

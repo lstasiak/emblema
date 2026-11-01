@@ -4,9 +4,11 @@ import numpy as np
 import pytest
 
 from emblema.evaluation.adapters.detection.feature_detectors import FeatureDetectors
+from emblema.evaluation.adapters.detection.mean_distance_detector import MeanDistanceDetector
 from emblema.evaluation.adapters.detection.nearest_neighbour_detector import (
     NearestNeighbourDetector,
 )
+from emblema.evaluation.adapters.detection.subspace_detector import SubspaceDetector
 from emblema.evaluation.adapters.detection.whitened_gaussian_detector import (
     WhitenedGaussianDetector,
 )
@@ -58,3 +60,22 @@ def test_a_detector_scored_by_an_error_is_no_feature_detector() -> None:
 
     with pytest.raises(InvalidDetectorRecipeError, match="scores by an error"):
         FeatureDetectors.fitted(pretext, ROWS, units=None)
+
+
+@pytest.mark.parametrize(
+    ("distance", "expected"),
+    [
+        (ScoreDistance.CENTRE, MeanDistanceDetector),
+        (ScoreDistance.FARTHEST, MeanDistanceDetector),
+        (ScoreDistance.SUBSPACE, SubspaceDetector),
+    ],
+)
+def test_the_bars_of_the_field_are_chosen_by_their_distance(
+    distance: ScoreDistance, expected: type[MeanDistanceDetector] | type[SubspaceDetector]
+) -> None:
+    fitted = FeatureDetectors.fitted(replace(WHITENED, distance=distance), ROWS, units=None)
+
+    assert isinstance(fitted, expected)
+    assert expected.from_bytes(fitted.kept().content).scores(ROWS[:2]) == pytest.approx(
+        fitted.scores(ROWS[:2])
+    )

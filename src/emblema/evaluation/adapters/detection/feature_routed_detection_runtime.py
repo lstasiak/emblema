@@ -12,10 +12,11 @@ from emblema.evaluation.ports.detection_runtime import DetectionRuntime
 class FeatureRoutedDetectionRuntime:
     """Every kind of detector behind one port, each recipe routed by what it reads a window as.
 
-    A detector over an encoder's states needs the stack that runs the encoder and one over the
-    summaries does not, and one scored by the error of a backbone's pretext needs the backbone's
-    objective whole, so a process holds a runtime for each it can run and routes between them
-    here, by the recipe's features rather than by trying one and catching its refusal.
+    A detector over an encoder's states, or over the cells the encoder would read, needs the
+    stack that lays them out and runs the encoder and one over the summaries does not, and one
+    scored by the error of a backbone's pretext needs the backbone's objective whole, so a process
+    holds a runtime for each it can run and routes between them here, by the recipe's features
+    rather than by trying one and catching its refusal.
     """
 
     def __init__(
@@ -44,5 +45,5 @@ class FeatureRoutedDetectionRuntime:
                     f"this process asks no backbone's pretext, so it cannot fit {recipe.features}"
                 )
             return self._pretext.fit(recipe, task, fitting, scored, retain=retain)
-        runtime = self._states if recipe.features.reads_an_encoder else self._summaries
+        runtime = self._states if recipe.features.lays_out_cells else self._summaries
         return runtime.fit(recipe, task, fitting, scored, retain=retain)

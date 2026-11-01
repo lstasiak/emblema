@@ -4,9 +4,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from emblema.evaluation.adapters.detection.feature_detector import FeatureDetector
+from emblema.evaluation.adapters.detection.mean_distance_detector import MeanDistanceDetector
 from emblema.evaluation.adapters.detection.nearest_neighbour_detector import (
     NearestNeighbourDetector,
 )
+from emblema.evaluation.adapters.detection.subspace_detector import SubspaceDetector
 from emblema.evaluation.adapters.detection.whitened_gaussian_detector import (
     WhitenedGaussianDetector,
 )
@@ -33,6 +35,12 @@ class FeatureDetectors:
         if recipe.distance is ScoreDistance.WHITENED:
             return WhitenedGaussianDetector.fitted_on(
                 rows, contamination=recipe.contamination, units=units
+            )
+        if recipe.distance is ScoreDistance.SUBSPACE:
+            return SubspaceDetector.fitted_on(rows, contamination=recipe.contamination, units=units)
+        if recipe.distance in MeanDistanceDetector.DISTANCES:
+            return MeanDistanceDetector.fitted_on(
+                rows, distance=recipe.distance, contamination=recipe.contamination, units=units
             )
         return NearestNeighbourDetector.fitted_on(
             rows, neighbours=recipe.nearest(), contamination=recipe.contamination, units=units
