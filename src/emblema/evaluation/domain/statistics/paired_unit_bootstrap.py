@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from emblema.evaluation.domain.exceptions import InvalidPairedUnitBootstrapError
 from emblema.evaluation.domain.statistics.bootstrap_interval import BootstrapInterval
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
-from emblema.evaluation.domain.statistics.paired_units import PairedUnits
+from emblema.evaluation.domain.statistics.resampled import Resampled
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -44,7 +44,7 @@ class PairedUnitBootstrap:
         if not 0.0 < self.level < 1.0:
             raise InvalidPairedUnitBootstrapError(f"level must lie in (0, 1), got {self.level}")
 
-    def compare(self, paired: PairedUnits) -> PairedDifference:
+    def compare(self, paired: Resampled) -> PairedDifference:
         """The reduction the candidate makes over the control, with its interval and p-value."""
         reductions = self.reductions(paired)
         below = (1 + sum(1 for reduction in reductions if reduction <= 0.0)) / (self.resamples + 1)
@@ -56,7 +56,7 @@ class PairedUnitBootstrap:
             p_value=min(1.0, 2.0 * min(below, above)),
         )
 
-    def reductions(self, paired: PairedUnits) -> list[float]:
+    def reductions(self, paired: Resampled) -> list[float]:
         """The reduction in every resample of the units, in ascending order.
 
         Exposed so that another procedure can set its own reductions beside these off one draw.
