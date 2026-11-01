@@ -321,7 +321,9 @@ class Comparison:
 
     @property
     def seed_se(self) -> float:
-        """Standard error of that mean over the seeds."""
+        """Standard error of that mean over the seeds; nought where one seed gives no spread."""
+        if len(self.per_seed) < 2:
+            return 0.0
         return stdev(self.per_seed) / sqrt(len(self.per_seed))
 
     def row(self) -> tuple[str, ...]:

@@ -768,3 +768,15 @@ def test_main_reads_an_interaction_off_the_exported_answers_and_writes_it(
     assert float(written[0]["interaction"]) > 0.0
     assert "| campaign | taught pair |" in capsys.readouterr().out
     assert "taught pair" in render_interactions([])
+
+
+def test_a_comparison_of_one_seed_states_no_spread_over_seeds() -> None:
+    read = paired_by_area(
+        [replace(by_area(BY_AREA, PERFECT_ANSWERS, measure=ErrorMeasure.PR_AUC_SHORTFALL))],
+        side(BY_AREA, CONTROL),
+        side(BY_AREA, CONTENDER),
+    )
+    one_seed = replace(read, per_seed=read.per_seed[:1])
+
+    assert one_seed.seed_se == 0.0
+    assert "± 0.000" in render([one_seed])
