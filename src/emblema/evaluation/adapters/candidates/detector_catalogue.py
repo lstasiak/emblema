@@ -6,7 +6,11 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.candidate_method import CandidateMethod
+from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
+from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
+from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
+from emblema.evaluation.domain.detection.taught_head import TaughtHead
 from emblema.evaluation.domain.exceptions import (
     InvalidCandidateVariantError,
     InvalidDetectorRecipeError,
@@ -71,15 +75,29 @@ class DetectorCatalogue:
         """What the detector was set to, beyond the seed each cell of the grid supplies itself.
 
         An arm over the summaries or their counts names what it reads and the detector's knobs,
-        the reference only where it is not the fitting side's, so the campaigns declared before
-        it was a knob read as they were stored; one over an encoder's states names the model it
-        is shaped like too, the layer and the pooling it reads at; one that asks the pretext
-        names the draws in place of the neighbours, and the backbone whose masks it asks under.
+        the reference and the distance only where they are not the defaults, so the campaigns
+        declared before they were knobs read as they were stored; one over an encoder's states
+        names the model it is shaped like too, the layer and the pooling it reads at; one that
+        asks the pretext names the draws in place of the neighbours, the backbone whose masks it
+        asks under, which cells it hides where not the backbone's own draw and how it reads the
+        errors where not raw; one by a distance other than the nearest neighbours' names the
+        distance and no neighbours; one taught events names how many and, where not the
+        direction, the head, and no distance or neighbours.
         """
         stated: dict[str, object] = {"features": arm.features}
         if arm.features.asks_the_pretext and arm.backbone is not None:
             stated["draws"] = arm.draws
             stated["masks"] = arm.backbone.key
+            if arm.hidden is not HiddenCellsChoice.OWN:
+                stated["hidden"] = arm.hidden
+            if arm.normalisation is not ErrorNormalisation.RAW:
+                stated["error"] = arm.normalisation
+        elif arm.events:
+            stated["events"] = arm.events
+            if arm.head is not TaughtHead.DIRECTION:
+                stated["head"] = arm.head
+        elif arm.distance is not ScoreDistance.NEAREST_NEIGHBOURS:
+            stated["distance"] = arm.distance
         else:
             stated["neighbours"] = arm.neighbours
         stated["contamination"] = arm.contamination

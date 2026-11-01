@@ -7,14 +7,18 @@ from emblema.evaluation.domain.exceptions import (
     ForeignLabelSampleError,
     FrozenTestSplitClosedError,
     InvalidOutcomeError,
+    InvalidTaughtEventsError,
     MismatchedStratificationError,
     MixedTargetKindsError,
+    ProtocolMismatchError,
     UnknownGroundTruthError,
     UnlabelledWindowError,
 )
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
 from emblema.evaluation.domain.labels.label_sample import LabelSample
+from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.domain.task.run_purpose import RunPurpose
 from emblema.evaluation.domain.task.task_windows import TaskWindows
 from tests.evaluation.support import (
@@ -144,3 +148,19 @@ def test_a_task_asked_at_the_start_of_a_unit_reads_its_first_window_alone() -> N
     read = task(windows=TaskWindows.FIRST).read_windows(windows)
 
     assert read == (window("a", 0, 24.0), window("b", 2, 24.0))
+
+
+def test_a_detection_task_teaches_events_of_its_tuning_side_and_no_others() -> None:
+    detecting = task(
+        protocol=EvaluationProtocol.ANOMALY_DETECTION, labels=AnomalyScheme(), strata=None
+    )
+
+    detecting.accept_taught((labelled("a", 0, 10.0, 1.0), labelled("b", 3, 10.0, 2.0)))
+
+    with pytest.raises(InvalidTaughtEventsError, match="not on the tuning side"):
+        detecting.accept_taught((labelled("c", 5, 10.0, 1.0),))
+
+
+def test_a_task_that_spends_labels_teaches_no_events() -> None:
+    with pytest.raises(ProtocolMismatchError, match="teaches no events"):
+        task().accept_taught((labelled("a", 0, 10.0, 1.0),))

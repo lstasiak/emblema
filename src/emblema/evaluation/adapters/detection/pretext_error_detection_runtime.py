@@ -10,6 +10,8 @@ from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.blocks.read_corpus import ReadCorpus
+from emblema.evaluation.adapters.detection.channel_error_scales import ChannelErrorScales
+from emblema.evaluation.adapters.detection.channel_errors import ChannelErrors
 from emblema.evaluation.adapters.detection.hidden_cells import HiddenCells
 from emblema.evaluation.adapters.detection.linear_cell_answer import LinearCellAnswer
 from emblema.evaluation.adapters.detection.masked_cells import MaskedCells
@@ -18,11 +20,13 @@ from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
+from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
+    InvalidTaughtEventsError,
     UnreadablePretextError,
     UnsupportedDetectorFeaturesError,
 )
@@ -47,13 +51,15 @@ class PretextErrorDetectionRuntime:
     """Scores a window by the error of what is filled in where a backbone's masks hide its cells.
 
     Every window, fitting and scored alike, is hidden ``draws`` times under the backbone's own
-    masks, each draw seeded by the cell's seed and the window's unit, position and draw, so the
-    pretrained backbone and the answers that learnt nothing fill in the same cells. A window's
-    error is the mean, over the hidden timed cells that held a reading in all its draws, of the
-    backbone's loss on the five values in normalised units. A window without such a cell has no
-    error to read, so it scores the fitting side's median error, neither an alarm nor the most
-    normal window there is, and how many did is logged per side. The alarm is the one every
-    detector sets.
+    masks, each draw seeded by the cell's seed and the window's unit, position and draw, or once
+    in its tail, so the pretrained backbone and the answers that learnt nothing fill in the same
+    cells. A window's error is the backbone's loss on the five values in normalised units over the
+    hidden timed cells that held a reading in all its draws: one mean over them, or, read per
+    channel, the mean over the channels of each channel's error over its typical error on the
+    fitting side. A
+    window without such a cell has no error to read, so it scores the fitting side's median
+    error, neither an alarm nor the most normal window there is, and how many did is logged per
+    side. The alarm is the one every detector sets.
 
     The answers: the backbone's decoder; a ridge per channel over the same visible cells, fitted
     on the fitting side's draws; or each channel's line between its visible bins. What a fit
@@ -90,11 +96,16 @@ class PretextErrorDetectionRuntime:
         fitting: Sequence[TaskWindow],
         scored: Sequence[LabelledWindow],
         *,
+        taught: Sequence[LabelledWindow] = (),
         retain: bool,
     ) -> ScoredOutcome:
         if recipe.features not in self.FEATURES:
             raise UnsupportedDetectorFeaturesError(
                 f"this runtime asks a backbone's pretext, not {recipe.features}"
+            )
+        if taught:
+            raise InvalidTaughtEventsError(
+                "a detector scored by the pretext's error learns from no event"
             )
         if retain and self._kept_candidates is None:
             raise CandidateNotRetainableError(
@@ -112,11 +123,24 @@ class PretextErrorDetectionRuntime:
         answerer, ridge = self._answerer(recipe, asking, read, fitting)
         windows = [labelled.window for labelled in scored]
         per_unit = recipe.reference is ScoreReference.OWN_UNIT
-        fitted, unread = self._errors(read, fitting, recipe, asking, answerer, side="fitting")
+        channels = self._channels(read)
+        fitting_errors = self._errors(
+            read, fitting, recipe, asking, answerer, channels, side="fitting"
+        )
+        scales = (
+            ChannelErrorScales.fitted_on(fitting_errors)
+            if recipe.normalisation is ErrorNormalisation.PER_CHANNEL
+            else None
+        )
+        fitted = fitting_errors.raw() if scales is None else scales.read(fitting_errors)
+        unread = fitting_errors.unread
         neutral = float(np.median(fitted[~unread])) if (~unread).any() else 0.0
         fitted[unread] = neutral
-        errors, unanswered = self._errors(read, windows, recipe, asking, answerer, side="scored")
-        errors[unanswered] = neutral
+        scored_errors = self._errors(
+            read, windows, recipe, asking, answerer, channels, side="scored"
+        )
+        errors = scored_errors.raw() if scales is None else scales.read(scored_errors)
+        errors[scored_errors.unread] = neutral
         alarm = ScoreAlarm.set_over(
             fitted,
             contamination=recipe.contamination,
@@ -133,13 +157,34 @@ class PretextErrorDetectionRuntime:
                 for labelled, answer in zip(scored, answers.tolist(), strict=True)
             ),
             seconds=time.perf_counter() - started,
-            artifact=self._kept(alarm, ridge, task) if retain else None,
+            artifact=self._kept(alarm, ridge, scales, task) if retain else None,
+        )
+
+    @staticmethod
+    def _channels(read: ReadCorpus) -> NDArray[np.int64]:
+        """The corpus's timed channels, the columns every window's errors are summed into."""
+        manifest = read.manifest
+        return np.array(
+            sorted(
+                channel.channel_id
+                for channel in manifest.channels
+                if channel.corpus == manifest.corpus and not channel.timeless
+            ),
+            dtype=np.int64,
         )
 
     def _kept(
-        self, alarm: ScoreAlarm, ridge: LinearCellAnswer | None, task: DownstreamTask
+        self,
+        alarm: ScoreAlarm,
+        ridge: LinearCellAnswer | None,
+        scales: ChannelErrorScales | None,
+        task: DownstreamTask,
     ) -> ArtifactRef:
-        """The alarm and the ridge this fit produced, stored under a manifest, for the campaign."""
+        """The alarm, the ridge and the channels' scales this fit produced, stored for the campaign.
+
+        Raises:
+            CandidateNotRetainableError: If the runtime was given nowhere to keep them.
+        """
         if self._kept_candidates is None:  # pragma: no cover - refused before the fit
             raise CandidateNotRetainableError("this runtime was given no store")
         buffer = io.BytesIO()
@@ -154,6 +199,9 @@ class PretextErrorDetectionRuntime:
             "channels": np.asarray(sorted(weights), dtype=np.int64),
         }
         arrays.update({f"weights_{channel}": weights[channel] for channel in sorted(weights)})
+        if scales is not None:
+            arrays["scale_channels"] = scales.channels
+            arrays["scales"] = scales.scales
         np.savez(buffer, *(), **arrays)  # type: ignore[arg-type]  # numpy's stub types one keyword
         return self._kept_candidates.keep(
             CandidateKind.DETECTOR,
@@ -172,14 +220,8 @@ class PretextErrorDetectionRuntime:
             return self._decoded, None
         if recipe.features is DetectorFeatures.INTERPOLATION_ERROR:
             return (lambda cells, _: cells.interpolation()), None
-        manifest = read.manifest
-        channels = [
-            channel.channel_id
-            for channel in manifest.channels
-            if channel.corpus == manifest.corpus and not channel.timeless
-        ]
         ridge = LinearCellAnswer.fitted(
-            channels,
+            self._channels(read).tolist(),
             self._source.bins,
             (
                 (hidden, self._half(recipe.seed, fitting[at]))
@@ -203,32 +245,43 @@ class PretextErrorDetectionRuntime:
         recipe: DetectorRecipe,
         asking: PretextAsking,
         answerer: _Answerer,
+        channels: NDArray[np.int64],
         *,
         side: str,
-    ) -> tuple[NDArray[np.float64], NDArray[np.bool_]]:
-        """Every window's mean error over its draws' scored cells, in the order given.
+    ) -> ChannelErrors:
+        """Every window's loss over its draws' scored cells, summed per channel, in the order given.
 
-        Beside it, the windows that held no scored cell in any draw, whose error is unread.
+        A window lays out the channels it holds, so its grid's columns are looked up among the
+        corpus's ``channels``.
+
+        Raises:
+            UnreadablePretextError: If a window holds a channel the corpus does not name.
         """
-        missed = np.zeros(len(windows))
-        counted = np.zeros(len(windows))
+        column_of = np.full(int(channels.max()) + 1 if channels.size else 1, -1, dtype=np.int64)
+        column_of[channels] = np.arange(len(channels))
+        missed = np.zeros((len(windows), len(channels)))
+        counted = np.zeros((len(windows), len(channels)), dtype=np.int64)
         answered = recipe.features is DetectorFeatures.PRETEXT_ERROR
         for masked, hidden, at in self._drawn(read, windows, recipe, asking, answered=answered):
             if not hidden.scored.any():
                 continue
-            error = answerer(hidden, masked)[hidden.scored] - hidden.targets[hidden.scored]
-            missed[at] += float(self._loss(error).mean(axis=-1).sum())
-            counted[at] += int(hidden.scored.sum())
-        unread = counted == 0
-        if unread.any():
+            if hidden.channels.max() >= len(column_of) or (column_of[hidden.channels] < 0).any():
+                raise UnreadablePretextError("a window holds a channel the corpus does not name")
+            columns = column_of[hidden.channels]
+            error = answerer(hidden, masked) - hidden.targets
+            loss = np.where(hidden.scored, self._loss(error).mean(axis=-1), 0.0)
+            missed[at, columns] += loss.sum(axis=0)
+            counted[at, columns] += hidden.scored.sum(axis=0)
+        errors = ChannelErrors(channels=channels, missed=missed, counted=counted)
+        if errors.unread.any():
             logger.info(
                 "%d of %d %s windows held no hidden cell with a reading in any draw; "
                 "they score the fitting side's median error",
-                int(unread.sum()),
+                int(errors.unread.sum()),
                 len(windows),
                 side,
             )
-        return np.divide(missed, counted, out=np.zeros_like(missed), where=~unread), unread
+        return errors
 
     def _loss(self, error: NDArray[np.float64]) -> NDArray[np.float64]:
         """The backbone's own reading of a miss: squared, or Huber's past its knee."""
@@ -263,6 +316,7 @@ class PretextErrorDetectionRuntime:
                 [seed for _, _, seed in asked],
                 answered=answered,
                 device=self._device,
+                hidden=asking.hidden,
             )
             for (at, _, _), cells in zip(asked, masked, strict=True):
                 yield cells, HiddenCells.of(cells, self._source.bins), at

@@ -7,7 +7,11 @@ from emblema.evaluation.adapters.candidates.detector_catalogue import DetectorCa
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
+from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
+from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
+from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
+from emblema.evaluation.domain.detection.taught_head import TaughtHead
 from emblema.evaluation.domain.exceptions import (
     InvalidDetectorRecipeError,
     UnknownCandidateError,
@@ -202,3 +206,171 @@ def test_an_arm_that_asks_the_pretext_names_a_backbone_and_no_shape() -> None:
             architecture=WEIGHTS,
             backbone=WEIGHTS,
         )
+
+
+def test_a_detector_by_the_whitened_distance_says_so_and_names_no_neighbours() -> None:
+    turned = CATALOGUE.arm_of(CandidateRef("frozen_knn@distance=whitened"))
+    described = CATALOGUE.describe(CandidateRef("frozen_knn@distance=whitened"))
+    stated = {p.name: p.value for p in described.method.parameters}
+
+    assert turned.recipe(seed=1).distance is ScoreDistance.WHITENED
+    assert turned.recipe(seed=1).neighbours is None
+    assert stated["distance"] == "whitened"
+    assert "neighbours" not in stated
+    # A campaign declared before the distance was a knob keeps the design it was stored with.
+    assert "distance" not in {
+        p.name for p in CATALOGUE.describe(CandidateRef("frozen_knn")).method.parameters
+    }
+    assert (
+        CATALOGUE.arm_of(CandidateRef("summaries_knn@distance=whitened")).recipe(seed=1).distance
+        is ScoreDistance.WHITENED
+    )
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "pretext_error@distance=whitened",
+        "frozen_knn@distance=cosine",
+        "frozen_knn@distance=whitened,neighbours=10",
+        "frozen_knn@neighbours=10,distance=whitened",
+        "frozen_knn@neighbours=5,distance=whitened",
+    ],
+    ids=[
+        "distance of an error",
+        "no such distance",
+        "neighbours after",
+        "neighbours before",
+        "neighbours as they are",
+    ],
+)
+def test_a_distance_the_score_does_not_have_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError):
+        ASKING.arm_of(CandidateRef(name))
+
+
+def test_a_detector_reading_its_errors_per_channel_says_so() -> None:
+    turned = ASKING.arm_of(CandidateRef("pretext_error@error=channel"))
+    stated = {
+        p.name: p.value
+        for p in ASKING.describe(CandidateRef("pretext_error@error=channel")).method.parameters
+    }
+
+    assert turned.recipe(seed=1).normalisation is ErrorNormalisation.PER_CHANNEL
+    assert stated["error"] == "channel"
+    # A campaign declared before the reading was a knob keeps the design it was stored with.
+    assert "error" not in {
+        p.name for p in ASKING.describe(CandidateRef("pretext_error")).method.parameters
+    }
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["summaries_knn@error=channel", "pretext_error@error=quantile"],
+    ids=["errors of a distance", "no such reading"],
+)
+def test_a_reading_of_errors_the_score_does_not_have_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError):
+        ASKING.arm_of(CandidateRef(name))
+
+
+def test_a_detector_asked_for_the_tail_says_so_and_asks_once() -> None:
+    turned = ASKING.arm_of(CandidateRef("pretext_error@hidden=tail"))
+    stated = {
+        p.name: p.value
+        for p in ASKING.describe(CandidateRef("pretext_error@hidden=tail")).method.parameters
+    }
+
+    assert turned.recipe(seed=1).asked().hidden is HiddenCellsChoice.TAIL
+    assert turned.recipe(seed=1).asked().draws == 1
+    assert stated["hidden"] == "tail"
+    assert stated["draws"] == "1"
+    assert "hidden" not in {
+        p.name for p in ASKING.describe(CandidateRef("pretext_error")).method.parameters
+    }
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "pretext_error@draws=4,hidden=tail",
+        "pretext_error@draws=8,hidden=tail",
+        "pretext_error@hidden=tail,draws=4",
+        "pretext_error@hidden=middle",
+        "summaries_knn@hidden=tail",
+    ],
+    ids=[
+        "draws before",
+        "draws as they are",
+        "draws after",
+        "no such cells",
+        "cells of a distance",
+    ],
+)
+def test_a_hiding_the_score_does_not_have_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError):
+        ASKING.arm_of(CandidateRef(name))
+
+
+@pytest.mark.parametrize("distance", ["centre", "farthest", "subspace"])
+def test_a_bar_of_the_field_names_its_distance_and_no_neighbours(distance: str) -> None:
+    cells = DetectorArm(
+        ref=CandidateRef("cells_knn"),
+        features=DetectorFeatures.RAW_CELLS,
+        architecture=None,
+        backbone=None,
+    )
+    bars = DetectorCatalogue((cells,))
+    stated = {
+        p.name: p.value
+        for p in bars.describe(CandidateRef(f"cells_knn@distance={distance}")).method.parameters
+    }
+
+    assert stated["distance"] == distance
+    assert stated["features"] == "raw_cells"
+    assert "neighbours" not in stated
+    assert (
+        bars.arm_of(CandidateRef(f"cells_knn@distance={distance}")).recipe(seed=1).neighbours
+        is None
+    )
+    with pytest.raises(UnknownCandidateError):
+        bars.arm_of(CandidateRef(f"cells_knn@distance={distance},neighbours=3"))
+
+
+def test_a_detector_taught_events_names_its_count_and_head_and_no_distance_or_neighbours() -> None:
+    taught = CATALOGUE.arm_of(CandidateRef("frozen_knn@events=5"))
+    trees = CATALOGUE.arm_of(CandidateRef("summaries_knn@events=3,head=trees,reference=unit"))
+    described = CATALOGUE.describe(CandidateRef("summaries_knn@events=3,head=trees"))
+    stated = {p.name: p.value for p in described.method.parameters}
+
+    assert taught.events == 5
+    assert taught.recipe(seed=1).neighbours is None
+    assert taught.recipe(seed=1).is_taught
+    assert trees.recipe(seed=2).head is TaughtHead.TREES
+    assert (stated["events"], stated["head"]) == ("3", "trees")
+    assert {"neighbours", "distance"}.isdisjoint(stated)
+    assert "head" not in {
+        p.name for p in CATALOGUE.describe(CandidateRef("frozen_knn@events=5")).method.parameters
+    }
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "frozen_knn@events=5,distance=whitened",
+        "frozen_knn@distance=whitened,events=5",
+        "frozen_knn@events=5,neighbours=3",
+        "frozen_knn@neighbours=3,events=5",
+        "frozen_knn@head=trees,events=5",
+        "frozen_knn@head=trees",
+        "frozen_knn@events=5,head=direction",
+        "frozen_knn@events=0",
+        "frozen_knn@events=5,head=nearest",
+        "pretext_error@events=5",
+    ],
+)
+def test_a_teaching_the_detector_cannot_take_is_refused(name: str) -> None:
+    catalogue = DetectorCatalogue((FROZEN, UNTRAINED, SUMMARIES, PRETEXT))
+
+    with pytest.raises(UnknownCandidateError):
+        catalogue.arm_of(CandidateRef(name))

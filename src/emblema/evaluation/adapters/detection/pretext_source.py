@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from emblema.evaluation.adapters.detection.masked_cells import MaskedCells
+from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import TokenWindow
 
@@ -14,7 +15,8 @@ class PretextSource(Protocol):
     nor read the register that says how it was trained. What crosses is a window's cells under a
     draw of the backbone's own masks and, where asked, its decoder's answers; never a checkpoint.
     A draw is seeded by the caller, one seed per window, and depends on nothing else, so a
-    detector that learnt nothing can be asked over exactly the cells the backbone was.
+    detector that learnt nothing can be asked over exactly the cells the backbone was. Asked
+    for the tail, the source hides the last span of every channel instead of drawing.
     """
 
     @property
@@ -35,8 +37,9 @@ class PretextSource(Protocol):
         *,
         answered: bool,
         device: str,
+        hidden: HiddenCellsChoice = HiddenCellsChoice.OWN,
     ) -> list[MaskedCells]:
-        """One draw of the backbone's masks over each window, from the seed beside it.
+        """One draw of the backbone's masks over each window, from the seed beside it, or its tail.
 
         Raises:
             UnknownBackboneError: If this source does not serve those weights.

@@ -71,7 +71,9 @@ Last updated 2026-10-31.
   is near chance on them ([note](verification/composition-screen.md)). The states do not lose a
   reading's size: raised normal windows move them as far as their initialisation's. The normal
   windows lie farther apart under them, so a raised channel adds less to the detector's distance
-  ([note](verification/magnitude-in-states.md)).
+  ([note](verification/magnitude-in-states.md)). A distance that whitens the states closes most of
+  that gap on the second mission, and no distance over the states shows an advantage of
+  pretraining on either mission ([note](verification/anomaly-signal-in-states.md)).
 
 ## Setup
 
@@ -212,6 +214,7 @@ pretraining against four, 0.021 for two.
 | The same detector over the channels' summaries against the untrained encoder | SKAB **+0.188** [+0.057; +0.340], where both encoder arms read at chance; M1 and M2 indistinguishable; OPS-SAT −0.086 [−0.160; −0.002] | [anomaly-tasks](verification/anomaly-tasks.md) |
 | The encoder and summary detectors, each month or experiment read as its own reference (M1, SKAB) | alarm on 1–4 % of normal windows, from 64–98 %; frozen against initialisation M1 +0.007 [−0.011; +0.037], SKAB +0.011 [−0.044; +0.138]; on M1 both encoder arms lead the summaries (frozen **+0.063** [+0.011; +0.148]) | [anomaly-tasks](verification/anomaly-tasks.md) |
 | Normal windows raised around their largest reading, pretrained states against their initialisation (both missions, two backbones, three initialisations) | size kept: on the channel the states move 0.85 to 1.41 times as far as the initialisations' at ×3, tilt to ×10 0.88 to 1.24, none falls; the detector's distance rises 0.13 to 0.53 times as much, the fitting windows lying 2.3 to 3 times as far apart on M1 and M2's held-out months twice as far from the fitting ones | [magnitude-in-states](verification/magnitude-in-states.md) |
+| The same states read by other distances: whitened nearest neighbours, a Gaussian split into top and residual components, the window's own month's centre (both missions, two backbones, three initialisations) | no distance shows an advantage of pretraining by the declared rule; on M2 a whitened Gaussian reads the pretrained states at 0.74 / 0.81 against 0.61 / 0.67 under the campaign's distance (initialisations 0.86–0.87), level with them beyond ten deviations; on M1 a distance from the month's own centre reads the subtle events at 0.71–0.74 for every encoder alike (0.49–0.59 before), but not on the event-weighted PR-AUC | [anomaly-signal-in-states](verification/anomaly-signal-in-states.md) |
 | A detector over the counts of readings alone | near chance on M1 and M2 and 0.03–0.06 on SKAB (chance 0.017), every encoder arm **+0.34 to +0.54** above it on M2; OPS-SAT 0.387, level with the frozen encoder, below the plain count (0.51) | [anomaly-tasks](verification/anomaly-tasks.md) |
 
 ### What the failures have in common
