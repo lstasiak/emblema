@@ -4,6 +4,7 @@ from emblema.evaluation.domain.detection.detector_features import DetectorFeatur
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
 from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
+from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.exceptions import InvalidDetectorRecipeError
@@ -205,3 +206,12 @@ def test_only_a_detector_scored_by_an_error_reads_its_errors_per_channel() -> No
     assert recipe().normalisation is ErrorNormalisation.RAW
     with pytest.raises(InvalidDetectorRecipeError, match="no errors to read"):
         recipe(normalisation=ErrorNormalisation.PER_CHANNEL)
+
+
+def test_a_tail_is_hidden_exactly_once() -> None:
+    tail = PretextAsking(backbone=WEIGHTS, draws=1, hidden=HiddenCellsChoice.TAIL)
+
+    assert tail.hidden is HiddenCellsChoice.TAIL
+    assert PretextAsking(backbone=WEIGHTS).hidden is HiddenCellsChoice.OWN
+    with pytest.raises(InvalidDetectorRecipeError, match="hidden once"):
+        PretextAsking(backbone=WEIGHTS, draws=2, hidden=HiddenCellsChoice.TAIL)

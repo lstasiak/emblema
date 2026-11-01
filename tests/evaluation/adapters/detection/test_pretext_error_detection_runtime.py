@@ -17,6 +17,7 @@ from emblema.evaluation.adapters.detection.pretext_error_detection_runtime impor
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
+from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.exceptions import UnreadablePretextError
 from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
@@ -52,6 +53,7 @@ class FakePretext:
         self.bins = bins
         self.huber_delta = huber_delta
         self.calls: list[tuple[list[TokenWindow], list[int], bool]] = []
+        self.hidden: list[HiddenCellsChoice] = []
 
     def masked(
         self,
@@ -61,19 +63,21 @@ class FakePretext:
         *,
         answered: bool,
         device: str,
+        hidden: HiddenCellsChoice = HiddenCellsChoice.OWN,
     ) -> list[MaskedCells]:
         self.calls.append((list(windows), list(seeds), answered))
+        self.hidden.append(hidden)
         drawn = []
         for token_window in windows:
             (full,) = self._layout.lay([token_window])
-            hidden = (full.features[:, BinnedTokens.PRESENCE] > 0.5) & ~full.timeless
-            visible = self._layout.without(token_window, hidden)
+            concealed = (full.features[:, BinnedTokens.PRESENCE] > 0.5) & ~full.timeless
+            visible = self._layout.without(token_window, concealed)
             values = full.features[:, BinnedTokens.VALUE_FEATURES]
             drawn.append(
                 MaskedCells(
                     full=full.features.astype(np.float64),
                     visible=visible.features.astype(np.float64),
-                    hidden=hidden,
+                    hidden=concealed,
                     channel_ids=full.channel_ids.astype(np.int64),
                     timeless=full.timeless,
                     answers=(values + self._missed(token_window)) if answered else None,
@@ -361,3 +365,19 @@ def test_a_window_holding_a_channel_the_corpus_does_not_name_is_refused(
         PretextErrorDetectionRuntime(Relabelled(), blocks).fit(
             recipe(), stated, FITTING, SCORED, retain=False
         )
+
+
+def test_which_cells_are_hidden_is_asked_of_the_source_once_a_window(
+    detection_task: tuple[DownstreamTask, PublishedCorpusBlocks],
+) -> None:
+    stated, blocks = detection_task
+    source = FakePretext()
+    tail = replace(
+        recipe(), pretext=PretextAsking(backbone=WEIGHTS, draws=1, hidden=HiddenCellsChoice.TAIL)
+    )
+
+    PretextErrorDetectionRuntime(source, blocks).fit(tail, stated, FITTING, SCORED, retain=False)
+
+    assert set(source.hidden) == {HiddenCellsChoice.TAIL}
+    # One draw a window: the fitting side's windows once, then the scored side's once.
+    assert [len(seeds) for _, seeds, _ in source.calls] == [len(FITTING), len(SCORED)]

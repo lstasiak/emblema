@@ -6,6 +6,7 @@ from emblema.evaluation.domain.detection.detector_features import DetectorFeatur
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
 from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
+from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
@@ -23,9 +24,10 @@ class DetectorArm:
     states, pretrained or at their initialisation, the summaries per channel or their counts of
     readings, or the error of what is filled in under a backbone's masks — and the knobs of the
     detector itself: which distance from the fitted windows it scores by and the neighbours that
-    distance is taken to, or the draws an error is averaged over and how the errors are read, the
-    share of the fitting side the alarm flags and what a score is read against. A variant of an
-    arm is the arm with one of those turned, or the encoder's layer or pooling turned.
+    distance is taken to, or which cells are hidden, the draws an error is averaged over and how
+    the errors are read, the share of the fitting side the alarm flags and what a score is read
+    against. A variant of an arm is the arm with one of those turned, or the encoder's layer or
+    pooling turned.
 
     Invariants: an arm over an encoder's states names the model whose shape it reads; an arm
     that asks the pretext names the backbone whose masks it asks under and no shape; one over
@@ -46,10 +48,11 @@ class DetectorArm:
         contamination: The share of fitting windows the alarm is set to flag.
         reference: What a window's score is read against before the alarm.
         draws: How many draws of the backbone's masks an error is averaged over.
+        hidden: Which cells the pretext is asked to fill in.
         normalisation: How the cells' errors become a window's score.
     """
 
-    KNOBS = ("distance", "neighbours", "contamination", "reference", "draws", "error")
+    KNOBS = ("distance", "neighbours", "contamination", "reference", "draws", "hidden", "error")
     DEFAULT_NEIGHBOURS = 5
 
     ref: CandidateRef
@@ -63,6 +66,7 @@ class DetectorArm:
     contamination: float = 0.02
     reference: ScoreReference = ScoreReference.FITTING_SIDE
     draws: int = PretextAsking.STANDARD_DRAWS
+    hidden: HiddenCellsChoice = HiddenCellsChoice.OWN
     normalisation: ErrorNormalisation = ErrorNormalisation.RAW
 
     def __post_init__(self) -> None:
@@ -83,8 +87,9 @@ class DetectorArm:
     def tuned(self, knob: str, value: str) -> Self:
         """This arm with ``knob`` turned to ``value``, on the detector, the pooling or the encoder.
 
-        The whitened distance reads no neighbours, so a name that turns both is refused
-        whichever comes first: two names would otherwise denote one detector.
+        The whitened distance reads no neighbours and a hidden tail is asked once, so a name
+        that turns both of such a pair is refused whichever comes first, as is a knob turned to
+        the value it already has: two names would otherwise denote one detector.
 
         Raises:
             UnknownKnobError: If none has such a knob, or it cannot take that value.
@@ -102,9 +107,23 @@ class DetectorArm:
         if knob == "neighbours" and not self.features.asks_the_pretext:
             if self.distance is ScoreDistance.WHITENED:
                 raise UnknownKnobError("the whitened distance reads no neighbours")
-            return replace(self, neighbours=self._count(knob, value))
+            return replace(self, neighbours=self._turned(knob, value, self.neighbours))
         if knob == "draws" and self.features.asks_the_pretext:
-            return replace(self, draws=self._count(knob, value))
+            if self.hidden is HiddenCellsChoice.TAIL:
+                raise UnknownKnobError("a hidden tail is asked once; it takes no draws")
+            return replace(self, draws=self._turned(knob, value, self.draws))
+        if knob == "hidden" and self.features.asks_the_pretext:
+            try:
+                hidden = HiddenCellsChoice(value)
+            except ValueError as error:
+                raise UnknownKnobError(
+                    f"{knob} takes one of {[str(h) for h in HiddenCellsChoice]}, not {value!r}"
+                ) from error
+            if hidden is HiddenCellsChoice.TAIL:
+                if self.draws != PretextAsking.STANDARD_DRAWS:
+                    raise UnknownKnobError("a hidden tail is asked once; it takes no draws")
+                return replace(self, hidden=hidden, draws=1)
+            return replace(self, hidden=hidden)
         if knob == "error" and self.features.asks_the_pretext:
             try:
                 return replace(self, normalisation=ErrorNormalisation(value))
@@ -123,7 +142,9 @@ class DetectorArm:
                 ) from error
         if not self.features.reads_an_encoder:
             turned = (
-                ("draws", "error") if self.features.asks_the_pretext else ("distance", "neighbours")
+                ("draws", "hidden", "error")
+                if self.features.asks_the_pretext
+                else ("distance", "neighbours")
             )
             raise UnknownKnobError(
                 f"a detector over {self.features} turns "
@@ -160,7 +181,7 @@ class DetectorArm:
             normalisation=self.normalisation,
             reference=self.reference,
             pretext=(
-                PretextAsking(backbone=self.backbone, draws=self.draws)
+                PretextAsking(backbone=self.backbone, draws=self.draws, hidden=self.hidden)
                 if self.features.asks_the_pretext and self.backbone is not None
                 else None
             ),
@@ -169,6 +190,18 @@ class DetectorArm:
     @property
     def _scores_by_an_error_or_whitened(self) -> bool:
         return self.features.asks_the_pretext or self.distance is ScoreDistance.WHITENED
+
+    @classmethod
+    def _turned(cls, knob: str, value: str, current: int) -> int:
+        """The count ``knob`` is turned to, refused where it is the count it already has.
+
+        Raises:
+            UnknownKnobError: If the value is no count, or turns nothing.
+        """
+        count = cls._count(knob, value)
+        if count == current:
+            raise UnknownKnobError(f"{knob} is already {current}; the name turns nothing")
+        return count
 
     @staticmethod
     def _count(knob: str, value: str) -> int:

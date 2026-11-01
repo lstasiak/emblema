@@ -91,12 +91,19 @@ class PretextReading:
         return cls(model, trained.masking, vocabulary_size=trained.vocabulary_size, device=device)
 
     def drawn(
-        self, windows: Sequence[TokenWindow], seeds: Sequence[int], *, answered: bool
+        self,
+        windows: Sequence[TokenWindow],
+        seeds: Sequence[int],
+        *,
+        answered: bool,
+        tail: bool = False,
     ) -> list[ReadCells]:
         """One draw over each window, from a generator seeded by the seed beside it.
 
         A window read under several seeds is given once per seed. Without ``answered`` the
-        decoder is not run, and the draws are those a run with it would have made.
+        decoder is not run, and the draws are those a run with it would have made. With ``tail``
+        nothing is drawn: the last span of every channel is hidden and the rest left visible, the
+        seeds unread.
 
         Raises:
             ValueError: If the windows and seeds are not paired, or a seed is not one a
@@ -115,7 +122,13 @@ class PretextReading:
         for start in range(0, len(windows), self._batch_size):
             chunk = windows[start : start + self._batch_size]
             read.extend(
-                self._read(chunk, seeds[start : start + self._batch_size], alone, answered=answered)
+                self._read(
+                    chunk,
+                    seeds[start : start + self._batch_size],
+                    alone,
+                    answered=answered,
+                    tail=tail,
+                )
             )
         return read
 
@@ -126,6 +139,7 @@ class PretextReading:
         alone: dict[int, tuple[LaidWindow, CellWindows]],
         *,
         answered: bool,
+        tail: bool,
     ) -> list[ReadCells]:
         for window in windows:
             beyond = [c for c in window.channel_ids if c > self._vocabulary_size]
@@ -139,7 +153,7 @@ class PretextReading:
         tokens = batch.padding_mask.shape[1]
         masks = self._stacked(
             [
-                self._drawn_alone(own, seed, tokens)
+                self._tail_alone(own, tokens) if tail else self._drawn_alone(own, seed, tokens)
                 for (_, own), seed in zip(laid, seeds, strict=True)
             ]
         )
@@ -195,6 +209,14 @@ class PretextReading:
             token=padded(drawn.token),
             horizon=padded(drawn.horizon),
         )
+
+    def _tail_alone(self, laid: CellWindows, tokens: int) -> TokenMasks:
+        """The last span of every channel hidden, as the horizon a training draw would hide."""
+        last = laid.timestamps > 1.0 - 1.0 / self._cells.layout.bins
+        horizon = last & ~laid.timeless & ~laid.padding_mask
+        padded = torch.nn.functional.pad(horizon, (0, tokens - horizon.shape[1]), value=False)
+        none = torch.zeros_like(padded)
+        return TokenMasks(channel=none, block=none, token=none, horizon=padded)
 
     @staticmethod
     def _stacked(masks: Sequence[TokenMasks]) -> TokenMasks:

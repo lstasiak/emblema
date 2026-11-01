@@ -50,11 +50,12 @@ class PretextErrorDetectionRuntime:
     """Scores a window by the error of what is filled in where a backbone's masks hide its cells.
 
     Every window, fitting and scored alike, is hidden ``draws`` times under the backbone's own
-    masks, each draw seeded by the cell's seed and the window's unit, position and draw, so the
-    pretrained backbone and the answers that learnt nothing fill in the same cells. A window's
-    error is the backbone's loss on the five values in normalised units over the hidden timed
-    cells that held a reading in all its draws: one mean over them, or, read per channel, the
-    mean over the channels of each channel's error over its typical error on the fitting side. A
+    masks, each draw seeded by the cell's seed and the window's unit, position and draw, or once
+    in its tail, so the pretrained backbone and the answers that learnt nothing fill in the same
+    cells. A window's error is the backbone's loss on the five values in normalised units over the
+    hidden timed cells that held a reading in all its draws: one mean over them, or, read per
+    channel, the mean over the channels of each channel's error over its typical error on the
+    fitting side. A
     window without such a cell has no error to read, so it scores the fitting side's median
     error, neither an alarm nor the most normal window there is, and how many did is logged per
     side. The alarm is the one every detector sets.
@@ -309,6 +310,7 @@ class PretextErrorDetectionRuntime:
                 [seed for _, _, seed in asked],
                 answered=answered,
                 device=self._device,
+                hidden=asking.hidden,
             )
             for (at, _, _), cells in zip(asked, masked, strict=True):
                 yield cells, HiddenCells.of(cells, self._source.bins), at

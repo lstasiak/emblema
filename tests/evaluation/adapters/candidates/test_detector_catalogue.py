@@ -8,6 +8,7 @@ from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
+from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
@@ -232,8 +233,15 @@ def test_a_detector_by_the_whitened_distance_says_so_and_names_no_neighbours() -
         "frozen_knn@distance=cosine",
         "frozen_knn@distance=whitened,neighbours=10",
         "frozen_knn@neighbours=10,distance=whitened",
+        "frozen_knn@neighbours=5,distance=whitened",
     ],
-    ids=["distance of an error", "no such distance", "neighbours after", "neighbours before"],
+    ids=[
+        "distance of an error",
+        "no such distance",
+        "neighbours after",
+        "neighbours before",
+        "neighbours as they are",
+    ],
 )
 def test_a_distance_the_score_does_not_have_is_refused(name: str) -> None:
     with pytest.raises(UnknownCandidateError):
@@ -261,5 +269,43 @@ def test_a_detector_reading_its_errors_per_channel_says_so() -> None:
     ids=["errors of a distance", "no such reading"],
 )
 def test_a_reading_of_errors_the_score_does_not_have_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError):
+        ASKING.arm_of(CandidateRef(name))
+
+
+def test_a_detector_asked_for_the_tail_says_so_and_asks_once() -> None:
+    turned = ASKING.arm_of(CandidateRef("pretext_error@hidden=tail"))
+    stated = {
+        p.name: p.value
+        for p in ASKING.describe(CandidateRef("pretext_error@hidden=tail")).method.parameters
+    }
+
+    assert turned.recipe(seed=1).asked().hidden is HiddenCellsChoice.TAIL
+    assert turned.recipe(seed=1).asked().draws == 1
+    assert stated["hidden"] == "tail"
+    assert stated["draws"] == "1"
+    assert "hidden" not in {
+        p.name for p in ASKING.describe(CandidateRef("pretext_error")).method.parameters
+    }
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "pretext_error@draws=4,hidden=tail",
+        "pretext_error@draws=8,hidden=tail",
+        "pretext_error@hidden=tail,draws=4",
+        "pretext_error@hidden=middle",
+        "summaries_knn@hidden=tail",
+    ],
+    ids=[
+        "draws before",
+        "draws as they are",
+        "draws after",
+        "no such cells",
+        "cells of a distance",
+    ],
+)
+def test_a_hiding_the_score_does_not_have_is_refused(name: str) -> None:
     with pytest.raises(UnknownCandidateError):
         ASKING.arm_of(CandidateRef(name))
