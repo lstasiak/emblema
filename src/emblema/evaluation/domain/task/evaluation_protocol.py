@@ -13,9 +13,11 @@ class EvaluationProtocol(StrEnum):
         LABEL_BUDGET: Supervised learning from a counted number of labelled windows, the axis of
             the label-efficiency curve. The task carries a label scheme and a stratification,
             because a budget is drawn over groups of the target.
-        ANOMALY_DETECTION: Detection fitted on normal data and scored on held-out data, with no
-            labels spent and so no budget axis. The task carries no label scheme: there is no
-            target to read per window.
+        ANOMALY_DETECTION: Detection fitted on the fitting side and scored on held-out data,
+            with no budget of labels and so no budget axis; a detector may be taught a counted
+            number of the fitting side's events, which is a knob of the candidate and never a
+            budget. The task reads the event each scored window overlaps, never a target to
+            learn per window.
     """
 
     LABEL_BUDGET = "label_budget"

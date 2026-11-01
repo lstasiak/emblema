@@ -4,11 +4,13 @@ from typing import ClassVar
 
 from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
+from emblema.evaluation.adapters.detection.taught_rows import TaughtRows
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
+    InvalidTaughtEventsError,
 )
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.task_window import TaskWindow
@@ -27,6 +29,7 @@ class Detection:
     task: DownstreamTask
     fitting: tuple[TaskWindow, ...]
     scored: tuple[LabelledWindow, ...]
+    taught: tuple[LabelledWindow, ...] = ()
 
 
 class InMemoryDetectionRuntime:
@@ -37,7 +40,8 @@ class InMemoryDetectionRuntime:
     far past it the window ends: a window inside the span the fit covered scores at or below
     zero and one beyond it raises an alarm. Enough for a campaign of detectors to run end to
     end against known numbers, and for a test to tell a runtime that read the fitting side from
-    one that did not.
+    one that did not. The events it is taught it holds to the fitting side, as every runtime
+    does, and reads no further.
     """
 
     FORMAT: ClassVar[str] = "latest-end"
@@ -53,14 +57,32 @@ class InMemoryDetectionRuntime:
         fitting: Sequence[TaskWindow],
         scored: Sequence[LabelledWindow],
         *,
+        taught: Sequence[LabelledWindow] = (),
         retain: bool,
     ) -> ScoredOutcome:
         if not fitting:
             raise InvalidScoredOutcomeError("a detector needs a window to fit on")
         if not scored:
             raise InvalidScoredOutcomeError("there is no window to answer")
+        rows = TaughtRows.among(fitting, taught) if taught else None
+        if recipe.is_taught != (rows is not None):
+            raise InvalidTaughtEventsError(
+                f"a detector taught {recipe.events} events was handed no taught window"
+                if rows is None
+                else "a detector taught no event was handed taught windows"
+            )
+        if rows is not None and rows.event_count != recipe.events:
+            raise InvalidTaughtEventsError(
+                f"a detector taught {recipe.events} events was handed {rows.event_count}"
+            )
         self.detections.append(
-            Detection(recipe=recipe, task=task, fitting=tuple(fitting), scored=tuple(scored))
+            Detection(
+                recipe=recipe,
+                task=task,
+                fitting=tuple(fitting),
+                scored=tuple(scored),
+                taught=tuple(taught),
+            )
         )
         alarm = max(window.ends_at for window in fitting)
         return ScoredOutcome(

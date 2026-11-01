@@ -22,7 +22,9 @@ class KnownDetectors:
     by the error of what is filled in where the backbone's own masks hide a window's cells: by
     the backbone's pretext, by a ridge per channel over the same visible cells, and by each
     channel's line between its visible bins. The neighbours or the draws, the alarm's share and
-    what a score is read against are knobs of the name, declared with the campaign. A register
+    what a score is read against are knobs of the name, declared with the campaign, as are the
+    few of the fitting side's events a detector over features is taught and the head it then
+    scores by. A register
     rather than a table read from configuration, for the reason the arms are one: the names are
     what a stored campaign refers to.
     """

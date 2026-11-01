@@ -11,6 +11,7 @@ from emblema.evaluation.domain.detection.error_normalisation import ErrorNormali
 from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
+from emblema.evaluation.domain.detection.taught_head import TaughtHead
 from emblema.evaluation.domain.exceptions import (
     InvalidDetectorRecipeError,
     UnknownCandidateError,
@@ -334,3 +335,42 @@ def test_a_bar_of_the_field_names_its_distance_and_no_neighbours(distance: str) 
     )
     with pytest.raises(UnknownCandidateError):
         bars.arm_of(CandidateRef(f"cells_knn@distance={distance},neighbours=3"))
+
+
+def test_a_detector_taught_events_names_its_count_and_head_and_no_distance_or_neighbours() -> None:
+    taught = CATALOGUE.arm_of(CandidateRef("frozen_knn@events=5"))
+    trees = CATALOGUE.arm_of(CandidateRef("summaries_knn@events=3,head=trees,reference=unit"))
+    described = CATALOGUE.describe(CandidateRef("summaries_knn@events=3,head=trees"))
+    stated = {p.name: p.value for p in described.method.parameters}
+
+    assert taught.events == 5
+    assert taught.recipe(seed=1).neighbours is None
+    assert taught.recipe(seed=1).is_taught
+    assert trees.recipe(seed=2).head is TaughtHead.TREES
+    assert (stated["events"], stated["head"]) == ("3", "trees")
+    assert {"neighbours", "distance"}.isdisjoint(stated)
+    assert "head" not in {
+        p.name for p in CATALOGUE.describe(CandidateRef("frozen_knn@events=5")).method.parameters
+    }
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "frozen_knn@events=5,distance=whitened",
+        "frozen_knn@distance=whitened,events=5",
+        "frozen_knn@events=5,neighbours=3",
+        "frozen_knn@neighbours=3,events=5",
+        "frozen_knn@head=trees,events=5",
+        "frozen_knn@head=trees",
+        "frozen_knn@events=5,head=direction",
+        "frozen_knn@events=0",
+        "frozen_knn@events=5,head=nearest",
+        "pretext_error@events=5",
+    ],
+)
+def test_a_teaching_the_detector_cannot_take_is_refused(name: str) -> None:
+    catalogue = DetectorCatalogue((FROZEN, UNTRAINED, SUMMARIES, PRETEXT))
+
+    with pytest.raises(UnknownCandidateError):
+        catalogue.arm_of(CandidateRef(name))

@@ -7,6 +7,7 @@ from emblema.evaluation.domain.detection.error_normalisation import ErrorNormali
 from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance
+from emblema.evaluation.domain.detection.taught_head import TaughtHead
 from emblema.evaluation.domain.exceptions import InvalidDetectorRecipeError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
@@ -234,3 +235,36 @@ def test_a_distance_from_the_fitting_side_reads_no_neighbours(distance: ScoreDis
     assert recipe(distance=distance, neighbours=None).neighbours is None
     with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
         recipe(distance=distance)
+
+
+def test_a_detector_taught_events_reads_no_neighbours_and_no_distance_but_the_default() -> None:
+    taught = recipe(events=5, neighbours=None)
+
+    assert taught.is_taught
+    assert not taught.scores_by_nearest_neighbours
+    assert taught.head is TaughtHead.DIRECTION
+    assert recipe(events=5, neighbours=None, head=TaughtHead.TREES).head is TaughtHead.TREES
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
+        recipe(events=5)
+    with pytest.raises(InvalidDetectorRecipeError, match="no distance to choose"):
+        recipe(events=5, neighbours=None, distance=ScoreDistance.WHITENED)
+    with pytest.raises(InvalidDetectorRecipeError, match="taught 5 events reads no neighbours"):
+        taught.nearest()
+
+
+def test_a_head_is_chosen_only_for_a_detector_taught_events_and_a_count_is_not_negative() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="no head to choose"):
+        recipe(head=TaughtHead.TREES)
+    with pytest.raises(InvalidDetectorRecipeError, match="count of events"):
+        recipe(events=-1)
+
+
+def test_a_detector_scored_by_an_error_learns_from_no_event() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="learns from no event"):
+        recipe(
+            features=DetectorFeatures.PRETEXT_ERROR,
+            reading=None,
+            neighbours=None,
+            pretext=PretextAsking(backbone=WEIGHTS),
+            events=3,
+        )

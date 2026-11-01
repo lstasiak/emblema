@@ -10,6 +10,7 @@ from emblema.evaluation.domain.detection.error_normalisation import ErrorNormali
 from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
+from emblema.evaluation.domain.detection.taught_head import TaughtHead
 from emblema.evaluation.domain.exceptions import (
     InvalidCandidateVariantError,
     InvalidDetectorRecipeError,
@@ -80,7 +81,8 @@ class DetectorCatalogue:
         asks the pretext names the draws in place of the neighbours, the backbone whose masks it
         asks under, which cells it hides where not the backbone's own draw and how it reads the
         errors where not raw; one by a distance other than the nearest neighbours' names the
-        distance and no neighbours.
+        distance and no neighbours; one taught events names how many and, where not the
+        direction, the head, and no distance or neighbours.
         """
         stated: dict[str, object] = {"features": arm.features}
         if arm.features.asks_the_pretext and arm.backbone is not None:
@@ -90,6 +92,10 @@ class DetectorCatalogue:
                 stated["hidden"] = arm.hidden
             if arm.normalisation is not ErrorNormalisation.RAW:
                 stated["error"] = arm.normalisation
+        elif arm.events:
+            stated["events"] = arm.events
+            if arm.head is not TaughtHead.DIRECTION:
+                stated["head"] = arm.head
         elif arm.distance is not ScoreDistance.NEAREST_NEIGHBOURS:
             stated["distance"] = arm.distance
         else:

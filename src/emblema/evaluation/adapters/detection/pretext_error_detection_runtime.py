@@ -26,6 +26,7 @@ from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
+    InvalidTaughtEventsError,
     UnreadablePretextError,
     UnsupportedDetectorFeaturesError,
 )
@@ -95,11 +96,16 @@ class PretextErrorDetectionRuntime:
         fitting: Sequence[TaskWindow],
         scored: Sequence[LabelledWindow],
         *,
+        taught: Sequence[LabelledWindow] = (),
         retain: bool,
     ) -> ScoredOutcome:
         if recipe.features not in self.FEATURES:
             raise UnsupportedDetectorFeaturesError(
                 f"this runtime asks a backbone's pretext, not {recipe.features}"
+            )
+        if taught:
+            raise InvalidTaughtEventsError(
+                "a detector scored by the pretext's error learns from no event"
             )
         if retain and self._kept_candidates is None:
             raise CandidateNotRetainableError(

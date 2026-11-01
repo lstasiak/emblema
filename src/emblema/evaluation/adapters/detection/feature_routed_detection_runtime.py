@@ -37,6 +37,7 @@ class FeatureRoutedDetectionRuntime:
         fitting: Sequence[TaskWindow],
         scored: Sequence[LabelledWindow],
         *,
+        taught: Sequence[LabelledWindow] = (),
         retain: bool,
     ) -> ScoredOutcome:
         if recipe.features.asks_the_pretext:
@@ -44,6 +45,6 @@ class FeatureRoutedDetectionRuntime:
                 raise UnsupportedDetectorFeaturesError(
                     f"this process asks no backbone's pretext, so it cannot fit {recipe.features}"
                 )
-            return self._pretext.fit(recipe, task, fitting, scored, retain=retain)
+            return self._pretext.fit(recipe, task, fitting, scored, taught=taught, retain=retain)
         runtime = self._states if recipe.features.lays_out_cells else self._summaries
-        return runtime.fit(recipe, task, fitting, scored, retain=retain)
+        return runtime.fit(recipe, task, fitting, scored, taught=taught, retain=retain)

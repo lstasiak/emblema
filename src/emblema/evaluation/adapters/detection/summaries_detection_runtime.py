@@ -6,6 +6,7 @@ from emblema.evaluation.adapters.blocks.published_corpus_blocks import Published
 from emblema.evaluation.adapters.blocks.read_corpus import ReadCorpus
 from emblema.evaluation.adapters.detection.feature_detector import FeatureDetector
 from emblema.evaluation.adapters.detection.feature_detectors import FeatureDetectors
+from emblema.evaluation.adapters.detection.taught_rows import TaughtRows
 from emblema.evaluation.adapters.features.per_channel_features import PerChannelFeatures
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
@@ -50,6 +51,7 @@ class SummariesDetectionRuntime:
         fitting: Sequence[TaskWindow],
         scored: Sequence[LabelledWindow],
         *,
+        taught: Sequence[LabelledWindow] = (),
         retain: bool,
     ) -> ScoredOutcome:
         if recipe.features not in self.FEATURES:
@@ -61,6 +63,7 @@ class SummariesDetectionRuntime:
             raise InvalidScoredOutcomeError("a detector needs a window to fit on")
         if not scored:
             raise InvalidScoredOutcomeError("there is no window to answer")
+        taught_rows = TaughtRows.among(fitting, taught) if taught else None
         read = ReadCorpus.every(self._blocks, (task,))[task.manifest]
         features = PerChannelFeatures(read.channels)
         rows_of = (
@@ -74,6 +77,7 @@ class SummariesDetectionRuntime:
             recipe,
             rows_of(read.windows(fitting)),
             units=[str(window.unit) for window in fitting] if per_unit else None,
+            taught=taught_rows,
         )
         answers = detector.scores(
             rows_of(read.windows([w.window for w in scored])),

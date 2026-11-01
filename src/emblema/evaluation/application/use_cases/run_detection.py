@@ -30,11 +30,11 @@ class RunDetectionCommand:
 
 
 class RunDetection:
-    """Fits a detector on a task's fitting side without a label, and scores it.
+    """Fits a detector on a task's fitting side, taught what its recipe asks, and scores it.
 
-    Which windows those are is not this use case's business: reading them is the same for every
-    detector a campaign compares, so it is done in one place and this one is left with the
-    single step that is its own.
+    Which windows those are is not this use case's business: reading them, and drawing the few
+    events a recipe is taught, is the same for every detector a campaign compares, so it is done
+    in one place and this one is left with the single step that is its own.
     """
 
     def __init__(
@@ -53,15 +53,28 @@ class RunDetection:
             ProtocolMismatchError: If the task spends labels, or the run is a selection.
             FrozenTestSplitClosedError: If a run that is not the final one was to be scored on
                 the frozen side.
-            UnknownGroundTruthError: If the ground truth says nothing about a scored window.
+            UnknownGroundTruthError: If the ground truth says nothing about a scored window, or
+                about a fitting window where events are to be taught.
+            InvalidTaughtEventsError: If the fitting side holds fewer events than the recipe is
+                taught.
             UnsupportedDetectorFeaturesError: If the runtime cannot produce the recipe's
                 features.
             CandidateNotRetainableError: If the run was to keep what it fitted and the runtime
                 has nowhere to keep it.
         """
         windows = self._windows(
-            DrawDetectionWindowsCommand(task=command.task, purpose=command.purpose)
+            DrawDetectionWindowsCommand(
+                task=command.task,
+                purpose=command.purpose,
+                events=command.recipe.events,
+                seed=command.recipe.seed,
+            )
         )
         return self._runtime.fit(
-            command.recipe, windows.task, windows.fitting, windows.scored, retain=command.retain
+            command.recipe,
+            windows.task,
+            windows.fitting,
+            windows.scored,
+            taught=windows.taught,
+            retain=command.retain,
         )

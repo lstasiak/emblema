@@ -84,3 +84,16 @@ def test_the_cells_of_a_backbone_over_readings_are_refused(tmp_path: Path) -> No
 
     with pytest.raises(UnsupportedDetectorFeaturesError, match="no cells"):
         fitted.fit(CELLS, stated, FITTING, SCORED, retain=False)
+
+
+def test_the_cells_are_taught_an_event_as_the_states_are(tmp_path: Path) -> None:
+    fitted, stated, backbones = runtime(tmp_path, bins=2)
+    recipe = replace(CELLS, events=1, neighbours=None)
+
+    outcome = fitted.fit(
+        recipe, stated, FITTING, SCORED, taught=(labelled("a", 1, 15.0, 3.0),), retain=False
+    )
+
+    assert [p.window for p in outcome.predictions] == [s.window for s in SCORED]
+    assert all(abs(p.predicted) < float("inf") for p in outcome.predictions)
+    assert backbones.built == []

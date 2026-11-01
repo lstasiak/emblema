@@ -6,6 +6,7 @@ from emblema.evaluation.contracts.identifiers import TaskId
 from emblema.evaluation.domain.exceptions import (
     ForeignLabelSampleError,
     FrozenTestSplitClosedError,
+    InvalidTaughtEventsError,
     MismatchedStratificationError,
     MixedTargetKindsError,
     ProtocolMismatchError,
@@ -45,7 +46,7 @@ class DownstreamTask:
     Invariants: a task that spends labels reads its target by a scheme of a quantity or an
     outcome and carries a stratification, since it cannot draw a budget without knowing how to
     read a label or how to spread it; a detection task reads the events its windows overlap and
-    carries no stratification, since it draws no budget and its fitting side reads no label; a
+    carries no stratification, since it draws no budget and teaches at most a few events; a
     binary target is spread over its outcomes and a quantity over ranks of the target, since
     bins of ranks cut through the middle of an outcome and outcomes do not exist on a scale.
 
@@ -188,6 +189,28 @@ class DownstreamTask:
             raise ForeignLabelSampleError(
                 f"the sample was drawn from task {sample.task}, not {self.task_id}"
             )
+
+    def accept_taught(self, taught: Iterable[LabelledWindow]) -> None:
+        """Refuse events a detector is taught that are not this task's to teach.
+
+        A detection task spends no budget of labels, but a detector may be taught a counted
+        number of the events its fitting side holds; the task, not the detector, says which
+        windows those may be: the tuning side's, and nothing of the sides a run is scored on.
+
+        Raises:
+            ProtocolMismatchError: If the task spends labels, so it teaches no events.
+            InvalidTaughtEventsError: If a taught window lies outside the tuning side.
+        """
+        if self.protocol.spends_labels:
+            raise ProtocolMismatchError(
+                f"a task under {self.protocol} draws a budget of labels and teaches no events"
+            )
+        for labelled in taught:
+            if labelled.window.unit not in self.tuning_units:
+                raise InvalidTaughtEventsError(
+                    f"the taught window of unit {labelled.window.unit} is not on the tuning side "
+                    f"of task {self.task_id}"
+                )
 
     def accept_source(self, source: Self) -> None:
         """Refuse to learn this task from another task's labels of a different kind.

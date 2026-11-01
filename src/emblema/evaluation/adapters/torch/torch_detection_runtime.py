@@ -10,6 +10,7 @@ from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.detection.feature_detector import FeatureDetector
 from emblema.evaluation.adapters.detection.feature_detectors import FeatureDetectors
+from emblema.evaluation.adapters.detection.taught_rows import TaughtRows
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.frozen_embedding import FrozenEmbedding
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
@@ -73,6 +74,7 @@ class TorchDetectionRuntime:
         fitting: Sequence[TaskWindow],
         scored: Sequence[LabelledWindow],
         *,
+        taught: Sequence[LabelledWindow] = (),
         retain: bool,
     ) -> ScoredOutcome:
         if not recipe.features.lays_out_cells:
@@ -83,6 +85,7 @@ class TorchDetectionRuntime:
             raise InvalidScoredOutcomeError("a detector needs a window to fit on")
         if not scored:
             raise InvalidScoredOutcomeError("there is no window to answer")
+        taught_rows = TaughtRows.among(fitting, taught) if taught else None
         manifest = self._blocks.manifest_of(task.manifest)
         block = self._blocks.block_of(manifest)
         fitted_windows = block.at([window.position for window in fitting])
@@ -94,6 +97,7 @@ class TorchDetectionRuntime:
             recipe,
             rows(fitted_windows),
             units=[str(window.unit) for window in fitting] if per_unit else None,
+            taught=taught_rows,
         )
         answers = detector.scores(
             rows(scored_windows),

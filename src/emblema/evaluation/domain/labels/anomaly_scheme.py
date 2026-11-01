@@ -15,8 +15,9 @@ class AnomalyScheme:
     where it overlaps a stretch the task does not score, such as a gap in the downlink. The
     target is the event's number itself rather than a one: every window of one event shares it,
     which is what lets a reading weigh the event once however many windows it spans, and the
-    answers stored beside the targets say which event a score was given for. No candidate is
-    taught the target; the fitting side carries no label at all.
+    answers stored beside the targets say which event a score was given for. No candidate learns
+    the target of a window it answers; the fitting side carries no label, apart from the windows
+    of the few events a detector is taught, which travel beside it.
 
     Attributes:
         NORMAL: The target of a window that overlaps no event.
@@ -39,6 +40,11 @@ class AnomalyScheme:
     def scores(self, event: float) -> bool:
         """Whether a window the ground truth answers with ``event`` is scored at all."""
         return event != self.EXCLUDED
+
+    @classmethod
+    def is_event(cls, target: float) -> bool:
+        """Whether ``target`` is an event's number: a whole number above the normal mark."""
+        return isfinite(target) and target > cls.NORMAL and target == int(target)
 
     def target(self, *, event: float) -> float:
         """The target of a window the ground truth answers with ``event``.

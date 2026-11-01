@@ -8,16 +8,16 @@ from emblema.evaluation.adapters.artifacts.representation_bytes import Represent
 
 
 class FeatureDetector(Protocol):
-    """What a runtime asks of a detector fitted over features, whatever distance it scores by.
+    """What a runtime asks of a detector fitted over features, whatever it scores by.
 
     A seam between the runtimes that fit a detector and the detectors themselves, typed in the
-    arrays they exchange: one detector a distance answers it.
+    arrays they exchange: one detector a distance, or a head taught events, answers it.
     """
 
     def scores(
         self, rows: NDArray[np.float64], *, units: Sequence[str] | None = None
     ) -> NDArray[np.float64]:
-        """The distance above the alarm of every row, in the order given."""
+        """The score above the alarm of every row, in the order given."""
 
     def kept(self) -> RepresentationBytes:
         """The detector as it is kept, under the format its class reads back."""
