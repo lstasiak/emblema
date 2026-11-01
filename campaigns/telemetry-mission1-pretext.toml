@@ -1,0 +1,43 @@
+# The first mission's events read by the error of what is filled in under the backbone's masks:
+# the pretext's error as it was read before, per channel over each channel's typical miss
+# (ADR-0070), for the window's tail hidden once (ADR-0071), and for the tail per channel; each
+# against a ridge per channel over the same visible cells under the same knobs, and each read
+# against the other windows of its own month. The raw pretext's error is the control, so the
+# per-channel reading and the tail are read as what they add to the registered detector.
+#
+# The seeds draw the backbone's masks. Run once under each backbone the screen reads; committed
+# before the campaign runs.
+name = "telemetry-mission1-pretext"
+purpose = "tuning"
+tier = "M"
+measure = "pr_auc_shortfall"
+
+[candidates]
+competing = [
+    "pretext_error@reference=unit",
+    "pretext_error@error=channel,reference=unit",
+    "pretext_error@hidden=tail,reference=unit",
+    "pretext_error@error=channel,hidden=tail,reference=unit",
+    "linear_answer_error@reference=unit",
+    "linear_answer_error@error=channel,reference=unit",
+    "linear_answer_error@hidden=tail,reference=unit",
+    "linear_answer_error@error=channel,hidden=tail,reference=unit",
+]
+control = "pretext_error@reference=unit"
+endpoint = "pretext_error@error=channel,reference=unit"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3]
+
+[rules]
+minimum_absolute_reduction = 0.05
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 6
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
