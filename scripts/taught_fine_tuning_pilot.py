@@ -54,6 +54,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from emblema.evaluation.domain.detection.taught_events import TaughtEvents
 from emblema.evaluation.domain.exceptions import DivergedAdaptationError
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
@@ -528,8 +529,47 @@ def read(directory: Path, *, partial: bool = False) -> str:
     return render(rows)
 
 
-def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - environment
-    """Every fine-tuning cell of the pilot, on the device, those already answered skipped."""
+@dataclass(frozen=True, kw_only=True)
+class Bench:  # pragma: no cover - environment
+    """What every cell reads: the task, its two sides, the encoders and how windows are laid out.
+
+    Attributes:
+        task: The task, defined in memory.
+        registered: The task's identity in the registry, which the draw of events ranks by.
+        pool: The fitting side's windows, labelled.
+        read: The validation side's windows, labelled.
+        block: The corpus's windows.
+        blocks: Where the corpus's blocks are read from.
+        channels: How many channels the corpus's vocabulary holds.
+        schedule: The registered schedule.
+        weights: The pretrained encoders' weights, by name.
+        backbones: The encoders' factories, by name.
+        layout: How a window is laid out.
+        device: Where the arithmetic happens.
+    """
+
+    # Any: the frameworks' types stay out of the module's import, which its tests run without.
+    task: DownstreamTask
+    registered: Any
+    pool: tuple[LabelledWindow, ...]
+    read: tuple[LabelledWindow, ...]
+    block: Any
+    blocks: Any
+    channels: int
+    schedule: AdaptationSchedule
+    weights: Mapping[str, Any]
+    backbones: Mapping[str, Any]
+    layout: Any
+    device: str
+
+    @property
+    def arms(self) -> list[tuple[str, Any]]:
+        """Every encoder, the initialisation read through the first's shape."""
+        return [*self.backbones.items(), (INITIALISATION, next(iter(self.backbones.values())))]
+
+
+def bench_of(arguments: argparse.Namespace) -> Bench:  # pragma: no cover - environment
+    """The bench the command line names."""
     from emblema.config.settings import Settings
     from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
     from emblema.entrypoints.configured import configured_store
@@ -538,25 +578,18 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
     from emblema.entrypoints.workers.declared_worker import DeclaredWorker
     from emblema.evaluation.adapters.blocks.block_corpus_windows import BlockCorpusWindows
     from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
-    from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
     from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
         InMemoryDownstreamTaskRepository,
     )
-    from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
     from emblema.evaluation.application.use_cases.define_downstream_task import (
         DefineDownstreamTask,
     )
     from emblema.evaluation.contracts.identifiers import TaskId
     from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
     from emblema.shared.adapters.in_memory.id_generator import SequentialIdGenerator
-    from emblema.shared.adapters.tensors.token_tensors import TokenTensors
     from emblema.shared.kernel.artifacts import ArtifactRef
     from emblema.shared.kernel.checksums import Checksum
 
-    out: Path = arguments.out
-    (out / "answers").mkdir(parents=True, exist_ok=True)
-    commit = committed_tree()
-    refuse_another_commit(out / "conditions.json", commit)
     settings = Settings()
     store = configured_store(settings)
     worker = settings.require_worker()
@@ -569,126 +602,194 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
         known.defined_over(manifest_ref, corpus.describe(manifest_ref))
     )
     task: DownstreamTask = tasks.get(defined)
-    # The draw of the events ranks by the task's identity, so the registered one draws the same.
-    registered = TaskId(UUID(arguments.task_id))
     truth = KnownGroundTruths.under(Path("data/raw"))
     fitting = task.read_windows(corpus.windows_of(task.manifest, task.tuning_units))
-    pool = task.labelled(fitting, truth.truths_of(task.corpus, fitting))
     validation = task.read_windows(corpus.windows_of(task.manifest, task.validation_units))
-    read = task.labelled(validation, truth.truths_of(task.corpus, validation))
     manifest = blocks.manifest_of(task.manifest)
-    block = blocks.block_of(manifest)
-    schedule = DeclaredWorker(worker).schedule()
     weights = {
         name: ArtifactRef(key, Checksum.parse(checksum))
         for name, key, checksum in arguments.weights
     }
     backbones = {name: RestoredBackbones(store, ref) for name, ref in weights.items()}
-    first = next(iter(backbones.values()))
-    layout = BinnedTokens(first.bins)
-    laid_pool = layout.lay(block.at([w.window.position for w in pool]))
-    laid_read = layout.lay(block.at([w.window.position for w in read]))
+    return Bench(
+        task=task,
+        # The draw of the events ranks by the task's identity, so the registered one draws the same.
+        registered=TaskId(UUID(arguments.task_id)),
+        pool=task.labelled(fitting, truth.truths_of(task.corpus, fitting)),
+        read=task.labelled(validation, truth.truths_of(task.corpus, validation)),
+        block=blocks.block_of(manifest),
+        blocks=blocks,
+        channels=len(manifest.channels),
+        schedule=DeclaredWorker(worker).schedule(),
+        weights=weights,
+        backbones=backbones,
+        layout=BinnedTokens(next(iter(backbones.values())).bins),
+        device=arguments.device,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class TunedCell:
+    """What one fine-tuned encoder answered, and how its training went.
+
+    Attributes:
+        predictions: Every read window's score, read against its month.
+        early: The loss over the first tenth of the steps.
+        late: The loss over the last tenth.
+        moved: How far the weights travelled, as a share of their norm.
+        seconds: How long the cell took.
+    """
+
+    predictions: tuple[WindowPrediction, ...]
+    early: float
+    late: float
+    moved: float
+    seconds: float
+
+
+def tuned_cell(  # pragma: no cover - environment
+    bench: Bench,
+    name: str,
+    backbone: Any,
+    *,
+    schedule: AdaptationSchedule,
+    seed: int,
+    spans: Mapping[int, Sequence[int]],
+    others: Sequence[int],
+    laid_teach: Sequence[LaidWindow],
+    laid_read: Sequence[LaidWindow],
+    read: Sequence[LabelledWindow],
+) -> TunedCell:
+    """Fine-tune one encoder on the taught windows and score the windows read."""
+    from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
+    from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
+    from emblema.shared.adapters.tensors.token_tensors import TokenTensors
+
+    def answering(
+        candidate: nn.Module, laid: Sequence[LaidWindow]
+    ) -> Callable[[Sequence[int]], torch.Tensor]:
+        def answer(indices: Sequence[int]) -> torch.Tensor:
+            batch = TokenTensors.of(bench.layout.batch([laid[index] for index in indices]))
+            answers: torch.Tensor = candidate(batch.to(bench.device))
+            return answers.squeeze(-1)
+
+        return answer
+
+    started = time.perf_counter()
+    torch.manual_seed(seed)
+    plan = AdaptationPlan(
+        mode=TransferMode.FROM_SCRATCH if name == INITIALISATION else TransferMode.FULL_FINE_TUNING,
+        backbone=bench.weights.get(name),
+        schedule=schedule,
+        lora=None,
+        seed=seed,
+    )
+    candidate = AdaptedBackbone.under(
+        plan,
+        backbone,
+        vocabulary_size=bench.channels,
+        starting_at=0.0,
+        layout=bench.layout,
+    ).to(bench.device)
+    before = {key: value.detach().clone() for key, value in candidate.named_parameters()}
+    early, late = fine_tuned(
+        candidate,
+        answering(candidate, laid_teach),
+        BalancedDraw(spans, others, seed=seed),
+        schedule,
+        device=bench.device,
+    )
+    moved = moved_share(before, candidate)
+    candidate.eval()
+    reading = answering(candidate, laid_read)
+    with torch.no_grad():
+        scores = torch.cat(
+            [
+                reading(range(at, min(at + 64, len(laid_read)))).to("cpu")
+                for at in range(0, len(laid_read), 64)
+            ]
+        )
+    raw: NDArray[np.float64] = scores.to(torch.float64).numpy()
     units = [str(w.window.unit) for w in read]
+    alarm = ScoreAlarm.set_over(raw, contamination=SHARE, units=units)
+    return TunedCell(
+        predictions=tuple(
+            WindowPrediction(window=w.window, target=w.target, predicted=float(score))
+            for w, score in zip(read, alarm.above(raw, units=units).tolist(), strict=True)
+        ),
+        early=early,
+        late=late,
+        moved=moved,
+        seconds=time.perf_counter() - started,
+    )
+
+
+def taught_spans(
+    pool: Sequence[LabelledWindow], taught: Iterable[LabelledWindow]
+) -> tuple[dict[int, list[int]], list[int]]:
+    """Each taught event's windows, as indices into ``pool``, and every other index."""
+    position_of = {w.window.position: at for at, w in enumerate(pool)}
+    spans: dict[int, list[int]] = defaultdict(list)
+    for window in taught:
+        spans[int(window.target)].append(position_of[window.window.position])
+    taught_at = {index for span in spans.values() for index in span}
+    return dict(spans), [index for index in range(len(pool)) if index not in taught_at]
+
+
+def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - environment
+    """Every fine-tuning cell of the pilot, on the device, those already answered skipped."""
+    out: Path = arguments.out
+    (out / "answers").mkdir(parents=True, exist_ok=True)
+    commit = committed_tree()
+    refuse_another_commit(out / "conditions.json", commit)
+    bench = bench_of(arguments)
+    laid_pool = bench.layout.lay(bench.block.at([w.window.position for w in bench.pool]))
+    laid_read = bench.layout.lay(bench.block.at([w.window.position for w in bench.read]))
     conditions = {
         "commit": commit,
-        "encoders": list(weights),
+        "encoders": list(bench.weights),
         "events": arguments.events,
         "seeds": arguments.seeds,
-        "windows_taught_from": len(pool),
-        "windows_read": len(read),
-        "months_read": len(set(units)),
-        "events_in_pool": len({int(w.target) for w in pool if w.target}),
-        "events_read": len({int(w.target) for w in read if w.target}),
+        "windows_taught_from": len(bench.pool),
+        "windows_read": len(bench.read),
+        "months_read": len({str(w.window.unit) for w in bench.read}),
+        "events_in_pool": len({int(w.target) for w in bench.pool if w.target}),
+        "events_read": len({int(w.target) for w in bench.read if w.target}),
         "rates": arguments.rates,
-        "steps": schedule.min_steps,
-        "batch": schedule.batch_size,
+        "steps": bench.schedule.min_steps,
+        "batch": bench.schedule.batch_size,
         "device": arguments.device,
     }
     (out / "conditions.json").write_text(json.dumps(conditions, indent=2) + "\n")
     print(json.dumps(conditions))
     table_path = out / "cells.csv"
     done = done_cells(table_path)
-    position_of = {w.window.position: at for at, w in enumerate(pool)}
-
-    def answering(
-        candidate: nn.Module, laid: Sequence[LaidWindow]
-    ) -> Callable[[Sequence[int]], torch.Tensor]:
-        def answer(indices: Sequence[int]) -> torch.Tensor:
-            batch = TokenTensors.of(layout.batch([laid[index] for index in indices]))
-            answers: torch.Tensor = candidate(batch.to(arguments.device))
-            return answers.squeeze(-1)
-
-        return answer
-
-    arms = [*backbones.items(), (INITIALISATION, first)]
     for events in arguments.events:
         for seed in arguments.seeds:
-            taught = TaughtEvents.drawn(registered, pool, events=events, seed=seed).windows
-            spans: dict[int, list[int]] = defaultdict(list)
-            for window in taught:
-                spans[int(window.target)].append(position_of[window.window.position])
-            taught_at = {index for span in spans.values() for index in span}
-            others = [index for index in range(len(pool)) if index not in taught_at]
-            for name, backbone in arms:
+            taught = TaughtEvents.drawn(
+                bench.registered, bench.pool, events=events, seed=seed
+            ).windows
+            spans, others = taught_spans(bench.pool, taught)
+            for name, backbone in bench.arms:
                 for learning_rate in arguments.rates:
                     fine_tuning = f"{FINE_TUNED}{learning_rate}"
                     cell = cell_name(fine_tuning, name, events, seed)
                     if cell in done:
                         continue
-                    rated = replace(schedule, learning_rate=learning_rate)
-                    started = time.perf_counter()
-                    torch.manual_seed(seed)
-                    plan = AdaptationPlan(
-                        mode=(
-                            TransferMode.FROM_SCRATCH
-                            if name == INITIALISATION
-                            else TransferMode.FULL_FINE_TUNING
-                        ),
-                        backbone=weights.get(name),
-                        schedule=rated,
-                        lora=None,
-                        seed=seed,
-                    )
-                    candidate = AdaptedBackbone.under(
-                        plan,
+                    rated = replace(bench.schedule, learning_rate=learning_rate)
+                    tuned = tuned_cell(
+                        bench,
+                        name,
                         backbone,
-                        vocabulary_size=len(manifest.channels),
-                        starting_at=0.0,
-                        layout=layout,
-                    ).to(arguments.device)
-                    before = {
-                        key: value.detach().clone() for key, value in candidate.named_parameters()
-                    }
-                    early, late = fine_tuned(
-                        candidate,
-                        answering(candidate, laid_pool),
-                        BalancedDraw(spans, others, seed=seed),
-                        rated,
-                        device=arguments.device,
+                        schedule=rated,
+                        seed=seed,
+                        spans=spans,
+                        others=others,
+                        laid_teach=laid_pool,
+                        laid_read=laid_read,
+                        read=bench.read,
                     )
-                    moved = moved_share(before, candidate)
-                    candidate.eval()
-                    reading = answering(candidate, laid_read)
-                    with torch.no_grad():
-                        scores = torch.cat(
-                            [
-                                reading(range(at, min(at + 64, len(laid_read)))).to("cpu")
-                                for at in range(0, len(laid_read), 64)
-                            ]
-                        )
-                    raw: NDArray[np.float64] = scores.to(torch.float64).numpy()
-                    alarm = ScoreAlarm.set_over(raw, contamination=SHARE, units=units)
-                    write_answers(
-                        out / "answers" / f"{cell}.csv",
-                        (
-                            WindowPrediction(
-                                window=w.window, target=w.target, predicted=float(score)
-                            )
-                            for w, score in zip(
-                                read, alarm.above(raw, units=units).tolist(), strict=True
-                            )
-                        ),
-                    )
+                    write_answers(out / "answers" / f"{cell}.csv", tuned.predictions)
                     record(
                         table_path,
                         (
@@ -699,13 +800,13 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
                             seed,
                             len(taught),
                             rated.min_steps,
-                            time.perf_counter() - started,
-                            early,
-                            late,
-                            moved,
+                            tuned.seconds,
+                            tuned.early,
+                            tuned.late,
+                            tuned.moved,
                         ),
                     )
-                    print(f"{cell}: {time.perf_counter() - started:.0f} s", flush=True)
+                    print(f"{cell}: {tuned.seconds:.0f} s", flush=True)
 
 
 def committed_tree() -> str:  # pragma: no cover - environment

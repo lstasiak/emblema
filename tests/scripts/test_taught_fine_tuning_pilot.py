@@ -12,6 +12,7 @@ from torch import nn
 
 from emblema.evaluation.domain.exceptions import DivergedAdaptationError
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
@@ -32,6 +33,7 @@ from scripts.taught_fine_tuning_pilot import (
     read_answers,
     refuse_another_commit,
     spread_of,
+    taught_spans,
     write_answers,
 )
 
@@ -58,6 +60,21 @@ def test_a_draw_weighs_every_event_alike_however_long_and_repeats_under_its_seed
     assert set(indices[2000:]) == {200, 201}
     assert BalancedDraw(events, [200, 201], seed=3).batch(4000)[0] == indices
     assert BalancedDraw(events, [200, 201], seed=4).batch(4000)[0] != indices
+
+
+def test_taught_windows_are_found_in_the_pool_by_event_and_the_rest_are_the_others() -> None:
+    def window(position: int, target: float) -> LabelledWindow:
+        return LabelledWindow(
+            window=TaskWindow(unit=UnitKey("u"), position=position, ends_at=float(position)),
+            target=target,
+        )
+
+    pool = [window(10, 0.0), window(11, 1.0), window(12, 1.0), window(13, 2.0), window(14, 0.0)]
+
+    spans, others = taught_spans(pool, [window(12, 1.0), window(11, 1.0)])
+
+    assert spans == {1: [2, 1]}
+    assert others == [0, 3, 4]
 
 
 def test_a_draw_with_nothing_to_learn_from_is_refused() -> None:
