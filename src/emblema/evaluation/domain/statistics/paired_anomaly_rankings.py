@@ -5,6 +5,7 @@ from statistics import fmean
 from emblema.evaluation.domain.exceptions import InvalidPairedAnomalyRankingsError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
+from emblema.evaluation.domain.scoring.unit_counts import UnitCounts
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -82,10 +83,19 @@ class PairedAnomalyRankings:
 
     def reduction_over(self, picks: Sequence[int]) -> float:
         """The reduction over the units at ``picks``, a unit counted as often as it is picked."""
-        weights = [0] * len(self.units)
-        for pick in picks:
-            weights[pick] += 1
-        return self._shortfall(self.control, weights) - self._shortfall(self.candidate, weights)
+        return self.reductions_over([picks])[0]
+
+    def reductions_over(self, draws: Sequence[Sequence[int]]) -> list[float]:
+        """The reduction over each draw of units, the draws read together."""
+        counts = UnitCounts.of_picks(draws, len(self.units))
+        return [
+            control - candidate
+            for control, candidate in zip(
+                self._shortfalls(self.control, counts),
+                self._shortfalls(self.candidate, counts),
+                strict=True,
+            )
+        ]
 
     def per_repeat_control(self) -> tuple[float, ...]:
         """The shortfall of each repeat of the control on its own."""
@@ -97,4 +107,10 @@ class PairedAnomalyRankings:
 
     @staticmethod
     def _shortfall(repeats: Sequence[AnomalyRanking], weights: Sequence[int]) -> float:
-        return 1.0 - fmean(ranking.average_precision_weighted(weights) for ranking in repeats)
+        counts = UnitCounts.of_weights(weights)
+        return PairedAnomalyRankings._shortfalls(repeats, counts)[0]
+
+    @staticmethod
+    def _shortfalls(repeats: Sequence[AnomalyRanking], counts: UnitCounts) -> list[float]:
+        areas = [ranking.average_precisions(counts) for ranking in repeats]
+        return [1.0 - fmean(over_repeats) for over_repeats in zip(*areas, strict=True)]

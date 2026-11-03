@@ -86,3 +86,12 @@ def test_pairs_over_other_units_or_other_events_are_refused() -> None:
             taught=PairedAnomalyRankings(control=(other_events,), candidate=(other_events,)),
             untaught=paired(LAST, LAST),
         )
+
+
+def test_draws_read_together_answer_as_each_read_alone() -> None:
+    interaction = AnomalyInteraction(taught=paired(MIDDLE, FIRST), untaught=paired(LAST, LAST))
+    draws = [[0, 1, 2, 3], [1, 1, 2, 2], [3, 3, 0, 0]]
+
+    assert interaction.reductions_over(draws) == [
+        interaction.reduction_over(picks) for picks in draws
+    ]

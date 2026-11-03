@@ -140,6 +140,15 @@ VIOLATIONS = [
     ),
     Violation(
         contract_id="pure-core",
+        modules={
+            "evaluation/domain/__init__.py": "",
+            "evaluation/domain/statistics/__init__.py": "",
+            "evaluation/domain/statistics/fast.py": "import numpy\n",
+        },
+        evidence="emblema.evaluation.domain.statistics.fast -> numpy",
+    ),
+    Violation(
+        contract_id="pure-core",
         modules={"shared/ports/leak.py": "import pydantic\n"},
         evidence="emblema.shared.ports.leak -> pydantic",
     ),

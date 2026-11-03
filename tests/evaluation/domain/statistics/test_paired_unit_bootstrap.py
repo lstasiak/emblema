@@ -1,5 +1,7 @@
 """The procedure on data with a known answer: a shift is found, no shift is not, and how often."""
 
+import random
+
 import pytest
 
 from emblema.evaluation.adapters.synthetic.known_answer import KnownAnswer
@@ -124,6 +126,22 @@ def test_the_resampled_reductions_come_back_in_order_and_the_interval_is_read_of
     assert reductions == sorted(reductions)
     assert len(reductions) == 500
     assert bootstrap.interval_of(reductions) == bootstrap.compare(compared).interval
+
+
+def test_draws_read_in_batches_are_the_draws_read_one_by_one() -> None:
+    # Across the batch's edge: the batches must not change what is drawn, or an interval on
+    # record would no longer repeat.
+    compared = KnownAnswer(control_rmse=30.0, candidate_rmse=25.0).paired(seed=9)
+    strata = compared.strata
+    draws = random.Random(4)
+    one_by_one = sorted(
+        compared.reduction_over(
+            [pick for stratum in strata for pick in draws.choices(stratum, k=len(stratum))]
+        )
+        for _ in range(600)
+    )
+
+    assert PairedUnitBootstrap(resamples=600, seed=4).reductions(compared) == one_by_one
 
 
 def test_a_bootstrap_without_a_resample_is_refused() -> None:

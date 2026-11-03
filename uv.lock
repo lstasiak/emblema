@@ -706,6 +706,7 @@ dependencies = [
     { name = "alembic" },
     { name = "boto3" },
     { name = "celery" },
+    { name = "numpy" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -715,7 +716,6 @@ dependencies = [
 [package.optional-dependencies]
 api = [
     { name = "fastapi" },
-    { name = "numpy" },
     { name = "onnxruntime" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
@@ -730,7 +730,6 @@ api = [
 ]
 baselines = [
     { name = "joblib" },
-    { name = "numpy" },
     { name = "scikit-learn" },
     { name = "threadpoolctl" },
     { name = "xgboost", marker = "sys_platform == 'darwin'" },
@@ -742,7 +741,6 @@ corpora = [
     { name = "rdata" },
 ]
 ml = [
-    { name = "numpy" },
     { name = "onnx" },
     { name = "onnxruntime" },
     { name = "onnxscript" },
@@ -780,9 +778,7 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.115" },
     { name = "joblib", marker = "extra == 'baselines'", specifier = ">=1.4" },
     { name = "mlflow-skinny", marker = "extra == 'tracking'", specifier = ">=3.1" },
-    { name = "numpy", marker = "extra == 'api'", specifier = ">=2.2" },
-    { name = "numpy", marker = "extra == 'baselines'", specifier = ">=2.2" },
-    { name = "numpy", marker = "extra == 'ml'", specifier = ">=2.2" },
+    { name = "numpy", specifier = ">=2.2" },
     { name = "onnx", marker = "extra == 'ml'", specifier = ">=1.22" },
     { name = "onnxruntime", marker = "extra == 'api'", specifier = ">=1.22" },
     { name = "onnxruntime", marker = "extra == 'ml'", specifier = ">=1.22" },

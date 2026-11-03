@@ -29,6 +29,9 @@ dependencies = [
     # processes, like the database. The AMQP driver comes with kombu, so the broker needs no
     # extra of its own.
     "celery>=5.5",
+    # Core rather than an extra: a campaign's verdict is read in the domain, and every process that
+    # reads one needs it (ADR-0074).
+    "numpy>=2.2",
     "psycopg[binary]>=3.2",
     "pydantic>=2.11",
     "pydantic-settings>=2.10",
@@ -37,7 +40,6 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = [
-    "numpy>=2.2",
     "torch>=2.9",
     "onnxruntime>=1.22",
     # The exporter path through torch.export needs both; onnx also reads the graph back for the
@@ -54,7 +56,6 @@ ml = [
 # part of `ml`: the worker that fits them needs no accelerator and no torch, and the whole point
 # of a baseline is that it costs less to run than the thing it is a baseline for.
 baselines = [
-    "numpy>=2.2",
     "scikit-learn>=1.6",
     "joblib>=1.4",
     # Imported directly: the ridge solve is held to the threads a recipe names.
@@ -80,7 +81,6 @@ api = [
     # A caller's token from an external issuer is verified offline, by the issuer's published
     # keys; `crypto` brings the signature algorithms such issuers use.
     "pyjwt[crypto]>=2.10",
-    "numpy>=2.2",
     "onnxruntime>=1.22",
     "opentelemetry-api>=1.30",
     "opentelemetry-sdk>=1.30",
@@ -358,6 +358,11 @@ source_modules = [
     "emblema.shared.kernel", "emblema.shared.ports", "emblema.shared.events",
     "emblema.shared.jobs",
     "emblema.*.domain", "emblema.*.ports", "emblema.*.application", "emblema.*.contracts",
+]
+# The sweep a bootstrap repeats and nothing else in the core (ADR-0074).
+ignore_imports = [
+    "emblema.evaluation.domain.scoring.tied_sweep -> numpy",
+    "emblema.evaluation.domain.scoring.unit_counts -> numpy",
 ]
 forbidden_modules = [
     "torch", "numpy", "pandas", "pyarrow", "rdata", "onnx", "onnxruntime", "onnxscript",
