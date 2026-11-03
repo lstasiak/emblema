@@ -385,13 +385,15 @@
 | src/emblema/evaluation/domain/labels/task\_window.py                                      |       11 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/patching/patch\_model\_spec.py                              |       32 |        1 |       16 |        1 |     96% |        92 |
 | src/emblema/evaluation/domain/patching/patch\_plan.py                                     |       13 |        0 |        2 |        0 |    100% |           |
-| src/emblema/evaluation/domain/scoring/anomaly\_ranking.py                                 |      112 |        1 |       54 |        2 |     98% |76, 176-\>171 |
+| src/emblema/evaluation/domain/scoring/anomaly\_ranking.py                                 |      104 |        1 |       44 |        2 |     98% |79, 178-\>173 |
 | src/emblema/evaluation/domain/scoring/error\_measure.py                                   |       19 |        0 |        8 |        1 |     96% | 44-\>exit |
 | src/emblema/evaluation/domain/scoring/scored\_outcome.py                                  |       21 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/domain/scoring/tied\_sweep.py                                      |       82 |        0 |       10 |        0 |    100% |           |
+| src/emblema/evaluation/domain/scoring/unit\_counts.py                                     |       13 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/scoring/unit\_error.py                                      |       32 |        0 |       10 |        0 |    100% |           |
 | src/emblema/evaluation/domain/scoring/window\_prediction.py                               |       13 |        0 |        4 |        0 |    100% |           |
-| src/emblema/evaluation/domain/scoring/window\_ranking.py                                  |       63 |        2 |       22 |        2 |     95% |    46, 50 |
-| src/emblema/evaluation/domain/statistics/anomaly\_interaction.py                          |       26 |        0 |        4 |        0 |    100% |           |
+| src/emblema/evaluation/domain/scoring/window\_ranking.py                                  |       54 |        2 |       14 |        2 |     94% |    49, 53 |
+| src/emblema/evaluation/domain/statistics/anomaly\_interaction.py                          |       28 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/benjamini\_hochberg\_correction.py               |       29 |        0 |       16 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/bootstrap\_interval.py                           |       20 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/comparison\_rules.py                             |       45 |        0 |       20 |        1 |     98% |   58-\>60 |
@@ -402,12 +404,12 @@
 | src/emblema/evaluation/domain/statistics/family\_correction.py                            |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/holm\_correction.py                              |       27 |        0 |       14 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/outcome\_level.py                                |        6 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/domain/statistics/paired\_anomaly\_rankings.py                     |       53 |        1 |       12 |        1 |     97% |        80 |
+| src/emblema/evaluation/domain/statistics/paired\_anomaly\_rankings.py                     |       59 |        1 |       10 |        1 |     97% |        81 |
 | src/emblema/evaluation/domain/statistics/paired\_difference.py                            |       24 |        0 |       10 |        1 |     97% |   49-\>51 |
 | src/emblema/evaluation/domain/statistics/paired\_reading.py                               |       28 |        0 |        8 |        0 |    100% |           |
-| src/emblema/evaluation/domain/statistics/paired\_unit\_bootstrap.py                       |       35 |        0 |        4 |        0 |    100% |           |
-| src/emblema/evaluation/domain/statistics/paired\_unit\_errors.py                          |       69 |        0 |       22 |        0 |    100% |           |
-| src/emblema/evaluation/domain/statistics/paired\_unit\_rankings.py                        |       53 |        1 |       12 |        0 |     98% |       100 |
+| src/emblema/evaluation/domain/statistics/paired\_unit\_bootstrap.py                       |       40 |        0 |        6 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/paired\_unit\_errors.py                          |       71 |        0 |       22 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/paired\_unit\_rankings.py                        |       59 |        1 |       10 |        0 |     99% |       110 |
 | src/emblema/evaluation/domain/statistics/paired\_units.py                                 |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/practical\_floor.py                              |       23 |        0 |        8 |        1 |     97% |   50-\>52 |
 | src/emblema/evaluation/domain/statistics/pretraining\_spread.py                           |       21 |        0 |        6 |        0 |    100% |           |
@@ -710,7 +712,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **21575** |  **180** | **4350** |  **120** | **99%** |           |
+| **TOTAL**                                                                                 | **21674** |  **180** | **4340** |  **120** | **99%** |           |
 
 132 empty files skipped.
 
