@@ -31,7 +31,7 @@ report script before the harness exists.
 - **The verdict is domain code** (`ComparisonRules` → `ComparisonVerdict`): the endpoint is
   confirmed only if it takes the minimum share off, its interval excludes zero, *and* it clears the
   floor. A secondary cell is judged by the family's correction and is never "confirmed".
-- **Plain Python, no numpy**: 180,000 additions.
+- **Plain Python, no numpy**: 180,000 additions. A sweep over windows later changed the count ([ADR-0074](0074-numpy-for-the-sweep-a-bootstrap-repeats.md)).
 - **Task readings beside the endpoint** (`RemainingLifeMetrics`): error below the ceiling, error on
   each engine's last window, share within a fifth of the label, the asymmetric score as a mean per
   window. Reported, never thresholded. On validation engines that run to failure the last-window
