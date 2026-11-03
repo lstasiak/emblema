@@ -1,5 +1,5 @@
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
 import torch
@@ -7,11 +7,10 @@ from numpy.typing import NDArray
 
 from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
-from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
-from emblema.evaluation.adapters.detection.nearest_neighbour_detector import (
-    NearestNeighbourDetector,
-)
+from emblema.evaluation.adapters.detection.feature_detector import FeatureDetector
+from emblema.evaluation.adapters.detection.feature_detectors import FeatureDetectors
+from emblema.evaluation.adapters.detection.taught_rows import TaughtRows
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
 from emblema.evaluation.adapters.torch.frozen_embedding import FrozenEmbedding
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
@@ -44,13 +43,15 @@ _BATCH = 64
 
 
 class TorchDetectionRuntime:
-    """Fits a detector over the states of a frozen encoder, in this process, on a device.
+    """Fits a detector over the states of a frozen encoder, or over its cells, in this process.
 
     Every window of the fitting side and of the scored side is laid out as the encoder was
     trained to read it, embedded once under no gradient, and the detector is fitted and scored
-    over the states on the host in double precision: the arithmetic of a distance to the nearest
-    neighbours is numpy's, as it is for the summaries, so the two detectors differ in what they
-    read and in nothing else. The seconds an outcome reports start once the block is at hand.
+    over the states on the host in double precision; asked for the cells themselves, the runtime
+    lays every window out over the corpus's channels and hands the cells to the detector with no
+    encoder between, the bar of the input itself. The distance's arithmetic is numpy's, as it is
+    for the summaries, so the detectors over states, cells and summaries differ in what they read
+    and in nothing else. The seconds an outcome reports start once the block is at hand.
     """
 
     def __init__(
@@ -73,39 +74,33 @@ class TorchDetectionRuntime:
         fitting: Sequence[TaskWindow],
         scored: Sequence[LabelledWindow],
         *,
+        taught: Sequence[LabelledWindow] = (),
         retain: bool,
     ) -> ScoredOutcome:
-        if recipe.reading is None:
+        if not recipe.features.lays_out_cells:
             raise UnsupportedDetectorFeaturesError(
-                f"this runtime reads an encoder's states, not {recipe.features}"
+                f"this runtime reads an encoder's states or its cells, not {recipe.features}"
             )
         if not fitting:
             raise InvalidScoredOutcomeError("a detector needs a window to fit on")
         if not scored:
             raise InvalidScoredOutcomeError("there is no window to answer")
+        taught_rows = TaughtRows.among(fitting, taught) if taught else None
         manifest = self._blocks.manifest_of(task.manifest)
         block = self._blocks.block_of(manifest)
         fitted_windows = block.at([window.position for window in fitting])
         scored_windows = block.at([labelled.window.position for labelled in scored])
-        layout = self._layout(recipe.reading, manifest)
         started = time.perf_counter()
-        torch.manual_seed(recipe.seed)
-        embedding = FrozenEmbedding.under(
-            recipe.reading,
-            self._backbones,
-            vocabulary_size=len(manifest.channels),
-            layout=layout,
-        ).to(self._device)
-        embedding.eval()
+        rows = self._rows_of(recipe, manifest)
         per_unit = recipe.reference is ScoreReference.OWN_UNIT
-        detector = NearestNeighbourDetector.fitted_on(
-            self._states(embedding, layout, fitted_windows),
-            neighbours=recipe.nearest(),
-            contamination=recipe.contamination,
+        detector = FeatureDetectors.fitted(
+            recipe,
+            rows(fitted_windows),
             units=[str(window.unit) for window in fitting] if per_unit else None,
+            taught=taught_rows,
         )
         answers = detector.scores(
-            self._states(embedding, layout, scored_windows),
+            rows(scored_windows),
             units=[str(labelled.window.unit) for labelled in scored] if per_unit else None,
         )
         return ScoredOutcome(
@@ -119,6 +114,31 @@ class TorchDetectionRuntime:
             artifact=self._kept(detector, task) if retain else None,
         )
 
+    def _rows_of(
+        self, recipe: DetectorRecipe, manifest: PublishedCorpusManifest
+    ) -> Callable[[Sequence[TokenWindow]], NDArray[np.float64]]:
+        """What the detector reads a window as: the encoder's state, or the cells themselves.
+
+        Raises:
+            UnsupportedDetectorFeaturesError: If the cells are asked of a backbone that reads
+                one token per reading, which lays no cells out.
+        """
+        if recipe.reading is None:
+            if not self._backbones.bins:
+                raise UnsupportedDetectorFeaturesError(
+                    "the backbone reads one token per reading, so there are no cells to read"
+                )
+            cells = self._corpus_layout(self._backbones.bins, manifest)
+            return lambda windows: np.stack([laid.features.ravel() for laid in cells.lay(windows)])
+        reading = recipe.reading
+        layout = self._layout(reading, manifest)
+        torch.manual_seed(recipe.seed)
+        embedding = FrozenEmbedding.under(
+            reading, self._backbones, vocabulary_size=len(manifest.channels), layout=layout
+        ).to(self._device)
+        embedding.eval()
+        return lambda windows: self._states(embedding, layout, windows)
+
     def _layout(self, reading: EncoderReading, manifest: PublishedCorpusManifest) -> WindowLayout:
         """How the windows are laid out: as the backbone read them, unless the setting says.
 
@@ -130,6 +150,11 @@ class TorchDetectionRuntime:
             return BinnedTokens(self._backbones.bins) if self._backbones.bins else RawTokens()
         if reading.encoder.cells is CellSet.WINDOW:
             return BinnedTokens(bins)
+        return self._corpus_layout(bins, manifest)
+
+    @staticmethod
+    def _corpus_layout(bins: int, manifest: PublishedCorpusManifest) -> BinnedTokens:
+        """Every window laid out over the corpus's channels, so every window has the same cells."""
         observed = [channel for channel in manifest.channels if channel.corpus == manifest.corpus]
         return BinnedTokens(
             bins,
@@ -150,7 +175,7 @@ class TorchDetectionRuntime:
             states.append(embedding.embed(batch).to("cpu").to(torch.float64).numpy())
         return np.concatenate(states)
 
-    def _kept(self, detector: NearestNeighbourDetector, task: DownstreamTask) -> ArtifactRef:
+    def _kept(self, detector: FeatureDetector, task: DownstreamTask) -> ArtifactRef:
         """The detector this fit produced, stored under a manifest, for the campaign.
 
         The states it was fitted over are the measured form; the encoder they came from is named
@@ -166,5 +191,5 @@ class TorchDetectionRuntime:
         return self._kept_candidates.keep(
             CandidateKind.DETECTOR,
             corpus_manifest=task.manifest,
-            measured=RepresentationBytes(NearestNeighbourDetector.FORMAT, detector.to_bytes()),
+            measured=detector.kept(),
         )

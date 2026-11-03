@@ -17,12 +17,13 @@ _SECONDS_PER_HOUR = 3600.0
 
 @dataclass(frozen=True)
 class _Event:
-    """One annotated event as the window's question sees it: when, which number, scored or not."""
+    """One annotated event as the window's question sees it: when, which number, which class."""
 
     number: int
     start: float
     end: float
     scored: bool
+    kind: str
 
 
 class EsaAdRawGroundTruth:
@@ -75,6 +76,16 @@ class EsaAdRawGroundTruth:
         # This adapter is the truth of one corpus, so the name is the composite's business.
         return {window: self._answer(window) for window in windows}
 
+    def classes_of(self, mission: str) -> Mapping[int, str]:
+        """The benchmark's class of every scored event of ``mission``, by the event's number.
+
+        Raises:
+            UnknownGroundTruthError: If the mission is not one read here.
+        """
+        if mission not in self._channels:
+            raise UnknownGroundTruthError(f"{mission} is not a mission read here")
+        return {event.number: event.kind for event in self._of_mission(mission) if event.scored}
+
     def _answer(self, window: TaskWindow) -> float:
         mission, separator, _ = str(window.unit).partition("/")
         if not separator or mission not in self._channels:
@@ -98,7 +109,7 @@ class EsaAdRawGroundTruth:
 
     def _read(self, mission: str) -> tuple[_Event, ...]:
         folder = self._root / mission
-        categories = self._categories(folder / self._TYPES)
+        categories, kinds = self._categories(folder / self._TYPES)
         spans: dict[str, tuple[float, float]] = {}
         order: list[str] = []
         for number, row in enumerate(self._rows(folder / self._LABELS), start=2):
@@ -133,18 +144,29 @@ class EsaAdRawGroundTruth:
                 counted += 1
             start, end = spans[identifier]
             events.append(
-                _Event(number=counted if scored else 0, start=start, end=end, scored=scored)
+                _Event(
+                    number=counted if scored else 0,
+                    start=start,
+                    end=end,
+                    scored=scored,
+                    kind=kinds[identifier],
+                )
             )
         return tuple(events)
 
-    def _categories(self, path: Path) -> dict[str, str]:
+    def _categories(self, path: Path) -> tuple[dict[str, str], dict[str, str]]:
+        """Each event's category and its class, by the event's identifier."""
         categories: dict[str, str] = {}
+        kinds: dict[str, str] = {}
         for number, row in enumerate(self._rows(path), start=2):
-            identifier, category = row.get("ID"), row.get("Category")
-            if not identifier or category is None:
-                raise UnreadableGroundTruthError(f"{path} line {number}: no event or category")
+            identifier, category, kind = row.get("ID"), row.get("Category"), row.get("Class")
+            if not identifier or category is None or kind is None:
+                raise UnreadableGroundTruthError(
+                    f"{path} line {number}: no event, category or class"
+                )
             categories[identifier] = category
-        return categories
+            kinds[identifier] = kind
+        return categories, kinds
 
     @staticmethod
     def _rows(path: Path) -> list[dict[str, str]]:

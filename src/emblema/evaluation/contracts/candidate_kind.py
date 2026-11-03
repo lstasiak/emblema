@@ -19,8 +19,9 @@ class CandidateKind(StrEnum):
         NEURAL: A network the campaign adapts to the task. Every one in a campaign is held to the
             same compute budget.
         CLASSICAL: A method fitted to the task by its own procedure, serialised as it stands.
-        DETECTOR: A detector fitted on windows without a label, scoring a window by its
-            distance to the fitted ones; nothing serves it yet.
+        DETECTOR: A detector fitted on the fitting side's windows, taught at most a few of its
+            events, scoring a window by how far it lies from the fitted ones; nothing serves it
+            yet.
     """
 
     NEURAL = "neural"

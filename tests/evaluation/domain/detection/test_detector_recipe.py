@@ -3,7 +3,11 @@ import pytest
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
+from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
+from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
+from emblema.evaluation.domain.detection.score_distance import ScoreDistance
+from emblema.evaluation.domain.detection.taught_head import TaughtHead
 from emblema.evaluation.domain.exceptions import InvalidDetectorRecipeError
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling, PoolingScheme
 from emblema.evaluation.domain.transfer.encoder_setting import EncoderSetting
@@ -164,3 +168,103 @@ def test_the_masks_are_read_off_a_detector_that_asks_the_pretext_alone() -> None
     assert asked.asked() is ASKING
     with pytest.raises(InvalidDetectorRecipeError, match="reads features, not the pretext"):
         recipe().asked()
+
+
+def test_the_whitened_distance_reads_no_neighbours() -> None:
+    whitened = recipe(distance=ScoreDistance.WHITENED, neighbours=None)
+
+    assert not whitened.scores_by_nearest_neighbours
+    assert recipe().scores_by_nearest_neighbours
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
+        whitened.nearest()
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
+        recipe(distance=ScoreDistance.WHITENED)
+    with pytest.raises(InvalidDetectorRecipeError, match="names no neighbours"):
+        recipe(neighbours=None)
+
+
+def test_a_detector_scored_by_an_error_has_no_distance_to_choose() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="no distance to choose"):
+        recipe(
+            features=DetectorFeatures.PRETEXT_ERROR,
+            reading=None,
+            neighbours=None,
+            pretext=PretextAsking(backbone=WEIGHTS, draws=2),
+            distance=ScoreDistance.WHITENED,
+        )
+
+
+def test_only_a_detector_scored_by_an_error_reads_its_errors_per_channel() -> None:
+    asked = recipe(
+        features=DetectorFeatures.PRETEXT_ERROR,
+        reading=None,
+        neighbours=None,
+        pretext=PretextAsking(backbone=WEIGHTS, draws=2),
+        normalisation=ErrorNormalisation.PER_CHANNEL,
+    )
+
+    assert asked.normalisation is ErrorNormalisation.PER_CHANNEL
+    assert recipe().normalisation is ErrorNormalisation.RAW
+    with pytest.raises(InvalidDetectorRecipeError, match="no errors to read"):
+        recipe(normalisation=ErrorNormalisation.PER_CHANNEL)
+
+
+def test_a_tail_is_hidden_exactly_once() -> None:
+    tail = PretextAsking(backbone=WEIGHTS, draws=1, hidden=HiddenCellsChoice.TAIL)
+
+    assert tail.hidden is HiddenCellsChoice.TAIL
+    assert PretextAsking(backbone=WEIGHTS).hidden is HiddenCellsChoice.OWN
+    with pytest.raises(InvalidDetectorRecipeError, match="hidden once"):
+        PretextAsking(backbone=WEIGHTS, draws=2, hidden=HiddenCellsChoice.TAIL)
+
+
+def test_the_cells_are_laid_out_as_the_states_are_and_read_no_encoder() -> None:
+    cells = recipe(features=DetectorFeatures.RAW_CELLS, reading=None)
+
+    assert DetectorFeatures.RAW_CELLS.lays_out_cells
+    assert DetectorFeatures.ENCODER_STATES.lays_out_cells
+    assert not DetectorFeatures.SUMMARIES.lays_out_cells
+    assert not DetectorFeatures.RAW_CELLS.reads_an_encoder
+    assert cells.reading is None
+
+
+@pytest.mark.parametrize(
+    "distance", [ScoreDistance.CENTRE, ScoreDistance.FARTHEST, ScoreDistance.SUBSPACE]
+)
+def test_a_distance_from_the_fitting_side_reads_no_neighbours(distance: ScoreDistance) -> None:
+    assert recipe(distance=distance, neighbours=None).neighbours is None
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
+        recipe(distance=distance)
+
+
+def test_a_detector_taught_events_reads_no_neighbours_and_no_distance_but_the_default() -> None:
+    taught = recipe(events=5, neighbours=None)
+
+    assert taught.is_taught
+    assert not taught.scores_by_nearest_neighbours
+    assert taught.head is TaughtHead.DIRECTION
+    assert recipe(events=5, neighbours=None, head=TaughtHead.TREES).head is TaughtHead.TREES
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
+        recipe(events=5)
+    with pytest.raises(InvalidDetectorRecipeError, match="no distance to choose"):
+        recipe(events=5, neighbours=None, distance=ScoreDistance.WHITENED)
+    with pytest.raises(InvalidDetectorRecipeError, match="taught 5 events reads no neighbours"):
+        taught.nearest()
+
+
+def test_a_head_is_chosen_only_for_a_detector_taught_events_and_a_count_is_not_negative() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="no head to choose"):
+        recipe(head=TaughtHead.TREES)
+    with pytest.raises(InvalidDetectorRecipeError, match="count of events"):
+        recipe(events=-1)
+
+
+def test_a_detector_scored_by_an_error_learns_from_no_event() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="learns from no event"):
+        recipe(
+            features=DetectorFeatures.PRETEXT_ERROR,
+            reading=None,
+            neighbours=None,
+            pretext=PretextAsking(backbone=WEIGHTS),
+            events=3,
+        )

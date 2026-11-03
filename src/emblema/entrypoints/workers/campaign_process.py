@@ -88,7 +88,8 @@ class CampaignProcess:
         open_test_split: The operation that records the asking for the frozen side.
         draw_label_budget: One budget of labels, drawn from a task's tuning side.
         draw_run_labels: What a run of any candidate is given before anything is fitted.
-        draw_detection_windows: What a run of a detector is given: windows, and no label.
+        draw_detection_windows: What a run of a detector is given: windows, and the few
+            events it is taught.
     """
 
     def __init__(

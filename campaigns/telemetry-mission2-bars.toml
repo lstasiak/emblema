@@ -1,0 +1,40 @@
+# The second mission's bars that read no backbone's weights, fitted once for the screen: the
+# summaries per channel under the nearest neighbours and the whitened distance, the counts of
+# readings, and the cells themselves under the five distances (ADR-0072); read against the
+# fitting side, as the mission is registered.
+#
+# Run once; committed before the campaign runs.
+name = "telemetry-mission2-bars"
+purpose = "tuning"
+tier = "M"
+measure = "pr_auc_shortfall"
+
+[candidates]
+competing = [
+    "summaries_knn",
+    "summaries_knn@distance=whitened",
+    "counts_knn",
+    "cells_knn",
+    "cells_knn@distance=whitened",
+    "cells_knn@distance=centre",
+    "cells_knn@distance=farthest",
+    "cells_knn@distance=subspace",
+]
+control = "summaries_knn"
+endpoint = "summaries_knn@distance=whitened"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3]
+
+[rules]
+minimum_absolute_reduction = 0.05
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 6
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

@@ -1,0 +1,48 @@
+# The first mission's bars that read no backbone's weights, fitted once for the screen: the
+# summaries per channel under the nearest neighbours and the whitened distance, the counts of
+# readings, the cells themselves under the five distances (ADR-0072), and the trees taught three,
+# five and ten of the fitting side's events over the summaries, the classical comparator with the
+# same labels (ADR-0073). The trees are read against the fitting side, since their log-odds
+# saturate within a month, and against the month beside at five events, descriptively; the cells
+# taught five events stand beside, descriptively.
+#
+# Run once; committed before the campaign runs.
+name = "telemetry-mission1-bars"
+purpose = "tuning"
+tier = "M"
+measure = "pr_auc_shortfall"
+
+[candidates]
+competing = [
+    "summaries_knn@reference=unit",
+    "summaries_knn@distance=whitened,reference=unit",
+    "counts_knn@reference=unit",
+    "cells_knn@reference=unit",
+    "cells_knn@distance=whitened,reference=unit",
+    "cells_knn@distance=centre,reference=unit",
+    "cells_knn@distance=farthest,reference=unit",
+    "cells_knn@distance=subspace,reference=unit",
+    "summaries_knn@events=3,head=trees",
+    "summaries_knn@events=5,head=trees",
+    "summaries_knn@events=10,head=trees",
+    "summaries_knn@events=5,head=trees,reference=unit",
+    "cells_knn@events=5,reference=unit",
+]
+control = "summaries_knn@reference=unit"
+endpoint = "summaries_knn@distance=whitened,reference=unit"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+minimum_absolute_reduction = 0.05
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 11
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

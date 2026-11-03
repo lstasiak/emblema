@@ -80,6 +80,15 @@ def test_the_satellites_events_are_numbered_among_the_read_channels(tmp_path: Pa
     assert [truths[w] for w in windows] == [0.0, 1.0, 0.0, 0.0, 2.0, AnomalyScheme.EXCLUDED]
 
 
+def test_the_satellites_scored_events_are_classed_by_their_number(tmp_path: Path) -> None:
+    truth = esa(tmp_path, LABELS, TYPES)
+
+    # The anomaly on the unread channel and the gap are no scored event of the read channels.
+    assert truth.classes_of(MISSION) == {1: "class_1", 2: "class_2"}
+    with pytest.raises(UnknownGroundTruthError, match="not a mission read here"):
+        truth.classes_of("ESA-Mission9")
+
+
 def test_a_window_over_a_gap_and_an_event_answers_with_the_event(tmp_path: Path) -> None:
     gap_too = LABELS.replace(
         "id_4,channel_41,2000-01-02T16:00:00.000Z",
@@ -108,10 +117,17 @@ def test_a_month_of_a_mission_not_read_is_refused(tmp_path: Path) -> None:
             TYPES,
             "line 2",
         ),
-        (LABELS, "ID,Class\nid_1,class_1\n", "no event or category"),
+        (LABELS, "ID,Class\nid_1,class_1\n", "no event, category or class"),
+        (LABELS, "ID,Category\nid_1,Anomaly\n", "no event, category or class"),
         (LABELS, "ID,Class,Subclass,Category\nid_1,c,s,Anomaly\n", "names no category"),
     ],
-    ids=["no channel", "no instant", "no category column", "event without a category"],
+    ids=[
+        "no channel",
+        "no instant",
+        "no category column",
+        "no class column",
+        "event without a category",
+    ],
 )
 def test_malformed_satellite_files_are_refused(
     tmp_path: Path, labels: str, types: str, reason: str

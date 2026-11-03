@@ -4,6 +4,7 @@ from dataclasses import replace
 from torch import nn
 
 from emblema.evaluation.adapters.detection.masked_cells import MaskedCells
+from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.exceptions import UnknownBackboneError, UnreadablePretextError
 from emblema.evaluation.domain.transfer.encoder_setting import TimeEncoding, ValueEmbedding
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
@@ -76,8 +77,9 @@ class RestoredBackbones:
         *,
         answered: bool,
         device: str,
+        hidden: HiddenCellsChoice = HiddenCellsChoice.OWN,
     ) -> list[MaskedCells]:
-        """The stored objective's draws over the windows, read back once per device.
+        """The stored objective's draws over the windows, or their tails, read back once per device.
 
         Raises:
             UnknownBackboneError: If other weights are asked for than this was built over.
@@ -91,7 +93,9 @@ class RestoredBackbones:
             reading = self._readings.get(device)
             if reading is None:
                 reading = self._readings[device] = PretextReading.of(self._trained, device=device)
-            drawn = reading.drawn(windows, seeds, answered=answered)
+            drawn = reading.drawn(
+                windows, seeds, answered=answered, tail=hidden is HiddenCellsChoice.TAIL
+            )
         except (UnanswerablePretextError, UnreadableTrainedModelError) as error:
             raise UnreadablePretextError(str(error)) from error
         return [

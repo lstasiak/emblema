@@ -44,6 +44,10 @@ ml = [
     # export tests.
     "onnx>=1.22",
     "onnxscript>=0.7",
+    # The detector taught a few events grows boosted trees as its classical comparator, in the
+    # same process as the detectors over an encoder's states; scikit-learn's trees carry their
+    # own OpenMP runtime, which is what lets them share a process with torch on every platform.
+    "scikit-learn>=1.6",
 ]
 
 # The classical candidates a campaign compares the network against. Its own extra rather than
@@ -198,6 +202,7 @@ allowed-confusables = ["×"]
 "scripts/probe_penalty_report.py" = ["E402"]
 "scripts/seed_spread_report.py" = ["E402"]
 "scripts/frozen_representations.py" = ["E402"]
+"scripts/taught_class_report.py" = ["E402"]
 "scripts/head_and_representation_report.py" = ["E402"]
 "scripts/campaign_pairs_report.py" = ["E402"]
 "scripts/latent_prediction_report.py" = ["E402"]
@@ -228,6 +233,7 @@ allowed-confusables = ["×"]
 "scripts/pretraining_screen_report.py" = ["E402"]
 "scripts/label_curve_figures.py" = ["E402"]
 "scripts/magnitude_response_report.py" = ["E402"]
+"scripts/state_geometry_report.py" = ["E402"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

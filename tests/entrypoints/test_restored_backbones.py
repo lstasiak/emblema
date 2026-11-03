@@ -8,6 +8,9 @@ from torch import nn  # noqa: E402
 from emblema.entrypoints.restored_backbones import RestoredBackbones  # noqa: E402
 from emblema.evaluation.adapters.detection.pretext_source import PretextSource  # noqa: E402
 from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory  # noqa: E402
+from emblema.evaluation.domain.detection.hidden_cells_choice import (  # noqa: E402
+    HiddenCellsChoice,
+)
 from emblema.evaluation.domain.exceptions import (  # noqa: E402
     UnknownBackboneError,
     UnreadablePretextError,
@@ -333,3 +336,20 @@ def test_a_caller_s_error_is_not_passed_off_as_the_backbone_s() -> None:
             weights, windows(1, seed=8), [2**64], answered=False, device="cpu"
         )
     assert not isinstance(raised.value, UnreadablePretextError)
+
+
+def test_the_tail_asked_of_the_source_is_the_reading_s_tail() -> None:
+    store = InMemoryArtifactStore()
+    weights, trained = stored_over_cells(store)
+    read = windows(2, seed=8)
+
+    masked = RestoredBackbones(store, weights).masked(
+        weights, read, [4, 5], answered=False, device="cpu", hidden=HiddenCellsChoice.TAIL
+    )
+    expected = PretextReading.of(TrainedModel.read(trained.to_bytes())).drawn(
+        read, [4, 5], answered=False, tail=True
+    )
+
+    for got, wanted in zip(masked, expected, strict=True):
+        assert np.array_equal(got.hidden, wanted.hidden)
+        assert got.hidden.any()

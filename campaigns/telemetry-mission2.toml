@@ -1,0 +1,45 @@
+# The second mission's events, read descriptively beside the first: the encoder's states against
+# the same encoder at its initialisation under the whitened distance and under the nearest
+# neighbours, and the pretext's error raw, per channel, for the window's tail and for the tail per
+# channel, each against the ridge under the same knobs. The mission is read against the fitting
+# side, as registered.
+#
+# Run once under each backbone the screen reads; committed before the campaign runs.
+name = "telemetry-mission2"
+purpose = "tuning"
+tier = "M"
+measure = "pr_auc_shortfall"
+
+[candidates]
+competing = [
+    "untrained_knn@distance=whitened",
+    "frozen_knn@distance=whitened",
+    "untrained_knn",
+    "frozen_knn",
+    "pretext_error",
+    "pretext_error@error=channel",
+    "pretext_error@hidden=tail",
+    "pretext_error@error=channel,hidden=tail",
+    "linear_answer_error",
+    "linear_answer_error@error=channel",
+    "linear_answer_error@hidden=tail",
+    "linear_answer_error@error=channel,hidden=tail",
+]
+control = "untrained_knn@distance=whitened"
+endpoint = "frozen_knn@distance=whitened"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3]
+
+[rules]
+minimum_absolute_reduction = 0.05
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 10
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

@@ -14,6 +14,7 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "emblema"
 ADAPTER_SEAMS = {
+    "emblema.evaluation.adapters.detection.feature_detector.FeatureDetector",
     "emblema.evaluation.adapters.detection.pretext_source.PretextSource",
     "emblema.evaluation.adapters.torch.backbone_factory.BackboneFactory",
     "emblema.evaluation.adapters.torch.layered_encoder.LayeredEncoder",

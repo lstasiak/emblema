@@ -5,14 +5,8 @@ from typing import Self
 import numpy as np
 from numpy.typing import NDArray
 
+from emblema.evaluation.adapters.detection.robust_scale import RobustScale
 from emblema.evaluation.domain.exceptions import InvalidScoredOutcomeError
-
-# A unit's spread is put on the scale of a standard deviation, so the fallback spread a unit
-# without one borrows reads in the same units as every other.
-_MAD_TO_DEVIATION = 1.4826
-# A spread this small beside its median is the rounding of the scores, not a spread: distances
-# expanded as |a|² + |b|² - 2ab carry noise of about 1e-8.
-_NO_SPREAD = 1e-9
 
 
 @dataclass(frozen=True)
@@ -96,9 +90,7 @@ class ScoreAlarm:
     @staticmethod
     def _spread(scores: NDArray[np.float64]) -> float:
         """The scaled median absolute deviation of ``scores``; zero where it is only rounding."""
-        centre = float(np.median(scores))
-        spread = _MAD_TO_DEVIATION * float(np.median(np.abs(scores - centre)))
-        return spread if spread > _NO_SPREAD * (1.0 + abs(centre)) else 0.0
+        return RobustScale.deviation_of(scores)
 
     @classmethod
     def _against_own_unit(

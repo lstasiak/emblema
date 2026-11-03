@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from emblema.evaluation.adapters.detection.feature_routed_detection_runtime import (
@@ -14,6 +16,13 @@ from tests.evaluation.support import WEIGHTS, labelled, task, window
 FITTING = (window("a", 0, 10.0),)
 SCORED = (labelled("c", 2, 10.0, 1.0),)
 RECIPES = {
+    "cells": DetectorRecipe(
+        features=DetectorFeatures.RAW_CELLS,
+        reading=None,
+        neighbours=5,
+        contamination=0.02,
+        seed=1,
+    ),
     "states": DetectorRecipe(
         features=DetectorFeatures.ENCODER_STATES,
         reading=EncoderReading(architecture=WEIGHTS, backbone=WEIGHTS),
@@ -39,9 +48,13 @@ RECIPES = {
 }
 
 
+# The cells go where the states go: the runtime that lays windows out on the backbone's spans.
+ROUTES = {"cells": "states", "states": "states", "summaries": "summaries", "pretext": "pretext"}
+
+
 @pytest.mark.parametrize("route", list(RECIPES))
 def test_a_recipe_goes_to_the_runtime_its_features_need(route: str) -> None:
-    runtimes = {name: InMemoryDetectionRuntime() for name in RECIPES}
+    runtimes = {name: InMemoryDetectionRuntime() for name in ROUTES.values()}
     routed = FeatureRoutedDetectionRuntime(
         states=runtimes["states"], summaries=runtimes["summaries"], pretext=runtimes["pretext"]
     )
@@ -49,7 +62,7 @@ def test_a_recipe_goes_to_the_runtime_its_features_need(route: str) -> None:
     routed.fit(RECIPES[route], task(), FITTING, SCORED, retain=False)
 
     assert {name: len(runtime.detections) for name, runtime in runtimes.items()} == {
-        name: int(name == route) for name in RECIPES
+        name: int(name == ROUTES[route]) for name in runtimes
     }
 
 
@@ -60,3 +73,22 @@ def test_a_process_that_asks_no_pretext_refuses_a_detector_that_would() -> None:
 
     with pytest.raises(UnsupportedDetectorFeaturesError, match="asks no backbone's pretext"):
         routed.fit(RECIPES["pretext"], task(), FITTING, SCORED, retain=False)
+
+
+def test_the_taught_windows_travel_to_the_runtime_the_recipe_is_routed_to() -> None:
+    states, summaries = InMemoryDetectionRuntime(), InMemoryDetectionRuntime()
+    routed = FeatureRoutedDetectionRuntime(states=states, summaries=summaries)
+    fitting = (window("a", 0, 10.0), window("a", 1, 20.0))
+    taught = (labelled("a", 1, 20.0, 2.0),)
+
+    routed.fit(
+        replace(RECIPES["summaries"], events=1, neighbours=None),
+        task(),
+        fitting,
+        SCORED,
+        taught=taught,
+        retain=False,
+    )
+
+    assert summaries.detections[0].taught == taught
+    assert states.detections == []

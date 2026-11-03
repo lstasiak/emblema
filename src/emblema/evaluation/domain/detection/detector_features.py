@@ -7,6 +7,9 @@ class DetectorFeatures(StrEnum):
     Attributes:
         ENCODER_STATES: The states of a frozen encoder pooled over the window, pretrained or
             drawn at its initialisation, read at the layer and under the pooling a plan names.
+        RAW_CELLS: The window's cells as the encoder reads them, every channel of the corpus
+            over every span, with what each span held, and no encoder: the bar of the input
+            itself, held to the same distances as the states.
         SUMMARIES: The statistics of every channel of the window, the table the classical
             methods read; the bar a representation is held to.
         READING_COUNTS: How many readings each channel of the window holds, nothing of their
@@ -22,6 +25,7 @@ class DetectorFeatures(StrEnum):
     """
 
     ENCODER_STATES = "encoder_states"
+    RAW_CELLS = "raw_cells"
     SUMMARIES = "summaries"
     READING_COUNTS = "reading_counts"
     PRETEXT_ERROR = "pretext_error"
@@ -32,6 +36,11 @@ class DetectorFeatures(StrEnum):
     def reads_an_encoder(self) -> bool:
         """Whether a window is read as the states of an encoder."""
         return self is DetectorFeatures.ENCODER_STATES
+
+    @property
+    def lays_out_cells(self) -> bool:
+        """Whether a window is laid out as cells on the backbone's spans, encoder or no encoder."""
+        return self in (DetectorFeatures.ENCODER_STATES, DetectorFeatures.RAW_CELLS)
 
     @property
     def asks_the_pretext(self) -> bool:

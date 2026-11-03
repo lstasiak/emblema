@@ -24,6 +24,8 @@ from scripts.campaign_pairs_report import (
     COMPARISON_COLUMNS,
     COMPARISONS,
     GROUPED_BY,
+    INTERACTION_COLUMNS,
+    INTERACTIONS,
     PREDICTIONS,
     SCORES,
     Answers,
@@ -32,12 +34,14 @@ from scripts.campaign_pairs_report import (
     export,
     export_predictions,
     export_scores,
+    interact,
     main,
     pair,
     read_cells,
     read_predictions,
     read_scores,
     render,
+    render_interactions,
     write_cells,
     write_predictions,
     write_scores,
@@ -640,3 +644,139 @@ def test_a_side_fitted_once_pairs_by_event_weighted_area_with_a_side_of_two_seed
     assert read.candidate_error.pooled == pytest.approx(read.control_error.pooled / 2)
     assert read.per_seed == pytest.approx((read.difference.reduction,) * 3)
     assert read.difference.reduction > 0
+
+
+TAUGHT_CONTROL, TAUGHT_CONTENDER = (
+    CandidateRef("control@events=2"),
+    CandidateRef("contender@events=2"),
+)
+
+
+def taught_grid(campaign_id: CampaignId, taught_contender: tuple[float, ...]) -> CampaignReading:
+    """A grid of two detectors by two teachings read by event-weighted area, three seeds.
+
+    Untaught, both answer as the control does; taught, the control still does and the contender
+    answers ``taught_contender``.
+    """
+    grid = reading(
+        campaign_id=campaign_id,
+        purpose=RunPurpose.TUNING,
+        design=replace(
+            design(
+                candidates=(
+                    candidate(CONTROL),
+                    candidate(CONTENDER),
+                    candidate(TAUGHT_CONTROL),
+                    candidate(TAUGHT_CONTENDER),
+                ),
+                budgets=(BUDGET,),
+                seeds=(1, 2, 3),
+            ),
+            measure=ErrorMeasure.PR_AUC_SHORTFALL,
+        ),
+    )
+    for cell in grid.campaign.design.cells():
+        answers = taught_contender if cell.candidate == TAUGHT_CONTENDER else CONTROL_ANSWERS
+        grid = grid.record(
+            answered(
+                cell.candidate, cell.budget, cell.seed, [a * (1 + cell.seed / 100) for a in answers]
+            )
+        )
+    return grid
+
+
+def test_an_interaction_is_the_taught_pairs_reduction_less_the_untaught_pairs() -> None:
+    grid = taught_grid(BY_AREA, PERFECT_ANSWERS)
+
+    read = interact(
+        export([grid]),
+        str(BY_AREA),
+        taught=(str(TAUGHT_CONTENDER), str(TAUGHT_CONTROL)),
+        untaught=(str(CONTENDER), str(CONTROL)),
+        budget=BUDGET.text(),
+        bootstrap=BOOTSTRAP,
+        answers=Answers(export_predictions([grid])),
+    )
+
+    assert read.reduction_untaught == pytest.approx(0.0)
+    assert read.reduction_taught > 0.0
+    assert read.difference.reduction == pytest.approx(read.reduction_taught)
+    assert read.per_seed == pytest.approx((read.difference.reduction,) * 3)
+    assert read.repeats == 3
+    assert read.difference.relative_reduction is None
+
+
+def test_a_grid_whose_teaching_lifts_both_sides_alike_reads_no_interaction() -> None:
+    grid = taught_grid(BY_AREA, CONTROL_ANSWERS)
+
+    read = interact(
+        export([grid]),
+        str(BY_AREA),
+        taught=(str(TAUGHT_CONTENDER), str(TAUGHT_CONTROL)),
+        untaught=(str(CONTENDER), str(CONTROL)),
+        budget=BUDGET.text(),
+        bootstrap=BOOTSTRAP,
+        answers=Answers(export_predictions([grid])),
+    )
+
+    assert read.difference.reduction == pytest.approx(0.0)
+    assert read.seed_mean == pytest.approx(0.0)
+
+
+def test_an_interaction_is_read_by_event_weighted_area_alone() -> None:
+    grid = by_area(BY_AREA, PERFECT_ANSWERS)
+
+    with pytest.raises(ValueError, match="event-weighted area alone"):
+        interact(
+            export([grid]),
+            str(BY_AREA),
+            taught=(str(CONTENDER), str(CONTROL)),
+            untaught=(str(CONTENDER), str(CONTROL)),
+            budget=BUDGET.text(),
+            bootstrap=BOOTSTRAP,
+            answers=Answers(export_predictions([grid])),
+        )
+
+
+def test_main_reads_an_interaction_off_the_exported_answers_and_writes_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    registry = InMemoryEvaluationCampaignRepository()
+    store(registry, taught_grid(BY_AREA, PERFECT_ANSWERS))
+
+    main(
+        [
+            "--out",
+            str(tmp_path),
+            "--campaign",
+            str(BY_AREA),
+            "--interaction",
+            str(BY_AREA),
+            str(TAUGHT_CONTENDER),
+            str(TAUGHT_CONTROL),
+            str(CONTENDER),
+            str(CONTROL),
+            BUDGET.text(),
+            "--resamples",
+            "50",
+        ],
+        registry=registry,
+    )
+
+    written = list(csv.DictReader((tmp_path / INTERACTIONS).open(newline="")))
+    assert tuple(written[0]) == INTERACTION_COLUMNS
+    assert float(written[0]["interaction"]) > 0.0
+    assert "| campaign | taught pair |" in capsys.readouterr().out
+    assert "taught pair" in render_interactions([])
+
+
+def test_a_comparison_of_one_seed_states_no_spread_over_seeds() -> None:
+    read = paired_by_area(
+        [replace(by_area(BY_AREA, PERFECT_ANSWERS, measure=ErrorMeasure.PR_AUC_SHORTFALL))],
+        side(BY_AREA, CONTROL),
+        side(BY_AREA, CONTENDER),
+    )
+    one_seed = replace(read, per_seed=read.per_seed[:1])
+
+    assert one_seed.seed_se == 0.0
+    assert "± 0.000" in render([one_seed])

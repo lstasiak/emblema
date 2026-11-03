@@ -16,6 +16,8 @@ from emblema.evaluation.adapters.detection.pretext_error_detection_runtime impor
 )
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
+from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
+from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.exceptions import UnreadablePretextError
 from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
@@ -51,6 +53,7 @@ class FakePretext:
         self.bins = bins
         self.huber_delta = huber_delta
         self.calls: list[tuple[list[TokenWindow], list[int], bool]] = []
+        self.hidden: list[HiddenCellsChoice] = []
 
     def masked(
         self,
@@ -60,19 +63,21 @@ class FakePretext:
         *,
         answered: bool,
         device: str,
+        hidden: HiddenCellsChoice = HiddenCellsChoice.OWN,
     ) -> list[MaskedCells]:
         self.calls.append((list(windows), list(seeds), answered))
+        self.hidden.append(hidden)
         drawn = []
         for token_window in windows:
             (full,) = self._layout.lay([token_window])
-            hidden = (full.features[:, BinnedTokens.PRESENCE] > 0.5) & ~full.timeless
-            visible = self._layout.without(token_window, hidden)
+            concealed = (full.features[:, BinnedTokens.PRESENCE] > 0.5) & ~full.timeless
+            visible = self._layout.without(token_window, concealed)
             values = full.features[:, BinnedTokens.VALUE_FEATURES]
             drawn.append(
                 MaskedCells(
                     full=full.features.astype(np.float64),
                     visible=visible.features.astype(np.float64),
-                    hidden=hidden,
+                    hidden=concealed,
                     channel_ids=full.channel_ids.astype(np.int64),
                     timeless=full.timeless,
                     answers=(values + self._missed(token_window)) if answered else None,
@@ -285,3 +290,94 @@ def test_the_seed_of_a_draw_is_the_window_s_and_the_draw_s_alone() -> None:
     assert first != PretextErrorDetectionRuntime._seed(1, window("a", 0, 1.0), 1)
     assert first != PretextErrorDetectionRuntime._seed(2, window("a", 0, 1.0), 0)
     assert 0 <= first < 2**63
+
+
+class MissedByChannel(FakePretext):
+    """Misses channel one by one and channel two by three; the held-out window's first by two."""
+
+    def masked(self, *args: object, **kwargs: object) -> list[MaskedCells]:
+        drawn = super().masked(*args, **kwargs)  # type: ignore[arg-type]
+        read = []
+        for cells, token_window in zip(drawn, args[1], strict=True):  # type: ignore[call-overload]
+            if cells.answers is None:
+                read.append(cells)
+                continue
+            first = 2.0 if held_out_missed_by_three(token_window) else 1.0
+            miss = np.where(cells.channel_ids == 1, first, 3.0)
+            values = cells.full[:, BinnedTokens.VALUE_FEATURES]
+            read.append(replace(cells, answers=values + miss[:, None]))
+        return read
+
+
+def test_read_per_channel_a_quiet_channel_s_departure_counts_as_much_as_a_loud_one_s(
+    detection_task: tuple[DownstreamTask, PublishedCorpusBlocks],
+) -> None:
+    stated, blocks = detection_task
+    per_channel = replace(recipe(), normalisation=ErrorNormalisation.PER_CHANNEL)
+
+    raw = PretextErrorDetectionRuntime(MissedByChannel(), blocks).fit(
+        recipe(), stated, FITTING, SCORED, retain=False
+    )
+    normalised = PretextErrorDetectionRuntime(MissedByChannel(), blocks).fit(
+        per_channel, stated, FITTING, SCORED, retain=False
+    )
+
+    # Raw, the held-out window's doubled miss on the first channel (a loss of 4 against 1) is
+    # averaged with the second channel's 9 and sits below the alarm the loud fitting windows set.
+    # Per channel, every fitting window reads one on each channel it scored, so the alarm sits at
+    # one, and the held-out window reads the mean of 4 and 1.
+    assert raw.predictions[0].predicted < 0.0
+    assert normalised.predictions[0].predicted == pytest.approx(2.5 - 1.0)
+    assert normalised.predictions[1].predicted == pytest.approx(0.0)
+
+
+def test_what_a_fit_read_per_channel_keeps_is_the_channels_scales(
+    detection_task: tuple[DownstreamTask, PublishedCorpusBlocks],
+) -> None:
+    stated, blocks = detection_task
+    store = InMemoryArtifactStore()
+    per_channel = replace(recipe(), normalisation=ErrorNormalisation.PER_CHANNEL)
+
+    outcome = PretextErrorDetectionRuntime(MissedByChannel(), blocks, store=store).fit(
+        per_channel, stated, FITTING, SCORED, retain=True
+    )
+
+    assert outcome.artifact is not None
+    kept = KeptCandidates(store).read(outcome.artifact)
+    with np.load(io.BytesIO(store.get(kept.measured.artifact))) as archive:
+        assert archive["scale_channels"].tolist() == [1, 2]
+        assert archive["scales"].tolist() == pytest.approx([1.0, 9.0])
+
+
+def test_a_window_holding_a_channel_the_corpus_does_not_name_is_refused(
+    detection_task: tuple[DownstreamTask, PublishedCorpusBlocks],
+) -> None:
+    stated, blocks = detection_task
+
+    class Relabelled(FakePretext):
+        def masked(self, *args: object, **kwargs: object) -> list[MaskedCells]:
+            return [
+                replace(cells, channel_ids=np.where(cells.channel_ids == 2, 99, cells.channel_ids))
+                for cells in super().masked(*args, **kwargs)  # type: ignore[arg-type]
+            ]
+
+    with pytest.raises(UnreadablePretextError, match="does not name"):
+        PretextErrorDetectionRuntime(Relabelled(), blocks).fit(
+            recipe(), stated, FITTING, SCORED, retain=False
+        )
+
+
+def test_which_cells_are_hidden_is_asked_of_the_source_once_a_window(
+    detection_task: tuple[DownstreamTask, PublishedCorpusBlocks],
+) -> None:
+    stated, blocks = detection_task
+    source = FakePretext()
+    tail = replace(
+        recipe(), pretext=PretextAsking(backbone=WEIGHTS, draws=1, hidden=HiddenCellsChoice.TAIL)
+    )
+
+    PretextErrorDetectionRuntime(source, blocks).fit(tail, stated, FITTING, SCORED, retain=False)
+
+    assert set(source.hidden) == {HiddenCellsChoice.TAIL}
+    # One draw a window: the fitting side's windows once, then the scored side's once.
+    assert [len(seeds) for _, seeds, _ in source.calls] == [len(FITTING), len(SCORED)]

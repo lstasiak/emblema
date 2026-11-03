@@ -198,3 +198,19 @@ def test_the_answers_on_the_accelerator_are_the_host_s() -> None:
         assert accelerator.answers is not None
         assert np.abs(host.answers).max() > 0.0
         assert np.allclose(host.answers, accelerator.answers, atol=1e-4)
+
+
+def test_asked_for_the_tail_the_reading_hides_every_channel_s_last_span_and_draws_nothing() -> None:
+    reading = PretextReading.of(trained())
+    read = window(3, 9, seed=5, static=True)
+    layout = BinnedTokens(CELLS.bins)
+    (laid,) = layout.lay([read])
+    last_span = (laid.times > 1.0 - 1.0 / CELLS.bins) & ~laid.timeless
+
+    first, other = reading.drawn([read, read], [1, 2], answered=True, tail=True)
+
+    assert np.array_equal(first.hidden, last_span)
+    assert np.array_equal(other.hidden, first.hidden)
+    assert first.answers is not None
+    # The tail covers every channel, so a hidden cell still has a visible one before it.
+    assert first.visible[~first.hidden].shape[0] > 0

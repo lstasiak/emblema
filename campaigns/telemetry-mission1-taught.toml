@@ -1,0 +1,49 @@
+# The first mission's events read under the whitened distance, and by detectors taught a few of
+# the fitting side's events: the encoder's states against the same encoder at its initialisation,
+# untaught and taught three, five and ten events, each read against the other windows of its own
+# month (ADR-0069, ADR-0073). The nearest-neighbour detectors stand beside, so the change of
+# instrument is measured rather than assumed; the combination of the whitened distance and the
+# events' direction stands beside at five events, descriptively.
+#
+# The seeds draw the initialisation of the untrained encoder and the events taught, nested across
+# the counts under one seed, so the interaction between encoders and counts pairs by seed.
+#
+# Run once under each backbone the screen reads; committed before the campaign runs.
+name = "telemetry-mission1-taught"
+purpose = "tuning"
+tier = "M"
+measure = "pr_auc_shortfall"
+
+[candidates]
+competing = [
+    "untrained_knn@distance=whitened,reference=unit",
+    "frozen_knn@distance=whitened,reference=unit",
+    "untrained_knn@reference=unit",
+    "frozen_knn@reference=unit",
+    "untrained_knn@events=3,reference=unit",
+    "frozen_knn@events=3,reference=unit",
+    "untrained_knn@events=5,reference=unit",
+    "frozen_knn@events=5,reference=unit",
+    "untrained_knn@events=10,reference=unit",
+    "frozen_knn@events=10,reference=unit",
+    "untrained_knn@events=5,head=combined,reference=unit",
+    "frozen_knn@events=5,head=combined,reference=unit",
+]
+control = "untrained_knn@distance=whitened,reference=unit"
+endpoint = "frozen_knn@distance=whitened,reference=unit"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+minimum_absolute_reduction = 0.05
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 10
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

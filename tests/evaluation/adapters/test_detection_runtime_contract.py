@@ -22,10 +22,13 @@ from emblema.evaluation.domain.detection.detector_features import DetectorFeatur
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
+from emblema.evaluation.domain.detection.score_distance import ScoreDistance
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
+from emblema.evaluation.domain.detection.taught_head import TaughtHead
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
+    InvalidTaughtEventsError,
     UnsupportedDetectorFeaturesError,
 )
 from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
@@ -265,3 +268,81 @@ def test_the_counts_of_readings_are_read_where_the_summaries_are_and_nowhere_els
     else:
         with pytest.raises(UnsupportedDetectorFeaturesError):
             adapted.runtime.fit(counts, adapted.task, FITTING, SCORED, retain=False)
+
+
+def test_the_whitened_distance_answers_the_same_windows_and_scores_them_otherwise(
+    adapted: Adapted,
+) -> None:
+    nearest = recipe_for(adapted)
+    if nearest.features.asks_the_pretext:
+        pytest.skip("a detector scored by an error has no distance to choose")
+    whitened = replace(nearest, distance=ScoreDistance.WHITENED, neighbours=None)
+
+    by_nearest = adapted.runtime.fit(nearest, adapted.task, FITTING, OF_TWO_UNITS, retain=False)
+    by_whitened = adapted.runtime.fit(whitened, adapted.task, FITTING, OF_TWO_UNITS, retain=False)
+
+    assert [p.window for p in by_whitened.predictions] == [p.window for p in by_nearest.predictions]
+    assert all(isfinite(p.predicted) for p in by_whitened.predictions)
+    if not isinstance(adapted.runtime, InMemoryDetectionRuntime):
+        assert [p.predicted for p in by_whitened.predictions] != [
+            p.predicted for p in by_nearest.predictions
+        ]
+
+
+# One fitting window taught as an event, which leaves two fitting windows outside it.
+TAUGHT = (labelled("a", 1, 15.0, 7.0),)
+
+
+@pytest.mark.parametrize("head", [TaughtHead.DIRECTION, TaughtHead.COMBINED, TaughtHead.TREES])
+def test_a_detector_taught_an_event_answers_the_same_windows_under_every_head(
+    adapted: Adapted, head: TaughtHead
+) -> None:
+    plain = recipe_for(adapted)
+    if plain.features.asks_the_pretext:
+        with pytest.raises(InvalidTaughtEventsError, match="learns from no event"):
+            adapted.runtime.fit(plain, adapted.task, FITTING, SCORED, taught=TAUGHT, retain=False)
+        return
+    taught = replace(plain, events=1, neighbours=None, head=head)
+
+    outcome = adapted.runtime.fit(
+        taught, adapted.task, FITTING, OF_TWO_UNITS, taught=TAUGHT, retain=True
+    )
+
+    assert [p.window for p in outcome.predictions] == [w.window for w in OF_TWO_UNITS]
+    assert all(isfinite(p.predicted) for p in outcome.predictions)
+    assert outcome.artifact is not None
+
+
+def test_a_detector_taught_an_event_is_refused_a_window_off_the_fitting_side(
+    adapted: Adapted,
+) -> None:
+    plain = recipe_for(adapted)
+    if plain.features.asks_the_pretext:
+        pytest.skip("a detector scored by an error learns from no event")
+    taught = replace(plain, events=1, neighbours=None)
+
+    with pytest.raises(InvalidTaughtEventsError, match="not on the fitting side"):
+        adapted.runtime.fit(
+            taught,
+            adapted.task,
+            FITTING,
+            SCORED,
+            taught=(labelled("c", 2, 10.0, 1.0),),
+            retain=False,
+        )
+
+
+def test_a_detector_is_handed_the_events_its_recipe_is_taught_and_no_others(
+    adapted: Adapted,
+) -> None:
+    plain = recipe_for(adapted)
+    if plain.features.asks_the_pretext:
+        pytest.skip("a detector scored by an error learns from no event")
+    taught = replace(plain, events=2, neighbours=None)
+
+    with pytest.raises(InvalidTaughtEventsError, match="was handed 1"):
+        adapted.runtime.fit(taught, adapted.task, FITTING, SCORED, taught=TAUGHT, retain=False)
+    with pytest.raises(InvalidTaughtEventsError, match="handed no taught window"):
+        adapted.runtime.fit(taught, adapted.task, FITTING, SCORED, retain=False)
+    with pytest.raises(InvalidTaughtEventsError, match="taught no event"):
+        adapted.runtime.fit(plain, adapted.task, FITTING, SCORED, taught=TAUGHT, retain=False)

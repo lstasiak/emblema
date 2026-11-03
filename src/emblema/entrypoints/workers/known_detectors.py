@@ -12,16 +12,19 @@ class KnownDetectors:
     """The detectors every detection campaign competes, each under the name it is compared by.
 
     One detector over the pretrained encoder's states, one over the same encoder at its
-    initialisation, reading the windows as the backbone read them, one over the summaries per
-    channel and one over their counts of readings alone: the same distance to the same number
-    of nearest fitting windows under the same alarm, so a campaign of them reads what the
-    representation adds and nothing else, and whether the sampling alone tells as much. Both
+    initialisation, reading the windows as the backbone read them, one over the cells themselves
+    as the encoder would read them, one over the summaries per channel and one over their counts
+    of readings alone: the same distance to the same number of nearest fitting windows under the
+    same alarm, so a campaign of them reads what the representation adds and nothing else, and
+    whether the sampling alone tells as much. Both
     encoders are read at every block side by side, the reading the probes found the states
     worth most under, and pooled by the mean over the window's tokens. Beside them, three scored
     by the error of what is filled in where the backbone's own masks hide a window's cells: by
     the backbone's pretext, by a ridge per channel over the same visible cells, and by each
     channel's line between its visible bins. The neighbours or the draws, the alarm's share and
-    what a score is read against are knobs of the name, declared with the campaign. A register
+    what a score is read against are knobs of the name, declared with the campaign, as are the
+    few of the fitting side's events a detector over features is taught and the head it then
+    scores by. A register
     rather than a table read from configuration, for the reason the arms are one: the names are
     what a stored campaign refers to.
     """
@@ -30,6 +33,7 @@ class KnownDetectors:
 
     FROZEN = CandidateRef("frozen_knn")
     UNTRAINED = CandidateRef("untrained_knn")
+    CELLS = CandidateRef("cells_knn")
     SUMMARIES = CandidateRef("summaries_knn")
     COUNTS = CandidateRef("counts_knn")
     PRETEXT = CandidateRef("pretext_error")
@@ -53,6 +57,12 @@ class KnownDetectors:
                 architecture=backbone,
                 backbone=None,
                 encoder=cls.READING,
+            ),
+            DetectorArm(
+                ref=cls.CELLS,
+                features=DetectorFeatures.RAW_CELLS,
+                architecture=None,
+                backbone=None,
             ),
             DetectorArm(
                 ref=cls.SUMMARIES,
@@ -92,6 +102,7 @@ class KnownDetectors:
         return (
             cls.FROZEN,
             cls.UNTRAINED,
+            cls.CELLS,
             cls.SUMMARIES,
             cls.COUNTS,
             cls.PRETEXT,

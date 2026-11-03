@@ -17,6 +17,7 @@ from emblema.evaluation.application.use_cases.open_test_split import OpenTestSpl
 from emblema.evaluation.contracts.events import FrozenTestSplitOpened
 from emblema.evaluation.domain.detection.detection_windows import DetectionWindows
 from emblema.evaluation.domain.exceptions import (
+    InvalidTaughtEventsError,
     ProtocolMismatchError,
     TaskNotFoundError,
     UnknownGroundTruthError,
@@ -49,6 +50,15 @@ EVENTS = {
     TaskWindow(unit=UnitKey("d"), position=8, ends_at=60.0): AnomalyScheme.EXCLUDED,
     TaskWindow(unit=UnitKey("d"), position=9, ends_at=120.0): 2.0,
 }
+# The fitting side's own events, where a detector is taught some: unit a holds event 3 over two
+# windows, unit b event 4 over one and a gap over the other.
+FITTING_EVENTS = EVENTS | {
+    TaskWindow(unit=UnitKey("a"), position=0, ends_at=60.0): 0.0,
+    TaskWindow(unit=UnitKey("a"), position=1, ends_at=120.0): 3.0,
+    TaskWindow(unit=UnitKey("a"), position=2, ends_at=180.0): 3.0,
+    TaskWindow(unit=UnitKey("b"), position=3, ends_at=60.0): 4.0,
+    TaskWindow(unit=UnitKey("b"), position=4, ends_at=120.0): AnomalyScheme.EXCLUDED,
+}
 FROZEN = FrozenTestSplit(units=units("d"), source="telemetry/test")
 PUBLISHED = sides(training=units("a", "b"), validation=units("c"))
 
@@ -60,6 +70,8 @@ def drawn(
     purpose: RunPurpose = RunPurpose.TUNING,
     heard: list[FrozenTestSplitOpened] | None = None,
     truths: dict[TaskWindow, float] = EVENTS,
+    events: int = 0,
+    seed: int = 1,
 ) -> DetectionWindows:
     tasks = InMemoryDownstreamTaskRepository()
     if save_task:
@@ -84,7 +96,9 @@ def drawn(
             tasks, SequentialIdGenerator(), FixedClock(NOW), InMemoryEventPublisher(subscriptions)
         ),
     )
-    return use_case(DrawDetectionWindowsCommand(task=TASK, purpose=purpose))
+    return use_case(
+        DrawDetectionWindowsCommand(task=TASK, purpose=purpose, events=events, seed=seed)
+    )
 
 
 def test_the_fitting_side_is_the_tuning_side_whole_and_carries_no_label() -> None:
@@ -135,3 +149,26 @@ def test_an_unknown_task_is_refused() -> None:
 def test_a_scored_window_the_ground_truth_says_nothing_about_is_refused() -> None:
     with pytest.raises(UnknownGroundTruthError):
         drawn(truths={})
+
+
+def test_a_detector_taught_events_is_handed_whole_events_of_the_fitting_side() -> None:
+    windows = drawn(truths=FITTING_EVENTS, events=1, seed=1)
+
+    # Under seed 1 the event drawn is the third, both of its windows and nothing of the fourth.
+    assert [(w.window.position, w.target) for w in windows.taught] == [(1, 3.0), (2, 3.0)]
+    # Every fitting window is still on the fitting side, and the scored side is as before.
+    assert len(windows.fitting) == 5
+    assert [w.target for w in windows.scored] == [0.0, 1.0, 1.0]
+
+
+def test_both_events_of_the_side_are_taught_when_two_are_asked_and_a_third_is_refused() -> None:
+    both = drawn(truths=FITTING_EVENTS, events=2, seed=1)
+
+    assert sorted({w.target for w in both.taught}) == [3.0, 4.0]
+    with pytest.raises(InvalidTaughtEventsError, match="holds 2 events"):
+        drawn(truths=FITTING_EVENTS, events=3, seed=1)
+
+
+def test_a_detector_taught_no_event_labels_no_fitting_window() -> None:
+    # The truths say nothing about the fitting windows, and nothing is asked of them.
+    assert drawn(events=0).taught == ()
