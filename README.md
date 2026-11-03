@@ -97,7 +97,10 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
   nothing at 200. It is a screen of four pretrainings; fresh pretrainings confirm it or not.
 - **On satellite telemetry the pretrained encoder does not find events without labels.** Its
   features do not beat the same encoder untrained, nor its pretext's error a linear model over
-  the same readings.
+  the same readings; a whitened distance, a per-channel error and a few taught events do not
+  change that. With five to ten labelled events a direction over the encoder's states,
+  pretrained or not, beats trees taught the same events by 0.10; without labels the best
+  detectors are classical.
 - **Pretraining now leaves a representation above its initialisation.** On the encoder over
   cells a linear probe on the frozen features gains 0.06 to 0.09 in area over the same encoder
   untrained at 500 stays; it still reads 0.03 below the trees.
@@ -110,9 +113,8 @@ Preliminary, on validation data. Each task's test data is used once, at the end.
 - **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
   dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
   model that saw it, and carries part of a downstream task.
-- **Next:** confirm the gain at few labels on fresh pretrainings. Pretraining on telemetry does
-  not lose the size of a reading; its states spread normal windows wider, so events stand out
-  less.
+- **Next:** confirm the gain at few labels on fresh pretrainings; on telemetry, pilot
+  fine-tuning with a few labelled events, pretrained against untrained.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
