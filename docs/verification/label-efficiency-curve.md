@@ -1,5 +1,7 @@
 # Label-efficiency curve on the turbofan task, preliminary and on the validation side
 
+*`scripts/label_curve_report.py`, `scripts/backbone_comparison_report.py` and the tests of the first two grids were removed in `ada65416`, when campaigns replaced them; read them at the commit a section names.*
+
 Purpose: draw the curve the programme is about — four transfer modes over four budgets of
 labels under five seeds, on the turbofan task — and read it by the rules registered before any
 of its numbers existed (`docs/preregistration.md`), through the Evaluation context's statistics
@@ -787,20 +789,13 @@ What it says:
 
 ## 2026-09-22 — Linux x86_64 (Colab, NVIDIA A100, fp32): the grid over the four subsets read per operating condition
 
-The grid under the floor on the configuration the replacement rule chose, registered before it
-ran (`docs/preregistration.md`, 2026-09-22).
+*Condensed on 2026-11-03; the full text is at commit `85858e92` (`git show 85858e92:docs/verification/label-efficiency-curve.md`). No number or conclusion changed.*
 
-- *What ran.* Budgets of 50, 1,000 and all 2,568 labelled windows; the four arms; seeds 1 to 5;
-  the peaks of the sweep above; 2,000 optimiser steps at least and the head's start. The cell at
-  200 is the endpoint above and did not run again.
-- *Where it ran.* At `fdf8053`, the endpoint's commit, on the A100, five processes at once. Each
-  directory holds one budget and seed with its four arms and was published as it landed.
-- *Where it is.* Fetched as `data/report/transfer/cond-grid/b<budget>-s<seed>` (fifteen archives,
-  one per budget and seed) and read with the endpoint (`data/report/curve/cond-grid`). Read here
-  again from the fetched archives, the comparisons match the notebook's digit for digit.
+Does pretraining help at few labels with four subsets read per operating condition, on the configuration the replacement rule chose (`docs/preregistration.md`, 2026-09-22)?
 
-**Endpoint RMSE per cell, mean ± SD over seeds** (the engines column is how many engines the
-budget's labels came from, over the seeds):
+Budgets 50, 1,000 and all 2,568 windows; four arms; seeds 1 to 5; the sweep's peaks; 2,000 optimiser steps at least and the head's start. The cell at 200 is the endpoint above, not rerun. Run at `fdf8053` on the A100, five processes at once; fifteen archives in `data/report/transfer/cond-grid/b<budget>-s<seed>`, read with the endpoint (`data/report/curve/cond-grid`); comparisons match the notebook.
+
+**Endpoint RMSE per cell, mean ± SD over seeds**:
 
 | budget | engines | from_scratch | frozen_probe | lora | full_fine_tuning |
 | --- | --- | --- | --- | --- | --- |
@@ -809,11 +804,9 @@ budget's labels came from, over the seeds):
 | 1000 | 79 | 15.20 ± 1.36 | 16.08 ± 0.23 | 14.45 ± 0.39 | 13.87 ± 0.30 |
 | all | 79 | 12.26 ± 0.65 | 15.72 ± 0.33 | 12.80 ± 0.37 | 12.88 ± 0.80 |
 
-Trivial predictors over the same windows: the mean predictor 40.84, the ceiling predictor 67.07.
+Trivial predictors: mean 40.84, ceiling 67.07.
 
-**Against the control arm**, pooled over the seeds both arms hold, with the interval from a
-bootstrap over the 21 engines (10,000 resamples). The endpoint stands alone; the other eleven
-cells are the registered family under the Holm correction at 5 %:
+**Against the control**, pooled over shared seeds, bootstrap over 21 engines (10,000 resamples), Holm at 5 %:
 
 | mode | budget | control | candidate | reduction | relative | 95 % interval | p | floor | rejected | verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -832,12 +825,9 @@ cells are the registered family under the Holm correction at 5 %:
 
 ![Label-efficiency curve](figures/label-efficiency-curve.png)
 
-**Conclusion.** Confirmed on the registered endpoint: at 200 labelled windows, full fine-tuning
-lowers the validation RMSE by +12% (+2.34, 95 % interval [+1.49, +3.30] over 5 seeds); among the
-secondary budgets the advantage of full fine-tuning holds under the Holm correction and above the
-floor at 50 and 1000, not at the full label set. Preliminary; validation, not test.
+**Conclusion.** Confirmed on the endpoint: at 200 windows full fine-tuning lowers validation RMSE by +12% (+2.34, [+1.49, +3.30], 5 seeds); among secondary budgets its advantage holds under Holm and above the floor at 50 and 1000, not at the full label set. Preliminary; validation, not test.
 
-How much the curve rests on, full fine-tuning read the same way over fewer seeds:
+Fewer seeds:
 
 | seeds read | 50 | 200 (endpoint) | 1000 | all |
 | --- | --- | --- | --- | --- |
@@ -848,59 +838,19 @@ How much the curve rests on, full fine-tuning read the same way over fewer seeds
 | without seed 4 | +17.6 %, distinguishable | +15.3 %, confirmed | +9.9 %, distinguishable | −3.9 %, indistinguishable |
 | without seed 5 | +16.4 %, distinguishable | +13.1 %, confirmed | +7.2 %, indistinguishable | −6.4 %, indistinguishable |
 
-In every one of these readings the probe and the low-rank updates stay distinguishable at 50 and
-at 200, and the probe stays worse at all labelled windows.
+In every reading the probe and low-rank stay distinguishable at 50 and 200; the probe is worse at all labels.
 
-**Seed by seed**, at 50 and at 200 labelled windows every pretrained arm scores below the control
-under every one of the five seeds (from +6.0 to +31.1 per cent at 50, from +0.3 to +21.1 at 200).
-The sweep chose the peaks at 200 under seeds 1 to 3, so at that budget only seeds 4 and 5 are
-fresh. Over them the probe and the low-rank updates keep what they show over seeds 1 to 3
-(+13.3 and +15.6 per cent against +14.7 and +15.2), but full fine-tuning falls from +17.6 to +5.0
-(+0.3 under seed 4, +9.4 under seed 5). Its sweep was flat near the peak (15.83 at 1e-3, 16.02 at
-3e-4), so the choice of the peak explains little of the gap. Full fine-tuning, which fits its 200
-windows exactly with 4.8 million weights, varies most with the draw of the labels. Whether its
-margin rested on the seeds the peak was chosen on is answered by the run of five fresh seeds
-below: it did not, and the low-rank updates turn out to vary nearly as much.
+**Seed by seed**, at 50 and 200 every pretrained arm beats the control under every seed (+6.0 to +31.1 per cent at 50, +0.3 to +21.1 at 200). The sweep chose the 200 peaks under seeds 1 to 3; seeds 4 and 5 are fresh. There probe and low-rank keep their lead (+13.3 and +15.6 per cent against +14.7 and +15.2); full fine-tuning falls from +17.6 to +5.0 (+0.3 under seed 4, +9.4 under seed 5); its sweep was flat near the peak (15.83 at 1e-3, 16.02 at 3e-4), so the peak explains little. Full fine-tuning fits its 200 windows exactly with 4.8 million weights and varies most with the label draw; five fresh seeds below show its margin did not rest on the tuned seeds.
 
-What the curve says:
+**Conclusions**
 
-- **The endpoint holds, and the advantage is largest where labels are scarcest.** At 50 labelled
-  windows, from 33 to 39 engines, every pretrained arm leads the control by 16 to 22 per cent,
-  distinguishable in every reading over four seeds. The two arms that change the fewest weights
-  lead most there: the low-rank updates by 22.2 per cent and the probe by 20.6.
-- **The low-rank updates are the steadiest arm**: distinguishable at 50 and 200 in every reading,
-  and as far ahead of the control on the fresh seeds as on the others (above).
-- **Every configuration choice was read on the same 21 validation engines**: the window, the
-  normalisation, the corpus, the backbone and the peaks. Each was registered before its run, but
-  a configuration kept because it did better on these engines scores optimistically on them; the
-  single run on the frozen test engines is what measures it without that bias.
-- **At 1,000 the lead of full fine-tuning is fragile.** It is 9.0 per cent overall, and over four
-  seeds it clears its floor in two readings of five.
-- **Once every label is used, the pretrained arms that update the encoder only match the
-  control.** They are indistinguishable from it (−5.1 and −4.3 per cent), and the probe is worse
-  (−28.0). With 2,568 windows from 79 engines the control reaches 12.28, and the pretrained
-  weights do not improve on it. Two things the column does not settle:
-  - Full fine-tuning at 1e-3 does not settle under two seeds of five at this budget: its training
-    loss ends at 0.007–0.008, one run after a jump of 3.2 times, while the control ends at
-    0.0002–0.0004 under every seed. A peak chosen over 2,002 steps may not suit 4,830.
-  - At this budget the control sees every tuning engine labelled, and the backbone saw those
-    same engines unlabelled, so what the backbone adds here is only the other subsets.
-- **The probe's error stops falling near 16** from 1,000 labelled windows on (16.08, then
-  15.72), while the arms that update the encoder go on to 12.8–12.9. From 200 windows on, its
-  error on each engine's last window stays at 8.4–11.2, against 2.4–4.8 for the control at the
-  same budgets. A linear head over frozen features places an engine's stage of life and not its
-  last cycles.
-- **Up to 1,000 windows the pretrained arms err late less often.** The asymmetric score, which
-  punishes a late answer exponentially, is 8.4–11.7 for them against 21.2 for the control at 50
-  windows, and 4.7–6.7 against 10.0 at 200.
-- **Against the record of FD001 and FD003** (section above), this configuration leads by more at
-  50 and 200. Its control is stronger at all labelled windows, where that grid's column compared
-  arms that did not settle.
+- **The endpoint holds; the advantage is largest where labels are scarcest.** At 50 windows (33 to 39 engines) every pretrained arm leads by 16 to 22 per cent, distinguishable in every reading over four seeds; arms changing fewest weights lead most (low-rank 22.2, probe 20.6). Low-rank is steadiest: distinguishable at 50 and 200 in every reading.
+- **At 1,000 the lead of full fine-tuning is fragile**: 9.0 per cent; over four seeds it clears its floor in two readings of five.
+- **At all labels the encoder-updating pretrained arms only match the control** (−5.1 and −4.3 per cent); the probe is worse (−28.0). The control reaches 12.28 from 2,568 windows of 79 engines. Full fine-tuning at 1e-3 does not settle under two seeds of five (loss 0.007–0.008, one run after a 3.2-times jump, against 0.0002–0.0004 for the control); a peak chosen over 2,002 steps may not suit 4,830. The backbone saw the tuning engines unlabelled, so adds only the other subsets.
+- **The probe's error stops near 16** from 1,000 windows (16.08, then 15.72), while encoder-updating arms reach 12.8–12.9; from 200 its last-window error stays 8.4–11.2 against 2.4–4.8 for the control. A linear head over frozen features places the stage of life, not the last cycles. Up to 1,000 pretrained arms err late less often (asymmetric score 8.4–11.7 against 21.2 at 50, 4.7–6.7 against 10.0 at 200).
+- Against the FD001 and FD003 record, this configuration leads by more at 50 and 200 and has a stronger control.
 
-**Two readings beside the endpoint**, mean ± SD over seeds — read, not thresholded:
-
-RMSE on the last window of each engine (the error at the end of life on this side, not
-comparable with published test-side numbers):
+Readings beside the endpoint. RMSE on the last window (end of life; not comparable with test-side numbers):
 
 | budget | engines | from_scratch | frozen_probe | lora | full_fine_tuning |
 | --- | --- | --- | --- | --- | --- |
@@ -909,8 +859,7 @@ comparable with published test-side numbers):
 | 1000 | 79 | 2.81 ± 0.27 | 9.55 ± 0.45 | 4.45 ± 0.80 | 3.12 ± 0.45 |
 | all | 79 | 2.36 ± 0.33 | 8.36 ± 0.63 | 3.70 ± 0.82 | 3.37 ± 0.81 |
 
-Asymmetric score (mean per window, lower is better; its exponential tail is carried by a few
-engines):
+Asymmetric score (lower is better):
 
 | budget | engines | from_scratch | frozen_probe | lora | full_fine_tuning |
 | --- | --- | --- | --- | --- | --- |
@@ -919,9 +868,9 @@ engines):
 | 1000 | 79 | 4.75 ± 1.44 | 4.53 ± 0.48 | 3.78 ± 0.19 | 3.78 ± 0.23 |
 | all | 79 | 2.71 ± 0.41 | 4.25 ± 0.55 | 2.89 ± 0.28 | 3.01 ± 0.51 |
 
-**Cost** on the A100 shared by five processes: a run of an arm that steps the encoder or an update
-beside it took 507–536 s at 50 labelled windows, 646–675 s at 1,000 and 1,567–1,622 s at all; a
-run of the probe 17–34 s. The 60 runs took about 2.3 hours, as declared.
+**Cost** (A100, five processes): 507–536 s at 50, 646–675 s at 1,000, 1,567–1,622 s at all for encoder-stepping arms; probe 17–34 s. The 60 runs took about 2.3 hours.
+
+**Limitations.** Every configuration choice was read on the same 21 validation engines and scores optimistically there; only the single run on the frozen test engines is free of that bias.
 
 ## 2026-09-22 — Linux x86_64 (Kaggle, two Tesla T4, fp32): the endpoint on seeds no sweep has seen, and whether a longer backbone helps this corpus, exploratory
 

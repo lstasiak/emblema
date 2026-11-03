@@ -1,5 +1,7 @@
 # Published corpus
 
+*The two tests of `tests/entrypoints/cli/` named here were removed in `151ca0a7`, when each process got its own package; read them at the commit a section names.*
+
 What a tokenised corpus costs once it is an artifact, and what publishing it twice gives. The
 tables below are produced by `scripts/published_corpus_report.py`, which publishes the corpus into
 a local directory store so that the numbers are about the format and the machine rather than about

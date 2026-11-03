@@ -34,9 +34,8 @@ their losses, and whether they ended in the same artifact. The store is content-
 reference for two runs is the strongest form the claim has; where a device does not repeat its own
 arithmetic, the claim is that pairs with a resume in them lie no further apart than pairs without.
 
-## Runs
 
-### 2026-09-15 — Windows x86_64, development machine
+## 2026-09-15 — Windows x86_64, development machine
 
 The host leg, where equality is exact: the same arithmetic in the same order, so the resumed run's
 weights are the uninterrupted run's byte for byte and the content-addressed store gives both the
@@ -61,7 +60,7 @@ Command: `uv run scripts/training_loop_report.py`.
 | Largest weight difference | 0.000e+00 |
 | Same artifact | yes |
 
-#### Runs
+### Runs
 
 | Run | Epochs | Last training | Last validation | Wall seconds | Weights |
 | --- | --- | --- | --- | --- | --- |
@@ -76,7 +75,7 @@ while the test suite had the CPU, read 79 s and 23 s an epoch, a bit over twice 
 and the weights did not move between the two runs, which is the point: what this note claims is
 exact, and what it merely observes is the machine's mood.
 
-#### Validation loss per epoch
+### Validation loss per epoch
 
 | Epoch | Uninterrupted | Resumed | Seconds |
 | --- | --- | --- | --- |
@@ -84,7 +83,7 @@ exact, and what it merely observes is the machine's mood.
 | 2 | 0.478727 | 0.478727 | 10.6 |
 | 3 | 0.439631 | 0.439631 | 10.3 |
 
-#### Drawing from the store
+### Drawing from the store
 
 The other half of the ticket, checked the same day on the same machine: a two-epoch run of
 `control-a-s` was trained, stored and drawn, and then drawn again from the stored directory alone
@@ -92,7 +91,7 @@ with `--figures-only`. All three figures came out byte for byte identical, which
 stored run holds everything a figure needs — the curve, the baseline levels and the drawn windows
 token by token — and that a change of style costs a redraw rather than a run.
 
-#### What the numbers say
+### What the numbers say
 
 - **A resumed run is the run it resumed.** Equal to six decimal places on every epoch's loss, zero
   difference on every weight, one artifact reference for both runs.
@@ -109,7 +108,7 @@ Open, for the M1 leg: whether a resumed run on MPS matches bit for bit or only t
 the accelerator reorders reductions, so the honest expectation there is closeness, not equality,
 and the number that closeness comes out at is what the note is missing.
 
-### 2026-09-15 — macOS arm64 (M1 Pro), MPS
+## 2026-09-15 — macOS arm64 (M1 Pro), MPS
 
 The first reading on the accelerator, with the script as it then was: one uninterrupted run against
 one resumed run. On the host that is enough, because the arithmetic repeats; here it is not, and the
@@ -133,14 +132,14 @@ Command: `uv run scripts/training_loop_report.py --device mps`.
 | Largest weight difference | 5.572e-05 |
 | Same artifact | no |
 
-#### Runs
+### Runs
 
 | Run | Epochs | Last training | Last validation | Seconds | Weights |
 | --- | --- | --- | --- | --- | --- |
 | uninterrupted | 3 | 0.673601 | 0.439631 | 4.8 | f47583ca067d |
 | resumed | 3 | 0.673601 | 0.439631 | 3.9 | e2dcfa8d02e3 |
 
-#### Validation loss per epoch
+### Validation loss per epoch
 
 | Epoch | Uninterrupted | Resumed | Seconds |
 | --- | --- | --- | --- |
@@ -152,7 +151,7 @@ The same command run again minutes later printed the same losses, a largest weig
 3.915e-05 and uninterrupted weights `d6a869db2877` rather than `f47583ca067d`: two processes, one
 uninterrupted run, two sets of weights.
 
-#### Tracked through the report
+### Tracked through the report
 
 The same evening the report ran through the training runtime and logged to the local stack's
 MLflow server:
@@ -177,7 +176,7 @@ tracker and the store:
   case and a store on disk rather than the runtime and a store in memory. The second epoch differs
   from the one above, as it should: two epochs decay the rate over one epoch, three over two.
 
-### 2026-09-16 — macOS arm64 (M1 Pro), MPS, repeated
+## 2026-09-16 — macOS arm64 (M1 Pro), MPS, repeated
 
 The script now repeats both runs and compares every pair. Two things it printed before changed with
 that. The resumed column of the second epoch is the resumed run's own validation, after it re-entered
@@ -204,7 +203,7 @@ every pair and one artifact for all four runs, as on the host leg above.
 | Interruption | after the second epoch, resumed from its last checkpoint, which falls inside it |
 | Same artifact | no two runs, at either precision |
 
-#### Largest difference per pair of runs, fp32
+### Largest difference per pair of runs, fp32
 
 | Pair | Pairs | Weights, smallest | Weights, median | Weights, largest | Losses, largest |
 | --- | --- | --- | --- | --- | --- |
@@ -217,7 +216,7 @@ loss lay within 2.1e-08 across them. The losses compared are every epoch's valid
 last epoch's training loss: the epoch a resumed run re-enters is trained only in part by it, so its
 training loss covers the batches after the checkpoint and is not the epoch's.
 
-#### Largest difference per pair of runs, fp16
+### Largest difference per pair of runs, fp16
 
 | Pair | Pairs | Weights, smallest | Weights, median | Weights, largest | Losses, largest |
 | --- | --- | --- | --- | --- | --- |
@@ -230,7 +229,7 @@ last one came out at one of two values, 0.439469 or 0.439599: seven of the twent
 runs and four of the twenty resumed runs took the second, so a resumed run that lands there has not
 failed its resume. That 1.3e-04 is the whole of the loss difference in every kind of pair.
 
-#### A test on the device
+### A test on the device
 
 `tests/ml/test_resume_matches_uninterrupted.py` resumes on MPS as well, held to tolerances measured
 on its own configuration (eight training windows in batches of two, three epochs, a checkpoint every
@@ -248,7 +247,7 @@ unchanged, it passed eight runs out of eight. A fault it cannot see is one that 
 here: without dropout the host's generator is not drawn from after initialisation, and leaving its
 state out of the checkpoint moved no number beyond the correct runs' spread.
 
-#### What the numbers say
+### What the numbers say
 
 - **On MPS a resumed run is the uninterrupted run to the tolerance the device keeps with itself**, at
   both precisions it runs: pairs with a resume lie as far apart as pairs without — medians 3.47e-05
