@@ -191,13 +191,24 @@ def test_a_window_with_no_scored_cell_scores_the_fitting_side_s_median_and_is_co
     stated, blocks = detection_task
 
     class HidingNothingOfTheHeldOut(FakePretext):
-        def masked(self, *args: object, **kwargs: object) -> list[MaskedCells]:
-            drawn = super().masked(*args, **kwargs)  # type: ignore[arg-type]
+        def masked(
+            self,
+            weights: ArtifactRef,
+            windows: Sequence[TokenWindow],
+            seeds: Sequence[int],
+            *,
+            answered: bool,
+            device: str,
+            hidden: HiddenCellsChoice = HiddenCellsChoice.OWN,
+        ) -> list[MaskedCells]:
+            drawn = super().masked(
+                weights, windows, seeds, answered=answered, device=device, hidden=hidden
+            )
             return [
                 replace(cells, hidden=np.zeros_like(cells.hidden))
                 if held_out_missed_by_three(token_window)
                 else cells
-                for cells, token_window in zip(drawn, args[1], strict=True)  # type: ignore[call-overload]
+                for cells, token_window in zip(drawn, windows, strict=True)
             ]
 
     source = HidingNothingOfTheHeldOut(lambda _: 1.0)
@@ -295,10 +306,21 @@ def test_the_seed_of_a_draw_is_the_window_s_and_the_draw_s_alone() -> None:
 class MissedByChannel(FakePretext):
     """Misses channel one by one and channel two by three; the held-out window's first by two."""
 
-    def masked(self, *args: object, **kwargs: object) -> list[MaskedCells]:
-        drawn = super().masked(*args, **kwargs)  # type: ignore[arg-type]
+    def masked(
+        self,
+        weights: ArtifactRef,
+        windows: Sequence[TokenWindow],
+        seeds: Sequence[int],
+        *,
+        answered: bool,
+        device: str,
+        hidden: HiddenCellsChoice = HiddenCellsChoice.OWN,
+    ) -> list[MaskedCells]:
+        drawn = super().masked(
+            weights, windows, seeds, answered=answered, device=device, hidden=hidden
+        )
         read = []
-        for cells, token_window in zip(drawn, args[1], strict=True):  # type: ignore[call-overload]
+        for cells, token_window in zip(drawn, windows, strict=True):
             if cells.answers is None:
                 read.append(cells)
                 continue
@@ -355,10 +377,21 @@ def test_a_window_holding_a_channel_the_corpus_does_not_name_is_refused(
     stated, blocks = detection_task
 
     class Relabelled(FakePretext):
-        def masked(self, *args: object, **kwargs: object) -> list[MaskedCells]:
+        def masked(
+            self,
+            weights: ArtifactRef,
+            windows: Sequence[TokenWindow],
+            seeds: Sequence[int],
+            *,
+            answered: bool,
+            device: str,
+            hidden: HiddenCellsChoice = HiddenCellsChoice.OWN,
+        ) -> list[MaskedCells]:
             return [
                 replace(cells, channel_ids=np.where(cells.channel_ids == 2, 99, cells.channel_ids))
-                for cells in super().masked(*args, **kwargs)  # type: ignore[arg-type]
+                for cells in super().masked(
+                    weights, windows, seeds, answered=answered, device=device, hidden=hidden
+                )
             ]
 
     with pytest.raises(UnreadablePretextError, match="does not name"):

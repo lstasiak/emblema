@@ -202,7 +202,7 @@ class PretextErrorDetectionRuntime:
         if scales is not None:
             arrays["scale_channels"] = scales.channels
             arrays["scales"] = scales.scales
-        np.savez(buffer, *(), **arrays)  # type: ignore[arg-type]  # numpy's stub types one keyword
+        np.savez(buffer, allow_pickle=False, **arrays)
         return self._kept_candidates.keep(
             CandidateKind.DETECTOR,
             corpus_manifest=task.manifest,
