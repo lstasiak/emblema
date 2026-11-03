@@ -1,5 +1,5 @@
 # Development-loop checks. All tools run through uv so versions come from uv.lock.
-# mypy (strict) is the authority in CI, not here: ty is the fast checker for the loop.
+# mypy (strict) runs in CI, not here: ty is the fast checker for the loop, and CI runs it too.
 repos:
   - repo: local
     hooks:

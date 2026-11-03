@@ -37,6 +37,9 @@ jobs:
       - run: uv sync --locked --all-extras
       - name: Type check
         run: uv run mypy
+      # Its own reading of the same types: a `type: ignore` silences mypy alone, not this.
+      - name: Type check with ty
+        run: uv run ty check src tests scripts
 
   architecture:
     # Static analysis of the import graph: the ML extras are not needed here. Every step runs one

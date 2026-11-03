@@ -7,6 +7,10 @@ from emblema.evaluation.domain.statistics.bootstrap_interval import BootstrapInt
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
 from emblema.evaluation.domain.statistics.resampled import Resampled
 
+# Bounds the memory of a read: a batch holds one float per draw and window, and larger batches run
+# no faster.
+_DRAWS_AT_ONCE = 256
+
 
 @dataclass(frozen=True, kw_only=True)
 class PairedUnitBootstrap:
@@ -21,8 +25,9 @@ class PairedUnitBootstrap:
     the p-value is two-sided, twice the smaller share of resamples on either side of zero, which
     is the test the percentile interval inverts; the share counts the observed reduction as one
     more resample on its side, so no p-value is zero and the smallest one says how many
-    resamples were drawn. Seeded, so one comparison always gets the same interval, and stated in
-    plain Python: the sums are per unit and the units are few.
+    resamples were drawn. Seeded, so one comparison always gets the same interval. The draws
+    reach the pairing in batches, for a pairing that can read many at once does so far faster
+    than one by one, and the size of a batch changes nothing about the draws (ADR-0074).
 
     Invariants: at least one resample; the level lies strictly between zero and one.
 
@@ -63,12 +68,16 @@ class PairedUnitBootstrap:
         """
         strata = paired.strata
         draws = random.Random(self.seed)
-        return sorted(
-            paired.reduction_over(
-                [pick for stratum in strata for pick in draws.choices(stratum, k=len(stratum))]
+        reductions: list[float] = []
+        while len(reductions) < self.resamples:
+            batch = min(_DRAWS_AT_ONCE, self.resamples - len(reductions))
+            reductions += paired.reductions_over(
+                [
+                    [pick for stratum in strata for pick in draws.choices(stratum, k=len(stratum))]
+                    for _ in range(batch)
+                ]
             )
-            for _ in range(self.resamples)
-        )
+        return sorted(reductions)
 
     def interval_of(self, ascending: Sequence[float]) -> BootstrapInterval:
         """The percentile interval at this bootstrap's level over ``ascending`` reductions."""

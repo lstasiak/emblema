@@ -220,6 +220,10 @@ Validation loss went from 0.6283 to 0.2132 (÷2.9); over the same hidden tokens 
 
 ## 2026-09-14 — macOS arm64, MPS, tier S
 
+*Condensed on 2026-11-03; the full text is at commit `85858e92` (`git show 85858e92:docs/verification/masked-reconstruction.md`). No number or conclusion changed.*
+
+Does tier S masked reconstruction beat trivial baselines on three synthetic corpora, and has it converged?
+
 ### Provenance
 
 | | |
@@ -230,30 +234,17 @@ Validation loss went from 0.6283 to 0.2132 (÷2.9); over the same hidden tokens 
 | Commands | `uv run scripts/masked_reconstruction_report.py --corpus control-a --corpus spectral-probe --epochs 12`, then `… --corpus control-b --epochs 10`, then `uv run scripts/masked_reconstruction_report.py` |
 | Stored runs | `data/report/results/{control-a-20260914-211153, control-b-20260914-211323, spectral-probe-20260914-211659}`, compared with the half-budget runs `control-a-20260914-210150`, `control-b-20260914-210433` and `spectral-probe-20260914-210343` (local, not tracked) |
 
-The first two commands train each corpus for half its default budget, so that the default run is
-compared with a shorter run of the same code, as the convergence rule requires. The training does
-not repeat bit for bit on MPS (see [Repeatability](#repeatability-on-mps)): every repeat so far gave
-the same verdicts, with final losses up to 9% apart.
-
-The figures of this leg are not in the repository. It keeps one set — the newest run's, in the leg
-of 2026-09-16 below, which repeats this one on the same experiments and the same seed — rather than
-a set per leg that says the same thing.
+The first two commands also train half the budget. MPS training does not repeat bit for bit (see [Repeatability](#repeatability-on-mps)): same verdicts, losses up to 9% apart. Figures are in the leg of 2026-09-16.
 
 ### Configuration
 
-Common to every run: windows of 32 steps with a stride of 12; a quarter of the units held out for
-validation; the tier S encoder (192 wide, 3 heads, 4 blocks, feed-forward 768) with a decoder of 1
-block; masks hiding whole channels at 0.15, one block over half the window at 0.6 and single tokens
-at 0.1, which hides 46.5% of observed tokens in expectation; Adam at a peak rate of 1e-3, one epoch
-of warmup, cosine decay to 1% of the peak, batch 32, seed 1.
+Windows of 32 steps, stride 12; a quarter of units held out; tier S (192 wide, 3 heads, 4 blocks, feed-forward 768), decoder of 1 block; masks: whole channels 0.15, one block over half the window 0.6, single tokens 0.1 (46.5% hidden); Adam peak 1e-3, one epoch warmup, cosine decay to 1%, batch 32, seed 1. A channel "apart" is never judged.
 
 | Corpus | Layout | Windows (training / validation) | Validation units | Vocabulary | Epochs | Parameters |
 | --- | --- | --- | --- | --- | --- | --- |
 | control-a | dense, regular: 8 sensors on every step | 4,732 / 1,534 | 40 | 9, 1 apart | 24 | 1,787,136 |
 | control-b | sparse, irregular: 5 sensors on their own schedules, noisier | 3,354 / 1,132 | 30 | 6, 1 apart | 20 | 1,786,560 |
 | spectral-probe | control-a with factor periods of 6–32 steps instead of 24–300, 80 units | 2,363 / 783 | 20 | 9, 1 apart | 24 | 1,787,136 |
-
-A channel "apart" is timeless or constant: it is tallied in a row of its own and never judged.
 
 ### Loss
 
@@ -263,19 +254,11 @@ A channel "apart" is timeless or constant: it is tallied in a row of its own and
 | control-b | 0.6912 → 0.1314 (÷5.3) | 0.7342 | 0.4893 | 45.8% |
 | spectral-probe | 1.0199 → 0.0409 (÷25.0) | 1.2289 | 0.4701 | 45.7% |
 
-Losses are mean squared errors on hidden tokens in normalised units. The baselines are scored over
-the same hidden tokens as the model. The validation loss ends within 0.1% of its best epoch on all
-three corpora, and at 0.97–1.08× the training loss.
+Validation ends within 0.1% of its best epoch, at 0.97–1.08× the training loss.
 
 ### Triviality per kind of mask
 
-Each kind is judged against the baseline matched to it (interpolation within the channel
-for blocks and single tokens, ridge regression from the other channels for a channel hidden whole).
-Blocks and single tokens are also judged against the strongest linear baseline on the same sources
-(the channel's own line and the other channels together). An interval is a 95% bootstrap over
-validation units, under one draw of the masks, of the baseline's error minus the model's. A kind is
-`learnt` only when the whole interval lies above zero. The rules, their thresholds and why each was
-set where it is are in ADR-0020.
+Matched baselines: interpolation (blocks, tokens), ridge (channels); blocks and tokens also against the strongest linear baseline. Intervals: 95% bootstrap over validation units; `learnt` needs the whole interval above zero (ADR-0020).
 
 | Corpus | Kind | Tokens / units | Model | Matched baseline | Excess [95%] | Beyond linear [95%] | Noise floor |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -289,34 +272,13 @@ set where it is are in ADR-0020.
 | spectral-probe | block | 49,884 / 20 | 0.0352 | interpolation 1.6275 | [+1.3606, +1.8388] learnt | [+0.4099, +0.5800] learnt | 0.0025 |
 | spectral-probe | token | 11,768 / 20 | 0.0206 | interpolation 0.1191 | [+0.0755, +0.1225] learnt | [+0.0542, +0.0848] learnt | 0.0025 |
 
-**The triviality diagnostic is negative on all three corpora.** Every kind beats its matched baseline
-and, where it applies, the linear one. No model error falls below the noise floor, which would point
-to a leak (the lowest is 2.4× the floor). Every matched baseline leaves room above the floor (the
-lowest is 5.5×, token masks on control-a). The kind closest to trivial is single tokens on
-control-a, where the lower bound beyond linear is +0.0041.
+**The triviality diagnostic is negative on all three corpora.** Every kind beats its matched and linear baseline. No model error is below the noise floor (lowest 2.4×), which would signal a leak; every baseline leaves room (lowest 5.5×, token masks on control-a). Closest to trivial: single tokens on control-a, lower bound beyond linear +0.0041.
 
-**This overturns one of the answers written before the runs.** Single tokens on the dense
-layout were expected to be trivial, and were trivial in the first leg. They are not trivial
-here. Three things differ: the tier S encoder against one cut to 64 wide and 2 blocks, 24
-epochs against 12, and a warmed-up, decayed learning rate against a constant one. Which of
-the three did it is not measured, so the honest statement is that the prediction held at the
-capacity and budget it was made for and does not hold at this one. The margin is the
-narrowest on the page, and the rate of this kind of mask remains the first dial an ablation
-of the mixture turns.
+**This overturns a prediction written before the runs**: single tokens on the dense layout were trivial in the first leg. Tier S (against 64 wide, 2 blocks), 24 epochs (against 12) and a warmed-up decayed rate (against constant) differ; which did it is unmeasured. The margin is the narrowest here; this rate stays the first dial of a mixture ablation.
 
-The assessment accepts all three runs. Two warnings stand:
-
-- **Convergence is not shown.** Doubling the budget from half still lowered the final validation
-  loss by 28.3% (control-a), 28.9% (control-b) and 43.0% (spectral-probe), above the 5% the rule
-  calls convergence, although no verdict changed.
-- **The spectrum is uninformative on the controls.** See below.
+Two warnings stand. **Convergence is not shown**: doubling from half the budget lowered final validation loss by 28.3% (control-a), 28.9% (control-b), 43.0% (spectral-probe), above the 5% rule; no verdict changed. **The spectrum is uninformative on the controls**: the truth holds 99.4% (control-a) and 100% (control-b) of its energy at one cycle per window; hence the spectral probe.
 
 ### Spectral recovery of channels hidden whole
-
-On the controls the truth holds 99.4% (control-a) and 100% (control-b) of its energy at one cycle
-per window. Every higher frequency holds noise alone, so the diagnostic cannot tell a model that
-learnt smoothness from one that learnt structure. The spectral probe is there to answer that
-question:
 
 | Cycles / window | Share of the truth's energy | Model recovers | Ridge recovers |
 | --- | --- | --- | --- |
@@ -327,38 +289,21 @@ question:
 | 5 | 4.7% | 94% | 60% |
 | 6 | 0.4% (below the 1% counted as signal) | 78% | 49% |
 
-Fitted over 901 channel-windows, 1 too short to fit. The model recovers at least 91% of the energy
-at every frequency that carries signal, so it does not recover only the low frequencies.
+901 channel-windows fitted, 1 too short. The model recovers at least 91% of the energy at every frequency carrying signal.
 
 ### Reconstructions
 
-One channel per kind of mask from the first validation windows: truth as a line, visible tokens as
-dots, the model's predictions (red crosses) and the matched baseline's (blue triangles) on the
-tokens that kind hid. What was seen in them, drawing by drawing:
+One channel per mask kind (first validation windows):
 
-- **spectral-probe.** Inside hidden blocks the model follows the oscillation through several cycles
-  where interpolation draws a straight line (`w2 s04`, `w32 s01`). On channels hidden whole it keeps
-  the shape and underestimates the peaks (`w1 s02`).
-- **control-a.** Predictions follow the trend of the truth and leave out the step-to-step wiggles,
-  which the spectrum puts at the noise level. Against interpolation inside blocks, the margin is
-  clear on `w2 s04` and small on `w0 s01`. On a channel hidden whole (`w1 s02`), the model follows
-  the shape with too much amplitude: below the truth in the first half and above it in the second.
-  The ridge baseline stays flat there.
-- **control-b**, the sparse and noisy layout, is the weakest. Blocks mostly follow the truth, some
-  a little below it (`w1 s01`). One channel hidden whole is recovered in shape (`w1 s05`), another is
-  not (`w2 s02`, where the model stays near +0.5 while the truth swings from +2 to −1.4). This agrees
-  with control-b's highest channel error (0.2435, 40× the floor).
+- **spectral-probe.** Blocks follow the oscillation where interpolation draws a line (`w2 s04`, `w32 s01`); whole channels keep the shape, underestimating peaks (`w1 s02`).
+- **control-a.** Trend followed, noise-level wiggles omitted; margin over interpolation clear on `w2 s04`, small on `w0 s01`; a whole channel (`w1 s02`) overshoots in amplitude.
+- **control-b**, weakest: blocks mostly follow the truth, some a little below (`w1 s01`); one whole channel recovered (`w1 s05`), another not (`w2 s02`: model near +0.5, truth from +2 to −1.4), matching the highest channel error (0.2435, 40× the floor).
 
-The reconstructions are sensible, not exact.
+Reconstructions are sensible, not exact.
 
 ### Training budget
 
-The default epochs were measured for what the report decides. They lived in
-`scripts/masked_reconstruction_epochs.toml` when this was written and are now in the experiment
-that states them, `experiments/<name>.toml`, beside everything else a run of it does (ADR-0022). For each corpus, the entry E is the fewest epochs for which runs of E/2, E and 2E give
-every kind of mask the same verdict against both baselines. The budget was measured before
-`e66f6ff`, with the report's source digests `e859c97fb13c8352` (controls) and `7d26d7c38c24c6b7`
-(spectral probe):
+Defaults live in `experiments/<name>.toml` (ADR-0022). E: the fewest epochs where E/2, E and 2E give each mask kind the same verdict. Measured before `e66f6ff`, digests `e859c97fb13c8352` (controls), `7d26d7c38c24c6b7` (spectral probe):
 
 | Corpus | Epochs | Final validation loss | Token masks, matched | Token masks beyond linear, lower bound |
 | --- | --- | --- | --- | --- |
@@ -366,25 +311,12 @@ every kind of mask the same verdict against both baselines. The budget was measu
 | control-b | 10 / **20** / 40 / 80 | 0.1865 / 0.1329 / 0.1008 / 0.0774 | learnt at every budget | +0.0049 / +0.0342 / +0.0497 / +0.0683 |
 | spectral-probe | 6 / 12 / **24** / 48 | 0.2930 / 0.0717 / 0.0409 / 0.0250 | beaten / learnt / learnt / learnt | −0.1576 / +0.0394 / +0.0542 / +0.0611 |
 
-- On the controls, channel and block masks were learnt at every budget.
-- On the spectral probe at 6 epochs, channel masks were `matched`; from 12 epochs every kind was
-  learnt.
-- The loss had not converged at any budget. Each doubling lowered it by 20–34% on control-a, 23–29%
-  on control-b and 39–76% on the spectral probe. A run at the default epochs therefore keeps the
-  convergence warning, and the warning is true.
-
-At `e66f6ff`, the E/2 and E runs give the same verdicts as the table: every kind learnt at both
-budgets on all three corpora. The lower bounds for token masks beyond linear are +0.0011 and
-+0.0041 on control-a, +0.0051 and +0.0363 on control-b, and +0.0394 and +0.0542 on the spectral
-probe.
+- Channel and block masks learnt at every budget on the controls; on the spectral probe channel masks `matched` at 6 epochs, all kinds learnt from 12. Not converged at any budget: each doubling lowered loss 20–34% (control-a), 23–29% (control-b), 39–76% (spectral probe).
+- At `e66f6ff` E/2 and E give the table's verdicts; token-mask lower bounds beyond linear: +0.0011 and +0.0041 (control-a), +0.0051 and +0.0363 (control-b), +0.0394 and +0.0542 (spectral probe).
 
 ### Repeatability on MPS
 
-Runs of one configuration do not always end at the same loss. The first two rows repeat one source
-digest. The rest compare the runs just before and just after the assessment moved into the package
-(`7d26d7c38c24c6b7`, then `47315a129a26f36c` at `e66f6ff`). That move changed where the rules live,
-not what trains or what is scored; replaying the 23 runs stored before it through the moved code
-reproduced every printed assessment byte for byte.
+First two rows repeat one digest; the rest straddle moving the assessment into the package (`7d26d7c38c24c6b7`, then `47315a129a26f36c` at `e66f6ff`); replaying the 23 earlier runs reproduced every assessment byte for byte.
 
 | Corpus, epochs | Source digests | Final validation loss | Channel masks, matched excess [95%] |
 | --- | --- | --- | --- |
@@ -396,24 +328,13 @@ reproduced every printed assessment byte for byte.
 | control-b, 20 | `7d26d7c` → `47315a1` | 0.1362 and 0.1314 (3.6% apart) | [+0.1993, +0.2706] and [+0.2000, +0.2710] |
 | spectral-probe, 12 and 24 | `7d26d7c` → `47315a1` | 0.071725 and 0.040858, both times | identical |
 
-No verdict differed between any of these runs. A verdict whose interval barely clears zero may still
-not survive a repeat, which is why each default sits one doubling past the first budget that was
-learnt. The cause of the spread has not been isolated.
+No verdict differed, but a barely positive interval may not survive a repeat, so each default sits one doubling past the first learnt budget. The cause is not isolated.
 
 ### Limitations
 
-- Synthetic control only, one pretraining seed, one draw of the validation masks. The intervals hold
-  the variation between units under that draw, not the variation between draws or seeds.
-- Validation numbers at tier S on one machine; MPS repeats differ by up to 9% in final loss.
-- Convergence is not shown at the default budgets.
-- The ridge penalty is a fixed 1.0, chosen rather than tuned, so the linear baselines are not the
-  strongest linear answers obtainable on these inputs — only the strongest on this parametrisation.
-  Their margins of defeat are five- to fortyfold, so a sweep would have to change them a great deal
-  to move a verdict.
-- The intervals are percentile bootstrap intervals over 20 to 40 units, which is approximate at
-  that count.
-- The training loop is the report's minimal one: no checkpoints, no experiment tracker and no
-  precision policy. The training runtime replaces it.
+- Synthetic control, one seed, one mask draw: intervals hold variation between units only. Tier S, one machine; MPS repeats differ up to 9% in final loss; convergence not shown at the defaults.
+- Ridge penalty fixed at 1.0, untuned; margins of defeat are five- to fortyfold, so a sweep would have to change them much to move a verdict.
+- Bootstrap over 20 to 40 units is approximate. The training loop is minimal; the training runtime replaces it.
 
 ## 2026-09-16 — macOS arm64, MPS, tier S, trained by the training runtime
 

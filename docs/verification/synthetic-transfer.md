@@ -1,5 +1,7 @@
 # The transfer leg of the synthetic control
 
+*`scripts/label_curve_report.py` was removed in `ada65416`, when campaigns replaced it; read it at the commit a section names.*
+
 Purpose: read the two rules registered for the synthetic control (`docs/preregistration.md`, "The
 synthetic control", and the sections of 2026-09-21 that state how the leg is run) on the corpora
 built for it, so that a negative result on real data can be told from a broken pipeline. A pair
@@ -11,7 +13,11 @@ Every number is validation, not test, and every run is at tier S on this machine
 
 ## 2026-09-21 — Darwin arm64 (MacBook Pro M1 Pro, MPS, fp32): both pairs at the endpoint's budget
 
-Code `0e9b0f5` for the runs, Python 3.14.7, torch 2.14.0. The pieces:
+*Condensed on 2026-11-03; the full text is at commit `85858e92` (`git show 85858e92:docs/verification/synthetic-transfer.md`). No number or conclusion changed.*
+
+Does a backbone pretrained on one layout transfer to the second layout of a coupled pair but not of a null pair, at the endpoint's budget?
+
+Code `0e9b0f5` for the runs, Python 3.14.7, torch 2.14.0.
 
 |  |  |
 | --- | --- |
@@ -24,10 +30,7 @@ Code `0e9b0f5` for the runs, Python 3.14.7, torch 2.14.0. The pieces:
 
 ### The sweep of the peaks, on each pair's own task
 
-Three peaks per arm, seeds 1 to 3, the rule of 2026-09-20; mean validation RMSE over the three
-seeds, the chosen cells in bold. Full fine-tuning was swept a decade above the turbofan grid after
-a pilot on the narrow null corpus (`null-b`, 20 validation units) found the turbofan peak of 3e-5
-a decade too small there: 0.508 against 0.185 from scratch.
+Three peaks per arm, seeds 1 to 3, the rule of 2026-09-20; mean validation RMSE, chosen cells in bold. Full fine-tuning was swept a decade above the turbofan grid after a pilot on the narrow null corpus (`null-b`, 20 validation units) found the turbofan peak of 3e-5 a decade too small: 0.508 against 0.185 from scratch.
 
 | arm | peak | null pair | coupled pair |
 | --- | --- | --- | --- |
@@ -36,16 +39,11 @@ a decade too small there: 0.508 against 0.185 from scratch.
 | low-rank updates | 3e-3 / 1e-3 / 3e-4 | **0.242** / 0.307 / 0.347 | **0.373** / 0.413 / 0.461 |
 | full fine-tuning | 1e-3 / 3e-4 / 1e-4 | **0.232** / 0.319 / 0.376 | **0.369** / 0.395 / 0.426 |
 
-Power, read off the chosen cells with the three seeds pooled per unit: the spread over the
-validation units of the paired difference of per-unit RMSE between the control and full
-fine-tuning is 0.033 on the null pair and 0.035 on the coupled pair, a half-width of 0.004 on
-either against floors of 0.010 and 0.011; the 266 units are six times more than the floor asks.
+Power, three seeds pooled per unit: the spread of the paired per-unit RMSE difference, control against full fine-tuning, is 0.033 (null) and 0.035 (coupled), half-width 0.004 against floors of 0.010 and 0.011; the 266 units are six times what the floor asks.
 
 ### The endpoint, five seeds
 
-Validation RMSE in the sensor's units per seed, and the paired reading against the control by
-the registered rules (`scripts/label_curve_report.py`; interval over units, 2,000 resamples;
-floor = max(3 % of the control's RMSE, its SD over the seeds)):
+Validation RMSE per seed and the paired reading against the control (`scripts/label_curve_report.py`; interval over units, 2,000 resamples; floor = max(3 % of the control's RMSE, its SD over seeds)):
 
 | pair | arm | seed 1 | 2 | 3 | 4 | 5 | mean | SD | trainable | seconds |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -58,9 +56,7 @@ floor = max(3 % of the control's RMSE, its SD over the seeds)):
 | null | lora | 0.255 | 0.209 | 0.262 | 0.255 | 0.253 | 0.247 | 0.022 | 99,649 | 52–54 |
 | null | full_fine_tuning | 0.209 | 0.211 | 0.245 | 0.235 | 0.244 | 0.229 | 0.018 | 1,788,481 | 53–54 |
 
-The mean predictor scores 1.003 on the coupled pair's validation windows and 1.011 on the null
-pair's. The trainable count of the probe and the low-rank arm includes the 1,088 weights of the
-rows grown for the second layout's six channels, trained under every mode.
+The mean predictor scores 1.003 (coupled) and 1.011 (null). The probe's and low-rank arm's trainable counts include 1,088 weights of rows grown for the second layout's six channels.
 
 | pair | comparison against from scratch | control | candidate | reduction | 95 % interval | floor | rule | verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -71,55 +67,23 @@ rows grown for the second layout's six channels, trained under every mode.
 | null | low-rank updates | 0.190 | 0.248 | −0.058 | [−0.061, −0.054] | 0.0095 | — | worse |
 | null | frozen probe | 0.190 | 0.860 | −0.670 | [−0.689, −0.651] | 0.0095 | — | worse |
 
-### What the leg says
+### Conclusions
 
-- **The coupled pair fails its rule.** Full fine-tuning of the backbone pretrained on the first
-  layout ends 0.019 above training from scratch at 200 labelled windows, with the whole interval
-  below zero and beyond the floor; the low-rank arm is further behind. Under the registered
-  reading the pipeline does not show transfer where transfer exists by construction, and until
-  this is understood a result on real data cannot be told from a pipeline that would miss the
-  effect if it were there.
-- **The null pair fails its equivalence, in the same direction.** Every pretrained arm is worse
-  than the control, full fine-tuning by four floors. A start from weights pretrained on
-  unrelated structure is a worse start than a random one for this task at this budget, and 2,002
-  steps at the largest peak swept do not close the gap.
-- **The backbone did learn the shared structure, and it reaches the second layout's sensors.**
-  The frozen probe stands at 0.66 on the coupled pair and at 0.86 on the null pair, twenty floors
-  apart, over channels the backbone never saw and whose rows were drawn at build time: the states
-  of a window computed by the backbone of the coupled pair carry the shared factors' phase and
-  amplitude, and those of the null pair carry almost nothing beyond the mean (1.01). The failure
-  is not that the encoder finds nothing; it is that what it finds does not beat a fresh encoder
-  trained for 2,002 steps on 200 windows of a task a fresh encoder solves to 0.37, and that
-  starting from it costs the fine-tuned arms something the fresh start does not pay.
-- **The ordering holds at other budgets, under one seed.** Twelve cells of the coupled pair run
-  before the grid was reduced to the endpoint (`data/report/transfer/grid-control-b-wide-forecast`,
-  seed 1): at 50 labelled windows from scratch 0.473, full fine-tuning 0.536, low-rank 0.511; at
-  1,000, 0.285, 0.284 and 0.269. Not a reading, one seed, but nothing in it points the other way.
-- **Cost.** An arm that steps the encoder costs 48–56 s a run on MPS at this budget, the probe
-  9–10 s; the two sweeps took 55 min, the forty endpoint runs 28 min; the S pretrainings 14 min
-  for both, run together.
+- **The coupled pair fails its rule.** Full fine-tuning from the first-layout backbone ends 0.019 above training from scratch at 200 labelled windows, interval below zero and beyond the floor; low-rank is further behind. The pipeline does not show transfer where it exists by construction, so until this is understood a real-data result cannot be told from a pipeline that would miss the effect.
+- **The null pair fails its equivalence, in the same direction.** Every pretrained arm is worse than the control, full fine-tuning by four floors: a start from weights pretrained on unrelated structure is worse than a random one at this budget, and 2,002 steps at the largest peak swept do not close the gap.
+- **The backbone did learn the shared structure and reaches the second layout's sensors.** The frozen probe stands at 0.66 (coupled) and 0.86 (null), twenty floors apart, over channels the backbone never saw: the coupled backbone's states carry the shared factors' phase and amplitude, the null backbone's almost nothing beyond the mean (1.01). What the encoder finds does not beat a fresh encoder trained 2,002 steps on 200 windows (0.37), and starting from it costs the fine-tuned arms something the fresh start does not pay.
+- **The ordering holds at other budgets, under one seed.** Twelve coupled cells (`data/report/transfer/grid-control-b-wide-forecast`, seed 1): at 50 windows from scratch 0.473, full fine-tuning 0.536, low-rank 0.511; at 1,000, 0.285, 0.284 and 0.269. Not a reading; nothing points the other way.
+- **Cost.** Encoder-stepping arms 48–56 s a run on MPS, the probe 9–10 s; the two sweeps 55 min, the forty endpoint runs 28 min; the S pretrainings 14 min for both, run together.
 
 ### What it does not say, and what comes next
 
-The rules were written for a pipeline that either transfers or does not, and the leg answers
-that it does not, on a task and a budget where a fresh encoder is strong. It does not say which
-of three things is missing, and the next runs are the ones that separate them:
+The pipeline does not transfer on a task and budget where a fresh encoder is strong; which of three things is missing is open:
 
-1. **The ceiling.** The two layouts with equal `trajectory_seed` watch the same factor
-   trajectories (ADR-0018): a leak, not a control, and therefore the most transfer can give.
-   If the fine-tuned arm does not beat the control even there, the fault is above the structure
-   of the data — in the objective, the head, or the way a pretrained start is fine-tuned.
-2. **The objective.** Masked reconstruction within a window teaches interpolation; the task asks
-   for a reading twelve steps past the window. A probe that reaches 0.66 shows the states carry
-   the factors; a fine-tuning that ends above the fresh start suggests the states are arranged
-   for reconstruction in a way the forecasting head has to undo first.
-3. **The task and budget.** Two hundred windows and 2,002 steps let a fresh encoder reach 0.37 on
-   a target that is a smooth function of four factors; a control whose fresh arm is that strong
-   leaves little for a pretrained start to add. A harder target — fewer windows, a longer horizon,
-   more noise — is the registration's to change before it is run, not after.
+1. **The ceiling.** Two layouts with equal `trajectory_seed` watch the same factor trajectories (ADR-0018): a leak, and the most transfer can give. If fine-tuning does not beat the control even there, the fault lies above the data structure: objective, head, or fine-tuning.
+2. **The objective.** Masked reconstruction teaches interpolation; the task reads twelve steps past the window. A probe at 0.66 shows the states carry the factors; fine-tuning ending above the fresh start suggests the states are arranged for reconstruction in a way the forecasting head must undo.
+3. **The task and budget.** 200 windows and 2,002 steps let a fresh encoder reach 0.37 on a smooth function of four factors, leaving little for a pretrained start. A harder target (fewer windows, longer horizon, more noise) is for the registration to change before a run, not after.
 
-Nothing on the turbofan task is read until the coupled pair passes: that is what the control is
-for.
+Nothing on the turbofan task is read until the coupled pair passes.
 
 ## 2026-09-21 — the ceiling: the second layout over the first's own trajectories
 
@@ -239,21 +203,15 @@ the real data, to be stated in its registration before any grid.
 
 ## 2026-09-21 — the control closed at a window of 128: the peaks swept, the null pair, both rules read
 
-Declared before it ran (`docs/preregistration.md`, 2026-09-21, "the synthetic control moves to
-a window of 128"). The null pair republished with windows of 128 time units at stride 12, as the
-coupled pair was: `null-a` (manifest `sha256:85e93b84…`, validation 0.25, seed 1) and
-`null-b-wide` under its vocabulary (`sha256:7df203eb…`, half the units held out, seed 1; 266
-validation units, 8,037 validation windows against the coupled pair's 7,906). `null-a-s`
-pretrained again on the new corpus under the same experiment file (backbone `22280c62-…`,
-weights `sha256:30f71255…`, 24 epochs of batch 32 on MPS, 1,861 s; validation loss per hidden
-token 0.33326, 0.340 of the trivial predictor's, against 0.32654 at the window of 32). The
-coupled pair's backbone is the one of the diagnostic above (`sha256:488be6bd…`). Code `36c3c19`
-with the registration's section uncommitted, one machine, everything on MPS in fp32.
+*Condensed on 2026-11-03; the full text is at commit `85858e92` (`git show 85858e92:docs/verification/synthetic-transfer.md`). No number or conclusion changed.*
+
+At a window of 128, does the coupled pair pass its rule and the null pair its equivalence, with peaks swept at that window?
+
+Declared before the run (`docs/preregistration.md`, 2026-09-21, "the synthetic control moves to a window of 128"). The null pair was republished at windows of 128 time units, stride 12, as the coupled pair was: `null-a` (manifest `sha256:85e93b84…`, validation 0.25, seed 1) and `null-b-wide` under its vocabulary (`sha256:7df203eb…`, half the units held out, seed 1; 266 validation units, 8,037 validation windows against the coupled pair's 7,906). `null-a-s` was retrained (backbone `22280c62-…`, weights `sha256:30f71255…`, 24 epochs of batch 32 on MPS, 1,861 s; validation loss per hidden token 0.33326, 0.340 of the trivial predictor's, against 0.32654 at the window of 32). The coupled backbone is the diagnostic's (`sha256:488be6bd…`). Code `36c3c19`, registration section uncommitted, MPS, fp32.
 
 ### The peaks at 128, swept on each pair's own task
 
-Two hundred labelled windows, seeds 1 to 3, the floor of 2,002 steps, the lowest mean over the
-seeds; the chosen peak of each arm in bold. Endpoint RMSE, mean over the three seeds.
+200 labelled windows, seeds 1 to 3, 2,002 steps; lowest mean wins (bold). Endpoint RMSE, mean over three seeds.
 
 | arm | peak | control-b-wide | null-b-wide |
 | --- | --- | --- | --- |
@@ -270,18 +228,11 @@ seeds; the chosen peak of each arm in bold. Endpoint RMSE, mean over the three s
 | full fine-tuning | 3e-4 | 0.317 | 0.260 |
 | full fine-tuning | 1e-4 | 0.337 | 0.287 |
 
-The same four peaks on both pairs, and the same four the sweep at 32 had chosen and the window
-diagnostic carried over: from scratch 1e-3, frozen probe 1e-2, low-rank updates 3e-3, full
-fine-tuning 1e-3. Every pretrained arm and the control sit at the top of their range, so a
-peak above the swept ones cannot be excluded; the rule chooses within the registered range, and
-the same range on both pairs keeps the comparison between them a comparison of corpora.
+Both pairs take the same peaks, as at 32: from scratch 1e-3, frozen probe 1e-2, low-rank updates 3e-3, full fine-tuning 1e-3. Every arm sits at the top of its range, so a higher peak is not excluded; the same range on both pairs keeps the comparison one of corpora.
 
 ### The endpoint, five seeds, both pairs
 
-Endpoint RMSE per seed, 200 labelled windows from 150 to 160 units, 2,002 steps, the head's
-bias at the draw's mean label, five seeds of every arm.
-
-The coupled pair, `control-b-wide-forecast` (mean predictor 1.002):
+200 labelled windows from 150 to 160 units, 2,002 steps, head bias at the draw's mean label, five seeds. The coupled pair, `control-b-wide-forecast` (mean predictor 1.002):
 
 | arm | seed 1 | 2 | 3 | 4 | 5 | mean | SD | seconds |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -299,17 +250,11 @@ The null pair, `null-b-wide-forecast` (mean predictor 1.010):
 | lora | 0.194 | 0.201 | 0.306 | 0.329 | 0.214 | 0.249 | 0.064 | 120–125 |
 | full_fine_tuning | 0.207 | 0.186 | 0.215 | 0.284 | 0.206 | 0.220 | 0.038 | 96–104 |
 
-The coupled pair's cells are the window diagnostic's within the accelerator's own scatter: the
-peaks are the same, the seeds are the same, and the two runs of the same cell differ by up to
-0.011 on the fresh encoder, by 0.004 at most on full fine-tuning and not at all on the probe
-and the low-rank updates, which is what
-non-deterministic kernels on MPS do over 2,002 steps and is the reason a registered result is
-five seeds and an interval rather than one number.
+Coupled cells match the window diagnostic within MPS scatter: two runs of one cell differ by up to 0.011 on the fresh encoder, 0.004 on full fine-tuning and not at all on probe and low-rank (non-deterministic kernels), hence five seeds.
 
 ### Both rules
 
-Paired bootstrap over the 266 validation units, 10,000 resamples, the five seeds pooled; the
-floor is the larger of 3 % of the control's RMSE and its spread over the seeds.
+Paired bootstrap over 266 validation units, 10,000 resamples, seeds pooled; floor = larger of 3 % of the control's RMSE and its spread.
 
 | pair | comparison against from scratch | control | candidate | reduction | 95 % interval | floor | rule | reading |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -320,79 +265,21 @@ floor is the larger of 3 % of the control's RMSE and its spread over the seeds.
 | null | low-rank updates | 0.247 | 0.255 | −0.008 | [−0.013, −0.004] | 0.013 | — | within ±the floor |
 | null | frozen probe | 0.247 | 0.596 | −0.349 | [−0.363, −0.335] | 0.013 | — | worse |
 
-**The coupled pair passes its rule** at this window, now under peaks swept at it: full
-fine-tuning ends a quarter below the fresh encoder, 24 % on the relative scale, on every seed,
-with an interval five times narrower than the advantage.
+### Conclusions
 
-**The null pair fails its equivalence.** Full fine-tuning on the backbone pretrained on `null-a`
-ends 10 % below the fresh encoder on `null-b-wide`, on every seed, and the interval [+0.020,
-+0.029] clears the floor of 0.013 in whole. The registration reads a failed equivalence as
-structure found where none was put, and holds every result on real data until it is understood.
+- **The coupled pair passes its rule** at this window under peaks swept at it: full fine-tuning ends 24 % below the fresh encoder on every seed, the interval five times narrower than the advantage.
+- **The null pair fails its equivalence.** Full fine-tuning on the `null-a` backbone ends 10 % below the fresh encoder on `null-b-wide`, on every seed; the interval [+0.020, +0.029] clears the floor of 0.013 in whole. The registration reads this as structure found where none was put and holds real-data results.
+- **Read against the generator, the failure is not "no structure".** The null pair is the coupled pair with one dial turned: at a coupling of zero a channel follows a private factor built like the shared ones (same harmonics, periods 24 to 300 time units, variance, noise, losses, cadence). The layouts share neither frequencies (per-layout seed) nor cross-channel structure. A backbone pretrained on `null-a` still learns what a signal of this family looks like, which a head on `null-b-wide` can use. `control-a` reconstructs hidden tokens to 0.017 of the trivial loss (read off the other channels), `null-a` to 0.340, still three times better than trivial: the family's temporal structure.
+- **Two things are measured at once.** The coupled advantage, +0.094 or 24 %, is family and shared frequencies together; the null, +0.025 or 10 %, the family alone; the structure put in on purpose is the difference, about +0.07, 14 points. The null rule asked the family's share to be zero, which the generator never promised; "a difference in what transfer achieves has one explanation" holds for the difference between the pairs and was overread as about the null pair alone.
+- **Two generator asymmetries.** A coupled channel follows two factors of three harmonics (six sinusoids), a private channel one (three), so the null forecast is easier (fresh encoder 0.247 against 0.387). The fresh encoder's spread on the coupled pair, 0.053, is four times the null pair's 0.013, and sets the coupled floor.
 
 ### What was checked
 
-By the standing instruction to audit before interpreting a result that disagrees with its
-registration. The null pair's cells ran under the backbone accepted for the new `null-a` corpus
-(`30f71255…`, pretrained on manifest `85e93b84…` as the registry's inputs record) and the
-`null-b-wide` manifest at 128 (`7df203eb…`); every row of `runs.csv` carries the task, 2,002
-steps, batches of 16, the schedule (warm-up 0.1, final fraction 0.01, no weight decay), the
-low-rank shape (rank 8, alpha 16, the three target families), the run's seed equal to the draw's,
-and the peaks the sweep chose; the from-scratch rows carry no backbone. The coupled pair's rows
-the same under `488be6bd…` and `9fb6c129…`. The pretraining converged as the same experiment
-file did at 32 (0.340 of the trivial predictor's against 0.334), and the backbone's channel table
-was grown to the second corpus's vocabulary by the code path the leg's first failure led to. No
-configuration error was found; the null pair's cells did what the registration asked.
-
-### What the failure is, read against the generator
-
-The null pair was written as the coupled pair with one dial turned: at a coupling of zero a
-channel follows a factor private to its layout instead of the shared ones (`sensor_signal.py`).
-The private factors are built like the shared ones on purpose, "so that an uncoupled channel
-differs from a coupled one in where its signal comes from rather than in how it looks": the same
-number of harmonics, the same band of periods from 24 to 300 time units, unit variance, the
-same noise, the same losses, the same cadence. What the two layouts of the null pair do not
-share is the set of frequencies, drawn under each layout's own seed, and any cross-channel
-structure, since every channel has a factor of its own.
-
-That is not "no structure". A backbone pretrained on `null-a` learns what a signal of this
-family looks like — a smooth sum of a few sinusoids in a known band, seen through gaps and
-noise — and a forecasting head on `null-b-wide` has a use for exactly that, whatever the
-frequencies. The pretraining losses say the same thing from the other side: `control-a`
-reconstructs its hidden tokens to 0.017 of the trivial predictor's loss, because eight channels
-follow four shared factors and a hidden channel can be read off the others, while `null-a` only
-reaches 0.340, because a hidden token there can be read off nothing but its own channel's past
-and future — and 0.340 is still three times better than the trivial predictor, which is the
-temporal structure of the family, learnt.
-
-So the leg measures two things at once, and the two pairs separate them: the whole advantage on
-the coupled pair, +0.094 or 24 %, is family and shared frequencies together; the advantage on
-the null pair, +0.025 or 10 %, is the family alone. The part attributable to the structure the
-control put in on purpose is the difference, about +0.07, or 14 points of the relative scale.
-The registered null rule asked the family's share to be zero, which the generator never
-promised; the leg's own sentence — "a difference in what transfer achieves has one explanation"
-— remains true of the *difference* between the pairs, and was overread as a claim about the null
-pair alone.
-
-Two further asymmetries are visible in the tables and belong to the generator rather than to
-the pipeline. A coupled channel follows two factors of three harmonics each, six sinusoids, and
-a private channel one factor, three sinusoids, so the null task is the easier forecast (the
-fresh encoder reaches 0.247 against 0.387) — the null pair is matched in signal strength, not in
-per-channel complexity. And the fresh encoder's spread over the seeds on the coupled pair, 0.053,
-is four times its spread on the null pair, 0.013: a harder forecast at 128 tokens in 2,002
-steps, which is what sets the coupled pair's floor.
+Audited because the result disagrees with its registration. The null cells ran under the backbone accepted for the new `null-a` (`30f71255…`, pretrained on manifest `85e93b84…` as the registry's inputs record) and the `null-b-wide` manifest at 128 (`7df203eb…`). Every row of `runs.csv` carries the task, 2,002 steps, batches of 16, the schedule (warm-up 0.1, final fraction 0.01, no weight decay), the low-rank shape (rank 8, alpha 16, three target families), the run's seed equal to the draw's, and the swept peaks; from-scratch rows carry no backbone. Coupled rows are the same under `488be6bd…` and `9fb6c129…`. Pretraining converged as at 32 (0.340 against 0.334), and the channel table was grown to the second vocabulary by the code path the first failure led to. No configuration error was found.
 
 ### What follows, a registration before a run
 
-The reading above is an explanation, not yet a measurement. It predicts what happens when the
-backbones are swapped between the pairs: the coupled pair's backbone fine-tuned on the null task
-carries the family and no useful frequencies, so it should end where the null pair's own backbone
-ends, near +0.025; the null pair's backbone fine-tuned on the coupled task carries the family
-alone, so it should end well short of +0.094, near the family's share. If instead the null pair's
-backbone gives the coupled task the whole +0.094, the shared frequencies contribute nothing to
-the transfer and the control does not discriminate structure at all, which would be a fault of
-the control's design. The two swapped cells are declared in `docs/preregistration.md`
-(2026-09-21, "the family's share"), each with its own fresh-encoder control at five seeds;
-nothing on real data is read before they are.
+The explanation is not yet measured. Swapping backbones predicts: the coupled backbone on the null task carries the family and no useful frequencies, so it should end near +0.025; the null backbone on the coupled task carries the family alone, so well short of +0.094, near the family's share. If it gives the whole +0.094, shared frequencies contribute nothing and the control does not discriminate structure, a design fault. Both swapped cells are declared in `docs/preregistration.md` (2026-09-21, "the family's share"), each with a fresh-encoder control at five seeds; no real data before them.
 
 ## 2026-09-21 — the backbones swapped between the pairs: the family's share is nearly the whole advantage
 

@@ -1,10 +1,13 @@
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Self
 
 from emblema.evaluation.domain.exceptions import InvalidAnomalyRankingError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
+from emblema.evaluation.domain.scoring.tied_sweep import TiedSweep
+from emblema.evaluation.domain.scoring.unit_counts import UnitCounts
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 
 
@@ -130,26 +133,25 @@ class AnomalyRanking:
         Raises:
             InvalidAnomalyRankingError: If the weights leave no event or no normal window.
         """
-        found = alarmed = 0.0
-        area = 0.0
-        found_in_group = alarmed_in_group = 0.0
-        for unit, event, weight, closes in zip(
-            self.sequence, self.events, self.weights, self.closes_tie, strict=True
-        ):
-            counted = weight * weights[unit]
-            if event:
-                found_in_group += counted
-            else:
-                alarmed_in_group += counted
-            if closes:
-                found += found_in_group
-                alarmed += alarmed_in_group
-                if found_in_group:
-                    area += found_in_group * found / (found + alarmed)
-                found_in_group = alarmed_in_group = 0.0
-        if found == 0.0 or alarmed == 0.0:
-            raise InvalidAnomalyRankingError("the weights leave no event or no normal window")
-        return area / found
+        return self.average_precisions(UnitCounts.of_weights(weights))[0]
+
+    def average_precisions(self, counts: UnitCounts) -> list[float]:
+        """The area under each of several draws of the units.
+
+        Raises:
+            InvalidAnomalyRankingError: If a draw leaves no event or no normal window.
+        """
+        return self._sweep.average_precisions(counts)
+
+    @cached_property
+    def _sweep(self) -> TiedSweep:
+        return TiedSweep.of(
+            unit_count=len(self.units),
+            sequence=self.sequence,
+            hit=tuple(bool(event) for event in self.events),
+            worth=self.weights,
+            closes_tie=self.closes_tie,
+        )
 
     def event_recall_at_false_alarm_share(self, share: float) -> float:
         """The share of events found with at most ``share`` of the normal windows flagged.

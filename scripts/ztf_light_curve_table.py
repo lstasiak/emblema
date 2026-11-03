@@ -158,12 +158,12 @@ def mutual_pairs(
     first: NDArray[np.float64], second: NDArray[np.float64], radius: float
 ) -> list[tuple[int, int]]:
     """Index pairs that are each other's nearest within ``radius``."""
-    from scipy.spatial import cKDTree
+    from scipy.spatial import KDTree
 
     if not len(first) or not len(second):
         return []
-    forward_distance, forward = cKDTree(second).query(first, distance_upper_bound=radius)
-    _, backward = cKDTree(first).query(second, distance_upper_bound=radius)
+    forward_distance, forward = KDTree(second).query(first, distance_upper_bound=radius)
+    _, backward = KDTree(first).query(second, distance_upper_bound=radius)
     return [
         (i, int(j))
         for i, (d, j) in enumerate(zip(forward_distance, forward, strict=True))

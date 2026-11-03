@@ -1,3 +1,6 @@
+from dataclasses import replace
+from typing import Any
+
 import pytest
 
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
@@ -16,16 +19,18 @@ from tests.evaluation.support import WEIGHTS
 READING = EncoderReading(architecture=WEIGHTS, backbone=WEIGHTS)
 
 
-def recipe(**overrides: object) -> DetectorRecipe:
-    stated = {
-        "features": DetectorFeatures.ENCODER_STATES,
-        "reading": READING,
-        "neighbours": 5,
-        "contamination": 0.02,
-        "seed": 1,
-    }
-    stated.update(overrides)
-    return DetectorRecipe(**stated)  # type: ignore[arg-type]
+# Any: these tests pass wrong values on purpose, to see them refused.
+def recipe(**overrides: Any) -> DetectorRecipe:
+    return replace(
+        DetectorRecipe(
+            features=DetectorFeatures.ENCODER_STATES,
+            reading=READING,
+            neighbours=5,
+            contamination=0.02,
+            seed=1,
+        ),
+        **overrides,
+    )
 
 
 def test_a_detector_over_an_encoders_states_names_the_encoder_and_one_over_summaries_none() -> None:

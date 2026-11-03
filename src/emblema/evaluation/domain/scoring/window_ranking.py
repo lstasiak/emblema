@@ -1,10 +1,13 @@
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Self
 
 from emblema.evaluation.domain.exceptions import InvalidWindowRankingError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.outcome_scheme import OutcomeScheme
+from emblema.evaluation.domain.scoring.tied_sweep import TiedSweep
+from emblema.evaluation.domain.scoring.unit_counts import UnitCounts
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 
 
@@ -90,27 +93,25 @@ class WindowRanking:
         Raises:
             InvalidWindowRankingError: If the weights leave one outcome only.
         """
-        below = 0
-        area = 0.0
-        positives = negatives = 0
-        tied_positive = tied_negative = 0
-        for unit, positive, closes in zip(
-            self.sequence, self.positive, self.closes_tie, strict=True
-        ):
-            weight = weights[unit]
-            if positive:
-                tied_positive += weight
-            else:
-                tied_negative += weight
-            if closes:
-                area += tied_positive * (below + tied_negative / 2.0)
-                below += tied_negative
-                positives += tied_positive
-                negatives += tied_negative
-                tied_positive = tied_negative = 0
-        if positives == 0 or negatives == 0:
-            raise InvalidWindowRankingError("the weights leave one outcome only")
-        return area / (positives * negatives)
+        return self.aurocs(UnitCounts.of_weights(weights))[0]
+
+    def aurocs(self, counts: UnitCounts) -> list[float]:
+        """The area under each of several draws of the units.
+
+        Raises:
+            InvalidWindowRankingError: If a draw leaves one outcome only.
+        """
+        return self._sweep.aurocs(counts)
+
+    @cached_property
+    def _sweep(self) -> TiedSweep:
+        return TiedSweep.of(
+            unit_count=len(self.units),
+            sequence=self.sequence,
+            hit=self.positive,
+            worth=(1.0,) * len(self.sequence),
+            closes_tie=self.closes_tie,
+        )
 
     @property
     def average_precision(self) -> float:

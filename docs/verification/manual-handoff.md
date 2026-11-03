@@ -36,9 +36,8 @@ the remote bucket; the three pretraining steps then touch the bucket, the local 
 local MLflow server exactly as a run split between this machine and a notebook would, except that
 the `run` step happens here too.
 
-## Runs
 
-### 2026-09-16 — Darwin arm64, M1 Pro, MPS, fp32, against Cloudflare R2
+## 2026-09-16 — Darwin arm64, M1 Pro, MPS, fp32, against Cloudflare R2
 
 |  |  |
 | --- | --- |
@@ -115,7 +114,7 @@ the file, to be measured when the leg is repeated.
   is a corpus. On the machine that published the corpus that is a map of a file already there; on
   another machine it is one download.
 
-### 2026-09-18 — Kaggle, Tesla T4, CUDA 12.8, fp32 and fp16, against Cloudflare R2
+## 2026-09-18 — Kaggle, Tesla T4, CUDA 12.8, fp32 and fp16, against Cloudflare R2
 
 The first runs on the platform the handoff was designed for: three orders placed here from a
 committed tree, fulfilled in one Kaggle notebook that installed the package at that commit, and
@@ -173,7 +172,7 @@ What the registry holds afterwards: three rows in `pretraining.backbone` in stat
 naming the corpus version `e143f4b4-…`, the manifest and the block; the acceptances replayed the
 epochs into the local MLflow server under the three experiment names, run `kaggle-t4` each.
 
-#### What the numbers say
+### What the numbers say
 
 - **The path works end to end on the platform it was made for**, from a committed tree: the
   notebook read the order and the corpus from the bucket, trained, uploaded its checkpoints and
@@ -206,7 +205,7 @@ epochs into the local MLflow server under the three experiment names, run `kaggl
   included; the mixed run's windows are longer and its attention is quadratic in them, so this
   number is the floor of that estimate, not the estimate.
 
-### 2026-09-19 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the backbone over the mixture
+## 2026-09-19 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the backbone over the mixture
 
 The first full pretraining: one order over the four corpora chained through one vocabulary
 (ADR-0029), placed here from `main` and fulfilled in one Kaggle session with "Save & Run All",
@@ -286,7 +285,7 @@ Every number is validation, not test. What the run says:
   `training-loop.md` says it does. Its result is not accepted: the backbone was delivered by the
   first run and refuses a second delivery, which is the registry doing its job.
 
-### 2026-09-21 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the C-MAPSS backbone to its plateau
+## 2026-09-21 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the C-MAPSS backbone to its plateau
 
 Four orders of the C-MAPSS backbone's experiment with the budget doubled each time — 8, 16, 32
 and 64 epochs, files `experiments/backbone-cmapss-m-{8,16,32,64}.toml`, otherwise the file of the
@@ -326,7 +325,7 @@ What the runs say:
 
 The two sessions cost about 6.3 hours of the platform's GPU quota in all.
 
-### 2026-09-21 — Colab, NVIDIA L4, fp16, against Cloudflare R2: the backbone over FD001 and FD003 to its plateau
+## 2026-09-21 — Colab, NVIDIA L4, fp16, against Cloudflare R2: the backbone over FD001 and FD003 to its plateau
 
 The same ladder over `cmapss` published again with the subsets FD001 and FD003 alone, one
 operating condition each (`durable/sha256/a9c73709…`; why, in `docs/preregistration.md`,
@@ -359,7 +358,7 @@ What the runs say:
 - **Cost**: one epoch takes about 30 s on the L4 alone and 120 s with four runs sharing it; the
   minutes above are the runs' own epochs, however many ran beside them.
 
-### 2026-09-22 — Colab, NVIDIA A100, fp16, against Cloudflare R2: the backbone over the four subsets read per operating condition to its plateau
+## 2026-09-22 — Colab, NVIDIA A100, fp16, against Cloudflare R2: the backbone over the four subsets read per operating condition to its plateau
 
 The same ladder over `cmapss` published again with all four subsets read per operating condition
 (ADR-0034; manifest `durable/sha256/d63f8e1b…`, 126 channels, 20,160 training and 5,235 held-out
@@ -392,7 +391,7 @@ What the runs say:
   epoch took from 51 to 181 s; the minutes above are the runs' own epochs, however many ran
   beside them.
 
-### 2026-09-29 — Kaggle, Tesla T4 x2, fp16, against Cloudflare R2: the intensive-care backbones
+## 2026-09-29 — Kaggle, Tesla T4 x2, fp16, against Cloudflare R2: the intensive-care backbones
 
 Two backbones for the intensive-care task: one over the stays of set A alone, named by the
 doubling rule, and the mixed backbone of 2026-09-19 with those stays added as a fifth corpus.
@@ -452,7 +451,7 @@ Every number is validation, not test. What the runs say:
   mixture cannot separate the added corpus from the run's own spread. The intensive-care task
   does not read C-MAPSS, so its campaigns are not affected.
 
-### 2026-10-02 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the mixture without SMD
+## 2026-10-02 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the mixture without SMD
 
 Two backbones over the mixture of five less SMD, for the question whether SMD teaches the
 intensive-care task anything (`intensive-care-curve.md`, 2026-10-02): A at the mixture's eight
@@ -508,7 +507,7 @@ What the runs say:
   the twelfth, not the last. What the two backbones do on the intensive-care task is in
   `intensive-care-curve.md` (2026-10-02): B's fine-tuning loses 0.057 to A's.
 
-### 2026-10-04 — Kaggle, Tesla T4 x2, fp16, against Cloudflare R2: the mixture of four and its leave-one-corpus-out variants
+## 2026-10-04 — Kaggle, Tesla T4 x2, fp16, against Cloudflare R2: the mixture of four and its leave-one-corpus-out variants
 
 Seven backbones for the transfer matrix, on a vocabulary chained anew from C-MAPSS read per
 operating condition (`durable/sha256/d63f8e1b…`): SKAB (`3e9c8450…`, channels 127–134), the
@@ -561,7 +560,7 @@ What the runs say:
   (2026-10-03), so the pretext loss again says nothing about the task until it is read there.
 - One run per backbone; the spread of a pretraining run is still unmeasured.
 
-### 2026-10-04 — Kaggle, Tesla T4 x2, fp16, against Cloudflare R2: the mixture of four at a second seed and in the shape of 512 by 8
+## 2026-10-04 — Kaggle, Tesla T4 x2, fp16, against Cloudflare R2: the mixture of four at a second seed and in the shape of 512 by 8
 
 The first point of the curve over the scale of pretraining (`docs/preregistration.md`, "The
 scale of pretraining") needs the mixture of four pretrained at a second seed, whose difference a
@@ -599,7 +598,7 @@ What the runs say:
 - A correction to the section above: leaving a corpus out moved the stays by up to 0.015 (0.490
   to 0.505), not 0.01; the reading does not change.
 
-### 2026-10-04 — declared before the run: the larger shape at half the rate
+## 2026-10-04 — declared before the run: the larger shape at half the rate
 
 **Question.** Does the larger shape's poorer pretext come from a rate of 1e-3 being too high for
 its width? `experiments/backbone-mixed4-512x8-m-5e-4.toml` is the same run at 5e-4, the rate
@@ -619,7 +618,7 @@ over the same stays and seeds, the run whose probe is higher by the paired inter
 the curve, and 1e-3 kept where neither is. If the half rate wins on the task, the larger shape
 at about 10⁹ values runs at it.
 
-### 2026-10-05 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the larger shape at half the rate
+## 2026-10-05 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the larger shape at half the rate
 
 Under the declaration above: `experiments/backbone-mixed4-512x8-m-5e-4.toml`, ordered here from
 `819e82ad`, fulfilled on one Kaggle T4 in 2,613 s an epoch (5.8 h), accepted as backbone
@@ -642,7 +641,7 @@ Under the declaration above: `experiments/backbone-mixed4-512x8-m-5e-4.toml`, or
   5e-4: its probe at 50 stays is higher by 0.012 [+0.005; +0.019] (`intensive-care-curve.md`,
   2026-10-05).
 
-### 2026-10-05 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the mixture of four under the forecast tail
+## 2026-10-05 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the mixture of four under the forecast tail
 
 The first variant of the pretext (`pretext-variants.md`, declared 2026-10-05):
 `experiments/backbone-mixed4-m-forecast.toml`, every window losing its tail across every
@@ -669,7 +668,7 @@ carrying the last value forward would score on the tail is the diagnostic's ques
   a stay's future is the hardest part of the pretext, as its interior was under the mixture's
   masks (0.49), and harder still.
 
-### 2026-10-06 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the mixture of four under the harder masks
+## 2026-10-06 — Kaggle, Tesla T4, fp16, against Cloudflare R2: the mixture of four under the harder masks
 
 The second variant of the pretext (`pretext-variants.md`, set by the rule of 2026-10-05 after
 the diagnostic): `experiments/backbone-mixed4-m-harder.toml`, the mixture's three kinds of mask
@@ -698,7 +697,7 @@ removes on its own pretext, not which run read the data better.**
   loss rose by 0.002 on C-MAPSS and by 0.05 on the stays, so the extra hidden tokens cost the
   stays' interior the most, as the forecast tail did their future.
 
-### 2026-10-07 — Kaggle T4 and Colab G4, fp16, against Cloudflare R2: the scale of pretraining
+## 2026-10-07 — Kaggle T4 and Colab G4, fp16, against Cloudflare R2: the scale of pretraining
 
 The backbones of the curve over the scale of pretraining (`docs/preregistration.md`, "The scale
 of pretraining"), ordered from `3beb04a1` (Kaggle, run `kaggle-l5a`), `76545474` (Colab, run
@@ -737,7 +736,7 @@ its 25 datasets. Seconds are the wall clock of an epoch, which a shared GPU stre
   because the cell's final wait also waited on its GPU logger; the cells now release the logger
   before waiting.
 
-### Open
+## Open
 
 - ~~The checkpoint reference a dropped session should be resumed from is known to nobody when
   the run is not tracked.~~ Closed on 2026-09-19: the runtime logs every checkpoint it writes,

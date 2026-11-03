@@ -56,3 +56,14 @@ class AnomalyInteraction:
     def reduction_over(self, picks: Sequence[int]) -> float:
         """The interaction over the units at ``picks``, a unit counted as often as it is picked."""
         return self.taught.reduction_over(picks) - self.untaught.reduction_over(picks)
+
+    def reductions_over(self, draws: Sequence[Sequence[int]]) -> list[float]:
+        """The interaction over each draw of units, the draws read together."""
+        return [
+            taught - untaught
+            for taught, untaught in zip(
+                self.taught.reductions_over(draws),
+                self.untaught.reductions_over(draws),
+                strict=True,
+            )
+        ]

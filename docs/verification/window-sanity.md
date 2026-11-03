@@ -1,5 +1,7 @@
 # Windows beside their token reconstruction
 
+*The FD001 figures named in the first table were never tracked; the tracked figures are the current set.*
+
 Purpose: see, before any GPU hour is spent, that a token window still holds the measurements it was
 cut from, and that the corpus behind it looks the way its documentation says. The arithmetic of the
 round trip is a test, not a number here — the reader, the tokeniser and the scheme are held to it on

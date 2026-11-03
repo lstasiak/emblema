@@ -102,6 +102,10 @@ class PairedUnitErrors:
         """The reduction over the units at ``picks``, a unit counted as often as it is picked."""
         return self.error_control_over(picks) - self.error_candidate_over(picks)
 
+    def reductions_over(self, draws: Sequence[Sequence[int]]) -> list[float]:
+        """The reduction over each draw of units."""
+        return [self.reduction_over(picks) for picks in draws]
+
     def error_control_over(self, picks: Sequence[int]) -> float:
         return _rmse_over(self.control, picks)
 
