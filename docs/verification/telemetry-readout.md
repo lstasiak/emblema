@@ -104,3 +104,132 @@ commas; no number was read.
 both the events taught and the untrained encoder's initialisation, so the paired difference
 between encoders mixes the two draws. The power simulation models the sampling of months and
 events, not a detector's seed. Validation side, tier M.
+
+## 2026-11-02 — measured: no readout qualifies; under every instrument the pretrained states match their initialisation, the pretext's error trails a ridge, and a few events teach either encoder alike
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | campaigns declared at `98d19b5f`; cells run from `06406c8d`, which only gives the ml processes scikit-learn |
+| Platform | Colab G4, fp32, 24 lanes under CUDA MPS; 152 pieces, every one exit 0; 35 lane-hours; a cell 3 min (states) to 27 min (ridge per channel) |
+| Registry | 514 cells accepted; a first-mission campaign of ten seeds closes with a verdict of eleven pairs, 2.5 h in pure Python |
+| Reading | `read.sh` as declared, each pair in a process of its own over the predictions of its sides (on the trial's campaigns byte for byte the sequential tables); 10,000 resamples, seed 1 |
+| Units | first mission: 56 months, 41,088 windows, 4,759 in 62 events (20 events of four windows or fewer, one of 571); chance under event weights 0.002; second mission 14 units, 10,223 windows |
+
+**Family A: the states under the whitened distance, first mission.** Gain = the candidate's
+event-weighted PR-AUC less the control's, mean of both backbones; interval over months.
+
+| Pair | Control | Candidate | Gain [interval] | p |
+| --- | --- | --- | --- | --- |
+| pretrained less initialisation, whitened | 0.080 | 0.090 (base1 0.100, base2 0.080) | +0.009 [−0.009; +0.026] | 0.38 |
+| pretrained less initialisation, nearest neighbours | 0.089 | 0.096 (0.086, 0.105) | +0.007 [−0.010; +0.024] | 0.66 |
+| whitened less nearest neighbours, pretrained | 0.096 | 0.090 | −0.006 [−0.024; +0.011] | 0.90 |
+| whitened less nearest neighbours, initialisation | 0.089 | 0.080 | −0.008 [−0.035; +0.020] | 0.69 |
+
+The bars of the field under the same reference, and the pretrained whitened states against each:
+
+| Bar | Area | States less bar [interval] | p |
+| --- | --- | --- | --- |
+| summaries, whitened | 0.018 | +0.072 [+0.015; +0.156] | 0.010 |
+| summaries, nearest neighbours | 0.021 | +0.069 [+0.011; +0.153] | 0.019 |
+| counts | 0.006 | +0.084 [+0.022; +0.174] | 0.004 |
+| cells, nearest neighbours | 0.029 | +0.060 [+0.006; +0.135] | 0.028 |
+| cells, whitened | 0.017 | +0.073 [+0.016; +0.157] | 0.007 |
+| cells, centre | 0.029 | +0.061 [+0.004; +0.131] | 0.020 |
+| cells, subspace | 0.056 | +0.034 [+0.003; +0.077] | 0.024 |
+| **cells, farthest** | **0.154** | −0.065 [−0.172; +0.036] | 0.20 |
+
+**Family B: the pretext's error, first mission** (three seeds; the ridge does not read the
+backbone, so its cells are the same under both).
+
+| Knobs | Pretext (base1, base2) | Ridge | Pretext less ridge [interval] | Pretext less raw pretext |
+| --- | --- | --- | --- | --- |
+| raw | 0.127 (0.114, 0.139) | 0.152 | −0.026 [−0.050; +0.019] | — |
+| per channel | 0.021 (0.021, 0.021) | 0.142 | −0.121 [−0.194; −0.058] | −0.106 [−0.193; −0.049] |
+| tail | 0.060 (0.058, 0.062) | 0.057 | +0.003 [−0.001; +0.024] | −0.067 [−0.158; −0.005] |
+| per channel and tail | 0.017 | 0.010 | +0.007 [+0.001; +0.026] | −0.110 [−0.198; −0.050] |
+
+Per channel the raw pretext's 37 events found at 1 % false alarms fall to 16 (the ridge 29):
+the short events caught at 0.2 % of the normal windows fall to 1.2 %, as the floor on a quiet
+channel's scale lifts that channel's ordinary error over them. One code path serves both
+detectors; the knob, not a fault, does it.
+
+**Family D: a few of the fitting side's events taught, first mission** (ten seeds, each
+drawing the events and the initialisation; sd over seeds 0.05 to 0.09).
+
+| Events | Pretrained taught less untaught | Initialisation taught less untaught | Interaction [interval], per seed | Pretrained less initialisation, taught |
+| --- | --- | --- | --- | --- |
+| 3 | +0.012 [−0.054; +0.066] | +0.029 [−0.034; +0.076] | −0.017 [−0.039; +0.006], −0.017 ± 0.015 | −0.008 [−0.029; +0.011] |
+| 5 | +0.035 [−0.043; +0.103] | +0.048 [−0.020; +0.109] | −0.013 [−0.044; +0.017], −0.013 ± 0.008 | −0.003 [−0.034; +0.023] |
+| 10 | +0.041 [−0.036; +0.112] | +0.032 [−0.036; +0.098] | +0.010 [−0.023; +0.036], +0.010 ± 0.013 | +0.019 [−0.016; +0.043] |
+
+Per backbone at five events: base1 0.170 against 0.100 untaught, base2 0.080 against 0.080.
+The combination of the whitened distance and the direction reads −0.035 [−0.104; +0.038]
+against the direction alone. By class, at ten events the scored events of a taught class gain
++0.08 to +0.11 under either encoder and the other classes lose −0.06 to −0.08. The trees
+taught the same events over the summaries read 0.002, 0.008 and 0.010 at 3, 5 and 10 events,
+below the untaught summaries (0.021); the taught states beat them by +0.10 to +0.12 (lower
+edges +0.06 to +0.07). Refitted on a real cell, the trees separate the taught rows in sample at
+AUROC 0.999 and the scored events at 0.56 and 0.46: they learn the taught events, which the
+scored side's classes do not repeat.
+
+**Second mission, descriptive** (three seeds; areas, mean of both backbones unless given).
+
+| Detector | Area |
+| --- | --- |
+| pretrained states whitened / nearest neighbours | 0.224 (0.123, 0.325) / 0.056; less initialisation −0.412 [−0.495; −0.273] / −0.432 [−0.594; −0.312] |
+| initialisation whitened / nearest neighbours | 0.636 / 0.488 |
+| pretext raw / per channel / tail / both | 0.489 / 0.685 / 0.314 / 0.426; ridge 0.496 / 0.722 / 0.206 / 0.403 |
+| summaries plain / whitened; cells plain / whitened / farthest; counts | 0.532 / 0.622; 0.427 / 0.593 / 0.618; 0.024 |
+
+**Beside** (first mission, events found at 1 % false alarms / the benchmark's F0.5 at the
+cell's alarm): pretrained states whitened 0.16 / 0.64, their initialisation 0.20 / 0.62;
+taught five 0.55 and 0.49; pretext raw 0.53 / 0.22, ridge raw 0.52 / 0.30; cells farthest
+0.42 / 0.68; summaries 0.08 / 0.22; trees taught ten 0.14.
+
+**Predictions against the reading.**
+
+| Reading | Predicted | Measured |
+| --- | --- | --- |
+| M1 states whitened less initialisation; their PR-AUC; less summaries whitened | ±0.03; [0.04, 0.15]; [+0.01, +0.16] | +0.009; 0.090; +0.072 (all held) |
+| M1 pretext per channel less ridge per channel | [−0.05, +0.02] | −0.121 (failed) |
+| M1 taught 3 / 10 less untaught | below / above zero | +0.012 and +0.029 / +0.041 and +0.032 (3 failed within noise; 10 held at the point) |
+| M1 interaction, every count | [−0.03, +0.05] | −0.017, −0.013, +0.010 (held) |
+| M1 trees taught 10 less summaries untaught | at least +0.05 | −0.013 (failed) |
+| M2 states whitened less initialisation | [−0.55, −0.28] | −0.412 (held) |
+
+**Selection.** No readout qualifies: the states' gain over their initialisation has its lower
+edge below zero and a point of −0.001 under `base2`; no pretext knob beats both the ridge and
+the raw error; no interaction reaches 0.03 and none has its lower edge above zero. By the
+declared rule the confirmation reads the leg descriptively, and the leg turns to the product
+reading: the best detector against the trees and the bars.
+
+**Conclusions.**
+
+1. Whitened or not, taught or not, the pretrained states read as their initialisation does on
+   the first mission and far below it on the second: the third screen to find it, under a third
+   instrument, and the same under PR-AUC, recall at 1 % and F0.5.
+2. The pretext's error does not read past a ridge over the same cells. Per channel it loses
+   the short events on the first mission and gains on the second; the tail loses on both.
+3. A few taught events lift either encoder by 0.03 to 0.05, on the taught classes alone; the
+   pretrained encoder learns no more from them than its initialisation. The trees learn the
+   taught events and nothing beyond.
+4. Product reading, zero label: on the first mission the cells' farthest neighbour (0.154) and
+   the raw ridge (0.152) lead, the pretext 0.127, the states 0.090; on the second the ridge per
+   channel (0.722). With five to ten events a direction over the states, pretrained or not,
+   beats the trees taught the same events by 0.10 to 0.12.
+5. The verdict's bootstrap and the reading's each cost hours on a first-mission campaign in
+   pure Python.
+
+**Limitations.** Two pretrainings, the ones the hypotheses came from; the initialisation and
+the ridge are one control each. One seed draws both the taught events and the initialisation.
+The event weights hinge the measure on twenty events of four windows or fewer, hence intervals
+of ±0.07 for the taught detectors. The measures disagree on the order of detectors (F0.5 ranks
+the states above the pretext, the area below); the comparison with the initialisation is the
+same under every one. The per-channel knob and the trees went to the platform on predictions
+from the literature without a pilot on the fitting side; both failed. Validation side, tier M.
+
+**What follows.** The leg keeps no claim of pretraining over frozen states; the confirmation
+reads it as the product table above. The pretraining question moves to fine-tuning with a few
+taught events, pretrained against random initialisation, piloted on the host first.
