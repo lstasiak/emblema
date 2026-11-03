@@ -23,6 +23,11 @@ experiment — and the shape of a note: its CSV, its tables, its figures.
 
 | Script | Kind | Evidence it produces | Retired by |
 | --- | --- | --- | --- |
+| `place_campaign_orders.py` | tooling | defines a batch of campaigns and places their orders from a clean tree | — |
+| `colab_cell.py` | tooling | writes the cell that fulfils the orders on one card, in lanes, resumable, every network step under a limit | — |
+| `accept_lane_results.py` | tooling | accepts a cell's pasted results, one per lane | — |
+| `campaign_pairs_fanout.py` | tooling | reads a plan of pairs across processes, the tables byte for byte those of one run | — |
+| `detection_side_readings.py` | measurement | a detection task's readings beside the area, per cell | — |
 | `smoke.sh` | tooling | run by the CI job `compose` | — |
 | `bootstrap-bucket.sh` | tooling | run by the compose service `bootstrap` | — |
 | `fetch_corpora.py`, `utsd_shards.sha256` | tooling | archive checksums for a note; the shard listing pins the collection's revision | — |
