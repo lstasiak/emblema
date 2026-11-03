@@ -53,10 +53,9 @@ patient's age, become tokens without a time.
 
 ![Sensor readings of an intensive-care stay and a turbofan engine, and the same windows as sets of tokens](docs/images/token-view.png)
 
-*Real data, tokenised by the code in this repository. Top: 48 hours of one intensive-care stay
-(PhysioNet 2012), where heart rate is read 189 times and glucose 5. Bottom: the last 50 cycles of
-one turbofan engine (NASA C-MAPSS), every sensor every cycle. On the right, the rows the model
-receives for each: the same kind of input, of any length, from any sensors.*
+*Real data, tokenised by this repository's code. Top: 48 hours of one intensive-care stay, where
+heart rate is read 189 times and glucose 5. Bottom: the last 50 cycles of one turbofan engine,
+every sensor every cycle. On the right, the same kind of input for each.*
 
 **One encoder for any sensor set.** A transformer reads the whole set at once, in any order.
 Each sensor has a learned identity vector, so a sensor it has never seen gets a new vector
@@ -67,11 +66,10 @@ stretches of one sensor's time, or single readings. The model predicts the hidde
 what remains, and counts as having learnt something only where it beats a simple method for the
 same gap, such as interpolation or a regression on the other sensors.
 
-**Adapting to a task.** The pretrained encoder is then used five ways on a small labelled task:
-frozen with a small output layer trained, frozen with that layer solved in closed form, lightly
-adjusted through a few extra weights (LoRA), fully fine-tuned, or trained from scratch as the
-control. Each runs at several label budgets, from 50 labelled windows to all of them, tuned per
-budget by the same declared procedure as the classical baselines.
+**Adapting to a task.** The encoder is then used on a small labelled task: frozen under a small
+output layer, lightly adjusted through a few extra weights (LoRA), fully fine-tuned, or trained
+from scratch as the control. Each runs at several label budgets, tuned by the same declared
+procedure as the classical baselines.
 
 **Keeping the comparison honest.**
 
@@ -90,40 +88,29 @@ budget by the same declared procedure as the classical baselines.
 Preliminary, on validation data. Each task's test data is used once, at the end.
 
 - **Pretraining has not yet been shown to pay off.** On turbofan remaining life (NASA C-MAPSS)
-  the network trained from scratch is the best candidate at every budget. On death in hospital
-  (PhysioNet 2012) a small encoder pretrained over cells of the stays, the eICU demo and raw
-  satellite telemetry gains 0.016 [0.007; 0.025] in area at 50 stays over the same network
-  trained from scratch at its own best rate, the same at 20 within the noise threshold, and
-  nothing at 200. It is a screen of four pretrainings; fresh pretrainings confirm it or not.
-- **On satellite telemetry the pretrained encoder does not find events without labels.** Its
-  features do not beat the same encoder untrained, nor its pretext's error a linear model over
-  the same readings; a whitened distance, a per-channel error and a few taught events do not
-  change that. With five to ten labelled events a direction over the encoder's states,
-  pretrained or not, beats trees taught the same events by 0.10; without labels the best
-  detectors are classical.
-- **Pretraining now leaves a representation above its initialisation.** On the encoder over
-  cells a linear probe on the frozen features gains 0.06 to 0.09 in area over the same encoder
-  untrained at 500 stays; it still reads 0.03 below the trees.
-- **Classical baselines lead at few labels.** Gradient-boosted trees over per-channel summaries
-  match or beat every network from 200 labels up. A small encoder from scratch that reads each
-  stay as cells of channel and time bin matches the trees at 200 stays and trails the tuned
-  trees by 0.008 at every stay.
+  no pretrained arm beats the network trained from scratch at any budget. On death in hospital (PhysioNet 2012) a small pretrained encoder gains 0.016
+  [0.007; 0.025] in area at 50 stays and nothing at 200. It is a screen of four pretrainings;
+  fresh pretrainings confirm it or not.
+- **On satellite telemetry it does not find events without labels.** Its features do not beat the
+  same encoder untrained. With five to ten labelled events, an encoder of either kind beats trees
+  taught the same events by 0.10; without labels the best detectors are classical.
+- **It does leave a useful representation.** A linear probe on the frozen features gains 0.06 to
+  0.09 over the same encoder untrained at 500 stays, still 0.03 below the trees.
+- **Classical baselines lead at few labels.** Gradient-boosted trees match or beat every network
+  from 200 labels up, except a small encoder from scratch that reads each stay as cells of channel
+  and time bin: level at 200 stays, 0.008 below the tuned trees at every stay.
 - **Ruled out:** more pretraining data (up to about 10⁹ values), a five times larger model,
   continuing on the task's own domain, the adaptation recipe and six variants of the pretext.
-- **What does transfer is the encoder's machinery.** Fitting only the sensor identities of a
-  dataset the model never saw, on its unlabelled data, brings the pretext to within 0.006 of a
-  model that saw it, and carries part of a downstream task.
-- **Next:** confirm the gain at few labels on fresh pretrainings; on telemetry, pilot
-  fine-tuning with a few labelled events, pretrained against untrained.
+- **Next:** confirm the gain at few labels on fresh pretrainings; on telemetry, pilot fine-tuning
+  with a few labelled events.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
-![Validation RMSE of the five network arms and of the classical baselines over the budget of labelled windows, mean over five seeds, and the reduction of each pretrained arm against the control with its paired interval over engines and the practical floor; tier M, Colab G4 and A100, fp32; validation, not test](docs/verification/figures/label-efficiency-curve.png)
+![Validation RMSE of the network arms and classical baselines by number of labelled windows, and each pretrained arm's reduction against training from scratch](docs/verification/figures/label-efficiency-curve.png)
 
-*Error by number of labelled windows on C-MAPSS FD001, one paired campaign. Top: the five ways
-of using the encoder (lower is better). Middle: the classical baselines beside the network
-trained from scratch. Bottom: each pretrained arm's reduction against training from scratch
-with its 95 % interval over engines; the grey band is the practical floor. Validation, not test.*
+*Error by number of labelled windows on C-MAPSS FD001, lower is better. Top: the ways of using the
+encoder. Middle: classical baselines. Bottom: each pretrained arm's reduction against training
+from scratch, with its 95 % interval; the grey band is the practical floor. Validation, not test.*
 
 ## Quickstart
 
@@ -149,20 +136,14 @@ uv run pytest -m integration     # adapter contracts against the stack
 The API listens on `http://127.0.0.1:8000` (`/docs`, `/openapi.json`, `/health`, `/ready`,
 `/metrics`).
 
-The integration tests use their own database, the configured name with `_test` appended. The
-merge gate is the same suite inside the image, on the interpreter, wheels and OS the processes
-run on:
+The merge gate is the same suite inside the image:
 
 ```sh
 docker compose run --rm tests pytest -o addopts="-ra --strict-markers" --cov
 ```
 
-On macOS XGBoost's OpenMP runtime cannot share a process with torch's, so the suite loads torch
-first and skips the fits, which run in a process that refuses torch:
-`uv run pytest --without-torch tests/evaluation/adapters/xgboost
-tests/evaluation/adapters/test_classical_runtime_contract.py
-tests/scripts/test_head_and_representation_report.py`. With `--env-file .env.r2` the
-integration tests run against the remote bucket; the variable names are in `env.example`.
+On macOS XGBoost's OpenMP runtime cannot share a process with torch's, so its fits run apart:
+`uv run pytest --without-torch tests/evaluation/adapters/xgboost`.
 
 ### Workflow
 
@@ -186,8 +167,8 @@ uv run python -m emblema.entrypoints.cli.pretrain accept --result <key> <checksu
     --track http://127.0.0.1:5000
 ```
 
-**Evaluation.** A campaign is declared from a committed file under `campaigns/`; its cells run on
-the Celery workers or, where no broker reaches, from an order in the artifact store:
+**Evaluation.** A campaign is declared from a file under `campaigns/`; its cells run on the
+workers or, where no broker reaches, from an order in the artifact store:
 
 ```sh
 uv run python -m emblema.entrypoints.cli.campaign define-task --corpus <key> <checksum> --task turbofan-fd001
@@ -203,49 +184,21 @@ uv run python -m emblema.entrypoints.cli.campaign_run --order <key> <checksum>
 uv run python -m emblema.entrypoints.cli.campaign accept --result <key> <checksum>
 ```
 
-`campaign select` prints what a finished selection chose per budget; `campaign announce`
-repeats a closed campaign's announcement with the checksum of every kept artifact.
-
 **Serving.** Only an artifact a finished campaign kept can be promoted, by checksum
-([ADR-0037](docs/adr/0037-promoting-what-a-campaign-kept.md)):
-
-```sh
-uv run python -m emblema.entrypoints.cli.serving promote --checksum <checksum>
-uv run python -m emblema.entrypoints.cli.serving withdraw --model <model id>
-```
-
-The same two operations answer over HTTP to a caller whose bearer token carries the scope of
-the operation (`serving:promote`, `serving:withdraw`). Who a token stands for is the configured
-identity provider's answer: tokens the process was given, for the local stack, or an issuer's
-signed tokens verified by its published keys
-([ADR-0048](docs/adr/0048-authentication-at-the-edge-authorisation-in-the-use-case.md)). On
-the local stack the token is the first field of `EMBLEMA_IDENTITY__STATIC_TOKENS` in `.env`:
-
-```sh
-curl -s -X POST http://127.0.0.1:8000/served-models \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"checksum": "<checksum>"}'
-curl -s -X POST http://127.0.0.1:8000/served-models/<model id>/withdrawal \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-A promoted model answers over HTTP with raw readings by channel name: unknown channels are
-ignored and named in the answer, a window without a reading the model takes is refused
+([ADR-0037](docs/adr/0037-promoting-what-a-campaign-kept.md)). A promoted model answers over HTTP
+with raw readings by channel name
 ([ADR-0042](docs/adr/0042-the-prediction-service.md)):
 
 ```sh
+uv run python -m emblema.entrypoints.cli.serving promote --checksum <checksum>
 curl -s -X POST http://127.0.0.1:8000/served-models/<model id>/predictions \
   -H 'Content-Type: application/json' \
   -d '{"windows": [{"start": 1, "length": 50,
                     "observations": [{"channel": "T24", "time": 1, "value": 641.8}]}]}'
 ```
 
-`/embeddings` returns each window's pooled representation. What the networks run at once is
-bounded by cost ([ADR-0043](docs/adr/0043-the-networks-memory-is-bounded-by-cost.md)): a
-request that cannot start in time gets `503` with a `Retry-After`, and a caller past its
-allowance of requests a minute gets `429` with the same header. `/campaigns` and its pages
-show each comparison's design, curves, verdict and grid. Every refusal is a problem details
-document (RFC 9457).
+The API's own page at `/docs` covers the rest: promotion and withdrawal under a token, embeddings,
+campaigns, and the refusals when a request cannot start in time.
 
 ## Documentation
 
