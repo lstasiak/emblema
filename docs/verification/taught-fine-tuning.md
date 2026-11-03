@@ -145,3 +145,72 @@ this task. About a tenth of the fitting windows (6,227) lie in events and all bu
 are drawn as normal, under both encoders, which pairing does not remove if pretraining reacts to
 them differently. Fine-tuning against the trees is not like for like, as they are read against the
 fitting side.
+
+## 2026-11-04 — declared before the run: what fine-tuning does here, and how far the task lets a detector go
+
+**Question.** The reading on unread months leaves three things open: whether this recipe can learn
+events at all, whether it overfits what it is taught, and how much room the task leaves when labels
+are not the limit. These diagnostics judge no claim. They change no rule, select nothing, and the
+readings above stand.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `scripts/taught_fine_tuning_diagnostics.py`, at the commit of this declaration |
+| Machine | M1 Pro, MPS, fp32 |
+| Encoders, seeds | `base1`, `base2` and the initialisation, seeds 1, 2, 3 |
+| Learning | as in the pilot, at rate 0.001, except where stated |
+| Control | the 36 fitting-side events of at least 20 windows: first halves teach, second halves are read (3,002 taught windows); a month holding a read window is read whole, so no event is read against itself, and normal windows teach only in the remaining months of even place (16,901 normal windows teach, 41,216 windows are read); every other event leaves both sides; the frozen direction beside |
+| Curve | the pilot's cells on unread months, each a run of its own at 200 and at 500 steps, beside the pilot's 2,000; events 5 and 10 |
+| Ceiling | all 99 events of the fitting side taught, read on the unread months: fine-tuning, the frozen direction and the trees |
+| Classes | the pilot's cells on unread months, each read apart on the events of the classes it was taught and on the rest, each half as a gain over the same encoder untaught, from the telemetry screen's cells; no new training |
+| Command | `scripts/taught_fine_tuning_diagnostics.py measure`, `classes`, `read` |
+| Cost | about 2.8 hours in two launches: control and curve 87 min, ceiling 82 min |
+
+**How each is read, stated before the run.** All descriptive: three seeds. Only pretrained less
+initialisation carries an interval over months, and no rule below uses it.
+
+| Diagnostic | Reading | What it says |
+| --- | --- | --- |
+| Control | on every encoder, fine-tuning's area at least the direction's less 0.05 | the recipe can learn events, so the pilot's result is about the task and its few events |
+| Control | on every encoder, more than 0.05 below | the recipe or its code is at fault, and the pilot's comparison with the direction says little about fine-tuning as such |
+| Control | encoders disagree | nothing about the recipe in general; the note names which |
+| Curve | a shorter run above the full one by more than 0.03 at both counts and on at least two of three encoders | the full run overfits, and the pilot's recipe was too long |
+| Curve | otherwise | length does not explain the result |
+| Classes | gain on the taught classes above the gain on the rest by more than 0.03, as a mean over the seeds | it learns the classes taught, as the frozen detectors did |
+| Ceiling | any value | the most these detectors reach with every label of this side |
+
+**Prediction.** The control's fine-tuning stays within 0.05 of the direction on every encoder. The
+curve shows no shorter run ahead. Gains on taught classes lie above those on the rest. No prediction
+for the ceiling, which is measured to see the room there is. These have no earlier interval behind
+them: none of this was read before.
+
+**Trial, before this declaration.** Every section at seed 1 ran end to end, with the curve at 5
+events and 200 steps and the ceiling at 99 events, and the class reading ran from the pilot's cells.
+The first attempt found a step count breaking a file name, fixed before these cells. The tables were
+written and only their arms and the cost read, and the cells were deleted. The control was run again
+after its cut changed.
+
+**Before the run: what a review changed.** A review of the code before this run found the first cut
+of the control unreadable: 19 of its 61 read months held only event windows, each then read against
+itself, so a perfect detector would have reached about 0.56. It also found the first class reading
+biased by how many events a half holds, by up to about 0.20 with no class learnt. Both are fixed
+above. Moving the pilot's code into functions changed nothing: at 30 steps on the CPU the
+committed code and the new one wrote the same bytes in all three cells.
+
+**What repeating a cell on MPS moves.** The same cell, seed and code, run three times on MPS (5
+events, seed 3), differs by up to 0.023 and 0.028 in area and by 0.065 and 0.081 in recall at 1 %, under
+`base1` and the initialisation, with rank correlations of 0.91 to 0.93 and 0.79 to 0.83 between
+runs. The batches and the start are the same, so this is the accelerator's own arithmetic. It sits
+inside the spread over seeds that every threshold here reads; a single cell's area is not exact to
+better than about 0.02, and a gap of 0.03 between two means over three seeds is near what this noise
+reaches.
+
+**Limitations.** The control reads windows the pretrained encoders have read, so it says whether
+fine-tuning can learn, not whether pretraining helps. An event's halves are close in time, so the
+control is easy by design. The ceiling is these detectors' at this side's labels, not the task's
+limit; reading each month against itself caps a perfect detector at about 0.90 on these months, as
+three of them are half or more event windows, and the trees are read against the fitting side. The
+best reading without a label is the cells' farthest neighbour at 0.154, and the states' is 0.090.
+Three seeds; these areas guide what to try next and confirm nothing.
