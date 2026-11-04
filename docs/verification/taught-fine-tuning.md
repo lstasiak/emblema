@@ -2,8 +2,8 @@
 
 The frozen states of a pretrained encoder match their initialisation on the first satellite mission,
 with or without taught events ([telemetry-readout.md](telemetry-readout.md)). One route stays open:
-the encoder itself learning from the events. This note asks whether that gain is large, cheaply and
-on the fitting side alone, before any code or campaign is built for it.
+the encoder itself learning from the events. This note asks whether that gain is large, cheaply,
+before any code or campaign is built for it.
 
 ## 2026-11-03 — declared before the run: fine-tuning on five or ten events, read on later fitting months
 
@@ -214,3 +214,116 @@ limit; reading each month against itself caps a perfect detector at about 0.90 o
 three of them are half or more event windows, and the trees are read against the fitting side. The
 best reading without a label is the cells' farthest neighbour at 0.154, and the states' is 0.090.
 Three seeds; these areas guide what to try next and confirm nothing.
+
+## 2026-11-04 — measured: on unread months fine-tuning at 2,000 steps shows no large gain
+
+**Question.** The declaration on unread months, read by its rule at commit `157c9495`. This reading
+came before the diagnostics were declared.
+
+**Conditions.** As declared: 18 cells, M1 Pro, MPS, fp32, about 40 min; the bars copied from the
+telemetry screen.
+
+| Arm | Events | `base1` | `base2` | Initialisation | Gain [interval] | p | T | Outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| fine-tuning | 5 | 0.076 | 0.049 | 0.018 | +0.045 [+0.010; +0.089] | 0.012 | 0.015 | inconclusive |
+| fine-tuning | 10 | 0.036 | 0.047 | 0.065 | −0.024 [−0.043; +0.015] | 0.233 | 0.025 | closed |
+| direction, beside | 5 | 0.192 | 0.037 | 0.138 | −0.024 [−0.067; +0.024] | 0.352 | 0.149 | not judged |
+| direction, beside | 10 | 0.197 | 0.061 | 0.121 | +0.008 [−0.048; +0.050] | 0.945 | 0.152 | not judged |
+
+Trees over summaries read 0.005 at 5 events and 0.014 at 10.
+
+**Conclusions.**
+
+- No large gain and no harm. The point at 5 events cannot be told from the least gain of 0.05.
+- The rule closes 10 events at this recipe. That rests on T of 0.025, where one pair of pretrainings
+  put the spread near the floor. At the spread declared beforehand, T is 0.08 to 0.10 and the reading
+  is inconclusive.
+- The prediction missed: 10 events was to be inconclusive, and +0.045 lies just above its range.
+- Fine-tuning stays below the frozen direction under `base1`, and `base1` again leads `base2` under
+  the direction. The next section asks why.
+
+**Limitations.** Two pretrainings and three seeds, so the reading resolves only a very large gain.
+The same cell repeated on MPS moves by up to 0.028 in area.
+
+## 2026-11-04 — measured: longer runs read worse, and 0.26 is a lower bound on what a detector can reach
+
+**Question.** The diagnostics declared above, by their readings, at commit `6dec492f`. Checks of the
+readings were asked for after the run and are marked so.
+
+**Conditions.** As declared: 75 cells in two launches, 54 for the control and the curve and 21 for
+the ceiling, M1 Pro, MPS, fp32, on a clean tree. All are validation numbers. The checks come from
+`scripts/taught_fine_tuning_diagnostics.py checks`, which reads the stored cells.
+
+Area by arm, as a mean over three seeds; recall at 1 % of normal windows in brackets.
+
+| Arm | Events | Steps | `base1` | `base2` | Initialisation |
+| --- | --- | --- | --- | --- | --- |
+| fine-tuning | 5 | 200 | 0.111 (0.500) | 0.088 (0.457) | 0.049 (0.333) |
+| | 5 | 500 | 0.091 (0.473) | 0.079 (0.462) | 0.040 (0.312) |
+| | 5 | 2,000 | 0.076 (0.425) | 0.049 (0.355) | 0.018 (0.296) |
+| fine-tuning | 10 | 200 | 0.169 (0.548) | 0.168 (0.489) | 0.127 (0.495) |
+| | 10 | 500 | 0.093 (0.430) | 0.116 (0.414) | 0.087 (0.328) |
+| | 10 | 2,000 | 0.036 (0.355) | 0.047 (0.376) | 0.065 (0.419) |
+| control, fine-tuning | 36 | 2,000 | 0.041 (0.278) | 0.058 (0.278) | 0.027 (0.278) |
+| control, direction | 36 | | 0.057 (0.722) | 0.059 (0.583) | 0.089 (0.722) |
+| ceiling, fine-tuning | 99 | 2,000 | 0.093 (0.382) | 0.095 (0.419) | 0.096 (0.419) |
+| ceiling, direction | 99 | | 0.261 (0.532) | 0.217 (0.645) | 0.266 (0.602) |
+
+Trees taught all 99 events read 0.154 (0.640). Pretrained less initialisation at 99 events: direction
+−0.027 [−0.090; +0.038], fine-tuning −0.001 [−0.044; +0.040].
+
+| Declared diagnostic | Result | Declared reading | Prediction |
+| --- | --- | --- | --- |
+| Control: direction less fine-tuning | `base1` 0.016, `base2` 0.001, initialisation 0.062 | encoders disagree: it passes under the two pretrained encoders and fails at the initialisation | missed at the initialisation |
+| Curve: 200 steps less 2,000 | 0.031 to 0.039 at 5 events; 0.061 to 0.133 at 10 | the full run overfits: met at both counts on all three encoders | missed |
+| Classes: gain on taught classes less gain on the rest, fine-tuning | +0.039 to +0.163 | it learns the classes taught | held |
+| Ceiling | as above | the most these detectors reach with every label of this side | none made |
+
+| Gain over the same encoder untaught, 2,000 steps | Taught classes | Other classes |
+| --- | --- | --- |
+| 5 events | +0.005 to +0.020 | −0.080 to −0.019 |
+| 10 events | +0.004 to +0.042 | −0.122 to −0.061 |
+
+**Checks, after the run; no reading depends on them.**
+
+| Check | Result |
+| --- | --- |
+| Noise with events raised by 50 deviations, read as a cell is | area 1.000 on the control's windows, 0.904 on the unread months |
+| Noise with no lift | area 0.001 and 0.002, recall 0.417 and 0.274 |
+| Stored scores of seed 1 turned within each month | area 0.001 to 0.006; recall 0.026 to 0.154 for fine-tuning, 0.076 to 0.324 for the direction |
+| 200 steps less 2,000, every encoder, over months | 5 events +0.035 [+0.014; +0.082]; 10 events +0.105 [+0.064; +0.154] |
+| 500 steps less 2,000, every encoder, over months | 5 events +0.023 [+0.004; +0.065]; 10 events +0.049 [+0.022; +0.085] |
+
+| Run | Late loss | Weights moved | Draws per event | Area |
+| --- | --- | --- | --- | --- |
+| 10 events, 200 steps | 0.24 to 0.34 | 0.029 to 0.034 | 160 | 0.127 to 0.169 |
+| 99 events, 2,000 steps | 0.24 to 0.28 | 0.055 to 0.064 | 162 | 0.093 to 0.096 |
+
+**Conclusions.**
+
+- **Longer runs read worse, and 2,000 steps is not a recipe to inherit.** At 10 events every seed
+  under every encoder reads higher at 200 steps. At 5 events the gap is near what repeating a cell
+  moves. The rule's word is overfitting, but the mechanism was not shown: 99 events at 2,000 steps
+  reads 0.09 to 0.10 against 0.13 to 0.17 for 10 events at 200, at the same late loss and draws per
+  event. Fine-tuning at 0.0001 in the first reading, with little weight movement, did not read
+  higher either.
+- **The closed reading at 10 events belongs to 2,000 steps.** It does not close fine-tuning as such.
+  200 steps was chosen on these months, so its numbers confirm nothing, and even so it reads below
+  the frozen direction under `base1`.
+- **The control gives no verdict on the recipe.** Fine-tuning beats its turned scores, so it learns,
+  but its mean recall of 0.278 on all three encoders, the same by chance as the seeds differ, lies
+  well below the direction's 0.58 to 0.72, at a length the curve finds too long.
+- **Taught classes gain little and the rest lose more.** The declared reading holds, yet the
+  difference comes mostly from the other classes falling.
+- **0.26 is a lower bound for these detectors, not a ceiling of the task.** The initialisation
+  reaches it without any pretraining, the pretrained states show no edge without labels, and
+  fine-tuning was read at 99 events only at 2,000 steps. How much a better encoder could add is not
+  measured.
+
+**An observation for later, not a finding.** At 10 events and 200 steps `base1` and `base2` read
+0.169 and 0.168, against 0.197 and 0.061 under the direction. Whether short fine-tuning narrows the
+gap between pretrainings needs more than this one pair.
+
+**Limitations.** Three seeds, two pretrainings, intervals after the fact and uncorrected, and months
+already read. Recall at 1 % does not start from zero here, as long events catch chance alarms, so a
+recall has to be read against its turned scores.
