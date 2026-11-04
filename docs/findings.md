@@ -205,11 +205,10 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 
 ## Next
 
-1. Diagnose the spread between pretrainings from what was already measured.
-2. On telemetry, train the same network with all the labels, its length chosen on later fitting
-   months, to see how much room a better pretext could aim at; then a pretext sensitive to
-   anomalies.
+1. On telemetry, train the same network with all the labels, its length chosen on later fitting
+   months, to see how much room a better pretext could aim at.
+2. A pretext sensitive to anomalies, after an audit of its shortcut.
 3. Read channels added without labels on sepsis, across pretrainings that never read 2019.
 4. Confirm the gain at 50 stays on fresh pretrainings, in a design with power at the screen's
-   lower edge.
+   lower edge, and read there whether the order of pretrainings holds across tasks and detectors.
 5. Open the frozen test side once.
