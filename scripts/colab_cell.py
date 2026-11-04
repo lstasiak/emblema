@@ -387,7 +387,8 @@ worker() {{
   while read -r label lane; do
     name="$label-${{lane%%/*}}"
     finished "$name" && continue
-    mkdir $T/claimed/$name 2>/dev/null || continue
+    # The shell's exclusive create: uutils mkdir (Ubuntu 26.04) lets two through.
+    ( set -C; : > $T/claimed/$name ) 2>/dev/null || continue
     piece "$name" "$(digest orders "$label")" "$(digest weights "$label")" "$lane"
   done < $W/pieces.txt
 }}
