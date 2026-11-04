@@ -252,7 +252,7 @@ readings were asked for after the run and are marked so.
 
 **Conditions.** As declared: 75 cells in two launches, 54 for the control and the curve and 21 for
 the ceiling, M1 Pro, MPS, fp32, on a clean tree. All are validation numbers. The checks come from
-`scripts/taught_fine_tuning_diagnostics.py checks`, which reads the stored cells.
+`scripts/taught_fine_tuning_diagnostics.py checks` at commit `d04f0d53`, which reads the stored cells.
 
 Area by arm, as a mean over three seeds; recall at 1 % of normal windows in brackets.
 
