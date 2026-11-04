@@ -404,7 +404,7 @@
 | src/emblema/evaluation/domain/statistics/family\_correction.py                            |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/holm\_correction.py                              |       27 |        0 |       14 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/outcome\_level.py                                |        6 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/domain/statistics/paired\_anomaly\_rankings.py                     |       59 |        1 |       10 |        1 |     97% |        81 |
+| src/emblema/evaluation/domain/statistics/paired\_anomaly\_rankings.py                     |       59 |        0 |       10 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_difference.py                            |       24 |        0 |       10 |        1 |     97% |   49-\>51 |
 | src/emblema/evaluation/domain/statistics/paired\_reading.py                               |       28 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_unit\_bootstrap.py                       |       40 |        0 |        6 |        0 |    100% |           |
@@ -712,7 +712,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **21674** |  **180** | **4340** |  **120** | **99%** |           |
+| **TOTAL**                                                                                 | **21674** |  **179** | **4340** |  **119** | **99%** |           |
 
 132 empty files skipped.
 
