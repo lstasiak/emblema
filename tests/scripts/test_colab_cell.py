@@ -1,6 +1,7 @@
 """A cell written from a plan, run to its end with the platform's commands stubbed."""
 
 import os
+import re
 import stat
 import subprocess
 from pathlib import Path
@@ -14,6 +15,8 @@ ORDER_A, ORDER_B = "1" * 64, "2" * 64
 WEIGHTS = "3" * 64
 LABELS = "4" * 64
 BLOCK = "5" * 64
+
+WORKER_STEP = re.compile(r"mktemp|claimed|read -r|name=|finished|grep -q|campaign_run|wait|seq ")
 
 STUBS = {
     # A step named by HANG never ends, as a stalled server leaves it.
@@ -82,13 +85,14 @@ def run_cell(
     cell = tmp_path / "cell.sh"
     cell.write_text("".join(cell_of(read_plan(plan)).splitlines(keepends=True)[1:]))
     done = subprocess.run(
-        ["/bin/bash", str(cell)],
+        ["/bin/bash", "-x", str(cell)],
         capture_output=True,
         text=True,
         timeout=60,
         check=False,
         env={
             "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "PS4": "+$BASHPID ",
             "CELL_ROOT": str(root),
             "CALLS": str(tmp_path / "calls.txt"),
             "NET_TIMEOUT": "1",
@@ -104,8 +108,8 @@ def calls_of(tmp_path: Path) -> list[str]:
     return calls.read_text().splitlines() if calls.exists() else []
 
 
-def what_the_cell_did(tmp_path: Path, results: Path) -> str:
-    """Each call and each lane's report, since a stray retry shows nowhere else after the cell."""
+def what_the_cell_did(tmp_path: Path, results: Path, trace: str) -> str:
+    """Each call, each lane's report and the workers' steps, as a stray run shows nowhere else."""
     logs = sorted(results.glob("*.log*")) if results.exists() else []
     reports = results / "results.txt"
     return "\n".join(
@@ -113,6 +117,7 @@ def what_the_cell_did(tmp_path: Path, results: Path) -> str:
             *calls_of(tmp_path),
             reports.read_text() if reports.exists() else "no results",
             *(f"{log.name}: {log.read_text()}" for log in logs),
+            *(line for line in trace.splitlines() if WORKER_STEP.search(line)),
         ]
     )
 
@@ -126,7 +131,7 @@ def test_every_piece_runs_under_its_backbone_and_settings_the_cell_sets_itself_a
 
     assert done.returncode == 0, done.stderr
     calls = calls_of(tmp_path)
-    assert len(calls) == 3, what_the_cell_did(tmp_path, results)
+    assert len(calls) == 3, what_the_cell_did(tmp_path, results, done.stderr)
     assert all(call.startswith(f"durable/sha256/{WEIGHTS}@sha256:{WEIGHTS}") for call in calls)
     assert sorted(call.split("--lane ")[1] for call in calls) == ["0/1", "0/2", "1/2"]
     assert sum(f"durable/sha256/{ORDER_A}" in call for call in calls) == 2
@@ -147,7 +152,7 @@ def test_run_again_a_cell_repeats_only_what_did_not_end(tmp_path: Path) -> None:
 
     assert done.returncode == 0
     again = calls_of(tmp_path)[len(failed) :]
-    assert len(again) == 1, what_the_cell_did(tmp_path, results)
+    assert len(again) == 1, what_the_cell_did(tmp_path, results, done.stderr)
     assert "0/1" in again[0]
     # The failed lane logged no answer of its own to resume from, so it starts afresh.
     assert "second-0] exit 0" in (results / "results.txt").read_text()
