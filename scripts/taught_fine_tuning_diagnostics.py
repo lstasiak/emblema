@@ -361,7 +361,7 @@ def _measure_control(
             _keep(
                 out, cell, arm, name, sides.events, seed, len(sides.taught), rated.min_steps, tuned
             )
-    _measure_frozen(
+    measure_frozen(
         bench,
         out,
         seeds,
@@ -405,7 +405,7 @@ def _keep(
     print(f"{cell}: {tuned.seconds:.0f} s", flush=True)
 
 
-def _measure_frozen(
+def measure_frozen(
     bench: Bench,
     out: Path,
     seeds: Sequence[int],
@@ -543,7 +543,7 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
         # The frozen runtime lays both sides again, so these need not stay in memory beside them.
         del laid_pool, laid_read
     if CEILING in arguments.sections:
-        _measure_frozen(
+        measure_frozen(
             bench,
             out,
             arguments.seeds,

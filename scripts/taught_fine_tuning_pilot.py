@@ -647,7 +647,39 @@ class TunedCell:
     seconds: float
 
 
-def tuned_cell(  # pragma: no cover - environment
+@dataclass(frozen=True, kw_only=True)
+class TunedEncoder:
+    """One encoder after its fine-tuning, ready to score windows, and how the training went.
+
+    Attributes:
+        candidate: The fine-tuned encoder with its head, in evaluation mode.
+        early: The loss over the first tenth of the steps.
+        late: The loss over the last tenth.
+        moved: How far the weights travelled, as a share of their norm.
+    """
+
+    # Any: the frameworks' types stay out of the module's import, which its tests run without.
+    candidate: Any
+    early: float
+    late: float
+    moved: float
+
+
+def answering(  # pragma: no cover - environment
+    bench: Bench, candidate: nn.Module, laid: Sequence[LaidWindow]
+) -> Callable[[Sequence[int]], torch.Tensor]:
+    """The candidate's answers to the laid windows at the indices asked, on the bench's device."""
+    from emblema.shared.adapters.tensors.token_tensors import TokenTensors
+
+    def answer(indices: Sequence[int]) -> torch.Tensor:
+        batch = TokenTensors.of(bench.layout.batch([laid[index] for index in indices]))
+        answers: torch.Tensor = candidate(batch.to(bench.device))
+        return answers.squeeze(-1)
+
+    return answer
+
+
+def fine_tune(  # pragma: no cover - environment
     bench: Bench,
     name: str,
     backbone: Any,
@@ -657,25 +689,10 @@ def tuned_cell(  # pragma: no cover - environment
     spans: Mapping[int, Sequence[int]],
     others: Sequence[int],
     laid_teach: Sequence[LaidWindow],
-    laid_read: Sequence[LaidWindow],
-    read: Sequence[LabelledWindow],
-) -> TunedCell:
-    """Fine-tune one encoder on the taught windows and score the windows read."""
-    from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
+) -> TunedEncoder:
+    """Fine-tune one encoder on the taught windows, from its weights or from nothing."""
     from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
-    from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
-    def answering(
-        candidate: nn.Module, laid: Sequence[LaidWindow]
-    ) -> Callable[[Sequence[int]], torch.Tensor]:
-        def answer(indices: Sequence[int]) -> torch.Tensor:
-            batch = TokenTensors.of(bench.layout.batch([laid[index] for index in indices]))
-            answers: torch.Tensor = candidate(batch.to(bench.device))
-            return answers.squeeze(-1)
-
-        return answer
-
-    started = time.perf_counter()
     torch.manual_seed(seed)
     plan = AdaptationPlan(
         mode=TransferMode.FROM_SCRATCH if name == INITIALISATION else TransferMode.FULL_FINE_TUNING,
@@ -694,14 +711,26 @@ def tuned_cell(  # pragma: no cover - environment
     before = {key: value.detach().clone() for key, value in candidate.named_parameters()}
     early, late = fine_tuned(
         candidate,
-        answering(candidate, laid_teach),
+        answering(bench, candidate, laid_teach),
         BalancedDraw(spans, others, seed=seed),
         schedule,
         device=bench.device,
     )
     moved = moved_share(before, candidate)
     candidate.eval()
-    reading = answering(candidate, laid_read)
+    return TunedEncoder(candidate=candidate, early=early, late=late, moved=moved)
+
+
+def scored(  # pragma: no cover - environment
+    bench: Bench,
+    candidate: nn.Module,
+    laid_read: Sequence[LaidWindow],
+    read: Sequence[LabelledWindow],
+) -> tuple[WindowPrediction, ...]:
+    """Every read window's score under the candidate, each read against its own unit."""
+    from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
+
+    reading = answering(bench, candidate, laid_read)
     with torch.no_grad():
         scores = torch.cat(
             [
@@ -712,14 +741,42 @@ def tuned_cell(  # pragma: no cover - environment
     raw: NDArray[np.float64] = scores.to(torch.float64).numpy()
     units = [str(w.window.unit) for w in read]
     alarm = ScoreAlarm.set_over(raw, contamination=SHARE, units=units)
+    return tuple(
+        WindowPrediction(window=w.window, target=w.target, predicted=float(score))
+        for w, score in zip(read, alarm.above(raw, units=units).tolist(), strict=True)
+    )
+
+
+def tuned_cell(  # pragma: no cover - environment
+    bench: Bench,
+    name: str,
+    backbone: Any,
+    *,
+    schedule: AdaptationSchedule,
+    seed: int,
+    spans: Mapping[int, Sequence[int]],
+    others: Sequence[int],
+    laid_teach: Sequence[LaidWindow],
+    laid_read: Sequence[LaidWindow],
+    read: Sequence[LabelledWindow],
+) -> TunedCell:
+    """Fine-tune one encoder on the taught windows and score the windows read."""
+    started = time.perf_counter()
+    tuned = fine_tune(
+        bench,
+        name,
+        backbone,
+        schedule=schedule,
+        seed=seed,
+        spans=spans,
+        others=others,
+        laid_teach=laid_teach,
+    )
     return TunedCell(
-        predictions=tuple(
-            WindowPrediction(window=w.window, target=w.target, predicted=float(score))
-            for w, score in zip(read, alarm.above(raw, units=units).tolist(), strict=True)
-        ),
-        early=early,
-        late=late,
-        moved=moved,
+        predictions=scored(bench, tuned.candidate, laid_read, read),
+        early=tuned.early,
+        late=tuned.late,
+        moved=tuned.moved,
         seconds=time.perf_counter() - started,
     )
 
