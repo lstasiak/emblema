@@ -3,13 +3,16 @@
 import csv
 import json
 import random
+from itertools import pairwise
 from pathlib import Path
+from statistics import fmean
 
 import pytest
 
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.task_window import TaskWindow
+from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from scripts.taught_class_report import OTHER_HALF, TAUGHT_HALF
 from scripts.taught_fine_tuning_diagnostics import (
@@ -19,7 +22,9 @@ from scripts.taught_fine_tuning_diagnostics import (
     main,
     read_tables,
     refuse_other_conditions,
+    rotated_within_months,
     split_by_class,
+    with_known_lift,
 )
 from scripts.taught_fine_tuning_pilot import CELL_COLUMNS, write_answers
 
@@ -203,6 +208,71 @@ def write_cell(
             for unit in range(30)
         ],
     )
+
+
+def month_of_answers() -> list[WindowPrediction]:
+    answers = [
+        predicted(
+            f"m/{month:02d}", month * 100 + at, 1.0 if month == 1 and at < 5 else 0.0, at / 50
+        )
+        for month in (1, 2, 3)
+        for at in range(50)
+    ]
+    return answers
+
+
+def test_a_large_known_lift_finds_every_event_and_no_lift_stays_near_chance() -> None:
+    answers = month_of_answers()
+
+    assert with_known_lift(answers, 50.0, seed=0).average_precision == pytest.approx(1.0)
+    assert with_known_lift(answers, 0.0, seed=0).average_precision < 0.5
+
+
+def test_rotating_a_month_keeps_each_months_scores_and_their_neighbours() -> None:
+    answers = month_of_answers()
+    before = {each.window.position: each.predicted for each in answers}
+
+    turned = rotated_within_months(answers, random.Random(3))
+
+    assert {each.window for each in turned} == {each.window for each in answers}
+    assert any(each.predicted != before[each.window.position] for each in turned)
+    for month in (1, 2, 3):
+        scores = [
+            each.predicted for each in turned if each.window.unit == UnitKey(f"m/{month:02d}")
+        ]
+        assert sorted(scores) == sorted(at / 50 for at in range(50))
+        assert {round((later - earlier) % 1.0, 6) for earlier, later in pairwise(scores)} == {0.02}
+
+
+def test_a_month_of_one_window_keeps_its_score_when_rotated() -> None:
+    answers = [predicted("m/01", 0, 1.0, 0.5), predicted("m/02", 1, 0.0, 0.1)]
+
+    assert rotated_within_months(answers, random.Random(1))[0].predicted == 0.5
+
+
+def test_a_rotation_can_cut_a_detector_off_from_its_events() -> None:
+    answers = month_of_answers()
+    found = AnomalyRanking.of(
+        [
+            predicted(str(each.window.unit), each.window.position, each.target, each.target)
+            for each in answers
+        ]
+    )
+    turned = [
+        AnomalyRanking.of(
+            rotated_within_months(
+                [
+                    predicted(str(each.window.unit), each.window.position, each.target, each.target)
+                    for each in answers
+                ],
+                random.Random(seed),
+            )
+        ).average_precision
+        for seed in range(5)
+    ]
+
+    assert found.average_precision == pytest.approx(1.0)
+    assert fmean(turned) < 1.0
 
 
 def test_the_tables_describe_every_arm_and_pass_nothing(

@@ -24,11 +24,17 @@ and prints them, so a trial sends that output elsewhere.
     uv run scripts/taught_fine_tuning_diagnostics.py classes --task esa-mission1-events
         --task-id UUID --pilot DIR --untaught DIR --first 2000-01 --last 2006-12 --out DIR
     uv run scripts/taught_fine_tuning_diagnostics.py read --dir DIR [--beside PILOT_DIR]
+    uv run scripts/taught_fine_tuning_diagnostics.py checks --dir DIR --beside PILOT_DIR
+
+``checks`` asks after the run whether the readings can be trusted: what a detector of known quality
+reaches, what the same scores reach with their link to the events cut, and how each length differs
+from the full run.
 """
 
 import argparse
 import csv
 import json
+import random
 import sys
 import time
 from collections import defaultdict
@@ -37,6 +43,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import fmean
 from uuid import UUID
+
+import numpy as np
 
 # Run from anywhere: the sibling script modules live in this directory's package at the root.
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -76,6 +84,8 @@ CEILING = "ceiling"
 DIRECTION = "direction"
 TREES = "trees"
 UNTAUGHT = "untaught"
+ROTATIONS = 40
+KNOWN_LIFTS = (0.0, 3.0, 6.0, 50.0)
 SECTIONS = (CONTROL, CURVE, CEILING)
 CLASS_COLUMNS = (
     "arm",
@@ -599,6 +609,168 @@ def classes(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
     print(f"{len(rows)} rows in {arguments.out / 'classes.csv'}")
 
 
+def with_known_lift(
+    answers: Sequence[WindowPrediction], lift: float, *, seed: int
+) -> AnomalyRanking:
+    """A detector of known quality over these windows: noise, with events ``lift`` deviations up.
+
+    Scored as a cell is, each month against itself, so a large lift shows the most this reading
+    lets any detector reach, and no lift what scores with no link to anything reach.
+    """
+    from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
+
+    raw = np.random.default_rng(seed).normal(size=len(answers)) + np.array(
+        [lift if each.target else 0.0 for each in answers]
+    )
+    units = [str(each.window.unit) for each in answers]
+    alarm = ScoreAlarm.set_over(raw, contamination=SHARE, units=units)
+    return AnomalyRanking.of(
+        [
+            WindowPrediction(window=each.window, target=each.target, predicted=score)
+            for each, score in zip(answers, alarm.above(raw, units=units).tolist(), strict=True)
+        ]
+    )
+
+
+def rotated_within_months(
+    answers: Sequence[WindowPrediction], draws: random.Random
+) -> list[WindowPrediction]:
+    """The same scores turned by a random offset within each month, cutting their link to events.
+
+    Neighbouring scores stay neighbours, so a run of high scores is kept: scores drawn afresh for
+    every window would reach a long event far more often than a real detector's could by chance.
+    """
+    by_month: dict[str, list[WindowPrediction]] = defaultdict(list)
+    for each in answers:
+        by_month[str(each.window.unit)].append(each)
+    rotated = []
+    for month in by_month.values():
+        ordered = sorted(month, key=lambda each: each.window.position)
+        offset = draws.randrange(1, len(ordered)) if len(ordered) > 1 else 0
+        rotated += [
+            replace(each, predicted=ordered[(at + offset) % len(ordered)].predicted)
+            for at, each in enumerate(ordered)
+        ]
+    return rotated
+
+
+def _baselines_table(directory: Path, beside: Path) -> str:
+    draws = random.Random(7)
+    chosen = [
+        (place, cell)
+        for place in (directory, beside)
+        for cell in cells_of(place)
+        if cell["seed"] == "1" and cell["arm"] != TREES and cell["arm"] != DIRECTION
+    ]
+    rows = []
+    for place, cell in chosen:
+        answers = read_answers(place / "answers" / f"{cell['cell']}.csv")
+        real = AnomalyRanking.of(answers)
+        turned = [
+            AnomalyRanking.of(rotated_within_months(answers, draws)) for _ in range(ROTATIONS)
+        ]
+        rows.append(
+            (
+                cell["cell"],
+                f"{real.average_precision:.3f}",
+                f"{real.event_recall_at_false_alarm_share(SHARE):.3f}",
+                f"{fmean(each.average_precision for each in turned):.4f}",
+                f"{fmean(each.event_recall_at_false_alarm_share(SHARE) for each in turned):.3f}",
+            )
+        )
+    return table(("Cell", "Area", "Recall", "Rotated area", "Rotated recall"), rows)
+
+
+def _known_lifts_table(directory: Path, cell_names: Mapping[str, str]) -> str:
+    rows = []
+    for side, name in cell_names.items():
+        answers = read_answers(directory / "answers" / f"{name}.csv")
+        for lift in KNOWN_LIFTS:
+            ranking = with_known_lift(answers, lift, seed=0)
+            rows.append(
+                (
+                    side,
+                    f"{lift:.0f}",
+                    f"{ranking.average_precision:.3f}",
+                    f"{ranking.event_recall_at_false_alarm_share(SHARE):.3f}",
+                )
+            )
+    return table(("Windows read", "Lift", "Area", "Recall"), rows)
+
+
+def _lengths_table(directory: Path, beside: Path) -> str:
+    bootstrap = PairedUnitBootstrap()
+    full = rankings_of(beside, [c for c in cells_of(beside) if c["arm"].startswith(FINE_TUNED)])
+    rows = []
+    shorter = [c for c in cells_of(directory) if c["arm"].startswith(FINE_TUNED)]
+    for (arm, events), sides in sorted(rankings_of(directory, shorter).items()):
+        whole = full[(arm.split("-steps")[0], events)]
+        for name in (*sorted(sides), "every encoder"):
+            names = sorted(sides) if name == "every encoder" else [name]
+            compared = bootstrap.compare(
+                PairedAnomalyRankings(
+                    control=tuple(
+                        whole[each][seed] for each in names for seed in sorted(whole[each])
+                    ),
+                    candidate=tuple(
+                        sides[each][seed] for each in names for seed in sorted(whole[each])
+                    ),
+                )
+            )
+            rows.append(
+                (
+                    arm,
+                    str(events),
+                    name,
+                    f"{compared.reduction:+.3f} [{compared.interval.low:+.3f}; "
+                    f"{compared.interval.high:+.3f}]",
+                )
+            )
+    return table(("Arm", "Events", "Encoder", "Less the full run"), rows)
+
+
+def _training_table(directory: Path, beside: Path) -> str:
+    gathered: dict[tuple[str, int, int, str], list[Mapping[str, str]]] = defaultdict(list)
+    for cell in cells_of(directory) + cells_of(beside):
+        if cell["last_loss"]:
+            key = (cell["arm"], int(cell["events"]), int(cell["steps"]), cell["backbone"])
+            gathered[key].append(cell)
+    return table(
+        ("Arm", "Events", "Steps", "Encoder", "Late loss", "Moved"),
+        [
+            (
+                arm,
+                str(events),
+                str(steps),
+                encoder,
+                f"{fmean(float(each['last_loss']) for each in cells):.3f}",
+                f"{fmean(float(each['moved']) for each in cells):.3f}",
+            )
+            for (arm, events, steps, encoder), cells in sorted(gathered.items())
+        ],
+    )
+
+
+def checks_tables(directory: Path, beside: Path) -> str:
+    """Whether the readings can be trusted, asked after the run; nothing here was declared."""
+    text = "\n\n".join(
+        (
+            _known_lifts_table(
+                directory,
+                {
+                    "control": f"{CONTROL}-{DIRECTION}-base1-k36-s1",
+                    "unread months": f"{CEILING}-{DIRECTION}-base1-k99-s1",
+                },
+            ),
+            _baselines_table(directory, beside),
+            _lengths_table(directory, beside),
+            _training_table(directory, beside),
+        )
+    )
+    (directory / "checks.md").write_text(text + "\n")
+    return text
+
+
 def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -632,6 +804,9 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     reading.add_argument(
         "--beside", type=Path, help="the pilot's directory, for the curve's full length"
     )
+    checking = commands.add_parser("checks")
+    checking.add_argument("--dir", type=Path, required=True)
+    checking.add_argument("--beside", type=Path, required=True)
     return parser.parse_args(argv)
 
 
@@ -642,6 +817,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         measure(arguments)
     elif arguments.command == "classes":  # pragma: no cover - environment
         classes(arguments)
+    elif arguments.command == "checks":  # pragma: no cover - environment
+        print(checks_tables(arguments.dir, arguments.beside))
     else:
         print(read_tables(arguments.dir, beside=arguments.beside))
 
