@@ -10,6 +10,12 @@ Everything here is run by hand, outside the package. Each script is one of three
 - **Transitional** scripts stand in for package code that is not written yet, and are deleted by
   the change that writes it.
 
+A new measurement or transitional script gets a row below in the change that adds it, naming what
+retires it and a date to review it by: on that date it is deleted, or its row says why it stays. The
+note cites the commit, so deleting one loses no evidence.
+`tests/architecture/test_scripts_are_registered.py` holds new scripts to this; older ones wait in its
+list of exceptions, which can only shrink.
+
 A script imports the package and other scripts, never the tests
 (`tests/architecture/test_scripts_import_no_tests.py`). The report of the ONNX export needs the
 candidates the export suite builds, so it lives with that suite in
@@ -28,6 +34,8 @@ experiment — and the shape of a note: its CSV, its tables, its figures.
 | `accept_lane_results.py` | tooling | accepts a cell's pasted results, one per lane | — |
 | `campaign_pairs_fanout.py` | tooling | reads a plan of pairs across processes, the tables byte for byte those of one run | — |
 | `detection_side_readings.py` | measurement | a detection task's readings beside the area, per cell | — |
+| `taught_fine_tuning_pilot.py` | measurement | [`taught-fine-tuning.md`](../docs/verification/taught-fine-tuning.md): fine-tuning on a few taught events under a pretrained encoder and its initialisation, read on months the encoders never read | the later of the supervised reference on telemetry and the descriptive reading on fresh pretrainings, or the change that brings this fine-tuning into the package; review by 2027-02-01 |
+| `taught_fine_tuning_diagnostics.py` | measurement | [`taught-fine-tuning.md`](../docs/verification/taught-fine-tuning.md): the control, the curve of lengths, every event taught, the classes taught, and checks of those readings after the run | the reading of the supervised reference on telemetry; review by 2027-02-01 |
 | `smoke.sh` | tooling | run by the CI job `compose` | — |
 | `bootstrap-bucket.sh` | tooling | run by the compose service `bootstrap` | — |
 | `fetch_corpora.py`, `utsd_shards.sha256` | tooling | archive checksums for a note; the shard listing pins the collection's revision | — |
