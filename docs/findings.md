@@ -6,7 +6,7 @@ by a rule registered before its run ([preregistration](preregistration.md)); eac
 note that holds its evidence ([`verification/`](verification/README.md)). A row states direction
 and size; conditions and caveats are in its note.
 
-Last updated 2026-11-03.
+Last updated 2026-11-04.
 
 ## Status
 
@@ -27,7 +27,10 @@ Last updated 2026-11-03.
 - **On satellite telemetry pretraining adds nothing without labels.** No distance over the states
   shows an advantage of pretraining on either mission, and the pretext's error trails a ridge. A few
   taught events lift either encoder alike and beat trees taught the same events by 0.10. Without a
-  label the best detectors are classical ([note](verification/telemetry-readout.md)).
+  label the best detectors are classical ([note](verification/telemetry-readout.md)). Fine-tuning on
+  a few events shows no large gain over its initialisation. With all 99 events the frozen direction
+  reaches at most about 0.26, with or without pretraining, which is a lower bound on what a detector
+  can reach ([note](verification/taught-fine-tuning.md)).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
 - **What transfers is the encoder's machinery.** Fitting only the channel rows of an unread corpus
@@ -162,6 +165,9 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | Pretext's error per channel, less its ridge | **−0.121** [−0.194; −0.058]; raw −0.026 | [telemetry-readout](verification/telemetry-readout.md) |
 | Taught 3, 5 or 10 events | +0.01 to +0.05 under either encoder, interaction −0.017 to +0.010; over taught trees +0.10 to +0.12 | [telemetry-readout](verification/telemetry-readout.md) |
 | Best zero-label bar on M1 | the cells' farthest neighbour 0.154 against the states' 0.090 | [telemetry-readout](verification/telemetry-readout.md) |
+| Fine-tuning on 5, 10 events, 2,000 steps, against its initialisation | +0.045 [+0.010; +0.089], −0.024 [−0.043; +0.015]; neither a large gain nor harm | [taught-fine-tuning](verification/taught-fine-tuning.md) |
+| Fine-tuning at 200 steps against 2,000, every encoder | 5 events +0.035 [+0.014; +0.082]; 10 events +0.105 [+0.064; +0.154]; mechanism not shown, length chosen on the months read | [taught-fine-tuning](verification/taught-fine-tuning.md) |
+| All 99 events taught, M1 | frozen direction: pretrained 0.261, 0.217, initialisation 0.266; fine-tuning at 2,000 steps 0.093 to 0.096; trees 0.154 | [taught-fine-tuning](verification/taught-fine-tuning.md) |
 
 ### What the failures have in common
 
@@ -199,9 +205,11 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 
 ## Next
 
-1. On telemetry, pilot fine-tuning with a few taught events, pretrained against initialisation,
-   on the host before any platform run; the leg's confirmation reads a product table only.
-2. Confirm the gain at 50 stays on fresh pretrainings, in a design with power at the screen's
-   lower edge.
+1. Diagnose the spread between pretrainings from what was already measured.
+2. On telemetry, train the same network with all the labels, its length chosen on later fitting
+   months, to see how much room a better pretext could aim at; then a pretext sensitive to
+   anomalies.
 3. Read channels added without labels on sepsis, across pretrainings that never read 2019.
-4. Open the frozen test side once.
+4. Confirm the gain at 50 stays on fresh pretrainings, in a design with power at the screen's
+   lower edge.
+5. Open the frozen test side once.

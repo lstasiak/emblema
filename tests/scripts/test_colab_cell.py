@@ -1,6 +1,7 @@
 """A cell written from a plan, run to its end with the platform's commands stubbed."""
 
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -26,6 +27,7 @@ STUBS = {
     '  *prefetch.py*) [ "${HANG:-}" = blocks ] && exec sleep 100000; exit 0;;\n'
     "esac\n"
     'echo "$EMBLEMA_WORKER__BACKBONE $*" >> "$CALLS"\n'
+    '[ -n "${HOLD:-}" ] && sleep "$HOLD"\n'
     'case "$*" in *"${FAIL:-@none@}"*) exit 3;; esac\n'
     'echo "1 cell answered: durable/sha256/res sha256:res" >&2\n'
     "echo durable/sha256/res sha256:res\n",
@@ -104,6 +106,19 @@ def calls_of(tmp_path: Path) -> list[str]:
     return calls.read_text().splitlines() if calls.exists() else []
 
 
+def what_the_cell_did(tmp_path: Path, results: Path) -> str:
+    """Each call and each lane's report, since a stray run shows nowhere else after the cell."""
+    logs = sorted(results.glob("*.log*")) if results.exists() else []
+    reports = results / "results.txt"
+    return "\n".join(
+        [
+            *calls_of(tmp_path),
+            reports.read_text() if reports.exists() else "no results",
+            *(f"{log.name}: {log.read_text()}" for log in logs),
+        ]
+    )
+
+
 def test_every_piece_runs_under_its_backbone_and_settings_the_cell_sets_itself_are_left_out(
     tmp_path: Path,
 ) -> None:
@@ -113,7 +128,7 @@ def test_every_piece_runs_under_its_backbone_and_settings_the_cell_sets_itself_a
 
     assert done.returncode == 0, done.stderr
     calls = calls_of(tmp_path)
-    assert len(calls) == 3
+    assert len(calls) == 3, what_the_cell_did(tmp_path, results)
     assert all(call.startswith(f"durable/sha256/{WEIGHTS}@sha256:{WEIGHTS}") for call in calls)
     assert sorted(call.split("--lane ")[1] for call in calls) == ["0/1", "0/2", "1/2"]
     assert sum(f"durable/sha256/{ORDER_A}" in call for call in calls) == 2
@@ -122,6 +137,26 @@ def test_every_piece_runs_under_its_backbone_and_settings_the_cell_sets_itself_a
     assert "EMBLEMA_WORKER__LORA__RANK=8" in cell
     assert "EMBLEMA_WORKER__BACKBONE=old" not in cell
     assert "EMBLEMA_WORKER__WORKSPACE=old" not in cell
+
+
+def test_two_workers_never_run_one_piece_where_mkdir_lets_both_through(tmp_path: Path) -> None:
+    # uutils mkdir answers success to a directory that came to exist while it worked; -p does so
+    # always, so this holds on every machine. The hold keeps each piece running while the other
+    # worker reaches it.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    real = shutil.which("mkdir")
+    assert real is not None
+    stub = bin_dir / "mkdir"
+    stub.write_text(f'#!/bin/bash\nexec {real} -p "$@"\n')
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+
+    done, results = run_cell(tmp_path, write_plan(tmp_path), HOLD="0.3")
+
+    assert done.returncode == 0, done.stderr
+    calls = calls_of(tmp_path)
+    assert len(calls) == 3, what_the_cell_did(tmp_path, results)
+    assert sorted(call.split("--lane ")[1] for call in calls) == ["0/1", "0/2", "1/2"]
 
 
 def test_run_again_a_cell_repeats_only_what_did_not_end(tmp_path: Path) -> None:
@@ -134,7 +169,7 @@ def test_run_again_a_cell_repeats_only_what_did_not_end(tmp_path: Path) -> None:
 
     assert done.returncode == 0
     again = calls_of(tmp_path)[len(failed) :]
-    assert len(again) == 1
+    assert len(again) == 1, what_the_cell_did(tmp_path, results)
     assert "0/1" in again[0]
     # The failed lane logged no answer of its own to resume from, so it starts afresh.
     assert "second-0] exit 0" in (results / "results.txt").read_text()
