@@ -104,6 +104,19 @@ def calls_of(tmp_path: Path) -> list[str]:
     return calls.read_text().splitlines() if calls.exists() else []
 
 
+def what_the_cell_did(tmp_path: Path, results: Path) -> str:
+    """Each call and each lane's report, since a stray retry shows nowhere else after the cell."""
+    logs = sorted(results.glob("*.log*")) if results.exists() else []
+    reports = results / "results.txt"
+    return "\n".join(
+        [
+            *calls_of(tmp_path),
+            reports.read_text() if reports.exists() else "no results",
+            *(f"{log.name}: {log.read_text()}" for log in logs),
+        ]
+    )
+
+
 def test_every_piece_runs_under_its_backbone_and_settings_the_cell_sets_itself_are_left_out(
     tmp_path: Path,
 ) -> None:
@@ -113,7 +126,7 @@ def test_every_piece_runs_under_its_backbone_and_settings_the_cell_sets_itself_a
 
     assert done.returncode == 0, done.stderr
     calls = calls_of(tmp_path)
-    assert len(calls) == 3
+    assert len(calls) == 3, what_the_cell_did(tmp_path, results)
     assert all(call.startswith(f"durable/sha256/{WEIGHTS}@sha256:{WEIGHTS}") for call in calls)
     assert sorted(call.split("--lane ")[1] for call in calls) == ["0/1", "0/2", "1/2"]
     assert sum(f"durable/sha256/{ORDER_A}" in call for call in calls) == 2
@@ -134,7 +147,7 @@ def test_run_again_a_cell_repeats_only_what_did_not_end(tmp_path: Path) -> None:
 
     assert done.returncode == 0
     again = calls_of(tmp_path)[len(failed) :]
-    assert len(again) == 1
+    assert len(again) == 1, what_the_cell_did(tmp_path, results)
     assert "0/1" in again[0]
     # The failed lane logged no answer of its own to resume from, so it starts afresh.
     assert "second-0] exit 0" in (results / "results.txt").read_text()
