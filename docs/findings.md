@@ -208,8 +208,12 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 
 ## Next
 
-1. A pretext sensitive to anomalies, after an audit of its shortcut; its mark is whether a
-   pretrained encoder reads above its initialisation at all, as no room above 0.26 has shown.
+1. Before any pretext aims at telemetry: whether a longer input, windows of 6 to 72 hours
+   ending at the scored hour, lifts the detectors at the encoder's initialisation above 0.26
+   and 0.08, since the one-hour readouts miss the same events
+   ([declared](verification/telemetry-context.md)). Then a pretext sensitive to anomalies over
+   whichever input that says, after an audit of its shortcut; its mark is whether a pretrained
+   encoder reads above its initialisation at all.
 2. Read channels added without labels on sepsis, across pretrainings that never read 2019.
 3. Confirm the gain at 50 stays on fresh pretrainings, in a design with power at the screen's
    lower edge, and read there whether the order of pretrainings holds across tasks and detectors.
