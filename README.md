@@ -14,9 +14,10 @@
 Emblema is a research platform for label-efficient representation learning on heterogeneous
 sensor streams. One permutation-invariant, variable-channel transformer is pretrained without
 labels on corpora that differ in channel count and sampling regime. It is then adapted to small
-labelled tasks. The platform measures, with paired confidence intervals and tuned classical
-baselines, whether and when that pretraining pays off. It can serve whichever candidate a
-finished comparison measured.
+labelled tasks. The aim is one backbone for irregular, multichannel sensor streams, judged on
+intensive-care stays and satellite telemetry against tuned classical baselines and a published
+network. The platform measures, with paired confidence intervals, whether and when that
+pretraining pays off. It can serve whichever candidate a finished comparison measured.
 
 ## The name
 
@@ -85,24 +86,31 @@ procedure as the classical baselines.
 
 ## Status
 
-Preliminary, on validation data. Each task's test data is used once, at the end.
+Preliminary, on validation data; each task's test data is used once, at the end.
 
-- **Pretraining has not yet been shown to pay off.** On turbofan remaining life (NASA C-MAPSS)
-  no pretrained arm beats the network trained from scratch at any budget. On death in hospital (PhysioNet 2012) a small pretrained encoder gains 0.016
-  [0.007; 0.025] in area at 50 stays and nothing at 200. It is a screen of four pretrainings;
-  fresh pretrainings confirm it or not.
-- **On satellite telemetry it does not find events without labels.** Its features do not beat the
-  same encoder untrained. With five to ten labelled events, an encoder of either kind beats trees
-  taught the same events by 0.10; without labels the best detectors are classical.
-- **It does leave a useful representation.** A linear probe on the frozen features gains 0.06 to
-  0.09 over the same encoder untrained at 500 stays, still 0.03 below the trees.
-- **Classical baselines lead at few labels.** Gradient-boosted trees match or beat every network
-  from 200 labels up, except a small encoder from scratch that reads each stay as cells of channel
-  and time bin: level at 200 stays, 0.008 below the tuned trees at every stay.
-- **Ruled out:** more pretraining data (up to about 10⁹ values), a five times larger model,
+**The research question: does pretraining without labels pay off at few labels?**
+
+- Not shown. On turbofan remaining life (NASA C-MAPSS) and on death in hospital (PhysioNet
+  2012) no pretrained arm beats the same network trained from scratch beyond the noise of the
+  comparison; a gain of 0.016 in area at 50 labelled stays awaits fresh pretrainings. A linear
+  probe reads 0.06 to 0.09 above the untrained encoder at 500 stays, still below the trees.
+- Ruled out: more pretraining data (up to about 10⁹ values), a five times larger model,
   continuing on the task's own domain, the adaptation recipe and six variants of the pretext.
-- **Next:** confirm the gain at few labels on fresh pretrainings; on telemetry, pilot fine-tuning
-  with a few labelled events.
+
+**The product: one backbone for irregular, multichannel sensor streams.**
+
+- On intensive-care stays a small network over channel-by-time cells is level with
+  gradient-boosted trees at 200 stays and ahead at 50, 0.008 below the tuned trees on the full
+  set; a published network (STraTS) reads 0.827 on the same stays, ours from scratch 0.818.
+- A new sensor set joins without labels: fitting only the channel rows brings the pretext to
+  within 0.006 of a backbone that read the corpus, and carries part of a task (+0.031 on sepsis
+  at 4,000 patients).
+- On satellite telemetry the features find no events without labels. With every label the best
+  readout is a linear direction over the frozen features, 0.26 in event-weighted PR-AUC against
+  0.15 for trees, with or without pretraining.
+
+**Next:** a pretext sensitive to anomalies on telemetry; confirmation at few labels on fresh
+pretrainings.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
