@@ -87,3 +87,117 @@ months stay frozen. The direction reads every block's states side by side under 
 covariance, the fine-tuning the mean of the last block's: a structural difference the harness does
 not let a trained encoder close. Three seeds; a cell repeated on the accelerator moves by up to
 0.03. Each window is one hour: a detector that needs longer context is not measured here.
+
+## 2026-11-05 — measured: at its chosen length the network trained on every event meets the frozen direction at 0.26, and both miss the same events
+
+**Question.** The declaration above, by its rule, at commit `e0763d5c`.
+
+**Conditions.** As declared, on a clean tree at `e0763d5c`: 108 selection cells in three lanes
+(7.9 hours, three processes on the accelerator, a cell of 500 steps 97 to 189 s and of 16,000
+steps 1,244 to 2,316 s), nine direction cells on the selection months (159 s each), nine refit
+cells (121 to 307 s), the bars on the validation months adopted from the few-event pilot. M1 Pro,
+MPS, fp32; validation numbers. The validation months were opened after the refit was whole.
+
+**The choice**, on the selection months (2004-01 to 2006-12), area as a mean over three seeds.
+The frozen direction taught the same teaching months stands beside; no encoder was untrainable
+and none asked for a longer grid.
+
+| Encoder | Rate | Steps | Area | Per seed | Direction on the same months |
+| --- | --- | --- | --- | --- | --- |
+| initialisation | 0.0003 | 500 | 0.259 | 0.243 0.288 0.246 | 0.206 |
+| `base1` | 0.0003 | 1,000 | 0.192 | 0.172 0.096 0.308 | 0.021 |
+| `base2` | 0.001 | 500 | 0.114 | 0.117 0.099 0.124 | 0.035 |
+
+The curve on the selection months, by length, at the chosen rate of each encoder (at 500 steps
+the other rate reads lower for every encoder):
+
+| Steps | 500 | 1,000 | 2,000 | 4,000 | 8,000 | 16,000 |
+| --- | --- | --- | --- | --- | --- | --- |
+| initialisation, 0.0003 | 0.259 | 0.167 | 0.160 | 0.190 | 0.073 | 0.105 |
+| `base1`, 0.0003 | 0.171 | 0.192 | 0.150 | 0.085 | 0.036 | 0.050 |
+| `base2`, 0.001 | 0.114 | 0.074 | 0.058 | 0.045 | 0.035 | 0.030 |
+| late loss, initialisation | 0.47 | 0.40 | 0.33 | 0.27 | 0.16 | 0.07 |
+
+**The reading**, on the 56 validation months: the refit on all 99 events against the frozen
+direction taught the same events, seeds paired, interval over months, T = 2·SE over seeds.
+
+| Encoder | Refit per seed | Refit | Recall @1 % | Direction | Difference [interval] | p | T | Outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| initialisation | 0.244 0.274 0.275 | 0.265 | 0.602 | 0.266 | −0.001 [−0.044; +0.040] | 0.899 | 0.035 | **around** |
+| `base1` | 0.176 0.200 0.080 | 0.152 | 0.554 | 0.261 | −0.109 [−0.167; +0.016] | 0.102 | 0.074 | around |
+| `base2` | 0.178 0.274 0.203 | 0.219 | 0.570 | 0.217 | +0.002 [−0.115; +0.132] | 0.949 | 0.058 | around |
+
+The trees taught the same events read 0.154 (recall 0.640). The prediction, a difference in
+[−0.17; +0.07] near −0.07, held in its interval and missed its centre by 0.07: the refit lost
+nothing to the direction.
+
+Beside, descriptively. The selection cells scored on the validation months, at the setting chosen
+for each encoder, read 0.219 (initialisation), 0.169 (`base1`) and 0.120 (`base2`): the refit's
+29 more events and 36 more months add 0.05 at the initialisation. For the initialisation and
+`base1` the setting chosen on the selection months is also the one that reads highest on the
+validation months; for `base2` the other rate reads 0.171 there. By class of event: a seen class
+has an event on the fitting side (56 of the 62 validation events), an unseen class none (six):
+
+| Arm | Encoder | Seen classes (56 events) | Unseen classes (6 events) |
+| --- | --- | --- | --- |
+| refit | initialisation | 0.255 | 0.275 |
+| refit | `base1` | 0.129 | 0.265 |
+| refit | `base2` | 0.189 | 0.335 |
+| direction | initialisation | 0.225 | 0.572 |
+| direction | `base1` | 0.194 | 0.835 |
+| direction | `base2` | 0.120 | 0.833 |
+| trees | | 0.166 | 0.016 |
+
+**Checks, after the run; no reading depends on them.** At 1 % of normal windows flagged, counting
+an event found under at least two seeds, the refit and the direction at the initialisation find 34
+of the 62 validation events together, 2 and 6 apart, and 20 neither; 11 events are found by none
+of the seven arms, the trees included, and 16 never enter the top 5 % of windows under either
+readout at the initialisation, at 1 to 158 windows long. The events' best positions correlate 0.72 (Spearman) between
+the two readouts, 0.42 between the refit and the trees. The initialisation's row recomputed from
+the stored answers with a second resampling of the months (seed 7, 2,000 draws) gives
+−0.0015 [−0.043; +0.042]; its interval prints the same as the few-event pilot's "pretrained less
+initialisation" at 99 events, which is a coincidence at the third decimal: that row pools both
+pretrained encoders and recomputes to −0.0012 [−0.0439; +0.0398] against this one's
+−0.0015 [−0.0435; +0.0398]. Every refit cell taught 6,227 windows, the pilot's ceiling count, and
+scored 41,088. The refit's late loss is 0.50 at the initialisation and 0.36 to 0.44 under the
+pretrained encoders, the weights moved by 0.025 to 0.034: at 500 steps the network has drawn each
+event about 80 times and is far from fitting them.
+
+**Conclusions.**
+
+- **The recipe reads highest when it has barely trained: 0.265 at 500 steps on the validation
+  months, against 0.266 for the frozen direction at the same initialisation.** The outcome is
+  *around*: a room of 0.05 above 0.26 is not ruled out, the power said so, but no room shows.
+  Both readouts are near-linear readouts of untrained features, and they miss the same events,
+  so the number measures what this recipe extracts from these windows, not what the task
+  allows. What the pretext sensitive to anomalies is expected to reach is revised before any
+  GPU: its target is not a number this reference sets but whether a pretrained encoder reads
+  above its initialisation at all, under the direction or under short fine-tuning, and whether a
+  pretext can change which events the windows show, as training has not.
+- **The shortest run wins at every encoder and both rates**, and the loss keeps falling as the
+  area falls: by 8,000 steps the late loss is below 0.2 and the area 0.03 to 0.07 on the later
+  months. For two encoders of three the setting chosen on the selection months is also the best
+  on the validation months, which is what the cut was for.
+- **Pretraining gives this reading nothing.** The pretrained refits read 0.152 and 0.219, within
+  their intervals of the initialisation's but not above it, and under the frozen direction the
+  pretrained states read 0.02 to 0.04 on the selection months, which the pretraining read, against
+  0.21 at the initialisation. A hypothesis, not a finding: the pretext learnt to reconstruct those
+  months with their events, so their states do not stand out; the few-event pilot's control on
+  read months pointed the same way, but drift between the years is not separated from it here.
+- **The readouts share most of their events and part on the unseen classes.** At 1 % of normal
+  windows flagged the refit and the direction at the initialisation find 34 events together and 2
+  and 6 apart. By class, the refit gains on the seen classes, 0.255 against the direction's 0.225,
+  and loses on the six unseen events, 0.275 against 0.572 to 0.835, where the direction over
+  frozen states of either kind finds most of them and the trees none. A detector that must catch
+  what nobody labelled keeps the frozen direction.
+- **0.26 stays a lower bound of what the task allows, now for two readouts.** A linear direction
+  over the states of an untrained encoder and the same encoder after 500 steps on every label meet
+  there, with a recall of 0.60 at 1 % of normal windows for both, and most of the events neither
+  finds are found by no other arm either.
+
+**Limitations.** The grid's shortest length won; the few-event pilot saw 200 steps beat 500 at 10
+events, so the curve may peak below the grid and the reference is a lower bound of this recipe
+too. Three seeds; `base1` spreads 0.08 to 0.20 over them. The readouts differ in structure, all
+blocks side by side under a shrunk covariance against the mean of the last block. The unseen
+classes hold six events. The validation months had been read before by the frozen detectors and
+by the few-event pilot.
