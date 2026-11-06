@@ -96,9 +96,15 @@ LOCAL, TAUGHT, STATES, CELLS = "local", "taught", "states", "cells"
 # The detectors of the departures: the largest over the channels, the mean over the channels
 # present, Fisher's direction over them, the direction over them beside the hour's state, trees.
 MAX, MEAN, COMBINED = "max", "mean", "combined"
+# Added beside before the reading, after the selection months read the direction over the 59
+# departures at chance while the largest departure read 0.17: the events lie in which channel
+# departs most, an order statistic no weight per channel expresses, so these read the direction
+# over the largest few departures, alone and beside the hour's state.
+TOP, ORDERED = "top", "ordered"
+LARGEST = 3
 LOCAL_DETECTORS = (MAX, MEAN)
-TAUGHT_DETECTORS = (DIRECTION, COMBINED, TREES)
-SEEDED = (COMBINED, TREES)
+TAUGHT_DETECTORS = (DIRECTION, COMBINED, TREES, TOP, ORDERED)
+SEEDED = (COMBINED, TREES, ORDERED)
 # The two readings declared as one family under Holm: whether the departures beside the state
 # read above the state, and whether the largest departure reads above the cells' bar.
 DECLARED = ((TAUGHT, COMBINED), (LOCAL, MAX))
@@ -278,6 +284,12 @@ def local_deviations(now: Floats, context: Floats, floor: Floats, *, least_conte
     """The departures of ``now`` from ``context``, the statistics and the floor in one step."""
     centre, spread, loaded = context_statistics(context)
     return departures_from(now, centre, spread, loaded, floor, least_context=least_context)
+
+
+def largest_departures(deviations: Floats, count: int = LARGEST) -> Floats:
+    """``[windows, count]``: each window's largest departures in order, logged, the rest left."""
+    ordered = np.sort(np.log1p(deviations), axis=1)[:, ::-1]
+    return np.ascontiguousarray(ordered[:, :count])
 
 
 def window_scores(deviations: Floats, present: NDArray[np.bool_], how: str) -> Floats:
@@ -1013,6 +1025,10 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
             rows = deviations
             if detector == COMBINED:
                 rows = np.concatenate((states[seed], deviations), axis=1)
+            elif detector == TOP:
+                rows = largest_departures(deviations)
+            elif detector == ORDERED:
+                rows = np.concatenate((states[seed], largest_departures(deviations)), axis=1)
             answers = reader.answers(
                 TREES if detector == TREES else DIRECTION,
                 rows[fit_array],
