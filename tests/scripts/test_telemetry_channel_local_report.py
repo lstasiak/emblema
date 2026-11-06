@@ -563,3 +563,20 @@ def test_main_routes_the_commands(tmp_path: Path, capsys: pytest.CaptureFixture[
     )
     with pytest.raises(SystemExit, match="less alike"):
         main(["check", "--dir", str(tmp_path), "--cell", cell, "--against", str(other)])
+    # Shifted by a month-wise offset, the windows rank the same within every unit alone.
+    shifted = tmp_path / "answers" / "shifted.csv"
+    write_answers(
+        shifted,
+        [
+            WindowPrediction(
+                window=p.window,
+                target=p.target,
+                predicted=p.predicted + 1000.0 * (p.window.position // 5),
+            )
+            for p in answers_scoring(True, 1)
+        ],
+    )
+    with pytest.raises(SystemExit, match="less alike"):
+        main(["check", "--dir", str(tmp_path), "--cell", cell, "--against", str(shifted)])
+    main(["check", "--dir", str(tmp_path), "--cell", cell, "--against", str(shifted), "--by-unit"])
+    assert "least over 4 units: Spearman 1.00000, top 1% held 1.000" in capsys.readouterr().out
