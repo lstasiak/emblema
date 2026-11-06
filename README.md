@@ -179,13 +179,13 @@
 | src/emblema/evaluation/adapters/detection/linear\_cell\_answer.py                         |      110 |        1 |       22 |        1 |     98% |       121 |
 | src/emblema/evaluation/adapters/detection/masked\_cells.py                                |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/mean\_distance\_detector.py                     |       51 |        0 |        4 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/detection/nearest\_neighbour\_detector.py                 |       49 |        2 |        2 |        0 |     96% |   163-164 |
+| src/emblema/evaluation/adapters/detection/nearest\_neighbour\_detector.py                 |       49 |        2 |        2 |        0 |     96% |   164-165 |
 | src/emblema/evaluation/adapters/detection/pretext\_error\_detection\_runtime.py           |      144 |        1 |       34 |        1 |     99% |       236 |
 | src/emblema/evaluation/adapters/detection/pretext\_source.py                              |       12 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/robust\_scale.py                                |       20 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/score\_alarm.py                                 |       43 |        0 |       12 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/shrunk\_covariance.py                           |       25 |        0 |        2 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/detection/standardisation.py                              |       15 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/detection/standardisation.py                              |       23 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/subspace\_detector.py                           |       64 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/summaries\_detection\_runtime.py                |       46 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/taught\_gaussian\_detector.py                   |       74 |        2 |       12 |        2 |     95% |    64, 68 |
@@ -712,7 +712,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **21674** |  **179** | **4340** |  **118** | **99%** |           |
+| **TOTAL**                                                                                 | **21682** |  **179** | **4342** |  **118** | **99%** |           |
 
 132 empty files skipped.
 
