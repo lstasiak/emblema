@@ -20,12 +20,13 @@ _CHUNK_ROWS = 512
 class NearestNeighbourDetector:
     """A detector fitted on rows without a label: how far a row lies from the nearest fitted ones.
 
-    Every feature is standardised over the fitting rows, a feature without spread left as it is,
-    and a statistic a row cannot support, which the summaries mark as missing, is put at the
-    fitting mean, so it moves no distance. A row's score is its mean Euclidean distance to its
-    ``neighbours`` nearest fitting rows. The alarm is set over the fitting rows' own scores,
-    each read against the other fitting rows, and a run answers the distance above it; fitted
-    with the unit of every row, the alarm reads each distance against its own unit first.
+    Every feature is standardised over the fitting rows, a feature without spread read over a
+    tenth of the typical one, and a statistic a row cannot support, which the summaries mark as
+    missing, is put at the fitting mean, so it moves no distance. A row's score is its mean
+    Euclidean distance to its ``neighbours`` nearest fitting rows. The alarm is set over the
+    fitting rows' own scores, each read against the other fitting rows, and a run answers the
+    distance above it; fitted with the unit of every row, the alarm reads each distance against
+    its own unit first.
 
     Attributes:
         standardisation: How every row is centred and scaled before it is read.

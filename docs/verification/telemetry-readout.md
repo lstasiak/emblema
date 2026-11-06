@@ -233,3 +233,19 @@ from the literature without a pilot on the fitting side; both failed. Validation
 **What follows.** The leg keeps no claim of pretraining over frozen states; the confirmation
 reads it as the product table above. The pretraining question moves to fine-tuning with a few
 taught events, pretrained against random initialisation, piloted on the host first.
+
+## 2026-11-06 — the cells' farthest bar read 0.154 by a near-constant feature's spread
+
+The bar `cells_knn@distance=farthest,reference=unit`, 0.154 above, was refitted on the same
+mission by the context report ([telemetry-context.md](telemetry-context.md)) with 39 fitting
+windows fewer, 61,324 against 61,363, and read 0.017 on the same 41,088 windows. Within every
+month the two rankings are the same (Spearman 0.999, each month's area equal to the third
+decimal); they differ in how the months line up in one ranking. One feature, the last
+reading's offset in one bin of one channel, has a spread of 0.0096 on the smaller fitting side
+and none on the larger, where the standardisation read it over one: so its departures grew a
+hundredfold, and in the months 2009-07 to 2009-12 it was the farthest feature of half the
+windows. Under one alignment for both, each month's scores over their mean and spread, both
+read 0.21; over their rank within the month, 0.076. The direction and the whitened distance
+over the states have continuous scores and read within 0.03 of their recorded areas under the
+same alignment. The standardisation now floors a feature's spread at a tenth of the typical
+one, so the bar is recomputed, with the same fit, in the channel-local note that follows.

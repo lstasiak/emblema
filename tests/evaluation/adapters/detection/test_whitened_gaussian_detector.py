@@ -38,12 +38,13 @@ def test_the_score_is_the_squared_whitened_length_above_the_alarm() -> None:
     assert detector.alarm.level == pytest.approx(np.quantile(expected, 0.75))
 
 
-def test_a_feature_without_spread_is_left_as_it_is() -> None:
+def test_a_feature_without_spread_is_read_over_the_floor_and_scores_finitely() -> None:
     rows = np.array([[1.0, 5.0], [2.0, 5.0], [3.0, 5.0]])
 
     detector = WhitenedGaussianDetector.fitted_on(rows, contamination=0.1)
 
-    assert detector.standardisation.scale[1] == 1.0
+    # The spreads are 0.816 and nought, so the typical spread is their median, 0.408.
+    assert detector.standardisation.scale[1] == pytest.approx(0.1 * 0.5 * np.std([1.0, 2.0, 3.0]))
     assert np.all(np.isfinite(detector.scores(np.array([[2.0, 7.0]]))))
 
 
