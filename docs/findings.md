@@ -6,7 +6,7 @@ by a rule registered before its run ([preregistration](preregistration.md)); eac
 note that holds its evidence ([`verification/`](verification/README.md)). A row states direction
 and size; conditions and caveats are in its note.
 
-Last updated 2026-11-05.
+Last updated 2026-11-06.
 
 ## Status
 
@@ -33,6 +33,10 @@ Last updated 2026-11-05.
   the same network trained on all 99 events, at the length chosen on later fitting months (500
   steps, the shortest), reaches the same 0.26 (−0.001 [−0.044; +0.040] against the direction at
   its initialisation) and misses the same events: no room above 0.26 shows for either readout ([note](verification/telemetry-supervised-reference.md)).
+  A longer input does not lift it either: over windows of 6 to 72 hours ending at the scored
+  hour no layout is chosen, and read beside every context arm over the untrained states falls
+  below the hour (−0.130 [−0.195; −0.066] under the direction), since the hours after an event
+  inherit its trail and the mean over cells dilutes the hour ([note](verification/telemetry-context.md)).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
 - **What transfers is the encoder's machinery.** Fitting only the channel rows of an unread corpus
@@ -171,6 +175,7 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | Fine-tuning at 200 steps against 2,000, every encoder | 5 events +0.035 [+0.014; +0.082]; 10 events +0.105 [+0.064; +0.154]; mechanism not shown, length chosen on the months read | [taught-fine-tuning](verification/taught-fine-tuning.md) |
 | All 99 events taught, M1 | frozen direction: pretrained 0.261, 0.217, initialisation 0.266; fine-tuning at 2,000 steps 0.093 to 0.096; trees 0.154 | [taught-fine-tuning](verification/taught-fine-tuning.md) |
 | Trained on all 99 events, length chosen on later fitting months, against the direction at its initialisation | 0.265 against 0.266, −0.001 [−0.044; +0.040]; 500 steps chosen, longer runs read worse; 11 of 62 events found by no arm; pretrained 0.152, 0.219; the direction finds the six unseen classes (0.57 to 0.84), the trained network 0.27 to 0.34 | [telemetry-supervised-reference](verification/telemetry-supervised-reference.md) |
+| Windows of 6, 24, 72 hours ending at the scored hour, untrained encoder, layout chosen on later fitting months, against the hour | no layout chosen; read beside, 6x6 under the direction **−0.130** [−0.195; −0.066], under the whitened distance **−0.059** [−0.136; −0.008]; smoothing the hour's scores −0.18 to −0.23; pooling the previous hours' states −0.006 [−0.037; +0.021]; trees over the cells with 24 hours +0.023 [−0.037; +0.060]; none of the 11 unfound events found, which are local (10 of 11), touch 3 channels of 48 (median) and last 5.5 hours against 12 channels and 15 hours for the found | [telemetry-context](verification/telemetry-context.md) |
 
 ### What the failures have in common
 
@@ -208,8 +213,12 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 
 ## Next
 
-1. A pretext sensitive to anomalies, after an audit of its shortcut; its mark is whether a
-   pretrained encoder reads above its initialisation at all, as no room above 0.26 has shown.
+1. A channel-local readout on telemetry, with no model first: the events every arm misses are
+   local, touch few channels and are short, and a longer window averaged over every channel
+   reads lower, not higher ([note](verification/telemetry-context.md)). Each channel's hour
+   against its own recent hours, the largest deviation over channels, read on the fitting side
+   under a declared rule; whether it finds those events decides what a pretext sensitive to
+   anomalies should produce, and none goes to the GPU before that.
 2. Read channels added without labels on sepsis, across pretrainings that never read 2019.
 3. Confirm the gain at 50 stays on fresh pretrainings, in a design with power at the screen's
    lower edge, and read there whether the order of pretrainings holds across tasks and detectors.

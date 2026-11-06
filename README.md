@@ -107,9 +107,11 @@ Preliminary, on validation data; each task's test data is used once, at the end.
   at 4,000 patients).
 - On satellite telemetry the features find no events without labels. With every label the best
   readout is a linear direction over the frozen features, 0.26 in event-weighted PR-AUC against
-  0.15 for trees, with or without pretraining.
+  0.15 for trees, with or without pretraining; windows of 6 to 72 hours instead of one read
+  lower, not higher.
 
-**Next:** a pretext sensitive to anomalies on telemetry; confirmation at few labels on fresh
+**Next:** a channel-local readout of telemetry events, since the missed events are local and
+few-channel; then a pretext sensitive to anomalies; confirmation at few labels on fresh
 pretrainings.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
