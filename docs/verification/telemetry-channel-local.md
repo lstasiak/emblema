@@ -221,3 +221,57 @@ is not the registered area; an event found by its onset and lost in its tail cou
 the recall and little in the area. The order-statistic arms were added after the choice and
 before the reading, on the selection months' evidence, and stand beside. Three seeds where a
 side draws. The validation months have been read before; the test months stay frozen.
+
+## 2026-11-06 — declared before the run: the second mission, as a confirmation on data the hypothesis did not come from
+
+**Questions.** The same two as on the first mission, on the second: (1) whether the hour's
+state beside the channels' departures, taught every event, reads above the state alone under
+Fisher's direction; (2) whether the largest departure over the channels, with no label, reads
+above the cells' farthest feature. Beside, descriptively, the same arms, and in particular
+whether the trees over the departures find more events at 1 % of normal windows than the
+taught direction over the states, as they did on the first mission. The local few-channel
+profile was read off the first mission's validation events, so the first mission's reading
+confirms nothing of itself; the second mission's events were never read for it.
+
+**Conditions.** As on the first mission, with these differences.
+
+| | |
+| --- | --- |
+| Code | `scripts/telemetry_channel_local_report.py` at the commit of this declaration; the context report lays a month published 16 s off the hour on the hourly grid (`TOLERANCE_HOURS`); the check reads ranks by unit |
+| Task | `esa-mission2-events` `09368ab9…`, the same corpus manifest: the fitting side 2000-01 to 2001-09, 21 months, 15,335 windows, 272 events; the validation months 2001-10 to 2003-06, 14 of them, 10,223 windows, 236 events in 475 windows, so an event lasts two windows at the median; the corpus reads 11 of the mission's channels, so 48 of the 59 rows are absent and depart nought; of the mission's 622 annotated events 45 are local |
+| Cut for the choice | the 14 months before 2001-03 fit, the 7 from it choose |
+| Cells and states | laid and embedded by the context report's reader once (32 s and 6 to 7 s a seed on MPS), the same layout and encoder shape |
+| Not read | a validation window whose context of 72 hours reaches into a month the task never loaded: 355 of 10,223, touching 7 events |
+| Check | the refitted whitened distance over the states against the readout screen's second-mission cells (`untrained_knn@distance=whitened`, seeds 1 to 3), which read no unit alone: Spearman's correlation at least 0.9999 and the top 1 % held whole within every unit, the least over the 14 units |
+| Command | `data/report/l38/local-m2/run.sh` |
+| Cost | from the trial: the departures of `hour-6h` 14 s, every cell under 3 s; the widest arm's statistics a few minutes; the whole run about a quarter of an hour |
+
+**The rule** is the first mission's, unchanged: the choice per family and detector on the
+selection months; the two declared readings under Holm with T = 2·SE over the seeds where a
+side draws and nought where neither does; the least gain 0.05; the rest descriptive. A
+confirmation reads the two missions together: a recommendation of the first mission's reading
+stands where the second mission's reading has the same sign and holds its prediction, and is
+scoped to the first mission's kind of events where it does not.
+
+**Power.** Fourteen months make the interval over months about twice as wide as on the first
+mission; with 236 events of two windows and about 97 normal windows flagged at 1 %, the recall
+at 1 % is bounded near 0.4 for any arm, so the trees' lead is read in the area as much as in
+the recall here.
+
+**Prediction, from the first mission's intervals.** (1) in [−0.14; +0.03], near −0.06, below
+or around. (2) in [−0.09; +0.09], near +0.02, around; the largest departure reads above the
+whitened distance over the states if that reads as low as it did on the first mission, and
+not if the second mission's global rare events lift it, as the readout screen saw. Order
+statistics beside the state in [−0.03; +0.02]. The trees over the departures against the
+direction over the states: in the recall at 1 % [−0.05; +0.25], near +0.10; in the area
+[−0.20; +0.05]. The arm chosen under the largest departure reads within 0.02 of the others.
+
+**Trial, before this declaration.** Every command ran end to end at `hour-6h` and seed 1, the
+tables deleted unopened; only the cell names, their seconds, the count of windows not read
+(25 of 10,223 at a widest context of 6 hours) and the check were read. The check held: the
+whitened distance refitted here ranks the screen's windows within every unit with Spearman
+1.00000 and holds every unit's top 1 %, so the states are the screen's.
+
+**Limitations.** The second mission's events are mostly global rare events, so it confirms the
+detectors, not the local few-channel mechanism; its 45 local events are read in the events
+table. Eleven channels. Fourteen months.
