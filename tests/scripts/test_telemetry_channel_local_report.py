@@ -21,6 +21,7 @@ from scripts.telemetry_channel_local_report import (
     COMBINED,
     DECLARED,
     FLOOR_SHARE,
+    LARGEST,
     LOCAL,
     MAX,
     MEAN,
@@ -42,6 +43,7 @@ from scripts.telemetry_channel_local_report import (
     event_annotations,
     global_floor,
     hour_summaries,
+    largest_departures,
     local_deviations,
     main,
     missing_refits,
@@ -187,6 +189,15 @@ def test_a_windows_score_is_the_largest_departure_or_the_mean_over_the_present()
         window_scores(departures, present, "median")
 
 
+def test_the_largest_departures_are_the_top_few_in_order_logged() -> None:
+    departures = np.array([[0.0, 5.0, 2.0, 9.0], [1.0, 0.0, 0.0, 0.0]])
+
+    largest = largest_departures(departures, 2)
+
+    np.testing.assert_allclose(largest, np.log1p([[9.0, 5.0], [1.0, 0.0]]))
+    assert largest_departures(departures).shape == (2, LARGEST)
+
+
 def hourly_cells(values: list[float | None], readings: int = 2) -> np.ndarray:
     """One channel, one window per hour, every bin at the hour's value, or an empty hour."""
     out = np.zeros((len(values), 1, BASE_BINS, F))
@@ -243,7 +254,9 @@ def test_the_cells_of_an_arm_are_seedless_where_the_detector_draws_nothing() -> 
     assert (TAUGHT, DIRECTION, "hour-6h", NO_SEED) in cells
     assert {s for f, d, a, s in cells if d == COMBINED} == {1, 2}
     assert {s for f, d, a, s in cells if d == TREES} == {1, 2}
-    assert len(cells) == 2 + 1 + 2 + 2
+    assert (TAUGHT, "top", "hour-6h", NO_SEED) in cells
+    assert {s for f, d, a, s in cells if d == "ordered"} == {1, 2}
+    assert len(cells) == 2 + 1 + 2 + 2 + 1 + 2
     assert control_cells([1, 2]) == [
         (STATES, DIRECTION, 1),
         (STATES, DIRECTION, 2),
@@ -426,7 +439,7 @@ def test_the_choice_from_the_selection_and_the_reading_on_the_refit(tmp_path: Pa
 
     by_key = {(c.family, c.detector): c for c in choices}
     assert set(by_key) == {(LOCAL, MAX), (LOCAL, MEAN)} | {
-        (TAUGHT, d) for d in (DIRECTION, COMBINED, TREES)
+        (TAUGHT, d) for d in (DIRECTION, COMBINED, TREES, "top", "ordered")
     }
     assert all(c.arm == "bins-6h" for c in choices)
     (tmp_path / "chosen.json").write_text(json.dumps([c.__dict__ for c in choices]))
