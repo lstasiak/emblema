@@ -307,6 +307,11 @@ class PublishedCells:
     def rows(self) -> NDArray[np.int64]:
         return self._rows
 
+    @property
+    def cells(self) -> Floats:
+        """``[windows, rows, BASE_BINS, features]``, every loaded window's published cells."""
+        return self._cells
+
     def context(self, indices: Sequence[int], layout: Layout) -> Floats:
         """``[len(indices), rows, bins, features]``: the windows' cells under ``layout``."""
         ends = self._hours[np.asarray(indices, dtype=np.int64)]
