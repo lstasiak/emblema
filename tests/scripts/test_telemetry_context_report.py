@@ -193,6 +193,8 @@ def test_published_cells_refuse_windows_off_the_hour_or_sharing_one() -> None:
     cells = np.zeros((2, 1, BASE_BINS, BinnedTokens.N_FEATURES))
     with pytest.raises(ValueError, match="whole hours"):
         PublishedCells(cells, np.array([1]), [1.0, 1.5])
+    # A few seconds off the hour is read at the nearest whole hour.
+    assert PublishedCells(cells, np.array([1]), [1.0044, 2.0044]).previous([1], 2).tolist() == [[0]]
     with pytest.raises(ValueError, match="end at one hour"):
         PublishedCells(cells, np.array([1]), [1.0, 1.0])
 
