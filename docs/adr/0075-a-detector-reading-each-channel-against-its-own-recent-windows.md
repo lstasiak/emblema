@@ -1,6 +1,6 @@
 # ADR-0075: A detector reading each channel against its own recent windows, from the windows it is handed
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-06
 
 ## Context
