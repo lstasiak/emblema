@@ -25,10 +25,12 @@ class FeatureRoutedDetectionRuntime:
         states: DetectionRuntime,
         summaries: DetectionRuntime,
         pretext: DetectionRuntime | None = None,
+        local: DetectionRuntime | None = None,
     ) -> None:
         self._states = states
         self._summaries = summaries
         self._pretext = pretext
+        self._local = local
 
     def fit(
         self,
@@ -46,5 +48,11 @@ class FeatureRoutedDetectionRuntime:
                     f"this process asks no backbone's pretext, so it cannot fit {recipe.features}"
                 )
             return self._pretext.fit(recipe, task, fitting, scored, taught=taught, retain=retain)
+        if recipe.features.reads_channel_history:
+            if self._local is None:
+                raise UnsupportedDetectorFeaturesError(
+                    f"this process reads no channel's history, so it cannot fit {recipe.features}"
+                )
+            return self._local.fit(recipe, task, fitting, scored, taught=taught, retain=retain)
         runtime = self._states if recipe.features.lays_out_cells else self._summaries
         return runtime.fit(recipe, task, fitting, scored, taught=taught, retain=retain)

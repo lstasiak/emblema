@@ -19,6 +19,12 @@ class CurvePointResource(BaseModel):
     )
     spread: float
     repeats: int
+    event_recall: float | None = Field(
+        description=(
+            "For a detection campaign, the share of events found with one in a hundred normal "
+            "windows flagged, the mean over the repeats; absent for any other campaign."
+        ),
+    )
 
 
 class CandidateCurveResource(BaseModel):
@@ -39,6 +45,7 @@ class CandidateCurveResource(BaseModel):
                     error=point.error,
                     spread=point.spread,
                     repeats=point.repeats,
+                    event_recall=point.event_recall,
                 )
                 for point in curve.points
             ],

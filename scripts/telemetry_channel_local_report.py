@@ -41,6 +41,7 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.stats import rankdata
 
 # Run from anywhere: the sibling script modules live in this directory's package at the root.
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -835,9 +836,12 @@ LEAST_SPEARMAN = 0.9999
 
 
 def agreement_of(a: Floats, b: Floats) -> tuple[float, float]:
-    """Spearman's correlation of two scorings of the same windows, and the top share held."""
-    ranks_a, ranks_b = a.argsort().argsort(), b.argsort().argsort()
-    spearman = float(np.corrcoef(ranks_a, ranks_b)[0, 1]) if len(a) > 1 else 1.0
+    """Spearman's correlation of two scorings of the same windows, and the top share held.
+
+    Tied windows share their mean rank, as Spearman's coefficient defines it: most hours depart
+    by nothing and tie, and an order broken within a tie by the sort would read as disagreement.
+    """
+    spearman = float(np.corrcoef(rankdata(a), rankdata(b))[0, 1]) if len(a) > 1 else 1.0
     top = max(1, int(SHARE * len(a)))
     held = len(set(np.argsort(-a)[:top].tolist()) & set(np.argsort(-b)[:top].tolist())) / top
     return spearman, held

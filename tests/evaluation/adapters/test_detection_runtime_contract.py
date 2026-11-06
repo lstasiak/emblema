@@ -18,6 +18,7 @@ import pytest
 from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.in_memory.detection_runtime import InMemoryDetectionRuntime
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
+from emblema.evaluation.domain.detection.channel_history import ChannelHistory
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
@@ -32,6 +33,8 @@ from emblema.evaluation.domain.exceptions import (
     UnsupportedDetectorFeaturesError,
 )
 from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
+from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.evaluation.ports.detection_runtime import DetectionRuntime
@@ -73,13 +76,40 @@ PRETEXT = DetectorRecipe(
 )
 
 
+# The same windows on one time axis, one unit after another, for a detector whose history
+# runs across the units; the block's positions are the ones above.
+ON_ONE_AXIS = (
+    (window("a", 0, 10.0), window("a", 1, 20.0), window("b", 3, 30.0)),
+    (labelled("c", 2, 40.0, 1.0),),
+    (labelled("c", 2, 40.0, 1.0), labelled("a", 0, 10.0, 0.0), labelled("a", 1, 20.0, 0.0)),
+)
+# A history of two windows back, one of which a channel needs, so every window with an earlier
+# one departs from it.
+HISTORY = DetectorRecipe(
+    features=DetectorFeatures.CHANNEL_DEPARTURES,
+    reading=None,
+    neighbours=None,
+    contamination=0.1,
+    seed=1,
+    history=ChannelHistory(span=3),
+)
+
+
 class Adapted(NamedTuple):
-    """An adapter, its task, where what it fits would be kept, and whose masks it asks under."""
+    """An adapter, its task, where what it fits would be kept, whose masks it asks under, and
+    the windows it is handed."""
 
     runtime: DetectionRuntime
     task: DownstreamTask
     store: ArtifactStore
     pretext: ArtifactRef | None = None
+    fitting: tuple[TaskWindow, ...] = FITTING
+    scored: tuple[LabelledWindow, ...] = SCORED
+    of_two_units: tuple[LabelledWindow, ...] = OF_TWO_UNITS
+
+
+def learns_no_event(recipe: DetectorRecipe) -> bool:
+    return recipe.features.asks_the_pretext or recipe.features.reads_channel_history
 
 
 def detection_task() -> DownstreamTask:
@@ -146,11 +176,35 @@ def over_the_pretext(tmp_path: Path, *, keeping: bool) -> Adapted:
     return Adapted(runtime, replace(detection_task(), manifest=manifest), store, pretext)
 
 
+def over_channel_history(tmp_path: Path, *, keeping: bool) -> Adapted:
+    from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
+    from emblema.evaluation.adapters.detection.channel_local_detection_runtime import (
+        ChannelLocalDetectionRuntime,
+    )
+    from tests.support.published import publish
+
+    store = InMemoryArtifactStore()
+    manifest = publish(store, tmp_path / "scratch").manifest
+    runtime = ChannelLocalDetectionRuntime(
+        PublishedCorpusBlocks(store, tmp_path / "workspace"), store=store if keeping else None
+    )
+    fitting, scored, of_two_units = ON_ONE_AXIS
+    return Adapted(
+        runtime,
+        replace(detection_task(), manifest=manifest),
+        store,
+        fitting=fitting,
+        scored=scored,
+        of_two_units=of_two_units,
+    )
+
+
 ADAPTERS: list[Callable[..., Adapted]] = [
     in_memory,
     over_summaries,
     over_encoder_states,
     over_the_pretext,
+    over_channel_history,
 ]
 
 
@@ -180,15 +234,23 @@ def recipe_for(adapted: Adapted) -> DetectorRecipe:
         return STATES
     if adapted.pretext is not None:
         return replace(PRETEXT, pretext=replace(ASKED, backbone=adapted.pretext))
+    from emblema.evaluation.adapters.detection.channel_local_detection_runtime import (
+        ChannelLocalDetectionRuntime,
+    )
+
+    if isinstance(adapted.runtime, ChannelLocalDetectionRuntime):
+        return HISTORY
     return SUMMARIES
 
 
 def test_a_detector_read_against_its_units_answers_the_same_windows(adapted: Adapted) -> None:
     recipe = replace(recipe_for(adapted), reference=ScoreReference.OWN_UNIT)
 
-    outcome = adapted.runtime.fit(recipe, adapted.task, FITTING, OF_TWO_UNITS, retain=False)
+    outcome = adapted.runtime.fit(
+        recipe, adapted.task, adapted.fitting, adapted.of_two_units, retain=False
+    )
 
-    assert [p.window for p in outcome.predictions] == [w.window for w in OF_TWO_UNITS]
+    assert [p.window for p in outcome.predictions] == [w.window for w in adapted.of_two_units]
     assert all(isfinite(p.predicted) for p in outcome.predictions)
 
 
@@ -199,12 +261,14 @@ def test_a_detector_read_against_its_units_scores_otherwise_than_against_the_fit
         pytest.skip("the fake reads nothing and scores by the windows' ends alone")
     whole = recipe_for(adapted)
 
-    against_the_fit = adapted.runtime.fit(whole, adapted.task, FITTING, OF_TWO_UNITS, retain=False)
+    against_the_fit = adapted.runtime.fit(
+        whole, adapted.task, adapted.fitting, adapted.of_two_units, retain=False
+    )
     against_the_unit = adapted.runtime.fit(
         replace(whole, reference=ScoreReference.OWN_UNIT),
         adapted.task,
-        FITTING,
-        OF_TWO_UNITS,
+        adapted.fitting,
+        adapted.of_two_units,
         retain=False,
     )
 
@@ -214,9 +278,13 @@ def test_a_detector_read_against_its_units_scores_otherwise_than_against_the_fit
 
 
 def test_every_scored_window_is_answered_once_in_the_order_given(adapted: Adapted) -> None:
-    outcome = adapted.runtime.fit(recipe_for(adapted), adapted.task, FITTING, SCORED, retain=False)
+    outcome = adapted.runtime.fit(
+        recipe_for(adapted), adapted.task, adapted.fitting, adapted.scored, retain=False
+    )
 
-    assert [p.window for p in outcome.predictions] == [labelled.window for labelled in SCORED]
+    assert [p.window for p in outcome.predictions] == [
+        labelled.window for labelled in adapted.scored
+    ]
     assert [p.target for p in outcome.predictions] == [1.0]
     assert outcome.seconds >= 0.0
     assert outcome.artifact is None
@@ -225,13 +293,15 @@ def test_every_scored_window_is_answered_once_in_the_order_given(adapted: Adapte
 def test_a_run_without_a_window_to_fit_on_or_to_answer_is_refused(adapted: Adapted) -> None:
     recipe = recipe_for(adapted)
     with pytest.raises(InvalidScoredOutcomeError, match="fit on"):
-        adapted.runtime.fit(recipe, adapted.task, (), SCORED, retain=False)
+        adapted.runtime.fit(recipe, adapted.task, (), adapted.scored, retain=False)
     with pytest.raises(InvalidScoredOutcomeError, match="answer"):
-        adapted.runtime.fit(recipe, adapted.task, FITTING, (), retain=False)
+        adapted.runtime.fit(recipe, adapted.task, adapted.fitting, (), retain=False)
 
 
 def test_what_was_fitted_is_kept_where_there_is_somewhere_to_keep_it(adapted: Adapted) -> None:
-    outcome = adapted.runtime.fit(recipe_for(adapted), adapted.task, FITTING, SCORED, retain=True)
+    outcome = adapted.runtime.fit(
+        recipe_for(adapted), adapted.task, adapted.fitting, adapted.scored, retain=True
+    )
 
     assert outcome.artifact is not None
     kept = KeptCandidates(adapted.store).read(outcome.artifact)
@@ -242,7 +312,11 @@ def test_what_was_fitted_is_kept_where_there_is_somewhere_to_keep_it(adapted: Ad
 def test_keeping_is_refused_where_there_is_nowhere_to_keep(keeping_nothing: Adapted) -> None:
     with pytest.raises(CandidateNotRetainableError):
         keeping_nothing.runtime.fit(
-            recipe_for(keeping_nothing), keeping_nothing.task, FITTING, SCORED, retain=True
+            recipe_for(keeping_nothing),
+            keeping_nothing.task,
+            keeping_nothing.fitting,
+            keeping_nothing.scored,
+            retain=True,
         )
 
 
@@ -252,7 +326,7 @@ def test_a_runtime_refuses_features_it_cannot_produce(adapted: Adapted) -> None:
     other = STATES if recipe_for(adapted) is SUMMARIES else SUMMARIES
 
     with pytest.raises(UnsupportedDetectorFeaturesError):
-        adapted.runtime.fit(other, adapted.task, FITTING, SCORED, retain=False)
+        adapted.runtime.fit(other, adapted.task, adapted.fitting, adapted.scored, retain=False)
 
 
 def test_the_counts_of_readings_are_read_where_the_summaries_are_and_nowhere_else(
@@ -263,23 +337,29 @@ def test_the_counts_of_readings_are_read_where_the_summaries_are_and_nowhere_els
     counts = replace(SUMMARIES, features=DetectorFeatures.READING_COUNTS)
 
     if recipe_for(adapted) is SUMMARIES:
-        outcome = adapted.runtime.fit(counts, adapted.task, FITTING, SCORED, retain=False)
-        assert [p.window for p in outcome.predictions] == [w.window for w in SCORED]
+        outcome = adapted.runtime.fit(
+            counts, adapted.task, adapted.fitting, adapted.scored, retain=False
+        )
+        assert [p.window for p in outcome.predictions] == [w.window for w in adapted.scored]
     else:
         with pytest.raises(UnsupportedDetectorFeaturesError):
-            adapted.runtime.fit(counts, adapted.task, FITTING, SCORED, retain=False)
+            adapted.runtime.fit(counts, adapted.task, adapted.fitting, adapted.scored, retain=False)
 
 
 def test_the_whitened_distance_answers_the_same_windows_and_scores_them_otherwise(
     adapted: Adapted,
 ) -> None:
     nearest = recipe_for(adapted)
-    if nearest.features.asks_the_pretext:
-        pytest.skip("a detector scored by an error has no distance to choose")
+    if nearest.features.asks_the_pretext or nearest.features.reads_channel_history:
+        pytest.skip("a detector scored by an error or by its history has no distance to choose")
     whitened = replace(nearest, distance=ScoreDistance.WHITENED, neighbours=None)
 
-    by_nearest = adapted.runtime.fit(nearest, adapted.task, FITTING, OF_TWO_UNITS, retain=False)
-    by_whitened = adapted.runtime.fit(whitened, adapted.task, FITTING, OF_TWO_UNITS, retain=False)
+    by_nearest = adapted.runtime.fit(
+        nearest, adapted.task, adapted.fitting, adapted.of_two_units, retain=False
+    )
+    by_whitened = adapted.runtime.fit(
+        whitened, adapted.task, adapted.fitting, adapted.of_two_units, retain=False
+    )
 
     assert [p.window for p in by_whitened.predictions] == [p.window for p in by_nearest.predictions]
     assert all(isfinite(p.predicted) for p in by_whitened.predictions)
@@ -298,17 +378,19 @@ def test_a_detector_taught_an_event_answers_the_same_windows_under_every_head(
     adapted: Adapted, head: TaughtHead
 ) -> None:
     plain = recipe_for(adapted)
-    if plain.features.asks_the_pretext:
+    if learns_no_event(plain):
         with pytest.raises(InvalidTaughtEventsError, match="learns from no event"):
-            adapted.runtime.fit(plain, adapted.task, FITTING, SCORED, taught=TAUGHT, retain=False)
+            adapted.runtime.fit(
+                plain, adapted.task, adapted.fitting, adapted.scored, taught=TAUGHT, retain=False
+            )
         return
     taught = replace(plain, events=1, neighbours=None, head=head)
 
     outcome = adapted.runtime.fit(
-        taught, adapted.task, FITTING, OF_TWO_UNITS, taught=TAUGHT, retain=True
+        taught, adapted.task, adapted.fitting, adapted.of_two_units, taught=TAUGHT, retain=True
     )
 
-    assert [p.window for p in outcome.predictions] == [w.window for w in OF_TWO_UNITS]
+    assert [p.window for p in outcome.predictions] == [w.window for w in adapted.of_two_units]
     assert all(isfinite(p.predicted) for p in outcome.predictions)
     assert outcome.artifact is not None
 
@@ -317,16 +399,16 @@ def test_a_detector_taught_an_event_is_refused_a_window_off_the_fitting_side(
     adapted: Adapted,
 ) -> None:
     plain = recipe_for(adapted)
-    if plain.features.asks_the_pretext:
-        pytest.skip("a detector scored by an error learns from no event")
+    if learns_no_event(plain):
+        pytest.skip("a detector scored by an error or by its history learns from no event")
     taught = replace(plain, events=1, neighbours=None)
 
     with pytest.raises(InvalidTaughtEventsError, match="not on the fitting side"):
         adapted.runtime.fit(
             taught,
             adapted.task,
-            FITTING,
-            SCORED,
+            adapted.fitting,
+            adapted.scored,
             taught=(labelled("c", 2, 10.0, 1.0),),
             retain=False,
         )
@@ -336,13 +418,17 @@ def test_a_detector_is_handed_the_events_its_recipe_is_taught_and_no_others(
     adapted: Adapted,
 ) -> None:
     plain = recipe_for(adapted)
-    if plain.features.asks_the_pretext:
-        pytest.skip("a detector scored by an error learns from no event")
+    if learns_no_event(plain):
+        pytest.skip("a detector scored by an error or by its history learns from no event")
     taught = replace(plain, events=2, neighbours=None)
 
     with pytest.raises(InvalidTaughtEventsError, match="was handed 1"):
-        adapted.runtime.fit(taught, adapted.task, FITTING, SCORED, taught=TAUGHT, retain=False)
+        adapted.runtime.fit(
+            taught, adapted.task, adapted.fitting, adapted.scored, taught=TAUGHT, retain=False
+        )
     with pytest.raises(InvalidTaughtEventsError, match="handed no taught window"):
-        adapted.runtime.fit(taught, adapted.task, FITTING, SCORED, retain=False)
+        adapted.runtime.fit(taught, adapted.task, adapted.fitting, adapted.scored, retain=False)
     with pytest.raises(InvalidTaughtEventsError, match="taught no event"):
-        adapted.runtime.fit(plain, adapted.task, FITTING, SCORED, taught=TAUGHT, retain=False)
+        adapted.runtime.fit(
+            plain, adapted.task, adapted.fitting, adapted.scored, taught=TAUGHT, retain=False
+        )

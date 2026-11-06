@@ -6,6 +6,9 @@ from emblema.evaluation.adapters.candidates.detector_arm import DetectorArm
 from emblema.evaluation.adapters.candidates.detector_catalogue import DetectorCatalogue
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.identifiers import CandidateRef
+from emblema.evaluation.domain.detection.channel_history import ChannelHistory
+from emblema.evaluation.domain.detection.channel_reduction import ChannelReduction
+from emblema.evaluation.domain.detection.departure_cells import DepartureCells
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
 from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
@@ -374,3 +377,67 @@ def test_a_teaching_the_detector_cannot_take_is_refused(name: str) -> None:
 
     with pytest.raises(UnknownCandidateError):
         catalogue.arm_of(CandidateRef(name))
+
+
+LOCAL = DetectorArm(
+    ref=CandidateRef("channel_local"),
+    features=DetectorFeatures.CHANNEL_DEPARTURES,
+    architecture=None,
+    backbone=None,
+)
+WITH_LOCAL = DetectorCatalogue((SUMMARIES, LOCAL))
+
+
+def test_a_detector_over_its_channels_history_names_its_span_departure_and_reduction() -> None:
+    described = WITH_LOCAL.describe(CandidateRef("channel_local"))
+    stated = {p.name: p.value for p in described.method.parameters}
+
+    assert stated == {
+        "features": "channel_departures",
+        "span": "6",
+        "departure": "window",
+        "channels": "max",
+        "contamination": "0.02",
+    }
+    assert (described.starts_from, described.budget) == (None, None)
+    recipe = WITH_LOCAL.arm_of(CandidateRef("channel_local")).recipe(seed=1)
+    assert recipe.read_history() == ChannelHistory()
+    assert recipe.neighbours is None
+
+
+def test_a_variant_turns_the_history_and_the_alarm() -> None:
+    arm = WITH_LOCAL.arm_of(
+        CandidateRef("channel_local@channels=mean,departure=bins,reference=unit,span=24")
+    )
+
+    assert arm.history == ChannelHistory(
+        span=24, departure=DepartureCells.BINS, channels=ChannelReduction.MEAN
+    )
+    assert arm.reference is ScoreReference.OWN_UNIT
+    assert arm.recipe(seed=3).read_history() == arm.history
+    described = WITH_LOCAL.describe(CandidateRef("channel_local@departure=bins,reference=unit"))
+    stated = {p.name: p.value for p in described.method.parameters}
+    assert (stated["departure"], stated["reference"]) == ("bins", "unit")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "channel_local@span=6",
+        "channel_local@span=1",
+        "channel_local@span=x",
+        "channel_local@departure=window",
+        "channel_local@departure=hour",
+        "channel_local@channels=median",
+        "channel_local@distance=whitened",
+        "channel_local@neighbours=3",
+        "channel_local@events=5",
+        "channel_local@draws=4",
+        "channel_local@layer=concat",
+        "summaries_knn@span=24",
+        "summaries_knn@channels=mean",
+    ],
+)
+def test_a_history_the_detector_cannot_take_is_refused(name: str) -> None:
+    with pytest.raises(UnknownCandidateError):
+        WITH_LOCAL.arm_of(CandidateRef(name))

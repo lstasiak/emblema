@@ -1,3 +1,4 @@
+import random
 from collections.abc import Sequence
 
 import pytest
@@ -7,6 +8,7 @@ from hypothesis import strategies as st
 from emblema.evaluation.domain.exceptions import InvalidAnomalyRankingError
 from emblema.evaluation.domain.identifiers import UnitKey
 from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
+from emblema.evaluation.domain.scoring.unit_counts import UnitCounts
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from tests.evaluation.support import prediction
 
@@ -226,3 +228,90 @@ def test_a_target_that_is_no_event_number_is_refused() -> None:
                 prediction("a", 1, 1.0, 0.9),
             ]
         )
+
+
+def copied(rows: Sequence[Row], counts: Sequence[int], units: Sequence[str]) -> list[Row]:
+    """The rows with unit ``units[i]`` there ``counts[i]`` times, each copy's events its own."""
+    out: list[Row] = []
+    for place, unit in enumerate(units):
+        for copy in range(counts[place]):
+            out.extend(
+                (f"{unit}#{copy}", position, event * 100 + copy if event else 0, score)
+                for row_unit, position, event, score in rows
+                if row_unit == unit
+            )
+    return out
+
+
+def drawn_rows(seed: int, tied: bool) -> list[Row]:
+    """Four units, each with a normal window and events of one to three windows, scores tied
+    when rounded to a tenth."""
+    draws = random.Random(seed)
+
+    def score() -> float:
+        return round(draws.random(), 1 if tied else 6)
+
+    rows: list[Row] = []
+    event = 0
+    for unit in UNITS:
+        rows.append((unit, 0, 0, score()))
+        for position in range(1, draws.randint(3, 9)):
+            if draws.random() < 0.25:
+                event += 1
+                rows.extend(
+                    (unit, position * 10 + length, event, score())
+                    for length in range(draws.randint(1, 3))
+                )
+            else:
+                rows.append((unit, position * 10, 0, score()))
+    if not event:
+        rows.append(("a", 999, 1, 0.5))
+    return rows
+
+
+UNITS = ("a", "b", "c", "d")
+
+
+@given(
+    seed=st.integers(0, 10_000),
+    share=st.sampled_from([0.0, 0.01, 0.1, 0.3, 1.0]),
+    tied=st.booleans(),
+)
+def test_the_events_found_under_draws_are_the_plain_sweeps_over_the_drawn_copies(
+    seed: int, share: float, tied: bool
+) -> None:
+    rows = drawn_rows(seed, tied)
+    ranking = ranked(*rows)
+    draws = random.Random(seed + 1)
+    held = []
+    for _ in range(6):
+        counts = [draws.randint(0, 3) for _ in UNITS]
+        events = {event for _, _, event, _ in copied(rows, counts, UNITS)}
+        if 0 in events and len(events) > 1:
+            held.append(counts)
+
+    expected = [
+        ranked(*copied(rows, counts, UNITS)).event_recall_at_false_alarm_share(share)
+        for counts in held
+    ]
+
+    picks = [[place for place, count in enumerate(row) for _ in range(count)] for row in held]
+    found = ranking.event_recalls(UnitCounts.of_picks(picks, len(UNITS)), share) if held else []
+    assert found == pytest.approx(expected, abs=1e-12)
+    assert ranking.event_recalls(UnitCounts.of_weights([1] * len(UNITS)), share) == [
+        ranking.event_recall_at_false_alarm_share(share)
+    ]
+
+
+def test_an_event_over_two_units_is_found_once_in_either() -> None:
+    ranking = ranked(("a", 0, 1, 0.9), ("b", 0, 1, 0.1), ("a", 1, 0, 0.5), ("b", 1, 0, 0.4))
+
+    assert ranking.event_recalls(UnitCounts.of_weights([1, 1]), 0.0) == [1.0]
+    assert ranking.event_recall_at_false_alarm_share(0.0) == 1.0
+    # Without the unit holding the flagged window, the event is not found.
+    assert ranking.event_recalls(UnitCounts.of_weights([0, 2]), 0.0) == [0.0]
+
+
+def test_a_share_of_false_alarms_outside_zero_to_one_is_refused_under_draws() -> None:
+    with pytest.raises(InvalidAnomalyRankingError, match=r"\[0, 1\]"):
+        ranked(("a", 0, 1, 0.9), ("a", 1, 0, 0.1)).event_recalls(UnitCounts.of_weights([1]), 1.5)

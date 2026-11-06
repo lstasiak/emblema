@@ -353,3 +353,67 @@ read near a ceiling (0.90 to 0.94 on the selection months), so differences among
 small by construction. The spans read within 0.04 of one another under the largest
 departure, wider than the predicted 0.02. The validation months have been read before by the
 readout screen; the test months stay frozen.
+
+## 2026-11-06 — measured: the package's detector reads both missions as the report did
+
+### Question
+
+The report above read the channel-local detector with no label on both missions. Does the
+package's detector (ADR-0075), fitted by a campaign cell, rank every month's windows as the
+report did, under the acceptance declared in the ADR before the cells ran?
+
+### Conditions
+
+| | |
+|---|---|
+| Code | `08f98fa9` (detector), cells ordered from `820a41e2`; rank check fixed in `a1391d1a` |
+| Machine | M1 Pro, CPU, campaign cell by order on the host |
+| Campaigns | `telemetry-mission1-local` (`channel_local@reference=unit`, the report's `hour-6h`), `telemetry-mission2-local` (`channel_local@departure=bins,reference=unit`, the report's `bins-6h`), one seed, the cells' farthest feature as control |
+| Against | the report's refit answers for the same arm: `refit-local-max-hour-6h` (first mission), `refit-local-max-bins-6h` (second) |
+| Acceptance | within every month Spearman's coefficient at least 0.9999 and the report's top 1 % held whole |
+| Commands | `data/report/l44/run.sh m2`, `m1`; `data/report/l44/check.sh m2`, `m1` (`telemetry_channel_local_report.py check --by-unit`) |
+
+### Results
+
+| | Second mission | First mission |
+|---|---|---|
+| Detector's cell, seconds once the block is at hand | 58 s | 249 s |
+| Both cells' run, wall time / peak memory | 114 s / 3.6 GB | 511 s / 11.0 GB |
+| Fitting windows: cell / report | 15,335 / 15,335 | 61,363 / 61,324 |
+| Scored windows in common | 10,223 | 41,088 |
+| Answers identical | all | none; median difference within a month −1.7·10⁻⁷ |
+| Least Spearman over the months | 1.00000 | 0.99998 |
+| Top 1 % held | 1.000 | 1.000 |
+| Area / recall at 1 %, report's read windows: cell | 0.8845 / 0.9956 | 0.1790 / 0.6066 |
+| The same, report | 0.8845 / 0.9956 | 0.1790 / 0.6066 |
+
+The report dropped from its fit the 39 first-mission windows that overlap a downlink gap, which
+it learned from the ground truth; the cell fits on every fitting window, as every campaign
+detector does. The floor of the channels' spreads moves with them, so the first mission's
+answers shift by the alarm's level and, where the floor binds, by more: up to 0.17 in one month
+(2007-04). The second mission has no such window and matches bit for bit.
+
+The first check of the first mission read 0.99941 in 2013-03. The check ranked each scoring by
+the order its sort left, and 477 of that month's 744 windows tie, since most hours depart by
+nothing; the same answers read 1.00000 under a stable sort and 0.999999 under mean ranks,
+Spearman's coefficient as declared. The check now gives tied windows their mean rank
+(`a1391d1a`), as does the count of windows moved more than ten ranks (`32b4b11b`: 1,439 under
+the sort's order, 28 under mean ranks, at a median difference of 1.6·10⁻⁴). The threshold is
+unchanged.
+
+### Conclusions
+
+- The package's detector is the report's, within the declared acceptance on both missions.
+- On the second mission it is the same to the bit; on the first the only difference is the
+  fitting side the cell is handed, and it moves no area or recall at four decimals.
+- The detector's cell takes about four minutes on the host for the first mission and one for
+  the second; the cells' bar beside it reads 0.1544 on the first, as the readout screen did.
+- The detector is now a bar a backbone is held to on the telemetry tasks, read by area and by
+  the events found at 1 % false alarms.
+
+### Limitations
+
+- One seed: neither detector draws anything, so seeds would repeat the same answers.
+- The run's peak memory on the first mission (11 GB) holds both cells' inputs; a longer history
+  over the spans would grow the detector's share.
+- Tasks whose units each keep their own time axis are refused, not read.

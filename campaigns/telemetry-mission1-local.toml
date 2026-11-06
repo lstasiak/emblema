@@ -1,0 +1,36 @@
+# The first mission's channel-local bar as the package fits it: each channel's departure from its
+# own previous five hours, the window scored by its largest channel, against the cells' farthest
+# single feature, the bar it was first read against; both against each month. One seed, since
+# neither detector draws anything; the cell checks the package against the report that first
+# read it, rank by rank within each month. No comparison is secondary; the family is the
+# least the rules take.
+#
+# Run once; committed before the campaign runs.
+name = "telemetry-mission1-local"
+purpose = "tuning"
+tier = "M"
+measure = "pr_auc_shortfall"
+
+[candidates]
+competing = [
+    "cells_knn@distance=farthest,reference=unit",
+    "channel_local@reference=unit",
+]
+control = "cells_knn@distance=farthest,reference=unit"
+endpoint = "channel_local@reference=unit"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1]
+
+[rules]
+minimum_absolute_reduction = 0.05
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 1
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

@@ -31,6 +31,7 @@ from scripts.telemetry_channel_local_report import (
     Arm,
     Departures,
     after_event_share,
+    agreement_of,
     arm_cells,
     arms_of,
     bin_values,
@@ -580,3 +581,16 @@ def test_main_routes_the_commands(tmp_path: Path, capsys: pytest.CaptureFixture[
         main(["check", "--dir", str(tmp_path), "--cell", cell, "--against", str(shifted)])
     main(["check", "--dir", str(tmp_path), "--cell", cell, "--against", str(shifted), "--by-unit"])
     assert "least over 4 units: Spearman 1.00000, top 1% held 1.000" in capsys.readouterr().out
+
+
+def test_tied_windows_share_their_mean_rank_as_spearmans_coefficient_defines_it() -> None:
+    # A scoring that ties three windows against one that orders them: no whole agreement,
+    # whatever order a sort leaves the tie in; Spearman's coefficient with mean ranks.
+    tied, ordered = np.array([0.0, 0.0, 0.0, 1.0]), np.array([0.0, 1.0, 2.0, 3.0])
+
+    spearman, _ = agreement_of(tied, ordered)
+
+    assert spearman == pytest.approx(np.corrcoef([2.0, 2.0, 2.0, 4.0], [1.0, 2.0, 3.0, 4.0])[0, 1])
+    # Two scorings with the same order and ties agree whole, at any level.
+    level = np.concatenate((np.full(400, -2.0), np.linspace(0.0, 5.0, 344)))
+    assert agreement_of(level, level - 0.37) == (1.0, 1.0)

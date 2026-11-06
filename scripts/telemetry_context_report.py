@@ -59,6 +59,7 @@ from typing import Any, ClassVar
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.stats import rankdata
 
 # Run from anywhere: the sibling script modules live in this directory's package at the root.
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1077,7 +1078,9 @@ def check_cell(directory: Path, cell: str, against: Path) -> str:
     theirs = np.array([other[k].predicted for k in keys])
     targets_agree = all(own[k].target == other[k].target for k in keys)
     gap = np.abs(mine - theirs)
-    rank_gap = np.abs(np.argsort(np.argsort(-mine)) - np.argsort(np.argsort(-theirs)))
+    # Tied windows share their mean rank: most hours tie, and an order a sort leaves within a
+    # tie would read as windows moving.
+    rank_gap = np.abs(rankdata(-mine) - rankdata(-theirs))
     targets = "agree" if targets_agree else "DIFFER"
     return (
         f"{cell} against {against.name}: {len(keys)} windows, targets {targets}, "

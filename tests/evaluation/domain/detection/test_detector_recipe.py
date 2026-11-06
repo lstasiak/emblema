@@ -3,6 +3,7 @@ from typing import Any
 
 import pytest
 
+from emblema.evaluation.domain.detection.channel_history import ChannelHistory
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
@@ -273,3 +274,50 @@ def test_a_detector_scored_by_an_error_learns_from_no_event() -> None:
             pretext=PretextAsking(backbone=WEIGHTS),
             events=3,
         )
+
+
+def history_recipe(**overrides: Any) -> DetectorRecipe:
+    return replace(
+        DetectorRecipe(
+            features=DetectorFeatures.CHANNEL_DEPARTURES,
+            reading=None,
+            neighbours=None,
+            contamination=0.02,
+            seed=1,
+            history=ChannelHistory(),
+        ),
+        **overrides,
+    )
+
+
+def test_a_detector_over_its_channels_history_reads_it_and_scores_by_no_distance() -> None:
+    made = history_recipe()
+
+    assert made.read_history() == ChannelHistory()
+    assert DetectorFeatures.CHANNEL_DEPARTURES.reads_channel_history
+    assert not DetectorFeatures.CHANNEL_DEPARTURES.reads_an_encoder
+    assert not DetectorFeatures.CHANNEL_DEPARTURES.lays_out_cells
+    assert not DetectorFeatures.CHANNEL_DEPARTURES.asks_the_pretext
+    assert not made.scores_by_nearest_neighbours
+    with pytest.raises(InvalidDetectorRecipeError, match="departs from its history"):
+        made.nearest()
+
+
+def test_a_history_named_or_missing_against_the_features_is_refused() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="names no history"):
+        history_recipe(history=None)
+    with pytest.raises(InvalidDetectorRecipeError, match="names a history it does not read"):
+        recipe(history=ChannelHistory())
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no channel's history"):
+        recipe().read_history()
+
+
+def test_a_detector_over_its_channels_history_reads_no_neighbours_distance_or_event() -> None:
+    with pytest.raises(InvalidDetectorRecipeError, match="reads no neighbours"):
+        history_recipe(neighbours=5)
+    with pytest.raises(InvalidDetectorRecipeError, match="no distance to choose"):
+        history_recipe(distance=ScoreDistance.WHITENED)
+    with pytest.raises(InvalidDetectorRecipeError, match="learns from no event"):
+        history_recipe(events=5)
+    with pytest.raises(InvalidDetectorRecipeError, match="no errors to read"):
+        history_recipe(normalisation=ErrorNormalisation.PER_CHANNEL)

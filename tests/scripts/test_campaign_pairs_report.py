@@ -27,6 +27,7 @@ from scripts.campaign_pairs_report import (
     INTERACTION_COLUMNS,
     INTERACTIONS,
     PREDICTIONS,
+    RECALL_COMPARISONS,
     SCORES,
     Answers,
     Comparison,
@@ -780,3 +781,93 @@ def test_a_comparison_of_one_seed_states_no_spread_over_seeds() -> None:
 
     assert one_seed.seed_se == 0.0
     assert "± 0.000" in render([one_seed])
+
+
+def test_a_pair_read_by_event_weighted_area_is_read_again_by_the_events_found() -> None:
+    """The contender ranks every event first and finds them all with no false alarm; the
+    control, under the same draws, finds as many as its order lets the alarm reach."""
+    events = ErrorMeasure.PR_AUC_SHORTFALL
+    readings = [by_area(BY_AREA, CONTROL_ANSWERS, measure=events)]
+    answers = Answers(export_predictions(readings))
+    control, contender = side(BY_AREA, CONTROL), side(BY_AREA, CONTENDER)
+
+    read = pair(
+        export(readings),
+        control,
+        contender,
+        bootstrap=BOOTSTRAP,
+        floor_share=0.02,
+        floor_area=0.01,
+        answers=answers,
+        recall_at=0.0,
+    )
+
+    assert (read.pairing, read.reading) == ("recall-pooled", "event_recall_at_0")
+    assert read.candidate_error.pooled == pytest.approx(
+        1.0 - answers.anomaly_ranking(contender, 1).event_recall_at_false_alarm_share(0.0)
+    )
+    assert read.control_error.pooled == pytest.approx(
+        1.0 - answers.anomaly_ranking(control, 1).event_recall_at_false_alarm_share(0.0)
+    )
+    assert read.difference.reduction == pytest.approx(
+        read.control_error.pooled - read.candidate_error.pooled
+    )
+    assert read.per_seed == pytest.approx((read.difference.reduction,) * 3)
+    # No least gain is registered for the events found: the floor is the control's spread.
+    assert read.floor.value == read.control_error.spread
+
+
+def test_the_events_found_are_refused_of_a_pair_not_read_by_event_weighted_area() -> None:
+    readings = [by_area(BY_AREA, PERFECT_ANSWERS)]
+
+    with pytest.raises(ValueError, match="event-weighted area, not by auroc_shortfall"):
+        pair(
+            export(readings),
+            side(BY_AREA, CONTROL),
+            side(BY_AREA, CONTENDER),
+            bootstrap=BOOTSTRAP,
+            floor_share=0.02,
+            floor_area=0.01,
+            answers=Answers(export_predictions(readings)),
+            recall_at=0.01,
+        )
+
+
+def test_main_reads_the_events_found_beside_the_area_when_asked(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    registry = InMemoryEvaluationCampaignRepository()
+    store(registry, by_area(BY_AREA, CONTROL_ANSWERS, measure=ErrorMeasure.PR_AUC_SHORTFALL))
+    main(
+        [
+            "--out",
+            str(tmp_path),
+            "--campaign",
+            str(BY_AREA),
+            "--pair",
+            *side(BY_AREA, CONTROL),
+            *side(BY_AREA, CONTENDER),
+            "--resamples",
+            "200",
+            "--recall-at",
+            "0.01",
+        ],
+        registry=registry,
+    )
+
+    printed = capsys.readouterr().out
+    assert "| control | 1 - PR-AUC |" in printed
+    assert "| control | 1 - recall @1% |" in printed
+    header, row = (tmp_path / RECALL_COMPARISONS).read_text().splitlines()[:2]
+    written = dict(zip(header.split(","), row.split(","), strict=True))
+    assert written["measure"] == "event_recall_at_0.01"
+    assert written["pairing"] == "recall-pooled"
+    assert (tmp_path / COMPARISONS).read_text().splitlines()[1].split(",")[5] == "area-pooled"
+
+
+def test_a_share_of_false_alarms_outside_zero_to_one_is_refused_before_anything_is_read(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(SystemExit):
+        main(["--out", str(tmp_path), "--campaign", str(BY_AREA), "--recall-at", "5"])
+    assert not list(tmp_path.iterdir())

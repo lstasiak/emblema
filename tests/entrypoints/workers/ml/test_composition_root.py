@@ -263,3 +263,5 @@ def test_left_to_build_its_own_candidates_the_process_serves_the_backbone_it_was
         None,
     )
     assert (summaries.kind, summaries.starts_from) == (CandidateKind.DETECTOR, None)
+    local = root.adapters.candidates.describe(KnownDetectors.CHANNEL_LOCAL)
+    assert (local.kind, local.starts_from, local.budget) == (CandidateKind.DETECTOR, None, None)

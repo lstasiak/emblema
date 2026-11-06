@@ -172,3 +172,16 @@ def test_picks_count_a_unit_as_often_as_it_is_picked_and_none_at_all_when_absent
     counts = UnitCounts.of_picks([[0, 0, 2], []], units=3)
 
     assert counts.rows.tolist() == [[2.0, 0.0, 1.0], [0.0, 0.0, 0.0]]
+
+
+def test_events_found_are_refused_a_draw_without_an_outcome_or_misnamed_hits() -> None:
+    windows: list[Window] = [(0, True, 1.0, True), (1, False, 1.0, True)]
+    swept = sweep(windows, 2, TABLE)
+
+    with pytest.raises(InvalidAnomalyRankingError, match="2 events were named for 1 hits"):
+        swept.event_recalls(UnitCounts.of_weights([1, 1]), share=0.0, hit_events=[1, 2])
+    with pytest.raises(InvalidAnomalyRankingError, match="no event or no normal window"):
+        swept.event_recalls(UnitCounts.of_weights([1, 0]), share=0.0, hit_events=[1])
+    with pytest.raises(InvalidAnomalyRankingError, match="no event or no normal window"):
+        swept.event_recalls(UnitCounts.of_weights([0, 1]), share=0.0, hit_events=[1])
+    assert swept.event_recalls(UnitCounts.of_weights([1, 1]), share=0.0, hit_events=[1]) == [1.0]

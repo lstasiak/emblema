@@ -6,6 +6,7 @@ from emblema.evaluation.adapters.detection.feature_routed_detection_runtime impo
     FeatureRoutedDetectionRuntime,
 )
 from emblema.evaluation.adapters.in_memory.detection_runtime import InMemoryDetectionRuntime
+from emblema.evaluation.domain.detection.channel_history import ChannelHistory
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
@@ -45,18 +46,35 @@ RECIPES = {
         seed=1,
         pretext=PretextAsking(backbone=WEIGHTS),
     ),
+    "local": DetectorRecipe(
+        features=DetectorFeatures.CHANNEL_DEPARTURES,
+        reading=None,
+        neighbours=None,
+        contamination=0.02,
+        seed=1,
+        history=ChannelHistory(),
+    ),
 }
 
 
 # The cells go where the states go: the runtime that lays windows out on the backbone's spans.
-ROUTES = {"cells": "states", "states": "states", "summaries": "summaries", "pretext": "pretext"}
+ROUTES = {
+    "cells": "states",
+    "states": "states",
+    "summaries": "summaries",
+    "pretext": "pretext",
+    "local": "local",
+}
 
 
 @pytest.mark.parametrize("route", list(RECIPES))
 def test_a_recipe_goes_to_the_runtime_its_features_need(route: str) -> None:
     runtimes = {name: InMemoryDetectionRuntime() for name in ROUTES.values()}
     routed = FeatureRoutedDetectionRuntime(
-        states=runtimes["states"], summaries=runtimes["summaries"], pretext=runtimes["pretext"]
+        states=runtimes["states"],
+        summaries=runtimes["summaries"],
+        pretext=runtimes["pretext"],
+        local=runtimes["local"],
     )
 
     routed.fit(RECIPES[route], task(), FITTING, SCORED, retain=False)
@@ -73,6 +91,15 @@ def test_a_process_that_asks_no_pretext_refuses_a_detector_that_would() -> None:
 
     with pytest.raises(UnsupportedDetectorFeaturesError, match="asks no backbone's pretext"):
         routed.fit(RECIPES["pretext"], task(), FITTING, SCORED, retain=False)
+
+
+def test_a_process_that_reads_no_channels_history_refuses_a_detector_that_would() -> None:
+    routed = FeatureRoutedDetectionRuntime(
+        states=InMemoryDetectionRuntime(), summaries=InMemoryDetectionRuntime()
+    )
+
+    with pytest.raises(UnsupportedDetectorFeaturesError, match="reads no channel's history"):
+        routed.fit(RECIPES["local"], task(), FITTING, SCORED, retain=False)
 
 
 def test_the_taught_windows_travel_to_the_runtime_the_recipe_is_routed_to() -> None:

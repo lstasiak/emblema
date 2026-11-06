@@ -154,6 +154,10 @@ class UnsupportedDetectorFeaturesError(EvaluationError):
     """A runtime was handed a detector reading features it cannot produce."""
 
 
+class OverlappingWindowsError(EvaluationError, ValueError):
+    """The windows of two units a detector reads one history over interleave in time."""
+
+
 class InvalidTaughtEventsError(EvaluationError, ValueError):
     """The events a detector is taught are too few, off the fitting side, or not the count asked."""
 

@@ -82,10 +82,16 @@ class DetectorCatalogue:
         asks under, which cells it hides where not the backbone's own draw and how it reads the
         errors where not raw; one by a distance other than the nearest neighbours' names the
         distance and no neighbours; one taught events names how many and, where not the
-        direction, the head, and no distance or neighbours.
+        direction, the head, and no distance or neighbours; one over its channels' history names
+        the span, what departs and how the channels make the score, and no distance or
+        neighbours.
         """
         stated: dict[str, object] = {"features": arm.features}
-        if arm.features.asks_the_pretext and arm.backbone is not None:
+        if arm.features.reads_channel_history:
+            stated["span"] = arm.history.span
+            stated["departure"] = arm.history.departure
+            stated["channels"] = arm.history.channels
+        elif arm.features.asks_the_pretext and arm.backbone is not None:
             stated["draws"] = arm.draws
             stated["masks"] = arm.backbone.key
             if arm.hidden is not HiddenCellsChoice.OWN:

@@ -107,11 +107,10 @@ Preliminary, on validation data; each task's test data is used once, at the end.
   at 4,000 patients).
 - On satellite telemetry the features find no events without labels. With every label the best
   readout is a linear direction over the frozen features, 0.26 in event-weighted PR-AUC against
-  0.15 for trees, with or without pretraining; windows of 6 to 72 hours instead of one read
-  lower, not higher. Each channel's departure from its own recent hours, with no model and no
-  label, reads level with the best classical bar on the first mission and 0.885 against 0.627
-  on the second, finding as many events as the taught direction on both; taught by trees, those
-  departures find 50 to 54 of 61 events at 1 % false alarms on the first mission.
+  0.15 for trees, with or without pretraining; longer windows read lower. Each channel's
+  departure from its own recent hours, with no model and no label, reads level with the best
+  classical bar on the first mission and 0.885 against 0.627 on the second, finding as many
+  events as the taught direction; it is now part of the package, a bar the backbone has to beat.
 
 **Next:** the shape of a pretext for telemetry, now that the missed events are read per
 channel against its own history; confirmation at few labels on fresh pretrainings.

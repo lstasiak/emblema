@@ -1,7 +1,7 @@
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Self
+from typing import ClassVar, Self
 
 from emblema.evaluation.domain.exceptions import InvalidAnomalyRankingError
 from emblema.evaluation.domain.identifiers import UnitKey
@@ -39,6 +39,8 @@ class AnomalyRanking:
     hold an event and a normal window, since an area needs both.
 
     Attributes:
+        PRODUCT_FALSE_ALARM_SHARE: The share of normal windows the product reads the events
+            found at: one in a hundred flagged.
         units: Every unit the windows belong to, in unit order.
         sequence: Index into ``units`` of each window, windows in descending order of score.
         events: The event each window of ``sequence`` overlaps, zero for none.
@@ -50,6 +52,8 @@ class AnomalyRanking:
         outcomes: Each window's event in window order (unit, then position), so two rankings
             can be checked to answer the same question.
     """
+
+    PRODUCT_FALSE_ALARM_SHARE: ClassVar[float] = 0.01
 
     units: tuple[UnitKey, ...]
     sequence: tuple[int, ...]
@@ -142,6 +146,22 @@ class AnomalyRanking:
             InvalidAnomalyRankingError: If a draw leaves no event or no normal window.
         """
         return self._sweep.average_precisions(counts)
+
+    def event_recalls(self, counts: UnitCounts, share: float) -> list[float]:
+        """The share of events found at ``share`` of false alarms under each draw of the units.
+
+        Under the draw that counts every unit once, the same share as
+        ``event_recall_at_false_alarm_share``.
+
+        Raises:
+            InvalidAnomalyRankingError: If ``share`` is not in ``[0, 1]``, or a draw leaves no
+                event or no normal window.
+        """
+        if not 0.0 <= share <= 1.0:
+            raise InvalidAnomalyRankingError(f"a share of false alarms lies in [0, 1], got {share}")
+        return self._sweep.event_recalls(
+            counts, share=share, hit_events=[event for event in self.events if event]
+        )
 
     @cached_property
     def _sweep(self) -> TiedSweep:

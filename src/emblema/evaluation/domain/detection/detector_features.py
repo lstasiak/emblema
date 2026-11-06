@@ -22,6 +22,8 @@ class DetectorFeatures(StrEnum):
             learnt nothing from the backbone, held to what the backbone sees.
         INTERPOLATION_ERROR: The error of the values each channel's visible bins interpolate
             under the same masks, beside the ridge.
+        CHANNEL_DEPARTURES: How far each channel of the window lies from the same channel's own
+            recent windows, with no model: the bar of a change local to a few channels.
     """
 
     ENCODER_STATES = "encoder_states"
@@ -31,6 +33,7 @@ class DetectorFeatures(StrEnum):
     PRETEXT_ERROR = "pretext_error"
     LINEAR_ANSWER_ERROR = "linear_answer_error"
     INTERPOLATION_ERROR = "interpolation_error"
+    CHANNEL_DEPARTURES = "channel_departures"
 
     @property
     def reads_an_encoder(self) -> bool:
@@ -50,3 +53,8 @@ class DetectorFeatures(StrEnum):
             DetectorFeatures.LINEAR_ANSWER_ERROR,
             DetectorFeatures.INTERPOLATION_ERROR,
         )
+
+    @property
+    def reads_channel_history(self) -> bool:
+        """Whether a window is read against its channels' own earlier windows."""
+        return self is DetectorFeatures.CHANNEL_DEPARTURES

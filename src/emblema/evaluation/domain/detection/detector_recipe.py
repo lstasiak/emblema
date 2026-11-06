@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from math import isfinite
 
+from emblema.evaluation.domain.detection.channel_history import ChannelHistory
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
 from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
@@ -19,15 +20,18 @@ class DetectorRecipe:
     that reads features scores a window by a distance from the fitted windows, every feature
     standardised over the fitting side: the mean distance to the nearest of them, or the whitened
     distance from their mean; one that asks the pretext scores it by the error of what is filled in
-    where a backbone's masks hide its cells. A detector over features may instead be taught a
-    counted number of the fitting side's events, and then scores by a head the events set, replacing
-    the distance. Its alarm is set where a stated share of the fitting windows, each scored as the
-    rest are, would be flagged, so the score a run answers is the score above that alarm: positive
-    is an alarm, and the alarm is set without a label. The score may first be read against the
-    window's own unit, the alarm then set over the fitting windows read so.
+    where a backbone's masks hide its cells; one over its channels' history scores it by how far
+    its channels lie from their own earlier windows. A detector over features may instead be taught
+    a counted number of the fitting side's events, and then scores by a head the events set,
+    replacing the distance. Its alarm is set where a stated share of the fitting windows, each
+    scored as the rest are, would be flagged, so the score a run answers is the score above that
+    alarm: positive is an alarm, and the alarm is set without a label. The score may first be
+    read against the window's own unit, the alarm then set over the fitting windows read so.
 
     Invariants: an encoder is read exactly when the features are an encoder's states; a
-    backbone's masks are named exactly when the pretext is asked; neighbours are named, at least
+    backbone's masks are named exactly when the pretext is asked; a history is named exactly
+    when the channels' departures are read, and such a detector has no distance to choose and
+    learns from no event; neighbours are named, at least
     one, exactly when the distance to the nearest fitted windows is the score; a detector scored
     by an error has no distance to choose, and only such a detector reads its errors per
     channel; a detector taught events reads features, names no distance but the default and no
@@ -50,6 +54,8 @@ class DetectorRecipe:
         events: How many of the fitting side's events the detector is taught; nought for one
             that learns from none.
         head: How a taught detector scores a window by its events.
+        history: How far back each channel is read and how its departures make the score, for
+            a detector over its channels' history; ``None`` otherwise.
     """
 
     features: DetectorFeatures
@@ -63,8 +69,30 @@ class DetectorRecipe:
     pretext: PretextAsking | None = None
     events: int = 0
     head: TaughtHead = TaughtHead.DIRECTION
+    history: ChannelHistory | None = None
 
     def __post_init__(self) -> None:
+        if (self.history is None) == self.features.reads_channel_history:
+            raise InvalidDetectorRecipeError(
+                f"a detector over {self.features} "
+                + (
+                    "names no history"
+                    if self.history is None
+                    else "names a history it does not read"
+                )
+            )
+        if self.features.reads_channel_history and self.events:
+            raise InvalidDetectorRecipeError(
+                f"a detector over {self.features} departs from its history; it learns from no event"
+            )
+        if (
+            self.features.reads_channel_history
+            and self.distance is not ScoreDistance.NEAREST_NEIGHBOURS
+        ):
+            raise InvalidDetectorRecipeError(
+                f"a detector over {self.features} departs from its history; "
+                "it has no distance to choose"
+            )
         if self.events < 0:
             raise InvalidDetectorRecipeError(
                 f"a detector is taught a count of events, not {self.events}"
@@ -123,6 +151,7 @@ class DetectorRecipe:
         """Whether the score is the mean distance to the nearest fitted windows."""
         return (
             not self.features.asks_the_pretext
+            and not self.features.reads_channel_history
             and not self.events
             and self.distance is ScoreDistance.NEAREST_NEIGHBOURS
         )
@@ -142,6 +171,8 @@ class DetectorRecipe:
         if self.neighbours is None:
             if self.features.asks_the_pretext:
                 reason = f"a detector over {self.features} scores by an error, not a distance"
+            elif self.features.reads_channel_history:
+                reason = f"a detector over {self.features} departs from its history, not a distance"
             elif self.events:
                 reason = f"a detector taught {self.events} events reads no neighbours"
             else:
@@ -160,3 +191,15 @@ class DetectorRecipe:
                 f"a detector over {self.features} reads features, not the pretext"
             )
         return self.pretext
+
+    def read_history(self) -> ChannelHistory:
+        """How far back each channel is read and how its departures make the score.
+
+        Raises:
+            InvalidDetectorRecipeError: If the detector does not read its channels' history.
+        """
+        if self.history is None:
+            raise InvalidDetectorRecipeError(
+                f"a detector over {self.features} reads no channel's history"
+            )
+        return self.history

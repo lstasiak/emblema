@@ -20,6 +20,9 @@ from emblema.evaluation.adapters.candidates.patch_candidate_provider import (
 from emblema.evaluation.adapters.candidates.routed_candidate_provider import (
     RoutedCandidateProvider,
 )
+from emblema.evaluation.adapters.detection.channel_local_detection_runtime import (
+    ChannelLocalDetectionRuntime,
+)
 from emblema.evaluation.adapters.detection.feature_routed_detection_runtime import (
     FeatureRoutedDetectionRuntime,
 )
@@ -250,6 +253,7 @@ class CompositionRoot:
                     pretext=PretextErrorDetectionRuntime(
                         restored, process.blocks, device=on, store=process.store
                     ),
+                    local=ChannelLocalDetectionRuntime(process.blocks, store=process.store),
                 ),
             ),
         )
