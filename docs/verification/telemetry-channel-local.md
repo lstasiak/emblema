@@ -113,3 +113,111 @@ each one's range is not its target. The spread is read over the previous hours a
 them, gaps included, and the floor is one share for every channel. Three seeds where a side
 draws; the local arms draw nothing, so their intervals come from the months alone. The
 validation months have been read before; the test months stay frozen.
+
+## 2026-11-06 — measured: the largest departure reads the bar with no label and finds the events the taught direction finds; taught linearly the departures add nothing to the state, taught by trees they find 50 of 61 events at 1 %
+
+**Questions.** As declared: (1) whether the hour's state beside the channels' departures,
+taught every event, reads above the state alone under Fisher's direction; (2) whether the
+largest departure over the channels, with no label, reads above the cells' farthest feature.
+
+**Conditions.** As declared, at commits `b0c9f84f` (code), `7afeadae` (declaration) and
+`161d068c` (the order-statistic arms added beside before the reading); `run.sh` on the M1 Pro's
+CPU. The first run took 40 minutes, 37 of them the context statistics of the six arms (25 s at
+`hour-6h` to 1,361 s at `bins-72h`); its reading was deleted unread and the second run, the
+statistics kept, took 5 minutes: every cell under a second to 6 s, the farthest feature 9 s.
+The check held under every seed: the states' direction refitted here ranks the context
+report's windows with Spearman 0.99998, 0.99998 and 0.99995 and holds the top 1 % whole. Not
+read: 1,704 of 41,088 validation windows, under every arm alike; 61 events read.
+
+**The choice, on the months 2004 to 2006, 70 events taught; mean area over the seeds.**
+
+| Family | Detector | hour-6h | bins-6h | hour-24h | bins-24h | hour-72h | bins-72h | Chosen |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| local | max | **0.170** | 0.161 | 0.163 | 0.171 | 0.177 | 0.179 | hour-6h |
+| local | mean | **0.169** | 0.096 | 0.144 | 0.058 | 0.146 | 0.066 | hour-6h |
+| taught | combined | 0.010 | **0.054** | 0.002 | 0.001 | 0.001 | 0.001 | bins-6h |
+| taught | direction | 0.001 | **0.031** | 0.001 | 0.002 | 0.001 | 0.001 | bins-6h |
+| taught | ordered | **0.203** | 0.198 | 0.207 | 0.197 | 0.206 | 0.198 | hour-6h |
+| taught | top | 0.090 | 0.007 | 0.041 | **0.145** | 0.029 | 0.095 | bins-24h |
+| taught | trees | 0.043 | **0.055** | 0.021 | 0.034 | 0.014 | 0.030 | bins-6h |
+
+The largest departure reads alike under every span and both feature sets, within 0.02; the
+shortest is chosen. On these months the states' direction reads 0.206 and the farthest
+feature 0.175.
+
+**The reading, on the validation months, 99 events taught; the chosen arm less its control,
+10,000 resamples over months; T = 2·SE over the seeds where a side draws.**
+
+| Family | Detector | Arm | Area per seed | Area | Recall @1 % | Control | Difference [interval] | p | T | Outcome | Holm |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| taught | combined | bins-6h, declared | 0.193 0.204 0.194 | 0.197 | 0.596 | 0.276 | **−0.079** [−0.138; −0.036] | 0.000 | 0.017 | below | passes |
+| local | max | hour-6h, declared | 0.179 | 0.179 | 0.607 | 0.160 | **+0.019** [−0.093; +0.086] | 0.728 | 0 | around | does not pass |
+| taught | ordered | hour-6h | 0.283 0.284 0.256 | 0.274 | 0.590 | 0.276 | −0.001 [−0.011; +0.003] | 0.500 | 0.004 | around | |
+| taught | ordered | bins-24h, beside | 0.282 0.283 0.245 | 0.270 | 0.596 | 0.276 | −0.006 [−0.022; +0.006] | 0.308 | 0.009 | beside | |
+| taught | direction | bins-6h | 0.189 | 0.189 | 0.607 | 0.276 | −0.087 [−0.150; −0.041] | 0.000 | 0.018 | below | |
+| taught | top | bins-24h | 0.176 | 0.176 | 0.492 | 0.276 | −0.099 [−0.172; −0.045] | 0.000 | 0.018 | below | |
+| taught | trees | bins-6h | 0.170 0.161 0.178 | 0.170 | **0.836** | 0.276 | −0.106 [−0.171; −0.005] | 0.040 | 0.026 | below | |
+| taught | trees | bins-24h, beside | 0.209 0.189 0.163 | 0.187 | **0.880** | 0.276 | −0.089 [−0.153; −0.000] | 0.050 | 0.011 | beside | |
+| local | mean | hour-6h | 0.188 | 0.188 | 0.672 | 0.160 | +0.027 [−0.079; +0.095] | 0.551 | 0 | around | |
+
+The controls: the states' direction 0.287, 0.282, 0.259 (recall 0.596 at 1 %), the whitened
+distance 0.097, 0.095, 0.096 (0.180), the farthest feature 0.160 (0.426), under the floored
+standardisation. The 12 rows not shown read −0.27 to +0.03.
+
+**Events found at 1 % of normal windows, of the 61 read; the local ones among them; the 11
+no arm found before; the share of the top false alarms within 6 hours after an event.**
+
+| Cell | Found | Local | Of the 11 | After 6 h |
+| --- | --- | --- | --- | --- |
+| states' direction, seeds 1 to 3 | 39, 30, 40 | 15, 9, 17 | 0, 0, 3 | 0.01 to 0.02 |
+| states' whitened distance | 11 | 8 | 0 | 0.00 |
+| cells' farthest feature | 26 | 8 | 0 | 0.02 |
+| local max, hour-6h | 37 | 12 | 3 (110, 132, 166) | 0.00 |
+| local mean, hour-6h | 41 | 17 | 3 (132, 166, 184) | 0.01 |
+| taught ordered, hour-6h, seeds 1 to 3 | 40, 29, 39 | 16, 8, 16 | 0, 0, 2 | 0.01 to 0.02 |
+| taught trees, hour-6h, seeds 1 to 3 | 50, 52, 51 | 25, 25, 24 | 7, 7, 6 | 0.03 |
+| taught trees, bins-6h, seeds 1 to 3 | 51, 50, 52 | 25, 24, 26 | 8, 7, 7 | 0.05 to 0.06 |
+| taught trees, bins-24h, seeds 1 to 3 | 54, 53, 54 | 27, 26, 27 | 7, 7, 7 | 0.14 to 0.16 |
+
+The trees over the departures find the events 50, 110, 132, 156, 157, 166 and 184 under every
+seed and arm, and 136 under some; the trees over the cells found 27 to 31 events and none of
+the 11 ([telemetry-context.md](telemetry-context.md)).
+
+**Conclusions.**
+
+- **(1) Below, under Holm: taught linearly, the departures beside the state read below the
+  state**, −0.079 [−0.138; −0.036], and the direction over the 59 departures alone reads
+  0.19 against 0.28. Read as order statistics beside the state (`ordered`) they read the
+  state's number, −0.001 [−0.011; +0.003]: a linear readout taught the events takes nothing
+  from channel-local context that the hour's state does not already hold.
+- **(2) Around: with no label, the largest departure over the channels reads 0.179 against
+  the bar's 0.160**, +0.019 [−0.093; +0.086], and 0.096 for the whitened distance over the
+  states. It finds 37 of the 61 events at 1 % of normal windows, as many as the taught
+  direction (30 to 40), three of the 11 unfound before among them, and its top false alarms do
+  not trail the events. As a zero-label detector it is level with the best bar and twice the
+  backbone's reading; it does not pass the least gain over the bar.
+- **Beside, and not declared: taught by trees, the departures find 50 to 54 of the 61 events
+  at 1 % of normal windows**, against 30 to 40 for the taught direction over the states and
+  27 to 31 for the trees over the cells, seven of the 11 unfound before among them under every
+  seed. Their area stays at 0.17 to 0.19, since an event's later windows rank low once its
+  context holds the event and the top false alarms follow events (0.14 at 24 hours of
+  context); by the registered area they read below the direction. The information the
+  one-hour readouts lack is in the channels' departures from their own recent hours, and it
+  is read by which channels depart, not by how much on average.
+- **The predictions.** (1) [−0.03; +0.08] missed below; (2) [−0.05; +0.15] held, near its
+  centre. `hour` was chosen over `bins` and 6 hours over 24 under the largest departure, the
+  second against the prediction: the spans read within 0.02 of one another.
+- **What follows for the pretext.** The declared row for (1) says the leg's aims are talked
+  through before any GPU, and the trees say what to talk about: a representation per channel
+  against its own history carries the missed events, and a readout that asks which channels
+  depart reads it. A pretext that produces one state of the window averaged over the channels
+  aims at the wrong thing; one that produces a state per channel against the channel's own
+  recent hours, read by the largest few, aims at what the trees found.
+
+**Limitations.** The departure reads each channel alone against a median of five to 71
+hours; the 11 channels the mission never fills depart nought. The floor is the hour summary's
+spread for both feature sets. The trees are read beside, not declared, and their recall at 1 %
+is not the registered area; an event found by its onset and lost in its tail counts once in
+the recall and little in the area. The order-statistic arms were added after the choice and
+before the reading, on the selection months' evidence, and stand beside. Three seeds where a
+side draws. The validation months have been read before; the test months stay frozen.
