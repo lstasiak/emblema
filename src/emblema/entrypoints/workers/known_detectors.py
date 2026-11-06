@@ -21,12 +21,13 @@ class KnownDetectors:
     worth most under, and pooled by the mean over the window's tokens. Beside them, three scored
     by the error of what is filled in where the backbone's own masks hide a window's cells: by
     the backbone's pretext, by a ridge per channel over the same visible cells, and by each
-    channel's line between its visible bins. The neighbours or the draws, the alarm's share and
-    what a score is read against are knobs of the name, declared with the campaign, as are the
-    few of the fitting side's events a detector over features is taught and the head it then
-    scores by. A register
-    rather than a table read from configuration, for the reason the arms are one: the names are
-    what a stored campaign refers to.
+    channel's line between its visible bins. Last, the bar of a change local to a few channels,
+    with no model: each channel's departure from its own recent windows, the window scored by
+    its largest. The neighbours or the draws, the history's span, the alarm's share and what a
+    score is read against are knobs of the name, declared with the campaign, as are the few of
+    the fitting side's events a detector over features is taught and the head it then scores
+    by. A register rather than a table read from configuration, for the reason the arms are
+    one: the names are what a stored campaign refers to.
     """
 
     READING: ClassVar[EncoderSetting] = EncoderSetting.standard().tuned("layer", "concat")
@@ -39,6 +40,7 @@ class KnownDetectors:
     PRETEXT = CandidateRef("pretext_error")
     LINEAR_ANSWER = CandidateRef("linear_answer_error")
     INTERPOLATION = CandidateRef("interpolation_error")
+    CHANNEL_LOCAL = CandidateRef("channel_local")
 
     @classmethod
     def over(cls, backbone: ArtifactRef) -> tuple[DetectorArm, ...]:
@@ -94,6 +96,12 @@ class KnownDetectors:
                 architecture=None,
                 backbone=backbone,
             ),
+            DetectorArm(
+                ref=cls.CHANNEL_LOCAL,
+                features=DetectorFeatures.CHANNEL_DEPARTURES,
+                architecture=None,
+                backbone=None,
+            ),
         )
 
     @classmethod
@@ -108,6 +116,7 @@ class KnownDetectors:
             cls.PRETEXT,
             cls.LINEAR_ANSWER,
             cls.INTERPOLATION,
+            cls.CHANNEL_LOCAL,
         )
 
     @classmethod

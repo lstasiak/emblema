@@ -6,6 +6,9 @@ than left to whichever process happened to build the register last.
 
 from emblema.entrypoints.workers.known_detectors import KnownDetectors
 from emblema.evaluation.adapters.candidates.detector_arm import DetectorArm
+from emblema.evaluation.domain.detection.channel_history import ChannelHistory
+from emblema.evaluation.domain.detection.channel_reduction import ChannelReduction
+from emblema.evaluation.domain.detection.departure_cells import DepartureCells
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.heads.head_pooling import HeadPooling
@@ -63,6 +66,8 @@ def test_every_detector_stands_up_as_a_recipe() -> None:
         recipe = arm.recipe(seed=1)
         if arm.features.asks_the_pretext:
             assert recipe.asked() == PretextAsking(backbone=WEIGHTS, draws=arm.draws)
+        elif arm.features.reads_channel_history:
+            assert recipe.read_history() == arm.history
         else:
             assert recipe.nearest() == arm.neighbours
 
@@ -94,3 +99,14 @@ def test_the_one_over_the_cells_reads_no_encoder_and_lays_them_out_as_the_states
     assert cells.backbone is None
     assert cells.recipe(seed=1).reading is None
     assert KnownDetectors.CELLS in KnownDetectors.refs()
+
+
+def test_the_channel_local_bar_reads_no_model_over_six_windows_by_its_largest_channel() -> None:
+    local, frozen = over()["channel_local"], over()["frozen_knn"]
+
+    assert local.features is DetectorFeatures.CHANNEL_DEPARTURES
+    assert (local.architecture, local.backbone) == (None, None)
+    assert local.history == ChannelHistory(
+        span=6, departure=DepartureCells.WINDOW, channels=ChannelReduction.MAX
+    )
+    assert (local.contamination, local.reference) == (frozen.contamination, frozen.reference)

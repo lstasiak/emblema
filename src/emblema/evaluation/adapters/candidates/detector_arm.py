@@ -2,6 +2,9 @@ from dataclasses import dataclass, field, replace
 from typing import Self
 
 from emblema.evaluation.contracts.identifiers import CandidateRef
+from emblema.evaluation.domain.detection.channel_history import ChannelHistory
+from emblema.evaluation.domain.detection.channel_reduction import ChannelReduction
+from emblema.evaluation.domain.detection.departure_cells import DepartureCells
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.encoder_reading import EncoderReading
@@ -23,16 +26,18 @@ class DetectorArm:
 
     What separates one of these from another is what a window is read as — an encoder's
     states, pretrained or at their initialisation, the cells the encoder would read, the
-    summaries per channel or their counts of readings, or the error of what is filled in under a
-    backbone's masks — and the knobs of the detector itself: which distance from the fitted
-    windows it scores by and the neighbours that distance is taken to, or which cells are hidden,
-    the draws an error is averaged over and how the errors are read, the share of the fitting
-    side the alarm flags and what a score is read against. A variant of an arm is the arm with
-    one of those turned, or the encoder's layer or pooling turned.
+    summaries per channel or their counts of readings, the error of what is filled in under a
+    backbone's masks, or each channel against its own history — and the knobs of the detector
+    itself: which distance from the fitted windows it scores by and the neighbours that distance
+    is taken to, or which cells are hidden, the draws an error is averaged over and how the
+    errors are read, or how far back a channel's history reaches and how its departures make
+    the score; the share of the fitting side the alarm flags and what a score is read against.
+    A variant of an arm is the arm with one of those turned, or the encoder's layer or pooling
+    turned.
 
     Invariants: an arm over an encoder's states names the model whose shape it reads; an arm
     that asks the pretext names the backbone whose masks it asks under and no shape; one over
-    the summaries names neither.
+    the summaries or its channels' history names neither.
 
     Attributes:
         ref: What the campaign calls this detector.
@@ -53,6 +58,8 @@ class DetectorArm:
         normalisation: How the cells' errors become a window's score.
         events: How many of the fitting side's events a detector over features is taught.
         head: How a taught detector scores a window by its events.
+        history: How far back a detector over its channels' history reads, what departs and how
+            the channels' departures make the score.
     """
 
     KNOBS = (
@@ -65,6 +72,9 @@ class DetectorArm:
         "error",
         "events",
         "head",
+        "span",
+        "departure",
+        "channels",
     )
     DEFAULT_NEIGHBOURS = 5
 
@@ -83,6 +93,7 @@ class DetectorArm:
     normalisation: ErrorNormalisation = ErrorNormalisation.RAW
     events: int = 0
     head: TaughtHead = TaughtHead.DIRECTION
+    history: ChannelHistory = field(default_factory=ChannelHistory)
 
     def __post_init__(self) -> None:
         if (self.architecture is None) == self.features.reads_an_encoder:
@@ -110,7 +121,10 @@ class DetectorArm:
 
         Raises:
             UnknownKnobError: If none has such a knob, or it cannot take that value.
+            InvalidDetectorRecipeError: If the turned arm no longer makes a recipe.
         """
+        if self.features.reads_channel_history and knob not in ("contamination", "reference"):
+            return replace(self, history=self._history_tuned(knob, value))
         if knob == "distance" and not self.features.asks_the_pretext:
             try:
                 distance = ScoreDistance(value)
@@ -235,12 +249,54 @@ class DetectorArm:
             ),
             events=self.events,
             head=self.head,
+            history=self.history if self.features.reads_channel_history else None,
         )
+
+    def _history_tuned(self, knob: str, value: str) -> ChannelHistory:
+        """The history with ``knob`` turned to ``value``.
+
+        Raises:
+            UnknownKnobError: If the history has no such knob, or it cannot take that value.
+            InvalidDetectorRecipeError: If the span leaves no window before the scored one.
+        """
+        history = self.history
+        if knob == "span":
+            return replace(history, span=self._turned(knob, value, history.span))
+        if knob == "departure":
+            departure = self._member(knob, value, DepartureCells, history.departure)
+            return replace(history, departure=departure)
+        if knob == "channels":
+            channels = self._member(knob, value, ChannelReduction, history.channels)
+            return replace(history, channels=channels)
+        raise UnknownKnobError(
+            f"a detector over {self.features} turns "
+            "('span', 'departure', 'channels', 'contamination', 'reference') and nothing else"
+        )
+
+    @staticmethod
+    def _member[E: (DepartureCells, ChannelReduction)](
+        knob: str, value: str, kind: type[E], current: E
+    ) -> E:
+        """The member ``value`` names, refused where it is the one already chosen.
+
+        Raises:
+            UnknownKnobError: If the value names no member, or turns nothing.
+        """
+        try:
+            member = kind(value)
+        except ValueError as error:
+            raise UnknownKnobError(
+                f"{knob} takes one of {[str(m) for m in kind]}, not {value!r}"
+            ) from error
+        if member is current:
+            raise UnknownKnobError(f"{knob} is already {member}; the name turns nothing")
+        return member
 
     @property
     def _scores_by_nearest_neighbours(self) -> bool:
         return (
             not self.features.asks_the_pretext
+            and not self.features.reads_channel_history
             and not self.events
             and self.distance is ScoreDistance.NEAREST_NEIGHBOURS
         )
