@@ -55,7 +55,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import fmean, stdev
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -284,14 +284,19 @@ class PublishedCells:
     never loaded, a frozen test month's among them, is an hour of nothing.
     """
 
+    # A month published a few seconds off the hour, as the second mission's first is (16 s),
+    # still lies on the hourly grid: its windows are read at the nearest whole hour.
+    TOLERANCE_HOURS: ClassVar[float] = 0.01
+
     def __init__(self, cells: Floats, rows: NDArray[np.int64], ends_at: Sequence[float]) -> None:
         """``cells`` is ``[windows, rows, BASE_BINS, features]``, ``ends_at`` one hour per window.
 
         Raises:
-            ValueError: If the windows do not end on whole hours, or two end at one.
+            ValueError: If the windows do not end on whole hours, within the tolerance, or two
+                end at one.
         """
         hours = np.asarray(ends_at, dtype=np.float64)
-        if not np.all(hours == np.rint(hours)):
+        if not np.all(np.abs(hours - np.rint(hours)) <= self.TOLERANCE_HOURS):
             raise ValueError("the published windows end on whole hours")
         self._cells = cells
         self._rows = rows
