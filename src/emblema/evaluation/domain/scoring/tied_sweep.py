@@ -123,6 +123,46 @@ class TiedSweep:
         areas = ordered / (positives * negatives)
         return [float(area) for area in areas]
 
+    def event_recalls(
+        self, counts: UnitCounts, *, share: float, hit_events: Sequence[int]
+    ) -> list[float]:
+        """The share of events found per draw with at most ``share`` of the misses flagged.
+
+        The alarm is lowered one group of equal answers at a time and stops before the group
+        that would flag more than ``share`` of the misses, so a group holding a hit is flagged
+        exactly when the misses up to its end stay within that share. An event is found when a
+        hit of it is flagged in a unit the draw holds, and weighs what its hits weigh there, so
+        an event counts once in the draw that holds its units once. ``hit_events`` names the
+        event of every hit, in sweep order.
+
+        Raises:
+            InvalidAnomalyRankingError: If a draw leaves no event or no normal window, or the
+                hits are named otherwise than they are counted.
+        """
+        if len(hit_events) != len(self.hit_units):
+            raise InvalidAnomalyRankingError(
+                f"{len(hit_events)} events were named for {len(self.hit_units)} hits"
+            )
+        misses = self._misses_in_all(counts)
+        if not misses.all():
+            raise InvalidAnomalyRankingError("the weights leave no event or no normal window")
+        flagged_groups = self._misses_through(counts) <= share * misses[:, None]
+        sizes = np.diff(self.hit_starts, append=len(self.hit_units))
+        held = counts.rows[:, self.hit_units]
+        flagged = np.repeat(flagged_groups, sizes, axis=1) & (held > 0.0)
+        weighed = held * self.hit_worth
+        events, of_hit = np.unique(np.asarray(hit_events, dtype=np.intp), return_inverse=True)
+        found = np.zeros(len(counts.rows))
+        total = np.zeros(len(counts.rows))
+        for event in range(len(events)):
+            mine = of_hit == event
+            weight = weighed[:, mine].sum(axis=1)
+            total += weight
+            found += np.where(flagged[:, mine].any(axis=1), weight, 0.0)
+        if not total.all():
+            raise InvalidAnomalyRankingError("the weights leave no event or no normal window")
+        return [float(recall) for recall in found / total]
+
     def _gained(self, counts: UnitCounts) -> NDArray[np.float64]:
         """What each group holding a hit gains under each draw."""
         gained = counts.rows[:, self.hit_units] * self.hit_worth
