@@ -34,6 +34,12 @@ second reads the first two, writes ``comparisons.csv`` and prints the table a no
 third reads an interaction off one campaign or group read by event-weighted area, the taught
 pair's reduction less the untaught pair's under one draw of the units, writes
 ``interactions.csv`` and prints its table. All may be given at once.
+
+With ``--recall-at SHARE`` the pairs of campaigns read by event-weighted area are read a second
+time by the events each side finds with at most that share of normal windows flagged, under the
+same draws of the units, written to ``comparisons-recall.csv`` and printed as a second table.
+No least gain is registered for that reading, so its floor is the control's spread over the
+seeds alone.
 """
 
 import argparse
@@ -66,6 +72,7 @@ from emblema.evaluation.domain.statistics.anomaly_interaction import AnomalyInte
 from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
 from emblema.evaluation.domain.statistics.paired_anomaly_rankings import PairedAnomalyRankings
 from emblema.evaluation.domain.statistics.paired_difference import PairedDifference
+from emblema.evaluation.domain.statistics.paired_event_recalls import PairedEventRecalls
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.evaluation.domain.statistics.paired_unit_errors import PairedUnitErrors
 from emblema.evaluation.domain.statistics.paired_unit_rankings import PairedUnitRankings
@@ -77,6 +84,7 @@ from emblema.evaluation.ports.evaluation_campaign_repository import EvaluationCa
 from scripts.reporting import table
 
 CELLS, PREDICTIONS, COMPARISONS = "cells.csv", "predictions.csv", "comparisons.csv"
+RECALL_COMPARISONS = "comparisons-recall.csv"
 SCORES = "scores.csv"
 SCORE_COLUMNS = (
     "campaign",
@@ -313,6 +321,14 @@ class Comparison:
     difference: PairedDifference
     floor: PracticalFloor
     per_seed: tuple[float, ...]
+    recall_at: float | None = None
+
+    @property
+    def reading(self) -> str:
+        """What the error is: the measure's, or the events missed at a share of false alarms."""
+        if self.recall_at is None:
+            return self.measure.value
+        return f"event_recall_at_{self.recall_at:g}"
 
     @property
     def seed_mean(self) -> float:
@@ -347,7 +363,7 @@ class Comparison:
             repr(self.difference.interval.high),
             repr(self.difference.p_value),
             repr(self.floor.value),
-            self.measure.value,
+            self.reading,
             repr(self.seed_mean),
             repr(self.seed_se),
         )
@@ -584,19 +600,29 @@ def pair(
     floor_share: float,
     floor_area: float,
     answers: Answers | None = None,
+    recall_at: float | None = None,
 ) -> Comparison:
     """``candidate`` against ``control``, paired as the campaigns' purpose and measure say.
+
+    With ``recall_at``, a pair read by event-weighted area is read instead by the events each side
+    misses with at most that share of normal windows flagged.
 
     Raises:
         ValueError: If a side has no cell, the sides were run for different purposes, read by
             different measures or run on different seeds, a side of several campaigns is read by
             an error rather than by area, a selection to be paired by area scored other units in
-            some repeat, or the units of a repeat do not pair.
+            some repeat, the units of a repeat do not pair, or the events found are asked of a
+            pair not read by event-weighted area.
     """
     control_cells = _cells_of(rows, control)
     candidate_cells = _cells_of(rows, candidate)
     purposes = {row.purpose for row in control_cells} | {row.purpose for row in candidate_cells}
     measure, seeds = _comparable(control, control_cells, candidate, candidate_cells, purposes)
+    if recall_at is not None and measure is not ErrorMeasure.PR_AUC_SHORTFALL:
+        raise ValueError(
+            f"the events found are read off a pair read by event-weighted area, not by "
+            f"{measure.value}: {control} against {candidate}"
+        )
     paired: PairedUnits
     match measure:
         case ErrorMeasure.RMSE:
@@ -615,9 +641,9 @@ def pair(
             candidate_spread = [_rmse(r) for r in candidate_repeats]
             floor_part, threshold = floor_share, ThresholdKind.RELATIVE
         case ErrorMeasure.PR_AUC_SHORTFALL:
-            pairing = "area-pooled"
+            pairing = "area-pooled" if recall_at is None else "recall-pooled"
             found = Answers(()) if answers is None else answers
-            paired = PairedAnomalyRankings(
+            events = PairedAnomalyRankings(
                 control=tuple(
                     found.anomaly_ranking(control.of_campaign(campaign), seed)
                     for campaign in control.campaigns
@@ -631,9 +657,16 @@ def pair(
             )
             # A repeat is a seed, as under the ROC area below, so that a side fitted once pairs
             # with a side of several backbones seed by seed.
-            control_spread = [_event_shortfall_at(found, control, seed) for seed in seeds]
-            candidate_spread = [_event_shortfall_at(found, candidate, seed) for seed in seeds]
-            floor_part, threshold = floor_area, ThresholdKind.ABSOLUTE
+            if recall_at is None:
+                paired = events
+                control_spread = [_event_shortfall_at(found, control, seed) for seed in seeds]
+                candidate_spread = [_event_shortfall_at(found, candidate, seed) for seed in seeds]
+                floor_part, threshold = floor_area, ThresholdKind.ABSOLUTE
+            else:
+                paired = PairedEventRecalls(rankings=events, share=recall_at)
+                control_spread = [_missed_at(found, control, seed, recall_at) for seed in seeds]
+                candidate_spread = [_missed_at(found, candidate, seed, recall_at) for seed in seeds]
+                floor_part, threshold = 0.0, ThresholdKind.ABSOLUTE
         case ErrorMeasure.AUROC_SHORTFALL:
             pairing = "area-pooled"
             found = Answers(()) if answers is None else answers
@@ -683,6 +716,7 @@ def pair(
                 control_spread, candidate_spread, strict=True
             )
         ),
+        recall_at=recall_at,
     )
 
 
@@ -821,6 +855,17 @@ def _event_shortfall_at(answers: Answers, side: Side, seed: int) -> float:
     )
 
 
+def _missed_at(answers: Answers, side: Side, seed: int, share: float) -> float:
+    """One seed's share of events a side misses at ``share`` of false alarms, over its campaigns."""
+    return mean(
+        1.0
+        - answers.anomaly_ranking(
+            side.of_campaign(campaign), seed
+        ).event_recall_at_false_alarm_share(share)
+        for campaign in side.campaigns
+    )
+
+
 def _cells_of(rows: Sequence[CellRow], side: Side) -> list[CellRow]:
     found = [
         row
@@ -921,13 +966,17 @@ def render(comparisons: Sequence[Comparison]) -> str:
         ValueError: If the comparisons are read by different measures, which one table's
             columns cannot name.
     """
-    measures = {comparison.measure for comparison in comparisons}
-    if len(measures) > 1:
-        raise ValueError(f"one table holds one measure, and these are read by {len(measures)}")
-    error = {
-        ErrorMeasure.AUROC_SHORTFALL: "1 - AUROC",
-        ErrorMeasure.PR_AUC_SHORTFALL: "1 - PR-AUC",
-    }.get(next(iter(measures)), "RMSE")
+    readings = {comparison.reading for comparison in comparisons}
+    if len(readings) > 1:
+        raise ValueError(f"one table holds one measure, and these are read by {len(readings)}")
+    first = comparisons[0]
+    if first.recall_at is not None:
+        error = f"1 - recall @{100 * first.recall_at:g}%"
+    else:
+        error = {
+            ErrorMeasure.AUROC_SHORTFALL: "1 - AUROC",
+            ErrorMeasure.PR_AUC_SHORTFALL: "1 - PR-AUC",
+        }.get(first.measure, "RMSE")
     rows = [
         (
             str(comparison.control),
@@ -992,6 +1041,15 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
             "'+': the taught pair's reduction less the untaught pair's; repeatable"
         ),
     )
+    parser.add_argument(
+        "--recall-at",
+        type=float,
+        metavar="SHARE",
+        help=(
+            "read the pairs a second time by the events found with at most this share of "
+            "normal windows flagged; pairs read by event-weighted area only"
+        ),
+    )
     parser.add_argument("--resamples", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=1, help="seed of the bootstrap's draws")
     parser.add_argument("--level", type=float, default=0.95)
@@ -1005,6 +1063,8 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         help="fixed part of the floor in area, for campaigns read by area",
     )
     arguments = parser.parse_args(argv)
+    if arguments.recall_at is not None and not 0.0 <= arguments.recall_at <= 1.0:
+        parser.error(f"--recall-at takes a share in [0, 1], not {arguments.recall_at}")
     if not arguments.campaign and not arguments.pair and not arguments.interaction:
         parser.error("give a campaign to export, a pair or an interaction to read, or several")
     return arguments
@@ -1055,6 +1115,22 @@ def main(
         ]
         write_comparisons(out / COMPARISONS, comparisons)
         print(render(comparisons))
+        if arguments.recall_at is not None:
+            recalls = [
+                pair(
+                    rows,
+                    Side(*each[:3]),
+                    Side(*each[3:]),
+                    bootstrap=bootstrap,
+                    floor_share=arguments.floor_share,
+                    floor_area=arguments.floor_area,
+                    answers=found,
+                    recall_at=arguments.recall_at,
+                )
+                for each in arguments.pair
+            ]
+            write_comparisons(out / RECALL_COMPARISONS, recalls)
+            print(render(recalls))
     if arguments.interaction:
         rows = read_cells(out / CELLS)
         found = Answers(read_predictions(out / PREDICTIONS))
