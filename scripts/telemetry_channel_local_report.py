@@ -834,11 +834,22 @@ def read_tables(directory: Path, localities: Mapping[int, str], *, partial: bool
 LEAST_SPEARMAN = 0.9999
 
 
-def rank_agreement(directory: Path, cell: str, against: Path) -> str:
+def agreement_of(a: Floats, b: Floats) -> tuple[float, float]:
+    """Spearman's correlation of two scorings of the same windows, and the top share held."""
+    ranks_a, ranks_b = a.argsort().argsort(), b.argsort().argsort()
+    spearman = float(np.corrcoef(ranks_a, ranks_b)[0, 1]) if len(a) > 1 else 1.0
+    top = max(1, int(SHARE * len(a)))
+    held = len(set(np.argsort(-a)[:top].tolist()) & set(np.argsort(-b)[:top].tolist())) / top
+    return spearman, held
+
+
+def rank_agreement(directory: Path, cell: str, against: Path, *, by_unit: bool = False) -> str:
     """How alike two cells rank the same windows: Spearman's correlation and the top share held.
 
     The standardisation's floor moves a score by a little, so the check reads ranks, not gaps;
-    no area is read.
+    no area is read. Read by unit, the least agreement over the units is held to the declared
+    least, so a cell whose alarm reads each unit alone can be checked against one whose alarm
+    does not.
 
     Raises:
         SystemExit: If the two score different windows, or rank them less alike than the
@@ -852,14 +863,21 @@ def rank_agreement(directory: Path, cell: str, against: Path) -> str:
     if set(own) != set(other):
         raise SystemExit(f"{cell} and {against.name} score different windows")
     keys = sorted(own)
-    a = np.asarray([own[k] for k in keys])
-    b = np.asarray([other[k] for k in keys])
-    ranks_a, ranks_b = a.argsort().argsort(), b.argsort().argsort()
-    spearman = float(np.corrcoef(ranks_a, ranks_b)[0, 1]) if len(keys) > 1 else 1.0
-    top = max(1, int(SHARE * len(keys)))
-    held = len(set(np.argsort(-a)[:top].tolist()) & set(np.argsort(-b)[:top].tolist())) / top
+    groups = sorted({unit for unit, _ in keys}) if by_unit else [None]
+    agreements = []
+    for unit in groups:
+        chosen = [k for k in keys if unit is None or k[0] == unit]
+        agreements.append(
+            agreement_of(
+                np.asarray([own[k] for k in chosen]), np.asarray([other[k] for k in chosen])
+            )
+        )
+    spearman = min(s for s, _ in agreements)
+    held = min(h for _, h in agreements)
+    how = f"least over {len(groups)} units" if by_unit else "over every window"
     text = (
-        f"{cell} against {against.name}: Spearman {spearman:.5f}, top {SHARE:.0%} held {held:.3f}"
+        f"{cell} against {against.name}, {how}: Spearman {spearman:.5f}, "
+        f"top {SHARE:.0%} held {held:.3f}"
     )
     if spearman < LEAST_SPEARMAN or held < 1.0:
         raise SystemExit(f"{text}: less alike than the declared least, the code is wrong")
@@ -1098,6 +1116,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     checking.add_argument("--dir", type=Path, required=True)
     checking.add_argument("--cell", required=True)
     checking.add_argument("--against", type=Path, required=True)
+    checking.add_argument("--by-unit", action="store_true", help="the least agreement over units")
     return parser.parse_args(argv)
 
 
@@ -1117,7 +1136,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(read_tables(arguments.dir, localities_of(arguments.task), partial=arguments.partial))
     else:
         print(check_cell(arguments.dir, arguments.cell, arguments.against))
-        print(rank_agreement(arguments.dir, arguments.cell, arguments.against))
+        print(
+            rank_agreement(
+                arguments.dir, arguments.cell, arguments.against, by_unit=arguments.by_unit
+            )
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover - entrypoint
