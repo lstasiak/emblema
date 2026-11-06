@@ -10,6 +10,7 @@ from emblema.evaluation.domain.campaign.campaign_design import CampaignDesign
 from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.campaign.campaign_verdict import CampaignVerdict
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
 from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.comparison_verdict import ComparisonVerdict
 from emblema.shared.events.domain_event import EventId
@@ -47,7 +48,7 @@ class CampaignCompletedAssembler:
     PR_AUC: ClassVar[str] = "pr_auc"
     EVENT_RECALL: ClassVar[str] = "event_recall_at_1pct_false_alarms"
     EVENT_F_HALF: ClassVar[str] = "event_f0.5"
-    FALSE_ALARM_SHARE: ClassVar[float] = 0.01
+    FALSE_ALARM_SHARE: ClassVar[float] = AnomalyRanking.PRODUCT_FALSE_ALARM_SHARE
     BRIER: ClassVar[str] = "brier"
 
     # What the context's own taxonomy amounts to for a reader who has not seen the registration

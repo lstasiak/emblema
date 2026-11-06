@@ -8,6 +8,8 @@ from emblema.evaluation.contracts.identifiers import CandidateRef
 from emblema.evaluation.domain.campaign.campaign_candidate import CampaignCandidate
 from emblema.evaluation.domain.campaign.campaign_reading import CampaignReading
 from emblema.evaluation.domain.labels.label_budget import LabelBudget
+from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
+from emblema.evaluation.domain.scoring.error_measure import ErrorMeasure
 from emblema.evaluation.domain.statistics.error_over_repeats import ErrorOverRepeats
 
 
@@ -21,25 +23,42 @@ class CurvePoint:
             no repeat has run.
         spread: The standard deviation of the error over the repeats; zero for one.
         repeats: How many repeats have run.
+        event_recall: For a detection campaign, the share of events found with one in a hundred
+            normal windows flagged, the mean over the repeats: what an operator is given at
+            that rate of false alarms. ``None`` for any other campaign and while no repeat has
+            run.
     """
 
     budget: str
     error: float | None
     spread: float
     repeats: int
+    event_recall: float | None
 
     @classmethod
     def of(cls, reading: CampaignReading, candidate: CandidateRef, budget: LabelBudget) -> Self:
         results = reading.results_of(candidate, budget)
         if not results:
-            return cls(budget=budget.text(), error=None, spread=0.0, repeats=0)
+            return cls(budget=budget.text(), error=None, spread=0.0, repeats=0, event_recall=None)
         error = ErrorOverRepeats.of(
             reading.error_of(candidate, budget),
             [result.error_under(reading.campaign.design.measure) for result in results],
         )
         return cls(
-            budget=budget.text(), error=error.pooled, spread=error.spread, repeats=error.repeats
+            budget=budget.text(),
+            error=error.pooled,
+            spread=error.spread,
+            repeats=error.repeats,
+            event_recall=cls._event_recall(reading, candidate, budget),
         )
+
+    @staticmethod
+    def _event_recall(
+        reading: CampaignReading, candidate: CandidateRef, budget: LabelBudget
+    ) -> float | None:
+        if reading.campaign.design.measure is not ErrorMeasure.PR_AUC_SHORTFALL:
+            return None
+        return reading.event_recall_of(candidate, budget, AnomalyRanking.PRODUCT_FALSE_ALARM_SHARE)
 
 
 @dataclass(frozen=True, kw_only=True)

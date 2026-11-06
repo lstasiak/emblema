@@ -21,6 +21,7 @@ from emblema.evaluation.adapters.in_memory.downstream_task_repository import (
 from emblema.evaluation.adapters.in_memory.evaluation_campaign_repository import (
     InMemoryEvaluationCampaignRepository,
 )
+from emblema.evaluation.adapters.in_memory.verdict_memo import InMemoryVerdictMemo
 from emblema.evaluation.application.assemblers.campaign_completed_assembler import (
     CampaignCompletedAssembler,
 )
@@ -38,6 +39,10 @@ from emblema.evaluation.application.use_cases.record_cell_result import RecordCe
 from emblema.evaluation.application.use_cases.run_campaign_cell import (
     RunCampaignCell,
     RunCampaignCellCommand,
+)
+from emblema.evaluation.application.use_cases.view_campaign import (
+    ViewCampaign,
+    ViewCampaignQuery,
 )
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.contracts.events import CampaignCompleted
@@ -211,3 +216,13 @@ def test_a_candidate_that_fits_on_labels_is_refused_where_the_task_spends_none(
 ) -> None:
     with pytest.raises(ProtocolMismatchError, match="fits on labels"):
         Campaign(contender_kind=kind).ran()
+
+
+def test_the_view_shows_each_detectors_events_found_beside_its_area(running: Campaign) -> None:
+    shown = ViewCampaign(running.campaigns, InMemoryVerdictMemo(capacity=1))(
+        ViewCampaignQuery(campaign=running.ran())
+    )
+
+    control, contender = shown.curves
+    assert [p.event_recall for p in control.points] == [0.0]
+    assert [p.event_recall for p in contender.points] == [1.0]
