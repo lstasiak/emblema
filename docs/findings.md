@@ -41,8 +41,9 @@ Last updated 2026-11-06.
   largest departure over the channels reads 0.18, level with the best bar and twice the
   backbone's zero-label reading, and finds as many events at 1 % false alarms as the taught
   direction; taught linearly the departures add nothing to the state, taught by trees they find
-  50 to 54 of 61 events at 1 % against 30 to 40, at a lower area
-  ([note](verification/telemetry-channel-local.md)).
+  50 to 54 of 61 events at 1 % against 30 to 40, at a lower area. On the second mission the
+  same zero-label detector reads 0.885 against the best bar's 0.627 and the taught direction's
+  0.900 ([note](verification/telemetry-channel-local.md)).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
 - **What transfers is the encoder's machinery.** Fitting only the channel rows of an unread corpus
@@ -182,6 +183,7 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | All 99 events taught, M1 | frozen direction: pretrained 0.261, 0.217, initialisation 0.266; fine-tuning at 2,000 steps 0.093 to 0.096; trees 0.154 | [taught-fine-tuning](verification/taught-fine-tuning.md) |
 | Trained on all 99 events, length chosen on later fitting months, against the direction at its initialisation | 0.265 against 0.266, −0.001 [−0.044; +0.040]; 500 steps chosen, longer runs read worse; 11 of 62 events found by no arm; pretrained 0.152, 0.219; the direction finds the six unseen classes (0.57 to 0.84), the trained network 0.27 to 0.34 | [telemetry-supervised-reference](verification/telemetry-supervised-reference.md) |
 | Each channel's hour against its own recent hours (6 to 72), untrained encoder's states beside | no label, largest departure over channels: 0.179 against the cells' bar 0.160, +0.019 [−0.093; +0.086], recall 0.61 at 1 %; taught, departures beside the state **−0.079** [−0.138; −0.036], as order statistics −0.001 [−0.011; +0.003]; trees over the departures recall **0.84 to 0.88** at 1 % (direction 0.60), area 0.17 to 0.19, 7 of the 11 unfound events found | [telemetry-channel-local](verification/telemetry-channel-local.md) |
+| The same on the second mission, as a confirmation | no label, largest departure **0.885** against the bar 0.627, **+0.258** [+0.199; +0.322], against the taught direction 0.900 and the whitened states 0.687; taught, departures beside the state **−0.052** [−0.079; −0.028], order statistics +0.001 [+0.001; +0.002]; trees +0.006 [−0.017; +0.026], every taught arm finds 228 of 229 events at 1 % | [telemetry-channel-local](verification/telemetry-channel-local.md) |
 | Windows of 6, 24, 72 hours ending at the scored hour, untrained encoder, layout chosen on later fitting months, against the hour | no layout chosen; read beside, 6x6 under the direction **−0.130** [−0.195; −0.066], under the whitened distance **−0.059** [−0.136; −0.008]; smoothing the hour's scores −0.18 to −0.23; pooling the previous hours' states −0.006 [−0.037; +0.021]; trees over the cells with 24 hours +0.023 [−0.037; +0.060]; none of the 11 unfound events found, which are local (10 of 11), touch 3 channels of 48 (median) and last 5.5 hours against 12 channels and 15 hours for the found | [telemetry-context](verification/telemetry-context.md) |
 
 ### What the failures have in common

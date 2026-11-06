@@ -275,3 +275,81 @@ whitened distance refitted here ranks the screen's windows within every unit wit
 **Limitations.** The second mission's events are mostly global rare events, so it confirms the
 detectors, not the local few-channel mechanism; its 45 local events are read in the events
 table. Eleven channels. Fourteen months.
+
+## 2026-11-06 — measured on the second mission: with no label the largest departure reads 0.885 against the bar's 0.627, level with the taught direction; taught linearly the departures again add nothing
+
+**Questions.** As declared for the second mission.
+
+**Conditions.** As declared, at commit `8488e834` (the tolerance `930bae85`, the by-unit check
+`64df4981`); `run.sh` on the M1 Pro, 10 minutes in all, 8 of them the six arms' context statistics (14 s at `hour-6h` to 286 s at `bins-72h`).
+The check held under every seed: the refitted whitened distance ranks the readout screen's
+second-mission windows within every unit with Spearman 1.00000 and holds every unit's top 1 %.
+Not read: 355 of 10,223 windows under every arm alike; 229 events read, 4 of them local.
+
+**The choice, on the months 2001-03 to 2001-09; mean area over the seeds.**
+
+| Family | Detector | hour-6h | bins-6h | hour-24h | bins-24h | hour-72h | bins-72h | Chosen |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| local | max | 0.920 | 0.925 | 0.906 | 0.889 | **0.932** | 0.915 | bins-6h |
+| local | mean | **0.898** | 0.889 | 0.827 | 0.815 | 0.850 | 0.820 | hour-6h |
+| taught | combined | 0.925 | 0.924 | **0.928** | 0.921 | 0.927 | 0.922 | hour-6h |
+| taught | direction | 0.919 | 0.921 | **0.922** | 0.914 | 0.909 | 0.903 | hour-6h |
+| taught | ordered | 0.934 | **0.936** | 0.933 | 0.934 | 0.933 | 0.935 | hour-6h |
+| taught | top | **0.871** | 0.861 | 0.842 | 0.841 | 0.783 | 0.771 | hour-6h |
+| taught | trees | **0.887** | 0.785 | 0.880 | 0.702 | 0.876 | 0.666 | hour-6h |
+
+**The reading, on the 14 validation months, 272 events taught.**
+
+| Family | Detector | Arm | Area per seed | Area | Recall @1 % | Control | Difference [interval] | p | T | Outcome | Holm |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| local | max | bins-6h, declared | 0.885 | 0.885 | 0.996 | 0.627 | **+0.258** [+0.199; +0.322] | 0.000 | 0 | clearly above | passes |
+| taught | combined | hour-6h, declared | 0.847 0.845 0.853 | 0.848 | 0.978 | 0.900 | **−0.052** [−0.079; −0.028] | 0.000 | 0.010 | below | passes |
+| local | mean | hour-6h | 0.873 | 0.873 | 0.991 | 0.627 | +0.246 [+0.187; +0.313] | 0.000 | 0 | clearly above | |
+| taught | ordered | hour-6h | 0.894 0.895 0.915 | 0.901 | 0.996 | 0.900 | +0.001 [+0.001; +0.002] | 0.000 | 0.000 | around | |
+| taught | direction | hour-6h | 0.828 | 0.828 | 0.974 | 0.900 | −0.072 [−0.102; −0.039] | 0.000 | 0.014 | below | |
+| taught | top | hour-6h | 0.862 | 0.862 | 0.987 | 0.900 | −0.037 [−0.060; −0.011] | 0.007 | 0.014 | below | |
+| taught | trees | hour-6h | 0.825 0.817 0.822 | 0.821 | 0.977 | 0.900 | −0.078 [−0.125; −0.024] | 0.001 | 0.014 | below | |
+| taught | trees | bins-6h, beside | 0.907 0.904 0.906 | 0.905 | 0.996 | 0.900 | +0.006 [−0.017; +0.026] | 0.683 | 0.014 | beside | |
+
+The controls: the states' direction 0.892, 0.894, 0.914 (recall 0.996), the whitened distance
+0.657, 0.693, 0.710 (0.889), the farthest feature 0.627 (0.869). At 1 % of normal windows
+the largest departure, the taught direction, the order statistics and the trees each find 228
+of the 229 events, the four local ones among them, and miss the same one; the whitened
+distance finds 197 and the farthest feature 199. The column of events unfound before and the
+share of false alarms after events say nothing here: the first names the first mission's
+events, and with 236 events in 14 months nearly every normal window lies within 72 hours of
+one.
+
+**Conclusions, the two missions together.**
+
+- **(2) holds and strengthens: with no label, each channel against its own recent hours is a
+  detector level with the best bar on the first mission and far above it on the second**,
+  +0.258 [+0.199; +0.322] under Holm, 0.885 against 0.627 and against 0.687 for the whitened
+  distance over the states; it reaches the taught direction's recall at 1 % on both missions
+  (0.61 against 0.60; 0.996 against 0.996) and its area on the second (0.885 against 0.900).
+  The prediction [−0.09; +0.09] missed above: the bar is weak on the second mission, the
+  departure is not.
+- **(1) holds: taught linearly, the departures add nothing to the state on either mission**,
+  −0.052 [−0.079; −0.028] under Holm here, −0.079 there; as order statistics beside the state
+  +0.001 [+0.001; +0.002] here, −0.001 there. The prediction [−0.14; +0.03] held.
+- **The trees' lead is the first mission's.** There they found 50 to 54 of 61 events at 1 %
+  against 30 to 40 for the taught direction; here every taught arm and the largest departure
+  find 228 of 229, and the trees read the direction's area (+0.006 [−0.017; +0.026] at
+  `bins-6h`). The second mission's events are global rare events the hour's state already
+  shows; the recommendation that reads "which channels depart" is scoped to events like the
+  first mission's local few-channel ones, as the declared confirmation rule says.
+- **A wrong statement in the declaration.** Its power paragraph said the recall at 1 % was
+  bounded near 0.4 here by the 97 normal windows flagged; the share counts normal windows
+  only, so every event window may rank above it, and the recall reached 0.996. The bound
+  played no part in the rule.
+- **What follows.** The product ticket for a channel-local detector with no label stands on
+  two missions. The pretext's shape, a state per channel against the channel's own history
+  read by the largest few, stands as the target for the events the hour's state misses, which
+  the first mission has and the second does not; a pretext is marked against the departures
+  themselves.
+
+**Limitations.** Eleven channels and 14 months; 4 local events among 229. The taught arms
+read near a ceiling (0.90 to 0.94 on the selection months), so differences among them are
+small by construction. The spans read within 0.04 of one another under the largest
+departure, wider than the predicted 0.02. The validation months have been read before by the
+readout screen; the test months stay frozen.
