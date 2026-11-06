@@ -145,10 +145,10 @@
 | src/emblema/entrypoints/workers/general/composition\_root.py                              |       37 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/workers/known\_arms.py                                            |       24 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/workers/known\_baselines.py                                       |       24 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/workers/known\_detectors.py                                       |       26 |        0 |        0 |        0 |    100% |           |
+| src/emblema/entrypoints/workers/known\_detectors.py                                       |       27 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/workers/known\_patch\_models.py                                   |       12 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/workers/ml/celery\_app.py                                         |       10 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/workers/ml/composition\_root.py                                   |       56 |        0 |        2 |        0 |    100% |           |
+| src/emblema/entrypoints/workers/ml/composition\_root.py                                   |       57 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/workers/services.py                                               |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/artifacts/kept\_candidates.py                             |       18 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/artifacts/kept\_classical\_inference.py                   |       52 |        0 |       10 |        1 |     98% |   79-\>81 |
@@ -163,18 +163,21 @@
 | src/emblema/evaluation/adapters/candidates/classical\_arm.py                              |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/classical\_baseline\_catalogue.py              |       35 |        2 |        4 |        0 |     95% |     51-52 |
 | src/emblema/evaluation/adapters/candidates/classical\_candidate\_provider.py              |       20 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/candidates/detector\_arm.py                               |      134 |        8 |       58 |        4 |     94% |117-118, 122, 127, 161, 174, 274-275 |
+| src/emblema/evaluation/adapters/candidates/detector\_arm.py                               |      160 |        8 |       68 |        4 |     95% |131-132, 136, 141, 175, 188, 330-331 |
 | src/emblema/evaluation/adapters/candidates/detector\_candidate\_provider.py               |       24 |       10 |        4 |        0 |     50% |     40-61 |
-| src/emblema/evaluation/adapters/candidates/detector\_catalogue.py                         |       61 |        0 |       20 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/candidates/detector\_catalogue.py                         |       65 |        0 |       22 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/patch\_candidate\_provider.py                  |       18 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/patch\_model\_catalogue.py                     |       46 |        3 |        8 |        0 |     94% |105, 110-111 |
 | src/emblema/evaluation/adapters/candidates/routed\_candidate\_catalogue.py                |       19 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/routed\_candidate\_provider.py                 |       23 |        2 |        2 |        0 |     92% |     48-49 |
+| src/emblema/evaluation/adapters/detection/channel\_departures.py                          |      134 |        0 |       22 |        1 |     99% | 162-\>156 |
 | src/emblema/evaluation/adapters/detection/channel\_error\_scales.py                       |       32 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/channel\_errors.py                              |       20 |        0 |        2 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/detection/channel\_local\_detection\_runtime.py           |       66 |        0 |       14 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/detection/channel\_local\_detector.py                     |       43 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/feature\_detector.py                            |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/feature\_detectors.py                           |       35 |        0 |       16 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/detection/feature\_routed\_detection\_runtime.py          |       20 |        0 |        4 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/detection/feature\_routed\_detection\_runtime.py          |       25 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/hidden\_cells.py                                |       48 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/linear\_cell\_answer.py                         |      110 |        1 |       22 |        1 |     98% |       121 |
 | src/emblema/evaluation/adapters/detection/masked\_cells.py                                |        5 |        0 |        0 |        0 |    100% |           |
@@ -284,14 +287,14 @@
 | src/emblema/evaluation/api/schemas/campaign\_detail.py                                    |       11 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/api/schemas/campaign\_resource.py                                  |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/api/schemas/campaign\_run\_resource.py                             |        9 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/api/schemas/candidate\_curve\_resource.py                          |        9 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/api/schemas/candidate\_curve\_resource.py                          |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/api/schemas/comparison\_resource.py                                |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/api/schemas/verdict\_resource.py                                   |        9 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/application/assemblers/campaign\_completed\_assembler.py           |       44 |        0 |        8 |        1 |     98% |124-\>exit |
+| src/emblema/evaluation/application/assemblers/campaign\_completed\_assembler.py           |       45 |        0 |        8 |        1 |     98% |125-\>exit |
 | src/emblema/evaluation/application/read\_models/campaign\_run.py                          |       11 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/application/read\_models/campaign\_summary.py                      |       14 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/application/read\_models/campaign\_view.py                         |        6 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/application/read\_models/candidate\_curve.py                       |       22 |        0 |        2 |        0 |    100% |           |
+| src/emblema/evaluation/application/read\_models/candidate\_curve.py                       |       29 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/application/read\_models/comparison\_view.py                       |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/application/read\_models/verdict\_view.py                          |       11 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/application/use\_cases/accept\_campaign\_order\_result.py          |       16 |        0 |        2 |        0 |    100% |           |
@@ -350,9 +353,12 @@
 | src/emblema/evaluation/domain/classical/minirocket\_spec.py                               |       18 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/classical/random\_convolutions.py                           |       22 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/domain/classical/ridge\_spec.py                                    |       14 |        0 |        2 |        0 |    100% |           |
+| src/emblema/evaluation/domain/detection/channel\_history.py                               |       20 |        0 |        2 |        0 |    100% |           |
+| src/emblema/evaluation/domain/detection/channel\_reduction.py                             |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/detection/departure\_cells.py                               |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/detection\_windows.py                             |       20 |        0 |       10 |        0 |    100% |           |
-| src/emblema/evaluation/domain/detection/detector\_features.py                             |       18 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/domain/detection/detector\_recipe.py                               |       60 |        0 |       30 |        0 |    100% |           |
+| src/emblema/evaluation/domain/detection/detector\_features.py                             |       22 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/detection/detector\_recipe.py                               |       74 |        0 |       40 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/encoder\_reading.py                               |       20 |        0 |       10 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/error\_normalisation.py                           |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/hidden\_cells\_choice.py                          |        4 |        0 |        0 |        0 |    100% |           |
@@ -361,7 +367,7 @@
 | src/emblema/evaluation/domain/detection/score\_reference.py                               |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/taught\_events.py                                 |       30 |        1 |       12 |        1 |     95% |        41 |
 | src/emblema/evaluation/domain/detection/taught\_head.py                                   |        5 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/domain/exceptions.py                                               |      118 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/exceptions.py                                               |      119 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/campaign\_order.py                                  |       42 |        0 |       18 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/campaign\_order\_result.py                          |       22 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/order\_lane.py                                      |       21 |        0 |        6 |        0 |    100% |           |
@@ -385,10 +391,10 @@
 | src/emblema/evaluation/domain/labels/task\_window.py                                      |       11 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/patching/patch\_model\_spec.py                              |       32 |        1 |       16 |        1 |     96% |        92 |
 | src/emblema/evaluation/domain/patching/patch\_plan.py                                     |       13 |        0 |        2 |        0 |    100% |           |
-| src/emblema/evaluation/domain/scoring/anomaly\_ranking.py                                 |      104 |        1 |       44 |        1 |     99% |        79 |
+| src/emblema/evaluation/domain/scoring/anomaly\_ranking.py                                 |      109 |        1 |       46 |        1 |     99% |        83 |
 | src/emblema/evaluation/domain/scoring/error\_measure.py                                   |       19 |        0 |        8 |        1 |     96% | 44-\>exit |
 | src/emblema/evaluation/domain/scoring/scored\_outcome.py                                  |       21 |        0 |        6 |        0 |    100% |           |
-| src/emblema/evaluation/domain/scoring/tied\_sweep.py                                      |       82 |        0 |       10 |        0 |    100% |           |
+| src/emblema/evaluation/domain/scoring/tied\_sweep.py                                      |      104 |        0 |       18 |        0 |    100% |           |
 | src/emblema/evaluation/domain/scoring/unit\_counts.py                                     |       13 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/scoring/unit\_error.py                                      |       32 |        0 |       10 |        0 |    100% |           |
 | src/emblema/evaluation/domain/scoring/window\_prediction.py                               |       13 |        0 |        4 |        0 |    100% |           |
@@ -406,11 +412,12 @@
 | src/emblema/evaluation/domain/statistics/outcome\_level.py                                |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_anomaly\_rankings.py                     |       59 |        0 |       10 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_difference.py                            |       24 |        0 |       10 |        1 |     97% |   49-\>51 |
+| src/emblema/evaluation/domain/statistics/paired\_event\_recalls.py                        |       50 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_reading.py                               |       28 |        0 |        8 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_unit\_bootstrap.py                       |       40 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_unit\_errors.py                          |       71 |        0 |       22 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/paired\_unit\_rankings.py                        |       59 |        1 |       10 |        0 |     99% |       110 |
-| src/emblema/evaluation/domain/statistics/paired\_units.py                                 |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/statistics/paired\_units.py                                 |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/practical\_floor.py                              |       23 |        0 |        8 |        1 |     97% |   50-\>52 |
 | src/emblema/evaluation/domain/statistics/pretraining\_spread.py                           |       21 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/domain/statistics/rate\_choice.py                                  |       41 |        0 |       14 |        0 |    100% |           |
@@ -712,7 +719,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **21682** |  **179** | **4342** |  **118** | **99%** |           |
+| **TOTAL**                                                                                 | **22096** |  **179** | **4424** |  **119** | **99%** |           |
 
 132 empty files skipped.
 
