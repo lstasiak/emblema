@@ -92,6 +92,21 @@ states' direction's, since the hours after a long event depart from a median the
 
 **Trial, before this declaration.** Every command ran end to end at `hour-6h` and seed 1 on the tree before this declaration's commit, the tables written and deleted unopened; only the cell names, their seconds, the count of windows not read (120 of 41,088 at a widest context of 6 hours) and the checks were read. The direction over the states refitted here ranks the context report's 41,088 windows with Spearman 0.99998 and holds its top 1 % whole; the whitened distance ranks them the same; the cells' farthest feature, the bar, ranks them with Spearman 0.981 and holds 0.33 of its top 1 %, which is the floor's work on the near-constant features. The check's criterion is the one the rule states; its gap-based form from the context report read a largest gap of 4.1 and a mean of 0.026 here, the floor's work, and was replaced before this declaration. The check of the seeds 2 and 3 and of the whole grid comes with the run. On the selection months, read before for the choice, the controls' areas against the context report's: the direction 0.219, 0.203, 0.196 against 0.220, 0.203, 0.196; the whitened distance the same to the third decimal; the farthest feature 0.175 against 0.167. The widest arms were timed on the trial's tree, their departures unread.
 
+**Added beside, after the choice and before the reading (2026-11-06).** On the selection
+months, which the choice reads, the largest departure over the channels read 0.170 to 0.179
+under every arm with no label, while the direction over the 59 departures taught 70 events
+read 0.001 to 0.031 and beside the state 0.001 to 0.054, below the state alone at 0.206. The
+check that this is the representation and not the instrument, on those months only: a plain
+logistic direction and a plain linear discriminant over the logged departures read 0.014 and
+0.026, and the same two over the three largest departures of each window in order read 0.168,
+the largest departure's own number. The events lie in which channel departs most, an order
+statistic no weight per channel expresses. Two arms are added beside, under every detector's
+rules and read descriptively: the direction over the three largest logged departures (`top`),
+and over the hour's state beside them (`ordered`, per seed). The declared readings stand as
+declared; the first reading of the validation months, written by the run before this
+addition, was deleted unread, and the cells of this addition were measured under the
+declaration's next commit.
+
 **Limitations.** No model is trained; the taught arms are linear or trees over 59 numbers. The
 departure reads each channel alone, so an event that moves several channels together within
 each one's range is not its target. The spread is read over the previous hours as the data has
