@@ -552,6 +552,24 @@ def test_the_check_reports_distances_and_refuses_other_windows(tmp_path: Path) -
         check_cell(tmp_path, "cell", tmp_path / "fewer.csv")
 
 
+def test_windows_tied_on_both_sides_move_no_rank_whatever_their_level(tmp_path: Path) -> None:
+    (tmp_path / "answers").mkdir()
+    own = answers_scoring(False, 1)
+    tied = [
+        predicted(str(p.window.unit), p.window.position, p.window.ends_at, p.target, score)
+        for p, score in zip(own, [0.0] * 14 + [1.0, 2.0, 3.0, 4.0, 5.0, 6.0], strict=True)
+    ]
+    write_answers(tmp_path / "answers" / "cell.csv", tied)
+    shifted = [
+        predicted(
+            str(p.window.unit), p.window.position, p.window.ends_at, p.target, p.predicted - 0.37
+        )
+        for p in tied
+    ]
+    write_answers(tmp_path / "other.csv", shifted)
+    assert "ranks moved by more than 10: 0" in check_cell(tmp_path, "cell", tmp_path / "other.csv")
+
+
 def test_main_routes_the_commands(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     conditions = {"arms": ["1x6"], "spans": [6], "seeds": [1], "select_from": "2004-01"}
     (tmp_path / "conditions.json").write_text(json.dumps(conditions))
