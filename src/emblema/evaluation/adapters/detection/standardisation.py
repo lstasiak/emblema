@@ -10,7 +10,7 @@ class Standardisation:
     """The fitting rows' centre and spread per feature, by which every later row is read.
 
     Invariants: every feature's spread is at least a tenth of the typical spread, the median
-    over every feature, or over the features that have one where more than half have none, so a
+    over every feature, or over the features that have one where that median is nought, so a
     feature that is constant or nearly so on the fitting rows is read over that floor and
     cannot dominate a distance by the few rows that move it; where no feature has a spread,
     the floor is one. A statistic a row cannot support, marked as missing, is put at the fitting
