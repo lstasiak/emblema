@@ -48,8 +48,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens  # noqa: E402
+from emblema.shared.adapters.arrays.joined_cells import JoinedCells  # noqa: E402
 from scripts.reporting import table  # noqa: E402
-from scripts.telemetry_context_report import context_cells  # noqa: E402
 
 Floats = NDArray[np.float64]
 
@@ -148,7 +148,7 @@ def arms() -> list[Arm]:
 
 def hour_summaries(published: Floats) -> Floats:
     """``[..., 9]``: each hour's one-hour cell from its ``[..., BASE_BINS, 9]`` published cells."""
-    summary: Floats = context_cells(published, 1)[..., 0, :]
+    summary: Floats = JoinedCells(1).join(published)[..., 0, :]
     return summary
 
 
@@ -171,7 +171,7 @@ def history_cells(channel: Floats, before: NDArray[np.int64], arm: Arm) -> Float
     published = gathered(channel, places)
     n, hours, bins, features = published.shape
     flat = published.reshape(n, hours * bins, features)
-    laid = context_cells(flat, arm.history_bins)
+    laid = JoinedCells(arm.history_bins).join(flat)
     out: Floats = laid.reshape(n, -1)
     return out
 

@@ -16,7 +16,6 @@ from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
-from emblema.shared.kernel.tokens import Token, TokenWindow
 from scripts.taught_fine_tuning_pilot import write_answers
 from scripts.telemetry_context_report import (
     BASE_BINS,
@@ -40,13 +39,11 @@ from scripts.telemetry_context_report import (
     choice_table,
     choose,
     choose_from,
-    context_cells,
     context_row,
     corrected,
     events_found,
     hours_of,
     kept,
-    laid_context,
     lane_of,
     lane_table,
     main,
@@ -69,84 +66,7 @@ CHANNELS = (1, 2, 3, 4)
 QUICK = PairedUnitBootstrap(resamples=400, seed=1)
 
 
-def hour_window(draw: random.Random, *, channels: tuple[int, ...], readings: int) -> TokenWindow:
-    """One published window of an hour: readings of the given channels at random instants."""
-    tokens = [
-        Token(
-            channel_id=draw.choice(channels),
-            value=round(draw.uniform(-3.0, 3.0), 3),
-            time=draw.random(),
-            gap=0.0,
-        )
-        for _ in range(readings)
-    ]
-    return TokenWindow.of(tokens)
-
-
-def concatenated(hours: list[TokenWindow | None]) -> TokenWindow:
-    """The hours as one window, each hour's times placed in its share of the whole."""
-    count = len(hours)
-    tokens = [
-        Token(channel_id=t.channel_id, value=t.value, time=(at + t.time) / count, gap=0.0)
-        for at, hour in enumerate(hours)
-        if hour is not None
-        for t in hour
-    ]
-    return TokenWindow.of(tokens)
-
-
-def published_cells(hours: list[TokenWindow | None]) -> np.ndarray:
-    """``[rows, hours * BASE_BINS, features]``: each hour laid over the corpus's channels."""
-    layout = BinnedTokens(BASE_BINS, channels=CHANNELS)
-    laid = []
-    for hour in hours:
-        if hour is None:
-            laid.append(np.zeros((len(CHANNELS), BASE_BINS, BinnedTokens.N_FEATURES)))
-        else:
-            cells = layout.lay([hour])[0].features
-            laid.append(cells.reshape(BASE_BINS, len(CHANNELS), -1).transpose(1, 0, 2))
-    return np.concatenate(laid, axis=1)
-
-
-@pytest.mark.parametrize(("hours", "bins"), [(1, 6), (6, 6), (6, 36), (24, 24), (4, 8), (3, 2)])
-@pytest.mark.parametrize("seed", [1, 2, 3])
-def test_the_context_cells_are_what_the_layout_makes_of_the_concatenated_tokens(
-    hours: int, bins: int, seed: int
-) -> None:
-    draw = random.Random(seed)
-    windows: list[TokenWindow | None] = [
-        None
-        if draw.random() < 0.2
-        else hour_window(
-            draw, channels=draw.choice([(1, 2), (2, 3, 4), CHANNELS]), readings=draw.randint(1, 30)
-        )
-        for _ in range(hours)
-    ]
-    if all(w is None for w in windows):
-        windows[-1] = hour_window(draw, channels=CHANNELS, readings=5)
-    whole = concatenated(windows)
-
-    derived = context_cells(published_cells(windows), bins)
-    over_corpus = BinnedTokens(bins, channels=CHANNELS).lay([whole])[0]
-    own = BinnedTokens(bins).lay([whole])[0]
-
-    assert derived.shape == (len(CHANNELS), bins, BinnedTokens.N_FEATURES)
-    expected = over_corpus.features.reshape(bins, len(CHANNELS), -1).transpose(1, 0, 2)
-    np.testing.assert_allclose(derived, expected, atol=1e-9)
-    rows = np.asarray(CHANNELS, dtype=np.int64)
-    laid_corpus = laid_context(derived, rows, own_channels=False)
-    np.testing.assert_allclose(laid_corpus.features, over_corpus.features, atol=1e-9)
-    assert laid_corpus.channel_ids.tolist() == over_corpus.channel_ids.tolist()
-    np.testing.assert_allclose(laid_corpus.times, over_corpus.times)
-    laid_own = laid_context(derived, rows, own_channels=True)
-    np.testing.assert_allclose(laid_own.features, own.features, atol=1e-9)
-    assert laid_own.channel_ids.tolist() == own.channel_ids.tolist()
-    assert not laid_own.timeless.any()
-
-
 def test_cells_that_do_not_cut_into_the_bins_are_refused() -> None:
-    with pytest.raises(ValueError, match="do not cut"):
-        context_cells(np.zeros((2, 12, BinnedTokens.N_FEATURES)), 5)
     with pytest.raises(ValueError, match="do not cut"):
         Layout(1, 4)
     with pytest.raises(ValueError, match="hours and bins"):

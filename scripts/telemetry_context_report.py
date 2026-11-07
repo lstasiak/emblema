@@ -75,7 +75,7 @@ from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.statistics.paired_anomaly_rankings import PairedAnomalyRankings
 from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUnitBootstrap
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
-from emblema.shared.adapters.arrays.laid_window import LaidWindow
+from emblema.shared.adapters.arrays.joined_cells import JoinedCells
 from scripts.reporting import table
 from scripts.taught_fine_tuning_pilot import (
     LEAST_GAIN,
@@ -130,10 +130,6 @@ CELL_COLUMNS = (
     "scored_windows",
     "seconds",
 )
-# The published cells' feature axis, as the layout names it.
-PRESENCE = BinnedTokens.PRESENCE
-LOG_COUNT = BinnedTokens.LOG_COUNT
-MEAN, MINIMUM, MAXIMUM, FIRST, LAST, OFFSET, SINCE = range(2, 9)
 
 
 @dataclass(frozen=True, order=True)
@@ -198,85 +194,6 @@ def bins_of(arm: str) -> int:
     return BASE_BINS if arm.endswith("h") else Layout.parse(arm).bins
 
 
-def context_cells(published: Floats, bins: int) -> Floats:
-    """The cells of a context window from the published cells of the hours it spans.
-
-    ``published`` is ``[..., cells, features]``: for each row, the published cells of the
-    hours in time order, an hour that is not in the block as cells of nothing. The result is
-    ``[..., bins, features]``, what the layout over ``bins`` would make of the concatenated
-    tokens: every bin gathers whole published cells, so its count, level, extremes, ends and
-    the offset of its last reading follow from theirs, and the carry forward and the "since"
-    count run over the context's bins as they would over a window's.
-
-    Raises:
-        ValueError: If the published cells do not cut into ``bins``.
-    """
-    *lead, cells, features = published.shape
-    if cells % bins:
-        raise ValueError(f"{cells} published cells do not cut into {bins} bins")
-    each = cells // bins
-    grouped = published.reshape(*lead, bins, each, features)
-    present = grouped[..., PRESENCE] > 0.0
-    observed = present.any(axis=-1)
-    counts = np.where(present, np.rint(np.expm1(grouped[..., LOG_COUNT])), 0.0)
-    count = counts.sum(axis=-1)
-    mean = np.where(
-        observed, (counts * grouped[..., MEAN]).sum(axis=-1) / np.where(count > 0, count, 1.0), 0.0
-    )
-    minimum = np.where(observed, np.where(present, grouped[..., MINIMUM], np.inf).min(axis=-1), 0.0)
-    maximum = np.where(
-        observed, np.where(present, grouped[..., MAXIMUM], -np.inf).max(axis=-1), 0.0
-    )
-    earliest = present.argmax(axis=-1)[..., None]
-    latest_cell = (each - 1 - present[..., ::-1].argmax(axis=-1))[..., None]
-    first = np.take_along_axis(grouped[..., FIRST], earliest, axis=-1)[..., 0]
-    last = np.take_along_axis(grouped[..., LAST], latest_cell, axis=-1)[..., 0]
-    offset = (
-        latest_cell[..., 0] + np.take_along_axis(grouped[..., OFFSET], latest_cell, axis=-1)[..., 0]
-    ) / each
-    offset = np.where(observed, np.minimum(offset, 1.0), 0.0)
-    first, last = np.where(observed, first, 0.0), np.where(observed, last, 0.0)
-    places = np.arange(bins)
-    latest = np.maximum.accumulate(np.where(observed, places, -1), axis=-1)
-    held = np.where(latest >= 0, np.take_along_axis(last, np.maximum(latest, 0), axis=-1), 0.0)
-    since = np.where(latest >= 0, places - latest, places + 1) / bins
-    for feature in (mean, minimum, maximum, first, last):
-        feature[~observed] = held[~observed]
-    stacked: Floats = np.stack(
-        (
-            observed.astype(np.float64),
-            np.log1p(count),
-            mean,
-            minimum,
-            maximum,
-            first,
-            last,
-            offset,
-            since,
-        ),
-        axis=-1,
-    )
-    return stacked
-
-
-def laid_context(cells: Floats, rows: NDArray[np.int64], *, own_channels: bool) -> LaidWindow:
-    """One context window's cells ``[rows, bins, features]`` as the layout lays a window out.
-
-    Over the window's own channels, a row no bin observed is dropped, as the layout gives a
-    window a row only for a channel it holds; over the corpus's, every row stays.
-    """
-    if own_channels:
-        kept = (cells[..., PRESENCE] > 0.0).any(axis=-1)
-        cells, rows = cells[kept], rows[kept]
-    channels, bins, features = cells.shape
-    return LaidWindow(
-        features=cells.transpose(1, 0, 2).reshape(-1, features),
-        channel_ids=np.tile(rows, bins),
-        times=np.repeat((np.arange(bins) + 0.5) / bins, channels),
-        timeless=np.zeros(channels * bins, dtype=bool),
-    )
-
-
 class PublishedCells:
     """The published one-hour cells of every loaded window, and the hours they end at.
 
@@ -332,7 +249,7 @@ class PublishedCells:
         )
         windows, hours, rows, bins, features = gathered.shape
         published = gathered.transpose(0, 2, 1, 3, 4).reshape(windows, rows, hours * bins, features)
-        return context_cells(published, layout.bins)
+        return JoinedCells(layout.bins).join(published)
 
     def previous(self, indices: Sequence[int], hours: int) -> NDArray[np.int64]:
         """``[len(indices), hours - 1]``: the loaded windows of the hours before each, or -1."""
@@ -1189,7 +1106,7 @@ class Reader:  # pragma: no cover - environment
             indices = list(range(start, min(start + batch_size, len(self.windows))))
             cells = self.cells.context(indices, layout)
             laid = [
-                laid_context(cells[i], self.cells.rows, own_channels=True)
+                JoinedCells.laid(cells[i], self.cells.rows, own_channels=True)
                 for i in range(len(indices))
             ]
             batch = TokenTensors.of(window_layout.batch(laid)).to(device)
