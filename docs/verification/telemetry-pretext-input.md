@@ -89,3 +89,70 @@ multiplicity. It therefore leans slightly towards longer windows and finer cells
 - The fitting months hold events and are read without their labels. An event in the read months
   raises the error of the bar and of the forecasts alike.
 - The second mission has 21 fitting months, seven of them read, so its intervals are wide.
+
+## 2026-11-07 — the declared measure read the median's precision and the level's drift, corrected before its rerun
+
+**What happened.** The run of the section above, on `ac65ca5c`, gave every arm a skill far below
+zero on both missions. On the first, the `cross` skills ran from −37 to −79 and the `own` ones
+from −1.7 to −4.2. On the second, they ran from −0.2 to −1.1. A quarter to over a third of the
+chosen penalties lay at the grid's lower edge. No choice is taken from that run. Its numbers were
+seen only to find the fault, and the trial before it had already shown one: a skill of −11.6.
+
+**The fault, on one channel.** Channel 394 of the first mission, at 60-minute cells and 6 hours:
+
+| Target | Scale | Forecast / median error, taught rows | `own`, read | `cross`, read |
+| --- | --- | --- | --- | --- |
+| mean | 0.0070 | 0.98 / 1 | 1.01 / 0.88 | 8.1 / 0.88 |
+| least | 0.0039 | 1.54 / 1 | 2.17 / 1.05 | 51 / 1.05 |
+| log of the count | 0.0025 | 1.57 / 1 | 19.6 / 1.89 | 762 / 1.89 |
+
+The mean target sat at −0.20 over the taught months and at +0.58 over the read ones.
+- The ridge forecast the hour's level, which drifts between months. The median of the hours
+  before follows such a drift. A ridge fitted on earlier months extrapolates it, and with every
+  channel's last hour as inputs, it does so along every drifting channel.
+- The forecast and the bar were not nested. A ridge shrunk to nothing answered the taught
+  months' mean, not the median, and a fit under squared loss could lose to the median under
+  absolute loss on its own rows.
+- Where the median is nearly exact, on stepped values and a fixed count of readings an hour,
+  its error is nearly zero. As a scale, it weighed each error of a forecast hundreds of times.
+
+**The corrected measure.** Everything else above stands: the arms, the sides, the rows read, the
+skill over the read months, the rule, the block and what is read beside.
+
+| | |
+| --- | --- |
+| Code | the commit that adds this section |
+| Target | the hidden hour's departure from the bar, per target; the forecast is the bar plus the forecast departure, so a forecast of nothing is the bar |
+| Own history | the cells with the level taken out: the five values less the bar's mean, the log of the count less the bar's; a bin before the history's first reading holds nothing, and a bin without a reading holds no count |
+| Other channels | each one's last hour as its departure from its own median over the five hours before, beside whether it was held; nothing where either is missing |
+| Fit | ridge on inputs standardised over the taught rows, the departures not centred; a constant column, penalised as every other; penalties 10⁻⁶ to 10³ times the rows and an infinite one, which forecasts nothing, so the grid holds the bar itself |
+| Scale | the bar's mean error on the taught rows, at least a tenth of the target's mean absolute deviation there, as the channel-local detector floors a history's spread; a target without deviation is left out |
+| Sides written | the errors on the taught rows beside the read ones |
+
+**Checks that the measure is believable.** These are read before the rule, on the fitting side, and
+they choose nothing. If either fails, the run is a configuration fault: `choice.json` then carries
+no layout and no block.
+- On the rows it was fitted on, no arm's skill is below −0.05. The grid holds a forecast of about
+  nothing, so a fit that loses more than this fights the measure rather than lacks signal.
+- On the rows read, no arm's skill is below −1, meaning no forecast errs twice as much as the bar.
+
+The shares of penalties at the grid's least and at its infinite end are read beside. Many at the
+infinite end mean that history adds nothing over the median for those targets. That is a
+finding, not a fault.
+
+**Trial.** On the first mission, channels 377, 394 and 407, over every fitting month (167 s):
+- both checks hold: the least skill is 0.21 on the taught rows and 0.07 on the rows read;
+- 3 % of the penalties lie at the least and 42 % at the infinite end;
+- channel 394, the one in the table above, reads 0.00 on the taught rows and −0.04 on the rows
+  read.
+
+The trial read skills of 0.07 to 0.17 over the median. The ten-minute arms read lowest: hundreds
+of columns under one penalty a target fit the taught rows better than they forecast the read
+ones. This tilts the rule towards wider cells. It is a limit of the linear forecast, already
+declared above, not of what the history holds. Three channels of 48 choose nothing, and the
+rule stands as declared.
+
+**Limitations added.**
+- The penalty is still chosen under absolute error for a fit under squared loss.
+- The inputs carry no level, so a forecast cannot read a channel acting otherwise near one level
+  than near another.
