@@ -48,6 +48,7 @@ from scripts.telemetry_pretext_input_report import (
     month_draws,
     month_errors,
     monthly_median_errors,
+    pooled_rows,
     skills,
     standardised,
     write_rows,
@@ -471,3 +472,54 @@ def test_the_bars_hours_are_clipped_where_the_targets_are() -> None:
 
     assert clipped[0, MEAN] == pytest.approx(np.quantile(np.arange(1.0, 1001.0), 0.001))
     assert clipped[:, PRESENCE].tolist() == hours[:, PRESENCE].tolist()
+
+
+def test_a_month_of_one_mission_is_not_the_same_month_of_another() -> None:
+    row = {"side": READ, "month": "2001-01", "forecast": "1.0"}
+
+    pooled = pooled_rows({"m1": [row], "m2": [row]})
+
+    assert [r["month"] for r in pooled] == ["m1:2001-01", "m2:2001-01"]
+    assert row["month"] == "2001-01"
+
+
+def test_the_pooled_rule_reads_every_run_and_names_its_months(tmp_path: Path) -> None:
+    levels = {Arm(r, length, CROSS): 0.2 for r in RESOLUTIONS for length in LENGTHS}
+    for run in ("a", "b"):
+        rows = [
+            {
+                "side": side,
+                "resolution": arm.resolution,
+                "length": arm.length,
+                "variant": arm.variant,
+                "month": month,
+                "forecast": forecast,
+                "median": each.median[month],
+                "cells": each.cells[month],
+                "channel": 7,
+            }
+            for side in (TEACH, READ)
+            for arm, each in errors_where(levels, 10).items()
+            for month, forecast in each.forecast.items()
+        ]
+        (tmp_path / run).mkdir()
+        write_rows(tmp_path / run / "errors.csv", list(rows[0]), rows)
+    out = tmp_path / "pooled.json"
+
+    main(
+        [
+            "pool",
+            "--dirs",
+            str(tmp_path / "a"),
+            str(tmp_path / "b"),
+            "--names",
+            "a",
+            "b",
+            "--out",
+            str(out),
+        ]
+    )
+
+    choice = json.loads(out.read_text())
+    assert choice["months"] == 20
+    assert (choice["resolution"], choice["length"]) == ("60min", 6)

@@ -10,13 +10,14 @@ under each resolution and length shows where more history or finer cells stop he
 much a forecast can gain over the median at all. No label is read; the targets are what the
 hidden hour held.
 
-Three commands:
+Four commands:
 
 - ``measure``: on the fitting months, the forecasts' errors per month for every resolution,
   length and set of inputs; each channel's hourly autocorrelation; each channel's monthly
   median error; the fitting windows per month. CSV only.
 - ``cost``: the small shape's forward and backward pass over a window of each layout, on a
   device, timed, with the memory it held.
+- ``pool``: the rule over the union of the missions' runs, the corpus a pretraining reads.
 - ``read``: the skills with intervals over the months, the checks that the measure is believable,
   the layout the rule chooses, whether the errors carry a yearly structure, and how many months
   the held-out block takes.
@@ -658,6 +659,50 @@ def read(arguments: argparse.Namespace) -> None:
         print("the measure is not believable: a configuration fault, no choice taken", flush=True)
 
 
+def pooled_rows(named: Mapping[str, Sequence[Mapping[str, str]]]) -> list[dict[str, str]]:
+    """The errors of several runs as one corpus's, each month named by its run.
+
+    A pretraining reads every mission at once, so its layout is the rule's over their union; a
+    month of one mission is not the same month of another, so the months are drawn apart.
+    """
+    return [
+        {**row, "month": f"{name}:{row['month']}"} for name, rows in named.items() for row in rows
+    ]
+
+
+def pool(arguments: argparse.Namespace) -> None:
+    """The rule over the union of the runs ``measure`` wrote, one per mission."""
+    if len(arguments.dirs) != len(arguments.names):
+        raise SystemExit("every run needs one name")
+    written = pooled_rows(
+        {
+            n: read_rows(d / "errors.csv")
+            for n, d in zip(arguments.names, arguments.dirs, strict=True)
+        }
+    )
+    errors = errors_of(written)
+    months = sorted({m for e in errors.values() for m in e.median})
+    found, drawn = skills(errors, month_draws(len(months), DRAWS, SEED), months)
+    believable = Believable(
+        least_teaching=min(point_skills(errors_of(written, TEACH)).values()),
+        least_read=min(s.skill for s in found.values()),
+    )
+    chosen = chosen_arm(drawn)
+    choice = {
+        "runs": dict(zip(arguments.names, map(str, arguments.dirs), strict=True)),
+        "months": len(months),
+        "believable": believable.holds,
+        "resolution": chosen.resolution if believable.holds else None,
+        "length": chosen.length if believable.holds else None,
+        "bins": chosen.tokens if believable.holds else None,
+        "skill": found[chosen].skill if believable.holds else None,
+    }
+    arguments.out.write_text(json.dumps(choice, indent=2) + "\n")
+    print(skill_table(found, chosen))
+    print()
+    print(json.dumps(choice, indent=2))
+
+
 def cost(arguments: argparse.Namespace) -> None:  # pragma: no cover - device
     """Forward and backward over one window of each layout, timed, on a device."""
     import torch
@@ -948,12 +993,16 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     costing.add_argument("--out", type=Path, required=True)
     reading = commands.add_parser("read", help="skills, the chosen layout and the block")
     reading.add_argument("--dir", type=Path, required=True)
+    pooling = commands.add_parser("pool", help="the rule over the union of the missions' runs")
+    pooling.add_argument("--dirs", type=Path, nargs="+", required=True)
+    pooling.add_argument("--names", nargs="+", required=True)
+    pooling.add_argument("--out", type=Path, required=True)
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     arguments = parse_arguments(argv)
-    {"measure": measure, "cost": cost, "read": read}[arguments.command](arguments)
+    {"measure": measure, "cost": cost, "read": read, "pool": pool}[arguments.command](arguments)
 
 
 if __name__ == "__main__":  # pragma: no cover
