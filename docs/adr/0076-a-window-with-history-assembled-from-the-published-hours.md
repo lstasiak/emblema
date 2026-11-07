@@ -7,8 +7,7 @@
 
 The satellite tasks score one-hour windows, and a task refuses a corpus published at any other
 length. A pretext that hides a channel's next hour and asks for it from the hours before needs
-those hours in its window. Measured with no label, one-hour cells over 48 hours tell the most
-about the hidden hour: a fifth of the median's error on the first mission
+those hours in its window: one-hour cells over 48 hours, measured with no label
 (`telemetry-pretext-input.md`).
 
 Checked on one month of each mission (`telemetry-history-window.md`):
@@ -33,10 +32,12 @@ Checked on one month of each mission (`telemetry-history-window.md`):
   and the experiment file's `[input]`. `bins` must be a whole multiple of `history`.
 - **Pretraining draws one window per published hour.**
   - The reader hands each side's windows with their unit and extent.
-  - A window ends at every published window. The hours before it within one mission are its
-    history, whichever side holds them, and an hour with no window is cells of nothing. A
-    validation window may so read training hours before it; no training window reads the
-    block, which comes last.
+  - A window ends at every published window. The windows before it on its axis are its
+    history, whichever side holds them; an hour with no window is cells of nothing. The axis is
+    the unit's part, a mission, as the manifest keys units `<part>/<name>`, or the unit itself;
+    overlapping windows of one axis are refused, and a window more than a hundredth of a
+    window off its place fills none. A validation window may read training hours;
+    no training window reads the block, which comes last.
   - The hours are laid once a run, the windows joined per batch.
   - Masks are drawn over the joined cells. Hiding a cell empties the published cells under it,
     and the carry-forward and counts are recomputed after it, as `BinnedTokens.without` does from
@@ -57,12 +58,11 @@ Checked on one month of each mission (`telemetry-history-window.md`):
 
 ## Consequences
 
-- A window costs 2,304 cells on the first mission's 48 channels. At batch 8, a step takes
-  0.73 s on the Mac's MPS, 11 windows a second against the 2,812 the host joins. A campaign at
-  batch 32 goes to a GPU, and its loader's throughput is measured in the pilot.
-- At one cell an hour, the first mission's first half holds about 0.2 GB of cells in float64,
-  so the hours are kept and joined in float64, as `BinnedTokens` lays them, and only the batch
-  is narrowed.
+- A window is 2,304 cells on the first mission; a step at batch 8 takes 0.73 s on the Mac's
+  MPS. On the published corpus, 153,000 hours are laid in 285 s once a run, and a batch of 32 is
+  joined, masked and joined again in 25 ms on one host process.
+- The first halves' 76,700 hours, one cell each over 59 channels, hold about 0.3 GB in float64,
+  so they are joined in float64, as `BinnedTokens` lays them, and only the batch is narrowed.
 - Neighbouring windows share 47 of their 48 hours; whether so dense a draw helps is read in the
   pilot, not assumed.
 - `history` reads as one in every stored document, so no encoder so far changes.
@@ -70,9 +70,8 @@ Checked on one month of each mission (`telemetry-history-window.md`):
 
 ## Alternatives
 
-- **Publish 48-hour windows at a step of 6 hours.** Eight times the data, one target hour in six,
-  47 hours lost at every month's start, two constructions of one window, and 40 to 56 windows a
-  second on the host.
-- **Publish at a step of 48 hours.** About 1,500 windows, one hour in 48 a target.
+- **Publish 48-hour windows.** At a step of 6 hours: eight times the data, one target hour in
+  six, 47 hours lost at each month's start, two constructions of one window, 40 to 56 windows a
+  second. At 48: about 1,500 windows.
 - **48-hour task windows labelled by their last hour.** New tasks, which no reading so far
   compares with.
