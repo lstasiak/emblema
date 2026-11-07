@@ -121,6 +121,17 @@ def test_windows_can_be_selected_by_the_unit_they_came_from(tmp_path: Path) -> N
     assert list(block.of_units(set())) == []
 
 
+def test_a_selection_by_unit_says_where_its_windows_lie_in_its_order(tmp_path: Path) -> None:
+    block = block_of(tmp_path / "corpus.block", PLACED)
+
+    units, starts, ends = block.places_of({0, 3})
+
+    assert units.tolist() == [0, 0, 3]
+    assert starts.tolist() == [0.0, 5.0, 1.0]
+    assert ends.tolist() == [10.0, 15.0, 11.0]
+    assert [len(column) for column in block.places_of(set())] == [0, 0, 0]
+
+
 def test_windows_can_be_selected_by_position_in_the_order_asked(tmp_path: Path) -> None:
     block = block_of(tmp_path / "corpus.block", PLACED)
 
