@@ -1,4 +1,5 @@
 import io
+from dataclasses import replace
 
 import pytest
 
@@ -224,6 +225,20 @@ def test_a_model_over_cells_is_read_back_with_its_bins_and_its_observation() -> 
     assert isinstance(trained, CellReconstruction)
     with torch.no_grad():
         assert torch.equal(read(batch, masks), trained(batch, masks))
+
+
+def test_a_model_over_a_history_is_read_back_with_it_and_one_without_writes_none() -> None:
+    joined = configuration(architecture=replace(CELLS, bins=6, history=3))
+    torch.manual_seed(6)
+
+    stored = TrainedModel.read(
+        TrainedModel.of(joined, CHANNELS, ObjectiveShape.of(joined, CHANNELS).build()).to_bytes()
+    )
+    plain = configuration(architecture=CELLS)
+    without = TrainedModel.of(plain, CHANNELS, ObjectiveShape.of(plain, CHANNELS).build())
+
+    assert stored.architecture.history == 3
+    assert b"history" not in without.to_bytes()
 
 
 def test_a_model_over_cells_is_read_back_with_the_masks_it_drew_and_how_it_scored_a_miss() -> None:

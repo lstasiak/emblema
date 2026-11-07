@@ -88,3 +88,21 @@ def test_the_bins_widen_the_value_projection_and_nothing_else() -> None:
 def test_negative_bins_are_refused() -> None:
     with pytest.raises(InvalidEncoderArchitectureError, match="bins"):
         replace(SMALL, bins=-1)
+
+
+def test_a_window_spans_its_own_alone_unless_it_has_a_history() -> None:
+    over_hours = replace(SMALL, bins=48, history=48)
+
+    assert SMALL.history == 1
+    assert over_hours.parameter_count(64) == replace(SMALL, bins=48).parameter_count(64)
+
+
+@pytest.mark.parametrize(
+    ("bins", "history", "match"),
+    [(48, 0, "at least its own"), (0, 48, "joined from their cells"), (12, 5, "divides")],
+)
+def test_a_history_is_refused_where_its_windows_cannot_be_joined(
+    bins: int, history: int, match: str
+) -> None:
+    with pytest.raises(InvalidEncoderArchitectureError, match=match):
+        replace(SMALL, bins=bins, history=history)

@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -249,6 +250,20 @@ def test_a_document_written_before_the_input_had_a_part_reads_one_token_per_read
     document = CODEC.encode(configuration())
 
     assert CODEC.decode(document).architecture.bins == 0
+
+
+def test_the_history_travels_inside_the_architecture_and_only_where_it_spans_more() -> None:
+    joined = configuration(architecture=replace(CELLS, bins=6, history=3))
+
+    document = CODEC.encode(joined)
+
+    plain = CODEC.encode(configuration(architecture=CELLS))["architecture"]
+    assert isinstance(plain, dict)
+    assert "history" not in plain
+    architecture = document["architecture"]
+    assert isinstance(architecture, dict)
+    assert architecture["history"] == 3
+    assert CODEC.decode(json.loads(json.dumps(document))) == joined
 
 
 def test_the_observation_travels_inside_the_objective_and_only_where_it_is_stated() -> None:

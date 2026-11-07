@@ -44,12 +44,20 @@ class RestoredBackbones:
         """Serve the model stored under ``weights``.
 
         Raises:
-            UnreadableTrainedModelError: If the artifact is not a trained model.
+            UnreadableTrainedModelError: If the artifact is not a trained model, or one over a
+                history of windows, whose windows an evaluation here does not join.
             ArtifactNotFoundError: If nothing is stored under the reference.
             ArtifactIntegrityError: If the stored bytes do not hash to the reference's checksum.
         """
         self._weights = weights
         self._trained = TrainedModel.read(store.get(weights))
+        # Its windows span the published ones before them; read one at a time it would score
+        # each hour cut into its bins, a reading that runs and means nothing.
+        if self._trained.architecture.history > 1:
+            raise UnreadableTrainedModelError(
+                f"{weights.key!r} reads a history of {self._trained.architecture.history} "
+                "windows, which an evaluation here does not join"
+            )
         self._readings: dict[str, PretextReading] = {}
 
     @property
@@ -176,7 +184,8 @@ class RestoredBackbones:
     ) -> nn.Module:
         # The input part is the run's layout's, not the stored model's: a fresh encoder over
         # the raw readings beside a backbone over cells reads two features, and says so.
-        architecture = replace(self._trained.architecture, bins=bins)
+        # A fresh encoder reads the run's own windows, so it spans no history it was not given.
+        architecture = replace(self._trained.architecture, bins=bins, history=1)
         if shape is not None:
             architecture = replace(
                 architecture,

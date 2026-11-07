@@ -9,11 +9,14 @@ class EncoderArchitecture:
     """The shape of the encoder: what a trained backbone is identified by and its weights load into.
 
     Invariants: every count is positive; ``width`` is a multiple of ``heads``; ``bins`` is not
-    negative. The vocabulary size is an argument of ``parameter_count`` rather than a field,
-    because the same architecture trained over two vocabularies is the same architecture with two
-    embedding tables. The bins are part of the shape because they fix what a token is and how
+    negative; a ``history`` of more than one window is read over cells, whose bins it divides.
+    The vocabulary size is an argument of ``parameter_count`` rather than a field, because the
+    same architecture trained over two vocabularies is the same architecture with two embedding
+    tables. The bins are part of the shape because they fix what a token is and how
     wide the value projection is: weights trained over one token per reading do not load into
-    an encoder reading one token per channel and span, and the other way round.
+    an encoder reading one token per channel and span, and the other way round. The history is
+    part of it because it fixes what a window is: an encoder that read the windows before its
+    own beside it must be handed the same ones wherever it is evaluated.
 
     Attributes:
         width: Size of a token's representation throughout the encoder.
@@ -25,6 +28,8 @@ class EncoderArchitecture:
         bins: Equal spans a window is cut into where a token is one channel over one span,
             carrying what the span held; zero where a token is one reading, as every encoder
             before the input had a part.
+        history: Consecutive published windows one window spans, its own the last; one where a
+            window is the published one alone, as every encoder before the history.
     """
 
     width: int
@@ -33,6 +38,7 @@ class EncoderArchitecture:
     feedforward_width: int
     time_frequencies: int
     bins: int = 0
+    history: int = 1
 
     def __post_init__(self) -> None:
         counts = (
@@ -51,6 +57,15 @@ class EncoderArchitecture:
             )
         if self.bins < 0:
             raise InvalidEncoderArchitectureError(f"bins must not be negative, got {self.bins}")
+        if self.history < 1:
+            raise InvalidEncoderArchitectureError(
+                f"a window spans at least its own, got a history of {self.history}"
+            )
+        if self.history > 1 and (not self.reads_cells or self.bins % self.history):
+            raise InvalidEncoderArchitectureError(
+                f"a history of {self.history} windows is joined from their cells, so it divides "
+                f"the bins, got {self.bins}"
+            )
 
     @property
     def reads_cells(self) -> bool:

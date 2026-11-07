@@ -114,6 +114,18 @@ def test_an_artifact_that_is_not_a_trained_model_is_refused_when_the_process_is_
         RestoredBackbones(store, store.put(b"not a model"))
 
 
+def test_a_backbone_over_a_history_of_windows_is_refused_when_the_process_is_built() -> None:
+    from dataclasses import replace
+
+    store = InMemoryArtifactStore()
+    joined = configuration(architecture=replace(CELLS, bins=6, history=3))
+    torch.manual_seed(6)
+    trained = TrainedModel.of(joined, CHANNELS, ObjectiveShape.of(joined, CHANNELS).build())
+
+    with pytest.raises(UnreadableTrainedModelError, match="history of 3 windows"):
+        RestoredBackbones(store, store.put(trained.to_bytes()))
+
+
 def test_the_pretrained_encoder_grows_rows_for_channels_past_its_table() -> None:
     store = InMemoryArtifactStore()
     weights, encoder = stored(store)

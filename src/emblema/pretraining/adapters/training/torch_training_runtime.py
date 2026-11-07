@@ -1,9 +1,9 @@
 import logging
 import math
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Self
+from typing import Any, Self
 
 import torch
 
@@ -14,6 +14,8 @@ from emblema.pretraining.adapters.training.batch_layout import BatchLayout
 from emblema.pretraining.adapters.training.cell_batches import CellBatches
 from emblema.pretraining.adapters.training.device_generator import DeviceGenerator
 from emblema.pretraining.adapters.training.devices import available_device
+from emblema.pretraining.adapters.training.joined_cell_batches import JoinedCellBatches
+from emblema.pretraining.adapters.training.joined_windows import JoinedWindows
 from emblema.pretraining.adapters.training.raw_batches import RawBatches
 from emblema.pretraining.adapters.training.torch_precision import TorchPrecision
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
@@ -70,8 +72,9 @@ class _Session:
     scheduler: torch.optim.lr_scheduler.LRScheduler
     scaler: torch.amp.GradScaler
     training: InterleavedLoader
-    validation: tuple[tuple[TrainingCorpus, WindowLoader], ...]
-    layout: BatchLayout
+    # Any: a loader's windows are whatever the run's layout collates, token windows or joined.
+    validation: tuple[tuple[TrainingCorpus, WindowLoader[Any]], ...]
+    layout: BatchLayout[Any]
     masking: TokenMasking
     draws: torch.Generator
     position: RunPosition
@@ -256,13 +259,17 @@ class TorchTrainingRuntime:
         model = model.to(self._device)
         self._restrict(model, configuration.trained)
         layout = self._layout_of(configuration.architecture)
+        sides = {
+            corpus.name: self._sides_of(corpus, configuration.architecture)
+            for corpus in mixture.corpora
+        }
         # A corpus read more than once an epoch is that many loaders over its windows, each turn
         # in its own order, so its share of the steps grows by whole passes and the interleaving
         # treats a pass as it treats a corpus.
         training = InterleavedLoader(
             [
                 WindowLoader(
-                    corpus.training,
+                    sides[corpus.name][0],
                     batch_size=budget.batch_size,
                     seed=budget.seed,
                     turn=turn,
@@ -279,7 +286,7 @@ class TorchTrainingRuntime:
             (
                 corpus,
                 WindowLoader(
-                    corpus.validation,
+                    sides[corpus.name][1],
                     batch_size=budget.batch_size,
                     seed=budget.seed,
                     shuffle=False,
@@ -321,12 +328,30 @@ class TorchTrainingRuntime:
             self._resume(session, resume_from)
         return session
 
+    # Any: the layout collates token windows or joined ones, as the architecture's history says.
     @staticmethod
-    def _layout_of(architecture: EncoderArchitecture) -> BatchLayout:
-        """How the run lays windows out: cells of the architecture's bins, or the raw readings."""
+    def _layout_of(architecture: EncoderArchitecture) -> BatchLayout[Any]:
+        """How the run lays windows out: cells of the architecture's bins, or the raw readings.
+
+        Over a history of windows, the cells are joined from each window's own (ADR-0076).
+        """
+        if architecture.history > 1:
+            return JoinedCellBatches(architecture.bins)
         if architecture.reads_cells:
             return CellBatches(BinnedTokens(architecture.bins))
         return RawBatches()
+
+    @staticmethod
+    def _sides_of(
+        corpus: TrainingCorpus, architecture: EncoderArchitecture
+    ) -> tuple[Sequence[Any], Sequence[Any]]:
+        """The windows the run reads of each side: as published, or joined with their history.
+
+        Joining lays every published window once, before the first step.
+        """
+        if architecture.history == 1:
+            return corpus.training, corpus.validation
+        return JoinedWindows.sides_of(corpus, history=architecture.history, bins=architecture.bins)
 
     @staticmethod
     def _restrict(model: PretrainingObjective, trained: TrainedParameters) -> None:

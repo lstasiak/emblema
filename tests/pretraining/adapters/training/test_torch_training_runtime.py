@@ -5,6 +5,7 @@ trains can be held to — that accumulation is the larger batch, that a resumed 
 resumed, and that the weights it stored are the weights it trained.
 """
 
+import dataclasses
 import math
 import re
 from typing import Any
@@ -14,6 +15,7 @@ import pytest
 from emblema.pretraining.domain.exceptions import (
     DivergedRunError,
     IncompatibleStartError,
+    InvalidTrainingCorpusError,
     UnsupportedPrecisionError,
 )
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
@@ -25,6 +27,7 @@ from emblema.pretraining.domain.training.precision import Precision
 from emblema.pretraining.domain.training.trained_parameters import TrainedParameters
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
 from emblema.pretraining.domain.training.training_mixture import TrainingMixture
+from emblema.pretraining.domain.training.window_place import WindowPlace
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.retention import Retention
@@ -777,3 +780,38 @@ def test_a_run_over_cells_reads_corpora_of_both_regimes() -> None:
     kept = outcomes[-1].backbone
     assert kept is not None
     assert isinstance(runtime.restore(kept), CellReconstruction)
+
+
+def placed(corpus: TrainingCorpus) -> TrainingCorpus:
+    """``corpus`` with its windows one after another on one axis, training before validation."""
+    count = len(corpus.training)
+    return dataclasses.replace(
+        corpus,
+        training_places=[WindowPlace("a", float(i), float(i + 1)) for i in range(count)],
+        validation_places=[
+            WindowPlace("a", float(count + i), float(count + i + 1))
+            for i in range(len(corpus.validation))
+        ],
+    )
+
+
+def test_a_run_over_a_history_joins_each_window_with_those_before_it_and_keeps_it() -> None:
+    joined = dataclasses.replace(CELLS, bins=6, history=3)
+    stated = configuration(budget=budget(epochs=1, batch_size=2), architecture=joined)
+    store = InMemoryArtifactStore()
+    runtime = TorchTrainingRuntime(store, device="cpu")
+
+    outcomes = list(runtime.train(stated, mixture(placed(CORPUS))))
+
+    assert all(math.isfinite(entry.loss) for entry in outcomes[-1].validation)
+    kept = outcomes[-1].backbone
+    assert kept is not None
+    assert TrainedModel.read(store.get(kept)).architecture.history == 3
+
+
+def test_a_run_over_a_history_refuses_a_corpus_that_does_not_say_where_its_windows_lie() -> None:
+    joined = dataclasses.replace(CELLS, bins=6, history=3)
+    stated = configuration(budget=budget(epochs=1, batch_size=2), architecture=joined)
+
+    with pytest.raises(InvalidTrainingCorpusError, match="does not say where"):
+        list(TorchTrainingRuntime(InMemoryArtifactStore(), device="cpu").train(stated, MIXTURE))

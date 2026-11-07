@@ -203,9 +203,10 @@ class ExperimentConfiguration:
         renders as it did before either knob existed. The tail is rendered only where it is
         drawn, the target only where it is a state, the contrast, the summaries and the
         observation only where they are stated, the bins only where the encoder reads cells, the
-        start only where there is one and the trained parameters only where they are not
-        everything, for the same reason. The start renders as the checksum of the stored model:
-        what the run starts from is the weights, wherever they are kept.
+        history only where a window spans more than its own, the start only where there is one
+        and the trained parameters only where they are not everything, for the same reason. The
+        start renders as the checksum of the stored model: what the run starts from is the
+        weights, wherever they are kept.
         """
         passes = {
             f"passes.{stated.corpus}": stated.passes
@@ -257,6 +258,8 @@ class ExperimentConfiguration:
         bins: dict[str, str | int | float] = (
             {"bins": self.architecture.bins} if self.architecture.reads_cells else {}
         )
+        if self.architecture.history > 1:
+            bins["history"] = self.architecture.history
         start: dict[str, str | int | float] = (
             {} if self.start is None else {"start": str(self.start.checksum)}
         )
