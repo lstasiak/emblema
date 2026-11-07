@@ -65,6 +65,16 @@ class PublishedCorpusManifest:
     token_count: int
     window_short_units: str = SHORT_UNITS_DROPPED
 
+    @staticmethod
+    def axis_of(unit: str) -> str:
+        """The time axis a unit's windows lie on: its part, where the corpus arrives in parts.
+
+        The units of one part are cut from one stream, a satellite's months from its mission, so
+        their windows share an axis; a unit with no part is a stream of its own.
+        """
+        part, separator, _ = unit.partition("/")
+        return part if separator else unit
+
     def __post_init__(self) -> None:
         if self.window_short_units not in SHORT_UNITS:
             raise InvalidPublishedCorpusManifestError(
