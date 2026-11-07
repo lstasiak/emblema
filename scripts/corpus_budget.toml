@@ -313,7 +313,7 @@ publisher = "European Space Agency (De Canio, Kotowski, Haskamp)"
 source = "https://zenodo.org/records/15237121"
 download_size = "11.6 GB (three mission zips), the same files as esa_ad"
 epochs = 1
-pretraining_split = "the first half of each mission by time may be pretrained on, as the benchmark trains; the second half holds the task's validation and frozen test months"
+pretraining_split = "the first half of each mission by time may be pretrained on, as the benchmark trains; the second half holds the task's validation and frozen test months. A pretraining publication cuts the second half out by name, holds the first half's last three months out to choose the epoch, and adopts the task corpus's statistics (ADR-0076, ADR-0077)"
 verdict = "candidate"
 decision = "Another reading of the same files, not another download: 48 target channels of Mission1 from three packets and one group and the 11 lightweight channels of Mission2, 618M readings; priced apart from the mix the reference shape was sized on."
 

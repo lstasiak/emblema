@@ -53,18 +53,19 @@ Checked on one month of each mission (`telemetry-history-window.md`):
   - Its last three months are the validation side, which chooses the epoch.
   - The second half is excluded by unit name. `--exclude-units` is extended to `esa_ad_raw`, whose
     units are named months.
+  - Statistics: the task corpus's (ADR-0077).
 
 ## Consequences
 
 - A window is 2,304 cells on the first mission; a step at batch 8 takes 0.73 s on the Mac's
   MPS. On the published corpus, 153,000 hours are laid in 285 s once a run, and a batch of 32 is
-  joined, masked and joined again in 25 ms on one host process.
+  joined, masked and joined again in 25 ms on one process.
 - The first halves' 76,700 hours, one cell each over 59 channels, hold about 0.3 GB in float64,
   so they are joined in float64, as `BinnedTokens` lays them, and only the batch is narrowed.
 - Neighbouring windows share 47 of their 48 hours; whether so dense a draw helps is read in the
   pilot, not assumed.
-- `history` reads as one in every stored document, so no encoder so far changes.
-- The arm that perturbs readings (ADR-0077) re-lays only the hour it perturbs, before the join.
+- Every stored document reads `history` as one, so no earlier encoder changes.
+- The arm that perturbs readings (ADR-0078) re-lays only the hour it perturbs, before the join.
 
 ## Alternatives
 
