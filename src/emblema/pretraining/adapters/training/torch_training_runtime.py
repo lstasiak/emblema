@@ -127,10 +127,12 @@ def _terms(terms: _Terms, tokens: int, trivial: _Terms | None = None) -> str:
         return ""
     divisor = max(tokens, 1)
     parts = []
+    # Eight places keep three figures of a term as small as a hundred-thousandth, as a cell's
+    # count is on a satellite's regular packets; the budget's rule reads a change of 1 % in it.
     for name, value in terms.items():
-        part = f"{name} {value / divisor:.5f}"
+        part = f"{name} {value / divisor:.8f}"
         if trivial is not None and name in trivial:
-            part += f" of {trivial[name] / divisor:.5f}"
+            part += f" of {trivial[name] / divisor:.8f}"
         parts.append(part)
     return " (" + ", ".join(parts) + ")"
 

@@ -543,11 +543,11 @@ def test_a_run_under_a_second_term_is_validated_on_the_hidden_tokens_alone(
     )
     assert said is not None
     validation, relative, reconstruction, trivial = said.groups()
-    assert validation == reconstruction
+    assert float(validation) == pytest.approx(float(reconstruction), abs=5e-6)
     assert float(relative) == pytest.approx(float(reconstruction) / float(trivial), abs=1e-3)
     scored = outcomes[-1].validation[0]
-    assert f"{scored.loss:.5f}" == reconstruction
-    assert f"{scored.trivial:.5f}" == trivial
+    assert f"{scored.loss:.8f}" == reconstruction
+    assert f"{scored.trivial:.8f}" == trivial
 
 
 def test_the_run_says_how_far_the_epoch_has_come_every_so_many_steps(
@@ -758,10 +758,10 @@ def test_a_run_over_cells_logs_its_three_terms_and_is_validated_on_the_summaries
     )
     assert said is not None
     validation, _relative, reconstruction, trivial = said.groups()
-    assert validation == reconstruction
+    assert float(validation) == pytest.approx(float(reconstruction), abs=5e-6)
     scored = outcomes[-1].validation[0]
-    assert f"{scored.loss:.5f}" == reconstruction
-    assert f"{scored.trivial:.5f}" == trivial
+    assert f"{scored.loss:.8f}" == reconstruction
+    assert f"{scored.trivial:.8f}" == trivial
     assert math.isfinite(outcomes[-1].training_loss)
 
 
