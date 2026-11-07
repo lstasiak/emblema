@@ -10,6 +10,9 @@ import pytest
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
 from scripts.telemetry_pretext_input_report import (
     CROSS,
+    FLOOR_SHARE,
+    LEAST_READ_SKILL,
+    LEAST_TEACHING_SKILL,
     LENGTHS,
     LOG_COUNT,
     MEAN,
@@ -17,9 +20,12 @@ from scripts.telemetry_pretext_input_report import (
     PENALTIES,
     PENALTY_COLUMNS,
     PRESENCE,
+    READ,
     RESOLUTIONS,
     TARGETS,
+    TEACH,
     Arm,
+    Believable,
     Moments,
     MonthErrors,
     arms,
@@ -28,12 +34,15 @@ from scripts.telemetry_pretext_input_report import (
     chosen_arm,
     chosen_penalty,
     clipped_hours,
+    departures,
     enough_history,
     errors_of,
+    floored_scale,
     forecast_of,
     gathered,
     history_cells,
     hour_summaries,
+    level_free,
     main,
     median_of_hours,
     month_draws,
@@ -132,15 +141,40 @@ def test_moments_added_are_the_moments_of_both_sets_of_rows() -> None:
 
 def test_the_ridge_forecasts_each_target_under_its_own_penalty() -> None:
     rng = np.random.default_rng(0)
-    inputs = rng.normal(size=(200, 3)) + 5.0
-    targets = np.column_stack((inputs @ [1.0, -2.0, 0.5] + 3.0, inputs[:, 0]))
-    every = np.arange(3)
+    features = rng.normal(size=(200, 3))
+    inputs = np.column_stack((np.ones(200), features))
+    targets = np.column_stack((features @ [1.0, -2.0, 0.5] + 3.0, features[:, 0] + 3.0))
+    every = np.arange(4)
 
     answers = forecast_of(Moments.of(inputs, targets), inputs, every, np.asarray([1e-6, 1e6]))
 
     assert answers[:, 0] == pytest.approx(targets[:, 0], abs=1e-3)
-    assert np.std(answers[:, 1]) < 0.05
-    assert answers[:, 1].mean() == pytest.approx(targets[:, 1].mean())
+    assert np.abs(answers[:, 1]).max() < 1e-4
+
+
+def test_the_largest_penalty_shrinks_a_forecast_to_the_medians_answer() -> None:
+    rng = np.random.default_rng(6)
+    inputs = np.column_stack((np.ones(300), rng.normal(size=(300, 4))))
+    departure = rng.normal(size=(300, 1)) + 0.5
+
+    shrunk = forecast_of(
+        Moments.of(inputs, departure), inputs, np.arange(5), np.asarray([PENALTIES[-1]])
+    )
+
+    assert shrunk.tolist() == [[0.0]] * 300
+
+
+def test_the_grid_ends_in_the_medians_answer_however_wide_the_window() -> None:
+    rng = np.random.default_rng(7)
+    walk = np.cumsum(rng.normal(size=(400, 1)), axis=0)
+    inputs = np.column_stack((np.ones(400), walk + 0.01 * rng.normal(size=(400, 300))))
+    departure = rng.normal(size=(400, 1))
+
+    shrunk = forecast_of(
+        Moments.of(inputs, departure), inputs, np.arange(301), np.asarray([PENALTIES[-1]])
+    )
+
+    assert np.abs(shrunk).max() == 0.0
 
 
 def test_a_forecast_over_some_columns_reads_those_alone() -> None:
@@ -177,6 +211,73 @@ def test_columns_without_spread_are_dropped_and_named() -> None:
     assert kept.tolist() == [True, False, True]
     assert scaled.mean(axis=0) == pytest.approx([0.0, 0.0])
     assert scaled.std(axis=0) == pytest.approx([1.0, 1.0])
+
+
+def test_a_level_shared_by_the_history_and_its_median_leaves_no_trace() -> None:
+    channel = published_hours([None, 1.0, 1.5, 0.5, 2.0])
+    before = np.asarray([[0, 1, 2, 3, 4]], dtype=np.int64)
+    arm = Arm("30min", 6, OWN)
+    cells = history_cells(channel, before, arm).reshape(1, arm.history_bins, FEATURES)
+    shifted = cells.copy()
+    shifted[..., 2:7] += 40.0
+
+    plain = level_free(cells, np.asarray([[1.25, 1.9]]))
+    drifted = level_free(shifted, np.asarray([[41.25, 1.9]]))
+
+    assert drifted == pytest.approx(plain)
+    assert plain[0, :2, 2:7].tolist() == [[0.0] * 5] * 2
+    assert plain[0, 2, MEAN] == pytest.approx(-0.25)
+    assert plain[0, 2, LOG_COUNT] == pytest.approx(math.log1p(3) - 1.9)
+
+
+def test_a_bin_without_a_reading_holds_no_count_after_the_first_reading_either() -> None:
+    channel = published_hours([1.0, None])
+    arm = Arm("60min", 3, OWN)
+    cells = history_cells(channel, np.asarray([[0, 1]], dtype=np.int64), arm)
+
+    plain = level_free(cells.reshape(1, 2, FEATURES), np.asarray([[1.0, 1.9]]))
+
+    assert plain[0, 1, LOG_COUNT] == 0.0
+    assert plain[0, 1, MEAN] == pytest.approx(0.0)
+
+
+def test_another_channels_last_hour_reads_as_its_departure_or_nothing() -> None:
+    last = np.zeros((2, 2, FEATURES))
+    last[:, 0, PRESENCE] = 1.0
+    last[:, 0, list(TARGETS)] = 5.0
+    median = np.full((2, 2, 5), 4.0)
+    median[1, 0] = np.nan
+
+    away = departures(last, median)
+
+    assert away[0, 0].tolist() == [1.0] * 5 + [1.0]
+    assert away[1, 0].tolist() == [0.0] * 6
+    assert away[:, 1].tolist() == [[0.0] * 6] * 2
+
+
+def test_a_scale_is_floored_where_the_median_is_nearly_exact() -> None:
+    targets = np.column_stack((np.arange(10.0), np.full(10, 3.0)))
+
+    scale = floored_scale(np.asarray([1e-9, 0.0]), targets)
+
+    assert scale[0] == pytest.approx(FLOOR_SHARE * 2.5)
+    assert scale[1] == 0.0
+    assert floored_scale(np.asarray([4.0, 0.0]), targets)[0] == pytest.approx(4.0)
+
+
+def test_a_measure_that_loses_on_its_own_rows_is_not_believable() -> None:
+    assert Believable(least_teaching=0.0, least_read=-0.5).holds
+    assert not Believable(least_teaching=LEAST_TEACHING_SKILL - 0.01, least_read=0.1).holds
+    assert not Believable(least_teaching=0.0, least_read=LEAST_READ_SKILL - 0.01).holds
+
+
+def test_a_reading_written_before_the_correction_is_refused(tmp_path: Path) -> None:
+    write_rows(
+        tmp_path / "errors.csv", ["resolution", "month"], [{"resolution": "60min", "month": "a"}]
+    )
+
+    with pytest.raises(SystemExit, match="holds no side"):
+        main(["read", "--dir", str(tmp_path)])
 
 
 def test_errors_are_scaled_and_summed_per_month() -> None:
@@ -302,6 +403,7 @@ def test_the_reading_writes_the_choice_from_what_was_measured(tmp_path: Path) ->
     levels = {Arm(r, length, CROSS): 0.2 for r in RESOLUTIONS for length in LENGTHS}
     rows = [
         {
+            "side": side,
             "resolution": arm.resolution,
             "length": arm.length,
             "variant": arm.variant,
@@ -311,6 +413,7 @@ def test_the_reading_writes_the_choice_from_what_was_measured(tmp_path: Path) ->
             "cells": each.cells[month],
             "channel": 7,
         }
+        for side in (TEACH, READ)
         for arm, each in errors_where(levels, 28).items()
         for month, forecast in each.forecast.items()
     ]
@@ -338,7 +441,9 @@ def test_the_reading_writes_the_choice_from_what_was_measured(tmp_path: Path) ->
     assert (choice["resolution"], choice["length"]) == ("60min", 6)
     assert choice["block_months"] == 3
     assert choice["yearly_read"] is False
-    assert choice["penalties_at_an_edge"] == pytest.approx(0.5)
+    assert choice["penalties_at_the_least"] == pytest.approx(0.25)
+    assert choice["penalties_at_the_most"] == pytest.approx(0.25)
+    assert choice["believable"] is True
     assert len(errors_of([{k: str(v) for k, v in r.items()} for r in rows])) == len(arms())
 
 

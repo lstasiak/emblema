@@ -3,10 +3,12 @@
 A pretext that hides a window's last hour and asks for it from the hours before needs a window
 length and a cell resolution. No model is needed to ask what history can tell about the hidden
 hour: a ridge forecast of the hour's summary from the cells before it, against the median of the
-five hours before it (the package's channel-local detector, ADR-0075). Its skill under each
-resolution and length shows where more history or finer cells stop helping, and how much a
-forecast can gain over the median at all. No label is read; the targets are what the hidden hour
-held.
+five hours before it (the package's channel-local detector, ADR-0075). The ridge forecasts the
+hour's departure from that median, from inputs with the level taken out, so a forecast shrunk to
+nothing is the median itself and a level drifting between months is not extrapolated. Its skill
+under each resolution and length shows where more history or finer cells stop helping, and how
+much a forecast can gain over the median at all. No label is read; the targets are what the
+hidden hour held.
 
 Three commands:
 
@@ -15,8 +17,9 @@ Three commands:
   median error; the fitting windows per month. CSV only.
 - ``cost``: the small shape's forward and backward pass over a window of each layout, on a
   device, timed, with the memory it held.
-- ``read``: the skills with intervals over the months, the layout the rule chooses, whether the
-  errors carry a yearly structure, and how many months the held-out block takes.
+- ``read``: the skills with intervals over the months, the checks that the measure is believable,
+  the layout the rule chooses, whether the errors carry a yearly structure, and how many months
+  the held-out block takes.
 
 The cells come from the context report's run, laid once from the published one-hour windows.
 """
@@ -71,7 +74,9 @@ TEACH_SHARE = 2 / 3
 INNER_SHARE = 3 / 4
 # A penalty is a share of the rows fitted, since a standardised column's square sums to about
 # that many: the same share shrinks alike on a quarter more rows when the forecast is refitted.
-PENALTIES = tuple(10.0**power for power in range(-5, 2))
+# The grid ends in a forecast of nothing, the median's answer itself: a finite penalty shrinks
+# a window of thousands of correlated columns too little along its widest directions.
+PENALTIES = (*(10.0**power for power in range(-6, 4)), math.inf)
 # Readings beyond these quantiles of the teaching months are clipped, as a few of the
 # satellites' readings lie thousands of deviations out.
 CLIP = (0.001, 0.999)
@@ -85,8 +90,19 @@ YEARLY_LAG, LEAST_YEARS = 12, 3
 LEAST_BLOCK_HOURS = 2_000
 LEAST_BLOCK_MONTHS = 3
 YEARLY_BLOCK_MONTHS = 12
+# A target's scale is at least this share of its own spread on the teaching rows, as the
+# channel-local detector floors a history's spread (ADR-0075): a median that is nearly exact on
+# a stepped target would otherwise weigh that target's every error hundreds of times over.
+FLOOR_SHARE = 0.1
+# The measure is believable when no arm's forecast loses to the median on the rows it was fitted
+# on by more than this share, and none read loses more than the median's whole error. The grid
+# holds a forecast of about nothing, so a worse one fights the measure rather than lacks signal.
+LEAST_TEACHING_SKILL = -0.05
+LEAST_READ_SKILL = -1.0
+TEACH, READ = "teach", "read"
 PENALTY_COLUMNS = ("resolution", "length", "variant", "channel", "target", "share")
 ERROR_COLUMNS = (
+    "side",
     "resolution",
     "length",
     "variant",
@@ -156,6 +172,47 @@ def history_cells(channel: Floats, before: NDArray[np.int64], arm: Arm) -> Float
     flat = published.reshape(n, hours * bins, features)
     laid = context_cells(flat, arm.history_bins)
     out: Floats = laid.reshape(n, -1)
+    return out
+
+
+def level_free(cells: Floats, level: Floats) -> Floats:
+    """``[n, bins, 9]`` history cells with each row's level taken out.
+
+    ``level`` is ``[n, 2]``: a reading's level, taken from the five values, and the log of a
+    count, taken from the log of the count. A bin before the history's first reading holds
+    nothing, so it stays zero rather than becoming the level's negative; a bin without a reading
+    holds no count, so its log of the count stays zero too.
+    """
+    out = cells.copy()
+    held = np.maximum.accumulate(cells[..., PRESENCE] > 0.0, axis=1)
+    values = [MEAN, MINIMUM, MAXIMUM, FIRST, LAST]
+    out[..., values] = np.where(held[..., None], cells[..., values] - level[:, None, 0, None], 0.0)
+    # A bin without a reading has no count to compare; its presence already says so.
+    present = cells[..., PRESENCE] > 0.0
+    out[..., LOG_COUNT] = np.where(present, cells[..., LOG_COUNT] - level[:, None, 1], 0.0)
+    return out
+
+
+def departures(last: Floats, median: Floats) -> Floats:
+    """``[n, channels, 6]``: each channel's last hour less its median, and whether it was held.
+
+    ``last`` is ``[n, channels, 9]`` one-hour cells, ``median`` ``[n, channels, 5]`` the medians
+    of the targets over the hours before; an hour or a median missing departs by nothing.
+    """
+    held = (last[..., PRESENCE] > 0.0) & ~np.isnan(median).any(axis=-1)
+    away = np.where(held[..., None], last[..., list(TARGETS)] - np.nan_to_num(median), 0.0)
+    out: Floats = np.concatenate((away, held[..., None].astype(np.float64)), axis=-1)
+    return out
+
+
+def floored_scale(bar_error: Floats, targets: Floats) -> Floats:
+    """Each target's scale: the bar's mean error, at least ``FLOOR_SHARE`` of its own spread.
+
+    Both are read over the same teaching rows; a target with no spread there keeps a scale of
+    zero and is left out.
+    """
+    spread = np.abs(targets - targets.mean(axis=0)).mean(axis=0)
+    out: Floats = np.where(spread > 0.0, np.maximum(bar_error, FLOOR_SHARE * spread), 0.0)
     return out
 
 
@@ -238,56 +295,38 @@ class Moments:
 
     Attributes:
         rows: How many rows the sums hold.
-        sums: Each input's sum.
         gram: The inputs' products, ``x.T @ x``.
-        target_sums: Each target's sum.
         cross: The inputs' products with the targets, ``x.T @ y``.
     """
 
     rows: int
-    sums: Floats
     gram: Floats
-    target_sums: Floats
     cross: Floats
 
     @classmethod
     def of(cls, inputs: Floats, targets: Floats) -> Moments:
-        return cls(
-            rows=len(inputs),
-            sums=inputs.sum(axis=0),
-            gram=inputs.T @ inputs,
-            target_sums=targets.sum(axis=0),
-            cross=inputs.T @ targets,
-        )
+        return cls(rows=len(inputs), gram=inputs.T @ inputs, cross=inputs.T @ targets)
 
     def __add__(self, other: Moments) -> Moments:
         return Moments(
             rows=self.rows + other.rows,
-            sums=self.sums + other.sums,
             gram=self.gram + other.gram,
-            target_sums=self.target_sums + other.target_sums,
             cross=self.cross + other.cross,
         )
 
-    def solved(
-        self, columns: NDArray[np.intp], penalties: Sequence[Floats]
-    ) -> list[tuple[Floats, Floats]]:
-        """The weights and intercepts over ``columns`` under each array of per-target penalties.
+    def solved(self, columns: NDArray[np.intp], penalties: Sequence[Floats]) -> list[Floats]:
+        """The weights over ``columns`` under each array of per-target penalties.
 
-        A penalty is a share of the rows. The inputs and targets are centred on these rows, so
-        the intercept is not penalised.
+        A penalty is a share of the rows; an infinite one forecasts nothing. The targets are not
+        centred and every column is penalised, the constant one included, so the forecast
+        shrinks towards nothing, the median's answer.
         """
-        mean_x = self.sums[columns] / self.rows
-        mean_y = self.target_sums / self.rows
-        gram = self.gram[np.ix_(columns, columns)] - self.rows * np.outer(mean_x, mean_x)
-        cross = self.cross[columns] - self.rows * np.outer(mean_x, mean_y)
-        values, vectors = np.linalg.eigh(gram)
-        projected = vectors.T @ cross
-        out = []
-        for penalty in penalties:
-            weights = vectors @ (projected / (values[:, None] + self.rows * penalty[None, :]))
-            out.append((weights, mean_y - mean_x @ weights))
-        return out
+        values, vectors = np.linalg.eigh(self.gram[np.ix_(columns, columns)])
+        projected = vectors.T @ self.cross[columns]
+        return [
+            vectors @ (projected / (values[:, None] + self.rows * penalty[None, :]))
+            for penalty in penalties
+        ]
 
 
 def chosen_penalty(
@@ -297,8 +336,8 @@ def chosen_penalty(
     targets = held_targets.shape[1]
     grid = [np.full(targets, penalty) for penalty in PENALTIES]
     errors = [
-        np.abs(held_inputs[:, columns] @ weights + intercept - held_targets).mean(axis=0)
-        for weights, intercept in inner.solved(columns, grid)
+        np.abs(held_inputs[:, columns] @ weights - held_targets).mean(axis=0)
+        for weights in inner.solved(columns, grid)
     ]
     best: Floats = np.asarray(PENALTIES)[np.argmin(np.stack(errors), axis=0)]
     return best
@@ -308,8 +347,8 @@ def forecast_of(
     moments: Moments, inputs: Floats, columns: NDArray[np.intp], penalties: Floats
 ) -> Floats:
     """Every row's forecast of each target, solved on ``moments`` under its own penalty."""
-    ((weights, intercept),) = moments.solved(columns, [penalties])
-    out: Floats = inputs[:, columns] @ weights + intercept
+    (weights,) = moments.solved(columns, [penalties])
+    out: Floats = inputs[:, columns] @ weights
     return out
 
 
@@ -505,12 +544,14 @@ def read_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def errors_of(rows: Sequence[Mapping[str, str]]) -> dict[Arm, MonthErrors]:
-    """The per-month errors ``measure`` wrote, summed over the channels, by arm."""
+def errors_of(rows: Sequence[Mapping[str, str]], side: str = READ) -> dict[Arm, MonthErrors]:
+    """The per-month errors ``measure`` wrote on one side, summed over the channels, by arm."""
     forecast: dict[Arm, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     median: dict[Arm, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     cells: dict[Arm, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for row in rows:
+        if row["side"] != side:
+            continue
         arm = Arm(row["resolution"], int(row["length"]), row["variant"])
         forecast[arm][row["month"]] += float(row["forecast"])
         median[arm][row["month"]] += float(row["median"])
@@ -538,13 +579,46 @@ def skill_table(found: Mapping[Arm, Skill], chosen: Arm) -> str:
     )
 
 
+@dataclass(frozen=True)
+class Believable:
+    """Whether the measure reads as a measure, before any choice it makes is taken.
+
+    Attributes:
+        least_teaching: The lowest skill of any arm on the rows it was fitted on.
+        least_read: The lowest skill of any arm on the rows read.
+    """
+
+    least_teaching: float
+    least_read: float
+
+    @property
+    def holds(self) -> bool:
+        return self.least_teaching >= LEAST_TEACHING_SKILL and self.least_read >= LEAST_READ_SKILL
+
+
+def point_skills(errors: Mapping[Arm, MonthErrors]) -> dict[Arm, float]:
+    return {
+        arm: 1.0 - sum(each.forecast.values()) / sum(each.median.values())
+        for arm, each in errors.items()
+    }
+
+
 def read(arguments: argparse.Namespace) -> None:
     """The tables and the choices from what ``measure`` and ``cost`` wrote."""
     out: Path = arguments.dir
-    errors = errors_of(read_rows(out / "errors.csv"))
+    written = read_rows(out / "errors.csv")
+    if not written or "side" not in written[0]:
+        raise SystemExit(
+            f"{out / 'errors.csv'} holds no side: written before the measure's correction"
+        )
+    errors = errors_of(written)
     months = sorted({m for e in errors.values() for m in e.median})
     draws = month_draws(len(months), DRAWS, SEED)
     found, drawn = skills(errors, draws, months)
+    believable = Believable(
+        least_teaching=min(point_skills(errors_of(written, TEACH)).values()),
+        least_read=min(s.skill for s in found.values()),
+    )
     chosen = chosen_arm(drawn)
     monthly: dict[int, list[tuple[str, float]]] = defaultdict(list)
     for row in read_rows(out / "monthly.csv"):
@@ -557,23 +631,31 @@ def read(arguments: argparse.Namespace) -> None:
     ]
     block = block_months(counts, yearly_present=year.present)
     shares = [float(r["share"]) for r in read_rows(out / "penalties.csv")]
-    edges = sum(s in (PENALTIES[0], PENALTIES[-1]) for s in shares) / len(shares) if shares else 0.0
+    low = sum(s == PENALTIES[0] for s in shares) / len(shares) if shares else 0.0
+    high = sum(s == PENALTIES[-1] for s in shares) / len(shares) if shares else 0.0
     choice = {
-        "penalties_at_an_edge": edges,
-        "resolution": chosen.resolution,
-        "length": chosen.length,
-        "bins": chosen.tokens,
-        "skill": found[chosen].skill,
+        "believable": believable.holds,
+        "least_teaching_skill": believable.least_teaching,
+        "least_read_skill": believable.least_read,
+        "penalties_at_the_least": low,
+        "penalties_at_the_most": high,
+        # An unbelievable measure chooses nothing, so nothing downstream can take its layout.
+        "resolution": chosen.resolution if believable.holds else None,
+        "length": chosen.length if believable.holds else None,
+        "bins": chosen.tokens if believable.holds else None,
+        "skill": found[chosen].skill if believable.holds else None,
         "yearly_read": year.read,
         "yearly_lag_twelve": year.lag_twelve,
         "yearly_band": year.band,
-        "block_months": block,
-        "block_hours": sum(counts[-block:]),
+        "block_months": block if believable.holds else None,
+        "block_hours": sum(counts[-block:]) if believable.holds else None,
     }
     (out / "choice.json").write_text(json.dumps(choice, indent=2) + "\n")
     print(skill_table(found, chosen))
     print()
     print(json.dumps(choice, indent=2))
+    if not believable.holds:
+        print("the measure is not believable: a configuration fault, no choice taken", flush=True)
 
 
 def cost(arguments: argparse.Namespace) -> None:  # pragma: no cover - device
@@ -704,6 +786,18 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
             for start in range(0, len(published.cells), 4096)
         ]
     )
+    # Every channel's last hour before each window, as its departure from its own median.
+    away = np.concatenate(
+        [
+            departures(
+                gathered(hours_all, before[start : start + 4096, -1]),
+                median_of_hours(
+                    gathered(hours_all, before[start : start + 4096, -BASELINE_HOURS:])
+                )[0],
+            )
+            for start in range(0, len(fit), 4096)
+        ]
+    )
     write_rows(
         out / "windows.csv",
         ("month", "windows"),
@@ -729,35 +823,40 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
         target_hours = hours[fit_array]
         targets = target_hours[:, list(TARGETS)]
         median, _ = median_of_hours(gathered(hours, before[:, -BASELINE_HOURS:]))
-        rows = present.copy()
+        barred = present & ~np.isnan(median).any(axis=1)
+        rows = barred.copy()
         for length in LENGTHS:
             _, held = median_of_hours(gathered(hours, before[:, max(LENGTHS) - length :]))
             rows &= enough_history(held, length)
-        rows &= ~np.isnan(median).any(axis=1)
         median = np.where(np.isnan(median), 0.0, median)
-        scale = np.abs(median - targets)[teach & rows].mean(axis=0)
-        others = np.delete(gathered(hours_all, before[:, -1]), channel, axis=1).reshape(
-            len(fit), -1
-        )
+        # The forecast asks what the history adds to the median: the hidden hour's departure.
+        departure = targets - median
+        scale = floored_scale(np.abs(departure)[teach & rows].mean(axis=0), targets[teach & rows])
+        level = median[:, [TARGETS.index(MEAN), TARGETS.index(LOG_COUNT)]]
+        others = np.delete(away, channel, axis=1).reshape(len(fit), -1)
+        fitted = teach & barred
+        inner_rows, held_rows = inner & barred, held_out & barred
+        sides = {TEACH: teach & rows, READ: rows & ~teach}
         for resolution in RESOLUTIONS:
             for length in LENGTHS:
-                history = history_cells(own, before, Arm(resolution, length, OWN))
-                fitted = teach & present
-                inputs, kept = standardised(
+                arm = Arm(resolution, length, OWN)
+                history = level_free(
+                    history_cells(own, before, arm).reshape(len(fit), arm.history_bins, -1), level
+                ).reshape(len(fit), -1)
+                scaled, kept = standardised(
                     clipped(np.concatenate((history, others), axis=1), fitted), fitted
                 )
+                inputs = np.concatenate((np.ones((len(fit), 1)), scaled), axis=1)
                 places = np.flatnonzero(kept)
                 columns = {
-                    OWN: np.flatnonzero(places < history.shape[1]),
-                    CROSS: np.arange(len(places)),
+                    OWN: np.flatnonzero(np.concatenate(([True], places < history.shape[1]))),
+                    CROSS: np.arange(inputs.shape[1]),
                 }
-                inner_rows, held_rows = inner & present, held_out & present
-                inner_moments = Moments.of(inputs[inner_rows], targets[inner_rows])
-                held_moments = Moments.of(inputs[held_rows], targets[held_rows])
-                read_rows_ = rows & ~teach
+                inner_moments = Moments.of(inputs[inner_rows], departure[inner_rows])
+                held_moments = Moments.of(inputs[held_rows], departure[held_rows])
                 for variant in VARIANTS:
                     penalty = chosen_penalty(
-                        inner_moments, inputs[held_rows], targets[held_rows], columns[variant]
+                        inner_moments, inputs[held_rows], departure[held_rows], columns[variant]
                     )
                     penalty_rows.extend(
                         {
@@ -770,17 +869,18 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
                         }
                         for name, share in zip(TARGET_NAMES, penalty, strict=True)
                     )
-                    forecast = np.zeros_like(targets)
-                    forecast[read_rows_] = forecast_of(
-                        inner_moments + held_moments,
-                        inputs[read_rows_],
-                        columns[variant],
-                        penalty,
-                    )
-                    each = month_errors(forecast, median, targets, scale, read_rows_, months)
-                    for month in each.median:
-                        error_rows.append(
+                    for side, side_rows in sides.items():
+                        forecast = median.copy()
+                        forecast[side_rows] += forecast_of(
+                            inner_moments + held_moments,
+                            inputs[side_rows],
+                            columns[variant],
+                            penalty,
+                        )
+                        each = month_errors(forecast, median, targets, scale, side_rows, months)
+                        error_rows.extend(
                             {
+                                "side": side,
                                 "resolution": resolution,
                                 "length": length,
                                 "variant": variant,
@@ -790,6 +890,7 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
                                 "cells": each.cells[month],
                                 "channel": int(published.rows[channel]),
                             }
+                            for month in each.median
                         )
         for month, value in monthly_median_errors(median, targets, scale, rows, months, order):
             monthly_rows.append(
