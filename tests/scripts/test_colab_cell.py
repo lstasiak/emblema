@@ -161,9 +161,11 @@ def test_two_workers_never_run_one_piece_where_mkdir_lets_both_through(tmp_path:
 
 def test_run_again_a_cell_repeats_only_what_did_not_end(tmp_path: Path) -> None:
     plan = write_plan(tmp_path)
-    run_cell(tmp_path, plan, FAIL="0/1")
+    first, results = run_cell(tmp_path, plan, FAIL="0/1")
     failed = calls_of(tmp_path)
-    assert len(failed) == 4  # the failing lane is tried twice before the cell moves on
+    # The failing lane is tried twice before the cell moves on; a cell that stopped before its
+    # workers says why on its output.
+    assert len(failed) == 4, f"{first.stdout}\n{what_the_cell_did(tmp_path, results)}"
 
     done, results = run_cell(tmp_path, plan)
 
