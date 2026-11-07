@@ -2,6 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.channels.channel_statistics import ChannelStatistics
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.exceptions import (
@@ -68,6 +69,35 @@ def test_extending_the_vocabulary_keeps_fitted_channels_and_adds_unfitted_ones()
 
     assert len(extended.vocabulary) == 3
     assert extended.statistics == (STATISTICS, None, None)
+
+
+def test_a_corpus_adopts_the_statistics_another_scheme_fitted_for_its_channels() -> None:
+    # The source registers another corpus first, so the identifiers differ and only the names
+    # can match the channels.
+    source = scheme_for(OTHER_SCHEMA, "other").extended_with(CORPUS, SCHEMA)
+    source = source.with_statistics(2, STATISTICS).with_statistics(3, ChannelStatistics(5, 0, 1))
+
+    adopted = scheme_for().adopting(CORPUS, source)
+
+    assert adopted.statistics == (STATISTICS, ChannelStatistics(5, 0, 1))
+
+
+def test_a_channel_the_source_fitted_nothing_for_is_refused_rather_than_left_raw() -> None:
+    source = scheme_for().with_statistics(PRESSURE, STATISTICS)
+
+    with pytest.raises(MissingChannelStatisticsError, match="temperature"):
+        scheme_for().adopting(CORPUS, source)
+    with pytest.raises(MissingChannelStatisticsError, match="registers no channel"):
+        scheme_for().adopting(CORPUS, scheme_for(SCHEMA, "other").with_statistics(1, STATISTICS))
+
+
+def test_a_channel_declared_otherwise_in_the_source_is_not_adopted() -> None:
+    # Statistics fitted in other units would normalise this channel's values wrongly.
+    kelvin = ChannelSchema(frozenset({Channel("temperature", "K"), Channel("pressure", "bar")}))
+    source = scheme_for(kelvin).with_statistics(1, STATISTICS).with_statistics(2, STATISTICS)
+
+    with pytest.raises(MissingChannelStatisticsError, match="pressure"):
+        scheme_for().adopting(CORPUS, source)
 
 
 def test_statistics_must_align_with_the_vocabulary() -> None:

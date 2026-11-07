@@ -40,6 +40,10 @@ class PublishCorpusCli:
     A corpus to be trained on together with an earlier one continues that one's vocabulary::
 
         ... --vocabulary-from <manifest key> <manifest checksum>
+
+    and one cut from an earlier one's data, to be read beside it, adopts its statistics too::
+
+        ... --statistics-from <manifest key> <manifest checksum>
     """
 
     def __init__(self, known: KnownCorpora | None = None) -> None:
@@ -82,7 +86,8 @@ class PublishCorpusCli:
                     arguments.window, arguments.stride, ShortUnits(arguments.short_units)
                 ),
                 split=self._split(arguments),
-                vocabulary_from=self._vocabulary_from(arguments.vocabulary_from),
+                vocabulary_from=self._manifest(arguments.vocabulary_from),
+                statistics_from=self._manifest(arguments.statistics_from),
             ),
             corpus_root=arguments.root or RAW / known.raw_directory,
             workspace=arguments.workspace,
@@ -148,9 +153,10 @@ class PublishCorpusCli:
             "--exclude-units",
             type=Path,
             metavar="FILE",
-            help="file naming units to cut from the corpus, one name per line as the corpus "
-            "names its files (p000015, not training_setA/p000015): a downstream task's frozen "
-            "side; only a corpus whose publisher drew no test set has a reader for it",
+            help="file naming units to cut from the corpus, one per line: a stay as the corpus "
+            "names its file (p000015, not training_setA/p000015) or a satellite's month as its "
+            "unit is keyed (ESA-Mission1/2007-01); the months or stays a downstream task reads, "
+            "and only physionet2019 and esa_ad_raw have a reader for it",
         )
         parser.add_argument(
             "--channels-independent",
@@ -209,6 +215,14 @@ class PublishCorpusCli:
             help="manifest of an earlier corpus whose channel vocabulary this one continues",
         )
         parser.add_argument(
+            "--statistics-from",
+            nargs=2,
+            metavar=("KEY", "CHECKSUM"),
+            help="manifest of a corpus cut from the same data whose channel statistics this one "
+            "adopts rather than fits, so a model trained on one reads the other's values; its "
+            "training side then fits nothing",
+        )
+        parser.add_argument(
             "--workspace",
             type=Path,
             default=Path("data/artifacts"),
@@ -226,7 +240,7 @@ class PublishCorpusCli:
         )
 
     @staticmethod
-    def _vocabulary_from(pair: Sequence[str] | None) -> ArtifactRef | None:
+    def _manifest(pair: Sequence[str] | None) -> ArtifactRef | None:
         if not pair:
             return None
         key, checksum = pair

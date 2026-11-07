@@ -14,6 +14,7 @@ from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReade
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.readers.esa_ad_raw import EsaAdRawCorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
 from emblema.catalog.adapters.readers.utsd import UtsdReading, UtsdScale
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
@@ -296,6 +297,16 @@ def test_the_command_line_names_the_manifest_whose_vocabulary_to_continue() -> N
     )
 
 
+def test_the_command_line_names_the_manifest_whose_statistics_to_adopt() -> None:
+    digest = "0" * 64
+    parsed = command("--statistics-from", f"durable/sha256/{digest}", f"sha256:{digest}")
+
+    assert parsed.statistics_from == ArtifactRef(
+        f"durable/sha256/{digest}", Checksum.parse(f"sha256:{digest}")
+    )
+    assert command().statistics_from is None
+
+
 def test_a_subset_asked_for_is_the_only_one_read() -> None:
     invocation = PublishCorpusCli().parse([*ARGUMENTS, "--subset", "FD001"])
 
@@ -362,10 +373,31 @@ def test_the_units_excluded_by_name_reach_the_reader_of_the_corpus_named(tmp_pat
     ]
 
 
+def test_the_months_excluded_by_name_reach_the_reader_of_the_raw_telemetry(
+    tmp_path: Path,
+) -> None:
+    every = [
+        str(unit.key)
+        for unit in EsaAdRawCorpusReader(sample("esa_ad"), ("ESA-Mission2",)).read_units()
+    ]
+    root = CompositionRoot.over(
+        corpora=InMemoryCorpusRepository(),
+        store=InMemoryArtifactStore(),
+        corpus="esa_ad_raw",
+        corpus_root=sample("esa_ad"),
+        workspace=tmp_path / "workspace",
+        subsets=("ESA-Mission2",),
+        excluded_units=(every[0],),
+    )
+
+    assert isinstance(root.adapters.reader, EsaAdRawCorpusReader)
+    assert [str(unit.key) for unit in root.adapters.reader.read_units()] == every[1:]
+
+
 def test_excluding_units_of_a_corpus_whose_publisher_drew_the_test_set_is_refused(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(ValueError, match="only the physionet2019 corpus has units to exclude"):
+    with pytest.raises(ValueError, match="physionet2019 and esa_ad_raw corpora have units"):
         CompositionRoot.over(
             corpora=InMemoryCorpusRepository(),
             store=InMemoryArtifactStore(),

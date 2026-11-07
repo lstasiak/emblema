@@ -52,6 +52,13 @@ class PublishedCorpusManifestJson:
             "window_count": manifest.window_count,
             "token_count": manifest.token_count,
         }
+        # Stated only where the statistics were adopted, so every manifest that fitted its own
+        # keeps its bytes, and so its checksum.
+        if manifest.statistics_from is not None:
+            document["statistics_from"] = {
+                "key": manifest.statistics_from.key,
+                "checksum": self._checksum_document(manifest.statistics_from.checksum),
+            }
         return json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
     def decode(self, content: bytes) -> PublishedCorpusManifest:
@@ -80,6 +87,7 @@ class PublishedCorpusManifestJson:
         block = fields.fields("block")
         window = fields.fields("window")
         split = fields.fields("split")
+        adopted = fields.optional_fields("statistics_from")
         return PublishedCorpusManifest(
             corpus=fields.text("corpus"),
             corpus_version=CorpusVersionId.parse(fields.text("corpus_version")),
@@ -96,6 +104,9 @@ class PublishedCorpusManifestJson:
             split_seed=split.optional_integer("seed"),
             window_count=fields.integer("window_count"),
             token_count=fields.integer("token_count"),
+            statistics_from=None
+            if adopted is None
+            else ArtifactRef(adopted.text("key"), self._checksum(adopted.fields("checksum"))),
         )
 
     @staticmethod

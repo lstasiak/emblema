@@ -34,6 +34,8 @@ class TokenisationManifest:
             of the corpus held out.
         empty_units: Units that yielded no window at all, a fact about the corpus that the block
             itself cannot state because it holds nothing for them.
+        statistics_from: The manifest whose statistics the scheme adopted for the corpus's
+            channels, so that its training side did not fit them; ``None`` where it did.
     """
 
     corpus: str
@@ -45,6 +47,7 @@ class TokenisationManifest:
     split: UnitSplit
     split_seed: int | None
     empty_units: tuple[UnitKey, ...] = ()
+    statistics_from: ArtifactRef | None = None
 
     def __post_init__(self) -> None:
         if not self.corpus or self.corpus != self.corpus.strip():

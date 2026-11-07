@@ -39,7 +39,8 @@ class PublishedCorpusManifest:
         channels: The vocabulary, in identifier order, each channel with its statistics.
         units: Unit keys in the order the block's unit column indexes them.
         empty_units: Units of the corpus that yielded no window; absent from the block.
-        training_units: Units whose data fitted the statistics, sorted.
+        training_units: Units of the training side, sorted, whose data fitted the statistics
+            unless ``statistics_from`` names where they were adopted from.
         validation_units: Units held out from fitting, sorted.
         split_seed: Seed the split was drawn with; ``None`` where its units were named or a part
             of the corpus held out.
@@ -47,6 +48,8 @@ class PublishedCorpusManifest:
         token_count: How many tokens the block holds in all.
         window_short_units: What a unit shorter than one window yielded: ``dropped``, nothing;
             ``one_window``, one window of the nominal length starting with the unit.
+        statistics_from: The manifest whose statistics the corpus's channels adopted, a corpus
+            cut from the same data and read beside this one; ``None`` where they were fitted.
     """
 
     corpus: str
@@ -64,6 +67,7 @@ class PublishedCorpusManifest:
     window_count: int
     token_count: int
     window_short_units: str = SHORT_UNITS_DROPPED
+    statistics_from: ArtifactRef | None = None
 
     @staticmethod
     def axis_of(unit: str) -> str:

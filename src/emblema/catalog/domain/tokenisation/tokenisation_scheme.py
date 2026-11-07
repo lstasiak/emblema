@@ -72,6 +72,37 @@ class TokenisationScheme:
         updated[channel_id - 1] = statistics
         return replace(self, statistics=tuple(updated))
 
+    def adopting(self, corpus: str, source: "TokenisationScheme") -> Self:
+        """The scheme with every channel of ``corpus`` given the statistics ``source`` fitted.
+
+        A corpus cut from the data of one published before it, to be read beside that one, is
+        normalised as that one was, so a model trained on either sees the other's values. A
+        channel is matched by its corpus, name, kind and unit, not by its identifier.
+
+        Raises:
+            MissingChannelStatisticsError: If ``source`` registers no channel of ``corpus``, the
+                sign of a manifest of another corpus, or fitted no statistics for one declared
+                the same way.
+        """
+        if not source.vocabulary.entries_of(corpus):
+            raise MissingChannelStatisticsError(
+                f"the scheme to adopt from registers no channel of {corpus!r}"
+            )
+        fitted = {
+            (entry.channel, entry.timeless, entry.unit): statistics
+            for entry, statistics in zip(source.vocabulary.entries, source.statistics, strict=True)
+            if entry.corpus == corpus and statistics is not None
+        }
+        scheme = self
+        for entry in self.vocabulary.entries_of(corpus):
+            statistics = fitted.get((entry.channel, entry.timeless, entry.unit))
+            if statistics is None:
+                raise MissingChannelStatisticsError(
+                    f"channel {entry.channel!r} of {corpus!r} has no statistics to adopt"
+                )
+            scheme = scheme.with_statistics(entry.channel_id, statistics)
+        return scheme
+
     def statistics_of(self, channel_id: int) -> ChannelStatistics:
         """The statistics fitted for a channel.
 
