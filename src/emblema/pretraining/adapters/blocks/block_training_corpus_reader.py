@@ -58,7 +58,7 @@ class BlockTrainingCorpusReader:
         positions = {key: index for index, key in enumerate(published.units)}
         training = self._positions(positions, share.select(published.training_units))
         validation = self._positions(positions, published.validation_units)
-        axes = tuple(self.axis_of(unit) for unit in published.units)
+        axes = tuple(PublishedCorpusManifest.axis_of(unit) for unit in published.units)
         return TrainingCorpus(
             name=published.corpus,
             checksum=published.block.checksum,
@@ -83,16 +83,6 @@ class BlockTrainingCorpusReader:
         may hold one channel name under two corpora, and the mixture compares names.
         """
         return f"{corpus}/{channel}"
-
-    @staticmethod
-    def axis_of(unit: str) -> str:
-        """The time axis a unit's windows lie on: its part, where the corpus arrives in parts.
-
-        A part's units are cut from one stream, as the manifest keys them ``<part>/<name>``; a
-        unit with no part is a stream of its own.
-        """
-        part, separator, _ = unit.partition("/")
-        return part if separator else unit
 
     @staticmethod
     def _positions(positions: dict[str, int], units: tuple[str, ...]) -> set[int]:

@@ -1,15 +1,16 @@
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import overload
+from typing import Self, overload
 
 import numpy as np
 from numpy.typing import NDArray
 
-from emblema.pretraining.domain.exceptions import InvalidTrainingCorpusError
-from emblema.pretraining.domain.training.training_corpus import TrainingCorpus
-from emblema.pretraining.domain.training.window_place import WindowPlace
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
+from emblema.shared.adapters.arrays.exceptions import (
+    OverlappingJoinedWindowsError,
+    UnjoinableWindowsError,
+)
 from emblema.shared.kernel.tokens import TokenWindow
 
 # Windows are laid this many at a time while every published window is laid once.
@@ -35,13 +36,15 @@ class JoinedWindow:
 
 
 class JoinedWindows(Sequence[JoinedWindow]):
-    """The windows of one side of a corpus, each joined with the ``history - 1`` before it.
+    """Published windows, each joined with the ``history - 1`` before it on its axis.
 
-    Every window of both sides is read once and laid into cells, over the channels the corpus
-    observes, and a window's history is gathered from there: the windows ending one, two and
-    more lengths before it on its axis, whichever side holds them, as an hour of the validation
-    side reads the training hours before it. A place with no window ending within a hundredth of
-    a length of it is a window of nothing, as a downlink's gap or the start of a stream leaves.
+    Every window is read once and laid into cells, over the channels the windows observe, and a
+    window's history is gathered from there: the windows ending one, two and more lengths
+    before it on its axis, wherever they are among the windows given, as a pretraining's
+    validation hour reads the training hours before it and a scored hour the fitting ones. A
+    place with no window ending within a hundredth of a length of it is a window of nothing, as
+    a downlink's gap or the start of a stream leaves. Pretraining and evaluation both join here,
+    so a backbone is evaluated over the windows it was trained over (ADR-0076).
     """
 
     def __init__(
@@ -57,27 +60,38 @@ class JoinedWindows(Sequence[JoinedWindow]):
         self._history = history
 
     @classmethod
-    def sides_of(
-        cls, corpus: TrainingCorpus, *, history: int, bins: int
-    ) -> tuple["JoinedWindows", "JoinedWindows"]:
-        """The training and validation windows of ``corpus``, each joined with its history.
+    def of(
+        cls,
+        sides: Sequence[Sequence[TokenWindow]],
+        *,
+        axes: Sequence[str],
+        starts: Sequence[float],
+        ends: Sequence[float],
+        history: int,
+        bins: int,
+    ) -> Self:
+        """The windows of ``sides`` in order, each joined with its history over ``bins`` bins.
+
+        ``axes``, ``starts`` and ``ends`` say where each window lies, in the same order.
 
         Raises:
-            InvalidTrainingCorpusError: If the corpus does not say where its windows lie, its
-                windows are not all one length, or two windows of one axis overlap.
+            OverlappingJoinedWindowsError: If two windows of one axis overlap.
+            UnjoinableWindowsError: If no windows are given, the places are not one per window,
+                the history does not cut into the bins, the windows are not all one length, or a
+                window holds a static feature.
         """
-        if not corpus.placed:
-            raise InvalidTrainingCorpusError(
-                f"{corpus.name!r} does not say where its windows lie, so none can be joined "
-                "with those before it"
-            )
-        if bins % history:
-            raise InvalidTrainingCorpusError(f"{history} windows do not cut into {bins} bins")
-        places = [*corpus.training_places, *corpus.validation_places]
-        laid, rows = cls._laid_once((corpus.training, corpus.validation), bins // history)
-        positions = cls._history_of(places, history)
-        split = len(corpus.training)
-        return cls(laid, rows, positions[:split]), cls(laid, rows, positions[split:])
+        count = sum(len(side) for side in sides)
+        if not count:
+            raise UnjoinableWindowsError("no windows were given to join")
+        if not len(axes) == len(starts) == len(ends) == count:
+            raise UnjoinableWindowsError(f"{len(axes)} places were given for {count} windows")
+        if history < 1 or bins % history:
+            raise UnjoinableWindowsError(f"{history} windows do not cut into {bins} bins")
+        laid, rows = cls._laid_once(sides, bins // history)
+        positions = cls._history_of(
+            axes, np.asarray(starts, dtype=np.float64), np.asarray(ends, dtype=np.float64), history
+        )
+        return cls(laid, rows, positions)
 
     def __len__(self) -> int:
         return len(self._history)
@@ -86,9 +100,9 @@ class JoinedWindows(Sequence[JoinedWindow]):
     def __getitem__(self, index: int) -> JoinedWindow: ...
 
     @overload
-    def __getitem__(self, index: slice) -> Sequence[JoinedWindow]: ...
+    def __getitem__(self, index: slice) -> "JoinedWindows": ...
 
-    def __getitem__(self, index: int | slice) -> JoinedWindow | Sequence[JoinedWindow]:
+    def __getitem__(self, index: int | slice) -> "JoinedWindow | JoinedWindows":
         if isinstance(index, slice):
             return JoinedWindows(self._laid, self._rows, self._history[index])
         positions = self._history[index]
@@ -99,6 +113,11 @@ class JoinedWindows(Sequence[JoinedWindow]):
         cells = gathered.transpose(1, 0, 2, 3).reshape(rows, windows * bins, features)
         return JoinedWindow(cells=cells, rows=self._rows)
 
+    def at(self, positions: Sequence[int]) -> "JoinedWindows":
+        """The windows at those positions, in the order given, sharing the cells laid once."""
+        chosen = np.asarray(positions, dtype=np.intp)
+        return JoinedWindows(self._laid, self._rows, self._history[chosen])
+
     @staticmethod
     def _laid_once(
         sides: Sequence[Sequence[TokenWindow]], bins: int
@@ -107,13 +126,13 @@ class JoinedWindows(Sequence[JoinedWindow]):
 
         The windows are read a slice at a time, so no more of them stand as objects at once than
         a slice holds: a corpus of tens of thousands of hours would not fit otherwise. Each is
-        laid over its own channels, then placed among the rows of
-        every channel the windows observe, where a channel it does not hold is cells of nothing,
-        as a layout over the corpus's channels would leave it.
+        laid over its own channels, then placed among the rows of every channel the windows
+        observe, where a channel it does not hold is cells of nothing, as a layout over the
+        corpus's channels would leave it.
 
         Raises:
-            InvalidTrainingCorpusError: If a window holds a static feature, which no window
-                joined with others carries.
+            UnjoinableWindowsError: If a window holds a static feature, which no joined window
+                carries.
         """
         layout = BinnedTokens(bins)
         own: list[tuple[NDArray[np.int64], NDArray[np.float64]]] = []
@@ -125,7 +144,7 @@ class JoinedWindows(Sequence[JoinedWindow]):
         for chunk in slices:
             for window in layout.lay(chunk):
                 if window.timeless.any():
-                    raise InvalidTrainingCorpusError(
+                    raise UnjoinableWindowsError(
                         "a window holding static features cannot be joined with others"
                     )
                 count = len(window) // bins
@@ -142,29 +161,33 @@ class JoinedWindows(Sequence[JoinedWindow]):
         return laid, rows.astype(np.int64)
 
     @staticmethod
-    def _history_of(places: Sequence[WindowPlace], history: int) -> NDArray[np.int64]:
+    def _history_of(
+        axes: Sequence[str],
+        starts: NDArray[np.float64],
+        ends: NDArray[np.float64],
+        history: int,
+    ) -> NDArray[np.int64]:
         """``[windows, history]``: each window's history by position, earliest first.
 
         Raises:
-            InvalidTrainingCorpusError: If the windows are not all one length, or two windows of
-                one axis overlap.
+            UnjoinableWindowsError: If the windows are not all one length.
+            OverlappingJoinedWindowsError: If two windows of one axis overlap.
         """
-        lengths = {round(place.end - place.start, 9) for place in places}
+        lengths = np.unique(np.round(ends - starts, 9))
         if len(lengths) != 1:
-            raise InvalidTrainingCorpusError(
-                f"windows of {len(lengths)} lengths cannot be joined with those before them"
+            raise UnjoinableWindowsError(
+                f"windows of {len(lengths)} lengths cannot be joined with each other"
             )
-        (length,) = lengths
+        length = float(lengths[0])
         by_axis: dict[str, list[int]] = defaultdict(list)
-        for position, place in enumerate(places):
-            by_axis[place.axis].append(position)
-        out = np.full((len(places), history), -1, dtype=np.int64)
+        for position, axis in enumerate(axes):
+            by_axis[axis].append(position)
+        out = np.full((len(axes), history), -1, dtype=np.int64)
         for axis, members in by_axis.items():
-            ends = np.asarray([places[m].end for m in members])
-            order = np.argsort(ends, kind="stable")
-            sorted_ends, sorted_members = ends[order], np.asarray(members)[order]
+            order = np.argsort(ends[members], kind="stable")
+            sorted_ends, sorted_members = ends[members][order], np.asarray(members)[order]
             if np.any(np.diff(sorted_ends) < length * (1 - _TOLERANCE)):
-                raise InvalidTrainingCorpusError(
+                raise OverlappingJoinedWindowsError(
                     f"windows of {axis!r} overlap, so none of them is another's history"
                 )
             for back in range(history):

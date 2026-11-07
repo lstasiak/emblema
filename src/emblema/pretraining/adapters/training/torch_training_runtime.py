@@ -15,7 +15,7 @@ from emblema.pretraining.adapters.training.cell_batches import CellBatches
 from emblema.pretraining.adapters.training.device_generator import DeviceGenerator
 from emblema.pretraining.adapters.training.devices import available_device
 from emblema.pretraining.adapters.training.joined_cell_batches import JoinedCellBatches
-from emblema.pretraining.adapters.training.joined_windows import JoinedWindows
+from emblema.pretraining.adapters.training.joined_sides import JoinedSides
 from emblema.pretraining.adapters.training.raw_batches import RawBatches
 from emblema.pretraining.adapters.training.torch_precision import TorchPrecision
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
@@ -351,7 +351,7 @@ class TorchTrainingRuntime:
         """
         if architecture.history == 1:
             return corpus.training, corpus.validation
-        return JoinedWindows.sides_of(corpus, history=architecture.history, bins=architecture.bins)
+        return JoinedSides.of(corpus, history=architecture.history, bins=architecture.bins)
 
     @staticmethod
     def _restrict(model: PretrainingObjective, trained: TrainedParameters) -> None:

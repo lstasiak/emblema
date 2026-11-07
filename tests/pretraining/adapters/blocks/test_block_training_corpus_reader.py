@@ -157,11 +157,6 @@ def test_each_window_says_where_it_lies_on_its_unit_s_axis(tmp_path: Path) -> No
     assert read.placed
 
 
-def test_the_units_of_one_part_lie_on_one_axis_and_a_unit_with_none_on_its_own() -> None:
-    assert BlockTrainingCorpusReader.axis_of("ESA-Mission1/2001-01") == "ESA-Mission1"
-    assert BlockTrainingCorpusReader.axis_of("u1") == "u1"
-
-
 def _refusing(store: InMemoryArtifactStore) -> RefusingStore:
     refusing = RefusingStore()
     refusing._content = store._content

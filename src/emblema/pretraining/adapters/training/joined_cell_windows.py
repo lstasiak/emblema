@@ -7,7 +7,7 @@ import torch
 from numpy.typing import NDArray
 from torch import Tensor
 
-from emblema.pretraining.adapters.training.joined_windows import JoinedWindow
+from emblema.shared.adapters.arrays.joined_windows import JoinedWindow
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
 

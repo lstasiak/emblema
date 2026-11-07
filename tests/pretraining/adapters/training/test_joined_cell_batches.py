@@ -12,7 +12,7 @@ from emblema.pretraining.adapters.training.cell_batches import CellBatches  # no
 from emblema.pretraining.adapters.training.joined_cell_batches import (  # noqa: E402
     JoinedCellBatches,
 )
-from emblema.pretraining.adapters.training.joined_windows import JoinedWindows  # noqa: E402
+from emblema.pretraining.adapters.training.joined_sides import JoinedSides  # noqa: E402
 from emblema.pretraining.domain.exceptions import InvalidTrainingCorpusError  # noqa: E402
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy  # noqa: E402
 from emblema.pretraining.domain.training.training_corpus import TrainingCorpus  # noqa: E402
@@ -95,7 +95,7 @@ def test_joined_cells_are_the_cells_of_the_hours_cut_whole_full_and_masked(
     streams = {"a": stream(seed, 12, {4}), "b": stream(seed + 10, 9, {0, 7})}
     corpus = corpus_of(streams, validation_from=8)
     bins = history * 2
-    training, validation = JoinedWindows.sides_of(corpus, history=history, bins=bins)
+    training, validation = JoinedSides.of(corpus, history=history, bins=bins)
     joined = JoinedCellBatches(bins)
     whole = CellBatches(BinnedTokens(bins))
     ends = [
@@ -137,7 +137,7 @@ def test_a_window_s_history_is_the_windows_before_it_on_its_axis_whichever_side(
     streams = {"a": stream(3, 5, {1}), "b": stream(4, 5, set())}
     corpus = corpus_of(streams, validation_from=4)
 
-    training, validation = JoinedWindows.sides_of(corpus, history=3, bins=3)
+    training, validation = JoinedSides.of(corpus, history=3, bins=3)
 
     assert len(training) == len(corpus.training)
     assert len(validation) == len(corpus.validation)
@@ -159,7 +159,7 @@ def test_a_corpus_that_does_not_say_where_its_windows_lie_is_refused() -> None:
     )
 
     with pytest.raises(InvalidTrainingCorpusError, match="does not say where"):
-        JoinedWindows.sides_of(unplaced, history=2, bins=2)
+        JoinedSides.of(unplaced, history=2, bins=2)
 
 
 def test_windows_of_one_axis_that_overlap_are_refused() -> None:
@@ -175,7 +175,7 @@ def test_windows_of_one_axis_that_overlap_are_refused() -> None:
     )
 
     with pytest.raises(InvalidTrainingCorpusError, match="overlap"):
-        JoinedWindows.sides_of(overlapping, history=2, bins=2)
+        JoinedSides.of(overlapping, history=2, bins=2)
 
 
 def test_a_layout_scores_only_the_batches_it_collated() -> None:
@@ -189,7 +189,7 @@ def test_a_layout_scores_only_the_batches_it_collated() -> None:
 
 def test_hiding_the_last_bin_leaves_every_earlier_cell_as_it_was() -> None:
     corpus = corpus_of({"a": stream(8, 6, set())}, validation_from=5)
-    training, _ = JoinedWindows.sides_of(corpus, history=6, bins=6)
+    training, _ = JoinedSides.of(corpus, history=6, bins=6)
     joined = JoinedCellBatches(6)
     batch = joined.collate([training[-1]])
     rows = int(batch.kept[0].sum())
@@ -217,7 +217,7 @@ def history_of(places: list[WindowPlace], history: int) -> list[list[bool]]:
         training_places=places[:-1],
         validation_places=places[-1:],
     )
-    training, validation = JoinedWindows.sides_of(corpus, history=history, bins=history)
+    training, validation = JoinedSides.of(corpus, history=history, bins=history)
     return [
         [bool(window.cells[:, place, BinnedTokens.PRESENCE].any()) for place in range(history)]
         for side in (training, validation)
@@ -256,7 +256,7 @@ def test_a_channel_read_only_in_the_hidden_bin_keeps_its_row_and_shows_nothing()
         training_places=[WindowPlace("a", 0.0, 1.0)],
         validation_places=[WindowPlace("a", 1.0, 2.0)],
     )
-    _, validation = JoinedWindows.sides_of(corpus, history=2, bins=2)
+    _, validation = JoinedSides.of(corpus, history=2, bins=2)
     joined, whole = JoinedCellBatches(2), CellBatches(BinnedTokens(2))
     batch, reference = joined.collate([validation[0]]), whole.collate([concatenated([first, last])])
     hidden = torch.tensor([[False, False, True, True]])
@@ -272,7 +272,7 @@ def test_a_channel_read_only_in_the_hidden_bin_keeps_its_row_and_shows_nothing()
 
 def test_the_tail_the_masking_draws_over_48_joined_hours_is_the_last_hour_alone() -> None:
     corpus = corpus_of({"a": stream(11, 50, set())}, validation_from=49)
-    training, _ = JoinedWindows.sides_of(corpus, history=48, bins=48)
+    training, _ = JoinedSides.of(corpus, history=48, bins=48)
     batch = JoinedCellBatches(48).collate([training[-1]])
     strategy = MaskingStrategy(
         channel_rate=0.0,
@@ -294,10 +294,10 @@ def test_windows_laid_a_slice_at_a_time_are_laid_as_at_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     corpus = corpus_of({"a": stream(12, 9, {3}), "b": stream(13, 7, set())}, validation_from=6)
-    whole, _ = JoinedWindows.sides_of(corpus, history=3, bins=3)
+    whole, _ = JoinedSides.of(corpus, history=3, bins=3)
 
-    monkeypatch.setattr("emblema.pretraining.adapters.training.joined_windows._LAID_AT_ONCE", 2)
-    sliced, _ = JoinedWindows.sides_of(corpus, history=3, bins=3)
+    monkeypatch.setattr("emblema.shared.adapters.arrays.joined_windows._LAID_AT_ONCE", 2)
+    sliced, _ = JoinedSides.of(corpus, history=3, bins=3)
 
     for a, b in zip(whole, sliced, strict=True):
         assert np.array_equal(a.cells, b.cells)

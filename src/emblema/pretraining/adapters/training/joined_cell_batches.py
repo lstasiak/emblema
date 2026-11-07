@@ -7,9 +7,9 @@ from numpy.typing import NDArray
 from emblema.pretraining.adapters.objective.cell_tensors import CellTensors
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
 from emblema.pretraining.adapters.training.joined_cell_windows import JoinedCellWindows
-from emblema.pretraining.adapters.training.joined_windows import JoinedWindow
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
 from emblema.shared.adapters.arrays.joined_cells import JoinedCells
+from emblema.shared.adapters.arrays.joined_windows import JoinedWindow
 from emblema.shared.adapters.arrays.laid_window import LaidWindow
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
