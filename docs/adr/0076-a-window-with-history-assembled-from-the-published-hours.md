@@ -24,14 +24,13 @@ Checked on one month of each mission (`telemetry-history-window.md`):
   window is laid once into cells, over the same channels and `bins / history` bins each; a
   window spanning `h` of them joins their cells in time, recomputing the carry-forward, the count
   since the last reading and the last reading's offset over the joined bins. This is
-  `JoinedCells`, moved out of the context report; pretraining, evaluation and the report call
-  it, and a test holds it to the concatenated readings' layout.
+  `JoinedCells`, moved out of the context report, beside `JoinedWindows`, which gathers each
+  window's history; a test holds them to the concatenated readings' layout.
 - **History is part of the encoder's input.** `EncoderArchitecture.history` gives how many
   consecutive published windows one window spans: one, as every encoder so far, or 48 here. It
-  enters the identity as `bins` does, through the signature, the stored document, the artifact
-  and the experiment file's `[input]`. `bins` must be a whole multiple of `history`.
+  enters the identity as `bins` does, and `bins` must be a whole multiple of it.
 - **Pretraining draws one window per published hour.**
-  - The reader hands each side's windows with their unit and extent.
+  - The reader says where each window lies.
   - A window ends at every published window. The windows before it on its axis are its
     history, whichever side holds them; an hour with no window is cells of nothing. The axis is
     the unit's part, a mission, as the manifest keys units `<part>/<name>`, or the unit itself;
@@ -42,14 +41,13 @@ Checked on one month of each mission (`telemetry-history-window.md`):
   - Masks are drawn over the joined cells. Hiding a cell empties the published cells under it,
     and the carry-forward and counts are recomputed after it, as `BinnedTokens.without` does from
     the readings; a known-answer test holds the two equal.
-  - A tail of the last hour changes no earlier cell, since every cell depends only on the bins
-    before it.
 - **The pretext hides the last hour.** `MaskKind.HORIZON` at rate one, with a span of exactly
   one bin in 48, the cell the evaluation's tail reading hides.
-- **The evaluation joins the same history from the windows it is handed.** It ends at each scored
-  window and reaches back by end time within its mission. Interleaved units are refused, as
-  in ADR-0075. A frozen month never handed in is
-  history of nothing.
+- **The evaluation joins the same history from the windows it is handed**, fitting and scored,
+  placed by the block's columns and gathered by the same `JoinedWindows` as in pretraining. The
+  pretext detector asks the backbone over them; a frozen month never handed in is history of
+  nothing. Every reading of the encoder alone, probes, fine-tuning and detectors over its
+  states, refuses such a backbone (`UnjoinedHistoryError`) rather than cut an hour into 48 bins.
 - **The publication holds out a validation block and excludes the task's months.**
   - The ESA corpus is published hourly from each mission's first half.
   - Its last three months are the validation side, which chooses the epoch.
