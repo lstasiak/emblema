@@ -156,3 +156,98 @@ rule stands as declared.
 - The penalty is still chosen under absolute error for a fit under squared loss.
 - The inputs carry no level, so a forecast cannot read a channel acting otherwise near one level
   than near another.
+
+## 2026-11-07 — measured: one-hour cells over 48 hours, with history adding a fifth over the median on the first mission and nothing on the second
+
+**Question.** The one declared on top, under the corrected measure: what a window of each width
+and length tells about its hidden hour beyond the median, which layout the rule chooses, and how
+many months the held-out block takes.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `0b841319` for the run; the commit adding this section for `pool` |
+| Machine | M1 Pro, CPU, float64; the first mission 2,554 s at 12.6 GB, the second 220 s |
+| Commands | `data/report/l38/input/rerun.sh` (`measure.sh m1`, `m2`, then `read` on each); `telemetry_pretext_input_report.py pool --dirs run-m1 run-m2 --names m1 m2 --out pooled.json` |
+| Cost | the `cost` run of `ac65ca5c`, whose code the correction did not touch |
+| Read | 48 channels over 28 read months on the first mission, 11 over 7 on the second |
+
+**Checks.** Both hold on both missions. The least skill on the taught rows is 0.23 on the first
+mission and 0.28 on the second. On the rows read it is 0.02 and −0.16. Penalties at the grid's
+least: 5 % and 6 %. At its infinite end, the median itself: 40 % and 26 %.
+
+**Skill over the median, `cross` inputs, with 95 % intervals over the read months.**
+
+| Cells | Hours | First mission | Second mission | Both, pooled |
+| --- | --- | --- | --- | --- |
+| 60 min | 6 | 0.185 [0.134; 0.266] | −0.004 [−0.086; 0.073] | 0.179 [0.131; 0.255] |
+| 60 min | 12 | 0.188 [0.137; 0.270] | 0.001 [−0.028; 0.027] | 0.183 [0.134; 0.260] |
+| 60 min | 24 | 0.211 [0.151; 0.304] | −0.002 [−0.031; 0.027] | 0.205 [0.148; 0.293] |
+| **60 min** | **48** | **0.214 [0.153; 0.310]** | −0.013 [−0.040; 0.016] | **0.207 [0.149; 0.298]** |
+| 30 min | 48 | 0.210 [0.150; 0.304] | −0.022 [−0.055; 0.011] | |
+| 10 min | 6 | 0.098 [0.068; 0.143] | −0.073 [−0.177; 0.007] | |
+| 10 min | 48 | 0.137 [0.096; 0.200] | −0.120 [−0.256; −0.013] | |
+| 60 min, `own` | 48 | 0.198 [0.142; 0.287] | −0.035 [−0.090; 0.010] | |
+
+The full grid is in each run's `read` log.
+
+**Paired differences on the first mission (95 %).**
+
+| | |
+| --- | --- |
+| 6 → 48 hours, 60 min | +0.019 to +0.045 |
+| 24 → 48 hours, 60 min | +0.001 to +0.006 |
+| 60 → 30 min, 48 hours | −0.007 to −0.002 |
+| `own` → `cross`, 60 min, 48 hours | +0.010 to +0.024 |
+
+**The rule's choice.**
+- The first mission chooses 60 min over 48 hours. The second chooses 60 min over 6 hours, where
+  the lengths' points lie within 1.4 points of each other.
+- The declaration did not say how to combine the missions. One pretraining reads both, so the
+  layout is the rule's over their union. In that union, a month of one mission is drawn apart
+  from the same calendar month of the other. This combination is set after the missions' readings
+  and is open about it. It could be foreseen, because 97 % of the bar's error is the first
+  mission's.
+- The union chooses **60 min over 48 hours**, 48 cells a channel, and the pretext's window is
+  laid so.
+
+**The block.** Three months, 2,208 hours, on both missions. The first mission's lag-12
+autocorrelation is −0.09 against a band of 0.21, so no yearly structure is seen.
+
+**Cost of the chosen layout.** On 48 channels, 2,304 cells a window.
+
+| Device | Batch 1 | Batch 8 | Batch 32 |
+| --- | --- | --- | --- |
+| MPS | 0.17 s, 2.2 GB | 0.73 s, 12.1 GB | not tried: 11 GB for attention laid out whole |
+| CPU | 0.10 s | 0.71 s | not tried |
+
+**Predictions against the outcome.**
+- *Longer history helps where a channel shows a cycle within 48 hours.* Held. Over the first
+  mission's channels, the gain from 6 to 48 hours rises with the hourly autocorrelation at a day
+  less that at half a day (Spearman 0.54, p < 10⁻⁴).
+- *Finer cells help less than longer history.* Held. They help not at all here.
+- *`cross` reads above `own`.* Held on both missions.
+- *A 60-minute choice keeps the window at most 48 × 48 cells.* Held. A host fits batch 8, and a
+  campaign at batch 32 goes to a GPU.
+
+**Conclusions.**
+1. The pretext's window is one-hour cells over 48 hours, every channel in it, with a three-month
+   held-out block at the end of each mission's first half.
+2. On the first mission, the hours before tell a fifth of the median's error away. Arm A has a
+   margin to learn. It lies mostly in a few channels: the median channel reads 0.11, 69 % of
+   channels read above zero, and the top tenth reads above 0.50.
+3. On the second mission, history adds nothing over the median on the months read (0.29 on the
+   taught ones). There, the pretext's case rests on arm B.
+
+**Limitations.**
+- 48 hours is the grid's edge. The gain flattens: +0.3, +2.3 and +0.3 points over its three
+  doublings on the first mission, as a daily cycle met by 24 hours would make it. Whether longer windows add more is
+  not measured.
+- The rule has no least effect worth its cost. 24 and 48 hours differ by 0.3 points, which is
+  significant over 61,000 windows and small in use.
+- One window holds one hidden hour. At a step of its length, 48 hours give half the hidden hours
+  an epoch that 24 hours give, at about twice the attention cost a cell. The window's step and
+  its count of hidden hours are left to the window's decision.
+- The width is a linear forecast's verdict. Ten-minute cells give it hundreds of columns that it
+  fits better than it forecasts. What they add to an encoder within the hour is not measured.
