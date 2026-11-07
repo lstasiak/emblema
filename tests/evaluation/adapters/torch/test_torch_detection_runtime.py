@@ -16,7 +16,10 @@ from emblema.evaluation.adapters.torch.torch_detection_runtime import (  # noqa:
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures  # noqa: E402
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe  # noqa: E402
 from emblema.evaluation.domain.detection.score_distance import ScoreDistance  # noqa: E402
-from emblema.evaluation.domain.exceptions import UnsupportedDetectorFeaturesError  # noqa: E402
+from emblema.evaluation.domain.exceptions import (  # noqa: E402
+    UnjoinedHistoryError,
+    UnsupportedDetectorFeaturesError,
+)
 from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme  # noqa: E402
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask  # noqa: E402
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol  # noqa: E402
@@ -35,7 +38,7 @@ CELLS = DetectorRecipe(
 
 
 def runtime(
-    tmp_path: Path, *, bins: int
+    tmp_path: Path, *, bins: int, history: int = 1
 ) -> tuple[TorchDetectionRuntime, DownstreamTask, SmallBackbones]:
     store = InMemoryArtifactStore()
     manifest = publish(store, tmp_path / "scratch").manifest
@@ -43,7 +46,7 @@ def runtime(
         task(protocol=EvaluationProtocol.ANOMALY_DETECTION, labels=AnomalyScheme(), strata=None),
         manifest=manifest,
     )
-    backbones = SmallBackbones(vocabulary_size=len(CHANNELS), bins=bins)
+    backbones = SmallBackbones(vocabulary_size=len(CHANNELS), bins=bins, history=history)
     fitted = TorchDetectionRuntime(
         backbones, PublishedCorpusBlocks(store, tmp_path / "workspace"), device="cpu"
     )
@@ -84,6 +87,14 @@ def test_the_cells_of_a_backbone_over_readings_are_refused(tmp_path: Path) -> No
 
     with pytest.raises(UnsupportedDetectorFeaturesError, match="no cells"):
         fitted.fit(CELLS, stated, FITTING, SCORED, retain=False)
+
+
+def test_a_backbone_over_a_history_is_refused_before_a_window_is_laid(tmp_path: Path) -> None:
+    fitted, stated, backbones = runtime(tmp_path, bins=4, history=2)
+
+    with pytest.raises(UnjoinedHistoryError, match="history of 2 windows"):
+        fitted.fit(CELLS, stated, FITTING, SCORED, retain=False)
+    assert backbones.built == []
 
 
 def test_the_cells_are_taught_an_event_as_the_states_are(tmp_path: Path) -> None:

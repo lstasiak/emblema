@@ -2,6 +2,7 @@ from typing import Protocol
 
 from torch import nn
 
+from emblema.evaluation.domain.exceptions import UnjoinedHistoryError
 from emblema.evaluation.domain.transfer.encoder_setting import TimeEncoding, ValueEmbedding
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
 from emblema.shared.kernel.artifacts import ArtifactRef
@@ -47,6 +48,11 @@ class BackboneFactory(Protocol):
         """Spans a pretrained encoder reads a channel's token over; zero for one per reading."""
         ...
 
+    @property
+    def history(self) -> int:
+        """Published windows one of its windows spans, its own the last; one where alone."""
+        ...
+
     def pretrained(
         self, weights: ArtifactRef, *, vocabulary_size: int, dropout: float
     ) -> nn.Module:
@@ -56,6 +62,8 @@ class BackboneFactory(Protocol):
 
         Raises:
             UnknownBackboneError: If this factory does not serve those weights.
+            UnjoinedHistoryError: If the encoder reads windows joined with their history, which
+                no reading of an encoder alone hands it.
         """
         ...
 
@@ -80,3 +88,21 @@ class BackboneFactory(Protocol):
         the raw readings; the channel module stays the stored architecture's.
         """
         ...
+
+
+def bins_read_alone(backbones: BackboneFactory) -> int:
+    """The bins a pretrained encoder lays each published window into, read one at a time.
+
+    Asked before a run lays anything out, so a backbone over a history is refused before the
+    work it would waste: cut into its bins one hour at a time, a window would be a reading that
+    runs and means nothing.
+
+    Raises:
+        UnjoinedHistoryError: If the encoder reads windows joined with their history.
+    """
+    if backbones.history > 1:
+        raise UnjoinedHistoryError(
+            f"the backbone reads a history of {backbones.history} windows; only its pretext is "
+            "asked over windows joined with theirs"
+        )
+    return backbones.bins

@@ -15,7 +15,7 @@ from emblema.evaluation.adapters.features.per_channel_features import PerChannel
 from emblema.evaluation.adapters.grid.gridded_tokens import GriddedTokens
 from emblema.evaluation.adapters.onnx.inference_graph import InferenceGraph
 from emblema.evaluation.adapters.torch.adapted_backbone import AdaptedBackbone
-from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
+from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory, bins_read_alone
 from emblema.evaluation.adapters.torch.channel_dropout import ChannelDropout
 from emblema.evaluation.adapters.torch.early_stop import EarlyStop
 from emblema.evaluation.adapters.torch.fitted_candidate import FittedCandidate
@@ -232,7 +232,7 @@ class TorchAdaptationRuntime:
         names, the measured and the static ones apart; a vocabulary continued from another
         corpus's names channels this one never holds, and they get no row.
         """
-        if plan.backbone is not None and self._backbones.bins:
+        if plan.backbone is not None and bins_read_alone(self._backbones):
             return BinnedTokens(self._backbones.bins)
         bins = plan.encoder.bins
         if bins is None:

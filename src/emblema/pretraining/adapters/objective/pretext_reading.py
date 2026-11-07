@@ -9,12 +9,14 @@ from emblema.pretraining.adapters.objective.cell_reconstruction import CellRecon
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
 from emblema.pretraining.adapters.training.cell_batches import CellBatches
-from emblema.pretraining.adapters.training.cell_windows import CellWindows
 from emblema.pretraining.adapters.training.exceptions import UnanswerablePretextError
+from emblema.pretraining.adapters.training.joined_cell_batches import JoinedCellBatches
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
 from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
+from emblema.shared.adapters.arrays.joined_windows import JoinedWindow
 from emblema.shared.adapters.arrays.laid_window import LaidWindow
+from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.tokens import TokenWindow
 
 # Seeds a generator takes: torch reads one as a signed 64-bit integer.
@@ -52,7 +54,8 @@ class PretextReading:
     The masks are the run's own strategy, but each window's are drawn from its own generator over
     that window alone, so what a window is asked never depends on the windows read beside it or
     on how the batch is padded. The objective is read as stored, its decoder included, and only
-    over the channels it learnt rows for.
+    over the channels it learnt rows for. An objective trained over a history of windows is asked
+    over windows joined with theirs, as its run joined them, and over nothing else.
     """
 
     def __init__(
@@ -66,7 +69,9 @@ class PretextReading:
     ) -> None:
         self._model = model.to(device).eval()
         self._masking = TokenMasking(masking)
-        self._cells = CellBatches(BinnedTokens(model.encoder.architecture.bins))
+        architecture = model.encoder.architecture
+        self._cells = CellBatches(BinnedTokens(architecture.bins))
+        self._joined = JoinedCellBatches(architecture.bins) if architecture.history > 1 else None
         self._vocabulary_size = vocabulary_size
         self._device = device
         self._batch_size = batch_size
@@ -92,7 +97,7 @@ class PretextReading:
 
     def drawn(
         self,
-        windows: Sequence[TokenWindow],
+        windows: Sequence[TokenWindow | JoinedWindow],
         seeds: Sequence[int],
         *,
         answered: bool,
@@ -108,17 +113,25 @@ class PretextReading:
         Raises:
             ValueError: If the windows and seeds are not paired, or a seed is not one a
                 generator takes: an integer in ``[0, 2**63)``.
-            UnanswerablePretextError: If a window holds a channel the objective has no row for.
+            UnanswerablePretextError: If a window holds a channel the objective has no row for,
+                or is not joined with its history where the objective read one, or the reverse.
         """
         if len(windows) != len(seeds):
             raise ValueError(f"{len(seeds)} seeds were given for {len(windows)} windows")
         outside = [seed for seed in seeds if not 0 <= seed < SEEDS]
         if outside:
             raise ValueError(f"a seed lies outside [0, 2**63): {outside[0]}")
+        joined = self._joined is not None
+        if any(isinstance(window, JoinedWindow) is not joined for window in windows):
+            raise UnanswerablePretextError(
+                "the objective reads windows joined with their history"
+                if joined
+                else "the objective reads each published window alone"
+            )
         read: list[ReadCells] = []
         # A window asked under several seeds is laid out once, not once a draw: its cells for
         # the batch and, alone, for its masks.
-        alone: dict[int, tuple[LaidWindow, CellWindows]] = {}
+        alone: dict[int, tuple[LaidWindow | None, TokenTensors]] = {}
         for start in range(0, len(windows), self._batch_size):
             chunk = windows[start : start + self._batch_size]
             read.extend(
@@ -134,22 +147,23 @@ class PretextReading:
 
     def _read(
         self,
-        windows: Sequence[TokenWindow],
+        windows: Sequence[TokenWindow | JoinedWindow],
         seeds: Sequence[int],
-        alone: dict[int, tuple[LaidWindow, CellWindows]],
+        alone: dict[int, tuple[LaidWindow | None, TokenTensors]],
         *,
         answered: bool,
         tail: bool,
     ) -> list[ReadCells]:
         for window in windows:
-            beyond = [c for c in window.channel_ids if c > self._vocabulary_size]
+            held = window.rows if isinstance(window, JoinedWindow) else window.channel_ids
+            beyond = [int(c) for c in held if c > self._vocabulary_size]
             if beyond:
                 raise UnanswerablePretextError(
                     f"a window holds the channel {beyond[0]}, beyond the "
                     f"{self._vocabulary_size} the objective learnt rows for"
                 )
         laid = [self._laid_alone(window, alone) for window in windows]
-        batch = self._cells.collate_laid(windows, [cells for cells, _ in laid])
+        batch, layout = self._batch(windows, [cells for cells, _ in laid])
         tokens = batch.padding_mask.shape[1]
         masks = self._stacked(
             [
@@ -157,7 +171,7 @@ class PretextReading:
                 for (_, own), seed in zip(laid, seeds, strict=True)
             ]
         )
-        cells = self._cells.scored(batch, masks)
+        cells = layout.scored(batch, masks)
         answers = None
         if answered:
             with torch.no_grad():
@@ -186,16 +200,43 @@ class PretextReading:
         ]
 
     def _laid_alone(
-        self, window: TokenWindow, alone: dict[int, tuple[LaidWindow, CellWindows]]
-    ) -> tuple[LaidWindow, CellWindows]:
-        """The window's cells, and the batch of it alone its masks are drawn over."""
+        self,
+        window: TokenWindow | JoinedWindow,
+        alone: dict[int, tuple[LaidWindow | None, TokenTensors]],
+    ) -> tuple[LaidWindow | None, TokenTensors]:
+        """The window's cells, and the batch of it alone its masks are drawn over.
+
+        A joined window's cells are joined again with the batch, which costs less than keeping
+        them; a published window's are laid once.
+        """
         found = alone.get(id(window))
         if found is None:
-            (cells,) = self._cells.layout.lay([window])
-            found = alone[id(window)] = (cells, self._cells.collate_laid([window], [cells]))
+            if isinstance(window, JoinedWindow):
+                found = (None, self._joined_layout.collate([window]))
+            else:
+                (cells,) = self._cells.layout.lay([window])
+                found = (cells, self._cells.collate_laid([window], [cells]))
+            alone[id(window)] = found
         return found
 
-    def _drawn_alone(self, laid: CellWindows, seed: int, tokens: int) -> TokenMasks:
+    def _batch(
+        self, windows: Sequence[TokenWindow | JoinedWindow], laid: Sequence[LaidWindow | None]
+    ) -> tuple[TokenTensors, CellBatches | JoinedCellBatches]:
+        """The batch of ``windows`` and the layout that scores it."""
+        joined = [window for window in windows if isinstance(window, JoinedWindow)]
+        if joined:
+            return self._joined_layout.collate(joined), self._joined_layout
+        tokens = [window for window in windows if isinstance(window, TokenWindow)]
+        cells = [cells for cells in laid if cells is not None]
+        return self._cells.collate_laid(tokens, cells), self._cells
+
+    @property
+    def _joined_layout(self) -> JoinedCellBatches:
+        if self._joined is None:  # pragma: no cover - refused before any window is laid
+            raise UnanswerablePretextError("the objective reads each published window alone")
+        return self._joined
+
+    def _drawn_alone(self, laid: TokenTensors, seed: int, tokens: int) -> TokenMasks:
         """The masks of one window drawn over it alone, padded to the batch's ``tokens``."""
         drawn = self._masking.draw(laid, torch.Generator().manual_seed(seed))
         own = drawn.channel.shape[1]
@@ -210,7 +251,7 @@ class PretextReading:
             horizon=padded(drawn.horizon),
         )
 
-    def _tail_alone(self, laid: CellWindows, tokens: int) -> TokenMasks:
+    def _tail_alone(self, laid: TokenTensors, tokens: int) -> TokenMasks:
         """The last span of every channel hidden, as the horizon a training draw would hide."""
         last = laid.timestamps > 1.0 - 1.0 / self._cells.layout.bins
         horizon = last & ~laid.timeless & ~laid.padding_mask

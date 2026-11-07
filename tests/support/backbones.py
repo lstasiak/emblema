@@ -26,9 +26,12 @@ PRETRAINED_SEED = 1
 class SmallBackbones:
     """Small encoders over the test vocabulary, the pretrained one always the same."""
 
-    def __init__(self, vocabulary_size: int = VOCABULARY_SIZE, *, bins: int = 0) -> None:
+    def __init__(
+        self, vocabulary_size: int = VOCABULARY_SIZE, *, bins: int = 0, history: int = 1
+    ) -> None:
         self._vocabulary_size = vocabulary_size
         self._bins = bins
+        self._history = history
         self.requested: list[ArtifactRef] = []
         # Every encoder handed out, so a test can read what a run did to the one it got.
         self.built: list[SetEncoder] = []
@@ -44,6 +47,10 @@ class SmallBackbones:
     @property
     def bins(self) -> int:
         return self._bins
+
+    @property
+    def history(self) -> int:
+        return self._history
 
     def pretrained(
         self, weights: ArtifactRef, *, vocabulary_size: int, dropout: float

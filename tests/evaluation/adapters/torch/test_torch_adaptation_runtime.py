@@ -42,6 +42,7 @@ from emblema.evaluation.domain.exceptions import (  # noqa: E402
     DivergedAdaptationError,
     InvalidTrainingRegimeError,
     LoraTargetNotFoundError,
+    UnjoinedHistoryError,
 )
 from emblema.evaluation.domain.heads.head_pooling import (  # noqa: E402
     HeadPooling,
@@ -968,6 +969,20 @@ def test_a_backbone_pretrained_over_cells_is_adapted_over_the_cells_it_was_train
     assert [form.format for form in kept.representations] == [FittedCandidate.FORMAT]
     fitted = FittedCandidate.read(store.get(kept.measured.artifact))
     assert fitted.cell_bins == 4
+
+
+def test_a_backbone_over_a_history_is_refused_before_a_window_is_laid(tmp_path: Path) -> None:
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "scratch")
+    backbones = SmallBackbones(vocabulary_size=len(CHANNELS), bins=4, history=2)
+    runtime = TorchAdaptationRuntime(
+        backbones, PublishedCorpusBlocks(store, tmp_path / "workspace"), device="cpu", store=store
+    )
+    defined = replace(task(), manifest=published.manifest, labels=RemainingLifeScheme(CEILING))
+
+    with pytest.raises(UnjoinedHistoryError, match="history of 2 windows"):
+        runtime.adapt(plan(TransferMode.FROZEN_PROBE), defined, SAMPLE, VALIDATION, retain=False)
+    assert backbones.built == []
 
 
 def test_a_network_from_nothing_beside_a_cells_backbone_reads_the_raw_tokens_unless_it_states_bins(
