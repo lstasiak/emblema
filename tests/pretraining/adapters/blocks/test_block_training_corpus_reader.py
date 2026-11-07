@@ -12,6 +12,7 @@ from emblema.pretraining.domain.exceptions import (
     InvalidTrainingCorpusError,
     UnreadablePublishedCorpusError,
 )
+from emblema.pretraining.domain.training.window_place import WindowPlace
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.retention import Retention
@@ -138,6 +139,27 @@ def test_a_split_that_leaves_a_side_without_windows_is_refused(tmp_path: Path) -
 
     with pytest.raises(InvalidTrainingCorpusError, match="validation side"):
         BlockTrainingCorpusReader(store, tmp_path / "reader").read(manifest, WHOLE)
+
+
+def test_each_window_says_where_it_lies_on_its_unit_s_axis(tmp_path: Path) -> None:
+    store = InMemoryArtifactStore()
+    published = publish(store, tmp_path / "publisher")
+
+    read = BlockTrainingCorpusReader(store, tmp_path / "reader").read(published.manifest, WHOLE)
+
+    assert list(read.training_places) == [
+        WindowPlace(TRAINING_UNIT, 0.0, 10.0),
+        WindowPlace(TRAINING_UNIT, 5.0, 15.0),
+        WindowPlace(OTHER_TRAINING_UNIT, 0.0, 10.0),
+    ]
+    assert list(read.validation_places) == [WindowPlace(VALIDATION_UNIT, 0.0, 10.0)]
+    assert list(read.training_places[1:]) == list(read.training_places)[1:]
+    assert read.placed
+
+
+def test_the_units_of_one_part_lie_on_one_axis_and_a_unit_with_none_on_its_own() -> None:
+    assert BlockTrainingCorpusReader.axis_of("ESA-Mission1/2001-01") == "ESA-Mission1"
+    assert BlockTrainingCorpusReader.axis_of("u1") == "u1"
 
 
 def _refusing(store: InMemoryArtifactStore) -> RefusingStore:
