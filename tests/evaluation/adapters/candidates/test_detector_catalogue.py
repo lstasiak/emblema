@@ -94,6 +94,7 @@ def test_the_description_of_a_variant_records_the_knobs_turned() -> None:
         "frozen_knn@epochs=3",
         "frozen_knn@reference=month",
         "frozen_knn@reference=fitting",
+        "pretext_error@error=raw",
     ],
     ids=[
         "no neighbour",
@@ -107,6 +108,7 @@ def test_the_description_of_a_variant_records_the_knobs_turned() -> None:
         "unknown knob",
         "an unknown reference",
         "the default reference under another name",
+        "the raw error under another name",
     ],
 )
 def test_a_name_that_is_no_detector_is_refused(name: str) -> None:
@@ -441,3 +443,14 @@ def test_a_variant_turns_the_history_and_the_alarm() -> None:
 def test_a_history_the_detector_cannot_take_is_refused(name: str) -> None:
     with pytest.raises(UnknownCandidateError):
         WITH_LOCAL.arm_of(CandidateRef(name))
+
+
+def test_a_detector_scored_by_its_largest_channel_s_error_says_so() -> None:
+    name = CandidateRef("pretext_error@error=largest")
+    turned = ASKING.arm_of(name)
+    stated = {p.name: p.value for p in ASKING.describe(name).method.parameters}
+
+    assert turned.recipe(seed=1).normalisation is ErrorNormalisation.LARGEST
+    assert turned.recipe(seed=1).normalisation.channels is ChannelReduction.MAX
+    assert ErrorNormalisation.PER_CHANNEL.channels is ChannelReduction.MEAN
+    assert stated["error"] == "largest"

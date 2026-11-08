@@ -511,3 +511,25 @@ def test_handed_windows_that_overlap_on_one_axis_are_refused_where_a_history_is_
         PretextErrorDetectionRuntime(FakePretext(bins=4, history=2), blocks).fit(
             recipe(), stated, fitting, scored, retain=False
         )
+
+
+def test_read_by_the_largest_channel_a_window_scores_its_channel_furthest_from_its_usual_miss(
+    detection_task: tuple[DownstreamTask, PublishedCorpusBlocks],
+) -> None:
+    stated, blocks = detection_task
+    store = InMemoryArtifactStore()
+    largest = replace(recipe(), normalisation=ErrorNormalisation.LARGEST)
+
+    outcome = PretextErrorDetectionRuntime(MissedByChannel(), blocks, store=store).fit(
+        largest, stated, FITTING, SCORED, retain=True
+    )
+
+    # Every fitting window reads one on each channel, so the alarm sits at one; the held-out
+    # window's first channel reads 4 over its scale and the second 1, and the largest is kept.
+    assert outcome.predictions[0].predicted == pytest.approx(4.0 - 1.0)
+    assert outcome.predictions[1].predicted == pytest.approx(0.0)
+    assert outcome.artifact is not None
+    kept = KeptCandidates(store).read(outcome.artifact)
+    with np.load(io.BytesIO(store.get(kept.measured.artifact))) as archive:
+        assert str(archive["reduction"]) == "max"
+        assert archive["channels"].tolist() == []

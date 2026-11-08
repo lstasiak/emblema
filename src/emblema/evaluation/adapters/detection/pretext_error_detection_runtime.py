@@ -19,9 +19,9 @@ from emblema.evaluation.adapters.detection.masked_cells import MaskedCells
 from emblema.evaluation.adapters.detection.pretext_source import PretextSource
 from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
+from emblema.evaluation.domain.detection.channel_reduction import ChannelReduction
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
-from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
@@ -65,12 +65,12 @@ class PretextErrorDetectionRuntime:
     in its tail, so the pretrained backbone and the answers that learnt nothing fill in the same
     cells. A window's error is the backbone's loss on the five values in normalised units over the
     hidden timed cells that held a reading in all its draws: one mean over them, or, read per
-    channel, the mean over the channels of each channel's error over its typical error on the
-    fitting side. A backbone over a history is asked over each window joined with the windows
-    before it among those handed in, fitting and scored alike, as its run joined them. A
-    window without such a cell has no error to read, so it scores the fitting side's median
-    error, neither an alarm nor the most normal window there is, and how many did is logged per
-    side. The alarm is the one every detector sets.
+    channel, the mean or the largest over the channels of each channel's error over its typical
+    error on the fitting side. A backbone over a history is asked over each window joined with
+    the windows before it among those handed in, fitting and scored alike, as its run joined
+    them. A window without such a cell has no error to read, so it scores the fitting side's
+    median error, neither an alarm nor the most normal window there is, and how many did is
+    logged per side. The alarm is the one every detector sets.
 
     The answers: the backbone's decoder; a ridge per channel over the same visible cells, fitted
     on the fitting side's draws; or each channel's line between its visible bins. What a fit
@@ -140,18 +140,24 @@ class PretextErrorDetectionRuntime:
             asked, fitting, recipe, asking, answerer, channels, side="fitting"
         )
         scales = (
-            ChannelErrorScales.fitted_on(fitting_errors)
-            if recipe.normalisation is ErrorNormalisation.PER_CHANNEL
-            else None
+            ChannelErrorScales.fitted_on(fitting_errors) if recipe.normalisation.scaled else None
         )
-        fitted = fitting_errors.raw() if scales is None else scales.read(fitting_errors)
+        fitted = (
+            fitting_errors.raw()
+            if scales is None
+            else scales.read(fitting_errors, recipe.normalisation.channels)
+        )
         unread = fitting_errors.unread
         neutral = float(np.median(fitted[~unread])) if (~unread).any() else 0.0
         fitted[unread] = neutral
         scored_errors = self._errors(
             asked, windows, recipe, asking, answerer, channels, side="scored"
         )
-        errors = scored_errors.raw() if scales is None else scales.read(scored_errors)
+        errors = (
+            scored_errors.raw()
+            if scales is None
+            else scales.read(scored_errors, recipe.normalisation.channels)
+        )
         errors[scored_errors.unread] = neutral
         alarm = ScoreAlarm.set_over(
             fitted,
@@ -169,7 +175,9 @@ class PretextErrorDetectionRuntime:
                 for labelled, answer in zip(scored, answers.tolist(), strict=True)
             ),
             seconds=time.perf_counter() - started,
-            artifact=self._kept(alarm, ridge, scales, task) if retain else None,
+            artifact=self._kept(alarm, ridge, scales, recipe.normalisation.channels, task)
+            if retain
+            else None,
         )
 
     @staticmethod
@@ -190,9 +198,12 @@ class PretextErrorDetectionRuntime:
         alarm: ScoreAlarm,
         ridge: LinearCellAnswer | None,
         scales: ChannelErrorScales | None,
+        channels: ChannelReduction,
         task: DownstreamTask,
     ) -> ArtifactRef:
         """The alarm, the ridge and the channels' scales this fit produced, stored for the campaign.
+
+        Beside the scales, how the channels' errors over them made the score.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep them.
@@ -214,6 +225,7 @@ class PretextErrorDetectionRuntime:
         if scales is not None:
             arrays["scale_channels"] = scales.channels
             arrays["scales"] = scales.scales
+            arrays["reduction"] = np.asarray(str(channels))
         np.savez(buffer, allow_pickle=False, **arrays)
         return self._kept_candidates.keep(
             CandidateKind.DETECTOR,
