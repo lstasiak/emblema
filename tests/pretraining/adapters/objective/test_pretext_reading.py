@@ -14,7 +14,10 @@ from emblema.pretraining.adapters.objective.cell_reconstruction import (  # noqa
     CellReconstruction,
 )
 from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape  # noqa: E402
-from emblema.pretraining.adapters.objective.pretext_reading import PretextReading  # noqa: E402
+from emblema.pretraining.adapters.objective.pretext_reading import (  # noqa: E402
+    PretextReading,
+    packed,
+)
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking  # noqa: E402
 from emblema.pretraining.adapters.training.cell_batches import CellBatches  # noqa: E402
 from emblema.pretraining.adapters.training.exceptions import (  # noqa: E402
@@ -82,8 +85,9 @@ def test_a_window_read_under_several_seeds_across_batches_is_read_as_each_seed_a
     model = stored.build()
     assert isinstance(model, CellReconstruction)
     assert stored.masking is not None
+    # Three bins: the two windows are 9 and 6 cells, so a budget of 15 holds two at most.
     reading = PretextReading(
-        model, stored.masking, vocabulary_size=stored.vocabulary_size, batch_size=2
+        model, stored.masking, vocabulary_size=stored.vocabulary_size, cells_per_batch=15
     )
     read, other = window(3, 9, seed=4), window(2, 5, seed=5)
 
@@ -264,3 +268,9 @@ def test_an_objective_reads_only_the_kind_of_window_it_was_trained_over() -> Non
         PretextReading.of(trained_over_a_history()).drawn([alone], [1], answered=False)
     with pytest.raises(UnanswerablePretextError, match="each published window alone"):
         PretextReading.of(trained()).drawn([joined[0]], [1], answered=False)
+
+
+def test_a_batch_holds_as_many_windows_as_fit_its_budget_of_cells_and_a_large_one_alone() -> None:
+    assert packed([18, 12, 18, 18, 12], 30) == [range(0, 2), range(2, 3), range(3, 5)]
+    assert packed([50, 10, 10], 30) == [range(0, 1), range(1, 3)]
+    assert packed([], 30) == []

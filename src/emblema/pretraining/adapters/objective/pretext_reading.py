@@ -21,6 +21,27 @@ from emblema.shared.kernel.tokens import TokenWindow
 
 # Seeds a generator takes: torch reads one as a signed 64-bit integer.
 SEEDS = 2**63
+# Cells a batch holds at most: attention over a window costs memory by the square of its cells,
+# and a window of 48 hours over 48 channels took a gigabyte of the Mac's accelerator at this
+# size, so a batch is as many windows as fit this budget, never a fixed count of them.
+CELLS_PER_BATCH = 8192
+
+
+def packed(cells: Sequence[int], budget: int) -> list[range]:
+    """Consecutive runs of windows whose cells together stay within ``budget``, in order.
+
+    A window larger than the budget is a run of its own: it is read, not refused.
+    """
+    runs: list[range] = []
+    start, held = 0, 0
+    for at, count in enumerate(cells):
+        if at > start and held + count > budget:
+            runs.append(range(start, at))
+            start, held = at, 0
+        held += count
+    if start < len(cells):
+        runs.append(range(start, len(cells)))
+    return runs
 
 
 @dataclass(frozen=True)
@@ -55,7 +76,8 @@ class PretextReading:
     that window alone, so what a window is asked never depends on the windows read beside it or
     on how the batch is padded. The objective is read as stored, its decoder included, and only
     over the channels it learnt rows for. An objective trained over a history of windows is asked
-    over windows joined with theirs, as its run joined them, and over nothing else.
+    over windows joined with theirs, as its run joined them, and over nothing else. The windows
+    are read in batches of as many as hold ``cells_per_batch`` cells together.
     """
 
     def __init__(
@@ -65,7 +87,7 @@ class PretextReading:
         *,
         vocabulary_size: int,
         device: str = "cpu",
-        batch_size: int = 64,
+        cells_per_batch: int = CELLS_PER_BATCH,
     ) -> None:
         self._model = model.to(device).eval()
         self._masking = TokenMasking(masking)
@@ -74,7 +96,7 @@ class PretextReading:
         self._joined = JoinedCellBatches(architecture.bins) if architecture.history > 1 else None
         self._vocabulary_size = vocabulary_size
         self._device = device
-        self._batch_size = batch_size
+        self._cells_per_batch = cells_per_batch
 
     @classmethod
     def of(cls, trained: TrainedModel, *, device: str = "cpu") -> "PretextReading":
@@ -132,18 +154,23 @@ class PretextReading:
         # A window asked under several seeds is laid out once, not once a draw: its cells for
         # the batch and, alone, for its masks.
         alone: dict[int, tuple[LaidWindow | None, TokenTensors]] = {}
-        for start in range(0, len(windows), self._batch_size):
-            chunk = windows[start : start + self._batch_size]
+        for run in packed([self._cells_of(window) for window in windows], self._cells_per_batch):
             read.extend(
                 self._read(
-                    chunk,
-                    seeds[start : start + self._batch_size],
+                    windows[run.start : run.stop],
+                    seeds[run.start : run.stop],
                     alone,
                     answered=answered,
                     tail=tail,
                 )
             )
         return read
+
+    def _cells_of(self, window: TokenWindow | JoinedWindow) -> int:
+        """How many cells the window is laid out as: a row per channel it holds, over the bins."""
+        if isinstance(window, JoinedWindow):
+            return int(window.cells.shape[0] * window.cells.shape[1])
+        return len(set(window.channel_ids)) * self._cells.layout.bins
 
     def _read(
         self,
