@@ -1,12 +1,14 @@
-r"""A forecasting pretext's answer for the hidden last hour against two answers with no model.
+r"""A forecasting pretext's answer for the hidden last hour against answers with no model.
 
 A backbone trained to fill in each channel's last hour of a window joined with its history is
 asked, on windows of its own corpus, for that hour as the pretext hides it, and its decoder is
-scored beside two answers that need no model: the channel's last reading before the hour,
-carried forward, and the median of the channel's hourly means over the hours before. Each is
+scored beside three answers that need no model: the channel's last reading before the hour,
+carried forward; the median of the channel's hourly means over the hours before; and the hour
+one period back, the period being the lag of up to half the window that best repeated the
+channel's own hours before, so that a channel that cycles is answered by its last cycle. Each is
 scored on every hidden cell that held a reading, by the objective's Huber loss over the cell's
 five values in normalised units; a cell whose channel read nothing earlier in the window is left
-out of all three, and counted.
+out of all of them, and counted.
 
 Cells of one window share the window, and neighbouring windows share their hours, so the
 intervals resample whole windows, and the decoder is compared with each answer on the same cells.
@@ -41,24 +43,31 @@ if TYPE_CHECKING:
     # The reading needs torch; scoring what it read does not, so the tests run without it.
     from emblema.pretraining.adapters.objective.pretext_reading import ReadCells
 
-ANSWERS = ("decoder", "last_reading", "median_of_history")
-COLUMNS = ("window", "axis", "channel", *ANSWERS)
+ANSWERS = ("decoder", "last_reading", "median_of_history", "same_phase")
+COLUMNS = ("window", "axis", "channel", "lag", *ANSWERS)
 VALUES = BinnedTokens.VALUE_FEATURES
 LAST = BinnedTokens.FEATURE_NAMES.index("last")
 MEAN = BinnedTokens.FEATURE_NAMES.index("mean")
 PRESENCE = BinnedTokens.PRESENCE
 RESAMPLES = 2000
 CHUNK = 16
+# A lag is a period only if it repeated the channel over this many earlier hours of the window.
+MIN_PAIRS = 6
 
 
 @dataclass(frozen=True)
 class ScoredCell:
-    """One hidden cell that held a reading, and each answer's loss on it."""
+    """One hidden cell that held a reading, and each answer's loss on it.
+
+    ``lag`` is the period the same-phase answer went back, or None where no lag repeated the
+    channel over enough earlier hours and that answer fell back to the channel's latest hour.
+    """
 
     window: int
     axis: str
     channel: int
-    losses: tuple[float, float, float]
+    losses: tuple[float, ...]
+    lag: int | None = None
 
 
 @dataclass(frozen=True)
@@ -68,7 +77,7 @@ class Comparison:
     label: str
     windows: int
     cells: int
-    means: tuple[float, float, float]
+    means: tuple[float, ...]
     intervals: tuple[tuple[float, float], ...]
     differences: tuple[tuple[float, float, float], ...]
 
@@ -76,6 +85,39 @@ class Comparison:
 def huber(error: NDArray[np.float64], delta: float = 1.0) -> NDArray[np.float64]:
     magnitude = np.abs(error)
     return np.where(magnitude <= delta, 0.5 * error**2, delta * (magnitude - 0.5 * delta))
+
+
+def same_phase(
+    values: NDArray[np.float64], present: NDArray[np.bool_]
+) -> tuple[NDArray[np.float64], int | None]:
+    """One channel's answer for its next hour: the hour one period back, and that period.
+
+    ``values`` holds the channel's hours before the hidden one, oldest first, and ``present``
+    which of them held a reading. Each lag up to half the window, the hidden hour counted, is
+    scored by how well an hour that lag back answered every earlier hour both read, so that a
+    48-hour window can find a daily cycle; the best lag whose hour back from the hidden one read
+    gives the answer. Without such a lag the answer is the latest hour read.
+
+    Raises:
+        ValueError: If no hour read.
+    """
+    read = np.flatnonzero(present)
+    if not len(read):
+        raise ValueError("the channel read in no hour before the hidden one")
+    hours = len(values)
+    best: tuple[float, int] | None = None
+    for lag in range(1, (hours + 1) // 2 + 1):
+        if not present[hours - lag]:
+            continue
+        pairs = present[lag:] & present[:-lag]
+        if pairs.sum() < MIN_PAIRS:
+            continue
+        error = float(huber(values[:-lag][pairs] - values[lag:][pairs]).mean())
+        if best is None or error < best[0]:
+            best = (error, lag)
+    if best is None:
+        return values[read[-1]], None
+    return values[hours - best[1]], best[1]
 
 
 def scored(read: "ReadCells", *, bins: int, window: int, axis: str) -> tuple[list[ScoredCell], int]:
@@ -109,6 +151,7 @@ def scored(read: "ReadCells", *, bins: int, window: int, axis: str) -> tuple[lis
             unscored += 1
             continue
         target = full[-1, row, VALUES]
+        cycled, lag = same_phase(full[:-1, row, VALUES], earlier[:, row])
         cells.append(
             ScoredCell(
                 window=window,
@@ -118,7 +161,9 @@ def scored(read: "ReadCells", *, bins: int, window: int, axis: str) -> tuple[lis
                     float(huber(answers[-1, row] - target).mean()),
                     float(huber(full[seen[-1], row, LAST] - target).mean()),
                     float(huber(np.median(full[seen, row, MEAN]) - target).mean()),
+                    float(huber(cycled - target).mean()),
                 ),
+                lag=lag,
             )
         )
     return cells, unscored
@@ -152,7 +197,7 @@ def compared(
         label=label,
         windows=len(ids),
         cells=len(cells),
-        means=(float(point[0]), float(point[1]), float(point[2])),
+        means=tuple(float(m) for m in point),
         intervals=tuple((float(a), float(b)) for a, b in zip(low, high, strict=True)),
         differences=tuple(differences),
     )
@@ -161,8 +206,8 @@ def compared(
 def table(comparisons: Sequence[Comparison]) -> str:
     lines = [
         "| Cells | Windows | Cells scored | Decoder | Last reading | Median of history "
-        "| Decoder - last reading | Decoder - median |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Same phase | Decoder - last reading | Decoder - median | Decoder - same phase |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for c in comparisons:
         means = [
@@ -183,12 +228,30 @@ def comparisons_of(cells: Sequence[ScoredCell], rng: np.random.Generator) -> lis
     ]
 
 
+def lags(cells: Sequence[ScoredCell]) -> str:
+    """Per axis, how often the same-phase answer fell back, and the periods it chose most."""
+    lines = []
+    for axis in sorted({cell.axis for cell in cells}):
+        chosen = [cell.lag for cell in cells if cell.axis == axis]
+        fitted = np.array([lag for lag in chosen if lag is not None])
+        ids, counts = np.unique(fitted, return_counts=True)
+        top = ", ".join(
+            f"{ids[i]} h {counts[i] / len(chosen):.0%}" for i in np.argsort(-counts)[:5]
+        )
+        lines.append(
+            f"{axis}: {len(chosen) - len(fitted)} of {len(chosen)} cells fell back; "
+            f"periods chosen most: {top or 'none'}"
+        )
+    return "\n".join(lines)
+
+
 def write_cells(path: Path, cells: Sequence[ScoredCell]) -> None:
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(COLUMNS)
         for cell in cells:
-            writer.writerow((cell.window, cell.axis, cell.channel, *cell.losses))
+            lag = "" if cell.lag is None else cell.lag
+            writer.writerow((cell.window, cell.axis, cell.channel, lag, *cell.losses))
 
 
 def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs the store
@@ -264,6 +327,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
         f"{RESAMPLES} resamples of whole windows"
     )
     print(table(comparisons_of(cells, rng)))
+    print(lags(cells))
 
 
 if __name__ == "__main__":  # pragma: no cover
