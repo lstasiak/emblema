@@ -204,3 +204,132 @@ where that predictor is near zero, as the count's is here; the next declaration 
 should judge such a term by its loss beside the values' loss instead. The presence's validation
 loss rose by a third after epoch 6 while its training loss fell, a small head overfitting at
 3 × 10⁻⁴ of the validation loss.
+
+## 2026-11-08 — declared before the run: arm A's forecast error, read by the channel that departs most, against the departures with no model
+
+**Questions.** (1) On the first mission's validation months, does the pretrained forecaster's
+error for the scored hour, each channel over its typical miss and the window scored by its
+largest channel, read above the departures with no model and no label (`channel_local`, the
+leg's bar)? (2) Does it read above the answer that learnt nothing under the same reading, each
+channel's last visible hour carried forward? Both must pass for the pretext to have shown it
+reads more than the departures themselves. Beside, descriptively: the mean and the raw error
+in place of the largest, the cells' farthest feature, the events found at 1 % of normal
+windows, the second mission, and the forecaster's error on the months it read against the
+months it never read.
+
+**Conditions.**
+
+| | |
+|---|---|
+| Commit | the one that adds this section; the knob at `d4ab754b`, the campaign and the pretrainings' files at `4af3c884` |
+| Pretrainings | `experiments/backbone-history-esa-m.toml` and `-seed2.toml`: the budget run's recipe over 13 epochs, seeds 1 and 2, on the pretraining corpus `e926af17…`; tier M, one G4 each, about 1 h 40 min |
+| Tasks | `esa-mission1-events` `8a6b1c18…` (61,363 fitting windows; 56 validation months, 41,088 windows, 62 events), `esa-mission2-events` `09368ab9…` (15,335 fitting windows; 14 validation months, 10,223 windows, 236 events); the task corpus `f1d0b0f2…` |
+| Campaign | `campaigns/telemetry-history-pretext.toml`, once per pretraining and mission: the arm `pretext_error@error=largest,hidden=tail,reference=unit`, beside it `error=channel` and the raw error, the control `interpolation_error@error=largest,hidden=tail,reference=unit`; the backbone asked over each window joined with the 47 before it among those handed in (ADR-0076), the tail hidden once |
+| Bars | the cells of `telemetry-mission1-local` and `telemetry-mission2-local` (`channel_local@reference=unit` on the first mission, `@departure=bins` on the second; `cells_knn@distance=farthest,reference=unit`), fitted on the same months and paired across campaigns |
+| Platform | pretrainings on Colab G4; the first mission's pretext cells on the G4 (2.7 h each on the Mac, which scores 10.6 of its windows a second); every other cell and the trial on the Mac |
+| Reading | `data/report/l38/reading/read.sh`: `campaign_pairs_report.py`, 10,000 resamples over months in two strata, seed 1, `--recall-at 0.01`; a window whose 47 hours before reach into a month the task never loaded is dropped from every side before the pairing |
+
+**Rules.**
+
+- *The knob, chosen on the fitting side before this declaration.* The arm's reading is the
+  largest channel, from the trees' finding that the missed events lie in which channel departs
+  (`telemetry-channel-local.md`). It stands unless, on the fitting side's later months under the
+  budget run's backbone (seed 0, which no pretraining of the arm uses), the mean reads at least
+  0.01 above it in area; then the mean is the arm. The pilot's number anchors the prediction and
+  decides nothing else.
+- *The reading.* Two readings, one family under Holm, each the arm less its control on the
+  validation months, the pretrainings' cells pooled by the mean of their areas over the same
+  resample, the interval over months: (1) less `channel_local`; (2) less the interpolation under
+  the same knobs. T = 2·s/√2 over the two pretrainings, s the larger of 0.014 and their own
+  spread; the control draws nothing. The least gain that counts is the detection tasks'
+  registered 0.05; the floor's fixed part 0.01.
+- *Truncated windows.* A validation window whose 47 hours before reach into a frozen month is
+  read by no side, bars included: the arm would see less history there and the bars would not.
+- *The second mission* is read descriptively, as the register has it: its bar reads 0.885 and
+  its control spreads.
+- *Read and unread months*, descriptively: `history_pretext_answers_report.py` on each
+  pretraining, the training side against the validation side of the pretraining corpus. Where the
+  decoder's loss on the months it read is under half its loss on the months it never read, the
+  arm "pretrained without event windows" returns to the stage's table.
+
+| Outcome | Condition | What follows |
+|---|---|---|
+| Above the departures | (1) at least +0.05 and T, interval above zero, under Holm; (2) the same | the pretext reads more than the departures: arm A's pretrainings are the leg's candidate, arm B is read as what its term adds to A |
+| Above its no-model answer only | (2) passes, (1) within ±max(0.05, T) or below | the forecaster is a better per-channel reader than the last hour, but no better a detector than the departures with no model; arm B's term is the next lever, read against A |
+| Around or below | (1) and (2) within ±max(0.05, T), or below | the forecast's sharpness does not reach the events; the pretext's target is talked through before any further card |
+| Undecided | T above 0.05 | the pretrainings spread more than the least gain; whether more seeds are worth their cards is decided with the size read |
+
+**Predictions**, from the pilot's intervals below at the edge nearer zero:
+
+| | Predicted | Source |
+|---|---|---|
+| (1) arm − `channel_local`, area, Mission1 | between −0.02 and +0.07, under the least gain of 0.05 | the pilot, +0.014 [−0.022; +0.066] |
+| (2) arm − interpolation, area, Mission1 | at least +0.045, the point near +0.15: passes on the point, the lower edge a hair under the least gain | the pilot, +0.156 [+0.045; +0.280] |
+| Outcome | above its no-model answer only | the two rows above |
+| Recall at 1 %, arm − `channel_local`, Mission1 | at least +0.02, the point near +0.17 | the pilot, +0.172 [+0.017; +0.315] |
+| The mean beside the largest, Mission1 | area about 0.02 under the arm's, recall about 0.10 above | the pilot, −0.021 [−0.075; +0.100] and +0.103 [0.000; +0.237] |
+| Mission2, arm − `channel_local`, area | within ±0.03 | the pilot, +0.006 [−0.022; +0.031] |
+| Read against unread months | the decoder's loss on the read months not under half that on the unread | the pilot's arm read the unread months no worse, below |
+
+**Power.** The paired difference (1) spreads 0.022 over resamples of the pilot's 36 months and
+29 events, so about 0.015 over the validation months' 56 and 62, before the pretrainings' own
+spread; T is 0.020 at the least. A true gain of 0.05 has its interval above zero with a
+probability of 0.5 to 0.9 (the first of the two readings held at 97.5 % under Holm) and reads
+at or above the least gain about half the time, so the
+reading can miss a gain at the least gain; a gain of 0.10 reads above zero with a probability
+over 0.99. The pilot's +0.014 predicts a miss for a reason other than power. The gain predicted
+for (2) stands two and a half of its pilot spreads (0.060) from zero.
+
+**Pilot on the fitting side, before this declaration.** The budget run's backbone (seed 0, 16
+epochs), `scripts/history_pretext_reading_pilot.py` on the Mac (M1 Pro, MPS, fp32): each
+mission's fitting months split at a date, the months before it fitting the scales and the
+alarm, those from it scored; intervals from the script's `read` over its CSVs, 2,000 resamples
+of the scored months, seed 1.
+
+| Mission | Fit | Scored | Reading | Area | Recall at 1 % |
+|---|---|---|---|---|---|
+| Mission1 | 35,020 windows to 2003-12 | 26,124 from 2004-01: 36 months, 29 events | arm, largest | 0.184 [0.061; 0.333] | 0.759 [0.604; 0.899] |
+| | | | mean | 0.163 | 0.862 |
+| | | | raw | 0.172 | 0.724 |
+| | | | interpolation, largest | 0.027 [0.004; 0.120] | 0.690 |
+| | | | `channel_local` | 0.170 [0.060; 0.300] | 0.586 [0.424; 0.748] |
+| Mission2 | 10,199 windows to 2001-02 | 5,136 from 2001-03: 7 months, 66 events | arm, largest | 0.931 [0.892; 0.971] | 0.970 |
+| | | | mean | 0.919 | 0.970 |
+| | | | raw | 0.898 | 0.939 |
+| | | | interpolation, largest | 0.942 [0.897; 0.983] | 0.970 |
+| | | | `channel_local@departure=bins` | 0.925 [0.886; 0.967] | 1.000 |
+
+- *The knob.* The mean reads 0.021 under the largest on Mission1 and 0.012 under it on
+  Mission2: the largest stands. It finds more of Mission1's events at 1 % of false alarms (0.86
+  against 0.76), so the recall is read beside the area.
+- *The control.* On Mission1 the last hour carried forward, read by its largest channel, reads
+  0.027 in area, a sixth of the bar's (a random order reads 0.0015), yet finds 0.69 of the
+  events at 1 % of false alarms, as many as the raw pretext: it reaches most events by some
+  hour of theirs and ranks the rest of their hours low. An answer that carries the last hour
+  forward departs where a channel turns, at an event's onset as at the turns of the channels'
+  18-hour cycle, not inside an event of hours (their median span is 8 hours, the longest 357).
+  Question (2) therefore asks whether the forecaster reads past the cycle more than whether it
+  finds the events; (1) is the reading that counts.
+- *Unread months.* The arm read the three months the pretraining never read (2006-10 to 12,
+  four events) at 0.70, the mean at 0.69 and `channel_local` at 0.51; on Mission2 the arm fell
+  from 0.931 to 0.890 there and the bar from 0.925 to 0.881. Over four events this says little
+  either way; the declared reading of read against unread months decides.
+- *Cost.* A Mission1 window is 2,304 cells against 528 on Mission2, and the attention's cost
+  grows with their square: the Mac scores 10.6 of them a second against 146. The reading now
+  batches windows by a budget of cells, not by count: at 64 windows a batch the attention's
+  scores over Mission1 took the whole memory.
+
+**Trial, before this declaration.** The campaign file defined, ordered, run and accepted
+through the campaign's own commands on the Mac, on the second mission under its pilot backbone
+of tier S (`86c3edbb…`, which no reading uses): four cells in 622 s, the pretext's about 190 s
+each, 1.9 GB. The reading script then ran whole on that campaign and the channel-local
+campaign of 2026-11-06: 235 windows in the 47 hours after an unloaded month dropped from every
+side, seven pairs, the area and the recall tables written, no number read.
+
+**Limitations declared.** Two pretrainings. The detectors over the encoder's states refuse a
+backbone over a history, so the arm is read by its pretext's error alone and no "states against
+their initialisation" reading exists for it. The channels' scales are fitted on months the
+pretraining read. The validation months have been read before; the test months stay frozen.
+The pilot read the budget run's backbone of 16 epochs, where the pretrainings stop at 13, on
+fitting months the pretraining read in part, with months resampled in one stratum where the
+reading uses two.
