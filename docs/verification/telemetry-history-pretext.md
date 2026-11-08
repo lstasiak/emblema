@@ -147,3 +147,60 @@ ordered until a longer cap, or another schedule, is agreed.
 | | Predicted | Source |
 |---|---|---|
 | Budget | from 6 to 13 epochs | at eight epochs the values still fell 6.3 % over the three after the fifth, so fewer than six is unlikely. Here the rate at the eighth epoch is still about half its peak, against its floor before. Thirteen is the last epoch the rule can judge under this cap |
+
+## 2026-11-08 — measured: the pretext's budget is thirteen epochs
+
+**Conditions.** As declared, at commit `68622066`: order `durable/sha256/288e1da0…`, result
+`durable/sha256/2d6aba00…`, not resumed. The stored configuration was checked against the
+experiment file before the reading: 16 epochs, otherwise as the eight-epoch run. On the G4 an
+epoch took 456 s, a step 0.2 s, with the card 86 % busy and 1.9 GB of its memory used; 7,510 s
+in all. The log names no error and no NaN. Budget:
+`scripts/pretraining_budget_report.py --log budget.log`. Forecast: read as before, on the
+backbone of epoch 16, the lowest validation reconstruction.
+
+**Budget.** Each term's validation cost, its loss over the trivial predictor's:
+
+| Epoch | 5 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 |
+|---|---|---|---|---|---|---|---|---|---|
+| Reconstruction | 0.0827 | 0.0715 | 0.0705 | 0.0701 | 0.0694 | **0.0689** | 0.0689 | 0.0685 | 0.0684 |
+| Presence | 0.0002 | 0.0002 | 0.0003 | 0.0003 | 0.0002 | 0.0002 | 0.0002 | 0.0002 | 0.0002 |
+| Count | **29.0** | 19.2 | 13.0 | 45.7 | 20.1 | 16.0 | 13.8 | 12.2 | 11.4 |
+
+The rule stops the count at epoch 5, the presence at 6 and the reconstruction at 13: the budget
+is 13 epochs, at the edge of the predicted 6 to 13.
+
+**Forecast**, 1,500 validation windows; it decides nothing:
+
+| Mission | Decoder at 8 → 16 epochs | Median of history | Same phase | Decoder − median | Decoder − same phase |
+|---|---|---|---|---|---|
+| Mission1 | 0.0082 → 0.0070 | 0.121 | 0.020 | −0.114 [−0.116; −0.113] | −0.013 [−0.016; −0.012] |
+| Mission2 | 0.048 → 0.045 | 0.149 | 0.433 | −0.103 [−0.113; −0.094] | −0.387 [−0.445; −0.334] |
+
+**Conclusions.**
+
+- Arm A's pretrainings train for 13 epochs, by the declared rule.
+- The reconstruction set the budget, at the last epoch this cap could judge; past it the values
+  fell 0.6 % in three epochs.
+- The count's cost is the decoder's loss over a guess that copies the channel's mean count from
+  the window's visible hours. That guess misses by 4 × 10⁻⁶: a satellite channel's count barely
+  moves from hour to hour. The decoder never came near it (4 × 10⁻⁵ to 1 × 10⁻³), so the ratio
+  swings with noise. The rule's letter stopped the count at a trough in epoch 5 that it later fell
+  below, and at the cap it was still falling, by 7 % over the last epoch: by the rule's intent
+  the count never stopped within the cap. The budget stands on the letter, declared before the
+  run, and on the term the pretext is for. The count weighs 4 to 5 % of the training loss from
+  the fifth epoch on and at most 2.2 % of the validation loss from the third.
+- The decoder gained a little over the eight further epochs on both missions. It stays past the
+  repetition on Mission1.
+- The two caps compare the schedule with the model: at epoch 8 the sixteen-epoch run, at half
+  its peak rate, read 0.0745 where the eight-epoch run, annealed to its floor, read 0.0754. The
+  annealing brought no gain, and the rate decays over the whole cap, so the plateau the rule read
+  at epochs 13 to 16, at a tenth of the peak rate and under, is at least partly the schedule's.
+  The budget is the budget under this schedule and this cap.
+
+**Limitations.** One seed. Validation months. The budget lies at the cap's last judgeable epoch,
+which was also the prediction's upper edge, so the result reads as "thirteen or more": a longer
+cap could set it later. The budget rule reads a ratio to a trivial predictor, which is noise
+where that predictor is near zero, as the count's is here; the next declaration of the rule
+should judge such a term by its loss beside the values' loss instead. The presence's validation
+loss rose by a third after epoch 6 while its training loss fell, a small head overfitting at
+3 × 10⁻⁴ of the validation loss.
