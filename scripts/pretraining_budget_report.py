@@ -15,10 +15,10 @@ the lowest mean cost of the values alone, which is all its validation reads — 
 it, with how far it falls before the presence stops learning, since a kept epoch long before
 that point would keep a backbone whose presence is not yet learnt.
 
-The cap of this run is longer than the budget it gives, and its rate decays over the whole cap,
-so at the budget's epoch this run still trained at a higher rate than a run capped there will:
-a run whose rate is spent by then reaches at least this cost, which makes the budget a bound
-from above rather than a guess.
+The rate decays over the whole cap, so the last epochs under any cap run near the floor and
+look like a plateau whatever the model has left to learn: the budget read here is the budget
+under this schedule and this cap, and a cap whose last judgeable epoch is the budget may have
+cut it short.
 
     uv run scripts/pretraining_budget_report.py --log <run.log> [--out DIR]
     uv run scripts/pretraining_budget_report.py --report-only DIR
