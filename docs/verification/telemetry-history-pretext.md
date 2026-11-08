@@ -71,3 +71,55 @@ in full:
 of the tasks' fitting side; no task's validation or test month is read. A channel that reads
 only in the hidden hour still has a row in the window, which tells the decoder it reads there:
 11 of 44,128 cells in the first pilot. The pilots' numbers are tier S and validation numbers.
+
+## 2026-11-08 — measured: the forecast beats the history's median on both missions; eight epochs set no budget
+
+**Conditions.** As declared, at commit `dfeaf86a`: order `durable/sha256/11a5a455…`, result
+`durable/sha256/f3d16c86…`. The stored configuration was checked against the experiment file
+before the reading: tier M, fp32, 2 × 64, 48 bins over 48 hours, the last hour the only mask, 8
+epochs, batches of 32, seed 0, 72,282 training and 4,416 validation windows. On the G4 an epoch
+took 456 s, a step 0.2 s, with the card 84 % busy; 3,811 s in all. The forecast was read on the
+backbone of epoch 8, the lowest validation reconstruction, on the Mac (M1 Pro, MPS, fp32).
+
+**Budget.** The values' cost, validation loss over the trivial predictor's, from the result:
+
+| Epoch | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|
+| Cost | 0.0870 | 0.0839 | 0.0805 | 0.0772 | 0.0760 | 0.0754 |
+| Largest fall over the next three epochs | 11.3 % | 9.3 % | 6.3 % | 2.3 %, two left | 0.8 %, one left | — |
+
+The presence and the count were not read: the budget is the latest epoch over the terms, so one
+term still learning leaves none whatever the others do.
+
+**Forecast**, 1,500 validation windows. *Same phase* was added after the run and decides
+nothing: each channel's hour one period back, the period being the lag of 1 to 24 hours that
+best repeated the window's own earlier hours, over at least six pairs of hours that both read.
+
+| Mission | Windows | Cells | Decoder | Last reading | Median of history | Same phase | Decoder − median | Decoder − same phase |
+|---|---|---|---|---|---|---|---|---|
+| Mission1 | 747 | 35,856 | 0.0082 | 0.154 | 0.121 | 0.020 | −0.113 [−0.115; −0.112] | −0.012 [−0.015; −0.011] |
+| Mission2 | 752 | 8,272 | 0.048 | 0.132 | 0.149 | 0.433 | −0.100 [−0.110; −0.091] | −0.384 [−0.442; −0.331] |
+
+The period chosen most on Mission1 was 18 hours (38 % of cells), then 23 (12 %); 24 hours was
+not among the five chosen most on either mission. On Mission2 it was one hour (47 %), and 33
+cells had no period and took the latest hour read.
+
+**Conclusions.**
+
+- The forecast gate passes on both missions: arm A's pretrainings may be ordered once a budget
+  is set.
+- Mission1 beat its prediction (−0.113 against at most −0.022). Mission2 went just past its
+  predicted edge: −0.100 against short of −0.096, with the interval across it. Its decoder did
+  not gain on the pilot over Mission2 alone (0.048 against 0.046).
+- No budget: the values still fell 6.3 % over the three epochs after the fifth, the last epoch
+  the rule could judge. The cap was too short, and the prediction of at most five epochs failed.
+- Mission1's channels repeat: one period back misses by a sixth of what the median misses by.
+  Most of the decoder's gain over the median is that cycle, yet it misses by 40 % of what the
+  cycle misses by. It forecasts past the repetition, and nothing in its gain needs a leak to
+  explain it.
+- On Mission2, with no period, same phase misses by more than the last reading and is no bar
+  there.
+
+**Limitations.** One seed, validation months. Same phase picks among 24 lags on the window's
+own hours and does not adjust for level. A seasonal answer that carries the change since the
+last cycle could narrow the gap on Mission1.
