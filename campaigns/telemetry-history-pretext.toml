@@ -1,0 +1,41 @@
+# A mission's events read by the error of the forecasting pretext's answer for the window's hour,
+# the backbone asked over the window joined with the 47 hours before it (ADR-0076): each channel's
+# error over its typical miss on the fitting side, the window scored by its largest channel
+# (ADR-0070, `largest`), beside the mean over the channels and the raw error; each read against the
+# other windows of its own month. The control is the answer that learnt nothing under the same
+# knobs, each channel's line through its visible hours carried to the hidden one; the bars with
+# no model, the channels' departures and the cells' farthest feature, are read from the campaigns
+# that fitted them on the same months (telemetry-mission1-local, telemetry-mission2-local).
+#
+# The window's tail is hidden once, so no seed draws anything; one seed. Run once under each
+# pretraining of the arm, on each mission; committed before the campaign runs.
+name = "telemetry-history-pretext"
+purpose = "tuning"
+tier = "M"
+measure = "pr_auc_shortfall"
+
+[candidates]
+competing = [
+    "pretext_error@error=largest,hidden=tail,reference=unit",
+    "pretext_error@error=channel,hidden=tail,reference=unit",
+    "pretext_error@hidden=tail,reference=unit",
+    "interpolation_error@error=largest,hidden=tail,reference=unit",
+]
+control = "interpolation_error@error=largest,hidden=tail,reference=unit"
+endpoint = "pretext_error@error=largest,hidden=tail,reference=unit"
+
+[budgets]
+labels = ["all"]
+endpoint = "all"
+seeds = [1]
+
+[rules]
+minimum_absolute_reduction = 0.05
+absolute_floor = 0.01
+alpha = 0.05
+secondary_family_size = 2
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95
