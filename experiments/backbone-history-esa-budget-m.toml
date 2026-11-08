@@ -7,11 +7,10 @@
 # of the arm uses; the backbone is read on no task.
 #
 # The recipe is the pilots' (backbone-history-esa-s.toml, backbone-history-esa-m2-s.toml) over
-# every training month, in batches of 32 a card holds whole. Eight epochs at most, about 18,000
-# steps: the pilot over Mission2 alone still lowered every term at its eighth epoch, 3,288 steps
-# in, but by little (its values 0.150 of the trivial predictor's, down 0.5 % over the last two
-# epochs), and an epoch here is 2,260 steps, so the rule's three epochs past where the terms stop
-# fit inside the cap unless they stop after the fifth.
+# every training month, in batches of 32 a card holds whole. Sixteen epochs at most, about 36,000
+# steps: capped at eight (commit dfeaf86a), the values still fell 6.3 % over the three epochs
+# after the fifth, the last the rule could judge, and 0.8 % over the eighth itself, at a rate
+# decayed to its floor, so the cap left no budget. Doubled, the rule judges up to the thirteenth.
 name = "backbone-history-esa-budget-m"
 tier = "M"
 corpora = ["esa_ad_raw"]
@@ -47,7 +46,7 @@ presence_weight = 1.0
 count_weight = 0.5
 
 [budget]
-epochs = 8
+epochs = 16
 batch_size = 32
 accumulation_steps = 1
 learning_rate = 1e-3
