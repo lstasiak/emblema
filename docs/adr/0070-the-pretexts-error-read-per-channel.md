@@ -51,3 +51,10 @@ channel whose variation is physically negligible otherwise inflates the error.
   units, only how unusual they were for their channels; the two readings are not on one scale.
 - A reading by rank within each channel's error distribution would stand up to heavier tails than
   the median does; it waits until the median has been read.
+
+## 2026-11-08
+
+`error` takes a third value, `largest`: each channel's error over its scale as under `channel`,
+the window scored by its largest channel rather than their mean, as the departures' detector
+scores it (ADR-0075). Declared for the forecasting pretext's reading in
+`telemetry-history-pretext.md`; the default and the stored campaigns are unchanged.

@@ -1,7 +1,7 @@
 # ADR-0076: A window with history, assembled from the published hours as cells
 
-- Status: proposed
-- Date: 2026-11-07
+- Status: accepted
+- Date: 2026-11-07; accepted 2026-11-08
 
 ## Context
 
@@ -62,15 +62,14 @@ Checked on one month of each mission (`telemetry-history-window.md`):
   joined, masked and joined again in 25 ms on one process.
 - The first halves' 76,700 hours, one cell each over 59 channels, hold about 0.3 GB in float64,
   so they are joined in float64, as `BinnedTokens` lays them, and only the batch is narrowed.
-- Neighbouring windows share 47 of their 48 hours; whether so dense a draw helps is read in the
-  pilot, not assumed.
+- Accepted once the pilots and the budget run had trained over the joined windows and their
+  forecast beat the history's median on both missions (`telemetry-history-pretext.md`).
 - Every stored document reads `history` as one, so no earlier encoder changes.
 - The arm that perturbs readings (ADR-0078) re-lays only the hour it perturbs, before the join.
 
 ## Alternatives
 
 - **Publish 48-hour windows.** At a step of 6 hours: eight times the data, one target hour in
-  six, 47 hours lost at each month's start, two constructions of one window, 40 to 56 windows a
-  second. At 48: about 1,500 windows.
+  six, 47 hours lost at each month's start, 40 to 56 windows a second. At 48: 1,500 windows.
 - **48-hour task windows labelled by their last hour.** New tasks, which no reading so far
   compares with.
