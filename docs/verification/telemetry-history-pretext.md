@@ -123,3 +123,27 @@ cells had no period and took the latest hour read.
 **Limitations.** One seed, validation months. Same phase picks among 24 lags on the window's
 own hours and does not adjust for level. A seasonal answer that carries the change since the
 last cycle could narrow the gap on Mission1.
+
+## 2026-11-08 — declared before the run: the budget over sixteen epochs
+
+**Question.** With the cap doubled, after how many epochs has every term of the pretext stopped
+learning? That number sets the epochs of arm A's pretrainings.
+
+**Conditions.** As in the first declaration, except for these:
+
+| | |
+|---|---|
+| Commit | the one that adds this section |
+| Experiment | `experiments/backbone-history-esa-budget-m.toml` capped at 16 epochs, about 36,000 steps; nothing else changed |
+| Cost | about 2 h on the G4, about 21 units; a dropped session resumes from the last checkpoint |
+| Forecast | the same report on the backbone the run keeps; reported, decides nothing: the gate passed above |
+
+**Rules.** The budget rule above, unchanged, judges the reconstruction, the presence and the
+count. A term still learning at the sixteenth epoch leaves no budget. Then no pretraining is
+ordered until a longer cap, or another schedule, is agreed.
+
+**Predictions.**
+
+| | Predicted | Source |
+|---|---|---|
+| Budget | from 6 to 13 epochs | at eight epochs the values still fell 6.3 % over the three after the fifth, so fewer than six is unlikely. Here the rate at the eighth epoch is still about half its peak, against its floor before. Thirteen is the last epoch the rule can judge under this cap |
