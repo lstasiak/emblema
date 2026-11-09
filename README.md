@@ -49,8 +49,7 @@ read.
 **Measurements as a bag of tokens.** Each measurement becomes one token: which sensor, its value
 scaled per sensor, when it was taken within the window, and how long since that sensor's
 previous reading. A window is the set of its tokens. Three sensors or thirty, read every second
-or twice a day, it is the same kind of input, with nothing interpolated. Fixed facts, such as a
-patient's age, become tokens without a time.
+or twice a day, it is the same kind of input, with nothing interpolated.
 
 ![Sensor readings of an intensive-care stay and a turbofan engine, and the same windows as sets of tokens](docs/images/token-view.png)
 
@@ -69,8 +68,7 @@ same gap, such as interpolation or a regression on the other sensors.
 
 **Adapting to a task.** The encoder is then used on a small labelled task: frozen under a small
 output layer, lightly adjusted through a few extra weights (LoRA), fully fine-tuned, or trained
-from scratch as the control. Each runs at several label budgets, tuned by the same declared
-procedure as the classical baselines.
+from scratch as the control. Each runs at several label budgets.
 
 **Keeping the comparison honest.**
 
@@ -105,17 +103,15 @@ Preliminary, on validation data; each task's test data is used once, at the end.
 - A new sensor set joins without labels: fitting only the channel rows brings the pretext to
   within 0.006 of a backbone that read the corpus, and carries part of a task (+0.031 on sepsis
   at 4,000 patients).
-- On satellite telemetry the features find no events without labels. With every label the best
-  readout is a linear direction over the frozen features, 0.26 in event-weighted PR-AUC against
-  0.15 for trees, with or without pretraining; longer windows read lower. Each channel's
-  departure from its own recent hours, with no model and no label, reads level with the best
-  classical bar on the first mission and 0.885 against 0.627 on the second, finding as many
-  events as the taught direction; it is now part of the package, a bar the backbone has to beat.
-  A pretext that forecasts each channel's next hour from two days of its history forecasts
-  well but reads the events no better than that departure (−0.018 [−0.074; +0.039]).
+- On satellite telemetry the features find few events without labels. Each channel's departure
+  from its own recent hours, with no model and no label, is part of the package and the bar the
+  backbone has to beat: it finds 61 % of the first mission's events at 1 % false alarms and reaches an
+  event-weighted PR-AUC of 0.885 against 0.627 on the second. A pretext forecasting each channel's next hour reads no
+  better than that departure, and the departures miss too few events on that mission to justify
+  a perturbation term.
 
-**Next:** the ceiling without labels on the first mission, and the events found at a
-false-alarm budget as the telemetry measure; confirmation at few labels on fresh pretrainings.
+**Next:** choose that bar on later fitting months by the events found; confirmation at few labels
+on fresh pretrainings.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 

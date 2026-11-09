@@ -53,6 +53,15 @@ Last updated 2026-11-09.
   hours at chance, so the event-weighted area reads the tail: an onset-only oracle would read
   0.30 here, these read 0.12 to 0.21
   ([note](verification/telemetry-history-pretext.md)).
+  The first mission's verdict is now read by the events found at 1 % false alarms, least gain
+  0.18. On that measure the departures leave little room on these events: they miss 13 of 61, too
+  few for the rule to reopen the perturbation term (at most 10.67 beyond chance, 11 required), and
+  other detectors with no label find 3.7 of them beyond chance. Ten-minute cells gain one of the 11
+  events nothing found and lose two. A fusion of five detectors reads 0.738 against
+  `channel_local`'s 0.607, unresolved against the mean of the departures (0.672: +0.066
+  [−0.052; +0.176]), and its share from the states is the same within one event at their
+  initialisation
+  ([note](verification/telemetry-ceiling.md)).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
 - **What transfers is the encoder's machinery.** Fitting only the channel rows of an unread corpus
@@ -196,6 +205,8 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | The same detector in the package, a campaign cell against the report's answers | every month ranked alike, least Spearman 1.00000 (M2) and 0.99998 (M1), top 1 % held; M2 the same to the bit; area and recall at 1 % equal at four decimals (M1 0.179, 0.607; M2 0.885, 0.996) | [telemetry-channel-local](verification/telemetry-channel-local.md) |
 | Windows of 6, 24, 72 hours ending at the scored hour, untrained encoder, layout chosen on later fitting months, against the hour | no layout chosen; read beside, 6x6 under the direction **−0.130** [−0.195; −0.066], under the whitened distance **−0.059** [−0.136; −0.008]; smoothing the hour's scores −0.18 to −0.23; pooling the previous hours' states −0.006 [−0.037; +0.021]; trees over the cells with 24 hours +0.023 [−0.037; +0.060]; none of the 11 unfound events found, which are local (10 of 11), touch 3 channels of 48 (median) and last 5.5 hours against 12 channels and 15 hours for the found | [telemetry-context](verification/telemetry-context.md) |
 | The pretext that forecasts each channel's hour from the 47 before it, two pretrainings, its error read by the largest channel | against `channel_local` −0.018 [−0.074; +0.039], against the last hour carried forward +0.036 [−0.033; +0.112]: around or below; recall at 1 % 0.59 against the bar's 0.60, the raw error's 0.67; every history-referenced detector ranks an event's later hours at chance, so the area reads the tail (an onset-only oracle 0.30, these 0.12–0.21); M2 0.889 against the bar 0.886 and the carried hour 0.928 | [telemetry-history-pretext](verification/telemetry-history-pretext.md) |
+| Events the channels' departures miss, against other detectors with no label at 1 % false alarms | others find 6 of 13, 3.67 beyond chance, at most 10.67 possible, least 11; stays deferred; fusion +0.131 [+0.037; +0.234] over `channel_local`, +0.066 [−0.052; +0.176] over the mean of the departures | [telemetry-ceiling](verification/telemetry-ceiling.md) |
+| The 11 events nothing found, on their annotated channels, ten minutes against the hour | one gained, two lost, least 4; not queued; six stand out at the hour beyond chance | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 
 ### What the failures have in common
 
@@ -233,13 +244,9 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 
 ## Next
 
-1. The ceiling without labels on the first mission, before any further pretext: which validation
-   events anything finds with no label and which only the labels' recurring classes reach; the
-   events found at 1 % false alarms registered as the telemetry measure, since every detector
-   referenced to its own history ranks an event's later hours at chance; the missed local events
-   read finer than the hour. The forecasting pretext over a channel's history is closed as a
-   detector ([note](verification/telemetry-history-pretext.md)); a perturbation term waits on
-   the ceiling.
+1. Choose the bar for the first mission on its later fitting months, by the events found at 1 % false
+   alarms: the departures' variant read today was chosen by area, and the mean of the departures
+   reads higher, unresolved ([note](verification/telemetry-ceiling.md)).
 2. Read channels added without labels on sepsis, across pretrainings that never read 2019.
 3. Confirm the gain at 50 stays on fresh pretrainings, in a design with power at the screen's
    lower edge, and read there whether the order of pretrainings holds across tasks and detectors.

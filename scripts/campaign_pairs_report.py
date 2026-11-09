@@ -85,6 +85,8 @@ from scripts.reporting import table
 
 CELLS, PREDICTIONS, COMPARISONS = "cells.csv", "predictions.csv", "comparisons.csv"
 RECALL_COMPARISONS = "comparisons-recall.csv"
+# One event of the first mission's 62: a smaller difference in the events found is no event at all.
+RECALL_FLOOR = 0.016
 SCORES = "scores.csv"
 SCORE_COLUMNS = (
     "campaign",
@@ -601,6 +603,7 @@ def pair(
     floor_area: float,
     answers: Answers | None = None,
     recall_at: float | None = None,
+    floor_recall: float = RECALL_FLOOR,
 ) -> Comparison:
     """``candidate`` against ``control``, paired as the campaigns' purpose and measure say.
 
@@ -666,7 +669,7 @@ def pair(
                 paired = PairedEventRecalls(rankings=events, share=recall_at)
                 control_spread = [_missed_at(found, control, seed, recall_at) for seed in seeds]
                 candidate_spread = [_missed_at(found, candidate, seed, recall_at) for seed in seeds]
-                floor_part, threshold = 0.0, ThresholdKind.ABSOLUTE
+                floor_part, threshold = floor_recall, ThresholdKind.ABSOLUTE
         case ErrorMeasure.AUROC_SHORTFALL:
             pairing = "area-pooled"
             found = Answers(()) if answers is None else answers
@@ -1062,6 +1065,12 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         default=0.01,
         help="fixed part of the floor in area, for campaigns read by area",
     )
+    parser.add_argument(
+        "--floor-recall",
+        type=float,
+        default=RECALL_FLOOR,
+        help="fixed part of the floor in recall, registered on the first mission: one of 62 events",
+    )
     arguments = parser.parse_args(argv)
     if arguments.recall_at is not None and not 0.0 <= arguments.recall_at <= 1.0:
         parser.error(f"--recall-at takes a share in [0, 1], not {arguments.recall_at}")
@@ -1126,6 +1135,7 @@ def main(
                     floor_area=arguments.floor_area,
                     answers=found,
                     recall_at=arguments.recall_at,
+                    floor_recall=arguments.floor_recall,
                 )
                 for each in arguments.pair
             ]
