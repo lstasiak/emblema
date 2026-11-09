@@ -94,6 +94,8 @@ class ExperimentConfigurationDocument:
         )
         # And the bins: an encoder over one token per reading writes the shape it always wrote.
         bins: Document = {"bins": architecture.bins} if architecture.reads_cells else {}
+        if architecture.history > 1:
+            bins["history"] = architecture.history
         # The start and the trained parameters too: a run from its seed moving everything
         # writes the document every run wrote before either knob existed.
         start: Document = (
@@ -176,6 +178,7 @@ class ExperimentConfigurationDocument:
         trained = fields.optional_text("trained")
         # Absent from every document written before the input had a part: one token per reading.
         bins = architecture.optional_integer("bins")
+        history = architecture.optional_integer("history")
         return ExperimentConfiguration(
             name=fields.text("name"),
             tier=ComputeTier(fields.text("tier")),
@@ -187,6 +190,7 @@ class ExperimentConfigurationDocument:
                 feedforward_width=architecture.integer("feedforward_width"),
                 time_frequencies=architecture.integer("time_frequencies"),
                 bins=0 if bins is None else bins,
+                history=1 if history is None else history,
             ),
             dropout=fields.number("dropout"),
             decoder_layers=fields.integer("decoder_layers"),

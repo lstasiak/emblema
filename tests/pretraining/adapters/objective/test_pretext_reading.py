@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
+from emblema.shared.adapters.arrays.joined_windows import JoinedWindow, JoinedWindows
 from emblema.shared.kernel.tokens import Token, TokenWindow
 from tests.support.experiments import CELLS, CHANNELS, OBSERVATION, configuration
 
@@ -13,7 +14,10 @@ from emblema.pretraining.adapters.objective.cell_reconstruction import (  # noqa
     CellReconstruction,
 )
 from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape  # noqa: E402
-from emblema.pretraining.adapters.objective.pretext_reading import PretextReading  # noqa: E402
+from emblema.pretraining.adapters.objective.pretext_reading import (  # noqa: E402
+    PretextReading,
+    packed,
+)
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking  # noqa: E402
 from emblema.pretraining.adapters.training.cell_batches import CellBatches  # noqa: E402
 from emblema.pretraining.adapters.training.exceptions import (  # noqa: E402
@@ -81,8 +85,9 @@ def test_a_window_read_under_several_seeds_across_batches_is_read_as_each_seed_a
     model = stored.build()
     assert isinstance(model, CellReconstruction)
     assert stored.masking is not None
+    # Three bins: the two windows are 9 and 6 cells, so a budget of 15 holds two at most.
     reading = PretextReading(
-        model, stored.masking, vocabulary_size=stored.vocabulary_size, batch_size=2
+        model, stored.masking, vocabulary_size=stored.vocabulary_size, cells_per_batch=15
     )
     read, other = window(3, 9, seed=4), window(2, 5, seed=5)
 
@@ -214,3 +219,58 @@ def test_asked_for_the_tail_the_reading_hides_every_channel_s_last_span_and_draw
     assert first.answers is not None
     # The tail covers every channel, so a hidden cell still has a visible one before it.
     assert first.visible[~first.hidden].shape[0] > 0
+
+
+def trained_over_a_history() -> TrainedModel:
+    from dataclasses import replace
+
+    stated = configuration(architecture=replace(CELLS, bins=6, history=3), observation=OBSERVATION)
+    torch.manual_seed(7)
+    return TrainedModel.of(stated, CHANNELS, ObjectiveShape.of(stated, CHANNELS).build())
+
+
+def joined_hours(count: int, seed: int) -> list[JoinedWindow]:
+    hours = [window(2 + at % 2, 3, seed=seed + at) for at in range(count)]
+    return list(
+        JoinedWindows.of(
+            (hours,),
+            axes=["a"] * count,
+            starts=[float(at) for at in range(count)],
+            ends=[float(at + 1) for at in range(count)],
+            history=3,
+            bins=6,
+        )
+    )
+
+
+def test_a_joined_window_is_drawn_and_answered_the_same_whatever_is_read_beside_it() -> None:
+    reading = PretextReading.of(trained_over_a_history())
+    windows = joined_hours(5, seed=3)
+
+    (by_itself,) = reading.drawn([windows[3]], [11], answered=True)
+    beside = reading.drawn([windows[0], windows[3], windows[4]], [5, 11, 7], answered=True)[1]
+    other_seed = reading.drawn([windows[3]], [12], answered=False)[0]
+
+    assert np.array_equal(by_itself.hidden, beside.hidden)
+    assert np.array_equal(by_itself.visible, beside.visible)
+    assert by_itself.answers is not None
+    assert beside.answers is not None
+    assert np.allclose(by_itself.answers, beside.answers, atol=1e-5)
+    assert by_itself.full.shape[0] % 6 == 0
+    assert not np.array_equal(by_itself.hidden, other_seed.hidden)
+
+
+def test_an_objective_reads_only_the_kind_of_window_it_was_trained_over() -> None:
+    joined = joined_hours(3, seed=4)
+    alone = window(2, 3, seed=1)
+
+    with pytest.raises(UnanswerablePretextError, match="joined with their history"):
+        PretextReading.of(trained_over_a_history()).drawn([alone], [1], answered=False)
+    with pytest.raises(UnanswerablePretextError, match="each published window alone"):
+        PretextReading.of(trained()).drawn([joined[0]], [1], answered=False)
+
+
+def test_a_batch_holds_as_many_windows_as_fit_its_budget_of_cells_and_a_large_one_alone() -> None:
+    assert packed([18, 12, 18, 18, 12], 30) == [range(0, 2), range(2, 3), range(3, 5)]
+    assert packed([50, 10, 10], 30) == [range(0, 1), range(1, 3)]
+    assert packed([], 30) == []

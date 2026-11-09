@@ -12,6 +12,7 @@ from emblema.evaluation.domain.detection.hidden_cells_choice import (  # noqa: E
     HiddenCellsChoice,
 )
 from emblema.evaluation.domain.exceptions import (  # noqa: E402
+    UnjoinedHistoryError,
     UnknownBackboneError,
     UnreadablePretextError,
 )
@@ -46,6 +47,7 @@ from emblema.pretraining.adapters.training.exceptions import (  # noqa: E402
     UnreadableTrainedModelError,
 )
 from emblema.pretraining.adapters.training.trained_model import TrainedModel  # noqa: E402
+from emblema.shared.adapters.arrays.joined_windows import JoinedWindows  # noqa: E402
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore  # noqa: E402
 from emblema.shared.kernel.artifacts import ArtifactRef  # noqa: E402
 from emblema.shared.kernel.tokens import N_FEATURES  # noqa: E402
@@ -112,6 +114,45 @@ def test_an_artifact_that_is_not_a_trained_model_is_refused_when_the_process_is_
 
     with pytest.raises(UnreadableTrainedModelError):
         RestoredBackbones(store, store.put(b"not a model"))
+
+
+def test_a_backbone_over_a_history_is_asked_its_pretext_over_joined_windows_alone() -> None:
+    from dataclasses import replace
+
+    store = InMemoryArtifactStore()
+    joined = configuration(architecture=replace(CELLS, bins=6, history=3), observation=OBSERVATION)
+    torch.manual_seed(6)
+    trained = TrainedModel.of(joined, CHANNELS, ObjectiveShape.of(joined, CHANNELS).build())
+    weights = store.put(trained.to_bytes())
+    source = RestoredBackbones(store, weights)
+    hours = windows(4, seed=8)
+    over = JoinedWindows.of(
+        (hours,),
+        axes=["a"] * 4,
+        starts=[float(i) for i in range(4)],
+        ends=[float(i + 1) for i in range(4)],
+        history=3,
+        bins=6,
+    )
+
+    masked = source.masked(
+        weights,
+        list(over),
+        [1, 2, 3, 4],
+        answered=True,
+        device="cpu",
+        hidden=HiddenCellsChoice.TAIL,
+    )
+
+    assert source.history == 3
+    for cells in masked:
+        rows = len(cells.channel_ids) // 6
+        assert cells.hidden.tolist() == [False] * (5 * rows) + [True] * rows
+        assert cells.answers is not None
+    with pytest.raises(UnreadablePretextError, match="joined with their history"):
+        source.masked(weights, hours, [1, 2, 3, 4], answered=False, device="cpu")
+    with pytest.raises(UnjoinedHistoryError, match="history of 3 windows"):
+        source.pretrained(weights, vocabulary_size=CHANNELS, dropout=0.0)
 
 
 def test_the_pretrained_encoder_grows_rows_for_channels_past_its_table() -> None:

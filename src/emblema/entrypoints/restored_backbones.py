@@ -5,7 +5,11 @@ from torch import nn
 
 from emblema.evaluation.adapters.detection.masked_cells import MaskedCells
 from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
-from emblema.evaluation.domain.exceptions import UnknownBackboneError, UnreadablePretextError
+from emblema.evaluation.domain.exceptions import (
+    UnjoinedHistoryError,
+    UnknownBackboneError,
+    UnreadablePretextError,
+)
 from emblema.evaluation.domain.transfer.encoder_setting import TimeEncoding, ValueEmbedding
 from emblema.evaluation.domain.transfer.encoder_shape import EncoderShape
 from emblema.pretraining.adapters.encoder.learned_channel_embedding import (
@@ -23,6 +27,7 @@ from emblema.pretraining.adapters.training.exceptions import (
 )
 from emblema.pretraining.adapters.training.trained_model import TrainedModel
 from emblema.pretraining.domain.encoder_architecture import EncoderArchitecture
+from emblema.shared.adapters.arrays.joined_windows import JoinedWindow
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.tokens import N_FEATURES, TokenWindow
 from emblema.shared.ports.artifact_store import ArtifactStore
@@ -65,6 +70,10 @@ class RestoredBackbones:
         return self._trained.architecture.bins
 
     @property
+    def history(self) -> int:
+        return self._trained.architecture.history
+
+    @property
     def huber_delta(self) -> float:
         loss = self._trained.loss
         return 0.0 if loss is None else loss.huber_delta
@@ -72,7 +81,7 @@ class RestoredBackbones:
     def masked(
         self,
         weights: ArtifactRef,
-        windows: Sequence[TokenWindow],
+        windows: Sequence[TokenWindow | JoinedWindow],
         seeds: Sequence[int],
         *,
         answered: bool,
@@ -84,7 +93,8 @@ class RestoredBackbones:
         Raises:
             UnknownBackboneError: If other weights are asked for than this was built over.
             UnreadablePretextError: If the stored model cannot say what it hid, its weights do not
-                fit their shape, or a window holds a channel it learnt no row for.
+                fit their shape, a window holds a channel it learnt no row for, or the windows
+                are not joined with their history where the model read one, or the reverse.
             ValueError: If the windows and seeds are not paired, or a seed lies outside
                 ``[0, 2**63)``: a caller's error, not the backbone's.
         """
@@ -123,8 +133,15 @@ class RestoredBackbones:
 
         Raises:
             UnknownBackboneError: If other weights are asked for than this was built over.
+            UnjoinedHistoryError: If the encoder reads windows joined with their history, which
+                no reading of an encoder alone hands it.
         """
         self._require(weights)
+        if self.history > 1:
+            raise UnjoinedHistoryError(
+                f"{weights.key!r} reads a history of {self.history} windows; only its pretext "
+                "is asked over windows joined with theirs"
+            )
         return self._trained.build(dropout=dropout).encoder.grown_to(vocabulary_size).eval()
 
     @staticmethod
@@ -176,7 +193,8 @@ class RestoredBackbones:
     ) -> nn.Module:
         # The input part is the run's layout's, not the stored model's: a fresh encoder over
         # the raw readings beside a backbone over cells reads two features, and says so.
-        architecture = replace(self._trained.architecture, bins=bins)
+        # A fresh encoder reads the run's own windows, so it spans no history it was not given.
+        architecture = replace(self._trained.architecture, bins=bins, history=1)
         if shape is not None:
             architecture = replace(
                 architecture,

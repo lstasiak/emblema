@@ -1,5 +1,6 @@
 from collections.abc import Callable, Iterator, Sequence
 from itertools import chain
+from typing import Any, overload
 
 from torch.utils.data import DataLoader
 
@@ -9,7 +10,7 @@ from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 from emblema.shared.kernel.tokens import TokenWindow
 
 
-class WindowLoader:
+class WindowLoader[Item]:
     """Batches of token windows for one epoch of training, in an order the seed decides.
 
     Asking for batches means naming the epoch, so an order that depends on it cannot be forgotten
@@ -25,9 +26,36 @@ class WindowLoader:
     probe than for the run it probes would measure the difference rather than the model.
     """
 
+    @overload
+    def __init__(
+        self: "WindowLoader[TokenWindow]",
+        windows: Sequence[TokenWindow],
+        *,
+        batch_size: int,
+        seed: int,
+        shuffle: bool = ...,
+        turn: int = ...,
+        drop_last: bool = ...,
+        num_workers: int = ...,
+    ) -> None: ...
+
+    @overload
     def __init__(
         self,
-        windows: Sequence[TokenWindow],
+        windows: Sequence[Item],
+        *,
+        batch_size: int,
+        seed: int,
+        shuffle: bool = ...,
+        turn: int = ...,
+        drop_last: bool = ...,
+        num_workers: int = ...,
+        collate: Callable[[Sequence[Item]], TokenTensors],
+    ) -> None: ...
+
+    def __init__(
+        self,
+        windows: Sequence[Any],
         *,
         batch_size: int,
         seed: int,
@@ -35,7 +63,8 @@ class WindowLoader:
         turn: int = 0,
         drop_last: bool = False,
         num_workers: int = 0,
-        collate: Callable[[Sequence[TokenWindow]], TokenTensors] = TokenTensors.from_windows,
+        # Any, here and for the windows: which collation suits which windows only the overloads say.
+        collate: Callable[[Sequence[Any]], TokenTensors] = TokenTensors.from_windows,
     ) -> None:
         """Draw batches of ``batch_size`` windows from ``windows``.
 
@@ -53,7 +82,8 @@ class WindowLoader:
                 A worker is handed the whole dataset when it starts, which is cheap for a memory
                 map and expensive for windows held as objects.
             collate: What turns the windows of a batch into its tensors; one token per reading
-                unless a run lays windows out otherwise. Importable in a worker process.
+                unless a run lays windows out otherwise, and stated wherever the windows are not
+                token windows. Importable in a worker process.
 
         Raises:
             ValueError: If no window is given.

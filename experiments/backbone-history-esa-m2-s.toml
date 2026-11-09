@@ -1,0 +1,56 @@
+# The pilot that asks whether arm A's pretext learns Mission2 when it reads all of that mission's
+# first half. In backbone-history-esa-s.toml, over a tenth of both missions' months, its forecast
+# of the hidden hour beat the channel's last reading and its median over the 47 hours before on
+# Mission1's validation months, and lost to both on Mission2's, where about two of the mission's
+# months were drawn; this run tells too few months from a target that cannot carry a level.
+#
+# Mission2 alone, as published for this pilot: its first half less its last three months, which
+# validate, with the task corpus's statistics (ADR-0077). Everything else is
+# backbone-history-esa-s.toml, but a window of Mission2's 11 channels is 528 cells, so a batch of
+# 32 fits the Mac's accelerator without accumulating, and eight epochs give the validation side
+# room to show where it stops falling.
+name = "backbone-history-esa-m2-s"
+tier = "S"
+corpora = ["esa_ad_raw"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+corpus_fraction = 1.0
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 48
+history = 48
+
+# One bin in 48 is exactly the last hour; no other mask, so nothing earlier is a target.
+[masking]
+channel_rate = 0.0
+block_rate = 0.0
+block_span = 0.5
+token_rate = 0.0
+horizon_rate = 1.0
+horizon_min_span = 0.020833333333333332
+horizon_max_span = 0.020833333333333332
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 8
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 200

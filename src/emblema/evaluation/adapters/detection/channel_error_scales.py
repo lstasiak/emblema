@@ -5,6 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from emblema.evaluation.adapters.detection.channel_errors import ChannelErrors
+from emblema.evaluation.domain.detection.channel_reduction import ChannelReduction
 
 
 @dataclass(frozen=True)
@@ -15,7 +16,8 @@ class ChannelErrorScales:
     it, floored at a share of the scales' own median so a channel the pretext answers exactly
     does not divide the rest away; where that median is itself nought, the floor is the smallest
     scale above nought. A channel no fitting window scored is unknown rather than quiet, so it
-    takes the scales' median, and a window that holds it is read neither up nor down for it.
+    takes the scales' median: the mean over the channels reads it as a typical channel, while
+    the largest may still be it.
 
     Invariants: every scale is positive and finite.
 
@@ -54,8 +56,14 @@ class ChannelErrorScales:
             scales=np.where(scored, np.maximum(typical, floor), max(middle, floor)),
         )
 
-    def read(self, errors: ChannelErrors) -> NDArray[np.float64]:
-        """``[windows]`` — the mean over the scored channels of each channel's error over its scale.
+    def read(
+        self, errors: ChannelErrors, channels: ChannelReduction = ChannelReduction.MEAN
+    ) -> NDArray[np.float64]:
+        """``[windows]`` — each channel's error over its scale, the mean or the largest over them.
+
+        The largest reads an event in a few channels of many as high as one in all of them, as
+        the detector over the channels' departures reads it; the mean is what the per-channel
+        reading was declared with.
 
         Raises:
             ValueError: If the errors lie on other channels than the scales.
@@ -64,5 +72,9 @@ class ChannelErrorScales:
             raise ValueError("the errors lie on other channels than the scales")
         read = np.zeros(len(errors.missed))
         scored = ~errors.unread
-        read[scored] = np.nanmean(errors.per_channel()[scored] / self.scales, axis=1)
+        over_scale = errors.per_channel()[scored] / self.scales
+        if channels is ChannelReduction.MAX:
+            read[scored] = np.nanmax(over_scale, axis=1)
+        else:
+            read[scored] = np.nanmean(over_scale, axis=1)
         return read

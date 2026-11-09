@@ -3,6 +3,7 @@ import pytest
 
 from emblema.evaluation.adapters.detection.channel_error_scales import ChannelErrorScales
 from emblema.evaluation.adapters.detection.channel_errors import ChannelErrors
+from emblema.evaluation.domain.detection.channel_reduction import ChannelReduction
 
 CHANNELS = np.array([1, 2, 3], dtype=np.int64)
 
@@ -78,3 +79,15 @@ def test_a_scale_is_positive_and_finite() -> None:
         ChannelErrorScales(channels=CHANNELS, scales=np.array([1.0, 0.0, 1.0]))
     with pytest.raises(ValueError, match="one scale per channel"):
         ChannelErrorScales(channels=CHANNELS, scales=np.array([1.0, 1.0]))
+
+
+def test_read_by_the_largest_a_window_scores_its_channel_furthest_over_its_scale() -> None:
+    scales = ChannelErrorScales.fitted_on(FITTING)
+    scored = errors(
+        [[4.0, 100.0, 0.0], [2.0, 0.0, 0.0], [0.0, 0.0, 0.0]], [[1, 1, 0], [1, 0, 0], [0, 0, 0]]
+    )
+
+    # The second channel's 100 over its scale of 4 is the window's score; a channel not scored
+    # in the window is passed over, and a window without a scored channel still reads nought.
+    assert scales.read(scored, ChannelReduction.MAX).tolist() == pytest.approx([25.0, 2.0, 0.0])
+    assert scales.read(scored, ChannelReduction.MEAN).tolist() == scales.read(scored).tolist()

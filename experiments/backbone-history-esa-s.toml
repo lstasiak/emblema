@@ -1,0 +1,58 @@
+# The pilot of the pretext that asks each satellite channel for its next hour from the 47 before
+# it (ADR-0076): every published hour is joined with the hours before it on its mission into
+# one cell an hour over 48 hours, and the last hour is hidden whole in every window, every
+# channel at once, so the objective forecasts it and reconstructs nothing else. The raw ESA
+# telemetry as published for pretraining: each mission's first half less its last three months,
+# which validate, with the task corpus's statistics (ADR-0077).
+#
+# The pilot checks the mechanics and prices a step, nothing more: a tenth of the training months,
+# ranked by the seed, so most months start with a history cut short where the month before was
+# not drawn. The shape, the terms and the step are the base recipe over cells, so arm A differs
+# from it in the input and the mask alone. Batches of 8 accumulated four times are its batch of
+# 32 in optimiser steps: the Mac's accelerator refuses attention over 32 windows of 2,304 cells
+# (an array past its largest size), and 16 already hold 17 GB of it.
+name = "backbone-history-esa-s"
+tier = "S"
+corpora = ["esa_ad_raw"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+corpus_fraction = 0.1
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 48
+history = 48
+
+# One bin in 48 is exactly the last hour; no other mask, so nothing earlier is a target.
+[masking]
+channel_rate = 0.0
+block_rate = 0.0
+block_span = 0.5
+token_rate = 0.0
+horizon_rate = 1.0
+horizon_min_span = 0.020833333333333332
+horizon_max_span = 0.020833333333333332
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 2
+batch_size = 8
+accumulation_steps = 4
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 200

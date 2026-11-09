@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from itertools import chain
 
 from emblema.catalog.contracts.identifiers import CorpusVersionId
-from emblema.catalog.domain.channels.channel_schema import ChannelSchema
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.exceptions import CorpusDataChangedError
 from emblema.catalog.domain.identifiers import CorpusId, UnitKey
@@ -36,6 +35,9 @@ class TokeniseCorpusVersionCommand:
             appended after. Corpora tokenised under one growing vocabulary can be trained on
             together, because no two of their channels share an identifier; a fresh vocabulary
             is right for the first corpus only.
+        statistics_from: Manifest of a corpus whose statistics this one's channels adopt rather
+            than fit on its training side, so that the two hand a model the same values;
+            ``None`` fits them.
     """
 
     corpus_id: CorpusId
@@ -43,6 +45,7 @@ class TokeniseCorpusVersionCommand:
     window: WindowSpec
     split: SplitPolicy
     vocabulary: ChannelVocabulary = field(default_factory=ChannelVocabulary)
+    statistics_from: ArtifactRef | None = None
 
 
 class TokeniseCorpusVersion:
@@ -77,6 +80,10 @@ class TokeniseCorpusVersion:
             CorpusDataChangedError: If the reader no longer sees the data that version froze.
             CorpusReadError: If the reader cannot read or validate the data.
             InvalidUnitSplitError: If the corpus holds too few units for the fraction asked.
+            ArtifactNotFoundError: If the manifest named for the statistics is not archived.
+            MalformedManifestError: If it is archived but is not a manifest.
+            MissingChannelStatisticsError: If it fitted no statistics for a channel of this
+                corpus.
             WindowNotArchivableError: If a window cannot be stored at the archive's precision.
         """
         corpus = self._corpora.get(command.corpus_id)
@@ -90,7 +97,16 @@ class TokeniseCorpusVersion:
             )
         units = list(self._reader.read_units())
         split = command.split.applied_to([unit.key for unit in units])
-        scheme = self._fitted(corpus.name, units, split, version.channel_schema, command.vocabulary)
+        unfitted = TokenisationScheme.for_vocabulary(command.vocabulary).extended_with(
+            corpus.name, version.channel_schema
+        )
+        scheme = (
+            self._fitted(corpus.name, units, split, unfitted)
+            if command.statistics_from is None
+            else unfitted.adopting(
+                corpus.name, self._archive.read_manifest(command.statistics_from).scheme
+            )
+        )
         archived = self._archive.write_windows(
             self._placed(corpus.name, units, scheme, command.window)
         )
@@ -105,6 +121,7 @@ class TokeniseCorpusVersion:
             split=split,
             split_seed=command.split.recorded_seed,
             empty_units=tuple(unit.key for unit in units if unit.key not in indexed),
+            statistics_from=command.statistics_from,
         )
         return self._archive.write_manifest(manifest)
 
@@ -113,12 +130,10 @@ class TokeniseCorpusVersion:
         corpus: str,
         units: Sequence[CorpusUnit],
         split: UnitSplit,
-        schema: ChannelSchema,
-        vocabulary: ChannelVocabulary,
+        unfitted: TokenisationScheme,
     ) -> TokenisationScheme:
         """The scheme this corpus is tokenised under, fitted on the training units alone."""
         training = [unit for unit in units if unit.key in split.training]
-        unfitted = TokenisationScheme.for_vocabulary(vocabulary).extended_with(corpus, schema)
         return self._tokeniser.fit(
             corpus,
             self._observations(unit.key for unit in training),

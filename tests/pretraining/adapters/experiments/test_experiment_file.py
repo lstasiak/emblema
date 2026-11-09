@@ -394,6 +394,15 @@ def test_a_file_without_an_input_reads_one_token_per_reading(tmp_path: Path) -> 
     assert ExperimentFile.load(written(STATED, tmp_path)).configuration().architecture.bins == 0
 
 
+def test_a_file_states_the_history_beside_the_bins(tmp_path: Path) -> None:
+    text = STATED + "\n[input]\nbins = 48\nhistory = 48\n"
+
+    stated = ExperimentFile.load(written(text, tmp_path)).configuration()
+
+    assert (stated.architecture.bins, stated.architecture.history) == (48, 48)
+    assert ExperimentFile.load(written(STATED, tmp_path)).configuration().architecture.history == 1
+
+
 def test_the_input_is_laid_over_the_shape_the_file_states(tmp_path: Path) -> None:
     text = STATED + "\n[shape]\nwidth = 64\nheads = 16\n\n[input]\nbins = 6\n"
 

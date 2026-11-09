@@ -43,6 +43,7 @@ class PublishedCorpusManifestAssembler:
             split_seed=manifest.split_seed,
             window_count=manifest.window_count,
             token_count=manifest.token_count,
+            statistics_from=manifest.statistics_from,
         )
 
     def restore(self, message: PublishedCorpusManifest) -> TokenisationManifest:
@@ -76,6 +77,7 @@ class PublishedCorpusManifestAssembler:
             ),
             split_seed=message.split_seed,
             empty_units=tuple(UnitKey(key) for key in message.empty_units),
+            statistics_from=message.statistics_from,
         )
 
     def restore_scheme(self, channels: Sequence[PublishedChannel]) -> TokenisationScheme:

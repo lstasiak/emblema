@@ -90,6 +90,7 @@ class Fixture:
         seed: int = 1,
         split: SplitPolicy | None = None,
         vocabulary: ChannelVocabulary | None = None,
+        statistics_from: ArtifactRef | None = None,
     ) -> ArtifactRef:
         return self.tokenise(
             TokeniseCorpusVersionCommand(
@@ -98,6 +99,7 @@ class Fixture:
                 window=WINDOW,
                 split=split if split is not None else SeededSplit(fraction, seed),
                 vocabulary=ChannelVocabulary() if vocabulary is None else vocabulary,
+                statistics_from=statistics_from,
             )
         )
 
@@ -197,6 +199,27 @@ def test_a_vocabulary_given_keeps_its_identifiers_and_grows_by_this_corpus(
     assert scheme.vocabulary.id_of("corpus", "pressure") == 2
     assert scheme.vocabulary.id_of("corpus", "temperature") == 3
     assert scheme.statistics[0] is None
+
+
+def test_statistics_adopted_from_an_earlier_manifest_are_its_and_are_recorded(
+    wired: Callable[..., Fixture],
+) -> None:
+    # A corpus cut from the data of an earlier one, to be read beside it, normalises as it did:
+    # another split here fits nothing, and the manifest says where the statistics came from.
+    fixture = wired(registered(UNITS))
+    earlier = fixture.run(fraction=0.25, seed=1)
+
+    ref = fixture.run(fraction=0.5, seed=2, statistics_from=earlier)
+
+    adopted, fitted = fixture.archive.read_manifest(ref), fixture.archive.read_manifest(earlier)
+    assert adopted.split != fitted.split
+    assert adopted.scheme.statistics == fitted.scheme.statistics
+    assert adopted.statistics_from == earlier
+    assert fitted.statistics_from is None
+    training = adopted.split.training
+    assert list(fixture.archive.read_windows(adopted.archived, training)) == list(
+        fixture.archive.read_windows(fitted.archived, training)
+    )
 
 
 def test_a_reader_no_longer_showing_the_frozen_data_stops_the_run(

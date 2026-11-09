@@ -71,10 +71,12 @@ class _Input(_Section):
 
     Stated apart from the shape because it changes what the encoder reads before it changes
     what the encoder is; a file without the section reads one token per reading, as every run
-    before the input had a part.
+    before the input had a part. ``history`` is how many consecutive published windows one
+    window spans, its own the last; one unless stated.
     """
 
     bins: int
+    history: int = 1
 
 
 class _Masking(_Section):
@@ -289,7 +291,7 @@ class ExperimentFile(_Section):
         if self.shape is not None:
             architecture = self.shape.over(architecture)
         if self.input is not None:
-            architecture = replace(architecture, bins=self.input.bins)
+            architecture = replace(architecture, bins=self.input.bins, history=self.input.history)
         return ExperimentConfiguration(
             name=self.name,
             tier=self.tier,

@@ -187,12 +187,10 @@ class DetectorArm:
                 return replace(self, hidden=hidden, draws=1)
             return replace(self, hidden=hidden)
         if knob == "error" and self.features.asks_the_pretext:
-            try:
-                return replace(self, normalisation=ErrorNormalisation(value))
-            except ValueError as error:
-                raise UnknownKnobError(
-                    f"{knob} takes one of {[str(n) for n in ErrorNormalisation]}, not {value!r}"
-                ) from error
+            return replace(
+                self,
+                normalisation=self._member(knob, value, ErrorNormalisation, self.normalisation),
+            )
         if knob == "contamination":
             return replace(self, contamination=self._share(knob, value))
         if knob == "reference":
@@ -274,7 +272,7 @@ class DetectorArm:
         )
 
     @staticmethod
-    def _member[E: (DepartureCells, ChannelReduction)](
+    def _member[E: (DepartureCells, ChannelReduction, ErrorNormalisation)](
         knob: str, value: str, kind: type[E], current: E
     ) -> E:
         """The member ``value`` names, refused where it is the one already chosen.

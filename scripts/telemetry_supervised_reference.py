@@ -91,7 +91,7 @@ SEEN_HALF, UNSEEN_HALF = "seen classes", "unseen classes"
 CLASS_COLUMNS = ("arm", "encoder", "seed", "half", "scored_events", "area", "recall")
 
 
-def month_of(window: LabelledWindow) -> str:
+def month_of(window: LabelledWindow | WindowPrediction) -> str:
     """The month a window's unit names, after the mission."""
     return str(window.window.unit).rpartition("/")[2]
 

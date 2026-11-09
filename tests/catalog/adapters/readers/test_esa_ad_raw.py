@@ -290,6 +290,60 @@ def test_a_month_outside_the_span_or_the_selection_is_refused(tmp_path: Path, ke
         reader_of(root, MISSION).read_observations(UnitKey(key))
 
 
+def three_months(root: Path) -> Path:
+    """A mission from January to March, an hour's readings in each month."""
+    days = timedelta(days=1).total_seconds()
+    return with_mission(root, MISSION, [0.0, HOUR, 40 * days, 40 * days + HOUR, 70 * days])
+
+
+def test_months_excluded_by_name_are_out_of_the_units_and_the_counts(tmp_path: Path) -> None:
+    root = three_months(tmp_path)
+    reader = EsaAdRawCorpusReader(
+        root, subsets=(MISSION,), policy=SMALL, excluded=(f"{MISSION}/2000-02",)
+    )
+
+    units = [str(unit.key) for unit in reader.read_units()]
+    content = reader.describe().content
+
+    assert units == [f"{MISSION}/2000-01", f"{MISSION}/2000-03"]
+    assert content.unit_count == 2
+    # Two channels, each two readings in January and one in March.
+    assert content.observation_count == 2 * 3
+    with pytest.raises(UnknownUnitError, match="excluded"):
+        reader.read_observations(UnitKey(f"{MISSION}/2000-02"))
+
+
+def test_a_corpus_cut_by_months_is_another_version_and_one_cut_by_none_is_the_same(
+    tmp_path: Path,
+) -> None:
+    root = three_months(tmp_path)
+    whole = reader_of(root, MISSION).describe().content.checksum
+
+    def cut(*months: str) -> Checksum:
+        reader = EsaAdRawCorpusReader(root, subsets=(MISSION,), policy=SMALL, excluded=months)
+        return reader.describe().content.checksum
+
+    assert cut() == whole
+    assert cut(f"{MISSION}/2000-02") not in (whole, cut(f"{MISSION}/2000-03"))
+
+
+@pytest.mark.parametrize("name", ["2000-02", f"{OTHER}/2000-02", "", f" {MISSION}/2000-02"])
+def test_an_excluded_month_not_keyed_within_a_selected_mission_is_refused(name: str) -> None:
+    with pytest.raises(ValueError, match=r"excluded month|selected mission"):
+        EsaAdRawCorpusReader(SAMPLE, subsets=(MISSION,), excluded=(name,))
+
+
+def test_an_excluded_month_outside_the_span_is_refused_rather_than_missed(tmp_path: Path) -> None:
+    reader = EsaAdRawCorpusReader(
+        three_months(tmp_path), subsets=(MISSION,), policy=SMALL, excluded=(f"{MISSION}/2000-07",)
+    )
+
+    with pytest.raises(CorpusDataNotFoundError, match="no month"):
+        list(reader.read_units())
+    with pytest.raises(CorpusDataNotFoundError, match="no month"):
+        reader.describe()
+
+
 def test_the_counts_agree_with_the_streams(reader: EsaAdRawCorpusReader) -> None:
     content = reader.describe().content
     units = list(reader.read_units())

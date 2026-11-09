@@ -1,4 +1,5 @@
 from collections.abc import Iterator, Sequence
+from typing import Any
 
 from emblema.shared.adapters.loaders.window_loader import WindowLoader
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
@@ -23,7 +24,14 @@ class InterleavedLoader:
     single loader interleaves with nothing and yields its batches as it would alone.
     """
 
-    def __init__(self, loaders: Sequence[WindowLoader], *, seed: int, group: int = 1) -> None:
+    def __init__(
+        # Any: what a loader's windows are is its collation's business; only its batches meet here.
+        self,
+        loaders: Sequence[WindowLoader[Any]],
+        *,
+        seed: int,
+        group: int = 1,
+    ) -> None:
         """Interleave the batches of ``loaders`` in turns of ``group``, ordered by ``seed``.
 
         Raises:

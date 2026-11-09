@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
 from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
 from emblema.evaluation.adapters.detection.hidden_cells import HiddenCells
@@ -19,16 +20,19 @@ from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
 from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
 from emblema.evaluation.domain.detection.hidden_cells_choice import HiddenCellsChoice
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
-from emblema.evaluation.domain.exceptions import UnreadablePretextError
+from emblema.evaluation.domain.exceptions import OverlappingWindowsError, UnreadablePretextError
 from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
 from emblema.evaluation.domain.task.evaluation_protocol import EvaluationProtocol
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
+from emblema.shared.adapters.arrays.joined_cells import JoinedCells
+from emblema.shared.adapters.arrays.joined_windows import JoinedWindow
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
+from emblema.shared.adapters.windows.window_block_writer import WindowBlockWriter
 from emblema.shared.kernel.artifacts import ArtifactRef
-from emblema.shared.kernel.tokens import TokenWindow
+from emblema.shared.kernel.tokens import Token, TokenWindow
 from tests.evaluation.support import WEIGHTS, labelled, task, window
-from tests.support.published import HELD_OUT, publish
+from tests.support.published import FIRST, HELD_OUT, OTHER, SECOND, manifest_of, publish
 
 FITTING = (window("a", 0, 10.0), window("a", 1, 15.0), window("b", 3, 10.0))
 SCORED = (labelled("c", 2, 10.0, 1.0), labelled("a", 0, 10.0, 0.0))
@@ -46,19 +50,21 @@ class FakePretext:
         missed: Callable[[TokenWindow], float] = lambda _: 0.0,
         *,
         bins: int = BINS,
+        history: int = 1,
         huber_delta: float = 0.0,
     ) -> None:
         self._missed = missed
         self._layout = BinnedTokens(max(bins, 1))
         self.bins = bins
+        self.history = history
         self.huber_delta = huber_delta
-        self.calls: list[tuple[list[TokenWindow], list[int], bool]] = []
+        self.calls: list[tuple[list[TokenWindow | JoinedWindow], list[int], bool]] = []
         self.hidden: list[HiddenCellsChoice] = []
 
     def masked(
         self,
         weights: ArtifactRef,
-        windows: Sequence[TokenWindow],
+        windows: Sequence[TokenWindow | JoinedWindow],
         seeds: Sequence[int],
         *,
         answered: bool,
@@ -69,6 +75,9 @@ class FakePretext:
         self.hidden.append(hidden)
         drawn = []
         for token_window in windows:
+            if isinstance(token_window, JoinedWindow):
+                drawn.append(self._joined(token_window, answered=answered))
+                continue
             (full,) = self._layout.lay([token_window])
             concealed = (full.features[:, BinnedTokens.PRESENCE] > 0.5) & ~full.timeless
             visible = self._layout.without(token_window, concealed)
@@ -85,9 +94,29 @@ class FakePretext:
             )
         return drawn
 
+    def _joined(self, window: JoinedWindow, *, answered: bool) -> MaskedCells:
+        """A joined window's every observed cell hidden, its visible copy emptied there."""
+        full = JoinedCells.laid(
+            JoinedCells(self.bins).join(window.cells), window.rows, own_channels=True
+        )
+        concealed = full.features[:, BinnedTokens.PRESENCE] > 0.5
+        visible = full.features.copy()
+        visible[concealed, : BinnedTokens.LOG_COUNT + 1] = 0.0
+        values = full.features[:, BinnedTokens.VALUE_FEATURES]
+        return MaskedCells(
+            full=full.features,
+            visible=visible,
+            hidden=concealed,
+            channel_ids=full.channel_ids,
+            timeless=full.timeless,
+            answers=values.copy() if answered else None,
+        )
 
-def held_out_missed_by_three(token_window: TokenWindow) -> float:
+
+def held_out_missed_by_three(token_window: TokenWindow | JoinedWindow) -> float:
     """A miss of three on the held-out window's cells, read back from the block, and none else."""
+    if isinstance(token_window, JoinedWindow):
+        return 0.0
     same = len(token_window.values) == len(HELD_OUT.values)
     return 3.0 if same and np.allclose(token_window.values, HELD_OUT.values) else 0.0
 
@@ -194,7 +223,7 @@ def test_a_window_with_no_scored_cell_scores_the_fitting_side_s_median_and_is_co
         def masked(
             self,
             weights: ArtifactRef,
-            windows: Sequence[TokenWindow],
+            windows: Sequence[TokenWindow | JoinedWindow],
             seeds: Sequence[int],
             *,
             answered: bool,
@@ -309,7 +338,7 @@ class MissedByChannel(FakePretext):
     def masked(
         self,
         weights: ArtifactRef,
-        windows: Sequence[TokenWindow],
+        windows: Sequence[TokenWindow | JoinedWindow],
         seeds: Sequence[int],
         *,
         answered: bool,
@@ -380,7 +409,7 @@ def test_a_window_holding_a_channel_the_corpus_does_not_name_is_refused(
         def masked(
             self,
             weights: ArtifactRef,
-            windows: Sequence[TokenWindow],
+            windows: Sequence[TokenWindow | JoinedWindow],
             seeds: Sequence[int],
             *,
             answered: bool,
@@ -414,3 +443,93 @@ def test_which_cells_are_hidden_is_asked_of_the_source_once_a_window(
     assert set(source.hidden) == {HiddenCellsChoice.TAIL}
     # One draw a window: the fitting side's windows once, then the scored side's once.
     assert [len(seeds) for _, seeds, _ in source.calls] == [len(FITTING), len(SCORED)]
+
+
+def placed_task(
+    tmp_path: Path, ends: Sequence[float]
+) -> tuple[DownstreamTask, PublishedCorpusBlocks]:
+    """The published windows, each ending where ``ends`` says and spanning one length."""
+    store = InMemoryArtifactStore()
+    path = tmp_path / "corpus.block"
+    with WindowBlockWriter(path, scratch=tmp_path) as writer:
+        for unit, (token_window, end) in enumerate(
+            zip((FIRST, SECOND, HELD_OUT, OTHER), ends, strict=True)
+        ):
+            writer.add(token_window, unit=min(unit, 2), start=end - 10.0, end=end)
+    manifest = store.put(PublishedCorpusManifestJson().encode(manifest_of(store.put_file(path))))
+    stated = task(
+        protocol=EvaluationProtocol.ANOMALY_DETECTION, labels=AnomalyScheme(), strata=None
+    )
+    return replace(stated, manifest=manifest), PublishedCorpusBlocks(store, tmp_path / "work")
+
+
+def test_a_backbone_over_a_history_is_asked_over_each_window_joined_with_those_before_it(
+    tmp_path: Path,
+) -> None:
+    stated, blocks = placed_task(tmp_path, (10.0, 15.0, 20.0, 30.0))
+    source = FakePretext(bins=4, history=2)
+    # Three of the block's windows one after another on one axis, the stream's months as units.
+    fitting = (window("s/1", 0, 10.0), window("s/1", 2, 20.0))
+    scored = (labelled("s/2", 3, 30.0, 1.0),)
+
+    PretextErrorDetectionRuntime(source, blocks).fit(
+        recipe(), stated, fitting, scored, retain=False
+    )
+
+    asked = [w for windows, _, _ in source.calls for w in windows]
+    assert all(isinstance(w, JoinedWindow) for w in asked)
+    joined = [w for w in asked if isinstance(w, JoinedWindow)]
+    rows = joined[0].rows.tolist()
+    concatenated = TokenWindow.of(
+        [
+            Token(channel_id=t.channel_id, value=t.value, time=(at + t.time) / 2, gap=0.0)
+            for at, tokens in enumerate((HELD_OUT, OTHER))
+            for t in tokens
+        ]
+    )
+    whole = BinnedTokens(4, channels=rows).lay([concatenated])[0].features
+
+    # The last window scored reads the held-out window before it, then itself; the block keeps
+    # values in single precision.
+    np.testing.assert_allclose(
+        JoinedCells(4).join(joined[-1].cells),
+        whole.reshape(4, len(rows), -1).transpose(1, 0, 2),
+        atol=1e-6,
+    )
+    # The first window has nothing before it on its axis.
+    assert not joined[0].cells[:, :2, BinnedTokens.PRESENCE].any()
+
+
+def test_handed_windows_that_overlap_on_one_axis_are_refused_where_a_history_is_joined(
+    tmp_path: Path,
+) -> None:
+    stated, blocks = placed_task(tmp_path, (10.0, 15.0, 15.0, 30.0))
+    fitting = (window("s/1", 0, 10.0), window("s/1", 2, 15.0))
+    scored = (labelled("s/2", 3, 30.0, 1.0),)
+
+    with pytest.raises(OverlappingWindowsError, match="cannot be joined"):
+        PretextErrorDetectionRuntime(FakePretext(bins=4, history=2), blocks).fit(
+            recipe(), stated, fitting, scored, retain=False
+        )
+
+
+def test_read_by_the_largest_channel_a_window_scores_its_channel_furthest_from_its_usual_miss(
+    detection_task: tuple[DownstreamTask, PublishedCorpusBlocks],
+) -> None:
+    stated, blocks = detection_task
+    store = InMemoryArtifactStore()
+    largest = replace(recipe(), normalisation=ErrorNormalisation.LARGEST)
+
+    outcome = PretextErrorDetectionRuntime(MissedByChannel(), blocks, store=store).fit(
+        largest, stated, FITTING, SCORED, retain=True
+    )
+
+    # Every fitting window reads one on each channel, so the alarm sits at one; the held-out
+    # window's first channel reads 4 over its scale and the second 1, and the largest is kept.
+    assert outcome.predictions[0].predicted == pytest.approx(4.0 - 1.0)
+    assert outcome.predictions[1].predicted == pytest.approx(0.0)
+    assert outcome.artifact is not None
+    kept = KeptCandidates(store).read(outcome.artifact)
+    with np.load(io.BytesIO(store.get(kept.measured.artifact))) as archive:
+        assert str(archive["reduction"]) == "max"
+        assert archive["channels"].tolist() == []

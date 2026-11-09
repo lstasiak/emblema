@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from emblema.pretraining.domain.exceptions import (
@@ -359,6 +361,18 @@ def test_the_bins_render_after_the_shape_and_only_where_the_encoder_reads_cells(
     assert parameters[shape : shape + 2] == ["bins", "dropout"]
     assert over_cells.parameters()["bins"] == 3
     assert over_cells.differences_from(configuration()) == ("bins",)
+
+
+def test_the_history_renders_after_the_bins_and_only_where_it_spans_more() -> None:
+    joined = configuration(architecture=replace(CELLS, bins=6, history=3))
+
+    parameters = list(joined.parameters())
+
+    assert "history" not in configuration(architecture=CELLS).parameters()
+    assert parameters[parameters.index("bins") + 1] == "history"
+    assert joined.differences_from(configuration(architecture=replace(CELLS, bins=6))) == (
+        "history",
+    )
 
 
 def test_the_observation_renders_after_the_summaries_and_only_where_it_is_stated() -> None:

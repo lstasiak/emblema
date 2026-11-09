@@ -108,8 +108,22 @@ class WindowBlock(Sequence[TokenWindow]):
         How a corpus is split into training and held-out units is recorded per unit, so selecting
         the windows of a split is this and nothing else.
         """
-        wanted = np.isin(self._units, np.asarray(sorted(units), dtype=self._units.dtype))
-        return _WindowSelection(self, [int(index) for index in np.flatnonzero(wanted)])
+        return _WindowSelection(self, [int(index) for index in self._positions_of(units)])
+
+    def places_of(
+        self, units: Collection[int]
+    ) -> tuple[NDArray[np.int64], NDArray[np.float64], NDArray[np.float64]]:
+        """Where the windows ``of_units`` gives lie, in its order: unit indices, starts and ends.
+
+        Read from the columns alone, so a run that joins windows with those before them learns
+        where every window lies without reading a token.
+        """
+        positions = self._positions_of(units)
+        return (
+            np.asarray(self._units[positions], dtype=np.int64),
+            np.asarray(self._starts[positions], dtype=np.float64),
+            np.asarray(self._ends[positions], dtype=np.float64),
+        )
 
     def at(self, positions: Sequence[int]) -> Sequence[TokenWindow]:
         """The windows at those positions, in the order given, without copying any token.
@@ -123,6 +137,10 @@ class WindowBlock(Sequence[TokenWindow]):
             IndexError: If a position is not one of the block's windows.
         """
         return _WindowSelection(self, [self._checked(position) for position in positions])
+
+    def _positions_of(self, units: Collection[int]) -> NDArray[np.intp]:
+        wanted = np.isin(self._units, np.asarray(sorted(units), dtype=self._units.dtype))
+        return np.flatnonzero(wanted)
 
     def _span_of(self, index: int) -> tuple[int, int]:
         position = self._checked(index)

@@ -1,0 +1,52 @@
+# Arm A of the telemetry pretext: each satellite channel's hidden last hour asked for from the 47
+# hours before it (ADR-0076), over the raw ESA telemetry as published for pretraining — both
+# missions' first halves less their last three months, which validate, with the task corpus's
+# statistics (ADR-0077). The recipe of the budget run (backbone-history-esa-budget-m.toml) over
+# thirteen epochs, where that run's values stopped learning by the rule written before it
+# (telemetry-history-pretext.md, 2026-11-08); its backbone is read on the missions' events by
+# the campaign telemetry-history-pretext. Two seeds: a recipe is screened under two pretrainings.
+name = "backbone-history-esa-m"
+tier = "M"
+corpora = ["esa_ad_raw"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+corpus_fraction = 1.0
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 48
+history = 48
+
+# One bin in 48 is exactly the last hour; no other mask, so nothing earlier is a target.
+[masking]
+channel_rate = 0.0
+block_rate = 0.0
+block_span = 0.5
+token_rate = 0.0
+horizon_rate = 1.0
+horizon_min_span = 0.020833333333333332
+horizon_max_span = 0.020833333333333332
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 13
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 1000

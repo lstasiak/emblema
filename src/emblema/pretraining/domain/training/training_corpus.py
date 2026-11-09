@@ -4,6 +4,7 @@ from typing import Self
 
 from emblema.pretraining.domain.exceptions import InvalidTrainingCorpusError
 from emblema.pretraining.domain.training.training_corpus_shape import TrainingCorpusShape
+from emblema.pretraining.domain.training.window_place import WindowPlace
 from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.tokens import TokenWindow
 
@@ -20,7 +21,8 @@ class TrainingCorpus:
 
     Invariants: those of its shape — the name is non-empty and carries no surrounding whitespace,
     both sides hold at least one window — and the vocabulary holds at least one channel, each
-    named without surrounding whitespace and none twice. That every token's channel is within
+    named without surrounding whitespace and none twice; a side's places, where it has them, are
+    one per window. That every token's channel is within
     the vocabulary is not checked: the scan would cost the pass it protects, and a window that
     says otherwise is refused by the model's channel table on the first batch.
 
@@ -34,6 +36,9 @@ class TrainingCorpus:
         validation: Windows the run is scored on and never trains on.
         channels: Names of the published vocabulary's channels, entry ``i`` being the channel
             the tokens carry as identifier ``i + 1``.
+        training_places: Where each training window lies, in the same order; none where the
+            reader does not say, and then no window can be joined with those before it.
+        validation_places: Where each validation window lies, the same way.
     """
 
     name: str
@@ -41,8 +46,18 @@ class TrainingCorpus:
     training: Sequence[TokenWindow]
     validation: Sequence[TokenWindow]
     channels: tuple[str, ...]
+    training_places: Sequence[WindowPlace] = ()
+    validation_places: Sequence[WindowPlace] = ()
 
     def __post_init__(self) -> None:
+        for side, windows, places in (
+            ("training", self.training, self.training_places),
+            ("validation", self.validation, self.validation_places),
+        ):
+            if places and len(places) != len(windows):
+                raise InvalidTrainingCorpusError(
+                    f"{len(places)} places were given for {len(windows)} {side} windows"
+                )
         for channel in self.channels:
             if not channel or channel != channel.strip():
                 raise InvalidTrainingCorpusError(
@@ -54,6 +69,11 @@ class TrainingCorpus:
             )
         # Building the shape runs the invariants: a corpus whose shape is not a shape is no corpus.
         _ = self.shape
+
+    @property
+    def placed(self) -> bool:
+        """Whether every window of both sides says where it lies."""
+        return bool(self.training_places) and bool(self.validation_places)
 
     @property
     def vocabulary_size(self) -> int:

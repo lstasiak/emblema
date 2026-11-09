@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterator, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from emblema.evaluation.adapters.artifacts.kept_candidates import KeptCandidates
 from emblema.evaluation.adapters.artifacts.representation_bytes import RepresentationBytes
 from emblema.evaluation.adapters.blocks.published_corpus_blocks import PublishedCorpusBlocks
@@ -18,15 +19,16 @@ from emblema.evaluation.adapters.detection.masked_cells import MaskedCells
 from emblema.evaluation.adapters.detection.pretext_source import PretextSource
 from emblema.evaluation.adapters.detection.score_alarm import ScoreAlarm
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
+from emblema.evaluation.domain.detection.channel_reduction import ChannelReduction
 from emblema.evaluation.domain.detection.detector_features import DetectorFeatures
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
-from emblema.evaluation.domain.detection.error_normalisation import ErrorNormalisation
 from emblema.evaluation.domain.detection.pretext_asking import PretextAsking
 from emblema.evaluation.domain.detection.score_reference import ScoreReference
 from emblema.evaluation.domain.exceptions import (
     CandidateNotRetainableError,
     InvalidScoredOutcomeError,
     InvalidTaughtEventsError,
+    OverlappingWindowsError,
     UnreadablePretextError,
     UnsupportedDetectorFeaturesError,
 )
@@ -35,8 +37,14 @@ from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.scoring.scored_outcome import ScoredOutcome
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.task.downstream_task import DownstreamTask
+from emblema.shared.adapters.arrays.exceptions import (
+    OverlappingJoinedWindowsError,
+    UnjoinableWindowsError,
+)
+from emblema.shared.adapters.arrays.joined_windows import JoinedWindow, JoinedWindows
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.ordering import seeded_rank
+from emblema.shared.kernel.tokens import TokenWindow
 from emblema.shared.ports.artifact_store import ArtifactStore
 
 logger = logging.getLogger(__name__)
@@ -45,6 +53,8 @@ logger = logging.getLogger(__name__)
 _CHUNK = 32
 
 type _Answerer = Callable[[HiddenCells, MaskedCells], NDArray[np.float64]]
+# What the backbone is asked over for a chunk of windows: as published, or joined with history.
+type _Asked = Callable[[Sequence[TaskWindow]], Sequence[TokenWindow | JoinedWindow]]
 
 
 class PretextErrorDetectionRuntime:
@@ -55,11 +65,12 @@ class PretextErrorDetectionRuntime:
     in its tail, so the pretrained backbone and the answers that learnt nothing fill in the same
     cells. A window's error is the backbone's loss on the five values in normalised units over the
     hidden timed cells that held a reading in all its draws: one mean over them, or, read per
-    channel, the mean over the channels of each channel's error over its typical error on the
-    fitting side. A
-    window without such a cell has no error to read, so it scores the fitting side's median
-    error, neither an alarm nor the most normal window there is, and how many did is logged per
-    side. The alarm is the one every detector sets.
+    channel, the mean or the largest over the channels of each channel's error over its typical
+    error on the fitting side. A backbone over a history is asked over each window joined with
+    the windows before it among those handed in, fitting and scored alike, as its run joined
+    them. A window without such a cell has no error to read, so it scores the fitting side's
+    median error, neither an alarm nor the most normal window there is, and how many did is
+    logged per side. The alarm is the one every detector sets.
 
     The answers: the backbone's decoder; a ridge per channel over the same visible cells, fitted
     on the fitting side's draws; or each channel's line between its visible bins. What a fit
@@ -120,26 +131,33 @@ class PretextErrorDetectionRuntime:
         asking = recipe.asked()
         read = ReadCorpus.every(self._blocks, (task,))[task.manifest]
         started = time.perf_counter()
-        answerer, ridge = self._answerer(recipe, asking, read, fitting)
         windows = [labelled.window for labelled in scored]
+        asked = self._asked(read, (*fitting, *windows))
+        answerer, ridge = self._answerer(recipe, asking, read, asked, fitting)
         per_unit = recipe.reference is ScoreReference.OWN_UNIT
         channels = self._channels(read)
         fitting_errors = self._errors(
-            read, fitting, recipe, asking, answerer, channels, side="fitting"
+            asked, fitting, recipe, asking, answerer, channels, side="fitting"
         )
         scales = (
-            ChannelErrorScales.fitted_on(fitting_errors)
-            if recipe.normalisation is ErrorNormalisation.PER_CHANNEL
-            else None
+            ChannelErrorScales.fitted_on(fitting_errors) if recipe.normalisation.scaled else None
         )
-        fitted = fitting_errors.raw() if scales is None else scales.read(fitting_errors)
+        fitted = (
+            fitting_errors.raw()
+            if scales is None
+            else scales.read(fitting_errors, recipe.normalisation.channels)
+        )
         unread = fitting_errors.unread
         neutral = float(np.median(fitted[~unread])) if (~unread).any() else 0.0
         fitted[unread] = neutral
         scored_errors = self._errors(
-            read, windows, recipe, asking, answerer, channels, side="scored"
+            asked, windows, recipe, asking, answerer, channels, side="scored"
         )
-        errors = scored_errors.raw() if scales is None else scales.read(scored_errors)
+        errors = (
+            scored_errors.raw()
+            if scales is None
+            else scales.read(scored_errors, recipe.normalisation.channels)
+        )
         errors[scored_errors.unread] = neutral
         alarm = ScoreAlarm.set_over(
             fitted,
@@ -157,7 +175,9 @@ class PretextErrorDetectionRuntime:
                 for labelled, answer in zip(scored, answers.tolist(), strict=True)
             ),
             seconds=time.perf_counter() - started,
-            artifact=self._kept(alarm, ridge, scales, task) if retain else None,
+            artifact=self._kept(alarm, ridge, scales, recipe.normalisation.channels, task)
+            if retain
+            else None,
         )
 
     @staticmethod
@@ -178,9 +198,12 @@ class PretextErrorDetectionRuntime:
         alarm: ScoreAlarm,
         ridge: LinearCellAnswer | None,
         scales: ChannelErrorScales | None,
+        channels: ChannelReduction,
         task: DownstreamTask,
     ) -> ArtifactRef:
         """The alarm, the ridge and the channels' scales this fit produced, stored for the campaign.
+
+        Beside the scales, how the channels' errors over them made the score.
 
         Raises:
             CandidateNotRetainableError: If the runtime was given nowhere to keep them.
@@ -202,6 +225,7 @@ class PretextErrorDetectionRuntime:
         if scales is not None:
             arrays["scale_channels"] = scales.channels
             arrays["scales"] = scales.scales
+            arrays["reduction"] = np.asarray(str(channels))
         np.savez(buffer, allow_pickle=False, **arrays)
         return self._kept_candidates.keep(
             CandidateKind.DETECTOR,
@@ -209,11 +233,50 @@ class PretextErrorDetectionRuntime:
             measured=RepresentationBytes(self.FORMAT, buffer.getvalue()),
         )
 
+    def _asked(self, read: ReadCorpus, handed: Sequence[TaskWindow]) -> _Asked:
+        """How a chunk of windows is put to the backbone: as published, or joined.
+
+        Joined, every handed window is laid once and each joined with the windows before it on
+        its unit's axis, wherever they are among those handed.
+
+        Raises:
+            OverlappingWindowsError: If the handed windows of one axis overlap in time, so none
+                is another's history.
+            UnreadablePretextError: If they cannot be joined otherwise: of several lengths, or
+                holding a static feature.
+        """
+        history = self._source.history
+        if history == 1:
+            return read.windows
+        by_position = {window.position: window for window in handed}
+        positions = sorted(by_position)
+        # The block's own columns place each window, as pretraining's reader places them, so a
+        # window is joined with the same history wherever it is read.
+        extents = [read.block.extent_of(position) for position in positions]
+        try:
+            joined = JoinedWindows.of(
+                (read.block.at(positions),),
+                axes=[PublishedCorpusManifest.axis_of(str(by_position[p].unit)) for p in positions],
+                starts=[start for start, _ in extents],
+                ends=[end for _, end in extents],
+                history=history,
+                bins=self._source.bins,
+            )
+        except OverlappingJoinedWindowsError as error:
+            raise OverlappingWindowsError(
+                f"the handed windows cannot be joined: {error}"
+            ) from error
+        except UnjoinableWindowsError as error:
+            raise UnreadablePretextError(f"the handed windows cannot be joined: {error}") from error
+        index = {position: at for at, position in enumerate(positions)}
+        return lambda chunk: joined.at([index[window.position] for window in chunk])
+
     def _answerer(
         self,
         recipe: DetectorRecipe,
         asking: PretextAsking,
         read: ReadCorpus,
+        asked: _Asked,
         fitting: Sequence[TaskWindow],
     ) -> tuple[_Answerer, LinearCellAnswer | None]:
         if recipe.features is DetectorFeatures.PRETEXT_ERROR:
@@ -225,7 +288,7 @@ class PretextErrorDetectionRuntime:
             self._source.bins,
             (
                 (hidden, self._half(recipe.seed, fitting[at]))
-                for _, hidden, at in self._drawn(read, fitting, recipe, asking, answered=False)
+                for _, hidden, at in self._drawn(asked, fitting, recipe, asking, answered=False)
             ),
         )
         return (lambda cells, _: ridge.answers(cells)), ridge
@@ -240,7 +303,7 @@ class PretextErrorDetectionRuntime:
 
     def _errors(
         self,
-        read: ReadCorpus,
+        asked: _Asked,
         windows: Sequence[TaskWindow],
         recipe: DetectorRecipe,
         asking: PretextAsking,
@@ -262,7 +325,7 @@ class PretextErrorDetectionRuntime:
         missed = np.zeros((len(windows), len(channels)))
         counted = np.zeros((len(windows), len(channels)), dtype=np.int64)
         answered = recipe.features is DetectorFeatures.PRETEXT_ERROR
-        for masked, hidden, at in self._drawn(read, windows, recipe, asking, answered=answered):
+        for masked, hidden, at in self._drawn(asked, windows, recipe, asking, answered=answered):
             if not hidden.scored.any():
                 continue
             if hidden.channels.max() >= len(column_of) or (column_of[hidden.channels] < 0).any():
@@ -293,7 +356,7 @@ class PretextErrorDetectionRuntime:
 
     def _drawn(
         self,
-        read: ReadCorpus,
+        asked: _Asked,
         windows: Sequence[TaskWindow],
         recipe: DetectorRecipe,
         asking: PretextAsking,
@@ -304,21 +367,21 @@ class PretextErrorDetectionRuntime:
         for start in range(0, len(windows), _CHUNK):
             chunk = windows[start : start + _CHUNK]
             # Read once a chunk: the block reads a window again at every index asked of it.
-            tokens = list(read.windows(chunk))
-            asked = [
+            tokens = list(asked(chunk))
+            draws = [
                 (start + at, tokens[at], self._seed(recipe.seed, window, draw))
                 for draw in range(asking.draws)
                 for at, window in enumerate(chunk)
             ]
             masked = self._source.masked(
                 asking.backbone,
-                [token for _, token, _ in asked],
-                [seed for _, _, seed in asked],
+                [token for _, token, _ in draws],
+                [seed for _, _, seed in draws],
                 answered=answered,
                 device=self._device,
                 hidden=asking.hidden,
             )
-            for (at, _, _), cells in zip(asked, masked, strict=True):
+            for (at, _, _), cells in zip(draws, masked, strict=True):
                 yield cells, HiddenCells.of(cells, self._source.bins), at
 
     @staticmethod

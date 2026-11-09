@@ -1,6 +1,6 @@
 # ADR-0011: Token representation — a window is a set of channel–time–value tokens, normalised per channel, timed relative to the window, with the gap to the previous token of its channel
 
-- Status: accepted
+- Status: accepted; amended by ADR-0077 (2026-11-07)
 - Date: 2026-09-11
 - Full text before condensation: commit `5f14447`
 

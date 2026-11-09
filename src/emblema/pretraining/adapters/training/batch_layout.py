@@ -3,10 +3,9 @@ from typing import Protocol
 
 from emblema.pretraining.adapters.objective.token_masks import TokenMasks
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
-from emblema.shared.kernel.tokens import TokenWindow
 
 
-class BatchLayout(Protocol):
+class BatchLayout[Item](Protocol):
     """How a run lays windows out: the batch its masks are drawn over, and the batch it scores.
 
     A seam of the training runtime, not a port: nothing in a use case sees it, and it speaks
@@ -14,10 +13,11 @@ class BatchLayout(Protocol):
     readings and the objective hides the hidden ones itself. Under cells the masks are drawn over
     the full layout and the batch the objective scores carries a second layout beside it, from
     the readings the masks left visible, so the layout is computed where the readings are, on
-    the host, before anything moves.
+    the host, before anything moves. A window is a token window, or one joined with the windows
+    before it where the run reads a history.
     """
 
-    def collate(self, windows: Sequence[TokenWindow]) -> TokenTensors:
+    def collate(self, windows: Sequence[Item]) -> TokenTensors:
         """``windows`` as the batch a run draws its masks over.
 
         Raises:

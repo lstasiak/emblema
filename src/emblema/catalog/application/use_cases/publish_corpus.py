@@ -37,6 +37,8 @@ class PublishCorpusCommand:
         split: How the units held out from fitting the scheme are chosen.
         vocabulary_from: Manifest of a corpus published earlier whose vocabulary this one
             continues, so that the two can be trained on together; ``None`` starts a vocabulary.
+        statistics_from: Manifest of a corpus whose statistics this one's channels adopt rather
+            than fit, so that the two hand a model the same values; ``None`` fits them.
     """
 
     name: str
@@ -45,6 +47,7 @@ class PublishCorpusCommand:
     window: WindowSpec
     split: SplitPolicy
     vocabulary_from: ArtifactRef | None = None
+    statistics_from: ArtifactRef | None = None
 
 
 class PublishCorpus:
@@ -76,7 +79,8 @@ class PublishCorpus:
         """Publish; return the reference to the manifest.
 
         Raises:
-            ArtifactNotFoundError: If the manifest named for the vocabulary is not archived.
+            ArtifactNotFoundError: If a manifest named for the vocabulary or the statistics is
+                not archived.
             MalformedManifestError: If it is archived but is not a manifest.
             CorpusReadError: If the reader cannot read or validate the data.
             InvalidUnitSplitError: If the split policy cannot split the units the corpus holds.
@@ -95,6 +99,7 @@ class PublishCorpus:
                 window=command.window,
                 split=command.split,
                 vocabulary=vocabulary,
+                statistics_from=command.statistics_from,
             )
         )
 

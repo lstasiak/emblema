@@ -1,0 +1,58 @@
+# The run that sets how long arm A's pretext trains, before any of its pretrainings is ordered:
+# each satellite channel's hidden last hour asked for from the 47 hours before it (ADR-0076),
+# over the raw ESA telemetry as published for pretraining — both missions' first halves less
+# their last three months, which validate, with the task corpus's statistics (ADR-0077). Read off
+# this run's validation by the rule the composition's budget used
+# (scripts/pretraining_budget_report.py: every term stopped learning), at a seed no pretraining
+# of the arm uses; the backbone is read on no task.
+#
+# The recipe is the pilots' (backbone-history-esa-s.toml, backbone-history-esa-m2-s.toml) over
+# every training month, in batches of 32 a card holds whole. Sixteen epochs at most, about 36,000
+# steps: capped at eight (commit dfeaf86a), the values still fell 6.3 % over the three epochs
+# after the fifth, the last the rule could judge, and 0.8 % over the eighth itself, at a rate
+# decayed to its floor, so the cap left no budget. Doubled, the rule judges up to the thirteenth.
+name = "backbone-history-esa-budget-m"
+tier = "M"
+corpora = ["esa_ad_raw"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+corpus_fraction = 1.0
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 48
+history = 48
+
+# One bin in 48 is exactly the last hour; no other mask, so nothing earlier is a target.
+[masking]
+channel_rate = 0.0
+block_rate = 0.0
+block_span = 0.5
+token_rate = 0.0
+horizon_rate = 1.0
+horizon_min_span = 0.020833333333333332
+horizon_max_span = 0.020833333333333332
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 16
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 0
+
+[checkpoint]
+every_steps = 1000

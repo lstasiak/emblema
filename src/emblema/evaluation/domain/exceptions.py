@@ -230,6 +230,14 @@ class UnreadablePretextError(EvaluationError):
     """
 
 
+class UnjoinedHistoryError(EvaluationError):
+    """A backbone reads windows joined with those before them, and this reading hands it one.
+
+    Read a published window at a time, it would score each one cut into its bins: a reading
+    that runs and means nothing.
+    """
+
+
 class CandidateMismatchError(EvaluationError):
     """A campaign recorded a candidate as something other than what a process supplies."""
 

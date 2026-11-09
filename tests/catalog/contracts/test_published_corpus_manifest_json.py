@@ -7,6 +7,8 @@ import pytest
 from emblema.catalog.contracts.exceptions import MalformedManifestError
 from emblema.catalog.contracts.published_corpus_manifest import SHORT_UNITS_ONE_WINDOW
 from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
+from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
 from tests.catalog.contracts.support import manifest
 
 MANIFEST = manifest(empty_units=("u3",), training=("u1", "u3"))
@@ -154,6 +156,20 @@ def test_the_policy_for_short_units_is_written_only_where_it_is_not_the_usual_on
     stated = replace(MANIFEST, window_short_units=SHORT_UNITS_ONE_WINDOW)
     document = json.loads(JSON.encode(stated))
     assert document["window"]["short_units"] == SHORT_UNITS_ONE_WINDOW
+    assert JSON.decode(JSON.encode(stated)) == stated
+
+
+def test_where_the_statistics_were_adopted_from_is_written_only_where_they_were() -> None:
+    # A manifest whose training side fitted its statistics keeps its bytes, and so its checksum.
+    assert "statistics_from" not in document_of()
+
+    digest = "1" * 64
+    stated = replace(
+        MANIFEST,
+        statistics_from=ArtifactRef(f"durable/sha256/{digest}", Checksum.parse(f"sha256:{digest}")),
+    )
+    document = json.loads(JSON.encode(stated))
+    assert document["statistics_from"]["key"] == f"durable/sha256/{digest}"
     assert JSON.decode(JSON.encode(stated)) == stated
 
 

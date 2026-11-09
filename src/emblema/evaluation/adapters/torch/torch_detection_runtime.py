@@ -11,7 +11,7 @@ from emblema.evaluation.adapters.blocks.published_corpus_blocks import Published
 from emblema.evaluation.adapters.detection.feature_detector import FeatureDetector
 from emblema.evaluation.adapters.detection.feature_detectors import FeatureDetectors
 from emblema.evaluation.adapters.detection.taught_rows import TaughtRows
-from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory
+from emblema.evaluation.adapters.torch.backbone_factory import BackboneFactory, bins_read_alone
 from emblema.evaluation.adapters.torch.frozen_embedding import FrozenEmbedding
 from emblema.evaluation.contracts.candidate_kind import CandidateKind
 from emblema.evaluation.domain.detection.detector_recipe import DetectorRecipe
@@ -122,13 +122,16 @@ class TorchDetectionRuntime:
         Raises:
             UnsupportedDetectorFeaturesError: If the cells are asked of a backbone that reads
                 one token per reading, which lays no cells out.
+            UnjoinedHistoryError: If the backbone's cells or layout are asked of a backbone over
+                a history, whose windows this runtime does not join.
         """
         if recipe.reading is None:
-            if not self._backbones.bins:
+            bins = bins_read_alone(self._backbones)
+            if not bins:
                 raise UnsupportedDetectorFeaturesError(
                     "the backbone reads one token per reading, so there are no cells to read"
                 )
-            cells = self._corpus_layout(self._backbones.bins, manifest)
+            cells = self._corpus_layout(bins, manifest)
             return lambda windows: np.stack([laid.features.ravel() for laid in cells.lay(windows)])
         reading = recipe.reading
         layout = self._layout(reading, manifest)
@@ -147,7 +150,8 @@ class TorchDetectionRuntime:
         """
         bins = reading.encoder.bins
         if bins is None:
-            return BinnedTokens(self._backbones.bins) if self._backbones.bins else RawTokens()
+            alone = bins_read_alone(self._backbones)
+            return BinnedTokens(alone) if alone else RawTokens()
         if reading.encoder.cells is CellSet.WINDOW:
             return BinnedTokens(bins)
         return self._corpus_layout(bins, manifest)

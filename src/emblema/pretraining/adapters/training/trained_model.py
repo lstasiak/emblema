@@ -37,10 +37,11 @@ class TrainedModel:
     and the terms beside the values, which say which objective the weights are of. Bytes written
     before a target or a term could be stated are of the objective every run then had, the one
     predicting values alone; the summaries' weight and the cells' observation are written only
-    where stated, and the bins only where the encoder reads cells, so the bytes of a run without
-    them are those it wrote before any of them existed. A run over cells also writes the masks it
-    drew and how it scored a miss, so its error can be asked of it where its configuration
-    cannot be read; bytes of cells written before hold neither.
+    where stated, the bins only where the encoder reads cells and the history only where a window
+    spans more than its own, so the bytes of a run without them are those it wrote before any of
+    them existed. A run over cells also writes the masks it drew and how it scored a miss, so its
+    error can be asked of it where its configuration cannot be read; bytes of cells written
+    before hold neither.
 
     Attributes:
         architecture: Shape of the encoder the weights load into.
@@ -109,6 +110,7 @@ class TrainedModel:
                 "contrast_temperature": self.contrast.temperature,
                 **({"summary_weight": self.summary.weight} if self.summary.is_stated else {}),
                 **({"bins": self.architecture.bins} if self.architecture.reads_cells else {}),
+                **({"history": self.architecture.history} if self.architecture.history > 1 else {}),
                 **(
                     {
                         "presence_weight": self.observation.presence_weight,
@@ -156,6 +158,7 @@ class TrainedModel:
                 feedforward_width=stored["feedforward_width"],
                 time_frequencies=stored["time_frequencies"],
                 bins=stored.get("bins", 0),
+                history=stored.get("history", 1),
             )
             return cls(
                 architecture=architecture,

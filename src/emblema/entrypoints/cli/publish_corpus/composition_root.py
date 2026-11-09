@@ -85,8 +85,9 @@ class CompositionRoot:
             subsets: Subsets of the corpus to read; all of them where empty.
             per_condition: Whether the named corpus is read with a channel per sensor and
                 operating condition, which only a corpus flown at several conditions offers.
-            excluded_units: Units cut from the named corpus by name, a downstream task's frozen
-                side, which only a corpus whose publisher drew no test set offers.
+            excluded_units: Units cut from the named corpus by name, the months or stays a
+                downstream task reads, which only a corpus whose reader names its units that way
+                offers.
             reading: How a dataset of the time-series collection is read, its channels
                 independent or on the scale it is stored at; its own reading unless given, and
                 refused for any other corpus.
@@ -215,9 +216,10 @@ class CompositionRoot:
             raise ValueError(
                 f"only the cmapss corpus is read per operating condition, not {corpus!r}"
             )
-        if excluded_units and corpus != "physionet2019":
+        if excluded_units and corpus not in ("physionet2019", "esa_ad_raw"):
             raise ValueError(
-                f"only the physionet2019 corpus has units to exclude by name, not {corpus!r}"
+                f"only the physionet2019 and esa_ad_raw corpora have units to exclude by name, "
+                f"not {corpus!r}"
             )
         collected = corpus is not None and corpus.startswith(UtsdCorpusReader.CORPUS_PREFIX)
         if reading is not None and reading != UtsdReading() and not collected:
@@ -242,7 +244,9 @@ class CompositionRoot:
             case "esa_ad":
                 return EsaAdCorpusReader(root, subsets or EsaAdCorpusReader.SUBSETS)
             case "esa_ad_raw":
-                return EsaAdRawCorpusReader(root, subsets or EsaAdRawCorpusReader.SUBSETS)
+                return EsaAdRawCorpusReader(
+                    root, subsets or EsaAdRawCorpusReader.SUBSETS, excluded=excluded_units
+                )
             case "opssat_ad":
                 return OpssatAdCorpusReader(root, subsets or OpssatAdCorpusReader.SUBSETS)
             case "physionet2012":

@@ -2,6 +2,7 @@ import pytest
 
 from emblema.catalog.contracts.exceptions import InvalidPublishedCorpusManifestError
 from emblema.catalog.contracts.published_channel import PublishedChannel
+from emblema.catalog.contracts.published_corpus_manifest import PublishedCorpusManifest
 from tests.catalog.contracts.support import PRESSURE, TEMPERATURE, manifest
 
 
@@ -61,3 +62,8 @@ def test_counts_cannot_be_negative(windows: int, tokens: int) -> None:
 def test_what_a_short_unit_yields_is_one_of_the_two_policies() -> None:
     with pytest.raises(InvalidPublishedCorpusManifestError, match="shorter than a window"):
         manifest(window_short_units="two_windows")
+
+
+def test_a_unit_of_a_part_lies_on_the_part_s_axis_and_one_without_on_its_own() -> None:
+    assert PublishedCorpusManifest.axis_of("ESA-Mission1/2001-01") == "ESA-Mission1"
+    assert PublishedCorpusManifest.axis_of("stay-7") == "stay-7"
