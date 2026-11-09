@@ -28,6 +28,7 @@ from scripts.campaign_pairs_report import (
     INTERACTIONS,
     PREDICTIONS,
     RECALL_COMPARISONS,
+    RECALL_FLOOR,
     SCORES,
     Answers,
     Comparison,
@@ -803,6 +804,7 @@ def test_a_pair_read_by_event_weighted_area_is_read_again_by_the_events_found() 
     )
 
     assert (read.pairing, read.reading) == ("recall-pooled", "event_recall_at_0")
+    assert read.floor.value == pytest.approx(RECALL_FLOOR)
     assert read.candidate_error.pooled == pytest.approx(
         1.0 - answers.anomaly_ranking(contender, 1).event_recall_at_false_alarm_share(0.0)
     )
@@ -813,8 +815,6 @@ def test_a_pair_read_by_event_weighted_area_is_read_again_by_the_events_found() 
         read.control_error.pooled - read.candidate_error.pooled
     )
     assert read.per_seed == pytest.approx((read.difference.reduction,) * 3)
-    # No least gain is registered for the events found: the floor is the control's spread.
-    assert read.floor.value == read.control_error.spread
 
 
 def test_the_events_found_are_refused_of_a_pair_not_read_by_event_weighted_area() -> None:
