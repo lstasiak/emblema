@@ -58,18 +58,18 @@ Checked on one month of each mission (`telemetry-history-window.md`):
 ## Consequences
 
 - A window is 2,304 cells on the first mission; a step at batch 8 takes 0.73 s on the Mac's
-  MPS. On the published corpus, 153,000 hours are laid in 285 s once a run, and a batch of 32 is
+  MPS. On the task corpus, both missions' 153,000 hours are laid in 285 s once a run, and a batch of 32 is
   joined, masked and joined again in 25 ms on one process.
 - The first halves' 76,700 hours, one cell each over 59 channels, hold about 0.3 GB in float64,
   so they are joined in float64, as `BinnedTokens` lays them, and only the batch is narrowed.
 - Accepted once the pilots and the budget run had trained over the joined windows and their
   forecast beat the history's median on both missions (`telemetry-history-pretext.md`).
 - Every stored document reads `history` as one, so no earlier encoder changes.
-- The arm that perturbs readings (ADR-0078) re-lays only the hour it perturbs, before the join.
+- An arm that perturbs readings re-lays only the hour it perturbs, before the join.
 
 ## Alternatives
 
 - **Publish 48-hour windows.** At a step of 6 hours: eight times the data, one target hour in
-  six, 47 hours lost at each month's start, 40 to 56 windows a second. At 48: 1,500 windows.
+  six, 47 hours lost at each month's start, 40 to 56 windows a second. At 48: 1,600 windows.
 - **48-hour task windows labelled by their last hour.** New tasks, which no reading so far
   compares with.
