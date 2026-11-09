@@ -134,3 +134,126 @@ were chosen for being unfound, so the second reading describes them and does not
 
 Outcome read as: the perturbation pretext stays deferred, the finer cells are not queued. A count
 of events is the measure here, so the levels are the rule's: reopened or not, queued or not.
+
+## 2026-11-09 — measured: the departures leave too little room for a pretext; finer cells add one event
+
+**Question.** As declared: what other detectors with no label find beyond the channels' departures,
+and whether the events nothing found stand out at ten minutes on their annotated channels.
+
+**Conditions.** Commit `0246ffac`, the declared commands, seed 1, MacBook Pro M1 Pro, CPU, 2.5
+minutes. Validation numbers. Before interpreting: the windows and events are the trial's, and
+`channel_local` reads 37 of 61, the published count. The configurations of the campaigns are those
+their notes recorded; they were not audited again against the registry.
+
+**The events, each under the first family that finds it.**
+
+| Family | Validation, 61 | Local | Later fitting months, 29 |
+|---|---|---|---|
+| Departures | 48 | 22 | 22 |
+| Another detector with no label | 6 | 6 | 5 |
+| Taught only | 5 | 3 | 0 |
+| None | 2 (40, 148) | 1 | 2 |
+
+**The rule that reopens the perturbation pretext.**
+
+| Condition | Read | Met |
+|---|---|---|
+| Others find, of the 13 the departures miss, more than the rotations' 95th percentile | 6 against 5.0 | yes |
+| That count less its expectation (2.33) at least 11 | 3.67 | **no** |
+| The fusion beats `channel_local` (gain ≥ 0.016, interval above zero) | +0.131 [+0.037; +0.234], recall 0.738 against 0.607 | yes |
+
+All five events taught detectors alone find are of classes seen on the fitting side, and all six events of a class unseen there are found with no label, five by the departures and one by another detector. The six events only other detectors find are all anomalies. On the later fitting months the other detectors find 5 of the 7 the departures miss, against 0.43 expected, 4.57 beyond chance; that reading is descriptive. Event 150 (class_14, local, rare event, starting 2011-04) has no window left and is aside.
+
+**The 11 events on their annotated channels.** Found = above the channel's alarm at 1 %; p = the share
+of rotations whose largest departure over the alarm is at least the event's.
+
+| Event | Class | Windows | Hour found, p | Ten minutes found, p | Gained |
+|---|---|---|---|---|---|
+| 40 | class_16 | 1 | yes, 0.002 | no, 0.788 | |
+| 50 | class_16 | 14 | yes, 0.379 | yes, 0.072 | |
+| 110 | class_7 | 8 | yes, 0.007 | yes, 0.007 | |
+| 132 | class_7 | 4 | yes, 0.012 | yes, 0.002 | |
+| 136 | class_7 | 37 | yes, 0.138 | yes, 0.067 | |
+| 148 | class_17 | 1 | no, 0.247 | yes, 0.023 | **yes** |
+| 156 | class_7 | 7 | yes, 0.010 | yes, 0.010 | |
+| 157 | class_7 | 3 | yes, 0.004 | yes, 0.001 | |
+| 166 | class_7 | 43 | yes, 0.055 | yes, 0.055 | |
+| 183 | class_7 | 6 | yes, 0.008 | no, 0.413 | |
+| 184 | class_7 | 39 | yes, 0.158 | yes, 0.052 | |
+
+**Predictions.**
+
+| Quantity | Predicted | Read |
+|---|---|---|
+| Events the departures find | 42 to 52 | 48 |
+| Excess of the other detectors | 0 to 5 | 3.67 |
+| Fusion against `channel_local` | −0.05 to +0.10 | **+0.131, above** |
+| Local events found with no label | 17 to 25 of 33 | **28 of 32 read, above** |
+| Of the 11, at the hour on annotated channels | 1 to 5 | **10 found, 6 of them beyond chance; above** |
+| Of the 11, gained at ten minutes | 0 to 3 | 1 |
+
+**Conclusions.**
+
+- The perturbation pretext stays deferred, by the room these events leave: the departures miss 13
+  and the expectation is 2.33, so the excess could reach at most 10.67 against the 11 required, and
+  the rule could not open. The other detectors find 6 of the 13, beyond the 95th percentile, 3.67
+  beyond chance.
+- Ten-minute cells are not queued: of the 11 events they gain one (148) against 4 required and lose
+  two (40, 183); beyond chance 6 stand out at the hour and 5 at ten minutes.
+- Six of the 11 events stand out at the hour once the channel is known, and four more pass its alarm
+  without standing out from chance; of the 11, nine are found by some family in this reading.
+- Read against each month or not, the largest departure's recall is 0.607 and 0.590, one event; the
+  area was not read this way.
+- The product claim as this reading leaves it: the departures are the detector with no label and
+  the bar a learned detector has to beat; the model as a reader of unknown classes is not read here.
+
+**Limitations.** The declaration said the rule cannot open when the departures miss fewer than 11;
+it also cannot when they miss 13, since the expectation is subtracted. The family of departures
+is a union of six arms (`channel_local` and `local-max-hour-6h` agree to Spearman 1.000), each at
+its own 1 %, so 48 is no detector's number and carries chance (next section). The rule asks for room over that family,
+which is harder than room over `channel_local` alone, which misses 24 events. The 11 events were
+chosen for being unfound and 8 of them share channels 14, 21 and 29, so they are few independent
+cases. Sixty-one events give a coarse count. The registered rule at 0.18 is for one pair; the fusion
+is judged by the floor and the interval alone.
+
+## 2026-11-09 — after the reading, deciding nothing: chance in the departures, and what the fusion is made of
+
+**Question.** Asked after the reading, so descriptive: how much of the departures' count is chance,
+and does the fusion beat the better departures rather than `channel_local`?
+
+**Conditions.** `scripts/telemetry_ceiling_report.py post-hoc` at the commit adding this section, 1,000
+rotations, seed 11, 10,000 resamples.
+
+| Events found at 1 % | Real | Rotations, mean | 95th percentile |
+|---|---|---|---|
+| Departures, any arm | 48 | 23.19 | 27 |
+| `channel_local` | 37 | 14.70 | 18 |
+
+| Fusion | Recall | Against `channel_local` 0.607 | Against mean, hour-6h 0.672 | Against mean, bins-24h 0.689 |
+|---|---|---|---|---|
+| All five | 0.738 | +0.131 [+0.036; +0.234] | +0.066 [−0.052; +0.176] | +0.049 [−0.050; +0.136] |
+| No model (departures, cells, interpolation) | 0.672 | +0.066 [+0.000; +0.148] | +0.000 [−0.136; +0.131] | −0.016 [−0.149; +0.103] |
+| Without the forecast | 0.738 | +0.131 | +0.066 | +0.049 |
+| Without the cells | 0.738 | +0.131 | +0.066 | +0.049 |
+| Without the states | 0.672 | +0.066 | +0.000 | −0.016 |
+| Without the interpolation | 0.639 | +0.033 | −0.033 | −0.049 |
+| Without the departures | 0.656 | +0.049 | −0.016 | −0.033 |
+
+The whitened distance over the states, added to the no-model fusion, gives 0.738 from the pretrained
+encoders (one answer: the ten seeds are identical, and the two pretrainings' scores differ, Spearman
+0.58) and 0.736 (0.721 to 0.738 over ten seeds) from the encoder at its initialisation.
+
+**Conclusions.**
+
+- The same scores with the events' places moved find 23 of 61 (27 at the 95th percentile). The
+  union's 48 stands far above that, and long events are the ones chance reaches.
+- Against the better departures the fusion is not resolved: +0.066 and +0.049, intervals across
+  zero. Of the +0.131 over `channel_local`, half to five-eighths is the better departures' own lead,
+  which is itself unresolved: +0.066 [−0.048; +0.198] and +0.082 [−0.033; +0.216].
+- The states add the fusion's four events, within one event as much at their initialisation, so
+  this is not evidence for pretraining. The forecast's largest-channel error adds nothing here; its
+  raw error, not in the fusion, reads 0.656 and 0.705 alone on the two pretrainings.
+
+**Limitations.** One campaign per member, a fusion of five chosen before the reading, the better
+departures chosen after it on the validation months. A bar is to be chosen on the fitting side's
+later months, by the events found.
