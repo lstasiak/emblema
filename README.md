@@ -14,7 +14,7 @@
 | src/emblema/catalog/adapters/readers/cmapss.py                                            |      129 |        0 |       44 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/eicu\_demo.py                                        |      211 |        0 |       70 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/esa\_ad.py                                           |      169 |        0 |       44 |        0 |    100% |           |
-| src/emblema/catalog/adapters/readers/esa\_ad\_raw.py                                      |      189 |        8 |       56 |        4 |     95% |214, 221-226, 233, 237, 245 |
+| src/emblema/catalog/adapters/readers/esa\_ad\_raw.py                                      |      207 |        8 |       64 |        4 |     96% |259, 266-271, 278, 282, 290 |
 | src/emblema/catalog/adapters/readers/opssat\_ad.py                                        |      116 |        0 |       38 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/physionet2012.py                                     |      125 |        0 |       44 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/physionet2019.py                                     |      116 |        0 |       40 |        0 |    100% |           |
@@ -31,7 +31,7 @@
 | src/emblema/catalog/adapters/tokenisation/sliding\_window.py                              |      117 |        0 |       32 |        0 |    100% |           |
 | src/emblema/catalog/application/assemblers/corpus\_version\_ref\_assembler.py             |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/application/assemblers/published\_corpus\_manifest\_assembler.py      |       31 |        0 |        2 |        0 |    100% |           |
-| src/emblema/catalog/application/use\_cases/publish\_corpus.py                             |       40 |        0 |        4 |        0 |    100% |           |
+| src/emblema/catalog/application/use\_cases/publish\_corpus.py                             |       41 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/application/use\_cases/register\_corpus.py                            |       16 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/application/use\_cases/register\_corpus\_version.py                   |       33 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/application/use\_cases/tokenise\_corpus\_version.py                   |       53 |        0 |        4 |        0 |    100% |           |
@@ -43,8 +43,8 @@
 | src/emblema/catalog/contracts/observed\_window.py                                         |       29 |        0 |       12 |        0 |    100% |           |
 | src/emblema/catalog/contracts/published\_channel.py                                       |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/contracts/published\_channel\_statistics.py                           |        3 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/contracts/published\_corpus\_manifest.py                              |       35 |        0 |       18 |        0 |    100% |           |
-| src/emblema/catalog/contracts/published\_corpus\_manifest\_json.py                        |      115 |        0 |       28 |        0 |    100% |           |
+| src/emblema/catalog/contracts/published\_corpus\_manifest.py                              |       40 |        0 |       18 |        0 |    100% |           |
+| src/emblema/catalog/contracts/published\_corpus\_manifest\_json.py                        |      118 |        0 |       30 |        0 |    100% |           |
 | src/emblema/catalog/contracts/static\_value.py                                            |       10 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/contracts/window\_tokeniser.py                                        |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/domain/channels/channel\_schema.py                                    |       27 |        0 |        6 |        0 |    100% |           |
@@ -65,8 +65,8 @@
 | src/emblema/catalog/domain/tokenisation/archived\_corpus.py                               |       15 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/placed\_window.py                                 |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/split\_policy.py                                  |       36 |        0 |        4 |        0 |    100% |           |
-| src/emblema/catalog/domain/tokenisation/tokenisation\_manifest.py                         |       36 |        0 |        8 |        0 |    100% |           |
-| src/emblema/catalog/domain/tokenisation/tokenisation\_scheme.py                           |       46 |        0 |       10 |        0 |    100% |           |
+| src/emblema/catalog/domain/tokenisation/tokenisation\_manifest.py                         |       37 |        0 |        8 |        0 |    100% |           |
+| src/emblema/catalog/domain/tokenisation/tokenisation\_scheme.py                           |       57 |        0 |       16 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/unit\_split.py                                    |       38 |        0 |       16 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/window\_reconstruction.py                         |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/window\_spec.py                                   |       30 |        0 |       10 |        0 |    100% |           |
@@ -125,7 +125,7 @@
 | src/emblema/entrypoints/cli/publish\_corpus/adapters.py                                   |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/composition\_root.py                          |      101 |        0 |       40 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/known\_corpora.py                             |       26 |        0 |        2 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_cli.py                       |       70 |        0 |       16 |        0 |    100% |           |
+| src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_cli.py                       |       71 |        0 |       16 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_invocation.py                |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/services.py                                   |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/serving/adapters.py                                           |        8 |        0 |        0 |        0 |    100% |           |
@@ -135,7 +135,7 @@
 | src/emblema/entrypoints/cli/serving/serving\_invocation.py                                |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/configured.py                                                     |       16 |        0 |        4 |        0 |    100% |           |
 | src/emblema/entrypoints/known\_ground\_truths.py                                          |       41 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/restored\_backbones.py                                            |       69 |        1 |       12 |        0 |     99% |        61 |
+| src/emblema/entrypoints/restored\_backbones.py                                            |       75 |        1 |       14 |        0 |     99% |        66 |
 | src/emblema/entrypoints/source\_revision.py                                               |       59 |        0 |       14 |        1 |     99% |   88-\>92 |
 | src/emblema/entrypoints/workers/adapters.py                                               |       13 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/workers/campaign\_process.py                                      |       69 |        0 |        2 |        0 |    100% |           |
@@ -163,7 +163,7 @@
 | src/emblema/evaluation/adapters/candidates/classical\_arm.py                              |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/classical\_baseline\_catalogue.py              |       35 |        2 |        4 |        0 |     95% |     51-52 |
 | src/emblema/evaluation/adapters/candidates/classical\_candidate\_provider.py              |       20 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/candidates/detector\_arm.py                               |      160 |        8 |       68 |        4 |     95% |131-132, 136, 141, 175, 188, 330-331 |
+| src/emblema/evaluation/adapters/candidates/detector\_arm.py                               |      157 |        8 |       68 |        4 |     95% |131-132, 136, 141, 175, 188, 328-329 |
 | src/emblema/evaluation/adapters/candidates/detector\_candidate\_provider.py               |       24 |       10 |        4 |        0 |     50% |     40-61 |
 | src/emblema/evaluation/adapters/candidates/detector\_catalogue.py                         |       65 |        0 |       22 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/patch\_candidate\_provider.py                  |       18 |        0 |        0 |        0 |    100% |           |
@@ -171,7 +171,7 @@
 | src/emblema/evaluation/adapters/candidates/routed\_candidate\_catalogue.py                |       19 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/candidates/routed\_candidate\_provider.py                 |       23 |        2 |        2 |        0 |     92% |     48-49 |
 | src/emblema/evaluation/adapters/detection/channel\_departures.py                          |      134 |        0 |       22 |        1 |     99% | 162-\>156 |
-| src/emblema/evaluation/adapters/detection/channel\_error\_scales.py                       |       32 |        0 |        8 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/detection/channel\_error\_scales.py                       |       36 |        0 |       10 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/channel\_errors.py                              |       20 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/channel\_local\_detection\_runtime.py           |       66 |        0 |       14 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/channel\_local\_detector.py                     |       43 |        0 |        2 |        0 |    100% |           |
@@ -183,8 +183,8 @@
 | src/emblema/evaluation/adapters/detection/masked\_cells.py                                |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/mean\_distance\_detector.py                     |       51 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/nearest\_neighbour\_detector.py                 |       49 |        2 |        2 |        0 |     96% |   164-165 |
-| src/emblema/evaluation/adapters/detection/pretext\_error\_detection\_runtime.py           |      144 |        1 |       34 |        1 |     99% |       236 |
-| src/emblema/evaluation/adapters/detection/pretext\_source.py                              |       12 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/detection/pretext\_error\_detection\_runtime.py           |      166 |        3 |       36 |        1 |     98% |269-270, 299 |
+| src/emblema/evaluation/adapters/detection/pretext\_source.py                              |       15 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/robust\_scale.py                                |       20 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/score\_alarm.py                                 |       43 |        0 |       12 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/detection/shrunk\_covariance.py                           |       25 |        0 |        2 |        0 |    100% |           |
@@ -254,7 +254,7 @@
 | src/emblema/evaluation/adapters/synthetic/synthetic\_ground\_truth.py                     |       33 |        0 |       10 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/adapted\_backbone.py                                |       82 |        0 |       26 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/attention\_pooling.py                               |       18 |        0 |        4 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/torch/backbone\_factory.py                                |       15 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/torch/backbone\_factory.py                                |       22 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/channel\_dropout.py                                 |       16 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/clipped\_values.py                                  |       13 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/early\_stop.py                                      |       63 |        4 |       14 |        3 |     88% |55-56, 76, 86 |
@@ -278,7 +278,7 @@
 | src/emblema/evaluation/adapters/torch/tail\_pooling.py                                    |       11 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/torch/target\_link.py                                     |       60 |        8 |       26 |        4 |     77% |67-68, 78-79, 88-89, 113-114 |
 | src/emblema/evaluation/adapters/torch/torch\_adaptation\_runtime.py                       |      188 |        3 |       44 |        2 |     97% |352, 479-480 |
-| src/emblema/evaluation/adapters/torch/torch\_detection\_runtime.py                        |       91 |        3 |       18 |        1 |     94% |   151-153 |
+| src/emblema/evaluation/adapters/torch/torch\_detection\_runtime.py                        |       93 |        3 |       18 |        1 |     95% |   155-157 |
 | src/emblema/evaluation/adapters/torch/torch\_patch\_runtime.py                            |       57 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/xgboost/fitted\_baseline.py                               |       34 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/xgboost/xgboost\_classical\_runtime.py                    |       87 |        4 |       22 |        3 |     90% |113-\>exit, 170-171, 183-184 |
@@ -360,14 +360,14 @@
 | src/emblema/evaluation/domain/detection/detector\_features.py                             |       22 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/detector\_recipe.py                               |       74 |        0 |       40 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/encoder\_reading.py                               |       20 |        0 |       10 |        0 |    100% |           |
-| src/emblema/evaluation/domain/detection/error\_normalisation.py                           |        4 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/detection/error\_normalisation.py                           |       12 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/hidden\_cells\_choice.py                          |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/pretext\_asking.py                                |       15 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/score\_distance.py                                |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/score\_reference.py                               |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/detection/taught\_events.py                                 |       30 |        1 |       12 |        1 |     95% |        41 |
 | src/emblema/evaluation/domain/detection/taught\_head.py                                   |        5 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/domain/exceptions.py                                               |      119 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/domain/exceptions.py                                               |      120 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/campaign\_order.py                                  |       42 |        0 |       18 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/campaign\_order\_result.py                          |       22 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/domain/handoff/order\_lane.py                                      |       21 |        0 |        6 |        0 |    100% |           |
@@ -460,7 +460,7 @@
 | src/emblema/evaluation/ports/ground\_truth.py                                             |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/ports/patch\_runtime.py                                            |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/ports/verdict\_memo.py                                             |        6 |        0 |        0 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/blocks/block\_training\_corpus\_reader.py                |       44 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/blocks/block\_training\_corpus\_reader.py                |       64 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/diagnostics/channel\_series.py                           |       36 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/diagnostics/cross\_channel\_ridge\_baseline.py           |       47 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/diagnostics/latent\_channel\_baseline.py                 |       23 |        0 |        6 |        0 |    100% |           |
@@ -473,7 +473,7 @@
 | src/emblema/pretraining/adapters/diagnostics/triviality\_diagnostic.py                    |       61 |        0 |       16 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/diagnostics/unit\_bootstrap.py                           |       39 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/diagnostics/window\_arrays.py                            |       19 |        0 |        0 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/documents/experiment\_configuration\_document.py         |       44 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/documents/experiment\_configuration\_document.py         |       47 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/documents/fields.py                                      |       72 |        0 |       14 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/documents/pretraining\_order\_json.py                    |       30 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/documents/pretraining\_result\_json.py                   |       47 |        0 |        4 |        0 |    100% |           |
@@ -486,7 +486,7 @@
 | src/emblema/pretraining/adapters/encoder/self\_attention.py                               |       21 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/set\_encoder.py                                  |       48 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/encoder/tier\_architecture.py                            |        4 |        0 |        0 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/experiments/experiment\_file.py                          |      101 |        0 |        8 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/experiments/experiment\_file.py                          |      102 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/handoff/artifact\_store\_handoff\_exchange.py            |       20 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/handoff/handoff\_training\_runtime.py                    |       19 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/in\_memory/backbone\_repository.py                       |       19 |        0 |        2 |        0 |    100% |           |
@@ -506,7 +506,7 @@
 | src/emblema/pretraining/adapters/objective/masked\_reconstruction.py                      |       30 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/objective\_score.py                            |       19 |        0 |        6 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/objective\_shape.py                            |       44 |        0 |       16 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/objective/pretext\_reading.py                            |       90 |        1 |       18 |        1 |     98% |        90 |
+| src/emblema/pretraining/adapters/objective/pretext\_reading.py                            |      126 |        1 |       32 |        1 |     99% |       117 |
 | src/emblema/pretraining/adapters/objective/pretraining\_objective.py                      |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/objective/reconstruction\_decoder.py                     |       31 |        1 |        6 |        1 |     95% |        38 |
 | src/emblema/pretraining/adapters/objective/reconstruction\_loss.py                        |       30 |        0 |        2 |        0 |    100% |           |
@@ -518,16 +518,19 @@
 | src/emblema/pretraining/adapters/persistence/backbone\_repository.py                      |       25 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/persistence/orm.py                                       |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/persistence/pretraining\_input\_record.py                |       29 |        0 |        0 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/training/batch\_layout.py                                |        8 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/training/batch\_layout.py                                |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/training/cell\_batches.py                                |       26 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/training/cell\_windows.py                                |       14 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/training/device\_generator.py                            |       14 |        3 |        4 |        1 |     67% | 22, 31-32 |
 | src/emblema/pretraining/adapters/training/devices.py                                      |        5 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/training/exceptions.py                                   |        6 |        0 |        0 |        0 |    100% |           |
+| src/emblema/pretraining/adapters/training/joined\_cell\_batches.py                        |       39 |        1 |        4 |        1 |     95% |        43 |
+| src/emblema/pretraining/adapters/training/joined\_cell\_windows.py                        |       16 |        2 |        0 |        0 |     88% |     36-39 |
+| src/emblema/pretraining/adapters/training/joined\_sides.py                                |       16 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/training/raw\_batches.py                                 |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/training/torch\_precision.py                             |       26 |        0 |        4 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/training/torch\_training\_runtime.py                     |      273 |        0 |       72 |        1 |     99% | 472-\>474 |
-| src/emblema/pretraining/adapters/training/trained\_model.py                               |       70 |        2 |       14 |        2 |     95% |  279, 285 |
+| src/emblema/pretraining/adapters/training/torch\_training\_runtime.py                     |      283 |        0 |       76 |        1 |     99% | 499-\>501 |
+| src/emblema/pretraining/adapters/training/trained\_model.py                               |       70 |        2 |       14 |        2 |     95% |  282, 288 |
 | src/emblema/pretraining/adapters/training/training\_checkpoint.py                         |       42 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/application/use\_cases/accept\_pretraining\_result.py             |       30 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/application/use\_cases/assess\_reconstruction\_run.py             |       11 |        0 |        0 |        0 |    100% |           |
@@ -547,7 +550,7 @@
 | src/emblema/pretraining/domain/assessment/summarised\_run.py                              |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/backbone/backbone.py                                       |       63 |        0 |       24 |        0 |    100% |           |
 | src/emblema/pretraining/domain/backbone/pretraining\_input.py                             |       12 |        0 |        4 |        0 |    100% |           |
-| src/emblema/pretraining/domain/encoder\_architecture.py                                   |       38 |        0 |       10 |        0 |    100% |           |
+| src/emblema/pretraining/domain/encoder\_architecture.py                                   |       43 |        0 |       14 |        0 |    100% |           |
 | src/emblema/pretraining/domain/exceptions.py                                              |       67 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/handoff/pretraining\_order.py                              |       29 |        0 |       12 |        0 |    100% |           |
 | src/emblema/pretraining/domain/handoff/pretraining\_result.py                             |       51 |        0 |       16 |        0 |    100% |           |
@@ -564,7 +567,7 @@
 | src/emblema/pretraining/domain/training/corpus\_share.py                                  |       22 |        0 |        6 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/corpus\_validation.py                             |       17 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/epoch\_outcome.py                                 |       30 |        0 |       12 |        0 |    100% |           |
-| src/emblema/pretraining/domain/training/experiment\_configuration.py                      |       88 |        0 |       32 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/experiment\_configuration.py                      |       90 |        0 |       34 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/objective\_loss.py                                |       26 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/objective\_target.py                              |       43 |        0 |       18 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/observation\_term.py                              |       27 |        0 |        4 |        0 |    100% |           |
@@ -574,11 +577,12 @@
 | src/emblema/pretraining/domain/training/summary\_term.py                                  |       20 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/trained\_parameters.py                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/training\_budget.py                               |       32 |        0 |       16 |        0 |    100% |           |
-| src/emblema/pretraining/domain/training/training\_corpus.py                               |       24 |        0 |        6 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/training\_corpus.py                               |       33 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/training\_corpus\_shape.py                        |       13 |        0 |        8 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/training\_mixture.py                              |       31 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/training\_mixture\_shape.py                       |       21 |        0 |        6 |        0 |    100% |           |
 | src/emblema/pretraining/domain/training/training\_outcome.py                              |       24 |        0 |        8 |        0 |    100% |           |
+| src/emblema/pretraining/domain/training/window\_place.py                                  |       10 |        0 |        4 |        0 |    100% |           |
 | src/emblema/pretraining/ports/backbone\_repository.py                                     |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/ports/experiment\_tracker.py                                      |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/ports/handoff\_exchange.py                                        |        9 |        0 |        0 |        0 |    100% |           |
@@ -646,6 +650,9 @@
 | src/emblema/serving/ports/served\_model\_listing.py                                       |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/serving/ports/served\_model\_repository.py                                    |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/arrays/binned\_tokens.py                                      |      130 |        0 |       18 |        0 |    100% |           |
+| src/emblema/shared/adapters/arrays/exceptions.py                                          |        2 |        0 |        0 |        0 |    100% |           |
+| src/emblema/shared/adapters/arrays/joined\_cells.py                                       |       48 |        0 |        8 |        0 |    100% |           |
+| src/emblema/shared/adapters/arrays/joined\_windows.py                                     |       82 |        0 |       26 |        0 |    100% |           |
 | src/emblema/shared/adapters/arrays/laid\_window.py                                        |       28 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/adapters/arrays/raw\_tokens.py                                         |       17 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/arrays/token\_batch.py                                        |       41 |        0 |        6 |        0 |    100% |           |
@@ -657,10 +664,10 @@
 | src/emblema/shared/adapters/in\_memory/event\_publisher.py                                |        8 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/event\_subscriber.py                               |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/in\_memory/id\_generator.py                                   |        9 |        0 |        0 |        0 |    100% |           |
-| src/emblema/shared/adapters/loaders/interleaved\_loader.py                                |       27 |        0 |        6 |        0 |    100% |           |
+| src/emblema/shared/adapters/loaders/interleaved\_loader.py                                |       28 |        0 |        6 |        0 |    100% |           |
 | src/emblema/shared/adapters/loaders/seeded\_shuffle\_sampler.py                           |       23 |        0 |        6 |        0 |    100% |           |
-| src/emblema/shared/adapters/loaders/window\_dataset.py                                    |       12 |        0 |        2 |        0 |    100% |           |
-| src/emblema/shared/adapters/loaders/window\_loader.py                                     |       20 |        0 |        2 |        0 |    100% |           |
+| src/emblema/shared/adapters/loaders/window\_dataset.py                                    |       11 |        0 |        2 |        0 |    100% |           |
+| src/emblema/shared/adapters/loaders/window\_loader.py                                     |       21 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/adapters/persistence/datetimes.py                                      |        7 |        0 |        2 |        0 |    100% |           |
 | src/emblema/shared/adapters/persistence/naming.py                                         |        2 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/queues/celery\_application.py                                 |       10 |        0 |        0 |        0 |    100% |           |
@@ -684,7 +691,7 @@
 | src/emblema/shared/adapters/windows/block\_workspace.py                                   |       22 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/adapters/windows/exceptions.py                                         |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/windows/format.py                                             |       29 |        0 |        0 |        0 |    100% |           |
-| src/emblema/shared/adapters/windows/window\_block.py                                      |       79 |        0 |       12 |        0 |    100% |           |
+| src/emblema/shared/adapters/windows/window\_block.py                                      |       84 |        0 |       12 |        0 |    100% |           |
 | src/emblema/shared/adapters/windows/window\_block\_writer.py                              |      119 |        0 |       26 |        1 |     99% | 253-\>257 |
 | src/emblema/shared/api/bearer\_authentication.py                                          |       30 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/api/cursor\_page.py                                                    |       10 |        0 |        0 |        0 |    100% |           |
@@ -719,7 +726,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **22096** |  **179** | **4424** |  **119** | **99%** |           |
+| **TOTAL**                                                                                 | **22490** |  **184** | **4524** |  **120** | **99%** |           |
 
 132 empty files skipped.
 
