@@ -111,9 +111,11 @@ Preliminary, on validation data; each task's test data is used once, at the end.
   departure from its own recent hours, with no model and no label, reads level with the best
   classical bar on the first mission and 0.885 against 0.627 on the second, finding as many
   events as the taught direction; it is now part of the package, a bar the backbone has to beat.
+  A pretext that forecasts each channel's next hour from two days of its history forecasts
+  well but reads the events no better than that departure (−0.018 [−0.074; +0.039]).
 
-**Next:** the shape of a pretext for telemetry, now that the missed events are read per
-channel against its own history; confirmation at few labels on fresh pretrainings.
+**Next:** the ceiling without labels on the first mission, and the events found at a
+false-alarm budget as the telemetry measure; confirmation at few labels on fresh pretrainings.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
