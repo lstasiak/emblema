@@ -333,3 +333,128 @@ pretraining read. The validation months have been read before; the test months s
 The pilot read the budget run's backbone of 16 epochs, where the pretrainings stop at 13, on
 fitting months the pretraining read in part, with months resampled in one stratum where the
 reading uses two.
+
+## 2026-11-09 — measured: the forecast error reads the events no better than the departures with no model, and no better than its own no-model answer
+
+**Conditions.** As declared, at commit `5b15beed`. Pretrainings: backbones `5a0ffd31…` (seed 1,
+result `durable/sha256/aafb98f8…`, weights kept at epoch 13 `4f89bca9…`) and `03a53a6d…` (seed
+2, result `3af4817a…`, weights `1214d12a…`), side by side on one Colab G4: 11,342 s and 11,397 s,
+862 s an epoch each, twice the 456 s of one run alone; 3.8 GB of its memory. The stored configuration of both results matches the experiment files (48 bins
+over 48 joined hours, 2 × 64, 13 epochs, batches of 32, fp32, the hour hidden at a rate of
+one); the validation reconstruction at epoch 13 read 0.0156 and 0.0150, 0.071 and 0.068 of the
+trivial predictor's. Campaigns `telemetry-history-pretext`: first mission `fdd31528…` and
+`ec4cead7…`, second `4e7db42a…` and `48755751…`; the first mission's eight cells on the G4 in
+eight processes (a pretext cell 855–877 s, the interpolation 273 s, 1,779 s in all), the second
+mission's on the Mac (631 s and 655 s an order, 1.8 GB). Reading: `read.sh` as declared; 1,128
+windows of the first mission and 235 of the second dropped in the 47 hours after an unloaded
+month (24 and 5 boundaries); 39,960 windows, 62 events over 4,618 of them, 35,342 normal
+windows remain on the first mission, so a random order reads 0.0018 in area. The kept detectors record `max` and `mean` as their reductions; the interpolation's cells of
+the two campaigns agree to the bit; `channel_local` reads 0.176 here, 0.179 over every window
+on 2026-11-06.
+
+**Mission1, validation months.** Area: the mean of the two pretrainings' areas; in brackets
+seed 1, seed 2.
+
+| Candidate | Area | Recall at 1 % |
+|---|---|---|
+| arm, largest channel | 0.158 (0.138, 0.178) | 0.589 (0.565, 0.613) |
+| mean over channels | 0.178 (0.152, 0.203) | 0.621 (0.548, 0.694) |
+| raw error | 0.206 (0.198, 0.215) | 0.669 (0.645, 0.694) |
+| interpolation, largest | 0.122 | 0.548 |
+| `channel_local` | 0.176 | 0.597 |
+| `cells_knn` farthest | 0.157 | 0.419 |
+
+**The declared readings**, 10,000 resamples of months, one Holm family; T = 0.040 (the
+pretrainings' own spread 0.028 over the floor 0.014):
+
+| | Area | Interval | p | Recall at 1 % |
+|---|---|---|---|---|
+| (1) arm − `channel_local` | −0.018 | [−0.074; +0.039] | 0.67 | −0.008 [−0.112; +0.085] |
+| (2) arm − interpolation | +0.036 | [−0.033; +0.112] | 0.27 | +0.040 [−0.090; +0.154] |
+
+Both lie within ±0.05 and within ±T: the outcome is **around or below**. Beside: the mean reads
++0.020 [+0.001; +0.049] over the largest and the raw error +0.048 [+0.007; +0.098]; the arm
++0.001 [−0.090; +0.076] over the farthest feature; the interpolation −0.054 [−0.104; −0.015]
+under `channel_local`.
+
+**Mission2**, 14 validation months (232 events after the drop), descriptively: arm 0.889 (0.883, 0.895), mean 0.898, raw 0.829, interpolation 0.928, `channel_local` 0.886, farthest
+0.624; recall at 1 % 0.98–1.00 for every candidate but the farthest (0.86). Arm −
+`channel_local` +0.003 [−0.012; +0.023]; arm − interpolation −0.039 [−0.054; −0.017]: the last
+reading carried forward is the best reader of this mission's events.
+
+**Read against unread months**, `history_pretext_answers_report.py`, 1,500 windows a side,
+Huber loss of the decoder on the hidden hour: Mission1 0.0094 and 0.0091 on the months the
+pretraining read against 0.0073 and 0.0070 on the months it never read; Mission2 0.038 and
+0.040 against 0.047 and 0.045. Neither ratio falls under one half, so the arm "pretrained
+without event windows" does not return. The decoder beats the median of the history by 0.114
+on Mission1 and 0.10 on Mission2 under both pretrainings, as the forecast gate found.
+
+**Predictions against the outcome.**
+
+| | Predicted | Read |
+|---|---|---|
+| (1) area | −0.02 to +0.07 | −0.018 ✓ |
+| (2) area | at least +0.045, the point near +0.15 | +0.036 ✗ |
+| Outcome | above its no-model answer only | around or below ✗ |
+| Recall, arm − `channel_local` | at least +0.02 | −0.008 ✗ |
+| The mean beside the largest | area 0.02 under, recall 0.10 over | area 0.020 over, recall 0.032 over ✗ |
+| Mission2, arm − `channel_local` | within ±0.03 | +0.003 ✓ |
+| Read against unread | not under one half | 1.3 and 0.8 to 0.9 ✓ |
+
+**Post hoc, from the reading's exported predictions.** For each event, its windows in time
+order; each window's rank among the mission's 39,960 (0 the highest score), and the share of a
+detector's top 1 % that falls in the event:
+
+| Detector | Median rank of the event's first hour | Median rank of its later hours | Median share of the event's hours in the top 1 % |
+|---|---|---|---|
+| arm, seed 1 / seed 2 | 0.12 / 0.19 | 0.43 / 0.48 | 0.02 / 0.03 |
+| raw error, seed 2 | 0.07 | 0.45 | 0.03 |
+| interpolation | 0.12 | 0.48 | 0.01 |
+| `channel_local` | 0.09 | 0.50 | 0.01 |
+| farthest | 0.16 | 0.42 | 0.00 |
+
+Every detector referenced to the window's own past ranks the first hour of an event high and
+its later hours where chance would, since the history absorbs the event. The events last 11
+hours at the median, 113 at the third quartile, 571 at most, and the area spreads each event's
+weight over all its hours, so it reads their tails, not their alarms: a detector that ranked
+every event's first hour at the top and nothing else would read 0.30 here, and these read 0.12 to 0.21 because they also miss onsets, 22 to 26 of
+the 62 within their top 1 %. The pilot saw the tail in the control only; it belongs to the
+class. Of the 62 events, 27 are the benchmark's rare nominal events, counted as positives as it
+counts them; 33 are local to a few channels and 29 global. The detectors referenced to a channel's
+history find 21 to 26 of the 29 global events at 1 % and 12 to 17 of the 33 local ones (the raw
+error 17, the arm 13, `channel_local` 12); the farthest feature 18 and 8. The two pretrainings' areas differ by 0.040 under the largest and 0.052
+under the mean, as much as the least gain. The interpolation read 0.027 on the pilot's 36
+fitting months and 0.122 here, just above the upper edge of its pilot interval [0.004; 0.120].
+
+**Conclusions.**
+
+- The forecaster's error, read by its largest channel, reads the first mission's events no better
+  than the departures with no model (−0.018 [−0.074; +0.039]) and not demonstrably better than
+  the last hour carried forward (+0.036 [−0.033; +0.112]). Arm A, as declared, adds nothing to
+  the detectors with no model on either mission.
+- The forecast itself is good: 0.07 of the trivial predictor's loss, 17 times better than the
+  history's median on the first mission and 3 times on the second, as sharp on months it never
+  read. A better forecast of a channel's hour is
+  not a better reader of these events.
+- The registered area reads the hours after an alarm, which every detector referenced to its
+  own history ranks at chance; a detector that ranked every onset first and nothing else would
+  read 0.30 here, and these read 0.12 to 0.21 because they also miss onsets. For detectors of
+  this class the recall at a false-alarm budget is the reading that follows their mechanism, and under it the arm reads 0.59 against the
+  bar's 0.60 and its raw error 0.67, all within one interval.
+- The knob chosen on the fitting side (the largest channel) reversed on the validation months,
+  and two pretrainings spread as much as the least gain: a pilot over 29 events chooses no
+  knob, and the spread between two pretrainings (0.040 under the largest, 0.052 under the mean)
+  is as large as the least gain.
+- What stays out of reach are the local events: every detector here referenced to a channel's
+  history finds 12 to 17 of the 33 (the farthest feature 8), and the label-taught trees' advantage on them comes from recurring
+  event classes the labels name, which no pretext learns from the telemetry alone.
+
+**Limitations.** Two pretrainings, one reading each, validation months. The channels' scales
+were fitted on months the pretraining read. The onset-only oracle and the tail ranks are post hoc, on
+these detectors; the recall at 1 % was declared
+beside, not first. The per-month reference (`reference=unit`) shares one spread across a month,
+so a month holding a 571-hour event compresses its own scores; every candidate bears it alike,
+and its size is not measured. The rare nominal events are counted as the benchmark counts
+them. The Mission2 reading is descriptive. Hourly cells were chosen for the forecast's
+residual, not for the events' length; whether the local events the detectors miss survive the
+hour's summary is not read here.
