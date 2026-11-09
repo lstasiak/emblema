@@ -32,11 +32,13 @@ from scripts.telemetry_ceiling_report import (
     family_found,
     found_mask,
     fused,
+    fused_over_repeats,
     month_referenced,
     month_slices,
     queues_finer_cells,
     reopens_perturbation_pretext,
     resolution_found,
+    rotated_counts,
     rotated_targets,
     rotation_order,
 )
@@ -415,3 +417,19 @@ def test_finer_cells_need_enough_events_on_enough_channels(
 def test_a_correlation_needs_values_that_vary() -> None:
     assert np.isnan(correlation(np.ones(20), np.arange(20.0)))
     assert correlation(np.arange(20.0), np.arange(20.0)) == pytest.approx(1.0)
+
+
+def test_a_family_is_counted_under_each_rotation() -> None:
+    structure, ids = month_world()
+    detectors = [Detector("d", DEPARTURES, (only_event(structure, 1),))]
+    identity = np.arange(800)
+    counts = rotated_counts(detectors, DEPARTURES, structure, ids, [identity, identity])
+    assert counts.tolist() == [1, 1]
+
+
+def test_the_fusion_is_taken_once_per_repeat_of_the_varied_member() -> None:
+    fixed = Detector("a", OTHER, (np.array([1.0, 2.0, 3.0]),))
+    varied = Detector("b", OTHER, (np.array([3.0, 2.0, 1.0]), np.array([1.0, 2.0, 3.0])))
+    first, second = fused_over_repeats([fixed], varied)
+    assert first.tolist() == pytest.approx([1.0, 2.0 / 3.0, 1.0])
+    assert second.tolist() == pytest.approx([1.0 / 3.0, 2.0 / 3.0, 1.0])

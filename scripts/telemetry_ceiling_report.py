@@ -11,7 +11,11 @@ offset per month shared by every detector, which keeps detectors that agree in a
     uv run scripts/telemetry_ceiling_report.py measure --side refit --sources FILE --out DIR
         [--trial]
     uv run scripts/telemetry_ceiling_report.py resolution --sources FILE --out DIR [--trial]
+    uv run scripts/telemetry_ceiling_report.py post-hoc --sources FILE --out DIR
     uv run scripts/telemetry_ceiling_report.py read --dir DIR
+
+``post-hoc`` holds what was asked after the declared reading and decides nothing: the departures
+under the rotations, the fusion against better departures, and each member's share in it.
 
 ``measure`` writes CSV only; ``read`` makes the tables from it. ``--trial`` rotates the targets
 within months first, so the whole path runs with no reading of an event, and prints counts.
@@ -102,6 +106,7 @@ EVENTS, DETECTORS, SUMMARY, RESOLUTION, REFERENCE = (
     "resolution.csv",
     "reference.csv",
 )
+POST_HOC = "post-hoc.csv"
 
 
 @dataclass(frozen=True)
@@ -876,6 +881,10 @@ def read_tables(directory: Path) -> str:
                     [(a, b, str(n)) for (a, b), n in sorted(tally.items())],
                 )
             )
+    path = directory / POST_HOC
+    if path.exists():
+        rows = list(csv.DictReader(path.open(newline="")))
+        parts.append("**post hoc**\n\n" + table(tuple(rows[0]), [tuple(r.values()) for r in rows]))
     path = directory / REFERENCE
     if path.exists():
         rows = list(csv.DictReader(path.open(newline="")))
@@ -887,6 +896,162 @@ def read_tables(directory: Path) -> str:
         readable = [row for row in rows if row.get("gained")]
         parts.append(f"finer cells queued: {queues_finer_cells(readable)}")
     return "\n\n".join(parts)
+
+
+def rotated_counts(
+    detector_set: Sequence[Detector],
+    family: str,
+    structure: Structure,
+    event_ids: Ints,
+    orders: Sequence[Ints],
+) -> Ints:
+    """How many events ``family`` finds under each rotation."""
+    return np.array(
+        [
+            int(family_found(detector_set, family, structure.events, event_ids, SHARE, o).sum())
+            for o in orders
+        ],
+        dtype=np.int64,
+    )
+
+
+def fused_over_repeats(fixed: Sequence[Detector], varied: Detector) -> list[Floats]:
+    """The fusion once per repeat of ``varied``, the other members at their first repeat."""
+    return [
+        fused([*fixed, Detector(varied.name, varied.family, (scores,))])
+        for scores in varied.repeats
+    ]
+
+
+def post_hoc(arguments: argparse.Namespace) -> None:  # pragma: no cover - environment
+    """What was asked after the declared reading; it decides nothing."""
+    out: Path = arguments.out
+    out.mkdir(parents=True, exist_ok=True)
+    draws = np.random.default_rng(arguments.seed)
+    sources = Sources.read(arguments.sources)
+    windows = windows_of(sources, REFIT)
+    detectors, _, targets = load_detectors(sources, REFIT, windows)
+    structure = structure_over(windows, targets)
+    event_ids = np.unique(structure.events[structure.events > 0])
+    by_name = {d.name: d for d in detectors}
+    once = np.ones((1, structure.unit_count))
+    slices = month_slices(structure.units)
+    orders = [rotation_order(slices, draws) for _ in range(arguments.rotations)]
+
+    def recall(scores: Floats) -> float:
+        return float(event_recalls(structure, scores, once, SHARE)[0])
+
+    members = [by_name[f"{campaign}:{candidate}"] for campaign, candidate in REPRESENTATIVES]
+    local, farthest, forecast, interpolation, states = members
+    rows: list[dict[str, str]] = []
+    union = rotated_counts(detectors, DEPARTURES, structure, event_ids, orders)
+    alone = rotated_counts(
+        [Detector(local.name, DEPARTURES, local.repeats)],
+        DEPARTURES,
+        structure,
+        event_ids,
+        orders,
+    )
+    for name, chance, real in (
+        (
+            "departures, any arm",
+            union,
+            family_found(detectors, DEPARTURES, structure.events, event_ids, SHARE),
+        ),
+        ("channel_local", alone, detector_found(local, structure.events, event_ids, SHARE)),
+    ):
+        rows.append(
+            {
+                "kind": "chance",
+                "name": name,
+                "value": str(int(real.sum())),
+                "low": f"{float(chance.mean()):.2f}",
+                "high": f"{float(np.quantile(chance, 0.95)):.1f}",
+                "beside": "events found; the rotations' mean and 95th percentile",
+            }
+        )
+    bars = {
+        "channel_local": local.repeats[0],
+        "local mean, hour-6h": by_name["refit-local-mean-hour-6h"].repeats[0],
+        "local mean, bins-24h": by_name["refit-local-mean-bins-24h"].repeats[0],
+    }
+    for bar, scores in bars.items():
+        rows.append(
+            {
+                "kind": "bar",
+                "name": bar,
+                "value": f"{recall(scores):.4f}",
+                "low": "",
+                "high": "",
+                "beside": "recall",
+            }
+        )
+    sets = {
+        "all five": members,
+        "no model": [local, farthest, interpolation],
+        "without the forecast": [local, farthest, interpolation, states],
+        "without the states": [local, farthest, forecast, interpolation],
+        "without the interpolation": [local, farthest, forecast, states],
+        "without the cells": [local, forecast, interpolation, states],
+        "without the departures": [farthest, forecast, interpolation, states],
+    }
+    for name, chosen in sets.items():
+        scores = fused(chosen)
+        for bar, control in bars.items():
+            gain, lower, upper = recall_interval(
+                structure, control, scores, share=SHARE, resamples=FUSION_RESAMPLES, draws=draws
+            )
+            rows.append(
+                {
+                    "kind": "fusion",
+                    "name": name,
+                    "value": f"{gain:+.4f}",
+                    "low": f"{lower:+.4f}",
+                    "high": f"{upper:+.4f}",
+                    "beside": f"recall {recall(scores):.4f}, against {bar}",
+                }
+            )
+    no_model = [local, farthest, interpolation]
+    for name, detector in (
+        ("frozen, base1", "3bed588b:frozen_knn@distance=whitened,reference=unit"),
+        ("initialisation, base1", "3bed588b:untrained_knn@distance=whitened,reference=unit"),
+        ("frozen, base2", "631d0f65:frozen_knn@distance=whitened,reference=unit"),
+        ("initialisation, base2", "631d0f65:untrained_knn@distance=whitened,reference=unit"),
+    ):
+        values = [recall(scores) for scores in fused_over_repeats(no_model, by_name[detector])]
+        rows.append(
+            {
+                "kind": "states member",
+                "name": name,
+                "value": f"{float(np.mean(values)):.4f}",
+                "low": f"{min(values):.4f}",
+                "high": f"{max(values):.4f}",
+                "beside": f"recall of the no-model fusion with it, over {len(values)} repeats",
+            }
+        )
+    for bar, scores in bars.items():
+        if bar == "channel_local":
+            continue
+        gain, lower, upper = recall_interval(
+            structure,
+            bars["channel_local"],
+            scores,
+            share=SHARE,
+            resamples=FUSION_RESAMPLES,
+            draws=draws,
+        )
+        rows.append(
+            {
+                "kind": "bar gap",
+                "name": bar,
+                "value": f"{gain:+.4f}",
+                "low": f"{lower:+.4f}",
+                "high": f"{upper:+.4f}",
+                "beside": "against channel_local",
+            }
+        )
+    write_csv(out / POST_HOC, rows)
+    print(f"{len(rows)} rows; CSV written")
 
 
 def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -908,6 +1073,11 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     checking = commands.add_parser("preflight")
     checking.add_argument("--sources", type=Path, required=True)
     checking.add_argument("--out", type=Path, required=True)
+    after = commands.add_parser("post-hoc")
+    after.add_argument("--sources", type=Path, required=True)
+    after.add_argument("--out", type=Path, required=True)
+    after.add_argument("--rotations", type=int, default=1000)
+    after.add_argument("--seed", type=int, default=11)
     reading = commands.add_parser("read")
     reading.add_argument("--dir", type=Path, required=True)
     return parser.parse_args(argv)
@@ -922,6 +1092,8 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - envir
             resolution(arguments)
         case "preflight":
             preflight(arguments)
+        case "post-hoc":
+            post_hoc(arguments)
         case "read":
             print(read_tables(arguments.dir))
 
