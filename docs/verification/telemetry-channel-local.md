@@ -417,3 +417,123 @@ unchanged.
 - The run's peak memory on the first mission (11 GB) holds both cells' inputs; a longer history
   over the spans would grow the detector's share.
 - Tasks whose units each keep their own time axis are refused, not read.
+
+## 2026-11-10 — declared before the run: the departure bar chosen by events found above chance, on months no arm was read on
+
+**Question.** Which no-model arm is the first mission's channel-local bar when the choice uses
+the measure the verdict is read by? The bar `max`, `hour-6h` was chosen by mean area on the
+selection months. From 2026-11-09 the first mission's verdict reads the events found at 1 % of
+normal windows (`telemetry-ceiling.md`).
+
+**Why not the selection months.** This choice was first written for the selection months (2004
+to 2006). Before it was committed, a check of how the arms' alarms are spread printed how many
+windows each arm's real scores flag there, event windows included, which less the 1 % of normal
+windows counts the event windows each arm flags. The ceiling note had published that the twelve
+arms together find 22 of those 29 events, and its run holds each arm's count. The rule below was
+shaped after that print, so a choice there would not be blind. The choice moves to the fitting
+side's months before them, 2000 to 2003, which no arm has been read on; the selection months are
+read beside, marked as not blind. Every check of scores against events on the months 2000 to
+2003 ran on rotated scores.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `scripts/telemetry_channel_local_report.py` at the commit of this declaration; the measure at `51864599`, the ground truth's overlaps at `cfd34c29` |
+| Machine | M1 Pro, the CPU; no model; the measure 18 minutes on its first, trial run and under a minute at the commit; the choice seconds |
+| Side | the 12 no-model arms (`max`, `mean` by `hour`, `bins` by 6, 24, 72 hours), each score read against its month; scored: 2000-01 to 2003-12, 48 months, 35,020 windows less 71 whose 72 hours reach before the first month; the floor set on 2004-01 to 2006-12 (26,304 windows), where each cell's own alarm level is set too, which shifts every score of a cell alike and so does not move the alarm in the next row |
+| Events | 70 by their windows' targets; `class_22` left out, every window touching one of its events set aside, neither event nor normal: its 28 events among the 70 and 4 more with no window of their own, 32 in all, and 35 windows, leaving 42 events in 34,914 windows |
+| Alarm | the score of the normal window past 1 % of the side's normal windows, as the harness counts it; an event is found when one of its windows scores above it |
+| Chance | each arm's events found, averaged over 1,000 rotations of every month's scores by an offset of at least one window, the same rotations for every arm (seed 1) |
+| Commands | `data/report/l47/measure.sh data/report/l47/early`; `telemetry_channel_local_report.py choose-recall --dir data/report/l47/early --section early --task esa-mission1-events --leave-out class_22 --out data/report/l47/choice`; beside, the same without `--leave-out`, and with `--dir data/report/l38/local/run --section select` without `--leave-out` |
+
+**Why `class_22` is left out.** Events by their windows' targets; length in windows:
+
+| Months | Events | `class_22` | Most frequent classes | Median windows | Short (≤ 6 windows) |
+| --- | --- | --- | --- | --- | --- |
+| 2000 to 2003 | 70 | 28 | 22, 7, 14 | 5 | 0.54 |
+| 2000 to 2003, less `class_22` | 42 | 0 | 7, 14 | 25.5 | 0.24 |
+| 2004 to 2006 | 29 | 0 | 7, 3, 14 | 8 | 0.41 |
+| validation | 61 | 1 | 7, 14, 3 | 10 | 0.44 |
+
+With it, 40 % of the choice would rest on a class the months the bar is read on hardly hold.
+Without it, the events left run longer than on those months. A window's target names only the
+lowest event it overlaps, so five events touching these months carry no window of their own
+number, four of them `class_22`; the windows are set aside by every event they overlap.
+
+**The rule, stated before the run.**
+
+- *The choice*: the arm with the largest excess, the events found less the events found by
+  chance; then the most found; then the most found averaged over 0.5, 1, 1.5 and 2 % of normal
+  windows; then the shorter span, `hour` before `bins`, `max` before `mean`.
+- *Beside*, descriptively: the events found at 1 %, the averaged count, and the events found by
+  their onset, by a window ending less than 6 hours after the end of the event's first scored
+  window, at the same alarm and not corrected for chance; the short events' excess, on the 10
+  events of at most 6 windows; the same with all 70 events; and the selection months by the
+  same rule, not blind.
+- *What follows.* The chosen arm becomes the first mission's channel-local bar in the
+  registered rules, as `channel_local` with its knobs (`channels`, `departure`, `span`) and
+  `reference=unit`. If it is not `max`, `hour-6h`, the package's detector is checked against the
+  report on that arm, rank by rank within each month, before any campaign reads it. Two
+  findings go back to a decision before the next reading with a telemetry verdict: if the
+  chosen arm finds more events in all than `max`, `hour-6h` but fewer by their onset, its lead
+  lies in events' later hours; and if its short events' excess is 3 or more below the largest
+  among the arms, a third of the 10 (under the rotations two arms' short counts differ with a
+  standard deviation of 0.3 to 0.7), its lead lies in long events, which these months
+  over-represent. The second mission keeps `bins` with `max` and 6 hours: its bar found every
+  event of its selection months (`telemetry-history-pretext.md`), so the count has no room to
+  choose there.
+- *Beside every telemetry reading from now on*: the excess over the same rotations, next to the
+  events found, for the candidate and the bar alike.
+
+**Why the excess and not the count.** On these months an arm finds by chance (the mean over
+500 rotations, its standard deviation beside):
+
+| Arm | `max` | `mean` |
+| --- | --- | --- |
+| `hour-6h` | 10.7 (1.8) | 14.1 (2.1) |
+| `bins-6h` | 14.1 (1.9) | 13.5 (2.0) |
+| `hour-24h` | 9.7 (1.7) | 11.1 (2.1) |
+| `bins-24h` | 9.5 (1.8) | 9.7 (2.3) |
+| `hour-72h` | 8.8 (2.2) | 6.4 (2.7) |
+| `bins-72h` | 7.6 (1.7) | 7.2 (2.6) |
+
+The arms differ by up to 7.7 events of 42, 0.18, by chance alone; of the 10 short events,
+chance finds 0.1 to 0.3. On the selection months a random score per window found about 10 of
+29 and the arms' chance ran from 3 to 11, the arms over 72 hours putting their alarms into
+fewer, longer runs (18 to 92 against 158 to 206 under a rotation); a budget of false-alarm
+runs did not even this out.
+
+**What has been seen.** On 2000 to 2003: the events' classes, lengths and overlaps; that every
+score is finite; no arm's scores against the events except under rotation. Elsewhere, among
+others: on the selection months every arm's area, `channel_local`'s found share (0.586), other
+detectors' shares, the twelve arms' union (22 of 29) and every arm's flagged windows; on the
+validation months six arms' found shares (`max` 0.525 to 0.623, `mean` 0.656 to 0.689), which
+events each finds, and their union, 48 of 61.
+
+**Prediction.** A weak lean from point shares, with no interval. Under the rotations two arms'
+counts differ with a standard deviation of 1.5 to 3.1 events (median 2.3), so arms within
+about 5 events are chosen among by noise. Source: each validation share scaled to 42 events,
+less the arm's chance here; the share carries the validation months' events and chance, which
+differ from these in length and class by an amount that differs by arm, direction unknown.
+Excess near 19 for `mean`, `bins-24h`, 17 for `max`, `bins-24h`, 15 for `max`, `hour-6h`, 14 for
+`mean` over `hour-6h` and `bins-6h`, 8 for `max`, `bins-6h`; the other six arms have no
+validation share. The lean: `bins-24h`, `mean` before `max`; the gap of about 4 events to
+`max`, `hour-6h` is within the noise, so the bar may stand. No prediction for the onset or the
+short events.
+
+**Trial, before this declaration.** The measure of the 12 arms ran first under `--trial`, which
+only waives the committed tree and reads no event; its answers are byte for byte those of the
+run at `51864599`. The choice ran three times on rotated scores (`--trial 1`, `2`, `3`): the 12
+arms over the same windows and events, the excess between −3.5 and +4.8 events and the short
+events' between −0.3 and +0.8; 500 further rotations gave the spreads above. Two reviews of the
+code found the leave-out reading only a window's target, which names the lowest overlapping
+event, and a run without `--leave-out` writing over one with it; both were fixed before the
+measure.
+
+**Limitations.** Forty-two events and 48 months, the arms measured once, so the choice has no
+interval. These are the mission's first years: drift, classes (`class_3` 2 events here, 14 on
+the validation months) and lengths differ from the months the bar is read on, and 10 short
+events check the last only coarsely. The onset is the first window the side scores. The rule was
+written after the selection months' flagged windows were seen; applied to months not read, it
+chooses blind, but its shape is not independent of that look.
