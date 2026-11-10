@@ -6,7 +6,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-from emblema.shared.adapters.storage.files import CHUNK_SIZE, write_verified
+from emblema.shared.adapters.storage.files import CHUNK_SIZE, write_resuming
 from emblema.shared.adapters.storage.layout import content_address, file_address
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.retention import Retention
@@ -91,7 +91,7 @@ class S3ArtifactStore:
         return content
 
     def get_file(self, ref: ArtifactRef, destination: Path) -> None:
-        write_verified(ref, self._streamed(ref), destination)
+        write_resuming(ref, lambda offset: self._streamed(ref, offset), destination)
 
     def exists(self, ref: ArtifactRef) -> bool:
         try:
@@ -102,17 +102,28 @@ class S3ArtifactStore:
             raise
         return True
 
-    def _body(self, ref: ArtifactRef) -> "StreamingBody":
+    def _body(self, ref: ArtifactRef, offset: int = 0) -> "StreamingBody":
+        key = self._object_key(ref)
         try:
-            response = self._client.get_object(Bucket=self._bucket, Key=self._object_key(ref))
+            response = (
+                self._client.get_object(Bucket=self._bucket, Key=key, Range=f"bytes={offset}-")
+                if offset
+                else self._client.get_object(Bucket=self._bucket, Key=key)
+            )
         except ClientError as error:
             if self._is_not_found(error):
                 raise ArtifactNotFoundError(ref.key) from error
             raise
         return response["Body"]
 
-    def _streamed(self, ref: ArtifactRef) -> Iterator[bytes]:
-        body = self._body(ref)
+    def _streamed(self, ref: ArtifactRef, offset: int = 0) -> Iterator[bytes]:
+        try:
+            body = self._body(ref, offset)
+        except ClientError as error:
+            # A partial file already holding every byte: the service has nothing past its end.
+            if offset and error.response.get("Error", {}).get("Code") == "InvalidRange":
+                return
+            raise
         while chunk := body.read(CHUNK_SIZE):
             yield chunk
 
