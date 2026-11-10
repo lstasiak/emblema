@@ -3,12 +3,14 @@
 import csv
 import json
 import random
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from emblema.evaluation.domain.identifiers import UnitKey
+from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
 from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
@@ -16,32 +18,45 @@ from emblema.evaluation.domain.statistics.paired_unit_bootstrap import PairedUni
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
 from scripts.taught_fine_tuning_pilot import write_answers
 from scripts.telemetry_channel_local_report import (
+    AVERAGED_SHARES,
     CELL_COLUMNS,
     CELLS,
     COMBINED,
     DECLARED,
+    EARLY,
     FLOOR_SHARE,
     LARGEST,
     LOCAL,
     MAX,
     MEAN,
     NO_SEED,
+    ONSET_HOURS,
     STATES,
     TAUGHT,
     Arm,
     Departures,
+    LeftOut,
+    RecallReading,
+    SideArrays,
     after_event_share,
     agreement_of,
+    alarm_boundary,
     arm_cells,
     arms_of,
     bin_values,
     cell_name,
+    chance_found,
     choose,
+    choose_by_recall,
     choose_from,
+    choose_recall,
     chosen_of,
+    classes_left_out,
     control_cells,
     corrected,
+    early_sides,
     event_annotations,
+    found_count,
     global_floor,
     hour_summaries,
     largest_departures,
@@ -49,11 +64,15 @@ from scripts.telemetry_channel_local_report import (
     main,
     missing_refits,
     missing_selects,
+    onset_windows,
     paired,
     read_tables,
     reading_row,
+    recall_reading,
     refit_arms,
+    selection_answers,
     window_scores,
+    without_events,
 )
 from scripts.telemetry_context_report import (
     BASE_BINS,
@@ -594,3 +613,350 @@ def test_tied_windows_share_their_mean_rank_as_spearmans_coefficient_defines_it(
     # Two scorings with the same order and ties agree whole, at any level.
     level = np.concatenate((np.full(400, -2.0), np.linspace(0.0, 5.0, 344)))
     assert agreement_of(level, level - 0.37) == (1.0, 1.0)
+
+
+def ranked_answers(seed: int, *, ties: bool) -> list[WindowPrediction]:
+    """Three months of 40 hourly windows, five events of one to nine hours, scores maybe tied."""
+    draw = random.Random(seed)
+    out = []
+    event = 0
+    for month in range(3):
+        starts = {5: 3, 22: 9} if month != 1 else {12: 1}
+        open_until, number = -1, 0
+        for place in range(40):
+            if place in starts:
+                event += 1
+                open_until, number = place + starts[place], event
+            target = float(number) if place < open_until else 0.0
+            score = draw.randint(0, 6) if ties else draw.random()
+            out.append(
+                predicted(f"m/200{month}-01", place, float(1000 * month + place), target, score)
+            )
+    return out
+
+
+@pytest.mark.parametrize("seed", range(12))
+@pytest.mark.parametrize("ties", [False, True])
+@pytest.mark.parametrize("share", [0.0, 0.01, 0.05, 0.1, 0.3, 1.0])
+def test_the_alarm_finds_the_events_the_ranking_finds_at_the_same_share(
+    seed: int, ties: bool, share: float
+) -> None:
+    answers = ranked_answers(seed, ties=ties)
+    ranking = AnomalyRanking.of(answers)
+
+    found = found_count(SideArrays.of(answers), share)
+
+    assert found / ranking.event_count == ranking.event_recall_at_false_alarm_share(share)
+
+
+def test_a_window_tied_with_the_first_normal_window_past_the_share_is_not_flagged() -> None:
+    answers = [
+        predicted("m/2000-01", 0, 1.0, 1.0, 5.0),
+        predicted("m/2000-01", 1, 2.0, 0.0, 5.0),
+        *(predicted("m/2000-01", place, float(place + 1), 0.0, 1.0) for place in range(2, 12)),
+    ]
+    arrays = SideArrays.of(answers)
+
+    assert found_count(arrays, 0.05) == 0
+    assert found_count(arrays, 0.1) == 1
+    assert alarm_boundary(arrays.scores, arrays.events, 1.0) == -np.inf
+
+
+def test_the_arrays_hold_the_windows_by_unit_then_place() -> None:
+    answers = [
+        predicted("m/2000-02", 1, 31.0, 0.0, 4.0),
+        predicted("m/2000-01", 1, 2.0, 1.0, 2.0),
+        predicted("m/2000-02", 0, 30.0, 0.0, 3.0),
+        predicted("m/2000-01", 0, 1.0, 0.0, 1.0),
+    ]
+
+    arrays = SideArrays.of(answers)
+
+    assert arrays.units.tolist() == [0, 0, 1, 1]
+    assert arrays.scores.tolist() == [1.0, 2.0, 3.0, 4.0]
+    assert arrays.events.tolist() == [0, 1, 0, 0]
+    assert arrays.event_ids.tolist() == [1]
+
+
+def test_an_event_is_found_by_its_onset_only_through_its_first_hours() -> None:
+    late = [
+        predicted("m/2000-01", place, float(place), 1.0 if 2 <= place < 12 else 0.0, 0.0)
+        for place in range(40)
+    ]
+    late[2 + ONSET_HOURS] = predicted("m/2000-01", 2 + ONSET_HOURS, 8.0, 1.0, 9.0)
+    early = list(late)
+    early[2 + ONSET_HOURS - 1] = predicted("m/2000-01", 2 + ONSET_HOURS - 1, 7.0, 1.0, 9.0)
+    early[2 + ONSET_HOURS] = predicted("m/2000-01", 2 + ONSET_HOURS, 8.0, 1.0, 0.0)
+
+    late_reading = recall_reading(MAX, "hour-6h", SideArrays.of(late), 0.0)
+    early_reading = recall_reading(MAX, "hour-6h", SideArrays.of(early), 0.0)
+
+    assert int(onset_windows(SideArrays.of(late), ONSET_HOURS).sum()) == ONSET_HOURS
+    assert (late_reading.found, late_reading.onset) == (1, 0)
+    assert (early_reading.found, early_reading.onset) == (1, 1)
+
+
+def test_an_events_onset_is_its_first_scored_window_across_months() -> None:
+    answers = [
+        predicted("m/2000-01", 0, 10.0, 0.0, 0.0),
+        predicted("m/2000-01", 1, 11.0, 1.0, 0.0),
+        predicted("m/2000-02", 0, 15.0, 1.0, 0.0),
+        predicted("m/2000-02", 1, 17.0, 1.0, 0.0),
+    ]
+
+    assert onset_windows(SideArrays.of(answers), 6).tolist() == [False, True, True, False]
+
+
+def test_the_averaged_reading_is_the_mean_of_the_events_found_over_the_shares() -> None:
+    arrays = SideArrays.of(ranked_answers(3, ties=False))
+
+    reading = recall_reading(MEAN, "bins-24h", arrays, 1.5)
+
+    counts = [found_count(arrays, share) for share in AVERAGED_SHARES]
+    assert reading.events == 5
+    assert reading.averaged == pytest.approx(sum(counts) / len(counts))
+    assert reading.excess == reading.found - 1.5
+
+
+def test_chance_turns_every_arm_by_the_same_offsets() -> None:
+    arrays = SideArrays.of(ranked_answers(4, ties=False))
+    events_high = replace(arrays, scores=arrays.scores + 10.0 * (arrays.events > 0))
+
+    chance = chance_found(
+        {(MAX, "hour-6h"): arrays, (MEAN, "hour-6h"): arrays, (MAX, "bins-6h"): events_high},
+        rotations=200,
+        seed=1,
+    )
+
+    assert chance[(MAX, "hour-6h")] == chance[(MEAN, "hour-6h")]
+    assert 0.0 < chance[(MAX, "bins-6h")] < found_count(events_high, 0.01) == 5
+
+
+def test_chance_refuses_arms_over_other_windows() -> None:
+    arrays = SideArrays.of(ranked_answers(4, ties=False))
+    other = replace(arrays, events=np.roll(arrays.events, 1))
+
+    with pytest.raises(ValueError, match="other windows or events"):
+        chance_found({(MAX, "hour-6h"): arrays, (MEAN, "hour-6h"): other}, rotations=2, seed=1)
+
+
+def reading(detector: str, arm: str, found: int, chance: float, averaged: float) -> RecallReading:
+    return RecallReading(
+        detector=detector,
+        arm=arm,
+        events=29,
+        found=found,
+        chance=chance,
+        averaged=averaged,
+        onset=0,
+    )
+
+
+def test_the_choice_takes_the_largest_excess_then_the_found_then_the_plainest() -> None:
+    spread = reading(MAX, "hour-6h", 20, 12.0, 20.0)
+    skilled = reading(MEAN, "bins-72h", 18, 3.0, 15.0)
+    assert choose_by_recall([spread, skilled]) == skilled
+    more = reading(MAX, "bins-6h", 19, 4.0, 19.0)
+    assert choose_by_recall([skilled, more]) == more
+    better_averaged = reading(MEAN, "bins-72h", 19, 4.0, 19.5)
+    assert choose_by_recall([more, better_averaged]) == better_averaged
+    tied = [
+        reading(MEAN, "hour-6h", 19, 4.0, 19.0),
+        reading(MAX, "bins-6h", 19, 4.0, 19.0),
+        reading(MAX, "hour-24h", 19, 4.0, 19.0),
+        reading(MAX, "hour-6h", 19, 4.0, 19.0),
+    ]
+    assert choose_by_recall(tied) == tied[3]
+    assert choose_by_recall(tied[:3]) == tied[0]
+    assert choose_by_recall(tied[1:3]) == tied[1]
+    with pytest.raises(ValueError, match="no arm"):
+        choose_by_recall([])
+
+
+def selection_run(directory: Path, *, good: str) -> None:
+    (directory / "conditions.json").write_text(json.dumps(CONDITIONS))
+    (directory / f"truncated-{SELECT}.csv").write_text("unit,position,ends_at,target\n")
+    for arm in ("hour-6h", "bins-6h"):
+        for detector in (MAX, MEAN):
+            write_cell(
+                directory,
+                SELECT,
+                LOCAL,
+                detector,
+                arm,
+                NO_SEED,
+                answers_scoring(arm == good and detector == MEAN, 1),
+            )
+
+
+def test_the_choice_by_recall_is_written_from_its_csv(tmp_path: Path) -> None:
+    run, out = tmp_path / "run", tmp_path / "out"
+    run.mkdir()
+    selection_run(run, good="bins-6h")
+
+    text = choose_recall(run, out, rotations=50)
+
+    with (out / "recall-select.csv").open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 4
+    assert [(r["detector"], r["arm"]) for r in rows if r["chosen"] == "1"] == [(MEAN, "bins-6h")]
+    chosen = json.loads((out / "recall-select-chosen.json").read_text())
+    assert (chosen["arm"], chosen["rotations"], chosen["trial"]) == ("bins-6h", 50, None)
+    assert chosen["excess"] == pytest.approx(chosen["found"] - chosen["chance"])
+    assert (out / "recall-select.md").read_text() == text + "\n"
+    assert chosen["section"] == SELECT
+    assert "| mean | bins-6h | 1.000 (4) |" in text
+
+
+def test_a_trial_turns_the_scores_first_and_writes_beside_the_reading(tmp_path: Path) -> None:
+    run, out = tmp_path / "run", tmp_path / "out"
+    run.mkdir()
+    selection_run(run, good="bins-6h")
+
+    first = choose_recall(run, out, rotations=20, trial=7)
+
+    assert (out / "recall-select-trial-7.csv").exists()
+    assert not (out / "recall-select.csv").exists()
+    assert choose_recall(run, out, rotations=20, trial=7) == first
+
+
+def test_the_selection_answers_refuse_a_missing_arm_or_other_windows(tmp_path: Path) -> None:
+    selection_run(tmp_path, good="bins-6h")
+    assert len(selection_answers(tmp_path)) == 4
+    name = cell_name(SELECT, LOCAL, MAX, "hour-6h", NO_SEED)
+    write_answers(tmp_path / "answers" / f"{name}.csv", answers_scoring(False, 1)[1:])
+    with pytest.raises(SystemExit, match="scores other windows"):
+        selection_answers(tmp_path)
+    (tmp_path / "answers" / f"{name}.csv").unlink()
+    with pytest.raises(SystemExit, match="is missing"):
+        selection_answers(tmp_path)
+
+
+def test_main_routes_the_choice_by_recall(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run, out = tmp_path / "run", tmp_path / "out"
+    run.mkdir()
+    selection_run(run, good="hour-6h")
+
+    main(
+        [
+            "choose-recall",
+            *("--dir", str(run), "--out", str(out)),
+            *("--section", SELECT, "--rotations", "10"),
+        ]
+    )
+
+    assert "| Detector | Arm |" in capsys.readouterr().out
+
+
+def labelled_in(month: str, position: int, target: float) -> LabelledWindow:
+    return LabelledWindow(
+        window=TaskWindow(unit=UnitKey(f"ESA-Mission1/{month}"), position=position, ends_at=1.0),
+        target=target,
+    )
+
+
+def test_the_early_side_fits_from_the_cut_and_scores_the_months_before_it() -> None:
+    windows = [
+        labelled_in("2003-11", 0, 0.0),
+        labelled_in("2003-12", 1, 7.0),
+        labelled_in("2004-01", 2, 7.0),
+        labelled_in("2004-02", 3, 0.0),
+    ]
+
+    fit, scored = early_sides(windows, "2004-01")
+
+    assert fit == windows[2:]
+    assert scored == windows[:2]
+
+
+def test_the_early_side_refuses_a_cut_with_no_event_before_it_or_nothing_after() -> None:
+    with pytest.raises(SystemExit, match="no event before it"):
+        early_sides([labelled_in("2003-12", 0, 0.0), labelled_in("2004-01", 1, 1.0)], "2004-01")
+    with pytest.raises(SystemExit, match="nothing after it"):
+        early_sides([labelled_in("2003-12", 0, 1.0)], "2004-01")
+
+
+def test_the_early_section_is_chosen_on_from_its_own_cells(tmp_path: Path) -> None:
+    (tmp_path / "conditions.json").write_text(json.dumps(CONDITIONS))
+    (tmp_path / f"truncated-{EARLY}.csv").write_text("unit,position,ends_at,target\n")
+    for arm in ("hour-6h", "bins-6h"):
+        for detector in (MAX, MEAN):
+            write_cell(
+                tmp_path,
+                EARLY,
+                LOCAL,
+                detector,
+                arm,
+                NO_SEED,
+                answers_scoring(arm == "hour-6h" and detector == MAX, 1),
+            )
+    with pytest.raises(SystemExit, match="select-local"):
+        selection_answers(tmp_path)
+
+    choose_recall(tmp_path, tmp_path / "out", section=EARLY, rotations=10)
+
+    chosen = json.loads((tmp_path / "out" / "recall-early-chosen.json").read_text())
+    assert (chosen["detector"], chosen["arm"], chosen["section"]) == (MAX, "hour-6h", EARLY)
+
+
+def test_every_window_touching_an_event_left_out_is_neither_event_nor_normal() -> None:
+    answers = answers_scoring(True, 1)
+    # The window ending at 102 carries event 1's number but also touches event 2, and the one
+    # ending at 108 carries event 2's number and touches nothing left out beside it.
+    overlaps = {102.0: (1, 2), 107.0: (2,)}
+    left_out = LeftOut(classes={"class_x": [2, 3]}, overlaps=lambda w: overlaps.get(w.ends_at, ()))
+
+    kept_windows = without_events(answers, left_out)
+
+    dropped = {p.window.ends_at for p in answers} - {p.window.ends_at for p in kept_windows}
+    assert dropped == {102.0, 107.0, 112.0}
+    assert {int(p.target) for p in kept_windows} == {0, 4}
+    assert without_events(answers, None) == answers
+    assert left_out.stem == "-without-class_x"
+
+
+def test_events_left_out_by_class_need_a_task_and_an_event_of_each(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import scripts.telemetry_channel_local_report as report
+
+    class Truth:
+        def events_of(self, window: TaskWindow) -> tuple[int, ...]:
+            return (1,)
+
+    annotations = {1: ("class_22", "Global"), 2: ("class_7", "Local"), 3: ("class_22", "Local")}
+    assert classes_left_out(None, []) is None
+    with pytest.raises(SystemExit, match="--task"):
+        classes_left_out(None, ["class_22"])
+    monkeypatch.setattr(report, "ground_truth_of", lambda task: (Truth(), annotations))
+    left_out = classes_left_out("t", ["class_22"])
+    assert left_out is not None
+    assert left_out.classes == {"class_22": [1, 3]}
+    assert left_out.events == {1, 3}
+    with pytest.raises(SystemExit, match="no event of class_9"):
+        classes_left_out("t", ["class_9"])
+
+
+def test_the_choice_leaves_out_the_events_named_apart_and_records_what_it_removed(
+    tmp_path: Path,
+) -> None:
+    run, out = tmp_path / "run", tmp_path / "out"
+    run.mkdir()
+    selection_run(run, good="bins-6h")
+    left_out = LeftOut(classes={"class_x": [1, 2, 9]}, overlaps=lambda w: ())
+
+    choose_recall(run, out, rotations=10, left_out=left_out)
+    choose_recall(run, out, rotations=10)
+
+    with (out / "recall-select-without-class_x.csv").open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert {r["events"] for r in rows} == {"2"}
+    chosen = json.loads((out / "recall-select-without-class_x-chosen.json").read_text())
+    assert chosen["left_out"] == {
+        "classes": ["class_x"],
+        "events_removed": 2,
+        "windows_removed": 2,
+    }
+    assert json.loads((out / "recall-select-chosen.json").read_text())["left_out"] == {}

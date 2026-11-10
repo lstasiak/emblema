@@ -30,18 +30,16 @@ from scripts.telemetry_ceiling_report import (
     event_signal,
     excess_over_rotations,
     family_found,
-    found_mask,
     fused,
     fused_over_repeats,
     month_referenced,
-    month_slices,
     queues_finer_cells,
     reopens_perturbation_pretext,
     resolution_found,
     rotated_counts,
     rotated_targets,
-    rotation_order,
 )
+from scripts.telemetry_channel_local_report import found_mask, month_slices, rotation_order
 
 
 def structure_of_events(events: list[int], units: list[int]) -> Structure:

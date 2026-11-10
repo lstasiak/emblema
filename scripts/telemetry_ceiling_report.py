@@ -55,6 +55,9 @@ from scripts.telemetry_channel_local_report import (
     MAX,
     UNFOUND_BEFORE,
     event_annotations,
+    found_mask,
+    month_slices,
+    rotation_order,
     window_scores,
 )
 from scripts.telemetry_context_report import read_truncated
@@ -219,45 +222,6 @@ def candidate_family(candidate: str) -> str | None:
     if candidate.partition("@")[0] in FREE_CANDIDATES:
         return OTHER
     raise ValueError(f"{candidate}: no family claims this candidate")
-
-
-def month_slices(units: Ints) -> list[tuple[int, int]]:
-    """Where each unit's run of windows starts and how long it is.
-
-    Raises:
-        ValueError: If a unit's windows are not contiguous.
-    """
-    changes = np.flatnonzero(np.diff(units)) + 1
-    starts = np.concatenate(([0], changes))
-    lengths = np.diff(np.concatenate((starts, [len(units)])))
-    if len(set(units[starts].tolist())) != len(starts):
-        raise ValueError("a unit's windows are not contiguous")
-    return list(zip(starts.tolist(), lengths.tolist(), strict=True))
-
-
-def rotation_order(slices: Sequence[tuple[int, int]], draws: np.random.Generator) -> Ints:
-    """An index that turns every month by a random offset of at least one window."""
-    parts = []
-    for start, length in slices:
-        offset = int(draws.integers(1, length)) if length > 1 else 0
-        parts.append(start + (np.arange(length) + offset) % length)
-    return np.concatenate(parts)
-
-
-def found_mask(scores: Floats, events: Ints, event_ids: Ints, share: float) -> Bools:
-    """Which of ``event_ids`` hold a window above the alarm at ``share`` of normal windows.
-
-    The alarm stops before the normal window that would flag more than ``share`` of them, so a
-    window ties with that normal window and is not flagged, as the harness counts it.
-    """
-    normal = scores[events == 0]
-    allowed = int(share * len(normal))
-    if allowed >= len(normal):
-        boundary = -np.inf
-    else:
-        boundary = float(np.partition(normal, len(normal) - 1 - allowed)[len(normal) - 1 - allowed])
-    flagged = np.unique(events[(scores > boundary) & (events > 0)])
-    return np.isin(event_ids, flagged)
 
 
 def detector_found(

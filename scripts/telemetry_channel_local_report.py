@@ -10,7 +10,7 @@ direction over them, over them beside the encoder's state of the hour, and trees
 are the direction and the whitened distance over the untrained encoder's states, and the cells'
 farthest feature, refitted here on the same windows.
 
-Three commands, so a reading stays blind until the choice is made:
+Four commands, so a reading stays blind until the choice is made:
 
 - ``measure``: the departures of every loaded window under each span and feature set, kept
   on disk, and every cell's answers of a section (``select`` chooses on the later fitting
@@ -18,6 +18,15 @@ Three commands, so a reading stays blind until the choice is made:
 - ``choose``: for each family and detector, the arm with the highest mean area on the
   selection months; within 0.01 of it the shorter span, then the hour's summary before the
   bins.
+- ``choose-recall``: of the no-model arms, the one finding the most events at 1 % of normal
+  windows on a choosing section above those it finds with every month's scores turned, the
+  measure the first mission's verdict is read by less its chance; beside, the events found
+  averaged over 0.5 to 2 % and by their first six hours. ``--trial`` turns every month's scores
+  first, so the whole path runs at chance before the choice is declared. The sections that
+  choose are the selection months and the months before them (``early``), which ``measure``
+  scores by the no-model arms alone, the floor and the alarm set on the selection months.
+  ``--leave-out`` names event classes whose windows are not scored, so a class that one period
+  holds and the validation months hardly do does not decide the choice.
 - ``read``: the chosen arms on the validation months against their controls, the two declared
   readings under Holm; which events each cell finds, their locality, and how many of its top
   false alarms follow an event.
@@ -33,7 +42,7 @@ import json
 import sys
 import warnings
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import fmean, stdev
@@ -48,7 +57,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.catalog.adapters.readers.esa_ad_raw import ORIGIN_SECONDS
+from emblema.evaluation.adapters.readers.esa_ad_raw_ground_truth import EsaAdRawGroundTruth
 from emblema.evaluation.domain.labels.anomaly_scheme import AnomalyScheme
+from emblema.evaluation.domain.labels.labelled_window import LabelledWindow
+from emblema.evaluation.domain.labels.task_window import TaskWindow
 from emblema.evaluation.domain.scoring.anomaly_ranking import AnomalyRanking
 from emblema.evaluation.domain.scoring.window_prediction import WindowPrediction
 from emblema.evaluation.domain.statistics.detection_threshold import DetectionThreshold
@@ -89,8 +101,14 @@ from scripts.telemetry_context_report import (
 from scripts.telemetry_supervised_reference import month_of
 
 Floats = NDArray[np.float64]
+Ints = NDArray[np.int64]
+Bools = NDArray[np.bool_]
 
-SECTIONS = (SELECT, REFIT)
+# The months before the selection months, read by the no-model arms alone with the floor and the
+# alarm set on the selection months: a second side to choose on, which no arm has been read on.
+EARLY = "early"
+SECTIONS = (SELECT, REFIT, EARLY)
+CHOOSING = (SELECT, EARLY)
 # What the windows are read through: each channel's departure from its own recent hours with no
 # model, the departures taught the events, or the controls over the states and the cells.
 LOCAL, TAUGHT, STATES, CELLS = "local", "taught", "states", "cells"
@@ -565,6 +583,425 @@ def choice_table(choices: Sequence[Choice]) -> str:
     )
 
 
+# The choice by the events found, the measure the first mission's verdict is read by. An event
+# lasts eight hours at the median and up to fifteen days, so a score drawn at random per window
+# finds about a third of the selection months' events at 1 % of false alarms, and how many a
+# detector finds by chance depends on how its alarms are spread: the arms are chosen by the
+# events found above those found when every month's scores are turned, the same turn for every
+# arm. Beside: the most found averaged over four shares of normal windows, so a choice that rests
+# on one operating point shows; and the events found by their first six hours (the standard span),
+# where a long event has no more hours than a typical one to cross the alarm by chance.
+AVERAGED_SHARES = (0.005, 0.01, 0.015, 0.02)
+ONSET_HOURS = 6
+ROTATIONS = 1000
+ROTATION_SEED = 1
+RECALL_COLUMNS = (
+    "detector",
+    "arm",
+    "events",
+    "found",
+    "chance",
+    "excess",
+    "averaged",
+    "onset",
+    "chosen",
+)
+
+
+def month_slices(units: Ints) -> list[tuple[int, int]]:
+    """Where each unit's run of windows starts and how long it is.
+
+    Raises:
+        ValueError: If a unit's windows are not contiguous.
+    """
+    changes = np.flatnonzero(np.diff(units)) + 1
+    starts = np.concatenate(([0], changes))
+    lengths = np.diff(np.concatenate((starts, [len(units)])))
+    if len(set(units[starts].tolist())) != len(starts):
+        raise ValueError("a unit's windows are not contiguous")
+    return list(zip(starts.tolist(), lengths.tolist(), strict=True))
+
+
+def rotation_order(slices: Sequence[tuple[int, int]], draws: np.random.Generator) -> Ints:
+    """An index that turns every month by a random offset of at least one window."""
+    parts = []
+    for start, length in slices:
+        offset = int(draws.integers(1, length)) if length > 1 else 0
+        parts.append(start + (np.arange(length) + offset) % length)
+    return np.concatenate(parts)
+
+
+def alarm_boundary(scores: Floats, events: Ints, share: float) -> float:
+    """The score a window must pass to be flagged at ``share`` of the normal windows.
+
+    The alarm stops before the normal window that would flag more than ``share`` of them, so a
+    window that ties with that normal window is not flagged, as the harness counts it.
+    """
+    normal = scores[events == 0]
+    allowed = int(share * len(normal))
+    if allowed >= len(normal):
+        return -np.inf
+    return float(np.partition(normal, len(normal) - 1 - allowed)[len(normal) - 1 - allowed])
+
+
+def found_mask(scores: Floats, events: Ints, event_ids: Ints, share: float) -> Bools:
+    """Which of ``event_ids`` hold a window above the alarm at ``share`` of normal windows."""
+    flagged = np.unique(events[(scores > alarm_boundary(scores, events, share)) & (events > 0)])
+    return np.isin(event_ids, flagged)
+
+
+@dataclass(frozen=True)
+class SideArrays:
+    """One arm's answers on a side as arrays, the windows by unit and then by place.
+
+    Attributes:
+        units: Each window's unit, numbered in the units' order.
+        ends: Each window's end, in hours.
+        events: Each window's event, nought for none.
+        scores: Each window's score.
+    """
+
+    units: Ints
+    ends: Floats
+    events: Ints
+    scores: Floats
+
+    @classmethod
+    def of(cls, predictions: Sequence[WindowPrediction]) -> SideArrays:
+        rows = sorted(predictions, key=lambda p: (str(p.window.unit), p.window.position))
+        names = sorted({str(p.window.unit) for p in rows})
+        number = {name: place for place, name in enumerate(names)}
+        return cls(
+            units=np.asarray([number[str(p.window.unit)] for p in rows], dtype=np.int64),
+            ends=np.asarray([p.window.ends_at for p in rows], dtype=np.float64),
+            events=np.asarray([int(p.target) for p in rows], dtype=np.int64),
+            scores=np.asarray([p.predicted for p in rows], dtype=np.float64),
+        )
+
+    def turned(self, order: Ints) -> SideArrays:
+        """The same windows with the scores taken in ``order``."""
+        return replace(self, scores=self.scores[order])
+
+    @property
+    def event_ids(self) -> Ints:
+        return np.unique(self.events[self.events > 0])
+
+
+def onset_windows(arrays: SideArrays, hours: int) -> Bools:
+    """Whether each window ends within ``hours`` of its event's first scored window's end.
+
+    The onset is the first window the side scores, which for an event begun before the side's
+    first month is not the event's own.
+    """
+    first = {
+        int(event): float(arrays.ends[arrays.events == event].min()) for event in arrays.event_ids
+    }
+    starts = np.asarray([first.get(int(event), np.inf) for event in arrays.events])
+    return (arrays.events > 0) & (arrays.ends < starts + hours)
+
+
+def found_count(arrays: SideArrays, share: float, among: Bools | None = None) -> int:
+    """How many events the alarm at ``share`` finds, by the windows ``among`` names if given."""
+    flagged = arrays.scores > alarm_boundary(arrays.scores, arrays.events, share)
+    flagged &= arrays.events > 0
+    if among is not None:
+        flagged &= among
+    return len(np.unique(arrays.events[flagged]))
+
+
+def chance_found(
+    arms: Mapping[tuple[str, str], SideArrays], *, rotations: int, seed: int
+) -> dict[tuple[str, str], float]:
+    """Each arm's events found on average when every month's scores are turned, one turn for all.
+
+    Raises:
+        ValueError: If the arms do not hold the same windows and events.
+    """
+    first = next(iter(arms.values()))
+    for key, arrays in arms.items():
+        same = np.array_equal(arrays.units, first.units) and np.array_equal(
+            arrays.events, first.events
+        )
+        if not same:
+            raise ValueError(f"{key[0]} {key[1]} holds other windows or events than the first")
+    slices = month_slices(first.units)
+    draws = np.random.default_rng(seed)
+    totals = dict.fromkeys(arms, 0)
+    for _ in range(rotations):
+        order = rotation_order(slices, draws)
+        for key, arrays in arms.items():
+            totals[key] += int(
+                found_mask(
+                    arrays.scores[order],
+                    arrays.events,
+                    arrays.event_ids,
+                    AnomalyRanking.PRODUCT_FALSE_ALARM_SHARE,
+                ).sum()
+            )
+    return {key: total / rotations for key, total in totals.items()}
+
+
+@dataclass(frozen=True)
+class RecallReading:
+    """An arm's events found on a choosing section.
+
+    Attributes:
+        detector: How the channels' departures become the window's score.
+        arm: The feature set and span.
+        events: The events the side scores.
+        found: The events found at the product's share of false alarms.
+        chance: The events found on average with every month's scores turned.
+        averaged: The events found, averaged over ``AVERAGED_SHARES``.
+        onset: The events found by their first ``ONSET_HOURS`` at the product's share.
+    """
+
+    detector: str
+    arm: str
+    events: int
+    found: int
+    chance: float
+    averaged: float
+    onset: int
+
+    @property
+    def excess(self) -> float:
+        return self.found - self.chance
+
+
+def recall_reading(detector: str, arm: str, arrays: SideArrays, chance: float) -> RecallReading:
+    share = AnomalyRanking.PRODUCT_FALSE_ALARM_SHARE
+    return RecallReading(
+        detector=detector,
+        arm=arm,
+        events=len(arrays.event_ids),
+        found=found_count(arrays, share),
+        chance=chance,
+        averaged=fmean(found_count(arrays, each) for each in AVERAGED_SHARES),
+        onset=found_count(arrays, share, onset_windows(arrays, ONSET_HOURS)),
+    )
+
+
+def choose_by_recall(readings: Sequence[RecallReading]) -> RecallReading:
+    """The reading with the largest excess over chance; then the most found and the averaged.
+
+    Among readings alike in all three the plainest arm stands: the shorter span, the hour before
+    the bins, the largest channel before the mean.
+
+    Raises:
+        ValueError: If there is no reading.
+    """
+    if not readings:
+        raise ValueError("no arm to choose from")
+
+    def order(reading: RecallReading) -> tuple[float, int, float, int, int, int]:
+        arm = Arm.parse(reading.arm)
+        return (
+            round(reading.excess, 9),
+            reading.found,
+            round(reading.averaged, 9),
+            -arm.hours,
+            -FEATURE_SETS.index(arm.features),
+            -LOCAL_DETECTORS.index(reading.detector),
+        )
+
+    return max(readings, key=order)
+
+
+def selection_answers(
+    directory: Path, section: str = SELECT
+) -> dict[tuple[str, str], list[WindowPrediction]]:
+    """Every no-model arm's answers on a choosing ``section``, by detector and arm.
+
+    Raises:
+        SystemExit: If an arm's cell is missing, or two arms score other windows or other events.
+    """
+    conditions = json.loads((directory / "conditions.json").read_text())
+    dropped = read_truncated(directory, section)
+    answers: dict[tuple[str, str], list[WindowPrediction]] = {}
+    for arm in arms_of(conditions["features"], conditions["spans"]):
+        for detector in LOCAL_DETECTORS:
+            name = cell_name(section, LOCAL, detector, arm.name, NO_SEED)
+            path = directory / "answers" / f"{name}.csv"
+            if not path.exists():
+                raise SystemExit(f"{name} is missing: every arm is read before one is chosen")
+            answers[(detector, arm.name)] = kept(read_answers(path), dropped)
+    keys = {
+        key: sorted((str(p.window.unit), p.window.position, p.target) for p in rows)
+        for key, rows in answers.items()
+    }
+    first = next(iter(keys.values()))
+    for key, held in keys.items():
+        if held != first:
+            raise SystemExit(f"{key[0]} {key[1]} scores other windows or events than the first")
+    return answers
+
+
+@dataclass(frozen=True)
+class LeftOut:
+    """Events not scored by a choice, and how to tell the windows they touch.
+
+    A window's target names only the lowest event it overlaps, so the windows are told by every
+    event they overlap.
+
+    Attributes:
+        classes: The event numbers of each class left out.
+        overlaps: Every scored event a window overlaps.
+    """
+
+    classes: Mapping[str, Sequence[int]]
+    overlaps: Callable[[TaskWindow], Sequence[int]]
+
+    @property
+    def events(self) -> frozenset[int]:
+        return frozenset(number for each in self.classes.values() for number in each)
+
+    @property
+    def stem(self) -> str:
+        return "".join(f"-without-{kind}" for kind in sorted(self.classes))
+
+
+def without_events(
+    predictions: Sequence[WindowPrediction], left_out: LeftOut | None
+) -> list[WindowPrediction]:
+    """The predictions less every window touching an event left out: neither event nor normal."""
+    if left_out is None:
+        return list(predictions)
+    events = left_out.events
+    return [
+        p
+        for p in predictions
+        if int(p.target) not in events and not events.intersection(left_out.overlaps(p.window))
+    ]
+
+
+def recall_readings(
+    directory: Path,
+    *,
+    section: str = SELECT,
+    rotations: int = ROTATIONS,
+    trial: int | None = None,
+    left_out: LeftOut | None = None,
+) -> list[RecallReading]:
+    """Each no-model arm's events found on a choosing ``section``, with its chance beside.
+
+    The windows of the events ``left_out`` are not scored, so they neither find nor raise alarms.
+
+    With ``trial``, every month's scores are first turned by an offset drawn from that seed, the
+    same for every arm, so the whole reading runs at chance before the choice is declared.
+    """
+    answers = selection_answers(directory, section)
+    arms = {key: SideArrays.of(without_events(rows, left_out)) for key, rows in answers.items()}
+    if trial is not None:
+        first = next(iter(arms.values()))
+        order = rotation_order(month_slices(first.units), np.random.default_rng(trial))
+        arms = {key: arrays.turned(order) for key, arrays in arms.items()}
+    chance = chance_found(arms, rotations=rotations, seed=ROTATION_SEED)
+    return [
+        recall_reading(detector, arm, arrays, chance[(detector, arm)])
+        for (detector, arm), arrays in arms.items()
+    ]
+
+
+def recall_rows(readings: Sequence[RecallReading]) -> list[dict[str, object]]:
+    chosen = choose_by_recall(readings)
+    return [
+        {
+            "detector": r.detector,
+            "arm": r.arm,
+            "events": r.events,
+            "found": r.found,
+            "chance": f"{r.chance:.3f}",
+            "excess": f"{r.excess:.3f}",
+            "averaged": f"{r.averaged:.2f}",
+            "onset": r.onset,
+            "chosen": int(r == chosen),
+        }
+        for r in readings
+    ]
+
+
+def recall_table(rows: Sequence[Mapping[str, str]]) -> str:
+    """The choice's table from its CSV: events of the side's, as a share and a count."""
+
+    def share(count: str, events: str) -> str:
+        return f"{float(count) / int(events):.3f} ({float(count):g})"
+
+    return table(
+        ("Detector", "Arm", "Found @1 %", "Chance", "Excess", "Averaged", "Onset", "Chosen"),
+        [
+            (
+                row["detector"],
+                row["arm"],
+                share(row["found"], row["events"]),
+                share(row["chance"], row["events"]),
+                share(row["excess"], row["events"]),
+                share(row["averaged"], row["events"]),
+                share(row["onset"], row["events"]),
+                "yes" if row["chosen"] == "1" else "",
+            )
+            for row in rows
+        ],
+    )
+
+
+def removed_from(directory: Path, section: str, left_out: LeftOut | None) -> dict[str, object]:
+    """What a choice left out of ``section``: the classes, and the events and windows removed."""
+    if left_out is None:
+        return {}
+    rows = next(iter(selection_answers(directory, section).values()))
+    kept_rows = without_events(rows, left_out)
+    events = left_out.events
+    touched = {
+        number
+        for p in rows
+        for number in (int(p.target), *left_out.overlaps(p.window))
+        if number in events
+    }
+    return {
+        "classes": sorted(left_out.classes),
+        "events_removed": len(touched),
+        "windows_removed": len(rows) - len(kept_rows),
+    }
+
+
+def choose_recall(
+    directory: Path,
+    out: Path,
+    *,
+    section: str = SELECT,
+    rotations: int = ROTATIONS,
+    trial: int | None = None,
+    left_out: LeftOut | None = None,
+) -> str:
+    """Write the choice by events found to ``out``: the CSV, then its table and the chosen arm."""
+    out.mkdir(parents=True, exist_ok=True)
+    readings = recall_readings(
+        directory, section=section, rotations=rotations, trial=trial, left_out=left_out
+    )
+    stem = f"recall-{section}{left_out.stem if left_out else ''}"
+    if trial is not None:
+        stem += f"-trial-{trial}"
+    path = out / f"{stem}.csv"
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=RECALL_COLUMNS)
+        writer.writeheader()
+        writer.writerows(recall_rows(readings))
+    with path.open(newline="") as handle:
+        text = recall_table(list(csv.DictReader(handle)))
+    (out / f"{stem}.md").write_text(text + "\n")
+    chosen = choose_by_recall(readings)
+    record_of = {
+        **chosen.__dict__,
+        "excess": chosen.excess,
+        "section": section,
+        "left_out": removed_from(directory, section, left_out),
+        "rotations": rotations,
+        "trial": trial,
+    }
+    (out / f"{stem}-chosen.json").write_text(json.dumps(record_of, indent=2) + "\n")
+    return text
+
+
 def chosen_of(directory: Path) -> dict[tuple[str, str], str]:
     """The chosen arm of each family and detector, as ``choose`` wrote them.
 
@@ -894,10 +1331,27 @@ def localities_of(task: str) -> dict[int, str]:
     Raises:
         SystemExit: If the corpus is not downloaded or the numbering does not match the truth's.
     """
+    return {number: locality for number, (_, locality) in annotations_of(task).items()}
+
+
+def annotations_of(task: str) -> dict[int, tuple[str, str]]:
+    """The class and locality of every scored event of the task's mission, checked.
+
+    Raises:
+        SystemExit: If the corpus is not downloaded or the numbering does not match the truth's.
+    """
+    return ground_truth_of(task)[1]
+
+
+def ground_truth_of(task: str) -> tuple[EsaAdRawGroundTruth, dict[int, tuple[str, str]]]:
+    """The task's ground truth and the class and locality of its mission's events, checked.
+
+    Raises:
+        SystemExit: If the corpus is not downloaded or the numbering does not match the truth's.
+    """
     from emblema.catalog.adapters.readers.esa_ad_raw import EsaAdRawCorpusReader
     from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
     from emblema.entrypoints.known_ground_truths import KnownGroundTruths
-    from emblema.evaluation.adapters.readers.esa_ad_raw_ground_truth import EsaAdRawGroundTruth
     from scripts.raw_corpora import raw_root
 
     mission = KnownTasks.named(task).unit_prefix.rstrip("/")
@@ -914,7 +1368,24 @@ def localities_of(task: str) -> dict[int, str]:
     annotations = event_annotations(root, mission, channels)
     if {n: kind for n, (kind, _) in annotations.items()} != dict(truth.classes_of(mission)):
         raise SystemExit("the events numbered here are not the ground truth's")
-    return {number: locality for number, (_, locality) in annotations.items()}
+    return truth, annotations
+
+
+def early_sides(
+    windows: Sequence[LabelledWindow], select_from: str
+) -> tuple[list[LabelledWindow], list[LabelledWindow]]:
+    """The fitting side's windows from ``select_from`` on, which fit, and those before, scored.
+
+    Nothing is taught, so an event on both sides of the cut is scored where it lies before it.
+
+    Raises:
+        SystemExit: If the months before the cut hold no event or none lie from it on.
+    """
+    fit = [w for w in windows if month_of(w) >= select_from]
+    scored = [w for w in windows if month_of(w) < select_from]
+    if not fit or not any(AnomalyScheme.is_event(w.target) for w in scored):
+        raise SystemExit(f"a cut at {select_from} leaves no event before it or nothing after it")
+    return fit, scored
 
 
 def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - environment
@@ -930,7 +1401,13 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
     refuse_another_commit(out / "conditions.json", commit)
     bench = bench_of(arguments)
     reader = Reader(bench, arguments.context)
-    fit, scored, taught = reader.sides(arguments.section, arguments.select_from)
+    if arguments.section == EARLY:
+        later, before = early_sides(bench.pool, arguments.select_from)
+        fit = [reader.at[(str(w.window.unit), w.window.position)] for w in later]
+        scored = [reader.at[(str(w.window.unit), w.window.position)] for w in before]
+        taught: list[LabelledWindow] = []
+    else:
+        fit, scored, taught = reader.sides(arguments.section, arguments.select_from)
     widest = max(arguments.spans)
     truncated = truncated_windows(
         [reader.windows[i] for i in scored],
@@ -959,7 +1436,7 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
     refuse_other_conditions(path, conditions)
     held = json.loads(path.read_text()) if path.exists() else {}
     path.write_text(json.dumps({**held, **conditions}, indent=2) + "\n")
-    if arguments.section == SELECT:
+    if arguments.section in CHOOSING:
         arms = arms_of(arguments.features, arguments.spans)
     else:
         arms = refit_arms(chosen_of(out))
@@ -1013,9 +1490,15 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
         )
 
     present = departures.present()
-    states = {seed: reader.states(CONTROL, seed, arguments.device) for seed in arguments.seeds}
+    states: dict[int, Floats] = (
+        {}
+        if arguments.section == EARLY
+        else {seed: reader.states(CONTROL, seed, arguments.device) for seed in arguments.seeds}
+    )
     for arm in arms:
         wanted = arm_cells(arguments.section, [arm], arguments.seeds)
+        if arguments.section == EARLY:
+            wanted = [cell for cell in wanted if cell[0] == LOCAL]
         if all(cell_name(arguments.section, *c) in held_cells for c in wanted):
             continue
         started = time.perf_counter()
@@ -1061,7 +1544,7 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
                 seed=seed if seed != NO_SEED else min(arguments.seeds),
             )
             keep(cell, family, detector, name, seed, answers, started)
-    if arguments.section == REFIT or arguments.controls:
+    if arguments.section == REFIT or (arguments.controls and arguments.section == SELECT):
         for family, detector, seed in control_cells(arguments.seeds):
             cell = cell_name(arguments.section, family, detector, None, seed)
             if cell in held_cells:
@@ -1106,6 +1589,20 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     choosing = commands.add_parser("choose", help="the choice from the selection months")
     choosing.add_argument("--dir", type=Path, required=True)
     choosing.add_argument("--partial", action="store_true")
+    by_recall = commands.add_parser(
+        "choose-recall", help="the no-model arm finding the most events above chance"
+    )
+    by_recall.add_argument("--dir", type=Path, required=True)
+    by_recall.add_argument("--section", choices=CHOOSING, required=True)
+    by_recall.add_argument("--out", type=Path, required=True)
+    by_recall.add_argument("--rotations", type=int, default=ROTATIONS)
+    by_recall.add_argument("--task", help="the task whose event classes --leave-out names")
+    by_recall.add_argument(
+        "--leave-out", nargs="+", default=[], metavar="CLASS", help="event classes not scored"
+    )
+    by_recall.add_argument(
+        "--trial", type=int, metavar="SEED", help="turn every month's scores first"
+    )
     reading = commands.add_parser("read", help="the reading on the validation months")
     reading.add_argument("--dir", type=Path, required=True)
     reading.add_argument("--task", required=True)
@@ -1124,6 +1621,26 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def classes_left_out(task: str | None, kinds: Sequence[str]) -> LeftOut | None:
+    """The events of each class named and the task's overlaps, or nothing when none is named.
+
+    Raises:
+        SystemExit: If classes are named without a task, or a class has no event.
+    """
+    if not kinds:
+        return None
+    if task is None:
+        raise SystemExit("--leave-out names classes of a task: name it with --task")
+    truth, annotations = ground_truth_of(task)
+    events = {
+        kind: sorted(n for n, (each, _) in annotations.items() if each == kind) for kind in kinds
+    }
+    empty = [kind for kind, numbers in events.items() if not numbers]
+    if empty:
+        raise SystemExit(f"no event of {', '.join(empty)} in {task}")
+    return LeftOut(classes=events, overlaps=truth.events_of)
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     arguments = parse_arguments(argv)
     if arguments.command == "measure":
@@ -1136,6 +1653,17 @@ def main(argv: Sequence[str] | None = None) -> None:
         text = choice_table(choices)
         (arguments.dir / "chosen.md").write_text(text + "\n")
         print(text)
+    elif arguments.command == "choose-recall":
+        print(
+            choose_recall(
+                arguments.dir,
+                arguments.out,
+                section=arguments.section,
+                rotations=arguments.rotations,
+                trial=arguments.trial,
+                left_out=classes_left_out(arguments.task, arguments.leave_out),
+            )
+        )
     elif arguments.command == "read":
         print(read_tables(arguments.dir, localities_of(arguments.task), partial=arguments.partial))
     else:
