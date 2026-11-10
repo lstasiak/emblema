@@ -30,6 +30,7 @@ STUBS = {
     '  *" rev-parse HEAD "*) echo "${AT_COMMIT:-"'
     "$COMMIT_HERE"
     '"}"; exit 0;;\n'
+    '  *" --show-toplevel "*) [ -n "${NO_REPO:-}" ] && exit 128; pwd; exit 0;;\n'
     '  *" status "*) echo "${DIRTY:-}"; exit 0;;\n'
     "esac\necho stub; exit 0\n",
     # The Mac's python goes through uv; the arguments before the command are uv's own.
@@ -357,6 +358,16 @@ def test_on_the_mac_a_failed_run_resumes_when_the_script_is_run_again(tmp_path: 
     run_cell(tmp_path, plan, MAC)
 
     assert f"--resume-from {CHECKPOINT}" in calls_of(tmp_path)[before]
+
+
+@pytest.mark.parametrize("env", [{"CELL_ROOT": "", "NO_REPO": "1"}, {"CELL_ROOT": "/no/such"}])
+def test_on_the_mac_a_script_found_outside_a_repository_does_nothing(
+    tmp_path: Path, env: dict[str, str]
+) -> None:
+    done, _ = run_cell(tmp_path, write_plan(tmp_path), MAC, **env)
+
+    assert "no repository" in done.stdout
+    assert calls_of(tmp_path) == []
 
 
 @pytest.mark.parametrize("platform", [COLAB, KAGGLE, MAC])

@@ -245,7 +245,8 @@ if [ -z "${CAFFEINATED:-}" ] && command -v caffeinate > /dev/null; then
   CAFFEINATED=1 exec caffeinate -is /bin/bash "$0" "$@"
 fi
 ROOT=${CELL_ROOT:-@ROOT@}
-cd $ROOT
+# Without a root, cd would go home and the checks below would read whatever is there.
+if [ -z "$ROOT" ] || ! cd "$ROOT"; then echo "no repository here"; exit 0; fi
 C=@COMMIT@
 AT=$(git rev-parse HEAD)
 if [ "$AT" != "$C" ]; then echo "the tree is at $AT, the orders at $C"; exit 0; fi
