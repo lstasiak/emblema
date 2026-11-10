@@ -101,6 +101,27 @@ def test_a_window_over_a_gap_and_an_event_answers_with_the_event(tmp_path: Path)
     }
 
 
+def test_a_window_over_two_events_names_both_and_answers_with_the_lower(tmp_path: Path) -> None:
+    second_over_first = LABELS.replace(
+        "id_3,channel_42,2000-01-02T06:15:00.000Z,2000-01-02T06:45:00.000Z",
+        "id_3,channel_42,2000-01-01T11:15:00.000Z,2000-01-01T11:45:00.000Z",
+    )
+    truth = esa(tmp_path, second_over_first, TYPES)
+    both, first, none = (
+        window(f"{MISSION}/2000-01", 0, 12.0),
+        window(f"{MISSION}/2000-01", 1, 11.0),
+        window(f"{MISSION}/2000-01", 2, 21.0),
+    )
+
+    assert truth.events_of(both) == (1, 2)
+    assert truth.truths_of("esa_ad_raw", [both])[both] == 1.0
+    assert truth.events_of(first) == (1,)
+    # The window over the event on the unread channel alone overlaps no scored event.
+    assert truth.events_of(none) == ()
+    with pytest.raises(UnknownGroundTruthError, match="not a month of a mission read here"):
+        truth.events_of(window("ESA-Mission9/2000-01", 0, 12.0))
+
+
 def test_a_month_of_a_mission_not_read_is_refused(tmp_path: Path) -> None:
     truth = esa(tmp_path, LABELS, TYPES)
 
