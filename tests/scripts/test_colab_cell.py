@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from scripts.colab_cell import cell_of, faults_of, main, read_plan
+from scripts.cell_parts import COLAB, KAGGLE, MAC, Platform, faults_of, write_cells
+from scripts.colab_cell import cell_of, main, read_plan
 
 COMMIT = "a" * 40
 ORDER_A, ORDER_B = "1" * 64, "2" * 64
@@ -20,19 +21,35 @@ STUBS = {
     # A step named by HANG never ends, as a stalled server leaves it.
     "git": 'case " $* " in *" clone "*)\n'
     '  [ "${HANG:-}" = clone ] && exec sleep 100000\n'
-    "  mkdir -p emblema/.git; exit 0;;\nesac\necho stub; exit 0\n",
+    "  mkdir -p emblema/.git; exit 0;;\n"
+    '  *" rev-parse HEAD "*) echo "${AT_COMMIT:-"'
+    "$COMMIT_HERE"
+    '"}"; exit 0;;\n'
+    '  *" status "*) echo "${DIRTY:-}"; exit 0;;\n'
+    "esac\necho stub; exit 0\n",
+    # The Mac's python goes through uv; the arguments before the command are uv's own.
+    "uv": 'shift 4\nexec "$(dirname "$0")/python" "$@"\n',
+    "caffeinate": 'echo caffeinated >> "$CALLS.caffeinate"\nshift\nexec "$@"\n',
     "pip": '[ "${HANG:-}" = install ] && exec sleep 100000\nexit 0\n',
     "python": 'case "$*" in\n'
-    '  *labels.py*) [ "${HANG:-}" = labels ] && exec sleep 100000; exit 0;;\n'
-    '  *prefetch.py*) [ "${HANG:-}" = blocks ] && exec sleep 100000; exit 0;;\n'
+    '  *fetch_published*labels*) [ "${HANG:-}" = labels ] && exec sleep 100000; exit 0;;\n'
+    '  *fetch_published*blocks*) echo "the store said no" >&2\n'
+    '    [ "${HANG:-}" = blocks ] && exec sleep 100000; exit 0;;\n'
+    '  *fetch_corpora*) echo "the mirror said no" >&2\n'
+    '    [ "${HANG:-}" = corpora ] && exec sleep 100000; exit 0;;\n'
     "esac\n"
-    'echo "$EMBLEMA_WORKER__BACKBONE $*" >> "$CALLS"\n'
+    'echo "$EMBLEMA_WORKER__BACKBONE card=${CUDA_VISIBLE_DEVICES:-shared} $*" >> "$CALLS"\n'
     '[ -n "${HOLD:-}" ] && sleep "$HOLD"\n'
     'case "$*" in *"${FAIL:-@none@}"*) exit 3;; esac\n'
     'echo "1 cell answered: durable/sha256/res sha256:res" >&2\n'
     "echo durable/sha256/res sha256:res\n",
     "nvidia-smi": 'case "$*" in *-l*) exec sleep 100000;; esac\necho "card, 1 MiB"\n',
-    "nvidia-cuda-mps-control": "exit 0\n",
+    "nvidia-cuda-mps-control": 'echo "$*" >> "$CALLS.mps"\n',
+    # As procps on Linux: a name is its first 15 characters, a command line is whole.
+    "pgrep": "running=${MPS_RUNNING:-}\n"
+    '[ "$1" = -f ] && { [ -n "$running" ] && echo "$running" | grep -qE "$2"; exit; }\n'
+    "name=${running%% *}; name=${name##*/}\n"
+    '[ "$1" = -x ] && [ -n "$running" ] && [ "$2" = "${name:0:15}" ]\n',
     "free": 'echo "total used"\necho "Mem: 1 1"\n',
     "nproc": "echo 2\n",
     # macOS has no timeout(1); the alarm's signal ends the command with a non-zero status.
@@ -70,7 +87,7 @@ def write_plan(tmp_path: Path, **lines: str) -> Path:
 
 
 def run_cell(
-    tmp_path: Path, plan: Path, **env: str
+    tmp_path: Path, plan: Path, platform: Platform = COLAB, **env: str
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     """Run the plan's cell under the stubs: what it did, and the directory of its results."""
     bin_dir = tmp_path / "bin"
@@ -82,7 +99,8 @@ def run_cell(
     root = tmp_path / "content"
     (root / "drive" / "MyDrive").mkdir(parents=True, exist_ok=True)
     cell = tmp_path / "cell.sh"
-    cell.write_text("".join(cell_of(read_plan(plan)).splitlines(keepends=True)[1:]))
+    cell.write_text("".join(cell_of(read_plan(plan), platform).splitlines(keepends=True)[1:]))
+    work = tmp_path / "working"
     done = subprocess.run(
         ["/bin/bash", str(cell)],
         capture_output=True,
@@ -92,13 +110,18 @@ def run_cell(
         env={
             "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
             "CELL_ROOT": str(root),
+            "CELL_WORK": str(work),
+            "COMMIT_HERE": COMMIT,
             "CALLS": str(tmp_path / "calls.txt"),
             "NET_TIMEOUT": "1",
             "NET_BLOCKS_TIMEOUT": "1",
             **env,
         },
     )
-    return done, root / "drive" / "MyDrive" / "emblema-test"
+    results = root / "drive" / "MyDrive" / "emblema-test"
+    if platform is MAC:
+        return done, root / "data" / "report" / "emblema-test"
+    return done, work / "emblema-test" if platform is KAGGLE else results
 
 
 def calls_of(tmp_path: Path) -> list[str]:
@@ -222,7 +245,7 @@ def test_the_generated_cell_breaks_none_of_its_own_rules(tmp_path: Path) -> None
     [
         ("git clone https://example.org", "without a limit"),
         ("pip install -e .", "without a limit"),
-        ("python /tmp/prefetch.py x", "without a limit"),
+        ("python scripts/fetch_published.py blocks x", "without a limit"),
         ("x" * 91, "91 characters"),
     ],
 )
@@ -314,3 +337,221 @@ def test_a_plan_without_labels_or_blocks_leaves_those_steps_out(tmp_path: Path) 
 
     assert "labels.py" not in cell
     assert "prefetch.py" not in cell
+
+
+def test_a_kaggle_cell_spreads_its_workers_over_the_cards_and_needs_no_drive(
+    tmp_path: Path,
+) -> None:
+    plan = write_plan(tmp_path, cards="2", workers="4", pieces='[["first", 4]]')
+
+    done, results = run_cell(tmp_path, plan, KAGGLE, HOLD="0.5")
+
+    assert done.returncode == 0, done.stderr
+    calls = calls_of(tmp_path)
+    assert len(calls) == 4, what_the_cell_did(tmp_path, results)
+    assert all(call.startswith(f"durable/sha256/{WEIGHTS}@sha256:{WEIGHTS}") for call in calls)
+    assert sorted(call.split()[1] for call in calls) == [
+        "card=0",
+        "card=0",
+        "card=1",
+        "card=1",
+    ]
+    assert (results / "results.txt").read_text().count("exit 0") == 4
+
+
+@pytest.mark.parametrize(
+    "running", ["nvidia-cuda-mps-control -d", "/usr/bin/nvidia-cuda-mps-control -d"]
+)
+def test_a_cell_run_again_finds_the_mps_daemon_it_left(tmp_path: Path, running: str) -> None:
+    done, _ = run_cell(tmp_path, write_plan(tmp_path), MPS_RUNNING=running)
+
+    assert "MPS: already running" in done.stdout
+    assert "-d" not in Path(f"{tmp_path / 'calls.txt'}.mps").read_text().split()
+
+
+@pytest.mark.parametrize("running", ["bash cell.sh", "bash -c nvidia-cuda-mps-control -d"])
+def test_a_cell_starts_the_mps_daemon_when_none_runs(tmp_path: Path, running: str) -> None:
+    done, _ = run_cell(tmp_path, write_plan(tmp_path), MPS_RUNNING=running)
+
+    assert "MPS: started" in done.stdout
+    assert Path(f"{tmp_path / 'calls.txt'}.mps").read_text().splitlines()[0] == "-d"
+
+
+@pytest.mark.parametrize("platform", [COLAB, KAGGLE, MAC])
+def test_a_plan_with_a_long_name_makes_a_cell_within_the_line_limit(
+    tmp_path: Path, platform: Platform
+) -> None:
+    plan = write_plan(tmp_path, name=f'"{"l46/trial/" + "x" * 30}"', cards="2")
+    assert faults_of(cell_of(read_plan(plan), platform)) == []
+
+
+@pytest.mark.parametrize("platform", [COLAB, KAGGLE])
+def test_the_cells_beside_a_cell_keep_to_its_line_limit(tmp_path: Path, platform: Platform) -> None:
+    written = write_cells(tmp_path / "cell.sh", "true\n", platform)
+
+    assert len(written) > 1
+    assert all(faults_of(path.read_text()) == [] for path in written)
+
+
+def test_a_kaggle_cell_starts_no_mps_daemon(tmp_path: Path) -> None:
+    cell = cell_of(read_plan(write_plan(tmp_path, cards="2")), KAGGLE)
+    assert "nvidia-cuda-mps-control -d" not in cell
+    assert "/kaggle/working" in cell
+
+
+def test_a_kaggle_cell_without_cards_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="spreads its workers over cards"):
+        cell_of(read_plan(write_plan(tmp_path)), KAGGLE)
+
+
+def test_a_colab_cell_shares_one_card(tmp_path: Path) -> None:
+    done, _ = run_cell(tmp_path, write_plan(tmp_path))
+
+    assert done.returncode == 0, done.stderr
+    assert all(call.split()[1] == "card=shared" for call in calls_of(tmp_path))
+
+
+def test_past_the_cutoff_no_piece_is_claimed(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path, cards="2", pieces='[["first", 2]]')
+
+    done, results = run_cell(tmp_path, plan, KAGGLE, SESSION_SECONDS="-1")
+
+    assert done.returncode == 0, done.stderr
+    assert calls_of(tmp_path) == []
+    assert (results / "results.txt").read_text().count("not claimed: past the cutoff") == 2
+
+
+def test_a_kaggle_cell_stops_claiming_at_ten_and_a_half_hours(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path, cards="2")
+    assert "CUTOFF=$(( START + ${SESSION_SECONDS:-37800} ))" in cell_of(read_plan(plan), KAGGLE)
+
+
+def test_a_corpora_fetch_that_hangs_ends_the_cell_cleanly(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path, fetch='[["skab", "opssat_ad"]]')
+
+    done, results = run_cell(tmp_path, plan, HANG="corpora")
+
+    assert done.returncode == 0
+    assert "corpora not fetched" in done.stdout
+    assert calls_of(tmp_path) == []
+    assert "the mirror said no" in (results / "fetch.log").read_text()
+
+
+def test_the_blocks_stderr_is_kept_for_the_person_reading_a_failure(tmp_path: Path) -> None:
+    done, results = run_cell(tmp_path, write_plan(tmp_path), HANG="blocks")
+
+    assert done.returncode == 0
+    assert "blocks not fetched" in done.stdout
+    assert "the store said no" in (results / "block.log").read_text()
+
+
+@pytest.mark.parametrize("platform", ["colab", "kaggle"])
+def test_the_cells_around_the_cell_are_written_beside_it(tmp_path: Path, platform: str) -> None:
+    plan = write_plan(tmp_path, cards="2")
+    out = tmp_path / "cell.sh"
+    main(["--plan", str(plan), "--out", str(out), "--platform", platform], head=COMMIT)
+    secrets = (tmp_path / "cell-secrets.py").read_text()
+    assert "EMBLEMA_ARTIFACT_STORE__" in secrets
+    assert ("userdata" in secrets) == (platform == "colab")
+    assert (tmp_path / "cell-release.py").exists() == (platform == "colab")
+
+
+def test_a_fetch_with_many_arguments_stays_within_the_line_limit(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path, fetch='[["--from-store", "physionet2012", "physionet2019"]]')
+    assert faults_of(cell_of(read_plan(plan))) == []
+
+
+def test_the_last_answer_is_taken_from_the_newest_log(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path, pieces='[["first", 1]]')
+    _, results = run_cell(tmp_path, plan)
+    results.mkdir(parents=True, exist_ok=True)
+    (results / "results.txt").unlink()
+    (results / "first-0.log.1000").write_text("1 cell answered: durable/sha256/aaa sha256:aaa\n")
+    (results / "first-0.log.2000").write_text("1 cell answered: durable/sha256/bbb sha256:bbb\n")
+    (results / "first-0.log").write_text("1 cell answered: durable/sha256/ccc sha256:ccc\n")
+    (tmp_path / "calls.txt").unlink()
+
+    run_cell(tmp_path, plan)
+
+    assert "--resume durable/sha256/ccc sha256:ccc" in calls_of(tmp_path)[0]
+
+
+def test_a_piece_still_running_past_the_grace_is_stopped_and_not_tried_again(
+    tmp_path: Path,
+) -> None:
+    plan = write_plan(tmp_path, cards="1", workers="1", pieces='[["first", 1]]')
+
+    done, results = run_cell(
+        tmp_path, plan, KAGGLE, SESSION_SECONDS="12", GRACE_SECONDS="1", HOLD="60"
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert len(calls_of(tmp_path)) == 1
+    assert "exit 0" not in (results / "results.txt").read_text()
+
+
+def test_a_step_with_its_limit_after_it_is_a_fault() -> None:
+    assert "without a limit" in faults_of("true; curl x; timeout 5 true")[0]
+
+
+@pytest.mark.parametrize(
+    "line", ["pip3 install x", "git fetch origin", "python scripts/fetch_published.py labels x"]
+)
+def test_the_other_forms_of_a_network_step_need_a_limit_too(line: str) -> None:
+    assert "without a limit" in faults_of(line)[0]
+
+
+def test_on_the_mac_a_script_runs_the_orders_on_mps_through_uv_and_keeps_awake(
+    tmp_path: Path,
+) -> None:
+    plan = write_plan(tmp_path, workers="1", pieces='[["first", 2]]')
+
+    done, results = run_cell(tmp_path, plan, MAC)
+
+    assert done.returncode == 0, done.stderr
+    calls = calls_of(tmp_path)
+    assert len(calls) == 2, what_the_cell_did(tmp_path, results)
+    assert (tmp_path / "calls.txt.caffeinate").read_text() == "caffeinated\n"
+    assert (results / "results.txt").read_text().count("exit 0") == 2
+    cell = cell_of(read_plan(plan), MAC)
+    assert cell.startswith("#!/bin/bash")
+    assert "EMBLEMA_WORKER__DEVICE=mps" in cell
+    assert "nvidia-smi" not in cell
+    assert "git clone" not in cell
+
+
+def test_on_the_mac_a_script_refuses_another_commit(tmp_path: Path) -> None:
+    done, _ = run_cell(tmp_path, write_plan(tmp_path), MAC, AT_COMMIT="b" * 40)
+
+    assert "the orders at" in done.stdout
+    assert calls_of(tmp_path) == []
+
+
+def test_on_the_mac_a_script_refuses_a_dirty_tree(tmp_path: Path) -> None:
+    done, _ = run_cell(tmp_path, write_plan(tmp_path), MAC, DIRTY=" M scripts/x.py")
+
+    assert "dirty" in done.stdout
+    assert calls_of(tmp_path) == []
+
+
+def test_on_the_mac_untracked_files_count_as_dirty_as_the_order_counts_them(
+    tmp_path: Path,
+) -> None:
+    assert 'git status --porcelain)"' in cell_of(read_plan(write_plan(tmp_path)), MAC)
+
+
+def test_on_the_mac_the_raw_corpora_are_not_fetched(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path, fetch='[["skab"]]')
+    cell = cell_of(read_plan(plan), MAC)
+    assert "fetch_corpora" not in cell
+    assert "fetch_published.py labels" not in cell
+    assert "fetch_published.py blocks" in cell
+
+
+def test_on_the_mac_nothing_is_written_beside_the_script(tmp_path: Path) -> None:
+    out = tmp_path / "run.sh"
+    plan = write_plan(tmp_path)
+    main(["--plan", str(plan), "--out", str(out), "--platform", "mac"], head=COMMIT)
+    assert out.stat().st_mode & stat.S_IXUSR
+    assert not (tmp_path / "run-secrets.py").exists()
+    assert not (tmp_path / "run-release.py").exists()

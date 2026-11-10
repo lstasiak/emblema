@@ -30,7 +30,10 @@ experiment — and the shape of a note: its CSV, its tables, its figures.
 | Script | Kind | Evidence it produces | Retired by |
 | --- | --- | --- | --- |
 | `place_campaign_orders.py` | tooling | defines a batch of campaigns and places their orders from a clean tree | — |
-| `colab_cell.py` | tooling | writes the cell that fulfils the orders on one card, in lanes, resumable, every network step under a limit | — |
+| `colab_cell.py` | tooling | writes the cell or Mac script that fulfils campaign orders on Colab, Kaggle or the Mac, in lanes, resumable, every network step under a limit, and the secrets and card-return cells beside it | — |
+| `pretraining_cell.py` | tooling | the same for pretraining orders, on Colab, Kaggle or the Mac: resumes from the last checkpoint a log names, one or several orders a card | — |
+| `fetch_published.py` | tooling | fetches blocks and task labels from the store before a run's processes need them | — |
+| `cell_parts.py` | tooling | what those cells share: the platforms, the checkout and install under limits, the rules a cell keeps | — |
 | `accept_lane_results.py` | tooling | accepts a cell's pasted results, one per lane | — |
 | `campaign_pairs_fanout.py` | tooling | reads a plan of pairs across processes, the tables byte for byte those of one run | — |
 | `detection_side_readings.py` | measurement | a detection task's readings beside the area, per cell | — |

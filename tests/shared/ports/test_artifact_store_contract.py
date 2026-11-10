@@ -206,6 +206,19 @@ def test_put_file_of_a_missing_source_fails(store: ArtifactStore, tmp_path: Path
         store.put_file(tmp_path / "never written.bin")
 
 
+@pytest.mark.parametrize("left_behind", [b"wei", b"weights"])
+def test_get_file_finishes_whatever_an_earlier_attempt_left(
+    store: ArtifactStore, tmp_path: Path, left_behind: bytes
+) -> None:
+    ref = store.put(b"weights", Retention.DURABLE)
+    destination = tmp_path / "fetched.bin"
+    (tmp_path / "fetched.bin.part").write_bytes(left_behind)
+
+    store.get_file(ref, destination)
+
+    assert destination.read_bytes() == b"weights"
+
+
 def test_get_file_of_an_unknown_reference_fails(store: ArtifactStore, tmp_path: Path) -> None:
     missing = content_address(b"never stored", Retention.DURABLE)
 

@@ -1,11 +1,14 @@
 """Behaviour of the S3 adapter that needs no bucket: client configuration and error mapping."""
 
+import io
 from collections.abc import Iterator
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import boto3
 import pytest
 from botocore.exceptions import ClientError
+from botocore.response import StreamingBody
 from botocore.stub import Stubber
 
 from emblema.shared.adapters.storage.layout import content_address
@@ -101,3 +104,57 @@ def test_a_read_refused_by_the_service_is_not_reported_as_a_missing_artifact(
 
     with pytest.raises(ClientError):
         stubbed.store.get(REF)
+
+
+def body_of(content: bytes) -> StreamingBody:
+    return StreamingBody(io.BytesIO(content), len(content))
+
+
+def test_get_file_asks_only_for_what_an_interrupted_attempt_did_not_receive(
+    stubbed: Stubbed, tmp_path: Path
+) -> None:
+    destination = tmp_path / "block"
+    (tmp_path / "block.part").write_bytes(b"wei")
+    stubbed.responses.add_response(
+        "get_object",
+        {"Body": body_of(b"ghts")},
+        {"Bucket": "emblema", "Key": f"test/{REF.key}", "Range": "bytes=3-"},
+    )
+
+    stubbed.store.get_file(REF, destination)
+
+    assert destination.read_bytes() == b"weights"
+    assert not (tmp_path / "block.part").exists()
+
+
+def test_get_file_of_a_partial_file_already_whole_asks_for_nothing_more(
+    stubbed: Stubbed, tmp_path: Path
+) -> None:
+    destination = tmp_path / "block"
+    (tmp_path / "block.part").write_bytes(b"weights")
+    stubbed.responses.add_client_error("get_object", "InvalidRange", http_status_code=416)
+
+    stubbed.store.get_file(REF, destination)
+
+    assert destination.read_bytes() == b"weights"
+
+
+def test_a_first_attempt_asks_for_the_whole_object(stubbed: Stubbed, tmp_path: Path) -> None:
+    stubbed.responses.add_response(
+        "get_object",
+        {"Body": body_of(b"weights")},
+        {"Bucket": "emblema", "Key": f"test/{REF.key}"},
+    )
+
+    stubbed.store.get_file(REF, tmp_path / "block")
+
+    assert (tmp_path / "block").read_bytes() == b"weights"
+
+
+def test_a_refused_range_on_a_first_attempt_is_not_mistaken_for_an_empty_object(
+    stubbed: Stubbed, tmp_path: Path
+) -> None:
+    stubbed.responses.add_client_error("get_object", "InvalidRange", http_status_code=416)
+
+    with pytest.raises(ClientError):
+        stubbed.store.get_file(REF, tmp_path / "block")
