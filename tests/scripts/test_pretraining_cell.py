@@ -359,6 +359,14 @@ def test_on_the_mac_a_failed_run_resumes_when_the_script_is_run_again(tmp_path: 
     assert f"--resume-from {CHECKPOINT}" in calls_of(tmp_path)[before]
 
 
+@pytest.mark.parametrize("platform", [COLAB, KAGGLE, MAC])
+def test_a_plan_with_a_long_name_makes_a_cell_within_the_line_limit(
+    tmp_path: Path, platform: Platform
+) -> None:
+    plan = write_plan(tmp_path, name=f'"{"l46/trial/" + "x" * 30}"')
+    assert faults_of(cell_of(read_plan(plan), platform)) == []
+
+
 def test_on_the_mac_a_script_refuses_a_dirty_tree(tmp_path: Path) -> None:
     done, _ = run_cell(tmp_path, write_plan(tmp_path), MAC, DIRTY=" M scripts/x.py")
 

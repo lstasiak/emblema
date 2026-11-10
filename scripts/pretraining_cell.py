@@ -155,7 +155,7 @@ def cell_of(plan: PretrainingPlan, platform: Platform = COLAB) -> str:
         raise SystemExit("the Mac has one accelerator: cards must be 1")
     if plan.per_card > 1 and not platform.shares_by_mps:
         raise SystemExit(f"{platform.name} does not share a card under MPS: per_card must be 1")
-    title = f"{plan.name}: pretraining orders."
+    title = "Pretraining orders."
     start, stop, utilisation = monitors(platform, every=10)
     threads = (
         f"export OMP_NUM_THREADS={plan.threads} MKL_NUM_THREADS={plan.threads}"

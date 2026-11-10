@@ -120,6 +120,7 @@ def head(platform: Platform, *, title: str, name: str, commit: str, extras: str)
     """The cell up to its first piece of work: the checkout, the install and the directories."""
     return (
         (_HOST_HEAD if platform.hosted else _HEAD)
+        .replace("@NAME@", name, 1)
         .replace("@TITLE@", title)
         .replace("@COMMIT@", commit)
         .replace("@BEFORE@", platform.before)
@@ -235,6 +236,7 @@ awk -F', ' '{u+=$1; n++} END {if (n) print "mean utilisation", u/n, "%"}' $W/smi
 
 _HOST_HEAD = """
 #!/bin/bash
+# @NAME@
 # @TITLE@
 # Commit @COMMIT@.
 # @BEFORE@
@@ -282,6 +284,7 @@ limited() {  # the command, stopped before a batch session would lose its output
 
 _HEAD = """
 %%bash
+# @NAME@
 # @TITLE@
 # Commit @COMMIT@.
 # @BEFORE@

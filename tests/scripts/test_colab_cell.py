@@ -354,6 +354,14 @@ def test_a_kaggle_cell_spreads_its_workers_over_the_cards_and_needs_no_drive(
     assert (results / "results.txt").read_text().count("exit 0") == 4
 
 
+@pytest.mark.parametrize("platform", [COLAB, KAGGLE, MAC])
+def test_a_plan_with_a_long_name_makes_a_cell_within_the_line_limit(
+    tmp_path: Path, platform: Platform
+) -> None:
+    plan = write_plan(tmp_path, name=f'"{"l46/trial/" + "x" * 30}"', cards="2")
+    assert faults_of(cell_of(read_plan(plan), platform)) == []
+
+
 def test_a_kaggle_cell_starts_no_mps_daemon(tmp_path: Path) -> None:
     cell = cell_of(read_plan(write_plan(tmp_path, cards="2")), KAGGLE)
     assert "nvidia-cuda-mps-control -d" not in cell

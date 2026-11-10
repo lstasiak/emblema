@@ -186,7 +186,7 @@ def cell_of(plan: CellPlan, platform: Platform = COLAB) -> str:
     if platform.needs_cards and plan.cards < 1:
         raise SystemExit(f"a {platform.name} cell spreads its workers over cards: none named")
     labels = sorted({piece.label for piece in plan.pieces})
-    title = f"{plan.name}: campaign orders, workers claiming pieces in the plan's order."
+    title = "Campaign orders, workers claiming pieces in the plan's order."
     parts = [
         head(platform, title=title, name=plan.name, commit=plan.commit, extras=plan.extras),
         _labels_step(plan.labels) if plan.labels and not platform.reads_raw else "",
