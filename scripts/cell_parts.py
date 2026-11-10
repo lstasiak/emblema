@@ -66,7 +66,8 @@ COLAB = Platform(
     session_hours=None,
     store_secrets=(
         "import os\n\nfrom google.colab import userdata\n\n"
-        f"for name in ({_NAMES}):\n"
+        f"names = ({_NAMES})\n"
+        "for name in names:\n"
         '    key = f"EMBLEMA_ARTIFACT_STORE__{name}"\n'
         "    os.environ[key] = userdata.get(key)\n"
         'print("store configured")\n'
@@ -89,7 +90,8 @@ KAGGLE = Platform(
     store_secrets=(
         "import os\n\nfrom kaggle_secrets import UserSecretsClient\n\n"
         "secrets = UserSecretsClient()\n"
-        f"for name in ({_NAMES}):\n"
+        f"names = ({_NAMES})\n"
+        "for name in names:\n"
         '    key = f"EMBLEMA_ARTIFACT_STORE__{name}"\n'
         "    os.environ[key] = secrets.get_secret(key)\n"
         'print("store configured")\n'
@@ -205,16 +207,19 @@ def write_cells(out: Path, cell: str, platform: Platform) -> list[Path]:
     """The cell and, beside it, the cells that come before and after it on the platform.
 
     Raises:
-        SystemExit: If the cell breaks its own rules; nothing is written.
+        SystemExit: If the cell or one beside it breaks the rules; nothing is written.
     """
+    companions = {"secrets": platform.store_secrets, "release": platform.release}
     faults = faults_of(cell)
+    for suffix, text in companions.items():
+        faults += [f"{suffix}: {fault}" for fault in faults_of(text or "")]
     if faults:
         raise SystemExit("the cell breaks its own rules:\n" + "\n".join(faults))
     written = [out]
     out.write_text(cell)
     if platform.hosted:
         out.chmod(0o755)
-    for suffix, text in (("secrets", platform.store_secrets), ("release", platform.release)):
+    for suffix, text in companions.items():
         if text is not None:
             beside = out.with_name(f"{out.stem}-{suffix}.py")
             beside.write_text(text)

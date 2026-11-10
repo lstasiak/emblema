@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.cell_parts import COLAB, KAGGLE, MAC, Platform, faults_of
+from scripts.cell_parts import COLAB, KAGGLE, MAC, Platform, faults_of, write_cells
 from scripts.colab_cell import cell_of, main, read_plan
 
 COMMIT = "a" * 40
@@ -360,6 +360,14 @@ def test_a_plan_with_a_long_name_makes_a_cell_within_the_line_limit(
 ) -> None:
     plan = write_plan(tmp_path, name=f'"{"l46/trial/" + "x" * 30}"', cards="2")
     assert faults_of(cell_of(read_plan(plan), platform)) == []
+
+
+@pytest.mark.parametrize("platform", [COLAB, KAGGLE])
+def test_the_cells_beside_a_cell_keep_to_its_line_limit(tmp_path: Path, platform: Platform) -> None:
+    written = write_cells(tmp_path / "cell.sh", "true\n", platform)
+
+    assert len(written) > 1
+    assert all(faults_of(path.read_text()) == [] for path in written)
 
 
 def test_a_kaggle_cell_starts_no_mps_daemon(tmp_path: Path) -> None:
