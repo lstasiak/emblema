@@ -160,6 +160,7 @@ def test_a_checkpoint_from_another_session_is_taken_from_the_plan(tmp_path: Path
     run_cell(tmp_path, plan)
 
     assert f"--resume-from {CHECKPOINT}" in calls_of(tmp_path)[0]
+    assert faults_of(cell_of(read_plan(plan), COLAB)) == []
 
 
 def test_a_cell_prints_where_an_unfinished_order_can_continue(tmp_path: Path) -> None:

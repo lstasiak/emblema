@@ -163,12 +163,14 @@ def cell_of(plan: PretrainingPlan, platform: Platform = COLAB) -> str:
         else ""
     )
     workers_arg = f" --num-workers {plan.num_workers}" if plan.num_workers else ""
+    # The digest alone: a checkpoint's key and digest together outgrow a line of the cell.
+    resumed = [f"{label} {ref.split(':')[-1]}" for label, ref in plan.resume.items()]
     parts = [
         head(platform, title=title, name=plan.name, commit=plan.commit, extras=plan.extras),
         blocks_step(plan.blocks) if plan.blocks else "",
         heredoc("pieces", plan.pieces),
         heredoc("orders", [f"{label} {plan.orders[label]}" for label in plan.pieces]),
-        heredoc("resume", [f"{label} {ref}" for label, ref in plan.resume.items()]),
+        heredoc("resume", resumed),
         LIMITED,
         MPS if plan.per_card > 1 else "",
         _WORK.replace("@CUTOFF@", cutoff_line(platform))
@@ -219,14 +221,18 @@ finished() { grep -q "^\[$1\] exit 0" $W/results.txt 2>/dev/null; }
 seen() {
   cat "$W/$1".log.* "$W/$1".log 2>/dev/null | grep -oE "$PAT" | tail -1 | cut -d' ' -f2-
 }
-named() { awk -v k="$2" '$1 == k { print $2, $3 }' "$W/$1.txt"; }
+resumed() {
+  local d
+  d=$(awk -v k="$1" '$1 == k { print $2 }' "$W/resume.txt")
+  [ -z "$d" ] || echo "transient/sha256/$d sha256:$d"
+}
 piece() {  # label order
   local ref start status args said
   for attempt in 1 2; do
     args=(--order "durable/sha256/$2" "sha256:$2" --device @DEVICE@)
     args+=(--progress-every @EVERY@ --commit "$C" --workspace $B@WORKERS_ARG@)
     ref=$(seen "$1")
-    [ -n "$ref" ] || ref=$(named resume "$1")
+    [ -n "$ref" ] || ref=$(resumed "$1")
     # shellcheck disable=SC2206
     [ -n "${ref// /}" ] && args+=(--resume-from $ref)
     # An earlier attempt's log is kept beside the new one, whether it failed or dropped.
