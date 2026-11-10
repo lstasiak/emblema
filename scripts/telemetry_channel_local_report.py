@@ -21,8 +21,9 @@ Four commands, so a reading stays blind until the choice is made:
 - ``choose-recall``: of the no-model arms, the one finding the most events at 1 % of normal
   windows on a choosing section above those it finds with every month's scores turned, the
   measure the first mission's verdict is read by less its chance; beside, the events found
-  averaged over 0.5 to 2 % and by their first six hours. ``--trial`` turns every month's scores
-  first, so the whole path runs at chance before the choice is declared. The sections that
+  averaged over 0.5 to 2 % and by their first six hours, and the short events' excess.
+  ``--trial`` turns every month's scores first, so the whole path runs at chance before the
+  choice is declared. The sections that
   choose are the selection months and the months before them (``early``), which ``measure``
   scores by the no-model arms alone, the floor and the alarm set on the selection months.
   ``--leave-out`` names event classes whose windows are not scored, so a class that one period
@@ -593,6 +594,10 @@ def choice_table(choices: Sequence[Choice]) -> str:
 # where a long event has no more hours than a typical one to cross the alarm by chance.
 AVERAGED_SHARES = (0.005, 0.01, 0.015, 0.02)
 ONSET_HOURS = 6
+# An event of at most this many windows is short. Where a side's events run longer than on the
+# months the bar is read on, its short events' excess is read beside the choice: there length
+# gives chance little to work with.
+SHORT_WINDOWS = 6
 ROTATIONS = 1000
 ROTATION_SEED = 1
 RECALL_COLUMNS = (
@@ -604,6 +609,10 @@ RECALL_COLUMNS = (
     "excess",
     "averaged",
     "onset",
+    "short_events",
+    "short_found",
+    "short_chance",
+    "short_excess",
     "chosen",
 )
 
@@ -686,6 +695,12 @@ class SideArrays:
     def event_ids(self) -> Ints:
         return np.unique(self.events[self.events > 0])
 
+    @property
+    def short(self) -> Bools:
+        """Whether each of ``event_ids`` holds at most ``SHORT_WINDOWS`` windows."""
+        _, counts = np.unique(self.events[self.events > 0], return_counts=True)
+        return np.asarray(counts <= SHORT_WINDOWS)
+
 
 def onset_windows(arrays: SideArrays, hours: int) -> Bools:
     """Whether each window ends within ``hours`` of its event's first scored window's end.
@@ -711,8 +726,10 @@ def found_count(arrays: SideArrays, share: float, among: Bools | None = None) ->
 
 def chance_found(
     arms: Mapping[tuple[str, str], SideArrays], *, rotations: int, seed: int
-) -> dict[tuple[str, str], float]:
+) -> dict[tuple[str, str], tuple[float, float]]:
     """Each arm's events found on average when every month's scores are turned, one turn for all.
+
+    Beside the events found in all, the short events found.
 
     Raises:
         ValueError: If the arms do not hold the same windows and events.
@@ -727,18 +744,19 @@ def chance_found(
     slices = month_slices(first.units)
     draws = np.random.default_rng(seed)
     totals = dict.fromkeys(arms, 0)
+    short_totals = dict.fromkeys(arms, 0)
     for _ in range(rotations):
         order = rotation_order(slices, draws)
         for key, arrays in arms.items():
-            totals[key] += int(
-                found_mask(
-                    arrays.scores[order],
-                    arrays.events,
-                    arrays.event_ids,
-                    AnomalyRanking.PRODUCT_FALSE_ALARM_SHARE,
-                ).sum()
+            found = found_mask(
+                arrays.scores[order],
+                arrays.events,
+                arrays.event_ids,
+                AnomalyRanking.PRODUCT_FALSE_ALARM_SHARE,
             )
-    return {key: total / rotations for key, total in totals.items()}
+            totals[key] += int(found.sum())
+            short_totals[key] += int(found[arrays.short].sum())
+    return {key: (totals[key] / rotations, short_totals[key] / rotations) for key in arms}
 
 
 @dataclass(frozen=True)
@@ -753,6 +771,9 @@ class RecallReading:
         chance: The events found on average with every month's scores turned.
         averaged: The events found, averaged over ``AVERAGED_SHARES``.
         onset: The events found by their first ``ONSET_HOURS`` at the product's share.
+        short_events: The events of at most ``SHORT_WINDOWS`` windows.
+        short_found: The short events found at the product's share.
+        short_chance: The short events found on average with every month's scores turned.
     """
 
     detector: str
@@ -762,22 +783,35 @@ class RecallReading:
     chance: float
     averaged: float
     onset: int
+    short_events: int
+    short_found: int
+    short_chance: float
 
     @property
     def excess(self) -> float:
         return self.found - self.chance
 
+    @property
+    def short_excess(self) -> float:
+        return self.short_found - self.short_chance
 
-def recall_reading(detector: str, arm: str, arrays: SideArrays, chance: float) -> RecallReading:
+
+def recall_reading(
+    detector: str, arm: str, arrays: SideArrays, chance: tuple[float, float]
+) -> RecallReading:
     share = AnomalyRanking.PRODUCT_FALSE_ALARM_SHARE
+    found = found_mask(arrays.scores, arrays.events, arrays.event_ids, share)
     return RecallReading(
         detector=detector,
         arm=arm,
         events=len(arrays.event_ids),
-        found=found_count(arrays, share),
-        chance=chance,
+        found=int(found.sum()),
+        chance=chance[0],
         averaged=fmean(found_count(arrays, each) for each in AVERAGED_SHARES),
         onset=found_count(arrays, share, onset_windows(arrays, ONSET_HOURS)),
+        short_events=int(arrays.short.sum()),
+        short_found=int(found[arrays.short].sum()),
+        short_chance=chance[1],
     )
 
 
@@ -914,6 +948,10 @@ def recall_rows(readings: Sequence[RecallReading]) -> list[dict[str, object]]:
             "excess": f"{r.excess:.3f}",
             "averaged": f"{r.averaged:.2f}",
             "onset": r.onset,
+            "short_events": r.short_events,
+            "short_found": r.short_found,
+            "short_chance": f"{r.short_chance:.3f}",
+            "short_excess": f"{r.short_excess:.3f}",
             "chosen": int(r == chosen),
         }
         for r in readings
@@ -924,10 +962,22 @@ def recall_table(rows: Sequence[Mapping[str, str]]) -> str:
     """The choice's table from its CSV: events of the side's, as a share and a count."""
 
     def share(count: str, events: str) -> str:
+        if int(events) == 0:
+            return "no event"
         return f"{float(count) / int(events):.3f} ({float(count):g})"
 
     return table(
-        ("Detector", "Arm", "Found @1 %", "Chance", "Excess", "Averaged", "Onset", "Chosen"),
+        (
+            "Detector",
+            "Arm",
+            "Found @1 %",
+            "Chance",
+            "Excess",
+            "Averaged",
+            "Onset",
+            "Short, excess",
+            "Chosen",
+        ),
         [
             (
                 row["detector"],
@@ -937,6 +987,7 @@ def recall_table(rows: Sequence[Mapping[str, str]]) -> str:
                 share(row["excess"], row["events"]),
                 share(row["averaged"], row["events"]),
                 share(row["onset"], row["events"]),
+                share(row["short_excess"], row["short_events"]),
                 "yes" if row["chosen"] == "1" else "",
             )
             for row in rows

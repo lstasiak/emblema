@@ -31,6 +31,7 @@ from scripts.telemetry_channel_local_report import (
     MEAN,
     NO_SEED,
     ONSET_HOURS,
+    RECALL_COLUMNS,
     STATES,
     TAUGHT,
     Arm,
@@ -69,6 +70,7 @@ from scripts.telemetry_channel_local_report import (
     read_tables,
     reading_row,
     recall_reading,
+    recall_table,
     refit_arms,
     selection_answers,
     window_scores,
@@ -688,8 +690,8 @@ def test_an_event_is_found_by_its_onset_only_through_its_first_hours() -> None:
     early[2 + ONSET_HOURS - 1] = predicted("m/2000-01", 2 + ONSET_HOURS - 1, 7.0, 1.0, 9.0)
     early[2 + ONSET_HOURS] = predicted("m/2000-01", 2 + ONSET_HOURS, 8.0, 1.0, 0.0)
 
-    late_reading = recall_reading(MAX, "hour-6h", SideArrays.of(late), 0.0)
-    early_reading = recall_reading(MAX, "hour-6h", SideArrays.of(early), 0.0)
+    late_reading = recall_reading(MAX, "hour-6h", SideArrays.of(late), (0.0, 0.0))
+    early_reading = recall_reading(MAX, "hour-6h", SideArrays.of(early), (0.0, 0.0))
 
     assert int(onset_windows(SideArrays.of(late), ONSET_HOURS).sum()) == ONSET_HOURS
     assert (late_reading.found, late_reading.onset) == (1, 0)
@@ -710,12 +712,16 @@ def test_an_events_onset_is_its_first_scored_window_across_months() -> None:
 def test_the_averaged_reading_is_the_mean_of_the_events_found_over_the_shares() -> None:
     arrays = SideArrays.of(ranked_answers(3, ties=False))
 
-    reading = recall_reading(MEAN, "bins-24h", arrays, 1.5)
+    reading = recall_reading(MEAN, "bins-24h", arrays, (1.5, 0.5))
 
     counts = [found_count(arrays, share) for share in AVERAGED_SHARES]
     assert reading.events == 5
     assert reading.averaged == pytest.approx(sum(counts) / len(counts))
     assert reading.excess == reading.found - 1.5
+    # Events of three, nine, one, three and nine hours: the nine-hour ones run long.
+    assert arrays.short.tolist() == [True, False, True, True, False]
+    assert reading.short_events == 3
+    assert reading.short_excess == reading.short_found - 0.5
 
 
 def test_chance_turns_every_arm_by_the_same_offsets() -> None:
@@ -729,7 +735,8 @@ def test_chance_turns_every_arm_by_the_same_offsets() -> None:
     )
 
     assert chance[(MAX, "hour-6h")] == chance[(MEAN, "hour-6h")]
-    assert 0.0 < chance[(MAX, "bins-6h")] < found_count(events_high, 0.01) == 5
+    everything, short = chance[(MAX, "bins-6h")]
+    assert 0.0 < short <= everything < found_count(events_high, 0.01) == 5
 
 
 def test_chance_refuses_arms_over_other_windows() -> None:
@@ -749,6 +756,9 @@ def reading(detector: str, arm: str, found: int, chance: float, averaged: float)
         chance=chance,
         averaged=averaged,
         onset=0,
+        short_events=10,
+        short_found=0,
+        short_chance=0.0,
     )
 
 
@@ -960,3 +970,28 @@ def test_the_choice_leaves_out_the_events_named_apart_and_records_what_it_remove
         "windows_removed": 2,
     }
     assert json.loads((out / "recall-select-chosen.json").read_text())["left_out"] == {}
+
+
+def test_the_short_events_found_are_those_of_at_most_six_windows_above_the_alarm() -> None:
+    # A long event of nine windows scored high is found; a short one of three scored low is not.
+    answers = [
+        predicted("m/2000-01", place, float(place), target, score)
+        for place, (target, score) in enumerate(
+            [(0.0, 0.0)] * 5 + [(1.0, 9.0)] * 9 + [(0.0, 0.0)] * 200 + [(2.0, 0.0)] * 3
+        )
+    ]
+    arrays = SideArrays.of(answers)
+
+    reading = recall_reading(MAX, "hour-6h", arrays, (0.5, 0.25))
+
+    assert arrays.short.tolist() == [False, True]
+    assert (reading.found, reading.short_events, reading.short_found) == (1, 1, 0)
+    assert reading.short_excess == -0.25
+
+
+def test_a_side_with_no_short_event_reads_none_in_the_table() -> None:
+    row = dict.fromkeys(RECALL_COLUMNS, "0")
+    row.update(detector=MAX, arm="hour-6h", events="4", found="2", chance="1", excess="1")
+    row.update(averaged="2", onset="1", chosen="1")
+
+    assert "no event" in recall_table([row])
