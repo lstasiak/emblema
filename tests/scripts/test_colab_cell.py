@@ -44,7 +44,12 @@ STUBS = {
     'echo "1 cell answered: durable/sha256/res sha256:res" >&2\n'
     "echo durable/sha256/res sha256:res\n",
     "nvidia-smi": 'case "$*" in *-l*) exec sleep 100000;; esac\necho "card, 1 MiB"\n',
-    "nvidia-cuda-mps-control": "exit 0\n",
+    "nvidia-cuda-mps-control": 'echo "$*" >> "$CALLS.mps"\n',
+    # As procps on Linux: a name is its first 15 characters, a command line is whole.
+    "pgrep": "running=${MPS_RUNNING:-}\n"
+    '[ "$1" = -f ] && { [ -n "$running" ] && echo "$running" | grep -qE "$2"; exit; }\n'
+    "name=${running%% *}; name=${name##*/}\n"
+    '[ "$1" = -x ] && [ -n "$running" ] && [ "$2" = "${name:0:15}" ]\n',
     "free": 'echo "total used"\necho "Mem: 1 1"\n',
     "nproc": "echo 2\n",
     # macOS has no timeout(1); the alarm's signal ends the command with a non-zero status.
@@ -352,6 +357,24 @@ def test_a_kaggle_cell_spreads_its_workers_over_the_cards_and_needs_no_drive(
         "card=1",
     ]
     assert (results / "results.txt").read_text().count("exit 0") == 4
+
+
+@pytest.mark.parametrize(
+    "running", ["nvidia-cuda-mps-control -d", "/usr/bin/nvidia-cuda-mps-control -d"]
+)
+def test_a_cell_run_again_finds_the_mps_daemon_it_left(tmp_path: Path, running: str) -> None:
+    done, _ = run_cell(tmp_path, write_plan(tmp_path), MPS_RUNNING=running)
+
+    assert "MPS: already running" in done.stdout
+    assert "-d" not in Path(f"{tmp_path / 'calls.txt'}.mps").read_text().split()
+
+
+@pytest.mark.parametrize("running", ["bash cell.sh", "bash -c nvidia-cuda-mps-control -d"])
+def test_a_cell_starts_the_mps_daemon_when_none_runs(tmp_path: Path, running: str) -> None:
+    done, _ = run_cell(tmp_path, write_plan(tmp_path), MPS_RUNNING=running)
+
+    assert "MPS: started" in done.stdout
+    assert Path(f"{tmp_path / 'calls.txt'}.mps").read_text().splitlines()[0] == "-d"
 
 
 @pytest.mark.parametrize("platform", [COLAB, KAGGLE, MAC])

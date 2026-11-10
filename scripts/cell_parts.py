@@ -349,7 +349,10 @@ MPS = """
 # A fixed place, so a cell run again on the machine finds the daemon it started.
 export CUDA_MPS_PIPE_DIRECTORY=/tmp/mps-pipe CUDA_MPS_LOG_DIRECTORY=/tmp/mps-log
 mkdir -p $CUDA_MPS_PIPE_DIRECTORY $CUDA_MPS_LOG_DIRECTORY
-if pgrep -x nvidia-cuda-mps-control > /dev/null; then echo "MPS: already running"
+# Linux keeps 15 characters of a name, too few for this one: match the command line
+# from its start, so a shell whose script names the daemon is not taken for it.
+if pgrep -f '^(/[^ ]*/)?nvidia-cuda-mps-control( |$)' > /dev/null; then
+  echo "MPS: already running"
 elif nvidia-cuda-mps-control -d 2>$W/mps.err; then echo "MPS: started"
 else echo "MPS: unavailable"; unset CUDA_MPS_PIPE_DIRECTORY; fi
 """
