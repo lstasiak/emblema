@@ -673,10 +673,10 @@
 | src/emblema/shared/adapters/queues/celery\_application.py                                 |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/queues/celery\_job\_queue.py                                  |       12 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/queues/immediate\_job\_queue.py                               |       14 |        0 |        2 |        0 |    100% |           |
-| src/emblema/shared/adapters/storage/files.py                                              |       29 |        0 |        6 |        0 |    100% |           |
+| src/emblema/shared/adapters/storage/files.py                                              |       58 |        0 |       12 |        0 |    100% |           |
 | src/emblema/shared/adapters/storage/layout.py                                             |       11 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/storage/local\_directory.py                                   |       55 |        0 |       10 |        0 |    100% |           |
-| src/emblema/shared/adapters/storage/s3.py                                                 |       65 |        0 |       14 |        1 |     99% |   80-\>85 |
+| src/emblema/shared/adapters/storage/s3.py                                                 |       71 |        0 |       16 |        1 |     99% |   80-\>85 |
 | src/emblema/shared/adapters/synthetic/dials.py                                            |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/synthetic/draws.py                                            |       16 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/synthetic/latent\_factor\_process.py                          |       26 |        0 |        2 |        0 |    100% |           |
@@ -726,7 +726,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **22490** |  **184** | **4524** |  **120** | **99%** |           |
+| **TOTAL**                                                                                 | **22525** |  **184** | **4532** |  **120** | **99%** |           |
 
 132 empty files skipped.
 
