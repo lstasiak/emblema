@@ -848,3 +848,82 @@ By the rule nothing was registered and the readings went to a decision.
 verdict is conservative. Why the order turns is a hypothesis (operating point, drift), not
 measured. The package's detector has been checked against this report on `max`, `hour-6h`
 only; every arm a campaign reads as a bar is checked first.
+
+## 2026-11-11 — declared before the run: whether any detector can pass the two verdicts, and why the excess turned
+
+**Question.** The two verdicts' bars and least gains were set on no-model arms alone. Can a
+detector pass them at all: the oracle, and the trees taught the events, the strongest detector
+read on these months? And does the excess at 1 % turn between periods because its operating
+point is fixed while each arm's own alarm is not?
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `scripts/telemetry_verdict_measure_report.py` at the commit of this declaration |
+| References | the oracle, every event window flagged and no other; the trees taught the events over the departures at `hour-6h`, `bins-6h` and `bins-24h`, seeds 1 to 3, their validation answers from the 2026-11-06 run, on the same 39,384 windows and 61 events as the twelve arms (refused otherwise) |
+| Reading | each reference as a candidate is read under the registered rule: its value less the bar's in each of 10,000 draws of months, the bar the stronger of the `bins-72h` pair for the F-score and the best of the twelve arms for the excess; confirmed when the interval at 97.5 % (Holm's first level) lies above nought and the gain reaches the floor's fixed part (0.01; one event); a seeded detector by its seeds' mean in every draw, each seed beside; 1,000 rotations shared by every detector |
+| Operating point | the twelve arms on three periods, 2000 to 2003 less `class_22` (42 events), the selection months (29) and the validation months (61): the events found above chance at 1 % and at each arm's own alarm, chance there read by the same rotations, which keep the share each month flags; Spearman's agreement of the arms' order between every two periods for the excess at 1 %, at the own alarm, the events found at the own alarm and the F-score |
+| Command | `data/report/l47/ceiling.sh data/report/l47/ceiling`: `ceiling --dir data/report/l47/validation --taught data/report/l38/local/run --f-bar max:bins-72h mean:bins-72h --taught-arm trees:hour-6h trees:bins-6h trees:bins-24h --resamples 10000`, then `operating-point --period early data/report/l47/early early --period selection data/report/l38/local/run select --period validation data/report/l47/validation refit --task esa-mission1-events --leave-out class_22 --leave-out-in early` |
+
+**The rule, stated before the run.**
+
+- The oracle must be confirmed by both verdicts; if not, a measure or the reading is broken and
+  nothing below is read.
+- A verdict can be passed when at least one arm of the trees, by its seeds' mean, is confirmed
+  against its bar. The best of three arms is lenient on purpose: the question is whether the
+  bar can be passed at all, so a bar the best of them cannot pass is out of reach with labels.
+- The operating point explains the turn when the excess at the own alarm agrees at +0.70 or
+  more between every two periods, the agreement the excess at 1 % showed between the first two;
+  otherwise the turn stays unexplained.
+- Decisions: both verdicts within reach, the two verdicts stand and the rule joining them is
+  registered; the excess out of reach, the user chooses between reading it beside, as a
+  description, and reading it at the own alarm, with its bar and least gain measured again
+  (only if the operating point explains the turn); the F-score out of reach, the choice of
+  measure is made again.
+
+**What has been seen.** For the trees on these months, the area and the events found at 1 %
+(50 to 54 of 61; 2026-11-06), not their F-score, false runs, chance or excess. For the twelve
+arms, the F-score, the events found at the own alarm, its false runs and its share flagged on
+every period (sections above), and on 2026-11-11, after the forward check, the agreement of the
+raw events found at the own alarm (+0.57) and of the share flagged (−0.07) between 2000 to 2003
+and the validation months. The excess at the own alarm has not been read on any period.
+
+**Prediction.**
+
+- The oracle: F-score 1; 61 events found at 1 % and none by chance, since its rotated flags
+  outnumber the budget and tie at the alarm, so an excess of 61; confirmed by both.
+- The trees by the excess: about 36 to 40, 50 to 54 found less a chance near the arms' 14 to 15;
+  against 32.4 a gain of 4 to 8, under the least gain of 10.6; the interval's half-width 2.24
+  times the spread to the best of the rest (1.7 to 3.9 events, `family`), 4 to 9, so the lower
+  edge lies between about −5 and +4: not clearly within reach. The trees' chance may differ from
+  the arms'; nothing on these months says how.
+- The trees by the F-score: no reading gives a source, so no prediction.
+- The operating point: no source. The agreement of the raw events found at the own alarm seen
+  before (+0.57) lies within what the trial reads at chance, so it supports nothing; the
+  excess there is expected below +0.70 on at least one pair, the turn unexplained.
+
+**Trial.** `ceiling.sh --trial 1`, every month's scores first turned by one offset shared by
+every detector, ran whole in 32 s and 71 s; `operating-point` again under `--trial 2` and `3`.
+The trees join the arms' windows and events; every period holds the twelve arms (42, 29 and 61
+events). At chance no tree is confirmed by either verdict and their excess lies at −2.4 to
++0.6. The rotated oracle is still confirmed by the F-score (0.247 against 0.069): a rotation
+keeps its flags in runs, so the F-score rewards clustered alarms at chance. Agreement of the
+arms' order between periods at chance, over the three trials and three pairs:
+
+| Measure | At chance | Read before |
+| --- | --- | --- |
+| Excess at 1 % | −0.25 to +0.35 | +0.70, −0.03, −0.03 |
+| Excess at the own alarm | −0.67 to +0.41 | not read |
+| Found at the own alarm | +0.27 to +0.87 | +0.57 (first and last) |
+| F-score | +0.29 to +0.73 | +0.83, +0.85, +0.95 |
+
+The F-score orders the arms above chance on every pair, by less than the comparison of measures
+suggested, since its chance shares the arms' alarm structure; the threshold of +0.70 for the
+excess at the own alarm lies above every draw at chance.
+
+**Limitations.** The trees are taught 70 events of the fitting side: they say what labels buy,
+not what a detector with no label can reach; only the oracle bounds a measure, and for the
+F-score it does so trivially. Three arms and three seeds. The own alarm flags 0.7 to 2.3 % of
+normal windows in different periods, so the excess there reads the drift of the alarm with the
+operating point.
