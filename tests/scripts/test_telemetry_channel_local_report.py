@@ -30,8 +30,10 @@ from scripts.telemetry_channel_local_report import (
     TAUGHT,
     Arm,
     Departures,
+    SideArrays,
     after_event_share,
     agreement_of,
+    alarm_boundary,
     arm_cells,
     arms_of,
     bin_values,
@@ -42,6 +44,7 @@ from scripts.telemetry_channel_local_report import (
     control_cells,
     corrected,
     event_annotations,
+    found_mask,
     global_floor,
     hour_summaries,
     largest_departures,
@@ -53,6 +56,7 @@ from scripts.telemetry_channel_local_report import (
     read_tables,
     reading_row,
     refit_arms,
+    selection_answers,
     window_scores,
 )
 from scripts.telemetry_context_report import (
@@ -594,3 +598,95 @@ def test_tied_windows_share_their_mean_rank_as_spearmans_coefficient_defines_it(
     # Two scorings with the same order and ties agree whole, at any level.
     level = np.concatenate((np.full(400, -2.0), np.linspace(0.0, 5.0, 344)))
     assert agreement_of(level, level - 0.37) == (1.0, 1.0)
+
+
+def ranked_answers(seed: int, *, ties: bool) -> list[WindowPrediction]:
+    """Three months of 40 hourly windows, five events of one to nine hours, scores maybe tied."""
+    draw = random.Random(seed)
+    out = []
+    event = 0
+    for month in range(3):
+        starts = {5: 3, 22: 9} if month != 1 else {12: 1}
+        open_until, number = -1, 0
+        for place in range(40):
+            if place in starts:
+                event += 1
+                open_until, number = place + starts[place], event
+            target = float(number) if place < open_until else 0.0
+            score = draw.randint(0, 6) if ties else draw.random()
+            out.append(
+                predicted(f"m/200{month}-01", place, float(1000 * month + place), target, score)
+            )
+    return out
+
+
+@pytest.mark.parametrize("seed", range(12))
+@pytest.mark.parametrize("ties", [False, True])
+@pytest.mark.parametrize("share", [0.0, 0.01, 0.05, 0.1, 0.3, 1.0])
+def test_the_alarm_finds_the_events_the_ranking_finds_at_the_same_share(
+    seed: int, ties: bool, share: float
+) -> None:
+    answers = ranked_answers(seed, ties=ties)
+    ranking = AnomalyRanking.of(answers)
+
+    arrays = SideArrays.of(answers)
+    found = int(found_mask(arrays.scores, arrays.events, arrays.event_ids, share).sum())
+
+    assert found / ranking.event_count == ranking.event_recall_at_false_alarm_share(share)
+
+
+def test_a_window_tied_with_the_first_normal_window_past_the_share_is_not_flagged() -> None:
+    answers = [
+        predicted("m/2000-01", 0, 1.0, 1.0, 5.0),
+        predicted("m/2000-01", 1, 2.0, 0.0, 5.0),
+        *(predicted("m/2000-01", place, float(place + 1), 0.0, 1.0) for place in range(2, 12)),
+    ]
+    arrays = SideArrays.of(answers)
+
+    assert not found_mask(arrays.scores, arrays.events, arrays.event_ids, 0.05).any()
+    assert found_mask(arrays.scores, arrays.events, arrays.event_ids, 0.1).tolist() == [True]
+    assert alarm_boundary(arrays.scores, arrays.events, 1.0) == -np.inf
+
+
+def test_the_arrays_hold_the_windows_by_unit_then_place() -> None:
+    answers = [
+        predicted("m/2000-02", 1, 31.0, 0.0, 4.0),
+        predicted("m/2000-01", 1, 2.0, 1.0, 2.0),
+        predicted("m/2000-02", 0, 30.0, 0.0, 3.0),
+        predicted("m/2000-01", 0, 1.0, 0.0, 1.0),
+    ]
+
+    arrays = SideArrays.of(answers)
+
+    assert arrays.units.tolist() == [0, 0, 1, 1]
+    assert arrays.scores.tolist() == [1.0, 2.0, 3.0, 4.0]
+    assert arrays.events.tolist() == [0, 1, 0, 0]
+    assert arrays.event_ids.tolist() == [1]
+
+
+def selection_run(directory: Path, *, good: str) -> None:
+    (directory / "conditions.json").write_text(json.dumps(CONDITIONS))
+    (directory / f"truncated-{SELECT}.csv").write_text("unit,position,ends_at,target\n")
+    for arm in ("hour-6h", "bins-6h"):
+        for detector in (MAX, MEAN):
+            write_cell(
+                directory,
+                SELECT,
+                LOCAL,
+                detector,
+                arm,
+                NO_SEED,
+                answers_scoring(arm == good and detector == MEAN, 1),
+            )
+
+
+def test_the_selection_answers_refuse_a_missing_arm_or_other_windows(tmp_path: Path) -> None:
+    selection_run(tmp_path, good="bins-6h")
+    assert len(selection_answers(tmp_path)) == 4
+    name = cell_name(SELECT, LOCAL, MAX, "hour-6h", NO_SEED)
+    write_answers(tmp_path / "answers" / f"{name}.csv", answers_scoring(False, 1)[1:])
+    with pytest.raises(SystemExit, match="scores other windows"):
+        selection_answers(tmp_path)
+    (tmp_path / "answers" / f"{name}.csv").unlink()
+    with pytest.raises(SystemExit, match="is missing"):
+        selection_answers(tmp_path)

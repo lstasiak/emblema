@@ -89,6 +89,8 @@ from scripts.telemetry_context_report import (
 from scripts.telemetry_supervised_reference import month_of
 
 Floats = NDArray[np.float64]
+Ints = NDArray[np.int64]
+Bools = NDArray[np.bool_]
 
 SECTIONS = (SELECT, REFIT)
 # What the windows are read through: each channel's departure from its own recent hours with no
@@ -452,6 +454,116 @@ def choose(family: str, detector: str, means: Mapping[str, float]) -> Choice:
     near = [Arm.parse(arm) for arm, mean in means.items() if mean >= best - 0.01]
     chosen = min(near, key=lambda arm: (arm.hours, FEATURE_SETS.index(arm.features)))
     return Choice(family=family, detector=detector, arm=chosen.name, means=dict(means))
+
+
+# The months' scores turned and read against an alarm at a share of normal windows: what the
+# first mission's verdict counts, shared with the reports that read it.
+def month_slices(units: Ints) -> list[tuple[int, int]]:
+    """Where each unit's run of windows starts and how long it is.
+
+    Raises:
+        ValueError: If a unit's windows are not contiguous.
+    """
+    changes = np.flatnonzero(np.diff(units)) + 1
+    starts = np.concatenate(([0], changes))
+    lengths = np.diff(np.concatenate((starts, [len(units)])))
+    if len(set(units[starts].tolist())) != len(starts):
+        raise ValueError("a unit's windows are not contiguous")
+    return list(zip(starts.tolist(), lengths.tolist(), strict=True))
+
+
+def rotation_order(slices: Sequence[tuple[int, int]], draws: np.random.Generator) -> Ints:
+    """An index that turns every month by a random offset of at least one window."""
+    parts = []
+    for start, length in slices:
+        offset = int(draws.integers(1, length)) if length > 1 else 0
+        parts.append(start + (np.arange(length) + offset) % length)
+    return np.concatenate(parts)
+
+
+def alarm_boundary(scores: Floats, events: Ints, share: float) -> float:
+    """The score a window must pass to be flagged at ``share`` of the normal windows.
+
+    The alarm stops before the normal window that would flag more than ``share`` of them, so a
+    window that ties with that normal window is not flagged, as the harness counts it.
+    """
+    normal = scores[events == 0]
+    allowed = int(share * len(normal))
+    if allowed >= len(normal):
+        return -np.inf
+    return float(np.partition(normal, len(normal) - 1 - allowed)[len(normal) - 1 - allowed])
+
+
+def found_mask(scores: Floats, events: Ints, event_ids: Ints, share: float) -> Bools:
+    """Which of ``event_ids`` hold a window above the alarm at ``share`` of normal windows."""
+    flagged = np.unique(events[(scores > alarm_boundary(scores, events, share)) & (events > 0)])
+    return np.isin(event_ids, flagged)
+
+
+@dataclass(frozen=True)
+class SideArrays:
+    """One arm's answers on a side as arrays, the windows by unit and then by place.
+
+    Attributes:
+        units: Each window's unit, numbered in the units' order.
+        positions: Where the block holds each window, so runs of alarms can be told apart.
+        events: Each window's event, nought for none.
+        scores: Each window's score.
+    """
+
+    units: Ints
+    positions: Ints
+    events: Ints
+    scores: Floats
+
+    @classmethod
+    def of(cls, predictions: Sequence[WindowPrediction]) -> SideArrays:
+        rows = sorted(predictions, key=lambda p: (str(p.window.unit), p.window.position))
+        names = sorted({str(p.window.unit) for p in rows})
+        number = {name: place for place, name in enumerate(names)}
+        return cls(
+            units=np.asarray([number[str(p.window.unit)] for p in rows], dtype=np.int64),
+            positions=np.asarray([p.window.position for p in rows], dtype=np.int64),
+            events=np.asarray([int(p.target) for p in rows], dtype=np.int64),
+            scores=np.asarray([p.predicted for p in rows], dtype=np.float64),
+        )
+
+    def turned(self, order: Ints) -> SideArrays:
+        """The same windows with the scores taken in ``order``."""
+        return replace(self, scores=self.scores[order])
+
+    @property
+    def event_ids(self) -> Ints:
+        return np.unique(self.events[self.events > 0])
+
+
+def selection_answers(
+    directory: Path, section: str = SELECT
+) -> dict[tuple[str, str], list[WindowPrediction]]:
+    """Every no-model arm's answers on ``section``, by detector and arm.
+
+    Raises:
+        SystemExit: If an arm's cell is missing, or two arms score other windows or other events.
+    """
+    conditions = json.loads((directory / "conditions.json").read_text())
+    dropped = read_truncated(directory, section)
+    answers: dict[tuple[str, str], list[WindowPrediction]] = {}
+    for arm in arms_of(conditions["features"], conditions["spans"]):
+        for detector in LOCAL_DETECTORS:
+            name = cell_name(section, LOCAL, detector, arm.name, NO_SEED)
+            path = directory / "answers" / f"{name}.csv"
+            if not path.exists():
+                raise SystemExit(f"{name} is missing: every arm is read")
+            answers[(detector, arm.name)] = kept(read_answers(path), dropped)
+    keys = {
+        key: sorted((str(p.window.unit), p.window.position, p.target) for p in rows)
+        for key, rows in answers.items()
+    }
+    first = next(iter(keys.values()))
+    for key, held in keys.items():
+        if held != first:
+            raise SystemExit(f"{key[0]} {key[1]} scores other windows or events than the first")
+    return answers
 
 
 def cells_of(directory: Path) -> list[dict[str, str]]:
