@@ -106,10 +106,10 @@ Preliminary, on validation data; each task's test data is used once, at the end.
 - On satellite telemetry the features find few events without labels. Each channel's departure
   from its own recent hours, with no model and no label, is part of the package and the bar the
   backbone has to beat: the best find 32 of 61 events beyond chance at 1 % false alarms on the
-  first mission, where a tree model trained on labelled events finds about 10 more; on the second, a PR-AUC of 0.885
-  against 0.627. A pretext forecasting each channel's next hour reads no
-  better than that departure, and the departures miss too few events on that mission to justify
-  a perturbation term.
+  first mission, where a tree model trained on labelled events finds about 10 more; on the
+  second, a PR-AUC of 0.885 against 0.627. A pretext forecasting each channel's next hour reads
+  no better than that departure, and the departures miss too few events on that mission to
+  justify a perturbation term.
 
 **Next:** confirmation at few labels on fresh pretrainings.
 
