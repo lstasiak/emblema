@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import random
+from collections.abc import Sequence
 from dataclasses import replace
 from itertools import combinations
 from pathlib import Path
@@ -21,15 +22,21 @@ from scripts.telemetry_channel_local_report import (
     MAX,
     MEAN,
     NO_SEED,
+    TAUGHT,
     LeftOut,
     SideArrays,
     alarm_boundary,
     cell_name,
+    month_slices,
+    rotation_order,
 )
-from scripts.telemetry_context_report import REFIT, SELECT
+from scripts.telemetry_context_report import REFIT, SELECT, TREES
 from scripts.telemetry_verdict_measure_report import (
+    FLOORS,
     FReading,
+    agreements,
     alarms,
+    ceiling,
     chance,
     chance_by_month,
     choose_by_f,
@@ -39,7 +46,12 @@ from scripts.telemetry_verdict_measure_report import (
     forward,
     main,
     month_draws,
+    operating_point,
+    oracle_of,
     parse_arm,
+    parse_taught,
+    period_arms,
+    rows_of,
     separated,
     side_answers,
     tally,
@@ -467,3 +479,293 @@ def test_each_arm_stands_against_the_best_of_the_rest(tmp_path: Path) -> None:
     median = (sds[1] + sds[2]) / 2
     assert float(str(rows[0]["least_gain"])) == pytest.approx(3.083 * median, abs=1e-3)
     assert (tmp_path / "out" / "family-excess.csv").exists()
+
+
+def taught_cells(directory: Path, arm: str, seeds: Sequence[int], lift: float) -> None:
+    """Trees taught the events: the arms' windows, event windows lifted more under each seed."""
+    for seed in seeds:
+        name = cell_name(REFIT, TAUGHT, TREES, arm, seed)
+        rows = [
+            replace(p, predicted=p.predicted + (lift + 0.1 * seed) * (p.target > 0))
+            for p in answers(1, months=6)
+        ]
+        write_answers(directory / "answers" / f"{name}.csv", rows)
+
+
+def test_the_oracle_flags_every_event_window_and_no_other() -> None:
+    arrays = SideArrays.of(answers(2, months=4))
+    oracle = oracle_of(arrays)
+
+    assert value(oracle, "f_own") == pytest.approx(1.0)
+    assert value(oracle, "found") == len(arrays.event_ids)
+    assert np.array_equal(oracle.events, arrays.events)
+
+
+def test_the_ceiling_reads_each_reference_against_the_bars_as_a_candidate(tmp_path: Path) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+    taught_cells(tmp_path, "hour-6h", (1, 2, 3), lift=3.0)
+    pair = [(MEAN, "hour-6h"), (MEAN, "bins-6h")]
+
+    rows = ceiling(
+        tmp_path,
+        tmp_path,
+        tmp_path / "out",
+        f_bar=pair,
+        references=[(TREES, "hour-6h")],
+        rotations=5,
+        resamples=60,
+    )
+
+    readings = {(r["verdict"], r["reference"], r["seeds"]): r for r in rows}
+    # Per verdict: the trees' mean over seeds, each seed, and the oracle.
+    assert len(rows) == 2 * (1 + 3 + 1)
+    for verdict in ("f_own", "excess"):
+        seeds = [
+            float(str(readings[(verdict, "trees hour-6h", f"s{s}")]["value"])) for s in (1, 2, 3)
+        ]
+        mean = float(str(readings[(verdict, "trees hour-6h", "all")]["value"]))
+        assert mean == pytest.approx(float(np.mean(seeds)), abs=1e-3)
+        oracle = readings[(verdict, "oracle", "")]
+        assert float(str(oracle["difference"])) >= 0.0
+    # Turned, the oracle's flags outnumber the budget and tie at the alarm, so its chance is
+    # nought and its excess every event.
+    events = len(SideArrays.of(answers(1, months=6)).event_ids)
+    assert float(str(readings[("excess", "oracle", "")]["value"])) == events
+    assert readings[("f_own", "oracle", "")]["confirmed"] == 1
+    for row in rows:
+        difference = float(str(row["difference"]))
+        confirmed = float(str(row["low"])) > 0 and difference >= FLOORS[str(row["verdict"])]
+        assert row["confirmed"] == int(confirmed)
+        assert difference == pytest.approx(
+            float(str(row["value"])) - float(str(row["bar"])), abs=2e-4
+        )
+    excess_bar = {str(r["bar"]) for r in rows if r["verdict"] == "excess"}
+    held = family(tmp_path, tmp_path / "family", verdict="excess", rotations=5, resamples=10)
+    assert excess_bar == {f"{max(float(str(r['value'])) for r in held):.4f}"}
+    assert (tmp_path / "out" / "ceiling.csv").exists()
+
+
+def test_the_ceiling_refuses_a_missing_seed_or_other_windows(tmp_path: Path) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+    pair = [(MEAN, "hour-6h"), (MEAN, "bins-6h")]
+    taught_cells(tmp_path, "hour-6h", (1, 2), lift=1.0)
+    with pytest.raises(SystemExit, match="refit-taught-trees-hour-6h-s3 is missing"):
+        ceiling(
+            tmp_path,
+            tmp_path,
+            tmp_path / "out",
+            f_bar=pair,
+            references=[(TREES, "hour-6h")],
+            rotations=2,
+            resamples=5,
+        )
+    name = cell_name(REFIT, TAUGHT, TREES, "hour-6h", 3)
+    write_answers(tmp_path / "answers" / f"{name}.csv", answers(1, months=6)[1:])
+    with pytest.raises(SystemExit, match="other windows or events than the no-model arms"):
+        ceiling(
+            tmp_path,
+            tmp_path,
+            tmp_path / "out",
+            f_bar=pair,
+            references=[(TREES, "hour-6h")],
+            rotations=2,
+            resamples=5,
+        )
+    with pytest.raises(SystemExit, match="is two arms"):
+        ceiling(
+            tmp_path,
+            tmp_path,
+            tmp_path / "out",
+            f_bar=[pair[0], pair[0]],
+            references=[],
+            rotations=2,
+            resamples=5,
+        )
+
+
+def test_a_rotation_keeps_the_share_the_own_alarm_flags_in_each_month() -> None:
+    arrays = SideArrays.of(answers(6, months=4))
+    finds = replace(arrays, scores=np.where(arrays.events > 0, 5.0, arrays.scores))
+    slices = month_slices(finds.units)
+    turned = finds.turned(rotation_order(slices, np.random.default_rng(3)))
+
+    assert (
+        np.bincount(finds.units[alarms(turned, "f_own")], minlength=4).tolist()
+        == np.bincount(finds.units[alarms(finds, "f_own")], minlength=4).tolist()
+    )
+    own = chance_by_month({(MAX, "a"): finds}, rotations=30, seed=1, alarm="f_own")[(MAX, "a")]
+    draws = np.random.default_rng(1)
+    expected = np.zeros(4)
+    for _ in range(30):
+        again = finds.turned(rotation_order(slices, draws))
+        expected += tally(again, alarms(again, "f_own")).found
+    assert own.tolist() == pytest.approx((expected / 30).tolist())
+    assert own.sum() < tally(finds, alarms(finds, "f_own")).found.sum()
+
+
+def test_the_operating_point_reads_both_alarms_in_every_period(tmp_path: Path) -> None:
+    a_run(tmp_path, {SELECT: ["hour-6h", "bins-6h"], REFIT: ["hour-6h", "bins-6h"]})
+    periods = [(side, period_arms(tmp_path, side, None)) for side in (SELECT, REFIT)]
+
+    rows = operating_point(periods, tmp_path / "out", rotations=5)
+
+    assert len(rows) == 2 * 4
+    for row in rows:
+        assert float(str(row["excess"])) == pytest.approx(
+            int(str(row["found"])) - float(str(row["chance"])), abs=2e-3
+        )
+        assert float(str(row["excess_own"])) == pytest.approx(
+            int(str(row["found_own"])) - float(str(row["chance_own"])), abs=2e-3
+        )
+    text = agreements(rows_of(tmp_path / "out" / "operating-point.csv"))
+    assert f"| {SELECT} and {REFIT} |" in text
+    assert text.count("\n") == 5
+
+
+def test_main_routes_the_ceiling_and_the_operating_point(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    a_run(tmp_path, {SELECT: ["hour-6h", "bins-6h"], REFIT: ["hour-6h", "bins-6h"]})
+    taught_cells(tmp_path, "hour-6h", (1,), lift=2.0)
+    main(
+        [
+            "ceiling",
+            *("--dir", str(tmp_path), "--taught", str(tmp_path), "--out", str(tmp_path / "out")),
+            *("--f-bar", "mean:hour-6h", "mean:bins-6h", "--taught-arm", "trees:hour-6h"),
+            *("--seeds", "1", "--rotations", "3", "--resamples", "20", "--trial", "2"),
+        ]
+    )
+    assert "| Verdict | Reference |" in capsys.readouterr().out
+    assert (tmp_path / "out" / "ceiling-trial-2.md").exists()
+    assert not (tmp_path / "out" / "ceiling.csv").exists()
+
+    main(
+        [
+            "operating-point",
+            *("--period", "a", str(tmp_path), SELECT, "--period", "b", str(tmp_path), REFIT),
+            *("--out", str(tmp_path / "out"), "--rotations", "3"),
+        ]
+    )
+    assert "| a and b |" in capsys.readouterr().out
+    with pytest.raises(SystemExit, match="names no period: c"):
+        main(
+            [
+                "operating-point",
+                *("--period", "a", str(tmp_path), SELECT),
+                *("--out", str(tmp_path / "out"), "--leave-out-in", "c"),
+                *("--leave-out", "class_22"),
+            ]
+        )
+
+
+def test_a_taught_arm_is_named_detector_then_arm() -> None:
+    assert parse_taught("trees:bins-24h") == (TREES, "bins-24h")
+    with pytest.raises(argparse.ArgumentTypeError, match="<detector>:<arm>"):
+        parse_taught("max:bins-24h")
+
+
+def test_an_operating_point_trial_writes_apart_from_the_reading(tmp_path: Path) -> None:
+    a_run(tmp_path, {SELECT: ["hour-6h", "bins-6h"]})
+
+    operating_point(
+        [(SELECT, period_arms(tmp_path, SELECT, None))], tmp_path / "out", rotations=3, trial=5
+    )
+
+    assert (tmp_path / "out" / "operating-point-trial-5.csv").exists()
+    assert not (tmp_path / "out" / "operating-point.csv").exists()
+
+
+def test_a_reference_is_paired_with_the_bar_in_every_draw(tmp_path: Path) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+    # The fixture's two mean arms score alike, so a reference scoring as they do ties the bar in
+    # every draw: an interval of nought only if each draw compares like with like.
+    mean = tmp_path / "answers" / f"{cell_name(REFIT, LOCAL, MEAN, 'hour-6h', NO_SEED)}.csv"
+    for seed in (1, 2, 3):
+        name = cell_name(REFIT, TAUGHT, TREES, "hour-6h", seed)
+        (tmp_path / "answers" / f"{name}.csv").write_text(mean.read_text())
+
+    rows = ceiling(
+        tmp_path,
+        tmp_path,
+        tmp_path / "out",
+        f_bar=[(MEAN, "hour-6h"), (MEAN, "bins-6h")],
+        references=[(TREES, "hour-6h")],
+        rotations=4,
+        resamples=40,
+    )
+
+    tied = [r for r in rows if r["verdict"] == "f_own" and r["reference"] == "trees hour-6h"]
+    assert {(r["low"], r["high"], r["difference"]) for r in tied} == {
+        ("0.0000", "0.0000", "0.0000")
+    }
+
+
+def test_a_ceiling_trial_turns_the_references_with_the_arms(tmp_path: Path) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+    taught_cells(tmp_path, "hour-6h", (1,), lift=3.0)
+    pair = [(MEAN, "hour-6h"), (MEAN, "bins-6h")]
+
+    def found(trial: int | None, reference: str) -> float:
+        rows = ceiling(
+            tmp_path,
+            tmp_path,
+            tmp_path / "out",
+            f_bar=pair,
+            references=[(TREES, "hour-6h")],
+            seeds=(1,),
+            rotations=3,
+            resamples=20,
+            trial=trial,
+        )
+        return next(float(str(r["found"])) for r in rows if r["reference"] == reference)
+
+    events = len(SideArrays.of(answers(1, months=6)).event_ids)
+    assert found(None, "oracle") == events
+    # Turned, the oracle's flags outnumber the budget and tie at the alarm: none is flagged.
+    assert found(1, "oracle") == 0
+    assert found(1, "trees hour-6h") < found(None, "trees hour-6h")
+
+
+def test_classes_are_left_out_of_the_periods_named_only(tmp_path: Path) -> None:
+    a_run(tmp_path, {SELECT: ["hour-6h", "bins-6h"]})
+    left_out = LeftOut(classes={"kind": [1]}, overlaps=lambda window: ())
+    whole = period_arms(tmp_path, SELECT, None)
+    less = period_arms(tmp_path, SELECT, left_out)
+
+    for key, arrays in less.items():
+        assert 1 not in arrays.event_ids
+        assert len(arrays.units) == len(whole[key].units) - int((whole[key].events == 1).sum())
+
+
+def test_an_order_with_no_spread_agrees_with_nothing() -> None:
+    rows = [
+        {
+            "period": period,
+            "detector": MAX,
+            "arm": arm,
+            **dict.fromkeys(("excess", "excess_own", "found_own"), str(value)),
+            "f_own": "0.5",
+        }
+        for period in ("a", "b")
+        for arm, value in (("x", 1.0), ("y", 2.0), ("z", 3.0))
+    ]
+
+    text = agreements(rows)
+
+    assert "| f_own | n/a |" in text
+    assert "| excess | +1.00 |" in text
+
+
+def test_classes_to_leave_out_and_the_periods_they_leave_are_named_together(
+    tmp_path: Path,
+) -> None:
+    a_run(tmp_path, {SELECT: ["hour-6h", "bins-6h"]})
+    for extra in (["--leave-out", "class_22"], ["--leave-out-in", "a"]):
+        with pytest.raises(SystemExit, match="give both"):
+            main(
+                [
+                    "operating-point",
+                    *("--period", "a", str(tmp_path), SELECT),
+                    *("--out", str(tmp_path / "out"), *extra),
+                ]
+            )

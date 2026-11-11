@@ -24,6 +24,15 @@ bootstrap over months tells apart. The CSV comes first, the tables from it.
     uv run scripts/telemetry_verdict_measure_report.py forward --dir RUN --out OUT
         --f-bar max:bins-72h mean:bins-72h --excess-bar mean:hour-72h mean:bins-72h
     uv run scripts/telemetry_verdict_measure_report.py family --dir RUN --out OUT --verdict excess
+    uv run scripts/telemetry_verdict_measure_report.py ceiling --dir RUN --taught RUN --out OUT
+        --f-bar max:bins-72h mean:bins-72h --taught-arm trees:hour-6h trees:bins-24h
+    uv run scripts/telemetry_verdict_measure_report.py operating-point --out OUT
+        --period early RUN early --period validation RUN refit
+        --task esa-mission1-events --leave-out class_22 --leave-out-in early
+
+``ceiling`` reads the oracle and detectors taught the events as candidates against the bars, so
+a bar no detector could pass is seen before one is read against it; ``operating-point`` reads
+each arm's events found above chance at 1 % beside those at its own alarm, in every period.
 """
 
 from __future__ import annotations
@@ -32,8 +41,8 @@ import argparse
 import csv
 import json
 import sys
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass, replace
 from itertools import combinations
 from pathlib import Path
 
@@ -52,6 +61,9 @@ from scripts.telemetry_channel_local_report import (
     LOCAL,
     LOCAL_DETECTORS,
     NO_SEED,
+    SEEDED,
+    TAUGHT,
+    TAUGHT_DETECTORS,
     Arm,
     LeftOut,
     SideArrays,
@@ -206,12 +218,18 @@ def chance(
 
 
 def chance_by_month(
-    arms: Mapping[tuple[str, str], SideArrays], *, rotations: int, seed: int
+    arms: Mapping[tuple[str, str], SideArrays],
+    *,
+    rotations: int,
+    seed: int,
+    alarm: str = "found",
 ) -> dict[tuple[str, str], Floats]:
-    """Each arm's events found at 1 % per month, averaged over rotations shared by every arm.
+    """Each arm's events found per month, averaged over rotations shared by every arm.
 
     An event counts in the month of its first window, as the tally counts it, so the excess of a
-    drawn set of months is the found less the chance of the same months.
+    drawn set of months is the found less the chance of the same months. ``alarm`` is ``found``
+    for 1 % of normal windows or ``f_own`` for the detector's own alarm, which a rotation keeps
+    flagging the same share of each month.
     """
     first = next(iter(arms.values()))
     slices = month_slices(first.units)
@@ -221,7 +239,7 @@ def chance_by_month(
         order = rotation_order(slices, draws)
         for key, arrays in arms.items():
             turned = arrays.turned(order)
-            sums[key] += tally(turned, alarms(turned, "found")).found
+            sums[key] += tally(turned, alarms(turned, alarm)).found
     return {key: total / rotations for key, total in sums.items()}
 
 
@@ -335,6 +353,25 @@ def power(directory: Path, out: Path, *, rotations: int, resamples: int) -> None
     write(out / "power.csv", POWER_COLUMNS, rows)
 
 
+def whole_grid(directory: Path) -> dict[tuple[str, str], SideArrays]:
+    """Every no-model arm of the run's grid on the validation months.
+
+    Raises:
+        SystemExit: If any arm of the grid has no answers, so an arm cannot drop out unseen.
+    """
+    arms = side_answers(directory, REFIT)
+    conditions = json.loads((directory / "conditions.json").read_text())
+    grid = [
+        (detector, arm.name)
+        for arm in arms_of(conditions["features"], conditions["spans"])
+        for detector in LOCAL_DETECTORS
+    ]
+    missing = [key for key in grid if key not in arms]
+    if missing:
+        raise SystemExit(f"no answers for {', '.join(' '.join(m) for m in missing)}")
+    return arms
+
+
 FORWARD_COLUMNS = ("verdict", "arm", "difference", "low", "high", "least_gain", "beats")
 # The first test of a Holm family of two reads its interval at 97.5 %.
 HOLM_FIRST_LEVEL = (1.25, 98.75)
@@ -377,16 +414,7 @@ def forward(
         if len(set(pair)) != 2:
             raise SystemExit(f"the {verdict} bar is two arms, not {list(pair)}")
     out.mkdir(parents=True, exist_ok=True)
-    arms = side_answers(directory, REFIT)
-    conditions = json.loads((directory / "conditions.json").read_text())
-    grid = [
-        (detector, arm.name)
-        for arm in arms_of(conditions["features"], conditions["spans"])
-        for detector in LOCAL_DETECTORS
-    ]
-    missing = [key for key in grid if key not in arms]
-    if missing:
-        raise SystemExit(f"no answers for {', '.join(' '.join(m) for m in missing)}")
+    arms = whole_grid(directory)
     if trial is not None:
         first = next(iter(arms.values()))
         order = rotation_order(month_slices(first.units), np.random.default_rng(trial))
@@ -454,16 +482,7 @@ def family(
         SystemExit: If any arm of the run's grid has no answers.
     """
     out.mkdir(parents=True, exist_ok=True)
-    arms = side_answers(directory, REFIT)
-    conditions = json.loads((directory / "conditions.json").read_text())
-    grid = [
-        (detector, arm.name)
-        for arm in arms_of(conditions["features"], conditions["spans"])
-        for detector in LOCAL_DETECTORS
-    ]
-    missing = [key for key in grid if key not in arms]
-    if missing:
-        raise SystemExit(f"no answers for {', '.join(' '.join(m) for m in missing)}")
+    arms = whole_grid(directory)
     by_month = chance_by_month(arms, rotations=rotations, seed=SEED)
     source = "f_own" if verdict == "f_own" else "found"
     tallies = {key: tally(arrays, alarms(arrays, source)) for key, arrays in arms.items()}
@@ -493,6 +512,321 @@ def family(
         )
     write(out / f"family-{verdict}.csv", FAMILY_COLUMNS, rows)
     return rows
+
+
+# The first mission's registered verdicts: each floor's fixed part and least gain.
+FLOORS = {"f_own": 0.01, "excess": 1.0}
+LEAST_GAINS = {"f_own": 0.195, "excess": 10.6}
+ORACLE = ("oracle", "events")
+TAUGHT_SEEDS = (1, 2, 3)
+CEILING_COLUMNS = (
+    "verdict",
+    "reference",
+    "seeds",
+    "value",
+    "bar",
+    "difference",
+    "low",
+    "high",
+    "floor",
+    "least_gain",
+    "confirmed",
+    "found",
+    "found_own",
+    "false_runs",
+    "flagged",
+)
+# Beside each reading, what makes it: the events found at 1 % and at the detector's own alarm,
+# that alarm's runs of false alarms and its share of normal windows flagged.
+DESCRIBED = CEILING_COLUMNS[-4:]
+
+
+def parse_taught(text: str) -> tuple[str, str]:
+    """``<taught detector>:<arm>``, as the taught cells are named.
+
+    Raises:
+        argparse.ArgumentTypeError: If the text is not of that form.
+    """
+    detector, _, arm = text.partition(":")
+    if detector not in TAUGHT_DETECTORS or not arm:
+        raise argparse.ArgumentTypeError(f"a taught arm is <detector>:<arm>, not {text!r}")
+    return detector, arm
+
+
+def taught_answers(
+    directory: Path,
+    reference: tuple[str, str],
+    seeds: Sequence[int],
+    like: SideArrays,
+    dropped: Collection[tuple[str, int]],
+) -> dict[tuple[str, str], SideArrays]:
+    """A taught detector's answers on the validation months, one per seed it draws.
+
+    Raises:
+        SystemExit: If a seed's cell is missing, or it scores other windows or events than
+            ``like``, so a reference is never read on another set of windows than its bar.
+    """
+    detector, arm = reference
+    held = {}
+    for seed in seeds if detector in SEEDED else (NO_SEED,):
+        name = cell_name(REFIT, TAUGHT, detector, arm, seed)
+        path = directory / "answers" / f"{name}.csv"
+        if not path.exists():
+            raise SystemExit(f"{name} is missing")
+        arrays = SideArrays.of(kept(read_answers(path), dropped))
+        if not (
+            np.array_equal(arrays.units, like.units)
+            and np.array_equal(arrays.positions, like.positions)
+            and np.array_equal(arrays.events, like.events)
+        ):
+            raise SystemExit(f"{name} scores other windows or events than the no-model arms")
+        held[(detector, arm if seed == NO_SEED else f"{arm} s{seed}")] = arrays
+    return held
+
+
+def oracle_of(like: SideArrays) -> SideArrays:
+    """Every event window above the alarm and every normal window below it."""
+    return replace(like, scores=np.where(like.events > 0, 1.0, -1.0))
+
+
+def ceiling(
+    validation: Path,
+    taught: Path,
+    out: Path,
+    *,
+    f_bar: Sequence[tuple[str, str]],
+    references: Sequence[tuple[str, str]],
+    seeds: Sequence[int] = TAUGHT_SEEDS,
+    rotations: int,
+    resamples: int,
+    trial: int | None = None,
+) -> list[dict[str, object]]:
+    """The oracle and detectors taught the events, read by both verdicts against their bars.
+
+    Each reference is read as a candidate is: its value less the bar's in every draw of months,
+    the bar the stronger of the F-score's pair or the best of the twelve no-model arms; it is
+    confirmed when the interval at Holm's first level lies above nought and the gain reaches the
+    floor's fixed part. A seeded detector is read by its seeds' mean in every draw, and each
+    seed beside. With ``trial``, every month's scores are first turned by one offset shared by
+    every detector.
+
+    Raises:
+        SystemExit: If the F-score's bar is not two arms.
+    """
+    if len(set(f_bar)) != 2:
+        raise SystemExit(f"the f_own bar is two arms, not {list(f_bar)}")
+    out.mkdir(parents=True, exist_ok=True)
+    arms = whole_grid(validation)
+    like = next(iter(arms.values()))
+    dropped = read_truncated(validation, REFIT)
+    groups: dict[str, list[tuple[str, str]]] = {}
+    everything: dict[tuple[str, str], SideArrays] = dict(arms)
+    for reference in references:
+        each = taught_answers(taught, reference, seeds, like, dropped)
+        groups[" ".join(reference)] = list(each)
+        everything.update(each)
+    everything[ORACLE] = oracle_of(like)
+    groups[ORACLE[0]] = [ORACLE]
+    if trial is not None:
+        order = rotation_order(month_slices(like.units), np.random.default_rng(trial))
+        everything = {key: arrays.turned(order) for key, arrays in everything.items()}
+    by_month = chance_by_month(everything, rotations=rotations, seed=SEED)
+    tallies = {
+        key: {name: tally(arrays, alarms(arrays, name)) for name in ("found", "f_own")}
+        for key, arrays in everything.items()
+    }
+    weights = month_draws([t["found"] for t in tallies.values()], resamples, SEED)
+    normal = like.events == 0
+    described = {
+        key: {
+            "found": float(tallies[key]["found"].found.sum()),
+            "found_own": float(tallies[key]["f_own"].found.sum()),
+            "false_runs": float(tallies[key]["f_own"].false_runs.sum()),
+            "flagged": float(alarms(arrays, "f_own")[normal].mean()),
+        }
+        for key, arrays in everything.items()
+    }
+    rows: list[dict[str, object]] = []
+    for verdict in VERDICTS:
+
+        def of(key: tuple[str, str], w: Floats | None, kind: str = verdict) -> float:
+            counted = tallies[key]["f_own" if kind == "f_own" else "found"]
+            return verdict_value(kind, counted, by_month[key], w)
+
+        drawn = {key: np.asarray([of(key, w) for w in weights]) for key in everything}
+        held = {key: of(key, None) for key in everything}
+        bar_keys = list(f_bar) if verdict == "f_own" else list(arms)
+        bar_drawn = np.max([drawn[key] for key in bar_keys], axis=0)
+        bar_held = max(held[key] for key in bar_keys)
+        readings = []
+        for label, members in groups.items():
+            readings.append((label, "all" if len(members) > 1 else "", members))
+            if len(members) > 1:
+                readings += [(label, key[1].split()[-1], [key]) for key in members]
+        for label, seeded, members in readings:
+            mean = float(np.mean([held[key] for key in members]))
+            low, high = np.percentile(
+                np.mean([drawn[key] for key in members], axis=0) - bar_drawn, HOLM_FIRST_LEVEL
+            )
+            difference = mean - bar_held
+            confirmed = bool(low > 0.0 and difference >= FLOORS[verdict])
+
+            rows.append(
+                {
+                    "verdict": verdict,
+                    "reference": label,
+                    "seeds": seeded,
+                    "value": f"{mean:.4f}",
+                    "bar": f"{bar_held:.4f}",
+                    "difference": f"{difference:.4f}",
+                    "low": f"{low:.4f}",
+                    "high": f"{high:.4f}",
+                    "floor": FLOORS[verdict],
+                    "least_gain": LEAST_GAINS[verdict],
+                    "confirmed": int(confirmed),
+                    **{
+                        column: f"{np.mean([described[k][column] for k in members]):.4f}"
+                        for column in DESCRIBED
+                    },
+                }
+            )
+    stem = "ceiling" if trial is None else f"ceiling-trial-{trial}"
+    write(out / f"{stem}.csv", CEILING_COLUMNS, rows)
+    return rows
+
+
+def ceiling_table(rows: Sequence[Mapping[str, str]]) -> str:
+    return table(
+        (
+            "Verdict",
+            "Reference",
+            "Seeds",
+            "Value",
+            "Bar",
+            "Less the bar [97.5 %]",
+            "Confirmed",
+            "Found @1 %",
+            "Found (own)",
+            "False runs",
+            "Flagged",
+        ),
+        [
+            (
+                r["verdict"],
+                r["reference"],
+                r["seeds"],
+                r["value"],
+                r["bar"],
+                f"{r['difference']} [{r['low']}; {r['high']}]",
+                "yes" if r["confirmed"] == "1" else "",
+                r["found"],
+                r["found_own"],
+                r["false_runs"],
+                r["flagged"],
+            )
+            for r in rows
+        ],
+    )
+
+
+OPERATING_COLUMNS = (
+    "period",
+    "detector",
+    "arm",
+    "events",
+    "found",
+    "chance",
+    "excess",
+    "found_own",
+    "chance_own",
+    "excess_own",
+    "flagged",
+    "f_own",
+)
+AGREEMENT_MEASURES = ("excess", "excess_own", "found_own", "f_own")
+
+
+def period_arms(
+    directory: Path, section: str, left_out: LeftOut | None
+) -> dict[tuple[str, str], SideArrays]:
+    """Every no-model arm of a section, less the events left out; each arm is required."""
+    answers = selection_answers(directory, section)
+    return {key: SideArrays.of(without_events(rows, left_out)) for key, rows in answers.items()}
+
+
+def operating_point(
+    periods: Sequence[tuple[str, Mapping[tuple[str, str], SideArrays]]],
+    out: Path,
+    *,
+    rotations: int,
+    trial: int | None = None,
+) -> list[dict[str, object]]:
+    """Each arm's events found above chance at 1 % and at its own alarm, in every period.
+
+    Chance at the own alarm is read by the same rotations as at 1 %: a rotation keeps the
+    share each month flags, so the excess there reads where the flags fall, not how many.
+    With ``trial``, every month's scores are first turned by one offset shared by every arm.
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    rows: list[dict[str, object]] = []
+    for period, held in periods:
+        arms = dict(held)
+        like = next(iter(arms.values()))
+        if trial is not None:
+            order = rotation_order(month_slices(like.units), np.random.default_rng(trial))
+            arms = {key: arrays.turned(order) for key, arrays in arms.items()}
+        budget = chance_by_month(arms, rotations=rotations, seed=SEED)
+        own = chance_by_month(arms, rotations=rotations, seed=SEED, alarm="f_own")
+        normal = like.events == 0
+        for key, arrays in arms.items():
+            at_budget = tally(arrays, alarms(arrays, "found"))
+            own_alarm = alarms(arrays, "f_own")
+            at_own = tally(arrays, own_alarm)
+            found, found_own = int(at_budget.found.sum()), int(at_own.found.sum())
+            rows.append(
+                {
+                    "period": period,
+                    "detector": key[0],
+                    "arm": key[1],
+                    "events": len(arrays.event_ids),
+                    "found": found,
+                    "chance": f"{budget[key].sum():.3f}",
+                    "excess": f"{found - budget[key].sum():.3f}",
+                    "found_own": found_own,
+                    "chance_own": f"{own[key].sum():.3f}",
+                    "excess_own": f"{found_own - own[key].sum():.3f}",
+                    "flagged": f"{own_alarm[normal].mean():.4f}",
+                    "f_own": f"{at_own.measure('f_own'):.4f}",
+                }
+            )
+    stem = "operating-point" if trial is None else f"operating-point-trial-{trial}"
+    write(out / f"{stem}.csv", OPERATING_COLUMNS, rows)
+    return rows
+
+
+def agreements(rows: Sequence[Mapping[str, str]]) -> str:
+    """Per measure, Spearman's agreement of the arms' order between every two periods."""
+    periods = list(dict.fromkeys(r["period"] for r in rows))
+    pairs = list(combinations(periods, 2))
+    lines = []
+    for name in AGREEMENT_MEASURES:
+        by = {
+            period: {
+                (r["detector"], r["arm"]): float(r[name]) for r in rows if r["period"] == period
+            }
+            for period in periods
+        }
+        cells = [name]
+        for a, b in pairs:
+            common = sorted(set(by[a]) & set(by[b]))
+            first, second = [by[a][k] for k in common], [by[b][k] for k in common]
+            # An order with no spread, every arm alike, agrees with nothing.
+            if len(set(first)) < 2 or len(set(second)) < 2:
+                cells.append("n/a")
+                continue
+            cells.append(f"{spearmanr(first, second).statistic:+.2f}")
+        lines.append(tuple(cells))
+    return table(("Measure", *(f"{a} and {b}" for a, b in pairs)), lines)
 
 
 def forward_table(rows: Sequence[Mapping[str, str]]) -> str:
@@ -789,6 +1123,30 @@ def main(argv: Sequence[str] | None = None) -> None:
     familying.add_argument("--verdict", choices=VERDICTS, required=True)
     familying.add_argument("--rotations", type=int, default=ROTATIONS)
     familying.add_argument("--resamples", type=int, default=RESAMPLES)
+    ceiling_parser = commands.add_parser("ceiling")
+    ceiling_parser.add_argument("--dir", type=Path, required=True)
+    ceiling_parser.add_argument("--taught", type=Path, required=True)
+    ceiling_parser.add_argument("--out", type=Path, required=True)
+    ceiling_parser.add_argument("--f-bar", type=parse_arm, nargs=2, required=True)
+    ceiling_parser.add_argument("--taught-arm", type=parse_taught, nargs="+", required=True)
+    ceiling_parser.add_argument("--seeds", type=int, nargs="+", default=list(TAUGHT_SEEDS))
+    ceiling_parser.add_argument("--rotations", type=int, default=ROTATIONS)
+    ceiling_parser.add_argument("--resamples", type=int, default=RESAMPLES)
+    ceiling_parser.add_argument(
+        "--trial", type=int, metavar="SEED", help="turn every month's scores first"
+    )
+    operating = commands.add_parser("operating-point")
+    operating.add_argument(
+        "--period", nargs=3, action="append", required=True, metavar=("NAME", "DIR", "SECTION")
+    )
+    operating.add_argument("--out", type=Path, required=True)
+    operating.add_argument("--task", help="the task whose event classes --leave-out names")
+    operating.add_argument("--leave-out", nargs="+", default=[], metavar="CLASS")
+    operating.add_argument("--leave-out-in", nargs="+", default=[], metavar="NAME")
+    operating.add_argument("--rotations", type=int, default=ROTATIONS)
+    operating.add_argument(
+        "--trial", type=int, metavar="SEED", help="turn every month's scores first"
+    )
     powering = commands.add_parser("power")
     powering.add_argument("--dir", type=Path, required=True)
     powering.add_argument("--out", type=Path, required=True)
@@ -818,6 +1176,54 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
         stem = "forward" if arguments.trial is None else f"forward-trial-{arguments.trial}"
         text = forward_table(rows_of(arguments.out / f"{stem}.csv"))
+        (arguments.out / f"{stem}.md").write_text(text + "\n")
+        print(text)
+        return
+    if arguments.command == "ceiling":
+        ceiling(
+            arguments.dir,
+            arguments.taught,
+            arguments.out,
+            f_bar=arguments.f_bar,
+            references=arguments.taught_arm,
+            seeds=arguments.seeds,
+            rotations=arguments.rotations,
+            resamples=arguments.resamples,
+            trial=arguments.trial,
+        )
+        stem = "ceiling" if arguments.trial is None else f"ceiling-trial-{arguments.trial}"
+        text = ceiling_table(rows_of(arguments.out / f"{stem}.csv"))
+        (arguments.out / f"{stem}.md").write_text(text + "\n")
+        print(text)
+        return
+    if arguments.command == "operating-point":
+        names = [name for name, _, _ in arguments.period]
+        if bool(arguments.leave_out) != bool(arguments.leave_out_in):
+            raise SystemExit("--leave-out names classes and --leave-out-in periods: give both")
+        unknown = sorted(set(arguments.leave_out_in) - set(names))
+        if unknown:
+            raise SystemExit(f"--leave-out-in names no period: {', '.join(unknown)}")
+        left_out = classes_left_out(arguments.task, arguments.leave_out)
+        periods = [
+            (
+                name,
+                period_arms(
+                    Path(directory),
+                    section,
+                    left_out if name in arguments.leave_out_in else None,
+                ),
+            )
+            for name, directory, section in arguments.period
+        ]
+        operating_point(
+            periods, arguments.out, rotations=arguments.rotations, trial=arguments.trial
+        )
+        stem = (
+            "operating-point"
+            if arguments.trial is None
+            else f"operating-point-trial-{arguments.trial}"
+        )
+        text = agreements(rows_of(arguments.out / f"{stem}.csv"))
         (arguments.out / f"{stem}.md").write_text(text + "\n")
         print(text)
         return
