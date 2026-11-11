@@ -665,12 +665,14 @@ class SideArrays:
 
     Attributes:
         units: Each window's unit, numbered in the units' order.
+        positions: Where the block holds each window, so runs of alarms can be told apart.
         ends: Each window's end, in hours.
         events: Each window's event, nought for none.
         scores: Each window's score.
     """
 
     units: Ints
+    positions: Ints
     ends: Floats
     events: Ints
     scores: Floats
@@ -682,6 +684,7 @@ class SideArrays:
         number = {name: place for place, name in enumerate(names)}
         return cls(
             units=np.asarray([number[str(p.window.unit)] for p in rows], dtype=np.int64),
+            positions=np.asarray([p.window.position for p in rows], dtype=np.int64),
             ends=np.asarray([p.window.ends_at for p in rows], dtype=np.float64),
             events=np.asarray([int(p.target) for p in rows], dtype=np.int64),
             scores=np.asarray([p.predicted for p in rows], dtype=np.float64),
