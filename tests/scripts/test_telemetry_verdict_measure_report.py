@@ -33,9 +33,11 @@ from scripts.telemetry_channel_local_report import (
 from scripts.telemetry_context_report import REFIT, SELECT, TREES
 from scripts.telemetry_verdict_measure_report import (
     FLOORS,
+    SHARES,
     FReading,
     agreements,
     alarms,
+    best_f,
     ceiling,
     chance,
     chance_by_month,
@@ -769,3 +771,40 @@ def test_classes_to_leave_out_and_the_periods_they_leave_are_named_together(
                     *("--out", str(tmp_path / "out"), *extra),
                 ]
             )
+
+
+def test_the_best_f_is_the_highest_over_the_grid_of_alarms(tmp_path: Path) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+    taught_cells(tmp_path, "hour-6h", (1,), lift=50.0)
+
+    rows = best_f(tmp_path, tmp_path, tmp_path / "out", references=[(TREES, "hour-6h")], seeds=(1,))
+
+    arms = side_answers(tmp_path, REFIT)
+    for key, arrays in arms.items():
+        row = next(r for r in rows if r["detector"] == " ".join(key))
+        at_budget = value(arrays, "f_budget")
+        assert float(str(row["best_f"])) >= round(at_budget, 4)
+        assert float(str(row["f_own"])) == pytest.approx(value(arrays, "f_own"), abs=1e-4)
+        assert float(str(row["best_share"])) in SHARES
+    # Lifted far above every normal window, the trees flag the events alone at a small share.
+    assert next(r for r in rows if r["detector"] == "trees hour-6h s1")["best_f"] == "1.0000"
+    assert len(rows) == 4 + 1
+
+
+def test_main_routes_the_best_f_and_its_trial_writes_apart(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+    taught_cells(tmp_path, "hour-6h", (1,), lift=1.0)
+
+    main(
+        [
+            "best-f",
+            *("--dir", str(tmp_path), "--taught", str(tmp_path), "--out", str(tmp_path / "out")),
+            *("--taught-arm", "trees:hour-6h", "--seeds", "1", "--trial", "3"),
+        ]
+    )
+
+    assert "| Detector | F own | Best F |" in capsys.readouterr().out
+    assert (tmp_path / "out" / "best-f-trial-3.md").exists()
+    assert not (tmp_path / "out" / "best-f.csv").exists()

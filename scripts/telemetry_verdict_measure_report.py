@@ -30,6 +30,7 @@ bootstrap over months tells apart. The CSV comes first, the tables from it.
         --period early RUN early --period validation RUN refit
         --task esa-mission1-events --leave-out class_22 --leave-out-in early
 
+``best-f`` reads each detector's F-score at the best of a grid of alarms set on the months read;
 ``ceiling`` reads the oracle and detectors taught the events as candidates against the bars, so
 a bar no detector could pass is seen before one is read against it; ``operating-point`` reads
 each arm's events found above chance at 1 % beside those at its own alarm, in every period.
@@ -695,6 +696,59 @@ def ceiling(
     return rows
 
 
+# Shares of normal windows flagged, from one in ten thousand to one in ten, evenly in the log.
+SHARES = tuple(float(f"{x:.6f}") for x in np.logspace(-4, -1, 31))
+BEST_F_COLUMNS = ("detector", "f_own", "best_f", "best_share", "found", "false_runs")
+
+
+def best_f(
+    validation: Path,
+    taught: Path,
+    out: Path,
+    *,
+    references: Sequence[tuple[str, str]],
+    seeds: Sequence[int] = TAUGHT_SEEDS,
+    trial: int | None = None,
+) -> list[dict[str, object]]:
+    """Each detector's F-score at its own alarm beside the best over a grid of alarms.
+
+    The grid's alarm is set on the months read, so the best is what no rule set beforehand could
+    do better than: a bound on what choosing the alarm can buy, the same for every detector.
+    With ``trial``, every month's scores are first turned by one offset shared by every detector.
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    arms = whole_grid(validation)
+    like = next(iter(arms.values()))
+    dropped = read_truncated(validation, REFIT)
+    everything: dict[tuple[str, str], SideArrays] = dict(arms)
+    for reference in references:
+        everything.update(taught_answers(taught, reference, seeds, like, dropped))
+    if trial is not None:
+        order = rotation_order(month_slices(like.units), np.random.default_rng(trial))
+        everything = {key: arrays.turned(order) for key, arrays in everything.items()}
+    rows: list[dict[str, object]] = []
+    for key, arrays in everything.items():
+        swept = []
+        for share in SHARES:
+            flags = arrays.scores > alarm_boundary(arrays.scores, arrays.events, share)
+            counted = tally(arrays, flags)
+            swept.append((counted.measure("f_own"), share, counted))
+        best, share, counted = max(swept, key=lambda each: each[0])
+        rows.append(
+            {
+                "detector": " ".join(key),
+                "f_own": f"{value(arrays, 'f_own'):.4f}",
+                "best_f": f"{best:.4f}",
+                "best_share": f"{share:.5f}",
+                "found": int(counted.found.sum()),
+                "false_runs": int(counted.false_runs.sum()),
+            }
+        )
+    stem = "best-f" if trial is None else f"best-f-trial-{trial}"
+    write(out / f"{stem}.csv", BEST_F_COLUMNS, rows)
+    return rows
+
+
 def ceiling_table(rows: Sequence[Mapping[str, str]]) -> str:
     return table(
         (
@@ -1135,6 +1189,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     ceiling_parser.add_argument(
         "--trial", type=int, metavar="SEED", help="turn every month's scores first"
     )
+    best = commands.add_parser("best-f")
+    best.add_argument("--dir", type=Path, required=True)
+    best.add_argument("--taught", type=Path, required=True)
+    best.add_argument("--out", type=Path, required=True)
+    best.add_argument("--taught-arm", type=parse_taught, nargs="+", required=True)
+    best.add_argument("--seeds", type=int, nargs="+", default=list(TAUGHT_SEEDS))
+    best.add_argument("--trial", type=int, metavar="SEED", help="turn every month's scores first")
     operating = commands.add_parser("operating-point")
     operating.add_argument(
         "--period", nargs=3, action="append", required=True, metavar=("NAME", "DIR", "SECTION")
@@ -1193,6 +1254,23 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
         stem = "ceiling" if arguments.trial is None else f"ceiling-trial-{arguments.trial}"
         text = ceiling_table(rows_of(arguments.out / f"{stem}.csv"))
+        (arguments.out / f"{stem}.md").write_text(text + "\n")
+        print(text)
+        return
+    if arguments.command == "best-f":
+        best_f(
+            arguments.dir,
+            arguments.taught,
+            arguments.out,
+            references=arguments.taught_arm,
+            seeds=arguments.seeds,
+            trial=arguments.trial,
+        )
+        stem = "best-f" if arguments.trial is None else f"best-f-trial-{arguments.trial}"
+        text = table(
+            ("Detector", "F own", "Best F", "At share", "Found", "False runs"),
+            [tuple(r.values()) for r in rows_of(arguments.out / f"{stem}.csv")],
+        )
         (arguments.out / f"{stem}.md").write_text(text + "\n")
         print(text)
         return
