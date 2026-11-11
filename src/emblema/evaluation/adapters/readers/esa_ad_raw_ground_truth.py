@@ -86,35 +86,21 @@ class EsaAdRawGroundTruth:
             raise UnknownGroundTruthError(f"{mission} is not a mission read here")
         return {event.number: event.kind for event in self._of_mission(mission) if event.scored}
 
-    def events_of(self, window: TaskWindow) -> tuple[int, ...]:
-        """The number of every scored event ``window`` overlaps, lowest first.
-
-        The window's answer names only the lowest, so a reading that sets an event aside needs
-        the rest to set aside every window that event touches.
-
-        Raises:
-            UnknownGroundTruthError: If the window's unit is not a month of a mission read here.
-        """
-        return tuple(sorted(e.number for e in self._overlapping(window) if e.scored))
-
     def _answer(self, window: TaskWindow) -> float:
-        overlapping = self._overlapping(window)
+        mission, separator, _ = str(window.unit).partition("/")
+        if not separator or mission not in self._channels:
+            raise UnknownGroundTruthError(f"{window.unit} is not a month of a mission read here")
+        end = self._origin + window.ends_at * _SECONDS_PER_HOUR
+        start = end - self._window * _SECONDS_PER_HOUR
+        overlapping = [
+            event for event in self._of_mission(mission) if event.start < end and start < event.end
+        ]
         numbered = [event.number for event in overlapping if event.scored]
         if numbered:
             return float(min(numbered))
         if overlapping:
             return AnomalyScheme.EXCLUDED
         return AnomalyScheme.NORMAL
-
-    def _overlapping(self, window: TaskWindow) -> list[_Event]:
-        mission, separator, _ = str(window.unit).partition("/")
-        if not separator or mission not in self._channels:
-            raise UnknownGroundTruthError(f"{window.unit} is not a month of a mission read here")
-        end = self._origin + window.ends_at * _SECONDS_PER_HOUR
-        start = end - self._window * _SECONDS_PER_HOUR
-        return [
-            event for event in self._of_mission(mission) if event.start < end and start < event.end
-        ]
 
     def _of_mission(self, mission: str) -> tuple[_Event, ...]:
         if mission not in self._events:
