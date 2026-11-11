@@ -1647,7 +1647,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "choose-recall", help="the no-model arm finding the most events above chance"
     )
     by_recall.add_argument("--dir", type=Path, required=True)
-    by_recall.add_argument("--section", choices=CHOOSING, required=True)
+    by_recall.add_argument("--section", choices=SECTIONS, required=True)
     by_recall.add_argument("--out", type=Path, required=True)
     by_recall.add_argument("--rotations", type=int, default=ROTATIONS)
     by_recall.add_argument("--task", help="the task whose event classes --leave-out names")

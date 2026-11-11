@@ -1,9 +1,11 @@
 """The verdict measures over the departure arms: the benchmark's F-score, chance and months."""
 
+import argparse
 import csv
 import json
 import random
 from dataclasses import replace
+from itertools import combinations
 from pathlib import Path
 
 import numpy as np
@@ -33,8 +35,10 @@ from scripts.telemetry_verdict_measure_report import (
     choose_by_f,
     choose_f,
     f_reading,
+    forward,
     main,
     month_draws,
+    parse_arm,
     separated,
     side_answers,
     tally,
@@ -339,3 +343,110 @@ def test_a_run_of_alarms_ends_where_its_month_ends_even_if_places_run_on() -> No
 
     assert int(counted.false_runs.sum()) == 2
     assert counted.false_runs.tolist() == [1, 1]
+
+
+def test_the_forward_check_holds_the_bar_to_the_stronger_of_its_pair(tmp_path: Path) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+    out = tmp_path / "out"
+    pair = [(MEAN, "hour-6h"), (MEAN, "bins-6h")]
+
+    forward(tmp_path, out, bars={"f_own": pair, "excess": pair}, rotations=5, resamples=60)
+
+    with (out / "forward.csv").open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert {r["arm"] for r in rows} == {"max hour-6h", "max bins-6h"}
+    assert len(rows) == 4
+    for row in rows:
+        assert float(row["low"]) <= float(row["high"])
+        beats = float(row["difference"]) >= float(row["least_gain"]) or float(row["low"]) > 0
+        assert row["beats"] == str(int(beats))
+    assert {r["verdict"] for r in rows} == {"f_own", "excess"}
+
+
+def test_the_forward_check_refuses_a_grid_arm_without_answers_or_a_bar_of_one(
+    tmp_path: Path,
+) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h"]})
+    pair = [(MEAN, "hour-6h"), (MAX, "hour-6h")]
+    with pytest.raises(SystemExit, match="no answers for max bins-6h, mean bins-6h"):
+        forward(tmp_path, tmp_path / "out", bars={"f_own": pair}, rotations=2, resamples=5)
+    with pytest.raises(SystemExit, match="is two arms"):
+        forward(
+            tmp_path,
+            tmp_path / "out",
+            bars={"f_own": [(MEAN, "hour-6h"), (MEAN, "hour-6h")]},
+            rotations=2,
+            resamples=5,
+        )
+
+
+def test_the_bar_is_the_stronger_of_its_pair_and_its_gain_reads_every_pair_holding_it(
+    tmp_path: Path,
+) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+    pair = [(MAX, "hour-6h"), (MEAN, "hour-6h")]
+    arms = side_answers(tmp_path, REFIT)
+    by_month = chance_by_month(arms, rotations=4, seed=1)
+    held = {
+        key: verdict_value("excess", tally(a, alarms(a, "found")), by_month[key], None)
+        for key, a in arms.items()
+    }
+
+    forward(tmp_path, tmp_path / "out", bars={"excess": pair}, rotations=4, resamples=30)
+
+    with (tmp_path / "out" / "forward.csv").open(newline="") as handle:
+        rows = {r["arm"]: r for r in csv.DictReader(handle)}
+    stronger = max(held[k] for k in pair)
+    for key in ((MAX, "bins-6h"), (MEAN, "bins-6h")):
+        assert float(rows[" ".join(key)]["difference"]) == pytest.approx(
+            held[key] - stronger, abs=1e-4
+        )
+    # Of the six pairs of four arms, five hold an arm of the bar.
+    weights = month_draws([tally(a, alarms(a, "found")) for a in arms.values()], 30, 1)
+    drawn = {
+        k: np.asarray(
+            [verdict_value("excess", tally(a, alarms(a, "found")), by_month[k], w) for w in weights]
+        )
+        for k, a in arms.items()
+    }
+    spreads = [
+        float((drawn[a] - drawn[b]).std())
+        for a, b in combinations(arms, 2)
+        if a in pair or b in pair
+    ]
+    assert len(spreads) == 5
+    assert float(rows["max bins-6h"]["least_gain"]) == pytest.approx(
+        3.083 * float(np.median(spreads)), abs=1e-3
+    )
+
+
+def test_an_arm_is_named_detector_then_arm() -> None:
+    assert parse_arm("mean:bins-72h") == (MEAN, "bins-72h")
+    with pytest.raises(argparse.ArgumentTypeError, match="<detector>:<arm>"):
+        parse_arm("median:bins-72h")
+
+
+def test_main_routes_the_forward_check(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+    main(
+        [
+            "forward",
+            *("--dir", str(tmp_path), "--out", str(tmp_path / "out")),
+            *("--f-bar", "mean:hour-6h", "mean:bins-6h"),
+            *("--excess-bar", "mean:hour-6h", "max:hour-6h"),
+            *("--rotations", "3", "--resamples", "20"),
+        ]
+    )
+
+    assert "| Verdict | Arm |" in capsys.readouterr().out
+    assert (tmp_path / "out" / "forward.md").exists()
+
+
+def test_a_forward_trial_writes_apart_from_the_reading(tmp_path: Path) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+    pair = [(MEAN, "hour-6h"), (MEAN, "bins-6h")]
+
+    forward(tmp_path, tmp_path / "out", bars={"f_own": pair}, rotations=3, resamples=20, trial=4)
+
+    assert (tmp_path / "out" / "forward-trial-4.csv").exists()
+    assert not (tmp_path / "out" / "forward.csv").exists()

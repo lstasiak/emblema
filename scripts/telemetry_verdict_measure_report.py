@@ -21,6 +21,8 @@ bootstrap over months tells apart. The CSV comes first, the tables from it.
     uv run scripts/telemetry_verdict_measure_report.py read --out OUT
     uv run scripts/telemetry_verdict_measure_report.py power --dir RUN --out OUT
     uv run scripts/telemetry_verdict_measure_report.py choose-f --dir RUN --section early --out OUT
+    uv run scripts/telemetry_verdict_measure_report.py forward --dir RUN --out OUT
+        --f-bar max:bins-72h mean:bins-72h --excess-bar mean:hour-72h mean:bins-72h
 """
 
 from __future__ import annotations
@@ -332,6 +334,126 @@ def power(directory: Path, out: Path, *, rotations: int, resamples: int) -> None
     write(out / "power.csv", POWER_COLUMNS, rows)
 
 
+FORWARD_COLUMNS = ("verdict", "arm", "difference", "low", "high", "least_gain", "beats")
+# The first test of a Holm family of two reads its interval at 97.5 %.
+HOLM_FIRST_LEVEL = (1.25, 98.75)
+
+
+def parse_arm(text: str) -> tuple[str, str]:
+    """``<detector>:<arm>`` as the arms are keyed.
+
+    Raises:
+        argparse.ArgumentTypeError: If the text is not of that form.
+    """
+    detector, _, arm = text.partition(":")
+    if detector not in LOCAL_DETECTORS or not arm:
+        raise argparse.ArgumentTypeError(f"an arm is <detector>:<arm>, not {text!r}")
+    return detector, arm
+
+
+def forward(
+    directory: Path,
+    out: Path,
+    *,
+    bars: Mapping[str, Sequence[tuple[str, str]]],
+    rotations: int,
+    resamples: int,
+    trial: int | None = None,
+) -> list[dict[str, object]]:
+    """Each verdict's bar, the stronger of its pair in every draw, against every other arm.
+
+    The least gain is the median, over the pairs holding an arm of the bar, of the spread of the
+    paired difference times the sum of the normal quantiles for Holm's first level and power 0.8.
+    An arm beats the bar when its point gain reaches that least gain or its interval at Holm's
+    first level lies above nought. With ``trial``, every month's scores are first turned by one
+    offset shared by every arm.
+
+    Raises:
+        SystemExit: If a bar is not two arms, or any arm of the run's grid has no answers, so an
+            arm that might beat a bar cannot drop out unseen.
+    """
+    for verdict, pair in bars.items():
+        if len(set(pair)) != 2:
+            raise SystemExit(f"the {verdict} bar is two arms, not {list(pair)}")
+    out.mkdir(parents=True, exist_ok=True)
+    arms = side_answers(directory, REFIT)
+    conditions = json.loads((directory / "conditions.json").read_text())
+    grid = [
+        (detector, arm.name)
+        for arm in arms_of(conditions["features"], conditions["spans"])
+        for detector in LOCAL_DETECTORS
+    ]
+    missing = [key for key in grid if key not in arms]
+    if missing:
+        raise SystemExit(f"no answers for {', '.join(' '.join(m) for m in missing)}")
+    if trial is not None:
+        first = next(iter(arms.values()))
+        order = rotation_order(month_slices(first.units), np.random.default_rng(trial))
+        arms = {key: arrays.turned(order) for key, arrays in arms.items()}
+    by_month = chance_by_month(arms, rotations=rotations, seed=SEED)
+    tallies = {
+        key: {name: tally(arrays, alarms(arrays, name)) for name in ("found", "f_own")}
+        for key, arrays in arms.items()
+    }
+    weights = month_draws([t["found"] for t in tallies.values()], resamples, SEED)
+    rows: list[dict[str, object]] = []
+    for verdict, pair in bars.items():
+
+        def of(key: tuple[str, str], w: Floats | None, kind: str = verdict) -> float:
+            counted = tallies[key]["f_own" if kind == "f_own" else "found"]
+            return verdict_value(kind, counted, by_month[key], w)
+
+        drawn = {key: np.asarray([of(key, w) for w in weights]) for key in arms}
+        held = {key: of(key, None) for key in arms}
+        spreads = [
+            float((drawn[a] - drawn[b]).std())
+            for a, b in combinations(arms, 2)
+            if a in pair or b in pair
+        ]
+        least = (HOLM_FIRST_Z + POWER_Z) * float(np.median(spreads))
+        bar_drawn = np.max([drawn[key] for key in pair], axis=0)
+        bar_held = max(held[key] for key in pair)
+        for key in arms:
+            if key in pair:
+                continue
+            difference = held[key] - bar_held
+            low, high = np.percentile(drawn[key] - bar_drawn, HOLM_FIRST_LEVEL)
+            rows.append(
+                {
+                    "verdict": verdict,
+                    "arm": " ".join(key),
+                    "difference": f"{difference:.4f}",
+                    "low": f"{low:.4f}",
+                    "high": f"{high:.4f}",
+                    "least_gain": f"{least:.4f}",
+                    "beats": int(difference >= least or low > 0.0),
+                }
+            )
+    write(
+        out / ("forward.csv" if trial is None else f"forward-trial-{trial}.csv"),
+        FORWARD_COLUMNS,
+        rows,
+    )
+    return rows
+
+
+def forward_table(rows: Sequence[Mapping[str, str]]) -> str:
+    return table(
+        ("Verdict", "Arm", "Less the bar", "Interval at 97.5 %", "Least gain", "Beats the bar"),
+        [
+            (
+                r["verdict"],
+                r["arm"],
+                r["difference"],
+                f"[{r['low']}; {r['high']}]",
+                r["least_gain"],
+                "yes" if r["beats"] == "1" else "",
+            )
+            for r in rows
+        ],
+    )
+
+
 def power_table(rows: Sequence[Mapping[str, str]]) -> str:
     """Per verdict, the pairs' least gain at power 0.8 under Holm: least, median and largest."""
     lines = []
@@ -593,6 +715,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     by_f.add_argument("--leave-out", nargs="+", default=[], metavar="CLASS")
     by_f.add_argument("--rotations", type=int, default=ROTATIONS)
     by_f.add_argument("--trial", type=int, metavar="SEED", help="turn every month's scores first")
+    forwarding = commands.add_parser("forward")
+    forwarding.add_argument("--dir", type=Path, required=True)
+    forwarding.add_argument("--out", type=Path, required=True)
+    forwarding.add_argument("--f-bar", type=parse_arm, nargs=2, required=True)
+    forwarding.add_argument("--excess-bar", type=parse_arm, nargs=2, required=True)
+    forwarding.add_argument("--rotations", type=int, default=ROTATIONS)
+    forwarding.add_argument("--resamples", type=int, default=RESAMPLES)
+    forwarding.add_argument(
+        "--trial", type=int, metavar="SEED", help="turn every month's scores first"
+    )
     powering = commands.add_parser("power")
     powering.add_argument("--dir", type=Path, required=True)
     powering.add_argument("--out", type=Path, required=True)
@@ -610,6 +742,20 @@ def main(argv: Sequence[str] | None = None) -> None:
                 trial=arguments.trial,
             )
         )
+        return
+    if arguments.command == "forward":
+        forward(
+            arguments.dir,
+            arguments.out,
+            bars={"f_own": arguments.f_bar, "excess": arguments.excess_bar},
+            rotations=arguments.rotations,
+            resamples=arguments.resamples,
+            trial=arguments.trial,
+        )
+        stem = "forward" if arguments.trial is None else f"forward-trial-{arguments.trial}"
+        text = forward_table(rows_of(arguments.out / f"{stem}.csv"))
+        (arguments.out / f"{stem}.md").write_text(text + "\n")
+        print(text)
         return
     if arguments.command == "power":
         power(

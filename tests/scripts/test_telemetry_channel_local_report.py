@@ -995,3 +995,29 @@ def test_a_side_with_no_short_event_reads_none_in_the_table() -> None:
     row.update(averaged="2", onset="1", chosen="1")
 
     assert "no event" in recall_table([row])
+
+
+def test_the_choice_by_recall_reads_the_validation_months_too(tmp_path: Path) -> None:
+    (tmp_path / "conditions.json").write_text(json.dumps(CONDITIONS))
+    (tmp_path / f"truncated-{REFIT}.csv").write_text("unit,position,ends_at,target\n")
+    for arm in ("hour-6h", "bins-6h"):
+        for detector in (MAX, MEAN):
+            write_cell(
+                tmp_path, REFIT, LOCAL, detector, arm, NO_SEED, answers_scoring(arm == "bins-6h", 1)
+            )
+
+    main(
+        [
+            "choose-recall",
+            "--dir",
+            str(tmp_path),
+            "--out",
+            str(tmp_path / "out"),
+            "--section",
+            REFIT,
+            "--rotations",
+            "5",
+        ]
+    )
+
+    assert (tmp_path / "out" / "recall-refit.csv").exists()
