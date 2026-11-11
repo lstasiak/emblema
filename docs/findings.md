@@ -61,14 +61,14 @@ Last updated 2026-11-11.
   [−0.052; +0.176]), and its share from the states is the same within one event at their
   initialisation
   ([note](verification/telemetry-ceiling.md)).
-  The first mission's verdict is now two readings, one Holm family: the satellite benchmark's
-  event-wise F-score at each detector's own alarm, which counts the false alarms an operator
-  must clear, and the events found at 1 % false alarms beyond those found by chance. Chosen on
-  months no detector had been read on, the mean departure over 72 hours finds about three times
-  as many events beyond chance as the variant chosen by area. The F-score orders the departure
-  detectors alike in every period and its bar holds on the validation months (0.269); the
-  events found beyond chance order them there unlike before, so that verdict's bar is the best
-  of the twelve departure detectors in each reading. Least gains 0.195 and 10.6 events of 61
+  The first mission's verdict is the events found at 1 % false alarms beyond those found by
+  chance, against the best of twelve departure detectors in each reading (32.4 of 61), least gain
+  10.6 events. Chosen on months no detector had been read on, the mean departure over 72 hours
+  finds about three times as many events beyond chance as the variant chosen by area, but the
+  detectors' order turns on the validation months, hence the best of twelve. Trees taught the
+  events over 24-hour bins pass it (+10.0 [+3.1; +17.0]); the 6-hour trees do not resolve. The satellite benchmark's event-wise F-score at each
+  detector's own alarm, which counts the false alarms an operator must clear, is reported beside:
+  it reads mostly how quiet the alarm is, and trees finding 51 to 54 of 61 events cannot pass it
   ([note](verification/telemetry-channel-local.md)).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
@@ -216,6 +216,7 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | Events the channels' departures miss, against other detectors with no label at 1 % false alarms | others find 6 of 13, 3.67 beyond chance, at most 10.67 possible, least 11; stays deferred; fusion +0.131 [+0.037; +0.234] over `channel_local`, +0.066 [−0.052; +0.176] over the mean of the departures | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The 11 events nothing found, on their annotated channels, ten minutes against the hour | one gained, two lost, least 4; not queued; six stand out at the hour beyond chance | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The departure bar, chosen on months no detector was read on (2000–2003, a class nearly absent later left out), then read forwards on the validation months | beyond chance at 1 %: mean over 72 hours 14.6 of 42 against 5.2 for the bar chosen by area; F-score at the own alarm: the `bins-72h` pair leads on every period (Spearman 0.83 to 0.95) and holds on validation, 0.269 against 0.197, **−0.071** [−0.174; −0.021] for the strongest other; beyond chance the order turns on validation (Spearman −0.03), 7 of 10 arms beat the earlier pair, best 32.4 of 61 | [telemetry-channel-local](verification/telemetry-channel-local.md) |
+| The oracle and trees taught the events against both bars on the validation months | beyond chance: trees over `bins-24h` **+10.0** [+3.1; +17.0] over the best of twelve, the 6-hour trees +3.3 and +5.4 unresolved; F-score at the own alarm: trees 0.15 to 0.28 against 0.269, the 6-hour trees below it, as they raise 344 to 367 false runs; at the best alarm, chosen on the months read, trees 0.71 to 0.81 against 0.53 to 0.69; the verdict becomes the excess alone | [telemetry-channel-local](verification/telemetry-channel-local.md) |
 
 ### What the failures have in common
 
