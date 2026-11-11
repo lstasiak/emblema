@@ -41,6 +41,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.catalog.contracts.published_channel import PublishedChannel
+from emblema.catalog.contracts.published_channel_statistics import NORMALISATION_STANDARD
 from emblema.config.settings import Settings
 from emblema.entrypoints.cli.campaign.known_tasks import KnownTasks
 from emblema.entrypoints.configured import configured_store
@@ -321,6 +322,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         placed, KnownGroundTruths.under(arguments.corpora).truths_of(task.corpus, placed)
     )
     published = blocks.manifest_of(manifest)
+    # The reference network's inputs are restored by the standard score's mean and deviation.
+    if any(
+        channel.statistics is not None
+        and channel.statistics.normalisation != NORMALISATION_STANDARD
+        for channel in published.channels
+    ):
+        sys.exit("the publication normalises otherwise than by the standard score")
     windows = blocks.block_of(published).at([item.window.position for item in labelled])
     tokens = [
         row
