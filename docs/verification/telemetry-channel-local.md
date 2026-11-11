@@ -802,3 +802,49 @@ excess's pair likewise against 32.4. These are point readings, with no interval 
 arms. A bar that is the stronger of two is read with a little upward bias, which makes the
 verdicts conservative. The least gains come from no-model arms; detectors over learnt states
 may spread otherwise.
+
+## 2026-11-11 — measured: the F-score's pair holds forwards; the excess orders the arms on the validation months unlike before, so its bar is the best arm of each reading
+
+**Conditions.** As declared, at `22e1fd7d`: the six new arms' answers byte for byte those of the
+trial; `forward` with 10,000 draws; `choose-f` and `choose-recall` beside. The least gains against
+the best of the other arms by `family` at `cffb6114`, 10,000 draws. Output in
+`data/report/l47/forward/`.
+
+**The check.** Least gains over the 21 pairs holding an arm of each bar: 0.195 in the F-score,
+10.4 events in the excess.
+
+| Verdict | Bar on these months | Strongest other arm | Less the bar [97.5 %] | Arms that beat the bar |
+| --- | --- | --- | --- | --- |
+| F-score | `max`, `bins-72h` 0.269 (`mean` 0.204) | `max`, `bins-24h` 0.197 | −0.071 [−0.174; −0.021] | none of 10 |
+| Excess | `mean`, `hour-72h` 14.6 (`mean`, `bins-72h` 9.4) | `mean`, `bins-24h` 32.4 | +17.8 [+10.6; +26.0] | 7 of 10 |
+
+By the rule nothing was registered and the readings went to a decision.
+
+**The arms' order across the three periods** (Spearman over the 12 arms).
+
+| Measure | 2000–2003 and selection | 2000–2003 and validation | Selection and validation |
+| --- | --- | --- | --- |
+| F-score | +0.83 | +0.85 | +0.95 |
+| Excess | +0.70 | −0.03 | −0.03 |
+
+**Conclusions.**
+
+- The F-score orders the departure arms alike in every period, alarms set backwards or forwards;
+  the `bins-72h` pair leads on all three, and its bar holds.
+- The excess orders them on the validation months unlike on either earlier period. The arms
+  over 72 hours find 13 to 21 of 61 events at 1 % there, against 39 to 42 for the best arms
+  over 6 or 24 hours, while at their own alarms, flagging about 2 %, they find 39 to 41: their
+  standing depends on the operating point, and the late months differ from the early ones. No
+  arm chosen before the validation months is a bar there by the excess.
+- The short events gave the warning on 2000 to 2003 too weakly: on the validation months
+  `mean`, `bins-72h` finds 5.9 short events above chance against 17.8 for `mean`, `bins-24h`.
+- Decision (2026-11-11): the excess's bar is the best of the 12 departure arms in each reading,
+  taken in every draw. A candidate must beat every one of them on the same months. The least
+  gain against the best of the other eleven, the median over the arms: 10.6 events of 61 (the
+  F-score's against the same: 0.195, as for its pair).
+- The F-score's bar stays the stronger of `max`, `bins-72h` and `mean`, `bins-72h`.
+
+**Limitations.** The best of twelve read on the same months is biased upward, so the excess
+verdict is conservative. Why the order turns is a hypothesis (operating point, drift), not
+measured. The package's detector has been checked against this report on `max`, `hour-6h`
+only; every arm a campaign reads as a bar is checked first.
