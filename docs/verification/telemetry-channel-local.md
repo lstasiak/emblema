@@ -683,3 +683,122 @@ under the trial and which leads on the selection months; it finds fewer events t
 **Limitations.** The F-score at these alarms reads mostly the false runs, so the bar is the
 quietest detector more than the one finding most. The rule was written after the selection
 and validation F-scores were seen; on 2000 to 2003 it is blind in the events found only.
+
+## 2026-11-11 — measured: by the F-score, the mean departure over 72 hours of bins; both verdicts' bars are one family
+
+**Conditions.** As declared, at `a034aa83`: `choose-f` on 2000 to 2003 less `class_22`, 42
+events. Output in `data/report/l47/choice/`.
+
+**The choice.** At each arm's own alarm; the excess at 1 % beside.
+
+| Arm | F-score | Found | Excess | False runs | Flagged |
+| --- | --- | --- | --- | --- | --- |
+| **`mean`, `bins-72h`** (chosen) | **0.113** | 20 | 13.8 | 189 | 0.76 % |
+| `max`, `bins-72h` (predicted) | 0.095 | 15 | 7.4 | 171 | 0.69 % |
+| `mean`, `hour-72h` (the excess's bar) | 0.082 | 21 | 14.6 | 287 | 1.03 % |
+| `mean`, `bins-24h` | 0.074 | 23 | 13.4 | 348 | 1.33 % |
+| `mean`, `hour-24h` | 0.068 | 26 | 11.9 | 433 | 1.46 % |
+| `max`, `hour-6h` (the bar until now) | 0.042 | 18 | 5.2 | 494 | 1.76 % |
+
+The other six arms read 0.034 to 0.057.
+
+**Conclusions.**
+
+- The two verdicts' bars are two arms of one family, the mean over the channels with 72 hours
+  of history: the F-score's bar is second by the excess (13.8 against 14.6), the excess's bar
+  third by the F-score. Between them lie 0.03 in the F-score and 0.8 events, both below the
+  least gains (0.11; 9.5 events), which were measured on the validation months.
+- The bar until now is last but one by the F-score (0.042 against 0.113) and by the excess
+  (5.2 against 14.6).
+- The choice itself is below the least gain: 0.113 against 0.095, a least gain of 0.11.
+- The prediction held for the history and missed the aggregation: over 72 hours of bins the
+  mean over the channels finds 20 events where the largest finds 15, at a like number of false
+  runs (189 against 171).
+
+**Corrections to the declaration.** The rotated trial did not show the shares flagged on these
+months, only near them: 1.3 to 2.8 % under rotation against 0.7 to 2.4 % read, since a rotation
+moves high scores off the events onto normal windows. Less was seen than declared; the runs of
+alarms were seen nearly as declared (170 to 646 under rotation, 171 to 632 read).
+
+**Limitations found after the run.** Here each arm's own alarm is set on the later months and
+read on the earlier, while every verdict sets it on the fitting side and reads later months;
+the F-score reads mostly how quiet that alarm stays, which may depend on the direction (the
+next section checks it forwards). A window names only the lowest event it overlaps, so an event
+wholly under another is not counted: one besides `class_22` here, 3 of 64 on the validation
+months, where the benchmark counts each event; the package's harness counts the same way.
+
+**Across the two periods.** Over the 12 arms the F-score orders the arms alike on the selection
+months, alarms set forwards, and on 2000 to 2003, alarms set backwards (Spearman +0.83; the
+excess +0.70). Both `bins-72h` arms are first and second on both, but the lead flips: 0.536
+against 0.280 for `max` on the selection months, 0.113 against 0.095 for `mean` here. With 14
+false runs one run more or less moves the F-score of `max`, `bins-72h` by about 0.015 and one
+event by 0.02, so the F-score's scale is loose for the quietest detectors, and the least gain of
+0.11, measured on louder arms, may not fit them; it is measured again with them below.
+
+## 2026-11-11 — declared before the run: each verdict's bar is a pair of one family, read forwards on the validation months
+
+**Question.** Does each verdict's bar hold on the validation months, with alarms set on the
+whole fitting side as every verdict sets them?
+
+**The bars, changed after the readings above.** A single arm chosen within the leading family
+is chosen by noise and its lead flips between periods, so each bar is a pair from that family,
+read in every reading as the stronger of the two by that reading's measure:
+
+- the F-score: `max`, `bins-72h` and `mean`, `bins-72h`;
+- the excess: `mean`, `hour-72h` and `mean`, `bins-72h`.
+
+This change followed the readings. For a candidate it makes a bar harder to pass: it must beat
+the stronger of two. For the check below it is easier in one respect: the pair's sibling no
+longer challenges the bar.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | at the commit of this declaration |
+| Answers | the 12 no-model arms on the validation months, 39,384 windows, 61 events: `hour-6h`, `bins-6h`, `bins-24h` from the 2026-11-06 run; `hour-24h`, `hour-72h`, `bins-72h` measured by the same report's `measure --section refit` at this commit, `max` and `mean` each |
+| Commands | per arm of `hour-24h`, `hour-72h`, `bins-72h`: `telemetry_channel_local_report.py measure --section refit` with the 2026-11-06 run's task, grid and context, a `chosen.json` naming the arm, the context statistics linked from that run; the twelve arms' answers linked into `data/report/l47/validation` (the untracked `data/report/l47/refit.sh`); then `telemetry_verdict_measure_report.py forward --dir data/report/l47/validation --out data/report/l47/forward --f-bar max:bins-72h mean:bins-72h --excess-bar mean:hour-72h mean:bins-72h --resamples 10000` (1,000 rotations); beside, `telemetry_verdict_measure_report.py choose-f` and `telemetry_channel_local_report.py choose-recall`, each `--dir data/report/l47/validation --section refit --out data/report/l47/forward`, whose arm marked chosen is not used |
+
+**The rule, stated before the run.**
+
+- *Least gains*: for each verdict, 3.08 standard deviations of the paired difference, 10,000
+  draws over months, the median over every pair holding an arm of its bar (21 of the 66). These
+  are the least gains registered and the ones the check uses; the check itself reads the
+  difference to the stronger of the pair, whose spread is not quite a single pair's.
+- *The check*: an arm outside a bar beats it when its point gain over the stronger of the pair
+  reaches the least gain, or its interval at 97.5 % (the first level of the Holm family) lies
+  above nought, the bar's value taken in every draw as the stronger of the pair. If any arm
+  beats either bar, nothing is registered: the arms that beat it and the bar go to the user,
+  with the readings, for a decision.
+- Otherwise the two bars, the two least gains and the rule of two verdicts under Holm are
+  registered.
+- *Beside*: every arm's F-score, events found, excess, false runs and share flagged.
+
+**Trial.** `refit.sh --trial` measured the six arms in three minutes, 1,704 windows unread as in
+the earlier run; nothing was read from them. The same command on `hour-6h` reproduced the
+earlier run's validation answers byte for byte, so the old and new answers join. `forward`,
+`choose-f` and `choose-recall` ran whole on these answers with every month's scores first
+rotated, three times for `forward`: no arm beat a bar at chance, and the `bins-72h` pair read the
+highest F-score by chance too.
+
+**What has been seen on these months.** For the six arms of the 2026-11-06 run: the F-score at
+the own alarm and at 1 % (0.060 to 0.197, `max`, `bins-24h` highest; 0.115 to 0.238), the events
+found and false runs, the excess (15.2 to 32.4, `mean`, `bins-24h` highest), the pairs told
+apart and their paired differences; that run also read the area and found share of these arms
+and of its taught, state and cell detectors. For `hour-24h`, `hour-72h` and `bins-72h`, either
+detector: through the rotated trial, each arm's false runs and share flagged at its own alarm
+and its chance at 1 %, near their true values, the `bins-72h` pair the quietest; which events
+any of them finds, not at all.
+
+**Prediction.** Neither bar is beaten. Sources: on the selection months, alarms set forwards,
+the `bins-72h` pair led the F-score at 0.536 and 0.280, against 0.202 for `mean`, `hour-72h`
+and at most 0.122 for the rest, and
+`mean`, `bins-72h` led the excess (15.8; `mean`, `hour-72h` third at 12.7); on 2000 to 2003 both
+pairs led their measures. Against the arms already seen, the F-score's pair is beaten if its
+stronger arm reads below 0.197 less the least gain, or a seen arm's interval clears nought; the
+excess's pair likewise against 32.4. These are point readings, with no interval behind them.
+
+**Limitations.** Six of the twelve arms have been read here; the check judges the bars, not the
+arms. A bar that is the stronger of two is read with a little upward bias, which makes the
+verdicts conservative. The least gains come from no-model arms; detectors over learnt states
+may spread otherwise.
