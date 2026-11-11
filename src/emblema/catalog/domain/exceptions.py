@@ -176,3 +176,15 @@ class WindowNotArchivableError(CatalogError, ValueError):
 
 class UnreadableCorpusBlockError(CatalogError):
     pass
+
+
+class InvalidValueBoundsError(CatalogError, ValueError):
+    pass
+
+
+class InvalidCleaningPolicyError(CatalogError, ValueError):
+    pass
+
+
+class InvalidCleaningRecordError(CatalogError, ValueError):
+    pass

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from emblema.catalog.contracts.identifiers import CorpusVersionId
+from emblema.catalog.domain.cleaning.cleaning_record import CleaningRecord
 from emblema.catalog.domain.exceptions import InvalidTokenisationManifestError
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.tokenisation.archived_corpus import ArchivedCorpus
@@ -36,6 +37,8 @@ class TokenisationManifest:
             itself cannot state because it holds nothing for them.
         statistics_from: The manifest whose statistics the scheme adopted for the corpus's
             channels, so that its training side did not fit them; ``None`` where it did.
+        cleaning: The bounds the corpus's values were held to before fitting and tokenising,
+            with what they removed and clipped; ``None`` where the values were read raw.
     """
 
     corpus: str
@@ -48,6 +51,7 @@ class TokenisationManifest:
     split_seed: int | None
     empty_units: tuple[UnitKey, ...] = ()
     statistics_from: ArtifactRef | None = None
+    cleaning: CleaningRecord | None = None
 
     def __post_init__(self) -> None:
         if not self.corpus or self.corpus != self.corpus.strip():

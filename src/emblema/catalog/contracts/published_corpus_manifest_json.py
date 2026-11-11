@@ -6,11 +6,17 @@ from typing import Final
 from emblema.catalog.contracts.exceptions import MalformedManifestError
 from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.contracts.published_channel import PublishedChannel
-from emblema.catalog.contracts.published_channel_statistics import PublishedChannelStatistics
+from emblema.catalog.contracts.published_channel_statistics import (
+    NORMALISATION_QUANTILE,
+    NORMALISATION_ROBUST,
+    NORMALISATION_STANDARD,
+    PublishedChannelStatistics,
+)
 from emblema.catalog.contracts.published_corpus_manifest import (
     SHORT_UNITS_DROPPED,
     PublishedCorpusManifest,
 )
+from emblema.catalog.contracts.published_value_bounds import PublishedValueBounds
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum, HashAlgorithm
 
@@ -28,11 +34,20 @@ class PublishedCorpusManifestJson:
     FORMAT: Final = "emblema.tokenisation-manifest"
     # Bumped when the meaning of a field changes; a new field is one an older reader ignores.
     VERSION: Final = 1
+    # The version of a manifest whose values were normalised otherwise than by the standard score:
+    # a reader that knew only that score would normalise a served value wrongly without noticing,
+    # so it must refuse such a manifest rather than ignore the field that says so.
+    VERSION_OTHER_NORMALISATION: Final = 2
+    VERSIONS: Final = (VERSION, VERSION_OTHER_NORMALISATION)
 
     def encode(self, manifest: PublishedCorpusManifest) -> bytes:
+        standard = all(
+            channel.statistics is None or channel.statistics.normalisation == NORMALISATION_STANDARD
+            for channel in manifest.channels
+        )
         document: _Document = {
             "format": self.FORMAT,
-            "version": self.VERSION,
+            "version": self.VERSION if standard else self.VERSION_OTHER_NORMALISATION,
             "corpus": manifest.corpus,
             "corpus_version": str(manifest.corpus_version.value),
             "corpus_checksum": self._checksum_document(manifest.corpus_checksum),
@@ -59,6 +74,9 @@ class PublishedCorpusManifestJson:
                 "key": manifest.statistics_from.key,
                 "checksum": self._checksum_document(manifest.statistics_from.checksum),
             }
+        # Stated only where the values were cleaned, for the same reason.
+        if manifest.cleaning:
+            document["cleaning"] = [self._bounds_document(each) for each in manifest.cleaning]
         return json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
     def decode(self, content: bytes) -> PublishedCorpusManifest:
@@ -74,14 +92,34 @@ class PublishedCorpusManifestJson:
             raise MalformedManifestError(f"manifest is not JSON: {error}") from error
         if not isinstance(document, dict):
             raise MalformedManifestError("manifest is not an object")
-        if document.get("format") != self.FORMAT or document.get("version") != self.VERSION:
+        version = document.get("version")
+        if document.get("format") != self.FORMAT or version not in self.VERSIONS:
             raise MalformedManifestError(
-                f"manifest is a {document.get('format')!r} of version {document.get('version')!r}"
+                f"manifest is a {document.get('format')!r} of version {version!r}"
             )
         try:
-            return self._manifest(_Fields(document))
+            manifest = self._manifest(_Fields(document))
         except ValueError as error:
             raise MalformedManifestError(f"manifest is not well formed: {error}") from error
+        stated = {
+            channel.statistics.normalisation
+            for channel in manifest.channels
+            if channel.statistics is not None
+        }
+        other = sorted(stated - {NORMALISATION_STANDARD})
+        # Each version states exactly what the encoder would write for it, so a manifest read
+        # and written again keeps its bytes, and so its checksum.
+        if other and version == self.VERSION:
+            raise MalformedManifestError(
+                f"a manifest of version {self.VERSION} normalises by the standard score only, "
+                f"not by {other}"
+            )
+        if not other and version == self.VERSION_OTHER_NORMALISATION:
+            raise MalformedManifestError(
+                f"a manifest of version {self.VERSION_OTHER_NORMALISATION} normalises some "
+                f"channel otherwise than by the standard score"
+            )
+        return manifest
 
     def _manifest(self, fields: _Fields) -> PublishedCorpusManifest:
         block = fields.fields("block")
@@ -107,6 +145,7 @@ class PublishedCorpusManifestJson:
             statistics_from=None
             if adopted is None
             else ArtifactRef(adopted.text("key"), self._checksum(adopted.fields("checksum"))),
+            cleaning=tuple(self._bounds(each) for each in fields.optional_each("cleaning")),
         )
 
     @staticmethod
@@ -128,8 +167,8 @@ class PublishedCorpusManifestJson:
         stated = window.optional_text("short_units")
         return SHORT_UNITS_DROPPED if stated is None else stated
 
-    @staticmethod
-    def _channel_document(channel: PublishedChannel) -> _Document:
+    @classmethod
+    def _channel_document(cls, channel: PublishedChannel) -> _Document:
         statistics = channel.statistics
         return {
             "channel_id": channel.channel_id,
@@ -137,13 +176,32 @@ class PublishedCorpusManifestJson:
             "channel": channel.channel,
             "timeless": channel.timeless,
             "unit": channel.unit,
-            "statistics": None
-            if statistics is None
-            else {"count": statistics.count, "mean": statistics.mean, "std": statistics.std},
+            "statistics": None if statistics is None else cls._statistics_document(statistics),
         }
 
     @staticmethod
-    def _channel(fields: _Fields) -> PublishedChannel:
+    def _statistics_document(statistics: PublishedChannelStatistics) -> _Document:
+        """The statistics, their normalisation and its facts stated only where it is not the usual.
+
+        Every manifest written before the other normalisations existed keeps its bytes.
+        """
+        document: _Document = {
+            "count": statistics.count,
+            "mean": statistics.mean,
+            "std": statistics.std,
+        }
+        if statistics.normalisation != NORMALISATION_STANDARD:
+            document["normalisation"] = statistics.normalisation
+        if statistics.median is not None:
+            document["median"] = statistics.median
+        if statistics.mad is not None:
+            document["mad"] = statistics.mad
+        if statistics.quantiles:
+            document["quantiles"] = list(statistics.quantiles)
+        return document
+
+    @classmethod
+    def _channel(cls, fields: _Fields) -> PublishedChannel:
         statistics = fields.optional_fields("statistics")
         return PublishedChannel(
             channel_id=fields.integer("channel_id"),
@@ -151,11 +209,62 @@ class PublishedCorpusManifestJson:
             channel=fields.text("channel"),
             timeless=fields.flag("timeless"),
             unit=fields.optional_text("unit"),
-            statistics=None
-            if statistics is None
-            else PublishedChannelStatistics(
-                statistics.integer("count"), statistics.number("mean"), statistics.number("std")
-            ),
+            statistics=None if statistics is None else cls._statistics(statistics),
+        )
+
+    @staticmethod
+    def _statistics(fields: _Fields) -> PublishedChannelStatistics:
+        named = fields.optional_text("normalisation") if fields.has("normalisation") else None
+        # The standard score is never written, so a field naming it is not the encoder's.
+        written = (NORMALISATION_ROBUST, NORMALISATION_QUANTILE)
+        if named is not None and named not in written:
+            raise MalformedManifestError(
+                f"field 'normalisation' must be one of {written} where stated, got {named!r}"
+            )
+        normalisation = NORMALISATION_STANDARD if named is None else named
+        expected = {
+            NORMALISATION_STANDARD: set(),
+            NORMALISATION_ROBUST: {"median", "mad"},
+            NORMALISATION_QUANTILE: {"quantiles"},
+        }[normalisation]
+        stated = {key for key in ("median", "mad", "quantiles") if fields.has(key)}
+        if stated != expected:
+            raise MalformedManifestError(
+                f"statistics normalised by {normalisation!r} state {sorted(expected)}, "
+                f"not {sorted(stated)}"
+            )
+        return PublishedChannelStatistics(
+            fields.integer("count"),
+            fields.number("mean"),
+            fields.number("std"),
+            normalisation=normalisation,
+            median=fields.number("median") if fields.has("median") else None,
+            mad=fields.number("mad") if fields.has("mad") else None,
+            quantiles=fields.numbers("quantiles") if fields.has("quantiles") else (),
+        )
+
+    @staticmethod
+    def _bounds_document(bounds: PublishedValueBounds) -> _Document:
+        return {
+            "channel": bounds.channel,
+            "removed_below": bounds.removed_below,
+            "clipped_below": bounds.clipped_below,
+            "clipped_above": bounds.clipped_above,
+            "removed_above": bounds.removed_above,
+            "removed": bounds.removed,
+            "clipped": bounds.clipped,
+        }
+
+    @staticmethod
+    def _bounds(fields: _Fields) -> PublishedValueBounds:
+        return PublishedValueBounds(
+            channel=fields.text("channel"),
+            removed_below=fields.number("removed_below"),
+            clipped_below=fields.number("clipped_below"),
+            clipped_above=fields.number("clipped_above"),
+            removed_above=fields.number("removed_above"),
+            removed=fields.integer("removed"),
+            clipped=fields.integer("clipped"),
         )
 
     @staticmethod
@@ -226,6 +335,20 @@ class _Fields:
         if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
             raise MalformedManifestError(f"field {key!r} must be a list of objects")
         return [_Fields(item) for item in value]
+
+    def has(self, key: str) -> bool:
+        return key in self._document
+
+    def numbers(self, key: str) -> tuple[float, ...]:
+        value = self._required(key)
+        if not isinstance(value, list) or not all(
+            isinstance(item, int | float) and not isinstance(item, bool) for item in value
+        ):
+            raise MalformedManifestError(f"field {key!r} must be a list of numbers")
+        return tuple(float(item) for item in value)
+
+    def optional_each(self, key: str) -> list[_Fields]:
+        return [] if key not in self._document else self.each(key)
 
     def texts(self, key: str) -> tuple[str, ...]:
         value = self._required(key)

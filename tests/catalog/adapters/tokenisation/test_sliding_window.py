@@ -6,10 +6,13 @@ import tomllib
 from itertools import chain
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.tokenisation.sliding_window import SlidingWindowTokeniser
+from emblema.catalog.domain.channels.channel_statistics import QUANTILE_KNOTS
+from emblema.catalog.domain.channels.normalisation import Normalisation
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
@@ -42,6 +45,58 @@ def test_a_constant_channel_has_exactly_zero_spread() -> None:
     )
 
     assert scheme.statistics_of(scheme.vocabulary.id_of(CORPUS, "pressure")).std == 0.0
+
+
+SKEWED = [float(value) for value in np.random.default_rng(7).lognormal(0.0, 1.5, 999)]
+
+
+def test_a_robust_fit_keeps_the_median_and_its_absolute_deviation_beside_the_moments() -> None:
+    scheme = TOKENISER.fit(
+        CORPUS,
+        [Observation("pressure", float(t), v) for t, v in enumerate(SKEWED)],
+        (),
+        scheme_for(),
+        Normalisation.ROBUST,
+    )
+
+    fitted = scheme.statistics_of(scheme.vocabulary.id_of(CORPUS, "pressure"))
+    assert fitted.normalisation is Normalisation.ROBUST
+    assert fitted.mean == pytest.approx(statistics.fmean(SKEWED))
+    assert fitted.median == pytest.approx(statistics.median(SKEWED))
+    assert fitted.mad == pytest.approx(
+        statistics.median(abs(v - statistics.median(SKEWED)) for v in SKEWED)
+    )
+
+
+def test_a_quantile_fit_keeps_every_thousandth_of_rank_lowest_first() -> None:
+    scheme = TOKENISER.fit(
+        CORPUS,
+        [Observation("pressure", float(t), v) for t, v in enumerate(SKEWED)],
+        (),
+        scheme_for(),
+        Normalisation.QUANTILE,
+    )
+
+    fitted = scheme.statistics_of(scheme.vocabulary.id_of(CORPUS, "pressure"))
+    assert len(fitted.quantiles) == QUANTILE_KNOTS
+    assert (fitted.quantiles[0], fitted.quantiles[-1]) == (min(SKEWED), max(SKEWED))
+    assert fitted.quantiles[500] == pytest.approx(statistics.median(SKEWED))
+
+
+def test_a_channel_recorded_at_few_levels_fits_quantiles_in_order() -> None:
+    # Interpolating between equal neighbours must not leave a knot below the one before it.
+    levels = [0.1 * (i % 3) for i in range(1000)]
+
+    scheme = TOKENISER.fit(
+        CORPUS,
+        [Observation("pressure", float(t), v) for t, v in enumerate(levels)],
+        (),
+        scheme_for(),
+        Normalisation.QUANTILE,
+    )
+
+    fitted = scheme.statistics_of(scheme.vocabulary.id_of(CORPUS, "pressure"))
+    assert list(fitted.quantiles) == sorted(fitted.quantiles)
 
 
 def test_a_unit_shorter_than_the_window_yields_one_window_of_the_nominal_length() -> None:

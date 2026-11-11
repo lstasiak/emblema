@@ -5,9 +5,16 @@ import pytest
 from emblema.catalog.application.assemblers.published_corpus_manifest_assembler import (
     PublishedCorpusManifestAssembler,
 )
-from emblema.catalog.contracts.published_channel_statistics import PublishedChannelStatistics
+from emblema.catalog.contracts.published_channel_statistics import (
+    NORMALISATIONS,
+    PublishedChannelStatistics,
+)
 from emblema.catalog.domain.channels.channel_statistics import ChannelStatistics
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
+from emblema.catalog.domain.channels.normalisation import Normalisation
+from emblema.catalog.domain.cleaning.cleaning_policy import CleaningPolicy
+from emblema.catalog.domain.cleaning.cleaning_record import ChannelCleaning, CleaningRecord
+from emblema.catalog.domain.cleaning.value_bounds import ValueBounds
 from emblema.catalog.domain.exceptions import InvalidUnitSplitError
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.tokenisation.archived_corpus import ArchivedCorpus
@@ -94,3 +101,40 @@ def test_the_policy_for_short_units_travels_in_the_published_form_and_back(
 
     assert message.window_short_units == "one_window"
     assert assembler.restore(message) == stated
+
+
+def test_another_normalisation_and_the_cleaning_restore_as_they_went_out(
+    assembler: PublishedCorpusManifestAssembler,
+) -> None:
+    quantiles = tuple(float(i) for i in range(1001))
+    pressure = VOCABULARY.id_of(CORPUS, "pressure")
+    scheme = TokenisationScheme.for_vocabulary(VOCABULARY).with_statistics(
+        pressure, ChannelStatistics(8, 0.5, 0.25, Normalisation.QUANTILE, quantiles=quantiles)
+    )
+    policy = CleaningPolicy(
+        (
+            ValueBounds(
+                channel="pressure",
+                removed_below=0.0,
+                clipped_below=1.0,
+                clipped_above=9.0,
+                removed_above=10.0,
+            ),
+        )
+    )
+    cleaned = replace(
+        MANIFEST,
+        scheme=scheme,
+        cleaning=CleaningRecord(
+            policy=policy, counts=(ChannelCleaning(channel="pressure", removed=3, clipped=1),)
+        ),
+    )
+
+    message = assembler.assemble(cleaned)
+
+    assert message.cleaning[0].removed == 3
+    assert assembler.restore(message) == cleaned
+
+
+def test_the_published_vocabulary_of_normalisations_is_the_catalogs() -> None:
+    assert set(NORMALISATIONS) == {str(each) for each in Normalisation}
