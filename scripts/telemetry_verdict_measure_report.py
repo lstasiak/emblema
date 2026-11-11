@@ -23,6 +23,7 @@ bootstrap over months tells apart. The CSV comes first, the tables from it.
     uv run scripts/telemetry_verdict_measure_report.py choose-f --dir RUN --section early --out OUT
     uv run scripts/telemetry_verdict_measure_report.py forward --dir RUN --out OUT
         --f-bar max:bins-72h mean:bins-72h --excess-bar mean:hour-72h mean:bins-72h
+    uv run scripts/telemetry_verdict_measure_report.py family --dir RUN --out OUT --verdict excess
 """
 
 from __future__ import annotations
@@ -437,6 +438,63 @@ def forward(
     return rows
 
 
+FAMILY_COLUMNS = ("verdict", "arm", "value", "best_of_rest", "sd", "least_gain")
+
+
+def family(
+    directory: Path, out: Path, *, verdict: str, rotations: int, resamples: int
+) -> list[dict[str, object]]:
+    """A bar that is the best of every no-model arm in each draw: each arm against the rest.
+
+    Each arm stands in for a candidate against the best of the other arms in the same draw;
+    the least gain is the median over the arms of the spread of that difference times the sum
+    of the normal quantiles for Holm's first level and power 0.8.
+
+    Raises:
+        SystemExit: If any arm of the run's grid has no answers.
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    arms = side_answers(directory, REFIT)
+    conditions = json.loads((directory / "conditions.json").read_text())
+    grid = [
+        (detector, arm.name)
+        for arm in arms_of(conditions["features"], conditions["spans"])
+        for detector in LOCAL_DETECTORS
+    ]
+    missing = [key for key in grid if key not in arms]
+    if missing:
+        raise SystemExit(f"no answers for {', '.join(' '.join(m) for m in missing)}")
+    by_month = chance_by_month(arms, rotations=rotations, seed=SEED)
+    source = "f_own" if verdict == "f_own" else "found"
+    tallies = {key: tally(arrays, alarms(arrays, source)) for key, arrays in arms.items()}
+    weights = month_draws(list(tallies.values()), resamples, SEED)
+    drawn = {
+        key: np.asarray([verdict_value(verdict, tallies[key], by_month[key], w) for w in weights])
+        for key in arms
+    }
+    held = {key: verdict_value(verdict, tallies[key], by_month[key], None) for key in arms}
+    spreads = {}
+    rows: list[dict[str, object]] = []
+    for key in arms:
+        rest = [other for other in arms if other != key]
+        spreads[key] = float((drawn[key] - np.max([drawn[o] for o in rest], axis=0)).std())
+    least = (HOLM_FIRST_Z + POWER_Z) * float(np.median(list(spreads.values())))
+    for key in arms:
+        rest = [other for other in arms if other != key]
+        rows.append(
+            {
+                "verdict": verdict,
+                "arm": " ".join(key),
+                "value": f"{held[key]:.4f}",
+                "best_of_rest": f"{max(held[o] for o in rest):.4f}",
+                "sd": f"{spreads[key]:.4f}",
+                "least_gain": f"{least:.4f}",
+            }
+        )
+    write(out / f"family-{verdict}.csv", FAMILY_COLUMNS, rows)
+    return rows
+
+
 def forward_table(rows: Sequence[Mapping[str, str]]) -> str:
     return table(
         ("Verdict", "Arm", "Less the bar", "Interval at 97.5 %", "Least gain", "Beats the bar"),
@@ -725,6 +783,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     forwarding.add_argument(
         "--trial", type=int, metavar="SEED", help="turn every month's scores first"
     )
+    familying = commands.add_parser("family")
+    familying.add_argument("--dir", type=Path, required=True)
+    familying.add_argument("--out", type=Path, required=True)
+    familying.add_argument("--verdict", choices=VERDICTS, required=True)
+    familying.add_argument("--rotations", type=int, default=ROTATIONS)
+    familying.add_argument("--resamples", type=int, default=RESAMPLES)
     powering = commands.add_parser("power")
     powering.add_argument("--dir", type=Path, required=True)
     powering.add_argument("--out", type=Path, required=True)
@@ -755,6 +819,30 @@ def main(argv: Sequence[str] | None = None) -> None:
         stem = "forward" if arguments.trial is None else f"forward-trial-{arguments.trial}"
         text = forward_table(rows_of(arguments.out / f"{stem}.csv"))
         (arguments.out / f"{stem}.md").write_text(text + "\n")
+        print(text)
+        return
+    if arguments.command == "family":
+        rows = family(
+            arguments.dir,
+            arguments.out,
+            verdict=arguments.verdict,
+            rotations=arguments.rotations,
+            resamples=arguments.resamples,
+        )
+        text = table(
+            ("Arm", "Value", "Best of the rest", "SD", "Least gain"),
+            [
+                (
+                    str(r["arm"]),
+                    str(r["value"]),
+                    str(r["best_of_rest"]),
+                    str(r["sd"]),
+                    str(r["least_gain"]),
+                )
+                for r in rows
+            ],
+        )
+        (arguments.out / f"family-{arguments.verdict}.md").write_text(text + "\n")
         print(text)
         return
     if arguments.command == "power":

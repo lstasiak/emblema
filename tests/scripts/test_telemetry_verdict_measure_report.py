@@ -35,6 +35,7 @@ from scripts.telemetry_verdict_measure_report import (
     choose_by_f,
     choose_f,
     f_reading,
+    family,
     forward,
     main,
     month_draws,
@@ -450,3 +451,19 @@ def test_a_forward_trial_writes_apart_from_the_reading(tmp_path: Path) -> None:
 
     assert (tmp_path / "out" / "forward-trial-4.csv").exists()
     assert not (tmp_path / "out" / "forward.csv").exists()
+
+
+def test_each_arm_stands_against_the_best_of_the_rest(tmp_path: Path) -> None:
+    a_run(tmp_path, {REFIT: ["hour-6h", "bins-6h"]})
+
+    rows = family(tmp_path, tmp_path / "out", verdict="excess", rotations=4, resamples=30)
+
+    assert len(rows) == 4
+    values = {str(r["arm"]): float(str(r["value"])) for r in rows}
+    for row in rows:
+        rest = [v for arm, v in values.items() if arm != row["arm"]]
+        assert float(str(row["best_of_rest"])) == pytest.approx(max(rest), abs=1e-4)
+    sds = sorted(float(str(r["sd"])) for r in rows)
+    median = (sds[1] + sds[2]) / 2
+    assert float(str(rows[0]["least_gain"])) == pytest.approx(3.083 * median, abs=1e-3)
+    assert (tmp_path / "out" / "family-excess.csv").exists()
