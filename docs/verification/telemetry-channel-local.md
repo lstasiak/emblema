@@ -537,3 +537,149 @@ the validation months) and lengths differ from the months the bar is read on, an
 events check the last only coarsely. The onset is the first window the side scores. The rule was
 written after the selection months' flagged windows were seen; applied to months not read, it
 chooses blind, but its shape is not independent of that look.
+
+## 2026-11-10 — measured: by the events found above chance, the mean departure over 72 hours; the 6-hour bar finds a third as many above chance
+
+**Conditions.** As declared, at `471ba43f`: `choose-recall` on the months 2000 to 2003 less
+`class_22`, 42 events, 1,000 rotations; beside, the same with all 70 events and the selection
+months (not blind). Output in `data/report/l47/choice/`.
+
+**The choice.** Events of 42; chance and excess in events; onset by the first 6 hours; short
+events' excess of 10.
+
+| Arm | Found | Chance | Excess | Onset | Short excess |
+| --- | --- | --- | --- | --- | --- |
+| **`mean`, `hour-72h`** (chosen) | 21 | 6.4 | **14.6** | 15 | **3.9** |
+| `mean`, `bins-72h` | 21 | 7.2 | 13.8 | 16 | 3.8 |
+| `mean`, `bins-24h` | 23 | 9.6 | 13.4 | 14 | 2.7 |
+| `max`, `hour-24h` | 22 | 9.7 | 12.3 | 14 | 2.9 |
+| `mean`, `hour-24h` | 23 | 11.1 | 11.9 | 16 | 3.8 |
+| `mean`, `hour-6h` | 23 | 14.3 | 8.7 | 15 | 2.7 |
+| `max`, `hour-6h` (the bar until now) | 16 | 10.8 | **5.2** | 14 | 0.8 |
+| `max`, `bins-6h` | 17 | 14.1 | 2.9 | 10 | 1.7 |
+
+The other four arms read 6.1 to 7.4 above chance.
+
+**Beside.** With all 70 events the same arm leads (41.5 above 7.5 by chance); `max`, `hour-6h`
+reads 32.2. On the selection months (not blind) `mean`, `bins-72h` leads at 15.8 of 29 above
+chance and `max`, `hour-6h` is last of the twelve at 6.1.
+
+**Conclusions.**
+
+- The bar chosen by area, `max`, `hour-6h`, finds about a third as many events above chance as
+  the arm chosen, 9.4 events apart, 3.5 standard deviations of that pair's difference under
+  the rotations (2.7). It is last or near last above chance on every period read.
+- What holds is a family: the mean over the channels with 24 to 72 hours of history. The first
+  five arms lie within 2.7 events, inside the noise of about 5, so the arm within the family is
+  chosen by noise.
+- Neither declared return applies: the chosen arm finds more by the onset (15 against 14) and
+  has the largest short events' excess.
+- Counted raw, the same rule would choose `mean`, `hour-24h` (23 found, averaged 24.25): the
+  same family.
+- The prediction held for the family and missed the old bar's distance: it gave a gap of about
+  4 events within the noise, the reading 9.4.
+
+## 2026-11-11 — measured: the verdict on the first mission reads the benchmark's F-score at the detector's own alarm beside the events found above chance
+
+**Question.** Which measure should carry the first mission's verdict? The events found at 1 % of
+normal windows depend on chance by up to 8 events between arms (above). The satellite benchmark
+ranks by the corrected event-wise F0.5, chosen there with the mission's operators: event-wise
+recall, and a precision counting the separate runs of false alarms an operator must clear,
+scaled by the share of normal time left quiet, at the detector's own alarm (Kotowski et al.,
+ESA-ADB, 2024). Reviews of anomaly-detection metrics ask that a measure be checked against
+random detections and reported beside its chance level (Sørbø and Ruocco, 2023).
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `scripts/telemetry_verdict_measure_report.py` at the commit adding this section |
+| Machine | M1 Pro, the CPU; seconds |
+| Arms | the no-model departure arms: 12 on the selection months (29 events), 6 on the validation months (61 events); the months 2000 to 2003 left unread for the F-score |
+| Candidates | `found` at 1 %; `f_own`, the corrected event-wise F0.5 at each arm's own alarm (set on its fitting side at 2 %, read against each month); `f_budget`, the same at 1 % |
+| Criteria, written before the reading | the claim the measure serves; chance's spread over the arms against their own spread (1,000 rotations); agreement of the arms' order between the two periods; pairs of arms a paired bootstrap over months tells apart (95 %, 2,000 draws, months in which an event begins and the rest drawn apart; the alarm at 1 % set once on the whole side) |
+| Command | `telemetry_verdict_measure_report.py measure --dir data/report/l38/local/run --out data/report/l47/measure`, then `power` with 10,000 draws |
+
+**The criteria.**
+
+| Measure | Chance's spread / arms' spread (selection; validation) | Order agreement (6 arms) | Pairs apart (selection; validation) |
+| --- | --- | --- | --- |
+| `found` | 8.0 / 10 (0.80); 7.2 / 10 (0.72) | +0.46 | 17 of 66; 4 of 15 |
+| `f_own` | 0.11 / 0.49 (0.23); 0.03 / 0.14 (0.24) | +0.89 | 38 of 66; 11 of 15 |
+| `f_budget` | 0.10 / 0.08 (1.29); 0.07 / 0.12 (0.58) | +0.60 | 8 of 66; 7 of 15 |
+
+**What `f_own` is made of.** The arms share one rule for their alarm, yet flag 0.3 to 2.3 % of
+the scored normal windows, as drift moves each differently. They raise 14 to 740 runs of false
+alarms against 14 to 45 events found, so for most arms precision is 0.04 to 0.25 (0.53 for the
+quietest) and the F-score is close to 1.25 times the precision: one more event found moves it by
+0.0015 to 0.0043 on the validation months, while halving the false runs about doubles it. On the selection months `max`, `bins-72h`
+flags 0.3 % in 14 runs and finds 16 of 29 (0.536); `max`, `hour-6h` flags 1.8 % in 409 runs and
+finds 17 (0.048). The rotations keep how alarms cluster, so `f_own`'s chance keeps part of the
+precision the measure is meant to read; its value and chance correlate at +0.86 to +0.98.
+
+**Power on the validation months.** The least gain the first test of a Holm family of two
+confirms with power 0.8, 3.08 standard deviations of the paired difference over the 15 pairs:
+
+| Verdict | Least | Median | Largest |
+| --- | --- | --- | --- |
+| `f_own` | 0.025 | 0.108 | 0.175 |
+| excess over chance, events of 61 | 5.3 | 9.5 | 11.3 |
+
+**Conclusions.**
+
+- `f_own` serves the product claim, a detector an operator would keep, in the benchmark's own
+  terms, and leads on every declared criterion. At these alarms it reads quiet alarms far more
+  than events found, so it cannot alone answer whether a detector finds the events.
+- The events found above chance answer that question; they are blind to the operator's cost.
+- The verdict is therefore two readings, one Holm family: `f_own`, and the events found at 1 %
+  less their chance, each against its own no-model bar, with the events found, the false runs
+  and the share flagged beside every reading.
+- Least gains: 0.11 in `f_own` and 9.5 events of 61 in the excess, the medians over the pairs.
+- `f_budget` is weakest and is not carried.
+
+**Limitations.** Six arms on the validation months make the order agreement coarse. The power
+uses the spread of real pairs under a normal approximation, not a simulation of a gain. The
+criterion on chance reads clustering as chance for the F-scores. The no-model arms are one
+family of detectors; detectors over learnt states may cluster their alarms differently.
+
+## 2026-11-11 — declared before the run: the bar for the F-score, chosen on months no arm was read on by it
+
+**Question.** Which no-model arm is the first mission's bar for the F-score verdict? The bar for
+the excess is `mean`, `hour-72h` (above).
+
+**Conditions.** As in the declaration of 2026-11-10: the 12 arms on 2000 to 2003, `class_22`
+left out, 42 events, 34,914 windows; code at the commit of this declaration. Command:
+`telemetry_verdict_measure_report.py choose-f --dir data/report/l47/early --section early --task
+esa-mission1-events --leave-out class_22 --out data/report/l47/choice`.
+
+**The rule, stated before the run.**
+
+- *The choice*: the highest `f_own`; then the most found at the own alarm; then the shorter
+  span, `hour` before `bins`, `max` before `mean`.
+- *Beside*: the events found, the excess at 1 %, the false runs and the share of normal windows
+  flagged, for every arm.
+- *What follows*: the chosen arm and `mean`, `hour-72h` become the first mission's two bars,
+  each for its verdict, in the registered rules with the two least gains; their validation
+  answers are measured and the package's detector is checked against the report on each, rank
+  by rank within each month, before any campaign reads them.
+
+**Trial.** The command ran whole three times with every month's scores first rotated: the
+F-score by chance 0.026 to 0.077, and the arm chosen `max`, `bins-72h` twice (the fewest flags
+and false runs) and `mean`, `hour-72h` once (the third fewest false runs). Under chance the
+F-score already prefers the arms whose alarms are fewest and longest.
+
+**What has been seen.** A rotation keeps each month's scores, so the trial showed each arm's
+share of normal windows flagged on 2000 to 2003 (1.3 to 2.8 %) and, nearly, its runs of alarms
+(170 to 646): the false-alarm part of the F-score, which needs no label and can be read on any
+unlabelled months. What stays blind is which events the alarms find. On the selection months every arm's
+F-score: `max`, `bins-72h` 0.536, `mean`, `bins-72h` 0.280, `mean`, `hour-72h` 0.202, the rest
+0.048 to 0.122. On the validation months six arms': 0.060 to 0.197, `max`, `bins-24h` highest.
+The events found and the excess on 2000 to 2003, read for the other bar.
+
+**Prediction.** A lean, not a margin: `max`, `bins-72h`, whose alarms are fewest and longest
+under the trial and which leads on the selection months; it finds fewer events than `mean`,
+`hour-72h` at its own alarm.
+
+**Limitations.** The F-score at these alarms reads mostly the false runs, so the bar is the
+quietest detector more than the one finding most. The rule was written after the selection
+and validation F-scores were seen; on 2000 to 2003 it is blind in the events found only.
