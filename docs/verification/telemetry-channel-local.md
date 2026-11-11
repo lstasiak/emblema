@@ -927,3 +927,80 @@ not what a detector with no label can reach; only the oracle bounds a measure, a
 F-score it does so trivially. Three arms and three seeds. The own alarm flags 0.7 to 2.3 % of
 normal windows in different periods, so the excess there reads the drift of the alarm with the
 operating point.
+
+## 2026-11-11 — measured: the excess can be passed, by trees taught the events; the F-score at the own alarm cannot, and reads the alarm's level; the verdict is the excess alone
+
+**Conditions.** As declared, at `6179f130`: `ceiling.sh`, 32 s and 71 s. Beside, not declared and
+read after: `best-f` at the commit adding this section, each detector's F-score at the best of
+31 alarms from 0.01 % to 10 % of normal windows, set on the months read; first on turned scores
+(`--trial 1`). Output in `data/report/l47/ceiling/`.
+
+**Against the bars** (seeds' mean; each seed reads the same way). F-score bar 0.269, excess bar
+32.4 events of 61.
+
+| Reference | F-score, less the bar [97.5 %] | Excess, less the bar [97.5 %] | Found at 1 % | False runs, flagged |
+| --- | --- | --- | --- | --- |
+| Oracle | 1.000, **+0.731** [+0.524; +0.834] | 61, **+28.6** [+19.7; +37.3] | 61 | 0, 0 % |
+| Trees, `bins-24h` | 0.283, +0.014 [−0.183; +0.124] | 42.4, **+10.0** [+3.1; +17.0] | 53.7 | 163, 0.73 % |
+| Trees, `bins-6h` | 0.147, −0.121 [−0.325; −0.024] | 37.8, +5.4 [−2.5; +13.1] | 51.0 | 367, 1.14 % |
+| Trees, `hour-6h` | 0.155, −0.114 [−0.313; −0.016] | 35.7, +3.3 [−5.4; +11.7] | 51.0 | 344, 1.07 % |
+
+Bold: confirmed by the registered rule. The trees over `bins-24h` are confirmed by the excess
+under each seed (+9.6 to +10.3, lower edges +2.4 to +3.5).
+
+**The operating point.** Spearman's agreement of the twelve arms' order between periods:
+
+| Measure | 2000–2003 and selection | 2000–2003 and validation | Selection and validation | At chance |
+| --- | --- | --- | --- | --- |
+| Excess at 1 % | +0.70 | −0.03 | −0.03 | −0.25 to +0.35 |
+| Excess at the own alarm | +0.52 | +0.97 | +0.58 | −0.67 to +0.41 |
+| Found at the own alarm | +0.44 | +0.57 | +0.46 | +0.27 to +0.87 |
+| F-score | +0.83 | +0.85 | +0.95 | +0.29 to +0.73 |
+
+**Beside: the F-score at the best alarm** (not declared; the alarm is chosen on the months read,
+so this bounds what choosing an alarm can buy). The departure arms reach 0.53 to 0.69, seven of
+twelve at the grid's quietest alarm, 0.01 %, finding 16 to 22 events with 0 to 3 false runs; the
+trees reach 0.71 to 0.81, the `bins-24h` trees 0.76 to 0.81 at 0.1 to 0.2 %, finding 39 to 48
+events with 10 to 14 false runs. On turned scores every detector reaches 0.09 to 0.20, 0.05 to
+0.14 above its own alarm.
+
+**Conclusions.**
+
+- The oracle passes both verdicts, so neither measure is broken.
+- By the rule, the excess can be passed: trees taught 70 events of the fitting side beat the
+  best of the twelve departure arms by 10.0 events, under every seed. The F-score at the own
+  alarm cannot: trees that find 51 to 54 of 61 events read at or below a departure arm that
+  finds 39, level with it or below, because they raise 163 to 367 runs of false alarms against its 124.
+- What the F-score reads is the alarm's level. At their best alarms the departure arms flag 0.01
+  to 1.6 % of normal windows, most 0.01 %, and the trees 0.02 to 0.2 %; there the trees lead the
+  best departure arm by 0.01 to 0.11, less than the least gain of 0.195 and about what choosing
+  an alarm adds to a detector on turned scores (0.05 to 0.14). The fragmentation of
+  alarms, which this section's declaration did not name but which was put to the user as the
+  likely cause, is not it.
+- By the rule, the turn stays unexplained: the excess at the own alarm agrees at +0.52 and +0.58
+  on two pairs. Beside, not declared: every pair lies above every draw at chance (at most +0.41).
+- Predictions: the oracle's held. The excess missed narrowly for the `hour-6h` trees (+3.3, lower
+  edge −5.4) and held for `bins-6h` (+5.4, edge −2.5); for `bins-24h` the edge (+3.1) fell inside
+  the range but the gain (+10.0) above it, because those trees' chance was 11.3 events, not 14 to
+  15. The operating point's held.
+
+**Decision (2026-11-11).** By the declared rule, the F-score being out of reach, the measure was
+chosen again, with the user. The first mission's verdict is the events found at 1 % of normal
+windows less those found by chance, against the best of the twelve departure arms in each reading.
+Each loosening that dropping a test of the family would allow is refused: the interval stays at
+97.5 % and the least gain at 10.6 events. Every reading reports beside it the excess at the own
+alarm, the F-score at the own alarm, its false runs and its share flagged. An operator's cost is
+read for a candidate that passes, by an alarm set on the fitting side, before any claim about a
+product.
+
+Alternatives weighed: the F-score at an alarm each detector chooses, as the benchmark lets it,
+falls short of its least gain even for taught trees at an alarm chosen on the months read;
+keeping the F-score as a check of no harm needs a margin set after this reading, and the 6-hour
+trees, which find 51 of 61 events, have upper edges below nought (−0.016, −0.024), so any margin
+read by the interval and tighter than about 0.31 would fail them.
+
+**Limitations.** The trees are the strongest reference read on these months, and they reach the
+excess's least gain only just: a detector with no label must find about as much as trees taught
+70 events to be confirmed with power 0.8. That is the resolution 61 events give, not a property of
+the measure. The best alarms lie at the grid's edge for seven arms, so their best F-score may be
+higher. The ceiling uses three arms of trees, read on months the 2026-11-06 run had read.
