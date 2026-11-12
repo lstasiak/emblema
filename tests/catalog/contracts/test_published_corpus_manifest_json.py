@@ -250,19 +250,28 @@ def test_a_first_version_manifest_claiming_another_normalisation_is_refused() ->
     document = json.loads(JSON.encode(replace(MANIFEST, channels=(ROBUST, TEMPERATURE))))
     document["version"] = PublishedCorpusManifestJson.VERSION
 
-    with pytest.raises(MalformedManifestError, match="standard score only"):
+    with pytest.raises(MalformedManifestError, match="otherwise than by the standard score"):
         JSON.decode(encoded(document))
 
 
 @pytest.mark.parametrize(
     ("change", "message"),
     [
-        ({"normalisation": "logarithm"}, "must be one of"),
+        ({"normalisation": "logarithm"}, "where stated"),
+        ({"normalisation": "standard"}, "where stated"),
+        ({"normalisation": ""}, "where stated"),
         ({"quantiles": [1.0, 2.0]}, "state"),
         ({"normalisation": "robust", "median": 0.4}, "state"),
         ({"normalisation": "quantile", "quantiles": ["a"]}, "list of numbers"),
     ],
-    ids=["unknown", "quantiles on the standard score", "robust without a deviation", "text"],
+    ids=[
+        "unknown",
+        "standard written",
+        "empty",
+        "quantiles on the standard score",
+        "robust without a deviation",
+        "text",
+    ],
 )
 def test_statistics_that_do_not_fit_their_normalisation_are_refused(
     change: dict[str, object], message: str
@@ -281,13 +290,4 @@ def test_a_second_version_manifest_normalised_by_the_standard_score_alone_is_ref
     document["version"] = PublishedCorpusManifestJson.VERSION_OTHER_NORMALISATION
 
     with pytest.raises(MalformedManifestError, match="otherwise than by the standard score"):
-        JSON.decode(encoded(document))
-
-
-@pytest.mark.parametrize("stated", ["standard", ""])
-def test_a_normalisation_the_encoder_never_writes_is_refused(stated: str) -> None:
-    document = json.loads(JSON.encode(replace(MANIFEST, channels=(ROBUST, TEMPERATURE))))
-    document["channels"][0]["statistics"]["normalisation"] = stated
-
-    with pytest.raises(MalformedManifestError, match="where stated"):
         JSON.decode(encoded(document))

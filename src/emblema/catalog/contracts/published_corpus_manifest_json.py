@@ -38,16 +38,15 @@ class PublishedCorpusManifestJson:
     # a reader that knew only that score would normalise a served value wrongly without noticing,
     # so it must refuse such a manifest rather than ignore the field that says so.
     VERSION_OTHER_NORMALISATION: Final = 2
-    VERSIONS: Final = (VERSION, VERSION_OTHER_NORMALISATION)
 
     def encode(self, manifest: PublishedCorpusManifest) -> bytes:
-        standard = all(
-            channel.statistics is None or channel.statistics.normalisation == NORMALISATION_STANDARD
-            for channel in manifest.channels
-        )
         document: _Document = {
             "format": self.FORMAT,
-            "version": self.VERSION if standard else self.VERSION_OTHER_NORMALISATION,
+            "version": (
+                self.VERSION_OTHER_NORMALISATION
+                if self._other_normalisations(manifest)
+                else self.VERSION
+            ),
             "corpus": manifest.corpus,
             "corpus_version": str(manifest.corpus_version.value),
             "corpus_checksum": self._checksum_document(manifest.corpus_checksum),
@@ -93,7 +92,10 @@ class PublishedCorpusManifestJson:
         if not isinstance(document, dict):
             raise MalformedManifestError("manifest is not an object")
         version = document.get("version")
-        if document.get("format") != self.FORMAT or version not in self.VERSIONS:
+        if document.get("format") != self.FORMAT or version not in (
+            self.VERSION,
+            self.VERSION_OTHER_NORMALISATION,
+        ):
             raise MalformedManifestError(
                 f"manifest is a {document.get('format')!r} of version {version!r}"
             )
@@ -101,25 +103,27 @@ class PublishedCorpusManifestJson:
             manifest = self._manifest(_Fields(document))
         except ValueError as error:
             raise MalformedManifestError(f"manifest is not well formed: {error}") from error
-        stated = {
-            channel.statistics.normalisation
-            for channel in manifest.channels
-            if channel.statistics is not None
-        }
-        other = sorted(stated - {NORMALISATION_STANDARD})
+        other = self._other_normalisations(manifest)
         # Each version states exactly what the encoder would write for it, so a manifest read
         # and written again keeps its bytes, and so its checksum.
-        if other and version == self.VERSION:
+        if bool(other) != (version == self.VERSION_OTHER_NORMALISATION):
             raise MalformedManifestError(
-                f"a manifest of version {self.VERSION} normalises by the standard score only, "
-                f"not by {other}"
-            )
-        if not other and version == self.VERSION_OTHER_NORMALISATION:
-            raise MalformedManifestError(
-                f"a manifest of version {self.VERSION_OTHER_NORMALISATION} normalises some "
-                f"channel otherwise than by the standard score"
+                f"version {self.VERSION_OTHER_NORMALISATION} is written exactly where a channel is "
+                f"normalised otherwise than by the standard score; version {version} states "
+                f"{other or 'none'}"
             )
         return manifest
+
+    @staticmethod
+    def _other_normalisations(manifest: PublishedCorpusManifest) -> list[str]:
+        return sorted(
+            {
+                channel.statistics.normalisation
+                for channel in manifest.channels
+                if channel.statistics is not None
+            }
+            - {NORMALISATION_STANDARD}
+        )
 
     def _manifest(self, fields: _Fields) -> PublishedCorpusManifest:
         block = fields.fields("block")
@@ -214,19 +218,15 @@ class PublishedCorpusManifestJson:
 
     @staticmethod
     def _statistics(fields: _Fields) -> PublishedChannelStatistics:
-        named = fields.optional_text("normalisation") if fields.has("normalisation") else None
+        named = fields.optional_text("normalisation")
         # The standard score is never written, so a field naming it is not the encoder's.
-        written = (NORMALISATION_ROBUST, NORMALISATION_QUANTILE)
-        if named is not None and named not in written:
+        facts = {NORMALISATION_ROBUST: {"median", "mad"}, NORMALISATION_QUANTILE: {"quantiles"}}
+        if named is not None and named not in facts:
             raise MalformedManifestError(
-                f"field 'normalisation' must be one of {written} where stated, got {named!r}"
+                f"field 'normalisation' must be one of {sorted(facts)} where stated, got {named!r}"
             )
         normalisation = NORMALISATION_STANDARD if named is None else named
-        expected = {
-            NORMALISATION_STANDARD: set(),
-            NORMALISATION_ROBUST: {"median", "mad"},
-            NORMALISATION_QUANTILE: {"quantiles"},
-        }[normalisation]
+        expected = facts.get(normalisation, set())
         stated = {key for key in ("median", "mad", "quantiles") if fields.has(key)}
         if stated != expected:
             raise MalformedManifestError(
