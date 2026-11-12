@@ -28,13 +28,13 @@
 | src/emblema/catalog/adapters/readers/wqp.py                                               |      197 |        0 |       52 |        0 |    100% |           |
 | src/emblema/catalog/adapters/synthetic/synthetic\_corpus\_reader.py                       |       91 |        0 |       12 |        0 |    100% |           |
 | src/emblema/catalog/adapters/tokenisation/published\_window\_tokeniser.py                 |       34 |        0 |        2 |        0 |    100% |           |
-| src/emblema/catalog/adapters/tokenisation/sliding\_window.py                              |      117 |        0 |       32 |        0 |    100% |           |
+| src/emblema/catalog/adapters/tokenisation/sliding\_window.py                              |      133 |        0 |       38 |        0 |    100% |           |
 | src/emblema/catalog/application/assemblers/corpus\_version\_ref\_assembler.py             |        6 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/application/assemblers/published\_corpus\_manifest\_assembler.py      |       31 |        0 |        2 |        0 |    100% |           |
-| src/emblema/catalog/application/use\_cases/publish\_corpus.py                             |       41 |        0 |        4 |        0 |    100% |           |
+| src/emblema/catalog/application/assemblers/published\_corpus\_manifest\_assembler.py      |       47 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/application/use\_cases/publish\_corpus.py                             |       45 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/application/use\_cases/register\_corpus.py                            |       16 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/application/use\_cases/register\_corpus\_version.py                   |       33 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/application/use\_cases/tokenise\_corpus\_version.py                   |       53 |        0 |        4 |        0 |    100% |           |
+| src/emblema/catalog/application/use\_cases/tokenise\_corpus\_version.py                   |      100 |        0 |       28 |        0 |    100% |           |
 | src/emblema/catalog/contracts/corpus\_version\_ref.py                                     |       24 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/contracts/events.py                                                   |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/contracts/exceptions.py                                               |       10 |        0 |        0 |        0 |    100% |           |
@@ -42,15 +42,20 @@
 | src/emblema/catalog/contracts/observed\_value.py                                          |       12 |        0 |        6 |        0 |    100% |           |
 | src/emblema/catalog/contracts/observed\_window.py                                         |       29 |        0 |       12 |        0 |    100% |           |
 | src/emblema/catalog/contracts/published\_channel.py                                       |        7 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/contracts/published\_channel\_statistics.py                           |        3 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/contracts/published\_corpus\_manifest.py                              |       40 |        0 |       18 |        0 |    100% |           |
-| src/emblema/catalog/contracts/published\_corpus\_manifest\_json.py                        |      118 |        0 |       30 |        0 |    100% |           |
+| src/emblema/catalog/contracts/published\_channel\_statistics.py                           |       11 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/contracts/published\_corpus\_manifest.py                              |       42 |        0 |       18 |        0 |    100% |           |
+| src/emblema/catalog/contracts/published\_corpus\_manifest\_json.py                        |      169 |        0 |       48 |        0 |    100% |           |
+| src/emblema/catalog/contracts/published\_value\_bounds.py                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/contracts/static\_value.py                                            |       10 |        0 |        4 |        0 |    100% |           |
 | src/emblema/catalog/contracts/window\_tokeniser.py                                        |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/domain/channels/channel\_schema.py                                    |       27 |        0 |        6 |        0 |    100% |           |
-| src/emblema/catalog/domain/channels/channel\_statistics.py                                |       19 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/domain/channels/channel\_statistics.py                                |       86 |        1 |       40 |        3 |     97% |76, 107-\>exit, 125-\>exit |
 | src/emblema/catalog/domain/channels/channel\_vocabulary.py                                |       48 |        0 |       24 |        0 |    100% |           |
-| src/emblema/catalog/domain/exceptions.py                                                  |       86 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/domain/channels/normalisation.py                                      |        7 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/domain/cleaning/cleaning\_policy.py                                   |       23 |        0 |        6 |        0 |    100% |           |
+| src/emblema/catalog/domain/cleaning/cleaning\_record.py                                   |       15 |        0 |        4 |        0 |    100% |           |
+| src/emblema/catalog/domain/cleaning/value\_bounds.py                                      |       18 |        0 |        8 |        0 |    100% |           |
+| src/emblema/catalog/domain/exceptions.py                                                  |       92 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/domain/identifiers.py                                                 |       31 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/domain/measurements/corpus\_unit.py                                   |       14 |        0 |        2 |        0 |    100% |           |
 | src/emblema/catalog/domain/measurements/observation.py                                    |       12 |        0 |        6 |        0 |    100% |           |
@@ -65,7 +70,7 @@
 | src/emblema/catalog/domain/tokenisation/archived\_corpus.py                               |       15 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/placed\_window.py                                 |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/split\_policy.py                                  |       36 |        0 |        4 |        0 |    100% |           |
-| src/emblema/catalog/domain/tokenisation/tokenisation\_manifest.py                         |       37 |        0 |        8 |        0 |    100% |           |
+| src/emblema/catalog/domain/tokenisation/tokenisation\_manifest.py                         |       39 |        0 |        8 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/tokenisation\_scheme.py                           |       57 |        0 |       16 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/unit\_split.py                                    |       38 |        0 |       16 |        0 |    100% |           |
 | src/emblema/catalog/domain/tokenisation/window\_reconstruction.py                         |        5 |        0 |        0 |        0 |    100% |           |
@@ -73,7 +78,7 @@
 | src/emblema/catalog/ports/corpus\_archive.py                                              |       13 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/ports/corpus\_reader.py                                               |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/catalog/ports/corpus\_repository.py                                           |        7 |        0 |        0 |        0 |    100% |           |
-| src/emblema/catalog/ports/tokeniser.py                                                    |       11 |        0 |        0 |        0 |    100% |           |
+| src/emblema/catalog/ports/tokeniser.py                                                    |       12 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/api\_settings.py                                                       |       29 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/artifact\_store\_settings.py                                           |        8 |        0 |        0 |        0 |    100% |           |
 | src/emblema/config/boosting\_settings.py                                                  |        2 |        0 |        0 |        0 |    100% |           |
@@ -125,7 +130,7 @@
 | src/emblema/entrypoints/cli/publish\_corpus/adapters.py                                   |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/composition\_root.py                          |      101 |        0 |       40 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/known\_corpora.py                             |       26 |        0 |        2 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_cli.py                       |       71 |        0 |       16 |        0 |    100% |           |
+| src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_cli.py                       |      100 |        0 |       24 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_invocation.py                |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/services.py                                   |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/serving/adapters.py                                           |        8 |        0 |        0 |        0 |    100% |           |
@@ -726,9 +731,9 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **22525** |  **184** | **4532** |  **120** | **99%** |           |
+| **TOTAL**                                                                                 | **22840** |  **185** | **4644** |  **123** | **99%** |           |
 
-132 empty files skipped.
+133 empty files skipped.
 
 
 ## Setup coverage badge
