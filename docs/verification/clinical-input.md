@@ -103,3 +103,94 @@ clears its bar, so differences between arms may also carry it; the pairs at the 
 show how much. The bounds keep zero weights (255 readings in 12 stays) and remove 234 weights
 above 250 kg in 6 stays that may be real (`data/report/l48/audit/weights.md`); neither was tuned.
 Validation side, tier M.
+
+## 2026-11-12 — Colab G4 and the Mac's CPU: the robust score is kept; it lifts the network from scratch at 20 and 50 stays
+
+**Question.** As declared above: which of the four preparations of the stays' values the network
+from scratch reads best at 20, 50 and 200 stays, and so which one the pretrainings read.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `d3d65254` for every cell (each order carries it) and for the reading |
+| Networks | one Colab G4 (RTX PRO 6000), 24 lanes under CUDA MPS, fp32; 32 pieces, 2,400 cells, 4,005 s. Two earlier starts of the same cell answered no cell: the cell had not fetched the stays' outcomes, so every piece stopped within 8 s |
+| Trees | the Mac's CPU (M1 Pro), 8 orders, 960 cells, 3 h 42 min |
+| Reading | `data/report/l48/read.sh` on the run's eight campaigns, every step as declared, exit 0; every campaign complete, 2,000 stays scored a cell |
+
+**Areas** (AUROC, mean over 30 seeds; the network at the rate it chose, the rate in brackets where
+not 0.001):
+
+| Stays | Raw | Cleaned | Robust | Quantile | Trees, raw / robust | Trees tuned, raw |
+| --- | --- | --- | --- | --- | --- | --- |
+| 20 | 0.604 | 0.607 (0.003) | **0.632** | 0.608 | 0.608 / 0.601 | 0.616 |
+| 50 | 0.657 (0.003) | 0.661 | **0.669** | 0.656 | 0.641 / 0.644 | 0.642 |
+| 200 | 0.744 (0.0001) | 0.748 (0.0001) | 0.748 (0.0001) | 0.745 (0.0001) | 0.738 / 0.738 | 0.741 |
+| every stay | 0.827 (0.000333) | 0.828 | 0.832 | 0.835 (0.000333) | 0.832 / 0.836 | 0.839 |
+
+Two choices lie at the edge of the grid: 0.003 for the cleaned network at 20 stays and for the
+raw one at 50.
+
+**Gains of each preparation over the raw one**, the network at each side's chosen rate (paired
+over 2,000 stays and 30 seeds; Holm over an arm's three budgets):
+
+| Pair | 20 | 50 | 200 | Level |
+| --- | --- | --- | --- | --- |
+| Cleaned less raw | +0.003 [+0.001; +0.006] | +0.004 [0.000; +0.007] | +0.003 [+0.001; +0.006] | noise at each: Holm rejects none (least adjusted p 0.051) |
+| Robust less raw | **+0.028** [+0.021; +0.036] | **+0.012** [+0.005; +0.018] | +0.004 [−0.002; +0.009] | gain at 20 and 50, harm at none |
+| Quantile less raw | +0.004 [−0.001; +0.009] | −0.001 [−0.007; +0.005] | +0.001 [−0.004; +0.007] | noise at each |
+| Quantile less robust | −0.024 | −0.013 | −0.002 | harm at 20 and 50 |
+
+Robust is the only arm that stays, and so it is kept. It gains on 26 of 30 seeds at 20 stays and
+20 of 30 at 50. Robust less cleaned gains +0.025 at 20 stays, so the gain comes from the
+normalisation, not from the cleaning.
+
+**Beside, descriptively.**
+
+| Reading | 20 | 50 | 200 | Every stay |
+| --- | --- | --- | --- | --- |
+| Robust less raw, both at the rate in force | +0.028 | +0.014 | +0.002 | +0.009 [+0.003; +0.015] |
+| Robust less raw, at their rates | | | | +0.005 [−0.001; +0.010] |
+| Quantile less raw, at their rates | | | | +0.009 [+0.003; +0.014] |
+| Trees, robust less raw | −0.007 [−0.010; −0.004] | +0.002 | −0.001 | +0.004 |
+| Network on robust less the best trees of the four inputs, at the setting in force | +0.023 (23 of 30 seeds) | +0.025 (24) | +0.010 (18) | |
+| Network less the tuned trees, raw / robust | | | | −0.012 / −0.007 |
+
+The screen over the composition (`composition-screen.md`, 2026-10-31) measured fine-tuning at
+0.631 and 0.670 at 20 and 50 stays, on the raw publication, at seeds 1 to 10; the network from
+scratch on the robust one reads 0.632 and 0.669 here. Seeds and campaigns differ, so this is no
+paired reading, but at 50 stays the screen's gain of +0.016 is about as large as what the
+normalisation alone gives (+0.012).
+
+**Predictions.**
+
+| Reading | Predicted | Observed | Held |
+| --- | --- | --- | --- |
+| Cleaned less raw, network | noise, in [−0.017, +0.016] | noise, +0.003 to +0.004 | yes |
+| Robust less raw, network | gain at one budget or more, in [0, +0.016]; harm at none | gain at 20 and 50, +0.028 and +0.012 | level yes, range no at 20 (above) |
+| Quantile less raw, network | as robust | noise at each budget | no |
+| Trees, cleaned or robust less raw | within ±0.005 | within, except robust at 20 stays, −0.007 | no at one budget |
+| Trees, quantile less raw | within ±0.01 | −0.006 to +0.003 | yes |
+| Network less trees, every stay, raw | −0.008, in [−0.023, +0.007] | −0.005 [−0.021; +0.011] | yes |
+| Rates | 0.0001 or below at 200 for every arm | 0.0001 for every arm | yes |
+
+**Conclusions.**
+
+- The pretrainings read the stays cleaned by the literature's bounds and normalised by the robust
+  score; ADR-0079 is accepted with it for the intensive-care corpora.
+- The robust score lifts the network from scratch where labels are few: +0.028 at 20 stays and
+  +0.012 at 50. At 200 the gain is within the noise; at every stay it is +0.005 to +0.009.
+- Cleaning alone moves the network by less than 0.005 at the chosen rates, and the quantile
+  score does not move it at 20 to 200 stays. At every stay the quantile score is within the noise
+  of the robust one (+0.004 [−0.001; +0.008]).
+- At 20 and 50 stays the network on the robust input leads the best tree model, tuned or not,
+  on any input, by 0.015 and 0.023. At every stay it stays below the tuned trees, within the noise.
+- A gain of pretraining measured against the network on the raw input is not a gain against this
+  control: at 50 stays the screen's +0.016 is about as large as the normalisation's own gain,
+  read across campaigns, unpaired.
+
+**Limitations.** One task and one corpus: 2019 and the eICU demo are published robust without a
+reading of their own. Robust both scales and bounds at ±10; which of the two gives the gain was
+not read. The trees lose 0.007 on the robust input at 20 stays for no reason measured, so they
+are no fairer a bar there than on the cleaned one. Two arms chose a rate at the edge of the grid.
+The comparison with the screen is across campaigns and seeds. Validation side, tier M.
