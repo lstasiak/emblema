@@ -21,12 +21,14 @@ The plan names the commit's orders and what each needs:
     threads = 2                       # threads per process
     extras = "ml"                     # what the cell installs
     fetch = [["skab", "opssat_ad"]]   # optional: arguments of each corpora fetch
+    answers = ["skab", "opssat_ad"]   # the corpora whose answers the tasks read, or []
     cards = 2                         # Kaggle: the cards the workers are spread over
     pieces = [["label", 24], ...]     # order label and its lanes, longest first
 
 The cells before and after this one (the store's secrets, the card given back) are written beside
-it. This refuses to write a cell from any commit but the orders', and a cell that breaks its own
-rules.
+it. This refuses to write a cell from any commit but the orders', a cell that breaks its own
+rules, and one whose tasks read answers that neither a fetch nor the labels bring: no block holds
+a task's answers, so such a cell would start every worker only to fail each order at once.
 
     uv run scripts/colab_cell.py --plan plan.toml --out cell.sh [--platform kaggle|mac]
 """
@@ -65,6 +67,19 @@ from scripts.cell_parts import (
 # Set by the cell itself, or too long for a line a notebook shows whole.
 LEFT_TO_THE_CELL = ("BACKBONE", "WORKSPACE", "CORPORA", "DEVICE")
 
+# The corpora a worker reads answers of, by the name a task gives them, and the corpora fetch
+# that brings each one's files.
+FETCHED_AS = {
+    "cmapss": "cmapss",
+    "physionet2012": "physionet2012",
+    "physionet2019": "physionet2019",
+    "esa_ad_raw": "esa_ad",
+    "skab": "skab",
+    "opssat_ad": "opssat_ad",
+}
+# The corpora whose answers the labels archive carries, so a cell need not fetch the whole corpus.
+IN_THE_LABELS = frozenset({"esa_ad_raw"})
+
 
 @dataclass(frozen=True, kw_only=True)
 class Piece:
@@ -97,6 +112,7 @@ class CellPlan:
         threads: How many threads each process keeps to.
         extras: What the cell installs.
         pieces: The work, in the order it is claimed.
+        answers: The corpora whose answers the tasks read.
         fetches: The arguments of each corpora fetch.
         cards: The cards the workers are spread over, or nought to share one under MPS.
     """
@@ -112,6 +128,7 @@ class CellPlan:
     threads: int
     extras: str
     pieces: tuple[Piece, ...]
+    answers: tuple[str, ...]
     fetches: tuple[tuple[str, ...], ...] = ()
     cards: int = 0
 
@@ -120,10 +137,13 @@ def read_plan(path: Path) -> CellPlan:
     """The plan at ``path``, its files read relative to it.
 
     Raises:
-        SystemExit: If the orders do not name their commit, a piece has no order or no weights, or
-            the labels' key does not match their digest.
+        SystemExit: If the orders do not name their commit, a piece has no order or no weights,
+            the labels' key does not match their digest, or the plan does not say whose answers
+            its tasks read.
     """
     plan = tomllib.loads(path.read_text())
+    if "answers" not in plan:
+        raise SystemExit("the plan names no answers: list the corpora its tasks read answers of")
     base = path.parent
     orders_text = (base / plan["orders"]).read_text()
     found = re.search(r"^# from ([0-9a-f]{40})$", orders_text, re.MULTILINE)
@@ -148,6 +168,7 @@ def read_plan(path: Path) -> CellPlan:
         threads=plan["threads"],
         extras=plan["extras"],
         pieces=tuple(pieces),
+        answers=tuple(plan["answers"]),
         fetches=tuple(tuple(each) for each in plan.get("fetch", ())),
         cards=plan.get("cards", 0),
     )
@@ -181,10 +202,13 @@ def cell_of(plan: CellPlan, platform: Platform = COLAB) -> str:
     """The cell's text, ``%%bash`` first.
 
     Raises:
-        SystemExit: If the plan shares one card among workers on a platform without MPS.
+        SystemExit: If the plan shares one card among workers on a platform without MPS, or its
+            tasks read answers the cell does not bring.
     """
     if platform.needs_cards and plan.cards < 1:
         raise SystemExit(f"a {platform.name} cell spreads its workers over cards: none named")
+    if not platform.reads_raw:
+        _refuse_answers_not_brought(plan)
     labels = sorted({piece.label for piece in plan.pieces})
     title = "Campaign orders, workers claiming pieces in the plan's order."
     parts = [
@@ -209,6 +233,25 @@ def cell_of(plan: CellPlan, platform: Platform = COLAB) -> str:
         _tail(platform),
     ]
     return "\n".join(part.strip("\n") for part in parts if part) + "\n"
+
+
+def _refuse_answers_not_brought(plan: CellPlan) -> None:
+    unknown = sorted(set(plan.answers) - FETCHED_AS.keys())
+    if unknown:
+        raise SystemExit(f"no worker reads answers of {unknown}; it knows {sorted(FETCHED_AS)}")
+    # A fetch that names no corpus fetches every one.
+    named = [[each for each in fetch if not each.startswith("-")] for fetch in plan.fetches]
+    missing = sorted(
+        corpus
+        for corpus in plan.answers
+        if not (corpus in IN_THE_LABELS and plan.labels)
+        and not any(not keys or FETCHED_AS[corpus] in keys for keys in named)
+    )
+    if missing:
+        raise SystemExit(
+            f"the tasks read answers of {missing}, which no block holds and no fetch or labels "
+            f"bring; add a fetch of {sorted(FETCHED_AS[corpus] for corpus in missing)}"
+        )
 
 
 def _tail(platform: Platform) -> str:
@@ -355,7 +398,14 @@ wait
 @STOP@
 if [ -n "${CUDA_MPS_PIPE_DIRECTORY:-}" ]; then echo quit | nvidia-cuda-mps-control; fi
 echo "=== results (paste back)"; cat $W/results.txt
-echo "=== failed"; grep -v "exit 0" $W/results.txt || echo none
+# A lane run again appends its report, so only each lane's last one says how it ended.
+echo "=== failed"
+awk '{ k = substr($0, 1, index($0, "]")); if (!(k in last)) order[++n] = k; last[k] = $0 }
+  END { for (i = 1; i <= n; i++) {
+          k = order[i]
+          if (substr(last[k], length(k) + 1, 8) != " exit 0 ") { print last[k]; f = 1 }
+        }
+        if (!f) print "none" }' $W/results.txt 2>/dev/null || echo none
 echo "=== not finished"
 while read -r label lane; do
   finished "$label-${lane%%/*}" || echo "$label-${lane%%/*}"
