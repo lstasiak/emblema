@@ -1,6 +1,6 @@
 # ADR-0079: How a publication normalises a channel is a property of the publication: the standard score, a robust score, or a normal score of its quantile
 
-- Status: accepted (2026-11-12): the intensive-care corpora take the robust score ([`clinical-input.md`](../verification/clinical-input.md))
+- Status: accepted (2026-11-12): the intensive-care corpora take the robust score ([`clinical-input.md`](../verification/clinical-input.md)); the telemetry's standard score and the fixed bound of 10 are replaced by ADR-0080 (2026-11-12)
 - Date: 2026-11-11
 
 ## Context
