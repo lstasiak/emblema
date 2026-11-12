@@ -1,6 +1,6 @@
 # ADR-0079: How a publication normalises a channel is a property of the publication: the standard score, a robust score, or a normal score of its quantile
 
-- Status: proposed
+- Status: accepted (2026-11-12): the intensive-care corpora take the robust score ([`clinical-input.md`](../verification/clinical-input.md))
 - Date: 2026-11-11
 
 ## Context
@@ -31,9 +31,10 @@ numbers let simple networks "compete with GBDT on some traditionally GBDT-friend
   is needed.
 - **A corpus that adopts another's statistics (ADR-0077) adopts its normalisation and the
   bounds its values were held to (ADR-0078)**; naming either beside them is refused.
-- **Which normalisation the clinical corpora take is decided by a declared reading**, the network
-  from scratch and the trees on the same input over 20, 50, 200 and every stay, cleaned with
-  ADR-0078; until then this record is proposed.
+- **The intensive-care corpora take the robust score**, after cleaning by ADR-0078. A declared
+  reading of the network from scratch and the trees on four preparations of PhysioNet 2012 kept
+  it: +0.028 at 20 stays and +0.012 at 50 over the raw values, harm at no budget; the quantile
+  score moved the network at no budget (`clinical-input.md`, 2026-11-12).
 
 ## Consequences
 
@@ -55,8 +56,12 @@ numbers let simple networks "compete with GBDT on some traditionally GBDT-friend
 
 ## Revisit when
 
-- The reading names a normalisation → accepted with it, or rejected if none moves the network.
-- A task depends on how far beyond the training range a value lies → the robust score.
+- A reading of PhysioNet 2019 or the eICU demo shows the robust score harming the network from
+  scratch → that corpus returns to the cleaned standard score.
+- The satellite telemetry's own reading of its input names another normalisation → a new
+  record for it.
+- Which part of the robust score, its scale or its bound, gives the gain matters to a task →
+  read the two apart.
 
 ## Sources
 
