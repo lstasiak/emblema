@@ -245,3 +245,111 @@ is the upper of two recipes, so the confirmation predicts from the four's lower 
 analysis after the results uses another measure than the register's, on the windows whose
 results prompted it. The trees come from another run on the same half and seeds. Validation
 side, tier M.
+
+## 2026-11-12 — declared before the run: two pretrainings of the base over the input the stage settled, read on three legs
+
+**Questions.** (1) On the stays cleaned and under the robust score (ADR-0078, ADR-0079) and
+the telemetry under the robust score held to 100 (ADR-0080), does fine-tuning a backbone
+pretrained over the composition gain over the network from nothing at 20, 50 and 200 stays of
+the half, each arm at the setting its rule chose, 20 and 50 one family under Holm? (2) Does the
+robust score lift the network from nothing on the 2019 stays as on 2012 (`clinical-input.md`,
+2026-11-12), read on the sepsis task at 400 and 4,000 patients? (3) Does the pretraining read
+the telemetry under its new score: a finite validation loss below the trivial predictor's under
+both seeds, the pretext answering hidden cells of the second mission's channels 18 to 20 better
+than at initialisation and than interpolation; and do the first mission's states and pretext
+error read as on the standard publication? Beside, descriptively: 100 stays, the rate in force,
+the probe, the sepsis reader, transduction, the second mission, the testbed and the fragments.
+A screen confirms nothing: it sizes the gain the confirmation is declared from and checks the
+new input's mechanics before sixteen pretrainings read it.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | the commit adding this section and the Holm family to `pretraining_screen_report.py`; the campaigns' orders placed from it; the pretrainings ordered from `b5ea3b62`, which adds the 2019 campaign file |
+| Input | 2012 `d2d86d29…`, 2019 `79364c26…` and the eICU demo `5f24d626…` cleaned and under the robust score held to 10; the raw ESA telemetry `490c1547…` under the robust score held to 100; the chain of vocabularies unchanged in its names |
+| Tasks | in-hospital death on the 2012 publication above (`c8584b61…`), sepsis on the 2019 publication above (`dc3955ac…`) and on the one as read (`03c3a159…`), on the half of the tuning side held out by seed 101, seeds 1 to 10; `esa-mission1-events` (`60bbbcf4…`) and `esa-mission2-events` (`c064e171…`) on the robust telemetry, `skab-anomalies` and `opssat-anomalies` as before, every fitting window, seeds 1 to 3; tier M |
+| Pretrainings | `backbone-cells-composition-m` at seeds 1 and 2, the recipe of 2026-10-30 unchanged, over the input above: `d61a6bcf` and `88c3e34a` |
+| Platform | the pretrainings on Kaggle, one T4 each (the shape is bound by the host, so a G4 would idle); the campaigns on one Colab G4 in 24 lanes under CUDA MPS, fp32 |
+| Campaigns, per backbone | as on 2026-10-30: `composition-physionet2012`, `cell-pretraining-probes-physionet2012`, `reader-probes-physionet2019`, `composition-mission1`, `detection-events-per-unit` on SKAB, `detection-events-counts` on the second mission and OPS-SAT |
+| Campaigns, once | `composition-scratch-physionet2012`, `composition-mission1-bars` under the first pretraining's masks; `clinical-input-physionet2019`, the network from nothing at five rates, on each of the two 2019 publications |
+| Worker | `data/report/t42c/worker-env.sh` (the rate in force 0.001), the backbone's weights per campaign |
+| Classical bar | the trees per channel of `clinical-input.md` (2026-11-12), 0.608 / 0.641 / 0.738 at 20 / 50 / 200 stays on 2,000 stays over 30 seeds: another design than this half, so beside; the trees on this half come with the confirmation |
+
+**What was seen before this section.** The first pretraining's order ran in a clean clone on
+the Mac's CPU into the second epoch (loss 0.32 to 0.15, no NaN). The trial ran every campaign
+at seed 1 and one budget (20 stays, 400 patients, 500 for the probe) under the 2026-10-30
+screen's `base1`, whose vocabulary names the same channels, on one Colab G4: 50 pieces, none
+retried, 1,863 s. Cells accepted: 17 on the 2012 stays, 12 on the 2019 patients, 8 on the first
+mission, 4, 5 and 4 on the second, the testbed and the fragments. The reading ran whole on them
+to files left unopened, after two corrections it showed: the budgets each export holds, and the
+identifier the transduction reads.
+
+**Reading.** Pairs by `scripts/campaign_pairs_report.py` (10,000 resamples); a side of two
+pretrainings is their mean. `data/report/l32b6/read.sh`, every step; a budget is read where
+its cells were exported.
+
+- *Settings.* At each budget apart by the registered rule (`scripts/rate_choice_report.py`,
+  2,000 resamples, seed 1): fine-tuning over its eight settings and both backbones together;
+  the network from nothing over its six rates; on the 2019 stays each publication's network
+  over its five rates at 400 and 4,000 apart.
+- *Gains.* Fine-tuning at its chosen setting less the network from nothing at its chosen rate
+  over the two pretrainings, against T = 2·√(SE² + s²/4), each given its level
+  (`scripts/pretraining_screen_report.py`); s the larger of 0.014 and the pair of seeds' own
+  spread. The gains at 20 and 50 stays are one family: a gain is a gain only where Holm over
+  the pairs' bootstrap p-values rejects it too (`--family 20 50`); 200 stays is read alone.
+  The rate in force and 100 stays beside.
+- *The 2019 stays.* The network from nothing on the robust publication less on the one as read,
+  each at the rate it chose, at 400 and 4,000 patients, paired by patient and seed; the rate in
+  force beside. Descriptive: harm at a budget reopens the 2019 input before the confirmation.
+- *The telemetry's mechanics.* From the pretrainings' logs, the ESA validation loss at the kept
+  epoch under each seed, finite, its ratio to the trivial predictor below one; after the
+  acceptance, `scripts/cell_pretext_audit.py` with `--model trained` and `--model
+  initialisation` on the second mission's windows: the pretext's error on the hidden cells of
+  channels 18 to 20 below the initialisation's and interpolation's. A seed that fails either
+  stops the telemetry leg until it is explained.
+- *The first mission.* As on 2026-10-30: the states less their initialisation and the
+  summaries, the pretext's error less the ridge and the summaries, each at 0.05 with the
+  interval clear of zero; the interpolation beside. The other three tasks as first read.
+- *Null pairs.* The network from nothing at the rate in force under the first pretraining's
+  campaign against the second's and its own, at every budget, within ±0.02, or the reading stops.
+- *Probe, sepsis, transduction.* The probe at 500 and the sepsis reader at 400, 4,000 and every
+  patient less the encoder at its initialisation; the transduction as on 2026-10-30.
+
+**Size and power.** The largest real gain in reach is fine-tuning's +0.025 at 50 stays on the
+raw input (2026-10-31, n = 2), of which the normalisation alone has since given +0.012; what
+remains is near the 0.010 the confirmation is sized for. With n = 2 and s at the floor, T is
+about 0.017 at 50 stays and 0.03 at 20: the screen cannot close a direction at 0.010 (power
+below 0.25) and is not asked to.
+
+**Predictions** (from earlier intervals, the lower edge where a gain is claimed; sources
+named).
+
+| Reading | Prediction | Source |
+| --- | --- | --- |
+| Spread s | in [0.014, 0.025] | own spread 0.009 on 2026-10-31; 0.025 over raw tokens (`few-label-fine-tuning.md`) |
+| Gain, chosen settings, 20 | noise, inside [−0.015, +0.010] | the base's +0.025 [+0.015; +0.036] on the raw input (2026-10-31) less the +0.028 [+0.021; +0.036] the robust score gave the network from nothing (`clinical-input.md`) |
+| Gain, chosen settings, 50 | noise or real and small, inside [−0.005, +0.020] | +0.025 [+0.015; +0.034] less +0.012 [+0.005; +0.018] |
+| Gain, chosen settings, 200 | noise, inside [−0.015, +0.010] | +0.011 [−0.001; +0.022] less +0.004 [−0.002; +0.009] |
+| Gain at the rate in force, 200 | inside [+0.010, +0.040] | +0.031 [+0.020; +0.043] less +0.002 |
+| Network from nothing, areas | within 0.01 of 0.632 / 0.669 / 0.748 at 20 / 50 / 200 | `clinical-input.md`, 30 seeds on 2,000 stays |
+| Settings | the network from nothing at 0.001 at 20 and 50, 0.0001 at 200; fine-tuning within 0.003 of the rate in force | `clinical-input.md`; 2026-10-31 |
+| 2019, robust less as read, network from nothing | 400: gain or noise, inside [−0.010, +0.030]; 4,000: noise, inside [−0.010, +0.015]; harm at neither | 2012 at 20 / 50 / 200: +0.028, +0.012, +0.004 |
+| ESA validation loss | finite under both seeds, within a factor of three of each other, ratio to the trivial predictor below one | seed 1 read 2.9, seed 2 about 12,219 on the standard score from readings thousands of deviations out, which the bound of 100 removes (`telemetry-input.md`) |
+| Second mission's hidden cells, channels 18 to 20 | the trained pretext's error below initialisation's and interpolation's | the budget run's pretext answered ESA's cells three times closer than interpolation (2026-10-30) |
+| Probe at 500 | above its threshold, inside [+0.044, +0.113] | +0.090 [+0.067; +0.113] for the base; +0.060 ± 0.008 over cells |
+| First mission: states less initialisation; less summaries; pretext less ridge; less interpolation | inside [−0.010, +0.045], the endpoint not met; [+0.011, +0.158]; [−0.050, +0.020]; [+0.012, +0.102] | the base's four intervals of 2026-10-31 |
+| Second mission, states less initialisation | below zero, inside [−0.35, +0.05], narrower than before | the states trailed a random encoder by 0.2 to 0.3 where the encoder read channels 18 to 20 as constant (2026-10-31) |
+| Sepsis reader, 4,000 | inside [−0.002, +0.025] | +0.009 [−0.002; +0.019] at 4,000, +0.013 [+0.002; +0.025] at every patient |
+| Transduction, 2012 and 2019 | the gap inside [−0.025, +0.009] at every budget | 2026-10-31 |
+| Null pairs | within ±0.002 | ±0.0015 within one run over cells |
+| Other telemetry tasks | SKAB states less initialisation within ±0.05, the summaries ahead; OPS-SAT states below initialisation | 2026-10-31 |
+
+**What follows.** The spread and the gains read here go into the power model of the
+confirmation, sixteen fresh pretrainings at 200 seeds on set B, by a declaration of its own;
+the telemetry leg is read on the sixteen by the rule in force. A harm on the 2019 stays, or a
+seed whose telemetry fails its mechanics, comes before that declaration.
+
+**Limitations.** Two pretrainings; the spread is bounded below by the floor. The 2019 reading
+is descriptive. The telemetry is read on the robust publication for the first time, so the
+comparison with 2026-10-31 is across publications, not paired. Validation side, tier M.
