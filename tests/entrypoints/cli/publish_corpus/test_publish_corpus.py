@@ -14,11 +14,17 @@ from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReade
 from emblema.catalog.adapters.in_memory.corpus_repository import InMemoryCorpusRepository
 from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCorpusRepository
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
+from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad_raw import EsaAdRawCorpusReader
+from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
 from emblema.catalog.adapters.readers.utsd import UtsdReading, UtsdScale
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
+from emblema.catalog.domain.channels.channel_schema import ChannelSchema
+from emblema.catalog.domain.channels.normalisation import Normalisation
+from emblema.catalog.domain.cleaning.cleaning_policy import CleaningPolicy
+from emblema.catalog.domain.cleaning.value_bounds import ValueBounds
 from emblema.catalog.domain.exceptions import InvalidUnitSplitError
 from emblema.catalog.domain.tokenisation.split_policy import PartSplit, SeededSplit
 from emblema.catalog.domain.tokenisation.window_spec import ShortUnits
@@ -506,3 +512,91 @@ def test_a_corpus_is_looked_for_where_the_fetch_script_lays_it(corpus: str, dire
     invocation = PublishCorpusCli().parse(["--corpus", corpus, *ARGUMENTS[4:]])
 
     assert invocation.corpus_root == Path("data/raw") / directory
+
+
+BOUNDS_FILE = """
+[[bounds]]
+channel = "pH"
+removed_below = 6.3
+clipped_below = 6.3
+clipped_above = 8.4
+removed_above = 10
+"""
+
+
+def test_the_command_line_reads_the_bounds_from_the_file_named(tmp_path: Path) -> None:
+    path = tmp_path / "bounds.toml"
+    path.write_text(BOUNDS_FILE, encoding="utf-8")
+
+    parsed = command("--cleaning", str(path))
+
+    assert parsed.cleaning == CleaningPolicy(
+        (
+            ValueBounds(
+                channel="pH",
+                removed_below=6.3,
+                clipped_below=6.3,
+                clipped_above=8.4,
+                removed_above=10.0,
+            ),
+        )
+    )
+    assert command().cleaning is None
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "[[bounds]]\nchannel = 'pH'\nremoved_below = 1\n",
+        "[[bounds]]\nchannel = 'pH'\nremoved_below = 'low'\nclipped_below = 1\n"
+        "clipped_above = 2\nremoved_above = 3\n",
+        "[[bounds]]\nchannel = 'pH'\nremoved_below = 5\nclipped_below = 1\n"
+        "clipped_above = 2\nremoved_above = 3\n",
+        "bounds = 3\n",
+        "not = toml = at all\n",
+        "",
+    ],
+    ids=["a field missing", "text for a number", "out of order", "no list", "not TOML", "empty"],
+)
+def test_a_file_of_bounds_that_is_not_one_is_refused_by_the_command_line(
+    tmp_path: Path, content: str
+) -> None:
+    path = tmp_path / "bounds.toml"
+    path.write_text(content, encoding="utf-8")
+
+    with pytest.raises(SystemExit):
+        command("--cleaning", str(path))
+
+
+def test_a_file_of_bounds_that_does_not_exist_is_refused_by_the_command_line(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(SystemExit):
+        command("--cleaning", str(tmp_path / "absent.toml"))
+
+
+@pytest.mark.parametrize("normalisation", list(Normalisation))
+def test_the_command_line_states_the_normalisation_it_was_given(
+    normalisation: Normalisation,
+) -> None:
+    assert command("--normalisation", str(normalisation)).normalisation is normalisation
+    assert command().normalisation is Normalisation.STANDARD
+
+
+@pytest.mark.skipif(not (Path("corpora") / "cleaning").is_dir(), reason="run from the repository")
+@pytest.mark.parametrize(
+    ("corpus", "schema"),
+    [
+        ("physionet2012", Physionet2012CorpusReader.SCHEMA),
+        ("physionet2019", Physionet2019CorpusReader.SCHEMA),
+        ("eicu_demo", EicuDemoCorpusReader.SCHEMA),
+    ],
+)
+def test_the_bounds_files_in_the_repository_bound_channels_their_corpus_declares(
+    corpus: str, schema: ChannelSchema
+) -> None:
+    # A misspelt channel would be refused only when the corpus is published, minutes in.
+    parsed = command("--cleaning", str(Path("corpora") / "cleaning" / f"{corpus}.toml"))
+
+    assert parsed.cleaning is not None
+    assert parsed.cleaning.channels <= set(schema.names)

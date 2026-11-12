@@ -1,0 +1,304 @@
+# Bounds a publication of the eICU demo holds its values to (ADR-0078): a value below removed_below
+# or above removed_above is removed and reads as never measured; one below clipped_below or above
+# clipped_above is clipped to it. Every row is MIMIC-Extract's variable range for the quantity
+# (Wang et al., CHIL 2020; resources/variable_ranges.csv, SHA-256
+# f4bf5853dc3e2276e26a33358961617dcc6018d496bfd3118b9c6ef2131d0c06): outlier low, valid low, valid
+# high, outlier high, in that order, named in the comment above each row. The reader records FiO2
+# as a percent, so its row is scaled by 100. A channel not named here has no row in that table and
+# is published as read: Age, Gender and the unit types.
+
+# Albumin
+[[bounds]]
+channel = "Albumin"
+removed_below = 0.0
+clipped_below = 0.6
+clipped_above = 6.0
+removed_above = 60.0
+
+# Alkaline phosphate
+[[bounds]]
+channel = "ALP"
+removed_below = 0.0
+clipped_below = 20.0
+clipped_above = 3625.0
+removed_above = 4000.0
+
+# Alanine aminotransferase
+[[bounds]]
+channel = "ALT"
+removed_below = 0.0
+clipped_below = 2.0
+clipped_above = 10000.0
+removed_above = 11000.0
+
+# Asparate aminotransferase
+[[bounds]]
+channel = "AST"
+removed_below = 0.0
+clipped_below = 6.0
+clipped_above = 20000.0
+removed_above = 22000.0
+
+# Bilirubin (total)
+[[bounds]]
+channel = "Bilirubin"
+removed_below = 0.0
+clipped_below = 0.1
+clipped_above = 60.0
+removed_above = 66.0
+
+# Blood urea nitrogen
+[[bounds]]
+channel = "BUN"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 250.0
+removed_above = 275.0
+
+# Cholesterol
+[[bounds]]
+channel = "Cholesterol"
+removed_below = 0.0
+clipped_below = 32.0
+clipped_above = 600.0
+removed_above = 660.0
+
+# Creatinine
+[[bounds]]
+channel = "Creatinine"
+removed_below = 0.0
+clipped_below = 0.1
+clipped_above = 60.0
+removed_above = 66.0
+
+# Diastolic blood pressure
+[[bounds]]
+channel = "DiasABP"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 375.0
+removed_above = 375.0
+
+# Fraction inspired oxygen, times 100
+[[bounds]]
+channel = "FiO2"
+removed_below = 20.0
+clipped_below = 21.0
+clipped_above = 100.0
+removed_above = 110.0
+
+# Glascow coma scale total
+[[bounds]]
+channel = "GCS"
+removed_below = 3.0
+clipped_below = 3.0
+clipped_above = 15.0
+removed_above = 15.0
+
+# Glucose
+[[bounds]]
+channel = "Glucose"
+removed_below = 0.0
+clipped_below = 33.0
+clipped_above = 2000.0
+removed_above = 2200.0
+
+# Bicarbonate
+[[bounds]]
+channel = "HCO3"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 60.0
+removed_above = 66.0
+
+# Hematocrit
+[[bounds]]
+channel = "HCT"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 75.0
+removed_above = 100.0
+
+# Height
+[[bounds]]
+channel = "Height"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 240.0
+removed_above = 275.0
+
+# Heart rate
+[[bounds]]
+channel = "HR"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 350.0
+removed_above = 390.0
+
+# Potassium
+[[bounds]]
+channel = "K"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 12.0
+removed_above = 15.0
+
+# Lactate
+[[bounds]]
+channel = "Lactate"
+removed_below = 0.0
+clipped_below = 0.4
+clipped_above = 30.0
+removed_above = 33.0
+
+# Mean blood pressure
+[[bounds]]
+channel = "MAP"
+removed_below = 0.0
+clipped_below = 14.0
+clipped_above = 330.0
+removed_above = 375.0
+
+# Magnesium
+[[bounds]]
+channel = "Mg"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 20.0
+removed_above = 22.0
+
+# Sodium
+[[bounds]]
+channel = "Na"
+removed_below = 0.0
+clipped_below = 50.0
+clipped_above = 225.0
+removed_above = 250.0
+
+# Diastolic blood pressure
+[[bounds]]
+channel = "NIDiasABP"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 375.0
+removed_above = 375.0
+
+# Mean blood pressure
+[[bounds]]
+channel = "NIMAP"
+removed_below = 0.0
+clipped_below = 14.0
+clipped_above = 330.0
+removed_above = 375.0
+
+# Systolic blood pressure
+[[bounds]]
+channel = "NISysABP"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 375.0
+removed_above = 375.0
+
+# Partial pressure of carbon dioxide
+[[bounds]]
+channel = "PaCO2"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 200.0
+removed_above = 220.0
+
+# Partial pressure of oxygen
+[[bounds]]
+channel = "PaO2"
+removed_below = 0.0
+clipped_below = 32.0
+clipped_above = 700.0
+removed_above = 770.0
+
+# pH
+[[bounds]]
+channel = "pH"
+removed_below = 6.3
+clipped_below = 6.3
+clipped_above = 8.4
+removed_above = 10.0
+
+# Platelets
+[[bounds]]
+channel = "Platelets"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 2000.0
+removed_above = 2200.0
+
+# Respiratory rate
+[[bounds]]
+channel = "RespRate"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 300.0
+removed_above = 330.0
+
+# Oxygen saturation
+[[bounds]]
+channel = "SaO2"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 100.0
+removed_above = 150.0
+
+# Systolic blood pressure
+[[bounds]]
+channel = "SysABP"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 375.0
+removed_above = 375.0
+
+# Temperature
+[[bounds]]
+channel = "Temp"
+removed_below = 14.2
+clipped_below = 26.0
+clipped_above = 45.0
+removed_above = 47.0
+
+# Troponin-I
+[[bounds]]
+channel = "TroponinI"
+removed_below = 0.0
+clipped_below = 0.01
+clipped_above = 49.6
+removed_above = 575.0
+
+# Troponin-T
+[[bounds]]
+channel = "TroponinT"
+removed_below = 0.0
+clipped_below = 0.01
+clipped_above = 20.85
+removed_above = 24.0
+
+# Urine output
+[[bounds]]
+channel = "Urine"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 1200.0
+removed_above = 2445.0
+
+# White blood cell count
+[[bounds]]
+channel = "WBC"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 1000.0
+removed_above = 1100.0
+
+# Weight
+[[bounds]]
+channel = "Weight"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 250.0
+removed_above = 250.0

@@ -5,11 +5,18 @@ from typing import Any
 import pytest
 
 from emblema.catalog.contracts.exceptions import MalformedManifestError
+from emblema.catalog.contracts.published_channel import PublishedChannel
+from emblema.catalog.contracts.published_channel_statistics import (
+    NORMALISATION_QUANTILE,
+    NORMALISATION_ROBUST,
+    PublishedChannelStatistics,
+)
 from emblema.catalog.contracts.published_corpus_manifest import SHORT_UNITS_ONE_WINDOW
 from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
+from emblema.catalog.contracts.published_value_bounds import PublishedValueBounds
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
-from tests.catalog.contracts.support import manifest
+from tests.catalog.contracts.support import PRESSURE, TEMPERATURE, manifest
 
 MANIFEST = manifest(empty_units=("u3",), training=("u1", "u3"))
 JSON = PublishedCorpusManifestJson()
@@ -178,4 +185,109 @@ def test_a_policy_for_short_units_the_manifest_does_not_know_is_refused() -> Non
     document["window"]["short_units"] = "two_windows"
 
     with pytest.raises(MalformedManifestError, match="shorter than a window"):
+        JSON.decode(encoded(document))
+
+
+QUANTILES = tuple(float(i) for i in range(1001))
+ROBUST = replace(
+    PRESSURE,
+    statistics=PublishedChannelStatistics(
+        8, 0.5, 0.25, normalisation=NORMALISATION_ROBUST, median=0.4, mad=0.1
+    ),
+)
+BY_QUANTILE = replace(
+    PRESSURE,
+    statistics=PublishedChannelStatistics(
+        8, 0.5, 0.25, normalisation=NORMALISATION_QUANTILE, quantiles=QUANTILES
+    ),
+)
+BOUNDED = PublishedValueBounds(
+    channel="pressure",
+    removed_below=0.0,
+    clipped_below=1.0,
+    clipped_above=9.0,
+    removed_above=10.0,
+    removed=11,
+    clipped=2,
+)
+
+
+@pytest.mark.parametrize("channel", [ROBUST, BY_QUANTILE], ids=["robust", "quantile"])
+def test_statistics_of_another_normalisation_come_back_as_they_went_in(
+    channel: PublishedChannel,
+) -> None:
+    other = replace(MANIFEST, channels=(channel, TEMPERATURE), cleaning=(BOUNDED,))
+
+    assert JSON.decode(JSON.encode(other)) == other
+
+
+def test_a_manifest_normalised_by_the_standard_score_keeps_its_version_and_fields() -> None:
+    # Every manifest published before the other normalisations keeps its bytes, so its checksum.
+    document = document_of()
+
+    assert document["version"] == PublishedCorpusManifestJson.VERSION
+    assert "cleaning" not in document
+    assert set(document["channels"][0]["statistics"]) == {"count", "mean", "std"}
+
+
+def test_a_manifest_normalised_otherwise_is_of_a_version_an_older_reader_refuses() -> None:
+    other = replace(MANIFEST, channels=(ROBUST, TEMPERATURE))
+
+    document = json.loads(JSON.encode(other))
+
+    assert document["version"] == PublishedCorpusManifestJson.VERSION_OTHER_NORMALISATION
+    assert document["channels"][0]["statistics"]["normalisation"] == NORMALISATION_ROBUST
+
+
+def test_cleaning_alone_keeps_the_first_version() -> None:
+    document = json.loads(JSON.encode(replace(MANIFEST, cleaning=(BOUNDED,))))
+
+    assert document["version"] == PublishedCorpusManifestJson.VERSION
+    assert document["cleaning"][0]["removed"] == 11
+
+
+def test_a_first_version_manifest_claiming_another_normalisation_is_refused() -> None:
+    document = json.loads(JSON.encode(replace(MANIFEST, channels=(ROBUST, TEMPERATURE))))
+    document["version"] = PublishedCorpusManifestJson.VERSION
+
+    with pytest.raises(MalformedManifestError, match="otherwise than by the standard score"):
+        JSON.decode(encoded(document))
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"normalisation": "logarithm"}, "where stated"),
+        ({"normalisation": "standard"}, "where stated"),
+        ({"normalisation": ""}, "where stated"),
+        ({"quantiles": [1.0, 2.0]}, "state"),
+        ({"normalisation": "robust", "median": 0.4}, "state"),
+        ({"normalisation": "quantile", "quantiles": ["a"]}, "list of numbers"),
+    ],
+    ids=[
+        "unknown",
+        "standard written",
+        "empty",
+        "quantiles on the standard score",
+        "robust without a deviation",
+        "text",
+    ],
+)
+def test_statistics_that_do_not_fit_their_normalisation_are_refused(
+    change: dict[str, object], message: str
+) -> None:
+    document = document_of()
+    document["version"] = PublishedCorpusManifestJson.VERSION_OTHER_NORMALISATION
+    document["channels"][0]["statistics"].update(change)
+
+    with pytest.raises(MalformedManifestError, match=message):
+        JSON.decode(encoded(document))
+
+
+def test_a_second_version_manifest_normalised_by_the_standard_score_alone_is_refused() -> None:
+    # Read and written again it would become a first-version manifest: other bytes, other checksum.
+    document = document_of()
+    document["version"] = PublishedCorpusManifestJson.VERSION_OTHER_NORMALISATION
+
+    with pytest.raises(MalformedManifestError, match="otherwise than by the standard score"):
         JSON.decode(encoded(document))

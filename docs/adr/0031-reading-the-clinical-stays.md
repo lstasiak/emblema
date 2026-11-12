@@ -65,6 +65,9 @@ the hundreds).
   are untouched. Every one of the 44 channels is measured in both sets (rarest: `Cholesterol`, 315 in
   A), asserted by a test where the raw files exist.
 
+- **2026-11-11 — values read raw superseded by ADR-0078.** A publication may now hold the
+  values to bounds from the literature; the reader still reads them raw.
+
 ## Sources
 
 Silva et al. (2012), Computing in Cardiology 39; Goldberger et al. (2000), Circulation 101(23).

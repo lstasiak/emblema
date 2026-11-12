@@ -14,6 +14,8 @@ from emblema.catalog.application.use_cases.tokenise_corpus_version import (
 )
 from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
+from emblema.catalog.domain.channels.normalisation import Normalisation
+from emblema.catalog.domain.cleaning.cleaning_policy import CleaningPolicy
 from emblema.catalog.domain.identifiers import CorpusId
 from emblema.catalog.domain.registry.corpus_source import CorpusSource
 from emblema.catalog.domain.registry.licence import Licence
@@ -39,6 +41,9 @@ class PublishCorpusCommand:
             continues, so that the two can be trained on together; ``None`` starts a vocabulary.
         statistics_from: Manifest of a corpus whose statistics this one's channels adopt rather
             than fit, so that the two hand a model the same values; ``None`` fits them.
+        cleaning: Bounds the corpus's values are held to before fitting and tokenising;
+            ``None`` publishes them raw.
+        normalisation: How the statistics fitted here normalise a value.
     """
 
     name: str
@@ -48,6 +53,8 @@ class PublishCorpusCommand:
     split: SplitPolicy
     vocabulary_from: ArtifactRef | None = None
     statistics_from: ArtifactRef | None = None
+    cleaning: CleaningPolicy | None = None
+    normalisation: Normalisation = Normalisation.STANDARD
 
 
 class PublishCorpus:
@@ -85,6 +92,9 @@ class PublishCorpus:
             CorpusReadError: If the reader cannot read or validate the data.
             InvalidUnitSplitError: If the split policy cannot split the units the corpus holds.
             WindowNotArchivableError: If a window cannot be stored at the archive's precision.
+            UnknownChannelError: If the cleaning policy bounds a channel the corpus does not
+                declare.
+            InvalidTokenisationSchemeError: If a normalisation is named beside adopted statistics.
         """
         vocabulary = (
             ChannelVocabulary()
@@ -100,6 +110,8 @@ class PublishCorpus:
                 split=command.split,
                 vocabulary=vocabulary,
                 statistics_from=command.statistics_from,
+                cleaning=command.cleaning,
+                normalisation=command.normalisation,
             )
         )
 

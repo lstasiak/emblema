@@ -1,9 +1,17 @@
 import argparse
+import tomllib
 from collections.abc import Sequence
 from pathlib import Path
 
 from emblema.catalog.adapters.readers.utsd import UtsdReading, UtsdScale
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
+from emblema.catalog.domain.channels.normalisation import Normalisation
+from emblema.catalog.domain.cleaning.cleaning_policy import CleaningPolicy
+from emblema.catalog.domain.cleaning.value_bounds import ValueBounds
+from emblema.catalog.domain.exceptions import (
+    InvalidCleaningPolicyError,
+    InvalidValueBoundsError,
+)
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.tokenisation.split_policy import (
     NamedSplit,
@@ -44,6 +52,11 @@ class PublishCorpusCli:
     and one cut from an earlier one's data, to be read beside it, adopts its statistics too::
 
         ... --statistics-from <manifest key> <manifest checksum>
+
+    Values outside the bounds a file names are removed or clipped before anything is fitted, and
+    the statistics may normalise otherwise than by the standard score::
+
+        ... --cleaning corpora/cleaning/physionet2012.toml --normalisation quantile
     """
 
     def __init__(self, known: KnownCorpora | None = None) -> None:
@@ -65,6 +78,12 @@ class PublishCorpusCli:
             )
         if arguments.exclude_units is not None and not arguments.exclude_units.is_file():
             parser.error(f"--exclude-units {arguments.exclude_units} is not a file")
+        try:
+            cleaning = self._cleaning(arguments.cleaning)
+        except (OSError, tomllib.TOMLDecodeError, InvalidCleaningPolicyError) as error:
+            parser.error(f"--cleaning {arguments.cleaning}: {error}")
+        except (InvalidValueBoundsError, KeyError, TypeError) as error:
+            parser.error(f"--cleaning {arguments.cleaning}: a bound is not a bound: {error}")
         if (
             arguments.hold_out_subset
             and arguments.subset
@@ -88,6 +107,8 @@ class PublishCorpusCli:
                 split=self._split(arguments),
                 vocabulary_from=self._manifest(arguments.vocabulary_from),
                 statistics_from=self._manifest(arguments.statistics_from),
+                cleaning=cleaning,
+                normalisation=Normalisation(arguments.normalisation),
             ),
             corpus_root=arguments.root or RAW / known.raw_directory,
             workspace=arguments.workspace,
@@ -223,12 +244,63 @@ class PublishCorpusCli:
             "training side then fits nothing",
         )
         parser.add_argument(
+            "--cleaning",
+            type=Path,
+            metavar="FILE",
+            help="TOML file of [[bounds]], one per channel: a value outside removed_below and "
+            "removed_above is removed, one outside clipped_below and clipped_above clipped; "
+            "values are published raw unless given, and held to the bounds of the manifest named "
+            "by --statistics-from where one is",
+        )
+        parser.add_argument(
+            "--normalisation",
+            choices=[str(each) for each in Normalisation],
+            default=str(Normalisation.STANDARD),
+            help="how the statistics fitted here normalise a value; "
+            f"{Normalisation.STANDARD} unless given",
+        )
+        parser.add_argument(
             "--workspace",
             type=Path,
             default=Path("data/artifacts"),
             help="where blocks pass through on their way to the store",
         )
         return parser
+
+    @staticmethod
+    def _cleaning(path: Path | None) -> CleaningPolicy | None:
+        """The policy the file states; ``None`` where no file is named.
+
+        Raises:
+            OSError: If the file cannot be read.
+            tomllib.TOMLDecodeError: If it is not TOML.
+            KeyError: If a bound lacks a field.
+            TypeError: If a field is not a name or a number, or the file holds no list of bounds.
+            InvalidValueBoundsError: If a channel's bounds do not run from low to high.
+            InvalidCleaningPolicyError: If no channel is bounded, or one is bounded twice.
+        """
+        if path is None:
+            return None
+        document = tomllib.loads(path.read_text(encoding="utf-8"))
+        entries = document.get("bounds", [])
+        if not isinstance(entries, list):
+            raise TypeError("the file must hold a list of [[bounds]]")
+        bounds = []
+        for entry in entries:
+            channel = entry["channel"]
+            figures = {
+                key: entry[key]
+                for key in ("removed_below", "clipped_below", "clipped_above", "removed_above")
+            }
+            if not isinstance(channel, str) or not all(
+                isinstance(figure, int | float) and not isinstance(figure, bool)
+                for figure in figures.values()
+            ):
+                raise TypeError(f"a bound names a channel and four numbers, got {entry}")
+            bounds.append(
+                ValueBounds(channel=channel, **{key: float(v) for key, v in figures.items()})
+            )
+        return CleaningPolicy(tuple(bounds))
 
     @staticmethod
     def _excluded_units(path: Path | None) -> tuple[str, ...]:

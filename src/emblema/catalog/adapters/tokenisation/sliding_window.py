@@ -1,10 +1,14 @@
 import math
+from array import array
 from collections import deque
 from collections.abc import Iterable, Iterator, Mapping
 from itertools import chain
 
-from emblema.catalog.domain.channels.channel_statistics import ChannelStatistics
+import numpy as np
+
+from emblema.catalog.domain.channels.channel_statistics import QUANTILE_KNOTS, ChannelStatistics
 from emblema.catalog.domain.channels.channel_vocabulary import VocabularyEntry
+from emblema.catalog.domain.channels.normalisation import Normalisation
 from emblema.catalog.domain.exceptions import (
     ChannelKindMismatchError,
     ObservationOutOfOrderError,
@@ -32,8 +36,9 @@ class SlidingWindowTokeniser:
     Memory is bounded by the observations one window can hold, never by the unit: a buffer keeps
     the observations of the window currently open, a window is produced when the stream passes its
     end, and observations that fall before the next window's start are dropped. Fitting is a
-    separate pass, over the training units rather than one unit, and holds only Welford's running
-    moments per channel. So a corpus of any size passes through in one pass per operation.
+    separate pass, over the training units rather than one unit, and holds Welford's running
+    moments per channel, and the channel's values only where a robust or quantile normalisation
+    needs their order. So a corpus of any size passes through in one pass per operation.
     """
 
     def fit(
@@ -42,15 +47,18 @@ class SlidingWindowTokeniser:
         observations: Iterable[Observation],
         static_features: Iterable[StaticFeature],
         scheme: TokenisationScheme,
+        normalisation: Normalisation = Normalisation.STANDARD,
     ) -> TokenisationScheme:
         entries = _entries_by_channel(scheme, corpus)
         moments: dict[int, _RunningMoments] = {}
         for observation in observations:
             entry = _entry(entries, corpus, observation.channel, timeless=False)
-            moments.setdefault(entry.channel_id, _RunningMoments()).add(observation.value)
+            moments.setdefault(entry.channel_id, _RunningMoments(normalisation)).add(
+                observation.value
+            )
         for feature in static_features:
             entry = _entry(entries, corpus, feature.channel, timeless=True)
-            moments.setdefault(entry.channel_id, _RunningMoments()).add(feature.value)
+            moments.setdefault(entry.channel_id, _RunningMoments(normalisation)).add(feature.value)
         for channel_id in sorted(moments):
             scheme = scheme.with_statistics(channel_id, moments[channel_id].statistics())
         return scheme
@@ -175,21 +183,49 @@ class SlidingWindowTokeniser:
 
 
 class _RunningMoments:
-    """Welford's running mean and sum of squared deviations, numerically stable in one pass."""
+    """Welford's running mean and sum of squared deviations, and the values where order is read.
 
-    def __init__(self) -> None:
+    The moments are numerically stable in one pass; the values, packed as doubles, are kept only
+    for a normalisation that reads their median or quantiles, which no running summary gives
+    exactly.
+    """
+
+    def __init__(self, normalisation: Normalisation) -> None:
         self.count = 0
         self.mean = 0.0
         self.m2 = 0.0
+        self._normalisation = normalisation
+        self._values: array[float] | None = (
+            None if normalisation is Normalisation.STANDARD else array("d")
+        )
 
     def add(self, value: float) -> None:
         self.count += 1
         delta = value - self.mean
         self.mean += delta / self.count
         self.m2 += delta * (value - self.mean)
+        if self._values is not None:
+            self._values.append(value)
 
     def statistics(self) -> ChannelStatistics:
-        return ChannelStatistics(self.count, self.mean, math.sqrt(self.m2 / self.count))
+        std = math.sqrt(self.m2 / self.count)
+        if self._values is None:
+            return ChannelStatistics(self.count, self.mean, std)
+        values = np.frombuffer(self._values, dtype=np.float64)
+        if self._normalisation is Normalisation.ROBUST:
+            median = float(np.median(values))
+            mad = float(np.median(np.abs(values - median)))
+            return ChannelStatistics(
+                self.count, self.mean, std, self._normalisation, median=median, mad=mad
+            )
+        # Interpolating between equal neighbours can round a knot a place below the one before
+        # it; the running maximum keeps them in the order the statistics require.
+        quantiles = np.maximum.accumulate(
+            np.quantile(values, np.linspace(0.0, 1.0, QUANTILE_KNOTS))
+        )
+        return ChannelStatistics(
+            self.count, self.mean, std, self._normalisation, quantiles=tuple(map(float, quantiles))
+        )
 
 
 def _entries_by_channel(scheme: TokenisationScheme, corpus: str) -> dict[str, VocabularyEntry]:

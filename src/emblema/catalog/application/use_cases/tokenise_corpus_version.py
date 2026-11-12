@@ -1,10 +1,17 @@
 from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import chain
 
 from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
-from emblema.catalog.domain.exceptions import CorpusDataChangedError
+from emblema.catalog.domain.channels.normalisation import Normalisation
+from emblema.catalog.domain.cleaning.cleaning_policy import CleaningPolicy
+from emblema.catalog.domain.cleaning.cleaning_record import ChannelCleaning, CleaningRecord
+from emblema.catalog.domain.exceptions import (
+    CorpusDataChangedError,
+    InvalidTokenisationSchemeError,
+    UnknownChannelError,
+)
 from emblema.catalog.domain.identifiers import CorpusId, UnitKey
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
@@ -38,6 +45,11 @@ class TokeniseCorpusVersionCommand:
         statistics_from: Manifest of a corpus whose statistics this one's channels adopt rather
             than fit on its training side, so that the two hand a model the same values;
             ``None`` fits them.
+        cleaning: Bounds the corpus's values are held to before fitting and tokenising;
+            ``None`` reads them raw. Statistics adopted from another manifest bring the bounds
+            that manifest's values were held to, so none is named beside them.
+        normalisation: How the statistics fitted here normalise a value; statistics adopted
+            from another manifest bring their own.
     """
 
     corpus_id: CorpusId
@@ -46,6 +58,8 @@ class TokeniseCorpusVersionCommand:
     split: SplitPolicy
     vocabulary: ChannelVocabulary = field(default_factory=ChannelVocabulary)
     statistics_from: ArtifactRef | None = None
+    cleaning: CleaningPolicy | None = None
+    normalisation: Normalisation = Normalisation.STANDARD
 
 
 class TokeniseCorpusVersion:
@@ -53,7 +67,8 @@ class TokeniseCorpusVersion:
 
     Units are split before a window is cut, the scheme is fitted on the training side only and
     every unit is tokenised under that one scheme, so nothing a held-out unit holds reaches the
-    statistics that normalise what a model sees.
+    statistics that normalise what a model sees. A cleaning policy is applied to both passes, so
+    the statistics describe the values the tokens carry.
     """
 
     def __init__(
@@ -85,9 +100,38 @@ class TokeniseCorpusVersion:
             MissingChannelStatisticsError: If it fitted no statistics for a channel of this
                 corpus.
             WindowNotArchivableError: If a window cannot be stored at the archive's precision.
+            UnknownChannelError: If the cleaning policy bounds a channel the corpus does not
+                declare, most likely a misspelt one.
+            InvalidTokenisationSchemeError: If a normalisation or a cleaning policy is named for
+                statistics adopted from another manifest, which bring their own.
         """
+        if command.statistics_from is not None and (
+            command.normalisation is not Normalisation.STANDARD or command.cleaning is not None
+        ):
+            raise InvalidTokenisationSchemeError(
+                "statistics adopted from another manifest bring their own normalisation and the "
+                "bounds their values were held to; neither can be named beside them"
+            )
+        source = (
+            None
+            if command.statistics_from is None
+            else self._archive.read_manifest(command.statistics_from)
+        )
+        # Adopted statistics describe values held to the source's bounds, so tokens follow them.
+        policy = (
+            command.cleaning
+            if source is None
+            else (None if source.cleaning is None else source.cleaning.policy)
+        )
         corpus = self._corpora.get(command.corpus_id)
         version = corpus.get_version(command.version_id)
+        if policy is not None:
+            undeclared = sorted(policy.channels - set(version.channel_schema.names))
+            if undeclared:
+                raise UnknownChannelError(
+                    f"the cleaning policy bounds channels {corpus.name!r} does not declare: "
+                    f"{undeclared}"
+                )
         frozen = version.frozen_content()
         description = self._reader.describe()
         if description.content.checksum != frozen.checksum:
@@ -100,15 +144,14 @@ class TokeniseCorpusVersion:
         unfitted = TokenisationScheme.for_vocabulary(command.vocabulary).extended_with(
             corpus.name, version.channel_schema
         )
+        fitting, publishing = _Cleaning(policy), _Cleaning(policy)
         scheme = (
-            self._fitted(corpus.name, units, split, unfitted)
-            if command.statistics_from is None
-            else unfitted.adopting(
-                corpus.name, self._archive.read_manifest(command.statistics_from).scheme
-            )
+            self._fitted(corpus.name, units, split, unfitted, fitting, command.normalisation)
+            if source is None
+            else unfitted.adopting(corpus.name, source.scheme)
         )
         archived = self._archive.write_windows(
-            self._placed(corpus.name, units, scheme, command.window)
+            self._placed(corpus.name, units, scheme, command.window, publishing)
         )
         indexed = set(archived.units)
         manifest = TokenisationManifest(
@@ -122,6 +165,7 @@ class TokeniseCorpusVersion:
             split_seed=command.split.recorded_seed,
             empty_units=tuple(unit.key for unit in units if unit.key not in indexed),
             statistics_from=command.statistics_from,
+            cleaning=publishing.record(),
         )
         return self._archive.write_manifest(manifest)
 
@@ -131,14 +175,17 @@ class TokeniseCorpusVersion:
         units: Sequence[CorpusUnit],
         split: UnitSplit,
         unfitted: TokenisationScheme,
+        cleaning: "_Cleaning",
+        normalisation: Normalisation,
     ) -> TokenisationScheme:
         """The scheme this corpus is tokenised under, fitted on the training units alone."""
-        training = [unit for unit in units if unit.key in split.training]
+        training = [cleaning.unit(unit) for unit in units if unit.key in split.training]
         return self._tokeniser.fit(
             corpus,
-            self._observations(unit.key for unit in training),
+            cleaning.observations(self._observations(unit.key for unit in training)),
             chain.from_iterable(unit.static_features for unit in training),
             unfitted,
+            normalisation,
         )
 
     def _observations(self, keys: Iterable[UnitKey]) -> Iterator[Observation]:
@@ -150,9 +197,71 @@ class TokeniseCorpusVersion:
         units: Sequence[CorpusUnit],
         scheme: TokenisationScheme,
         window: WindowSpec,
+        cleaning: "_Cleaning",
     ) -> Iterator[PlacedWindow]:
         """Every window of every unit, one unit at a time, so no corpus is ever held whole."""
         for unit in units:
             yield from self._tokeniser.tokenise(
-                corpus, unit, self._reader.read_observations(unit.key), scheme, window
+                corpus,
+                cleaning.unit(unit),
+                cleaning.observations(self._reader.read_observations(unit.key)),
+                scheme,
+                window,
             )
+
+
+class _Cleaning:
+    """A cleaning policy applied to a stream of values, counting what it changed.
+
+    The fitting pass reads the training units only, the tokenising pass every unit; the record
+    comes from the second, so it states what the published values lost, held-out units included.
+    """
+
+    def __init__(self, policy: CleaningPolicy | None) -> None:
+        self._policy = policy
+        self._removed: dict[str, int] = {}
+        self._clipped: dict[str, int] = {}
+
+    def unit(self, unit: CorpusUnit) -> CorpusUnit:
+        if self._policy is None:
+            return unit
+        kept = []
+        for feature in unit.static_features:
+            cleaned = self._policy.cleaned(feature)
+            self._count(feature.channel, feature.value, None if cleaned is None else cleaned.value)
+            if cleaned is not None:
+                kept.append(cleaned)
+        return replace(unit, static_features=tuple(kept))
+
+    def observations(self, observations: Iterable[Observation]) -> Iterator[Observation]:
+        if self._policy is None:
+            yield from observations
+            return
+        for observation in observations:
+            cleaned = self._policy.cleaned(observation)
+            self._count(
+                observation.channel, observation.value, None if cleaned is None else cleaned.value
+            )
+            if cleaned is not None:
+                yield cleaned
+
+    def record(self) -> CleaningRecord | None:
+        if self._policy is None:
+            return None
+        return CleaningRecord(
+            policy=self._policy,
+            counts=tuple(
+                ChannelCleaning(
+                    channel=each.channel,
+                    removed=self._removed.get(each.channel, 0),
+                    clipped=self._clipped.get(each.channel, 0),
+                )
+                for each in self._policy.bounds
+            ),
+        )
+
+    def _count(self, channel: str, value: float, cleaned: float | None) -> None:
+        if cleaned is None:
+            self._removed[channel] = self._removed.get(channel, 0) + 1
+        elif cleaned != value:
+            self._clipped[channel] = self._clipped.get(channel, 0) + 1

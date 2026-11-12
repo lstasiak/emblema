@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from emblema.catalog.contracts.exceptions import InvalidPublishedCorpusManifestError
 from emblema.catalog.contracts.identifiers import CorpusVersionId
 from emblema.catalog.contracts.published_channel import PublishedChannel
+from emblema.catalog.contracts.published_value_bounds import PublishedValueBounds
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
 
@@ -50,6 +51,8 @@ class PublishedCorpusManifest:
             ``one_window``, one window of the nominal length starting with the unit.
         statistics_from: The manifest whose statistics the corpus's channels adopted, a corpus
             cut from the same data and read beside this one; ``None`` where they were fitted.
+        cleaning: The bounds the corpus's values were held to before fitting and tokenising,
+            one per channel bounded; empty where the values were published raw.
     """
 
     corpus: str
@@ -68,6 +71,7 @@ class PublishedCorpusManifest:
     token_count: int
     window_short_units: str = SHORT_UNITS_DROPPED
     statistics_from: ArtifactRef | None = None
+    cleaning: tuple[PublishedValueBounds, ...] = ()
 
     @staticmethod
     def axis_of(unit: str) -> str:

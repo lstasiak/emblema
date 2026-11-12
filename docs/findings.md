@@ -6,7 +6,7 @@ by a rule registered before its run ([preregistration](preregistration.md)); eac
 note that holds its evidence ([`verification/`](verification/README.md)). A row states direction
 and size; conditions and caveats are in its note.
 
-Last updated 2026-11-11.
+Last updated 2026-11-12.
 
 ## Status
 
@@ -15,7 +15,10 @@ Last updated 2026-11-11.
   raw satellite telemetry, gains +0.016 [+0.007; +0.025] at 50 stays over the network from scratch
   at its chosen rate, the same at 20 within the noise threshold, and +0.004 [−0.007; +0.015] at
   200. At the lower edge the registered confirmation has power below 0.25
-  ([note](verification/composition-screen.md)).
+  ([note](verification/composition-screen.md)). That control read the raw values: cleaned and
+  normalised by the robust score, the network from scratch itself gains +0.028 [+0.021; +0.036]
+  at 20 stays and +0.012 [+0.005; +0.018] at 50, about the screen's gain there (another campaign
+  and seeds, unpaired), so the pretrainings and the confirmation read that input ([note](verification/clinical-input.md)).
 - **Pretraining over cells leaves a representation above its initialisation.** A frozen probe
   gains 0.060 to 0.091 over the same encoder untrained at 500 stays, and still reads about 0.03
   below the trees ([note](verification/cell-pretraining.md)).
@@ -127,6 +130,7 @@ The small encoder over cells, pretrained without labels, each arm at its chosen 
 | Fine-tuning, stays only ([note](verification/cell-pretraining.md)) | 0.62 | 0.66 | 0.74 | |
 | Fine-tuning, stays + eICU demo + satellites ([note](verification/composition-screen.md)) | 0.63 | 0.67 | 0.74 | |
 | Network from scratch, its chosen rate | 0.62 | 0.65 | 0.74 | |
+| Network from scratch, robust input, seeds 2–31 ([note](verification/clinical-input.md)) | 0.63 | 0.67 | 0.75 | |
 | Probe, pretrained / untrained (composition) | | | | 0.76 / 0.67 |
 | Trees per channel | 0.62 | 0.63 | 0.74 | **0.79** |
 
@@ -249,7 +253,8 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 
 ## Next
 
-1. Confirm the gain at 50 stays on fresh pretrainings, in a design with power at the screen's
-   lower edge, and read there whether the order of pretrainings holds across tasks and detectors.
+1. Confirm the gain at 50 stays on fresh pretrainings of the robust input, against the network
+   from scratch on the same input, in a design with power at the screen's lower edge, and read
+   there whether the order of pretrainings holds across tasks and detectors.
 2. Read channels added without labels on sepsis, across pretrainings that never read 2019.
 3. Open the frozen test side once.
