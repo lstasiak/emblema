@@ -8,8 +8,10 @@ from pathlib import Path
 
 import pytest
 
+from emblema.entrypoints.known_ground_truths import KnownGroundTruths
 from scripts.cell_parts import COLAB, KAGGLE, MAC, Platform, faults_of, write_cells
-from scripts.colab_cell import cell_of, main, read_plan
+from scripts.colab_cell import FETCHED_AS, cell_of, main, read_plan
+from scripts.fetch_corpora import CORPORA
 
 COMMIT = "a" * 40
 ORDER_A, ORDER_B = "1" * 64, "2" * 64
@@ -80,6 +82,7 @@ def write_plan(tmp_path: Path, **lines: str) -> Path:
         "threads": "2",
         "extras": '"ml"',
         "pieces": '[["first", 2], ["second", 1]]',
+        "answers": '["esa_ad_raw"]',
     }
     text = "".join(f"{key} = {value}\n" for key, value in {**defaults, **lines}.items())
     (plan_dir / "plan.toml").write_text(text)
@@ -329,7 +332,7 @@ def test_labels_whose_key_does_not_match_their_digest_are_refused(tmp_path: Path
 
 
 def test_a_plan_without_labels_or_blocks_leaves_those_steps_out(tmp_path: Path) -> None:
-    plan = write_plan(tmp_path, blocks="[]")
+    plan = write_plan(tmp_path, blocks="[]", answers="[]")
     text = plan.read_text().replace('labels = "labels.txt"\n', "")
     plan.write_text(text)
 
@@ -555,3 +558,91 @@ def test_on_the_mac_nothing_is_written_beside_the_script(tmp_path: Path) -> None
     assert out.stat().st_mode & stat.S_IXUSR
     assert not (tmp_path / "run-secrets.py").exists()
     assert not (tmp_path / "run-release.py").exists()
+
+
+def failed_section(stdout: str) -> list[str]:
+    return stdout.split("=== failed\n")[1].split("=== not finished")[0].splitlines()
+
+
+def test_a_lane_that_failed_and_then_ended_is_not_named_failed(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path)
+    run_cell(tmp_path, plan, FAIL="0/1")
+
+    done, results = run_cell(tmp_path, plan)
+
+    assert "] exit 3 " in (results / "results.txt").read_text()
+    assert failed_section(done.stdout) == ["none"]
+
+
+def test_a_lane_that_still_fails_is_named_once_by_its_last_report(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path)
+    run_cell(tmp_path, plan, FAIL="0/1")
+
+    done, _ = run_cell(tmp_path, plan, FAIL="0/1")
+
+    failed = failed_section(done.stdout)
+    assert len(failed) == 1, done.stdout
+    assert failed[0].startswith("[second-0] exit 3 ")
+
+
+def test_a_plan_that_does_not_say_whose_answers_its_tasks_read_is_refused(
+    tmp_path: Path,
+) -> None:
+    plan = write_plan(tmp_path)
+    plan.write_text(plan.read_text().replace('answers = ["esa_ad_raw"]\n', ""))
+
+    with pytest.raises(SystemExit, match="names no answers"):
+        read_plan(plan)
+
+
+def test_answers_neither_fetched_nor_in_the_labels_are_refused(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path, answers='["physionet2012"]', fetch='[["skab"]]')
+
+    with pytest.raises(SystemExit, match=r"answers of \['physionet2012'\].*fetch of"):
+        cell_of(read_plan(plan))
+
+
+def test_a_corpus_no_worker_reads_answers_of_is_refused(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path, answers='["smd"]')
+
+    with pytest.raises(SystemExit, match="no worker reads answers of"):
+        cell_of(read_plan(plan))
+
+
+@pytest.mark.parametrize(
+    "fetch",
+    ['[["--from-store", "physionet2012"]]', '[["skab"], ["physionet2012"]]', '[["--from-store"]]'],
+    ids=["named", "in a second fetch", "every corpus"],
+)
+def test_answers_a_fetch_brings_are_accepted(tmp_path: Path, fetch: str) -> None:
+    plan = write_plan(tmp_path, answers='["physionet2012"]', fetch=fetch)
+
+    assert "fetch_corpora" in cell_of(read_plan(plan))
+
+
+def test_the_telemetry_answers_come_in_the_labels_but_not_without_them(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path, answers='["esa_ad_raw"]')
+    assert "fetch_published.py labels" in cell_of(read_plan(plan))
+
+    plan.write_text(plan.read_text().replace('labels = "labels.txt"\n', ""))
+    with pytest.raises(SystemExit, match="fetch of \\['esa_ad'\\]"):
+        cell_of(read_plan(plan))
+
+
+def test_on_the_mac_answers_are_read_where_they_lie(tmp_path: Path) -> None:
+    plan = write_plan(tmp_path, answers='["physionet2012"]')
+
+    assert "fetch_published.py blocks" in cell_of(read_plan(plan), MAC)
+
+
+def test_every_corpus_a_worker_answers_for_is_one_the_fetch_knows() -> None:
+    known = {
+        KnownGroundTruths.CMAPSS,
+        KnownGroundTruths.PHYSIONET,
+        KnownGroundTruths.PHYSIONET2019,
+        KnownGroundTruths.ESA_AD_RAW,
+        KnownGroundTruths.SKAB,
+        KnownGroundTruths.OPSSAT_AD,
+    }
+    assert FETCHED_AS.keys() == known
+    assert set(FETCHED_AS.values()) <= {corpus.key for corpus in CORPORA}
