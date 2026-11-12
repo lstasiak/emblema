@@ -44,6 +44,8 @@ class PublishCorpusCommand:
         cleaning: Bounds the corpus's values are held to before fitting and tokenising;
             ``None`` publishes them raw.
         normalisation: How the statistics fitted here normalise a value.
+        robust_bound: How far from the median a robust score may lie, in robust deviations;
+            ``None`` holds it to the usual bound.
     """
 
     name: str
@@ -55,6 +57,7 @@ class PublishCorpusCommand:
     statistics_from: ArtifactRef | None = None
     cleaning: CleaningPolicy | None = None
     normalisation: Normalisation = Normalisation.STANDARD
+    robust_bound: float | None = None
 
 
 class PublishCorpus:
@@ -94,7 +97,8 @@ class PublishCorpus:
             WindowNotArchivableError: If a window cannot be stored at the archive's precision.
             UnknownChannelError: If the cleaning policy bounds a channel the corpus does not
                 declare.
-            InvalidTokenisationSchemeError: If a normalisation is named beside adopted statistics.
+            InvalidTokenisationSchemeError: If a normalisation or a bound is named beside
+                adopted statistics, or a bound beside another normalisation than the robust score.
         """
         vocabulary = (
             ChannelVocabulary()
@@ -112,6 +116,7 @@ class PublishCorpus:
                 statistics_from=command.statistics_from,
                 cleaning=command.cleaning,
                 normalisation=command.normalisation,
+                robust_bound=command.robust_bound,
             )
         )
 

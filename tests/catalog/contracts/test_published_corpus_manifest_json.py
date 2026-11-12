@@ -9,6 +9,7 @@ from emblema.catalog.contracts.published_channel import PublishedChannel
 from emblema.catalog.contracts.published_channel_statistics import (
     NORMALISATION_QUANTILE,
     NORMALISATION_ROBUST,
+    ROBUST_BOUND_UNSTATED,
     PublishedChannelStatistics,
 )
 from emblema.catalog.contracts.published_corpus_manifest import SHORT_UNITS_ONE_WINDOW
@@ -192,7 +193,13 @@ QUANTILES = tuple(float(i) for i in range(1001))
 ROBUST = replace(
     PRESSURE,
     statistics=PublishedChannelStatistics(
-        8, 0.5, 0.25, normalisation=NORMALISATION_ROBUST, median=0.4, mad=0.1
+        8, 0.5, 0.25, normalisation=NORMALISATION_ROBUST, median=0.4, mad=0.1, bound=10.0
+    ),
+)
+ROBUST_TO_A_HUNDRED = replace(
+    PRESSURE,
+    statistics=PublishedChannelStatistics(
+        8, 0.5, 0.25, normalisation=NORMALISATION_ROBUST, median=0.4, mad=0.1, bound=100.0
     ),
 )
 BY_QUANTILE = replace(
@@ -212,7 +219,11 @@ BOUNDED = PublishedValueBounds(
 )
 
 
-@pytest.mark.parametrize("channel", [ROBUST, BY_QUANTILE], ids=["robust", "quantile"])
+@pytest.mark.parametrize(
+    "channel",
+    [ROBUST, ROBUST_TO_A_HUNDRED, BY_QUANTILE],
+    ids=["robust", "robust to a hundred", "quantile"],
+)
 def test_statistics_of_another_normalisation_come_back_as_they_went_in(
     channel: PublishedChannel,
 ) -> None:
@@ -239,6 +250,44 @@ def test_a_manifest_normalised_otherwise_is_of_a_version_an_older_reader_refuses
     assert document["channels"][0]["statistics"]["normalisation"] == NORMALISATION_ROBUST
 
 
+def test_the_usual_bound_is_the_one_a_robust_manifest_states_by_stating_none() -> None:
+    # Every robust manifest written before a bound could be stated keeps its bytes.
+    document = json.loads(JSON.encode(replace(MANIFEST, channels=(ROBUST, TEMPERATURE))))
+
+    assert "bound" not in document["channels"][0]["statistics"]
+    read = JSON.decode(encoded(document)).channels[0].statistics
+    assert read == ROBUST.statistics
+    assert read is not None
+    assert read.bound == ROBUST_BOUND_UNSTATED
+
+
+def test_a_manifest_held_to_another_bound_is_of_a_version_an_older_reader_refuses() -> None:
+    document = json.loads(
+        JSON.encode(replace(MANIFEST, channels=(ROBUST_TO_A_HUNDRED, TEMPERATURE)))
+    )
+
+    assert document["version"] == PublishedCorpusManifestJson.VERSION_ROBUST_BOUND
+    assert document["channels"][0]["statistics"]["bound"] == 100.0
+
+
+@pytest.mark.parametrize(
+    ("channel", "version"),
+    [
+        (ROBUST, PublishedCorpusManifestJson.VERSION_ROBUST_BOUND),
+        (ROBUST_TO_A_HUNDRED, PublishedCorpusManifestJson.VERSION_OTHER_NORMALISATION),
+    ],
+    ids=["usual bound claiming the third", "another bound claiming the second"],
+)
+def test_a_manifest_whose_version_does_not_say_whether_a_bound_is_stated_is_refused(
+    channel: PublishedChannel, version: int
+) -> None:
+    document = json.loads(JSON.encode(replace(MANIFEST, channels=(channel, TEMPERATURE))))
+    document["version"] = version
+
+    with pytest.raises(MalformedManifestError, match="held to another bound"):
+        JSON.decode(encoded(document))
+
+
 def test_cleaning_alone_keeps_the_first_version() -> None:
     document = json.loads(JSON.encode(replace(MANIFEST, cleaning=(BOUNDED,))))
 
@@ -263,6 +312,9 @@ def test_a_first_version_manifest_claiming_another_normalisation_is_refused() ->
         ({"quantiles": [1.0, 2.0]}, "state"),
         ({"normalisation": "robust", "median": 0.4}, "state"),
         ({"normalisation": "quantile", "quantiles": ["a"]}, "list of numbers"),
+        ({"normalisation": "quantile", "quantiles": [0.0] * 1001, "bound": 100.0}, "belongs to"),
+        ({"bound": 100.0}, "belongs to"),
+        ({"normalisation": "robust", "median": 0.4, "mad": 0.1, "bound": 10.0}, "never written"),
     ],
     ids=[
         "unknown",
@@ -271,6 +323,9 @@ def test_a_first_version_manifest_claiming_another_normalisation_is_refused() ->
         "quantiles on the standard score",
         "robust without a deviation",
         "text",
+        "a bound on the quantile score",
+        "a bound on the standard score",
+        "the usual bound written",
     ],
 )
 def test_statistics_that_do_not_fit_their_normalisation_are_refused(

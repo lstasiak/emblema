@@ -1,3 +1,4 @@
+import math
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -16,7 +17,7 @@ from emblema.catalog.application.use_cases.tokenise_corpus_version import (
     TokeniseCorpusVersionCommand,
 )
 from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
-from emblema.catalog.domain.channels.channel_statistics import QUANTILE_KNOTS
+from emblema.catalog.domain.channels.channel_statistics import QUANTILE_KNOTS, ROBUST_BOUND
 from emblema.catalog.domain.channels.channel_vocabulary import ChannelVocabulary
 from emblema.catalog.domain.channels.normalisation import Normalisation
 from emblema.catalog.domain.cleaning.cleaning_policy import CleaningPolicy
@@ -106,6 +107,7 @@ class Fixture:
         statistics_from: ArtifactRef | None = None,
         cleaning: CleaningPolicy | None = None,
         normalisation: Normalisation = Normalisation.STANDARD,
+        robust_bound: float | None = None,
     ) -> ArtifactRef:
         return self.tokenise(
             TokeniseCorpusVersionCommand(
@@ -117,6 +119,7 @@ class Fixture:
                 statistics_from=statistics_from,
                 cleaning=cleaning,
                 normalisation=normalisation,
+                robust_bound=robust_bound,
             )
         )
 
@@ -372,27 +375,71 @@ def test_the_normalisation_named_is_fitted_and_survives_the_archive(
         # Every training unit reads temperature 1 to 8: the median is 4.5, its deviation 2.
         assert statistics.median == pytest.approx(4.5)
         assert statistics.mad == pytest.approx(2.0)
+        assert statistics.bound == ROBUST_BOUND
     else:
         assert len(statistics.quantiles) == QUANTILE_KNOTS
         assert statistics.quantiles[0] == 1.0
         assert statistics.quantiles[-1] == 8.0
 
 
+def test_the_bound_named_holds_the_robust_score_and_survives_the_archive(
+    wired: Callable[..., Fixture],
+) -> None:
+    fixture = wired(registered(UNITS))
+
+    manifest = fixture.archive.read_manifest(
+        fixture.run(normalisation=Normalisation.ROBUST, robust_bound=100.0)
+    )
+
+    channel = manifest.scheme.vocabulary.id_of("corpus", "temperature")
+    assert manifest.scheme.statistics_of(channel).bound == 100.0
+
+
+@pytest.mark.parametrize("normalisation", [Normalisation.STANDARD, Normalisation.QUANTILE])
+def test_a_bound_beside_another_normalisation_than_the_robust_score_is_refused(
+    wired: Callable[..., Fixture], normalisation: Normalisation
+) -> None:
+    fixture = wired(registered(UNITS))
+
+    with pytest.raises(InvalidTokenisationSchemeError, match="belongs to the robust score"):
+        fixture.run(normalisation=normalisation, robust_bound=100.0)
+
+
+@pytest.mark.parametrize("bound", [0.0, -1.0, math.inf, math.nan])
+def test_a_bound_that_cannot_hold_a_score_is_refused(
+    wired: Callable[..., Fixture], bound: float
+) -> None:
+    fixture = wired(registered(UNITS))
+
+    with pytest.raises(InvalidTokenisationSchemeError, match="finite positive bound"):
+        fixture.run(normalisation=Normalisation.ROBUST, robust_bound=bound)
+
+
 @pytest.mark.parametrize(
-    ("normalisation", "cleaning"),
-    [(Normalisation.QUANTILE, None), (Normalisation.STANDARD, PRESSURE_HELD)],
-    ids=["normalisation", "cleaning"],
+    ("normalisation", "cleaning", "robust_bound"),
+    [
+        (Normalisation.QUANTILE, None, None),
+        (Normalisation.STANDARD, PRESSURE_HELD, None),
+        (Normalisation.STANDARD, None, 100.0),
+    ],
+    ids=["normalisation", "cleaning", "bound"],
 )
 def test_what_adopted_statistics_bring_cannot_be_named_beside_them(
     wired: Callable[..., Fixture],
     normalisation: Normalisation,
     cleaning: CleaningPolicy | None,
+    robust_bound: float | None,
 ) -> None:
     fixture = wired(registered(UNITS))
     earlier = fixture.run()
 
     with pytest.raises(InvalidTokenisationSchemeError, match="bring their own"):
-        fixture.run(statistics_from=earlier, normalisation=normalisation, cleaning=cleaning)
+        fixture.run(
+            statistics_from=earlier,
+            normalisation=normalisation,
+            cleaning=cleaning,
+            robust_bound=robust_bound,
+        )
 
 
 def test_adopted_statistics_bring_the_bounds_their_values_were_held_to(

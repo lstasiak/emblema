@@ -124,6 +124,7 @@ class PublishedCorpusManifestAssembler:
                 median=statistics.median,
                 mad=statistics.mad,
                 quantiles=statistics.quantiles,
+                bound=statistics.bound,
             ),
         )
 
@@ -150,6 +151,7 @@ class PublishedCorpusManifestAssembler:
             median=published.median,
             mad=published.mad,
             quantiles=published.quantiles,
+            bound=published.bound,
         )
 
     @staticmethod

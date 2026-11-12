@@ -11,8 +11,9 @@ from emblema.catalog.domain.exceptions import InvalidChannelStatisticsError
 # The median absolute deviation times this is the standard deviation of a normal distribution,
 # so a robust deviation and a standard one measure the bulk of a normal channel alike.
 MAD_TO_DEVIATION: Final = 1.4826
-# How far from the median a robust score may lie: past it a value is an extreme of the channel,
-# and how far past says more about the channel's tail than about the unit.
+# How far from the median a robust score may lie unless the publication names another bound:
+# past it a value is an extreme of the channel, and how far past says more about the channel's
+# tail than about the unit.
 ROBUST_BOUND: Final = 10.0
 # Knots of the quantile score: the training values' quantiles at every thousandth of rank.
 QUANTILE_KNOTS: Final = 1001
@@ -35,8 +36,9 @@ class ChannelStatistics:
     instead, so a value that does depart later stays finite and honest about how far it strayed.
 
     Invariants: the count is positive; every figure is finite; the deviations are not negative;
-    a robust normalisation has a median and its deviation and no quantiles, a quantile one has
-    ``QUANTILE_KNOTS`` quantiles in order and no median, a standard one has neither.
+    a robust normalisation has a median, its deviation and a positive bound and no quantiles, a
+    quantile one has ``QUANTILE_KNOTS`` quantiles in order and none of those, a standard one has
+    neither.
 
     Attributes:
         count: Values the statistics were computed over.
@@ -47,6 +49,8 @@ class ChannelStatistics:
         mad: Median absolute deviation from the median, where the normalisation is robust.
         quantiles: The values at every ``1 / (QUANTILE_KNOTS - 1)`` of rank, lowest first, where
             the normalisation is by quantile.
+        bound: How far from the median a robust score may lie, in robust deviations, where the
+            normalisation is robust; a publication chooses it for the tails its channels have.
     """
 
     count: int
@@ -56,6 +60,7 @@ class ChannelStatistics:
     median: float | None = None
     mad: float | None = None
     quantiles: tuple[float, ...] = ()
+    bound: float | None = None
 
     def __post_init__(self) -> None:
         if self.count < 1:
@@ -71,6 +76,14 @@ class ChannelStatistics:
             raise InvalidChannelStatisticsError(
                 f"a median and its deviation belong to a robust normalisation, not a "
                 f"{self.normalisation} one"
+            )
+        if (self.bound is not None) != robust:
+            raise InvalidChannelStatisticsError(
+                f"a bound belongs to a robust normalisation, not a {self.normalisation} one"
+            )
+        if self.bound is not None and not (math.isfinite(self.bound) and self.bound > 0):
+            raise InvalidChannelStatisticsError(
+                f"bound must be finite and positive, got {self.bound}"
             )
         if self.median is not None and not math.isfinite(self.median):
             raise InvalidChannelStatisticsError(f"median must be finite, got {self.median}")
@@ -102,8 +115,8 @@ class ChannelStatistics:
             case Normalisation.STANDARD:
                 return (value - self.mean) / self._standard_scale
             case Normalisation.ROBUST:
-                centre, scale = self._robust_frame
-                return min(max((value - centre) / scale, -ROBUST_BOUND), ROBUST_BOUND)
+                centre, scale, bound = self._robust_frame
+                return min(max((value - centre) / scale, -bound), bound)
             case Normalisation.QUANTILE:
                 rank = min(max(self._rank(value), RANK_FLOOR), 1.0 - RANK_FLOOR)
                 return _NORMAL.inv_cdf(rank)
@@ -120,7 +133,7 @@ class ChannelStatistics:
             case Normalisation.STANDARD:
                 return value * self._standard_scale + self.mean
             case Normalisation.ROBUST:
-                centre, scale = self._robust_frame
+                centre, scale, _ = self._robust_frame
                 return value * scale + centre
             case Normalisation.QUANTILE:
                 position = _NORMAL.cdf(value) * (len(self.quantiles) - 1)
@@ -136,17 +149,21 @@ class ChannelStatistics:
         return self.std if self.std > 0.0 else 1.0
 
     @property
-    def _robust_frame(self) -> tuple[float, float]:
-        """The median and the robust deviation, the standard one where most values are equal.
+    def _robust_frame(self) -> tuple[float, float, float]:
+        """The median, the robust deviation and the bound; the standard deviation where most agree.
 
         A channel recorded at one value most of the time has no absolute deviation from its
         median, and measuring its rare departures in raw units would make their size depend on
         the unit the source chose; its standard deviation still says how far the values spread.
         """
-        if self.median is None or self.mad is None:  # pragma: no cover - the constructor's rule
-            raise InvalidChannelStatisticsError("only robust statistics have a median and a MAD")
+        if (
+            self.median is None or self.mad is None or self.bound is None
+        ):  # pragma: no cover - the constructor's rule
+            raise InvalidChannelStatisticsError(
+                "only robust statistics have a median, a MAD and a bound"
+            )
         robust = MAD_TO_DEVIATION * self.mad
-        return self.median, robust if robust > 0.0 else self._standard_scale
+        return self.median, robust if robust > 0.0 else self._standard_scale, self.bound
 
     def _rank(self, value: float) -> float:
         """The share of training values below ``value``, read off the quantiles.
