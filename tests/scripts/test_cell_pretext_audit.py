@@ -34,6 +34,7 @@ from scripts.cell_pretext_audit import (  # noqa: E402
     answered,
     answers_table,
     audit_corpus,
+    channel_kind,
     grids_of,
     hidden_cells_of,
     kinds_table,
@@ -244,6 +245,27 @@ def test_the_scores_name_every_kind_target_and_answer_the_cells_hold() -> None:
     all_presence = [r for r in rows if r.kind == "all" and r.target == "presence"]
     assert len(all_presence) == len(ANSWERS)
     assert all(r.cells == len(cells) for r in all_presence)
+
+
+def test_the_scores_per_channel_partition_the_cells_of_every_target_and_answer() -> None:
+    windows = irregular_windows(12, seed=3, channels=CHANNELS)
+    grids = grids_of(windows, BinnedTokens(BINS), MIXTURE, seed=4)
+    cells = hidden_cells_of(grids, vocabulary_size=CHANNELS, bins=BINS)
+    answers = answered(cells, cells, cells)
+
+    rows = scored("invented", cells, answers, presence_rate=0.5, by_channel=True)
+    without = scored("invented", cells, answers, presence_rate=0.5)
+
+    assert [r for r in rows if not r.kind.startswith("channel=")] == without
+    per_channel = [r for r in rows if r.kind.startswith("channel=")]
+    assert {r.kind for r in per_channel} == {channel_kind(c) for c in set(cells.channel)}
+    for whole in without:
+        if whole.kind != "all":
+            continue
+        parts = [r for r in per_channel if r.target == whole.target and r.answer == whole.answer]
+        assert sum(r.cells for r in parts) == whole.cells
+        assert sum(r.loss for r in parts) == pytest.approx(whole.loss)
+        assert sum(r.trivial for r in parts) == pytest.approx(whole.trivial)
 
 
 def test_the_csv_files_round_trip_and_the_tables_render_from_them(tmp_path: Path) -> None:
