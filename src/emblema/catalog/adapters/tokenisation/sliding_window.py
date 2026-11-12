@@ -50,17 +50,17 @@ class SlidingWindowTokeniser:
         normalisation: Normalisation = Normalisation.STANDARD,
     ) -> TokenisationScheme:
         entries = _entries_by_channel(scheme, corpus)
-        keeps = normalisation is not Normalisation.STANDARD
         moments: dict[int, _RunningMoments] = {}
         for observation in observations:
             entry = _entry(entries, corpus, observation.channel, timeless=False)
-            moments.setdefault(entry.channel_id, _RunningMoments(keeps)).add(observation.value)
+            moments.setdefault(entry.channel_id, _RunningMoments(normalisation)).add(
+                observation.value
+            )
         for feature in static_features:
             entry = _entry(entries, corpus, feature.channel, timeless=True)
-            moments.setdefault(entry.channel_id, _RunningMoments(keeps)).add(feature.value)
+            moments.setdefault(entry.channel_id, _RunningMoments(normalisation)).add(feature.value)
         for channel_id in sorted(moments):
-            statistics = moments[channel_id].statistics(normalisation)
-            scheme = scheme.with_statistics(channel_id, statistics)
+            scheme = scheme.with_statistics(channel_id, moments[channel_id].statistics())
         return scheme
 
     def tokenise(
@@ -190,11 +190,14 @@ class _RunningMoments:
     exactly.
     """
 
-    def __init__(self, keeps_values: bool) -> None:
+    def __init__(self, normalisation: Normalisation) -> None:
         self.count = 0
         self.mean = 0.0
         self.m2 = 0.0
-        self._values: array[float] | None = array("d") if keeps_values else None
+        self._normalisation = normalisation
+        self._values: array[float] | None = (
+            None if normalisation is Normalisation.STANDARD else array("d")
+        )
 
     def add(self, value: float) -> None:
         self.count += 1
@@ -204,16 +207,16 @@ class _RunningMoments:
         if self._values is not None:
             self._values.append(value)
 
-    def statistics(self, normalisation: Normalisation) -> ChannelStatistics:
+    def statistics(self) -> ChannelStatistics:
         std = math.sqrt(self.m2 / self.count)
         if self._values is None:
             return ChannelStatistics(self.count, self.mean, std)
         values = np.frombuffer(self._values, dtype=np.float64)
-        if normalisation is Normalisation.ROBUST:
+        if self._normalisation is Normalisation.ROBUST:
             median = float(np.median(values))
             mad = float(np.median(np.abs(values - median)))
             return ChannelStatistics(
-                self.count, self.mean, std, normalisation, median=median, mad=mad
+                self.count, self.mean, std, self._normalisation, median=median, mad=mad
             )
         # Interpolating between equal neighbours can round a knot a place below the one before
         # it; the running maximum keeps them in the order the statistics require.
@@ -221,7 +224,7 @@ class _RunningMoments:
             np.quantile(values, np.linspace(0.0, 1.0, QUANTILE_KNOTS))
         )
         return ChannelStatistics(
-            self.count, self.mean, std, normalisation, quantiles=tuple(map(float, quantiles))
+            self.count, self.mean, std, self._normalisation, quantiles=tuple(map(float, quantiles))
         )
 
 
