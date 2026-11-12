@@ -288,23 +288,17 @@ class PublishCorpusCli:
         bounds = []
         for entry in entries:
             channel = entry["channel"]
-            figures = [
-                entry[key]
+            figures = {
+                key: entry[key]
                 for key in ("removed_below", "clipped_below", "clipped_above", "removed_above")
-            ]
+            }
             if not isinstance(channel, str) or not all(
                 isinstance(figure, int | float) and not isinstance(figure, bool)
-                for figure in figures
+                for figure in figures.values()
             ):
                 raise TypeError(f"a bound names a channel and four numbers, got {entry}")
             bounds.append(
-                ValueBounds(
-                    channel=channel,
-                    removed_below=float(figures[0]),
-                    clipped_below=float(figures[1]),
-                    clipped_above=float(figures[2]),
-                    removed_above=float(figures[3]),
-                )
+                ValueBounds(channel=channel, **{key: float(v) for key, v in figures.items()})
             )
         return CleaningPolicy(tuple(bounds))
 
