@@ -21,29 +21,28 @@ POLICY = CleaningPolicy((bounds("pH", 6.3, 10.0), bounds("Height", 0.0, 240.0)))
 
 
 def test_an_observation_outside_its_bounds_is_removed() -> None:
-    assert POLICY.cleaned_observation(Observation("pH", 2.0, 735.0)) is None
+    assert POLICY.cleaned(Observation("pH", 2.0, 735.0)) is None
 
 
 def test_an_observation_inside_its_bounds_keeps_its_channel_and_time() -> None:
     observation = Observation("pH", 2.0, 7.38)
 
-    assert POLICY.cleaned_observation(observation) == observation
+    assert POLICY.cleaned(observation) == observation
 
 
 def test_a_channel_the_policy_does_not_name_is_left_as_it_is() -> None:
     observation = Observation("HR", 1.0, 900.0)
 
-    assert POLICY.cleaned_observation(observation) == observation
+    assert POLICY.cleaned(observation) == observation
 
 
 def test_a_descriptor_is_held_to_its_bounds_as_an_observation_is() -> None:
-    assert POLICY.cleaned_feature(StaticFeature("Height", 300.0)) is None
-    assert POLICY.cleaned_feature(StaticFeature("Height", 170.0)) == StaticFeature("Height", 170.0)
+    assert POLICY.cleaned(StaticFeature("Height", 300.0)) is None
+    assert POLICY.cleaned(StaticFeature("Height", 170.0)) == StaticFeature("Height", 170.0)
 
 
 def test_the_policy_names_its_channels() -> None:
     assert POLICY.channels == {"pH", "Height"}
-    assert POLICY.bounds_of("HR") is None
 
 
 def test_a_policy_naming_no_channel_is_refused() -> None:

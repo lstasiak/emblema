@@ -117,7 +117,12 @@ class TokeniseCorpusVersion:
             if command.statistics_from is None
             else self._archive.read_manifest(command.statistics_from)
         )
-        policy = command.cleaning if source is None else _adopted_policy(source)
+        # Adopted statistics describe values held to the source's bounds, so tokens follow them.
+        policy = (
+            command.cleaning
+            if source is None
+            else (None if source.cleaning is None else source.cleaning.policy)
+        )
         corpus = self._corpora.get(command.corpus_id)
         version = corpus.get_version(command.version_id)
         if policy is not None:
@@ -139,7 +144,7 @@ class TokeniseCorpusVersion:
         unfitted = TokenisationScheme.for_vocabulary(command.vocabulary).extended_with(
             corpus.name, version.channel_schema
         )
-        fitting, publishing = _Cleaning(policy), _Cleaning(policy, counts=True)
+        fitting, publishing = _Cleaning(policy), _Cleaning(policy)
         scheme = (
             self._fitted(corpus.name, units, split, unfitted, fitting, command.normalisation)
             if source is None
@@ -205,25 +210,15 @@ class TokeniseCorpusVersion:
             )
 
 
-def _adopted_policy(source: TokenisationManifest) -> CleaningPolicy | None:
-    """The bounds the values of a manifest whose statistics are adopted were held to.
-
-    Its statistics describe values held to those bounds; tokens held to others, or to none, would
-    be normalised by statistics of values they are not.
-    """
-    return None if source.cleaning is None else source.cleaning.policy
-
-
 class _Cleaning:
-    """A cleaning policy applied to a stream of values, counting what it changed when asked to.
+    """A cleaning policy applied to a stream of values, counting what it changed.
 
-    The fitting pass reads the training units only, the tokenising pass every unit; only the
-    second counts, so the record states what the published values lost, held-out units included.
+    The fitting pass reads the training units only, the tokenising pass every unit; the record
+    comes from the second, so it states what the published values lost, held-out units included.
     """
 
-    def __init__(self, policy: CleaningPolicy | None, *, counts: bool = False) -> None:
+    def __init__(self, policy: CleaningPolicy | None) -> None:
         self._policy = policy
-        self._counts = counts
         self._removed: dict[str, int] = {}
         self._clipped: dict[str, int] = {}
 
@@ -232,7 +227,7 @@ class _Cleaning:
             return unit
         kept = []
         for feature in unit.static_features:
-            cleaned = self._policy.cleaned_feature(feature)
+            cleaned = self._policy.cleaned(feature)
             self._count(feature.channel, feature.value, None if cleaned is None else cleaned.value)
             if cleaned is not None:
                 kept.append(cleaned)
@@ -243,7 +238,7 @@ class _Cleaning:
             yield from observations
             return
         for observation in observations:
-            cleaned = self._policy.cleaned_observation(observation)
+            cleaned = self._policy.cleaned(observation)
             self._count(
                 observation.channel, observation.value, None if cleaned is None else cleaned.value
             )
@@ -266,8 +261,6 @@ class _Cleaning:
         )
 
     def _count(self, channel: str, value: float, cleaned: float | None) -> None:
-        if not self._counts:
-            return
         if cleaned is None:
             self._removed[channel] = self._removed.get(channel, 0) + 1
         elif cleaned != value:

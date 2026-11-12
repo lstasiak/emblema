@@ -34,20 +34,10 @@ class CleaningPolicy:
     def channels(self) -> frozenset[str]:
         return frozenset(each.channel for each in self.bounds)
 
-    def bounds_of(self, channel: str) -> ValueBounds | None:
-        """The bounds of ``channel``; ``None`` where the policy leaves it as it is."""
-        return next((each for each in self.bounds if each.channel == channel), None)
-
-    def cleaned_observation(self, observation: Observation) -> Observation | None:
-        """The observation as the policy allows it; ``None`` where its value is removed."""
-        value = self._cleaned(observation.channel, observation.value)
-        return None if value is None else replace(observation, value=value)
-
-    def cleaned_feature(self, feature: StaticFeature) -> StaticFeature | None:
-        """The descriptor as the policy allows it; ``None`` where its value is removed."""
-        value = self._cleaned(feature.channel, feature.value)
-        return None if value is None else replace(feature, value=value)
-
-    def _cleaned(self, channel: str, value: float) -> float | None:
-        bounds = self.bounds_of(channel)
-        return value if bounds is None else bounds.cleaned(value)
+    def cleaned[T: (Observation, StaticFeature)](self, reading: T) -> T | None:
+        """The reading, timed or timeless, as the policy allows it; ``None`` where it is removed."""
+        bounds = next((each for each in self.bounds if each.channel == reading.channel), None)
+        if bounds is None:
+            return reading
+        value = bounds.cleaned(reading.value)
+        return None if value is None else replace(reading, value=value)

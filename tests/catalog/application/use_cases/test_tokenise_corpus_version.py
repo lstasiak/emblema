@@ -378,24 +378,21 @@ def test_the_normalisation_named_is_fitted_and_survives_the_archive(
         assert statistics.quantiles[-1] == 8.0
 
 
-def test_a_normalisation_named_beside_adopted_statistics_is_refused(
+@pytest.mark.parametrize(
+    ("normalisation", "cleaning"),
+    [(Normalisation.QUANTILE, None), (Normalisation.STANDARD, PRESSURE_HELD)],
+    ids=["normalisation", "cleaning"],
+)
+def test_what_adopted_statistics_bring_cannot_be_named_beside_them(
     wired: Callable[..., Fixture],
+    normalisation: Normalisation,
+    cleaning: CleaningPolicy | None,
 ) -> None:
     fixture = wired(registered(UNITS))
     earlier = fixture.run()
 
     with pytest.raises(InvalidTokenisationSchemeError, match="bring their own"):
-        fixture.run(statistics_from=earlier, normalisation=Normalisation.QUANTILE)
-
-
-def test_a_cleaning_policy_named_beside_adopted_statistics_is_refused(
-    wired: Callable[..., Fixture],
-) -> None:
-    fixture = wired(registered(UNITS))
-    earlier = fixture.run()
-
-    with pytest.raises(InvalidTokenisationSchemeError, match="bring their own"):
-        fixture.run(statistics_from=earlier, cleaning=PRESSURE_HELD)
+        fixture.run(statistics_from=earlier, normalisation=normalisation, cleaning=cleaning)
 
 
 def test_adopted_statistics_bring_the_bounds_their_values_were_held_to(
