@@ -583,6 +583,21 @@ def test_the_command_line_states_the_normalisation_it_was_given(
     assert command().normalisation is Normalisation.STANDARD
 
 
+def test_the_command_line_states_the_robust_bound_it_was_given() -> None:
+    parsed = command("--normalisation", "robust", "--robust-bound", "100")
+
+    assert parsed.robust_bound == 100.0
+    assert command("--normalisation", "robust").robust_bound is None
+
+
+@pytest.mark.parametrize("normalisation", [Normalisation.STANDARD, Normalisation.QUANTILE])
+def test_a_robust_bound_beside_another_normalisation_is_refused_by_the_command_line(
+    normalisation: Normalisation,
+) -> None:
+    with pytest.raises(SystemExit):
+        command("--normalisation", str(normalisation), "--robust-bound", "100")
+
+
 @pytest.mark.skipif(not (Path("corpora") / "cleaning").is_dir(), reason="run from the repository")
 @pytest.mark.parametrize(
     ("corpus", "schema"),

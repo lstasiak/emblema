@@ -64,8 +64,12 @@ def test_std_is_finite_and_non_negative(std: float) -> None:
 EVEN = tuple(float(i) for i in range(QUANTILE_KNOTS))
 
 
-def robust(median: float = 4.0, mad: float = 1.0, std: float = 3.0) -> ChannelStatistics:
-    return ChannelStatistics(10, 5.0, std, Normalisation.ROBUST, median=median, mad=mad)
+def robust(
+    median: float = 4.0, mad: float = 1.0, std: float = 3.0, bound: float = ROBUST_BOUND
+) -> ChannelStatistics:
+    return ChannelStatistics(
+        10, 5.0, std, Normalisation.ROBUST, median=median, mad=mad, bound=bound
+    )
 
 
 def by_quantile(quantiles: tuple[float, ...] = EVEN) -> ChannelStatistics:
@@ -76,9 +80,11 @@ def test_the_robust_score_measures_from_the_median_in_robust_deviations() -> Non
     assert robust().normalise(4.0 + 1.4826) == pytest.approx(1.0)
 
 
-def test_the_robust_score_is_bounded() -> None:
-    assert robust().normalise(1e6) == ROBUST_BOUND
-    assert robust().normalise(-1e6) == -ROBUST_BOUND
+@pytest.mark.parametrize("bound", [ROBUST_BOUND, 100.0])
+def test_the_robust_score_is_held_to_the_bound_its_statistics_name(bound: float) -> None:
+    assert robust(bound=bound).normalise(1e6) == bound
+    assert robust(bound=bound).normalise(-1e6) == -bound
+    assert robust(bound=bound).normalise(4.0 + 1.4826 * bound / 2) == pytest.approx(bound / 2)
 
 
 def test_a_channel_mostly_at_one_value_measures_robust_scores_in_standard_deviations() -> None:
@@ -127,10 +133,17 @@ def test_a_quantile_score_comes_back_between_its_knots() -> None:
 STANDARD, ROBUST, QUANTILE = Normalisation.STANDARD, Normalisation.ROBUST, Normalisation.QUANTILE
 MISMATCHED: dict[str, Callable[[], ChannelStatistics]] = {
     "standard with a median": lambda: ChannelStatistics(1, 0.0, 1.0, STANDARD, 1.0, 1.0),
-    "robust without one": lambda: ChannelStatistics(1, 0.0, 1.0, ROBUST),
-    "robust with quantiles": lambda: ChannelStatistics(1, 0.0, 1.0, ROBUST, 1.0, 1.0, EVEN),
+    "robust without one": lambda: ChannelStatistics(1, 0.0, 1.0, ROBUST, bound=10.0),
+    "robust without a bound": lambda: ChannelStatistics(1, 0.0, 1.0, ROBUST, 1.0, 1.0),
+    "robust with quantiles": lambda: ChannelStatistics(
+        1, 0.0, 1.0, ROBUST, 1.0, 1.0, EVEN, bound=10.0
+    ),
     "quantile without them": lambda: ChannelStatistics(1, 0.0, 1.0, QUANTILE),
+    "quantile with a bound": lambda: ChannelStatistics(
+        1, 0.0, 1.0, QUANTILE, quantiles=EVEN, bound=10.0
+    ),
     "standard with quantiles": lambda: ChannelStatistics(1, 0.0, 1.0, STANDARD, quantiles=EVEN),
+    "standard with a bound": lambda: ChannelStatistics(1, 0.0, 1.0, STANDARD, bound=10.0),
 }
 
 
@@ -158,3 +171,9 @@ def test_quantiles_that_are_not_a_full_ordered_set_are_refused(
 def test_a_robust_deviation_that_is_negative_or_not_finite_is_refused(mad: float) -> None:
     with pytest.raises(InvalidChannelStatisticsError, match="mad"):
         robust(mad=mad)
+
+
+@pytest.mark.parametrize("bound", [0.0, -10.0, float("nan"), float("inf")])
+def test_a_bound_that_is_not_positive_and_finite_is_refused(bound: float) -> None:
+    with pytest.raises(InvalidChannelStatisticsError, match="bound"):
+        robust(bound=bound)

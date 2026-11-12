@@ -5,6 +5,7 @@ from pathlib import Path
 
 from emblema.catalog.adapters.readers.utsd import UtsdReading, UtsdScale
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
+from emblema.catalog.domain.channels.channel_statistics import ROBUST_BOUND
 from emblema.catalog.domain.channels.normalisation import Normalisation
 from emblema.catalog.domain.cleaning.cleaning_policy import CleaningPolicy
 from emblema.catalog.domain.cleaning.value_bounds import ValueBounds
@@ -95,6 +96,11 @@ class PublishCorpusCli:
                 f"--hold-out-subset {arguments.hold_out_subset} holds out a subset this run does "
                 "not read"
             )
+        if (
+            arguments.robust_bound is not None
+            and Normalisation(arguments.normalisation) is not Normalisation.ROBUST
+        ):
+            parser.error("--robust-bound belongs to --normalisation robust")
         known = self._known.named(arguments.corpus)
         return PublishCorpusInvocation(
             command=PublishCorpusCommand(
@@ -109,6 +115,7 @@ class PublishCorpusCli:
                 statistics_from=self._manifest(arguments.statistics_from),
                 cleaning=cleaning,
                 normalisation=Normalisation(arguments.normalisation),
+                robust_bound=arguments.robust_bound,
             ),
             corpus_root=arguments.root or RAW / known.raw_directory,
             workspace=arguments.workspace,
@@ -258,6 +265,13 @@ class PublishCorpusCli:
             default=str(Normalisation.STANDARD),
             help="how the statistics fitted here normalise a value; "
             f"{Normalisation.STANDARD} unless given",
+        )
+        parser.add_argument(
+            "--robust-bound",
+            type=float,
+            metavar="DEVIATIONS",
+            help="how far from the median a robust score may lie, in robust deviations; "
+            f"{ROBUST_BOUND:g} unless given, and only with --normalisation {Normalisation.ROBUST}",
         )
         parser.add_argument(
             "--workspace",

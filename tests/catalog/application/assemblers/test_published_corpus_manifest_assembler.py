@@ -136,5 +136,23 @@ def test_another_normalisation_and_the_cleaning_restore_as_they_went_out(
     assert assembler.restore(message) == cleaned
 
 
+def test_a_robust_score_held_to_another_bound_restores_as_it_went_out(
+    assembler: PublishedCorpusManifestAssembler,
+) -> None:
+    pressure = VOCABULARY.id_of(CORPUS, "pressure")
+    scheme = TokenisationScheme.for_vocabulary(VOCABULARY).with_statistics(
+        pressure,
+        ChannelStatistics(8, 0.5, 0.25, Normalisation.ROBUST, median=0.4, mad=0.1, bound=100.0),
+    )
+    bounded = replace(MANIFEST, scheme=scheme)
+
+    message = assembler.assemble(bounded)
+
+    published = next(channel for channel in message.channels if channel.channel == "pressure")
+    assert published.statistics is not None
+    assert published.statistics.bound == 100.0
+    assert assembler.restore(message) == bounded
+
+
 def test_the_published_vocabulary_of_normalisations_is_the_catalogs() -> None:
     assert set(NORMALISATIONS) == {str(each) for each in Normalisation}

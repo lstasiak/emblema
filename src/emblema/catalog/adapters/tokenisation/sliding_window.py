@@ -6,7 +6,11 @@ from itertools import chain
 
 import numpy as np
 
-from emblema.catalog.domain.channels.channel_statistics import QUANTILE_KNOTS, ChannelStatistics
+from emblema.catalog.domain.channels.channel_statistics import (
+    QUANTILE_KNOTS,
+    ROBUST_BOUND,
+    ChannelStatistics,
+)
 from emblema.catalog.domain.channels.channel_vocabulary import VocabularyEntry
 from emblema.catalog.domain.channels.normalisation import Normalisation
 from emblema.catalog.domain.exceptions import (
@@ -48,17 +52,20 @@ class SlidingWindowTokeniser:
         static_features: Iterable[StaticFeature],
         scheme: TokenisationScheme,
         normalisation: Normalisation = Normalisation.STANDARD,
+        robust_bound: float = ROBUST_BOUND,
     ) -> TokenisationScheme:
         entries = _entries_by_channel(scheme, corpus)
         moments: dict[int, _RunningMoments] = {}
         for observation in observations:
             entry = _entry(entries, corpus, observation.channel, timeless=False)
-            moments.setdefault(entry.channel_id, _RunningMoments(normalisation)).add(
+            moments.setdefault(entry.channel_id, _RunningMoments(normalisation, robust_bound)).add(
                 observation.value
             )
         for feature in static_features:
             entry = _entry(entries, corpus, feature.channel, timeless=True)
-            moments.setdefault(entry.channel_id, _RunningMoments(normalisation)).add(feature.value)
+            moments.setdefault(entry.channel_id, _RunningMoments(normalisation, robust_bound)).add(
+                feature.value
+            )
         for channel_id in sorted(moments):
             scheme = scheme.with_statistics(channel_id, moments[channel_id].statistics())
         return scheme
@@ -190,11 +197,12 @@ class _RunningMoments:
     exactly.
     """
 
-    def __init__(self, normalisation: Normalisation) -> None:
+    def __init__(self, normalisation: Normalisation, robust_bound: float) -> None:
         self.count = 0
         self.mean = 0.0
         self.m2 = 0.0
         self._normalisation = normalisation
+        self._robust_bound = robust_bound
         self._values: array[float] | None = (
             None if normalisation is Normalisation.STANDARD else array("d")
         )
@@ -216,7 +224,13 @@ class _RunningMoments:
             median = float(np.median(values))
             mad = float(np.median(np.abs(values - median)))
             return ChannelStatistics(
-                self.count, self.mean, std, self._normalisation, median=median, mad=mad
+                self.count,
+                self.mean,
+                std,
+                self._normalisation,
+                median=median,
+                mad=mad,
+                bound=self._robust_bound,
             )
         # Interpolating between equal neighbours can round a knot a place below the one before
         # it; the running maximum keeps them in the order the statistics require.

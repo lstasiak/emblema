@@ -1,6 +1,7 @@
 from collections.abc import Iterable, Iterator
 from typing import Protocol
 
+from emblema.catalog.domain.channels.channel_statistics import ROBUST_BOUND
 from emblema.catalog.domain.channels.normalisation import Normalisation
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
@@ -27,13 +28,14 @@ class Tokeniser(Protocol):
         static_features: Iterable[StaticFeature],
         scheme: TokenisationScheme,
         normalisation: Normalisation = Normalisation.STANDARD,
+        robust_bound: float = ROBUST_BOUND,
     ) -> TokenisationScheme:
         """The scheme with statistics fitted for every channel of ``corpus`` the data holds.
 
         The caller streams the observations and static features of the training units only, all
         of them, whether or not a window will later cover them: the statistics describe the data,
         not the windowing. Each channel's statistics serve ``normalisation`` and hold the facts
-        it reads.
+        it reads; a robust score is held to ``robust_bound`` deviations from the median.
 
         Raises:
             UnknownChannelError: If a value names a channel the scheme's vocabulary has not

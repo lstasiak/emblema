@@ -10,6 +10,7 @@ from emblema.catalog.contracts.published_channel_statistics import (
     NORMALISATION_QUANTILE,
     NORMALISATION_ROBUST,
     NORMALISATION_STANDARD,
+    ROBUST_BOUND_UNSTATED,
     PublishedChannelStatistics,
 )
 from emblema.catalog.contracts.published_corpus_manifest import (
@@ -38,15 +39,15 @@ class PublishedCorpusManifestJson:
     # a reader that knew only that score would normalise a served value wrongly without noticing,
     # so it must refuse such a manifest rather than ignore the field that says so.
     VERSION_OTHER_NORMALISATION: Final = 2
+    # The version of a manifest whose robust score is held to another bound than the one every
+    # earlier robust manifest was held to: a reader that knew only that bound would clip a
+    # served value wrongly without noticing, so it must refuse such a manifest too.
+    VERSION_ROBUST_BOUND: Final = 3
 
     def encode(self, manifest: PublishedCorpusManifest) -> bytes:
         document: _Document = {
             "format": self.FORMAT,
-            "version": (
-                self.VERSION_OTHER_NORMALISATION
-                if self._other_normalisations(manifest)
-                else self.VERSION
-            ),
+            "version": self._version_of(manifest),
             "corpus": manifest.corpus,
             "corpus_version": str(manifest.corpus_version.value),
             "corpus_checksum": self._checksum_document(manifest.corpus_checksum),
@@ -95,6 +96,7 @@ class PublishedCorpusManifestJson:
         if document.get("format") != self.FORMAT or version not in (
             self.VERSION,
             self.VERSION_OTHER_NORMALISATION,
+            self.VERSION_ROBUST_BOUND,
         ):
             raise MalformedManifestError(
                 f"manifest is a {document.get('format')!r} of version {version!r}"
@@ -103,16 +105,35 @@ class PublishedCorpusManifestJson:
             manifest = self._manifest(_Fields(document))
         except ValueError as error:
             raise MalformedManifestError(f"manifest is not well formed: {error}") from error
-        other = self._other_normalisations(manifest)
         # Each version states exactly what the encoder would write for it, so a manifest read
         # and written again keeps its bytes, and so its checksum.
-        if bool(other) != (version == self.VERSION_OTHER_NORMALISATION):
+        if version != self._version_of(manifest):
+            other = self._other_normalisations(manifest)
             raise MalformedManifestError(
                 f"version {self.VERSION_OTHER_NORMALISATION} is written exactly where a channel is "
-                f"normalised otherwise than by the standard score; version {version} states "
-                f"{other or 'none'}"
+                f"normalised otherwise than by the standard score and version "
+                f"{self.VERSION_ROBUST_BOUND} where a robust score is held to another bound than "
+                f"{ROBUST_BOUND_UNSTATED:g}; version {version} states {other or 'none'}"
+                + (" and a bound" if self._bounds_stated(manifest) else "")
             )
         return manifest
+
+    @classmethod
+    def _version_of(cls, manifest: PublishedCorpusManifest) -> int:
+        if cls._bounds_stated(manifest):
+            return cls.VERSION_ROBUST_BOUND
+        if cls._other_normalisations(manifest):
+            return cls.VERSION_OTHER_NORMALISATION
+        return cls.VERSION
+
+    @staticmethod
+    def _bounds_stated(manifest: PublishedCorpusManifest) -> bool:
+        return any(
+            channel.statistics is not None
+            and channel.statistics.bound is not None
+            and channel.statistics.bound != ROBUST_BOUND_UNSTATED
+            for channel in manifest.channels
+        )
 
     @staticmethod
     def _other_normalisations(manifest: PublishedCorpusManifest) -> list[str]:
@@ -202,6 +223,8 @@ class PublishedCorpusManifestJson:
             document["mad"] = statistics.mad
         if statistics.quantiles:
             document["quantiles"] = list(statistics.quantiles)
+        if statistics.bound is not None and statistics.bound != ROBUST_BOUND_UNSTATED:
+            document["bound"] = statistics.bound
         return document
 
     @classmethod
@@ -233,6 +256,17 @@ class PublishedCorpusManifestJson:
                 f"statistics normalised by {normalisation!r} state {sorted(expected)}, "
                 f"not {sorted(stated)}"
             )
+        robust = normalisation == NORMALISATION_ROBUST
+        if fields.has("bound") and not robust:
+            raise MalformedManifestError(
+                f"a bound belongs to a robust normalisation, not a {normalisation!r} one"
+            )
+        if fields.has("bound") and fields.number("bound") == ROBUST_BOUND_UNSTATED:
+            # Written again it would be left out: other bytes, other checksum.
+            raise MalformedManifestError(
+                f"a bound of {ROBUST_BOUND_UNSTATED:g} is the one a robust score is held to "
+                "unless stated, and is never written"
+            )
         return PublishedChannelStatistics(
             fields.integer("count"),
             fields.number("mean"),
@@ -241,6 +275,9 @@ class PublishedCorpusManifestJson:
             median=fields.number("median") if fields.has("median") else None,
             mad=fields.number("mad") if fields.has("mad") else None,
             quantiles=fields.numbers("quantiles") if fields.has("quantiles") else (),
+            bound=(fields.number("bound") if fields.has("bound") else ROBUST_BOUND_UNSTATED)
+            if robust
+            else None,
         )
 
     @staticmethod
