@@ -90,10 +90,11 @@ Preliminary, on validation data; each task's test data is used once, at the end.
 
 - Not shown. On turbofan remaining life (NASA C-MAPSS) and on death in hospital (PhysioNet
   2012) no pretrained arm beats the same network trained from scratch beyond the noise of the
-  comparison; a gain of 0.016 in area at 50 labelled stays is about what normalising the values
-  robustly gives the network from scratch alone (0.012, read in another campaign), so fresh
-  pretrainings are read on that input. A linear probe reads 0.06 to 0.09 above the untrained
-  encoder at 500 stays, still below the trees.
+  comparison. On the cleaned, robustly normalised stays two fresh pretrainings fine-tune to
+  −0.013 / +0.009 / +0.007 in area at 20 / 50 / 200 labelled stays against the network from
+  scratch on the same input; the 0.016 read earlier at 50 stays was what that normalisation
+  gives the network from scratch. A linear probe reads 0.06 above the untrained encoder at 500
+  stays, still below the trees.
 - Ruled out: more pretraining data (up to about 10⁹ values), a five times larger model,
   continuing on the task's own domain, the adaptation recipe and six variants of the pretext.
 
@@ -113,7 +114,8 @@ Preliminary, on validation data; each task's test data is used once, at the end.
   no better than that departure, and the departures miss too few events on that mission to
   justify a perturbation term.
 
-**Next:** confirmation at few labels on fresh pretrainings.
+**Next:** the clinical leg is reformulated before another pretraining; its input, its pretext
+and the scale of in-regime data are the named causes.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
