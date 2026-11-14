@@ -353,3 +353,152 @@ seed whose telemetry fails its mechanics, comes before that declaration.
 **Limitations.** Two pretrainings; the spread is bounded below by the floor. The 2019 reading
 is descriptive. The telemetry is read on the robust publication for the first time, so the
 comparison with 2026-10-31 is across publications, not paired. Validation side, tier M.
+
+## 2026-11-13 — Kaggle T4 and Colab G4, fp32: on the input the stage settled, fine-tuning's gain over the network from nothing is within the noise at every budget and negative at 20 stays
+
+**Question.** As declared above: fine-tuning's gain over the network from nothing on the robust
+input, 20 and 50 stays one family; the robust score on the 2019 stays; the telemetry's
+mechanics under its new score and the first mission's leg.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `6baf98f5` for every campaign cell and the reading: the declaration's commit `b7e6ae8e` plus the per-channel scores of `cell_pretext_audit.py`, which the mechanics reading needed; the pretrainings from `b5ea3b62` |
+| Pretrainings | Kaggle, one T4 each, 20,465 and 20,507 s, the card a fifth busy (the shape is bound by the host); `d61a6bcf` (weights `db880c69…`) and `88c3e34a` (`cd49574b…`); the epochs kept 15 and 16 of 17 |
+| Campaigns | one Colab G4, 24 lanes under CUDA MPS, 101 pieces of 18 orders, none retried, 3,084 s; 101 lanes accepted (70 of them at the second attempt, after the Docker disk the registry lives on ran full and was pruned) |
+| Reading | `data/report/l32b6/read.sh` at `6baf98f5`, every step exit 0; the mechanics from MLflow and `data/report/l32b6/audit/` |
+
+**Areas** on the 2012 stays under the two pretrainings, at each arm's chosen setting (AUROC,
+mean over seeds; the setting in brackets):
+
+| Stays | Fine-tuning | Network from nothing | Fine-tuning on the raw input (2026-10-31) | Network from nothing on the raw input |
+| --- | --- | --- | --- | --- |
+| 20 | 0.627 (0.0001) | 0.640 (0.001) | 0.631 | 0.615 |
+| 50 | 0.679 (0.00003) | 0.670 (0.003, the grid's edge) | 0.670 | 0.654 |
+| 100 | 0.717 (encoder at a tenth, head solved) | 0.706 (0.000333) | 0.711 | 0.695 |
+| 200 | 0.745 (0.001) | 0.739 (0.0001) | 0.745 | 0.741 |
+
+Fine-tuning reads as on the raw input; the network from nothing gained 0.016 to 0.025 at 20
+and 50 stays from the robust score alone, and the gap closed.
+
+**Gains of fine-tuning over the network from nothing** (`pretraining_screen_report.py`; own
+spread 0.007, s = 0.014, the floor; null pairs 0.0000 at every budget):
+
+| Stays | Gain, chosen settings | T | Level | Holm, 20 and 50 | Gain at the rate in force |
+| --- | --- | --- | --- | --- | --- |
+| 20 | **−0.013** [−0.022; −0.005] | 0.027 | noise | rejected, the sign negative | −0.014 [−0.023; −0.006] |
+| 50 | +0.009 [−0.004; +0.021] | 0.029 | noise | held | +0.004 [−0.005; +0.012] |
+| 200 | +0.007 [−0.004; +0.017] | 0.020 | noise | read alone | +0.021 [+0.010; +0.032], at the least gain |
+
+The gain at the rate in force at 200 stays reads the network from nothing at 0.001, where its
+own choice is 0.0001 (0.725 against 0.739): the control's rate, not the pretraining. The second
+pretraining fine-tunes 0.011 to 0.014 below the first at 20 and 200 stays.
+
+**Representation and the 2019 stays.** The probe at 500 stays: 0.750 against 0.689 untrained,
++0.061 [+0.040; +0.082], at the least gain. The sepsis reader: +0.005 [−0.005; +0.016] at 400,
++0.003 [−0.008; +0.014] at 4,000, unresolved (2026-10-31: +0.009 and +0.013). The network from
+nothing on the sepsis task, robust publication less the one as read, both at the rate they
+chose (0.0001): +0.003 [−0.000; +0.006] at 400 patients, −0.000 [−0.004; +0.004] at 4,000; at
+the rate in force +0.015 [+0.007; +0.022] and +0.012 [+0.004; +0.021]. Harm at neither: the
+publication stands. The pretrained probe reads 0.022 below that network at 400 patients.
+
+**The telemetry's mechanics.** The ESA validation loss at the kept epoch: 0.143 and 0.157, its
+ratio to the trivial predictor 0.250 and 0.274 (2026-10-31, standard score: 0.857 and 1.000).
+The hidden cells of the second mission's channels 18 to 20, R² of the mean target against the
+channel's centre, the same 226,318 cells and masks for every backbone:
+
+| Channel | Interpolation, robust | Trained, seeds 1 / 2 | Initialisation, seeds 1 / 2 | Interpolation, standard | Trained on the standard score, 2026-10-30 seeds 1 / 2 |
+| --- | --- | --- | --- | --- | --- |
+| 18 | 0.445 | 0.216 / 0.255 | 0.001 / 0.002 | 0.993 | 0.968 / 0.396 |
+| 19 | −3.72 | 0.005 / 0.018 | −0.005 / −0.085 | −1.86 | −0.028 / −0.042 |
+| 20 | −1.96 | 0.049 / 0.077 | −0.258 / −0.131 | −1.50 | −0.012 / −0.090 |
+| every ESA cell | 0.574 | 0.400 / 0.431 | −0.040 / −0.032 | 0.275 | 0.000 / −0.001 |
+
+Channels 19 and 20, read as constant under the standard score, are answered above
+initialisation and interpolation; channel 18 above initialisation but below interpolation under
+either score. Its sum of squares, 124,381 over 1,163 cells, is what one cell in a hundred at the
+bound of 100 gives: the events' plateaus, which interpolation between two cells at the bound
+reads exactly and a pretext over one hour's other channels reads in part. A property of the
+channel's validation months, not of the score; the telemetry leg goes on.
+
+**The first mission** (event-weighted PR-AUC; reduction of 1 − PR-AUC, 10,000 resamples), areas
+under the two pretrainings: states 0.106 / 0.098, their initialisation 0.083, the pretext's
+error 0.183 / 0.125, the ridge 0.182, the interpolation 0.147, the summaries 0.012:
+
+| Pair | Reading | 2026-10-31, raw |
+| --- | --- | --- |
+| States less their initialisation (endpoint) | +0.019 [−0.005; +0.041] | +0.018 [−0.008; +0.045] |
+| States less the summaries | **+0.090** [+0.019; +0.174] | +0.074 [+0.011; +0.158] |
+| Pretext's error less the ridge | −0.028 [−0.059; +0.014] | −0.026 [−0.050; +0.019] |
+| Pretext's error less the summaries | **+0.142** [+0.076; +0.224] | +0.106 [+0.048; +0.194] |
+| Pretext's error less the interpolation | +0.007 [−0.011; +0.047] | +0.040 [+0.012; +0.102] |
+
+Bold: past the least gain of 0.05 with the interval clear of zero. Neither condition of the leg is
+met, as on the raw input; the interpolation's own area rose from 0.087 to 0.147 under the robust
+score, and the pretext's lead over it is gone.
+
+**The other tasks** (descriptive). The second mission: the states 0.053 / 0.039 against their
+initialisation 0.450 and the summaries 0.787, −0.404 [−0.597; −0.336] and −0.741 (raw input:
+0.2 to 0.3 behind a random encoder). The testbed: +0.002 [−0.052; +0.085] against
+initialisation, −0.178 against the summaries. The fragments: −0.051 [−0.097; −0.011]. The
+transduction gap on 2012: −0.004 to −0.025, the gain larger on the stays the backbone never
+read; on sepsis +0.004 to +0.008.
+
+**Predictions.**
+
+| Reading | Predicted | Observed | Held |
+| --- | --- | --- | --- |
+| Spread s | in [0.014, 0.025] | 0.014, own 0.007 | yes |
+| Gains, chosen settings, 20 / 50 / 200 | noise in [−0.015, +0.010]; noise or real and small in [−0.005, +0.020]; noise in [−0.015, +0.010] | −0.013, +0.009, +0.007, each noise | yes |
+| Gain at the rate in force, 200 | in [+0.010, +0.040] | +0.021 | yes |
+| Network from nothing, areas | within 0.01 of 0.632 / 0.669 / 0.748 | 0.640 / 0.670 / 0.739 | yes |
+| Settings | the network from nothing at 0.001 at 20 and 50, 0.0001 at 200; fine-tuning near the rate in force | 0.001, 0.003 (the grid's edge), 0.0001; fine-tuning 10 to 30 times below the rate in force at 20 and 50, in force at 200 | half: the edge at 50, and fine-tuning's rates far from the one in force |
+| 2019, robust less as read | 400 gain or noise in [−0.010, +0.030]; 4,000 noise in [−0.010, +0.015]; harm at neither | +0.003 and −0.000; +0.015 and +0.012 in force | yes |
+| ESA validation loss | finite, within a factor of three, ratio below one | 0.143 and 0.157, ratios 0.25 and 0.27 | yes |
+| Second mission's channels 18 to 20 | trained below initialisation's and interpolation's error | 19 and 20 yes; 18 above initialisation, below interpolation under either score | no, on one channel |
+| Probe at 500 | in [+0.044, +0.113] | +0.061 | yes |
+| First mission, four pairs | [−0.010, +0.045]; [+0.011, +0.158]; [−0.050, +0.020]; [+0.012, +0.102] | +0.019; +0.090; −0.028; +0.007 | three of four; the pretext's lead over the interpolation gone |
+| Second mission, states less initialisation | in [−0.35, +0.05], narrower | −0.404 | no: wider |
+| Sepsis reader, 4,000 | in [−0.002, +0.025] | +0.003 | yes |
+| Transduction | gap in [−0.025, +0.009] | −0.025 to +0.008 | yes, at the edge at 50 |
+| Null pairs | within ±0.002 | 0.0000 | yes |
+| Other telemetry tasks | SKAB within ±0.05, the summaries ahead; OPS-SAT below initialisation | +0.002, summaries ahead by 0.18; −0.051 | yes |
+
+**Conclusions.**
+
+1. On the input the stage settled, fine-tuning the base recipe gains nothing over the network
+   from nothing that the screen can see: −0.013 at 20 stays, +0.009 at 50, +0.007 at 200, each
+   within its noise threshold. The +0.025 of the raw input was what the robust score gives the
+   network from nothing, withheld from it there; fine-tuning reads the same on either input.
+2. The representation still stands above its initialisation on the stays (probe +0.061) and
+   only faintly on sepsis; the network from nothing at 400 patients beats the frozen probe.
+3. The robust score on the 2019 stays harms the network from nothing at neither budget and
+   lifts it at the rate in force; the publication stands.
+4. The pretraining reads the telemetry under its new score: the loss three to four times below
+   the trivial predictor's under both seeds, channels 19 and 20 of the second mission answered
+   above initialisation and interpolation. Channel 18 is answered below interpolation under
+   either score, by the plateaus of its events.
+5. On the first mission the leg's conditions are not met, as before; the interpolation gained
+   from the robust score as much as the pretext. On the second mission the pretrained states
+   lose the events a random encoder's states and the summaries find (0.05 against 0.45 and
+   0.79). A hypothesis, not a mechanism: the mission's first half, which the pretraining read,
+   holds the same rare events, so the encoder represents them as ordinary.
+
+**What follows.** The confirmation declared above, sixteen fresh pretrainings at 200 seeds, is
+not run. Fine-tuning reads the same on the raw input and on this one (0.631 / 0.670 / 0.745
+against 0.627 / 0.679 / 0.745 at 20 / 50 / 200 stays), so every pretraining over cells can be set
+against this screen's network from nothing: the eight of `cell-pretraining.md` (0.660 at 50
+stays, 0.738 at 200), the base's two of 2026-10-31 and these two read −0.010 to +0.009 at 50
+stays and −0.001 to +0.007 at 200, and −0.013 to −0.009 at 20; none past +0.009 at any budget.
+A confirmation sized to detect 0.010 could at best show a real and small gain at 50 stays and
+would change no decision, so the direction closes on the screen (the register's rule of
+2026-11-15). The leg is reformulated before another pretraining; the named causes are the input
+fine-tuning reads (cells of eight hours, a table with six columns of time), the pretext (the
+reconstruction of a cell's mean, which interpolation answers on a grid) and the scale of data in
+the tasks' regime.
+
+**Limitations.** Two pretrainings; the spread is the floor. The network from nothing at 50
+stays chose the grid's edge, so its area there may be understated and the gain overstated. The
+second mission's reading compares publications, not paired. The comparison across screens sets
+fine-tuning's areas from three campaigns against one control, unpaired. Validation side, tier M.
