@@ -6,15 +6,14 @@ means are in the corpus's normalised units, each channel scaled by the statistic
 training months, as the published comparison on this telemetry scaled them; the model then
 scales each series on its own inside, as it does for every input. The channels of one window
 are handed over together, so the model reads them as the variates of one series, as the backbone
-reads a window; ``--mode univariate`` hands each channel alone. A cell with no finite mean in
-its context is refused: the reading never scores one.
+reads a window. A cell with no finite mean in its context is refused: the reading never scores
+one.
 
 The forecaster is not a dependency of this package, so this runs in its own environment:
 
     uv run --isolated --no-project --python 3.12 --with chronos-forecasting \\
         scripts/chronos2_answers.py --context DIR/context-<label>.csv \\
-        --out DIR/chronos2-<label>.csv [--mode multivariate] [--model amazon/chronos-2] \\
-        [--device mps] [--limit N]
+        --out DIR/chronos2-<label>.csv [--model amazon/chronos-2] [--device mps]
 
 Writes one row per cell: window, axis, channel and the forecast of the hour's mean.
 """
@@ -31,7 +30,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 COLUMNS = ("window", "axis", "channel", "mean_chronos2")
-MODES = ("multivariate", "univariate")
 
 Predict = Callable[[Sequence[NDArray[np.float32]]], Sequence[NDArray[np.float32]]]
 
@@ -69,16 +67,8 @@ def read_context(path: Path) -> list[ContextRow]:
     return rows
 
 
-def grouped(rows: Sequence[ContextRow], mode: str) -> list[list[ContextRow]]:
-    """The cells handed to the model together: a window's channels, or each cell alone.
-
-    Raises:
-        ValueError: If the mode is not one of ``MODES``.
-    """
-    if mode not in MODES:
-        raise ValueError(f"mode must be one of {MODES}, not {mode!r}")
-    if mode == "univariate":
-        return [[row] for row in rows]
+def grouped(rows: Sequence[ContextRow]) -> list[list[ContextRow]]:
+    """The cells handed to the model together: a window's channels as one series' variates."""
     groups: dict[tuple[int, str], list[ContextRow]] = {}
     for row in rows:
         groups.setdefault((row.window, row.axis), []).append(row)
@@ -141,21 +131,16 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--context", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--mode", choices=MODES, default="multivariate")
     parser.add_argument("--model", default="amazon/chronos-2")
     parser.add_argument("--device", default="mps")
     parser.add_argument("--batch", type=int, default=200, help="groups handed at once")
-    parser.add_argument("--limit", type=int, help="read the first N windows only, for a trial")
     arguments = parser.parse_args(argv)
 
     import chronos  # type: ignore[import-not-found,unused-ignore]  # ty: ignore[unresolved-import]
     import torch  # type: ignore[import-not-found,unused-ignore]
 
     rows = read_context(arguments.context)
-    if arguments.limit is not None:
-        kept = sorted({row.window for row in rows})[: arguments.limit]
-        rows = [row for row in rows if row.window in kept]
-    groups = grouped(rows, arguments.mode)
+    groups = grouped(rows)
     started = time.monotonic()
     pipeline = chronos.Chronos2Pipeline.from_pretrained(
         arguments.model, device_map=arguments.device, dtype=torch.float32
@@ -178,7 +163,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
     arguments.out.parent.mkdir(parents=True, exist_ok=True)
     write_forecasts(arguments.out, answered)
     print(
-        f"{len(answered)} cells of {len(groups)} groups ({arguments.mode}) answered in "
+        f"{len(answered)} cells of {len(groups)} windows answered in "
         f"{time.monotonic() - started:.0f} s"
     )
 

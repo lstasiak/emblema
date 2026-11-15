@@ -59,16 +59,10 @@ def rows_of(*cells: tuple[int, str, int]) -> list[ContextRow]:
     ]
 
 
-def test_a_windows_channels_are_handed_together_or_each_alone() -> None:
+def test_a_windows_channels_are_handed_together() -> None:
     rows = rows_of((1, "M1", 7), (1, "M1", 8), (2, "M2", 9))
 
-    together = grouped(rows, "multivariate")
-    alone = grouped(rows, "univariate")
-
-    assert [[r.channel for r in g] for g in together] == [[7, 8], [9]]
-    assert [[r.channel for r in g] for g in alone] == [[7], [8], [9]]
-    with pytest.raises(ValueError, match="mode"):
-        grouped(rows, "bivariate")
+    assert [[r.channel for r in g] for g in grouped(rows)] == [[7, 8], [9]]
 
 
 def test_the_median_is_the_quantile_kept() -> None:
@@ -81,9 +75,7 @@ def test_each_cell_gets_the_models_median_for_its_hour() -> None:
     rows = rows_of((1, "M1", 7), (1, "M1", 8), (2, "M2", 9))
     said: list[str] = []
 
-    answered = forecast(
-        grouped(rows, "multivariate"), mean_of_finite, QUANTILES, batch=1, say=said.append
-    )
+    answered = forecast(grouped(rows), mean_of_finite, QUANTILES, batch=1, say=said.append)
 
     assert [r.channel for r, _ in answered] == [7, 8, 9]
     assert [m for _, m in answered] == pytest.approx([10.5, 12.0, 13.5])
@@ -98,7 +90,7 @@ def test_a_model_answering_another_number_of_variates_is_refused() -> None:
         return [np.zeros((1, 3, 1), dtype=np.float32) for _ in batch]
 
     with pytest.raises(ValueError, match="1 variates for 2"):
-        forecast(grouped(rows, "multivariate"), one_short, QUANTILES)
+        forecast(grouped(rows), one_short, QUANTILES)
 
 
 def test_the_forecasts_are_written_one_row_a_cell(tmp_path: Path) -> None:

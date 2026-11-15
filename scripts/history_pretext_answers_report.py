@@ -22,10 +22,8 @@ publication's statistics, so the two lay the same reading into the same normalis
 named in ``--frozen`` are left unread. A window whose history holds an hour in which no channel
 read, as a month not loaded or a gap in the downlink leaves, is dropped before the draw.
 
-Cells of one window share the window, and neighbouring windows share their hours, so the
-intervals resample whole windows, and the decoder is compared with each answer on the same cells.
-Each time axis of the corpus — a satellite's mission — is read on its own as well as together,
-and the windows are drawn per axis, so a mission with fewer months is read on as many.
+Each time axis of the corpus — a satellite's mission — is read on its own, and the windows are
+drawn per axis, so a mission with fewer months is read on as many.
 
     uv run --env-file .env.r2 scripts/history_pretext_answers_report.py \\
         --result <key> <checksum> --corpus <key> <checksum> --side training \\
@@ -37,8 +35,8 @@ and the windows are drawn per axis, so a mission with fewer months is read on as
 The first form fits both ridges on training windows outside the ones it then reads and writes
 ``ridge.npz`` and ``window-ridge.npz``; the second reads them from the directory the first wrote
 to. Each writes ``answers-<label>.csv``, one row per scored cell,
-and ``context-<label>.csv``, each cell's 47 hourly means for a forecaster outside this package,
-and prints the tables.
+and ``context-<label>.csv``, each cell's 47 hourly means for a forecaster outside this package;
+the tables are read from those files by ``history_forecast_reading.py``.
 """
 
 import argparse
@@ -77,7 +75,6 @@ VALUES = BinnedTokens.VALUE_FEATURES
 LAST = BinnedTokens.FEATURE_NAMES.index("last")
 MEAN = BinnedTokens.FEATURE_NAMES.index("mean")
 PRESENCE = BinnedTokens.PRESENCE
-RESAMPLES = 2000
 CHUNK = 16
 READ_SEED = 1
 FIT_SEED = 2
@@ -102,18 +99,6 @@ class ScoredCell:
     means: tuple[float, ...]
     lag: int | None = None
     history: tuple[float, ...] = ()
-
-
-@dataclass(frozen=True)
-class Comparison:
-    """The answers' mean losses on one set of cells, and the decoder's paired differences."""
-
-    label: str
-    windows: int
-    cells: int
-    means: tuple[float, ...]
-    intervals: tuple[tuple[float, float], ...]
-    differences: tuple[tuple[float, float, float], ...]
 
 
 def huber(error: NDArray[np.float64], delta: float = 1.0) -> NDArray[np.float64]:
@@ -332,16 +317,6 @@ class ChannelRidge:
         answered: NDArray[np.float64] = described @ self.weights[channel]
         return answered
 
-    @classmethod
-    def fitted(
-        cls, hours: int, corpus: str, rows: Iterable[FitRow], *, window: bool = False
-    ) -> "ChannelRidge":
-        """The ridges fitted on ``rows``; see ``RidgeFit`` for the choice of penalty."""
-        fit = RidgeFit(cls(hours, corpus, window))
-        for row in rows:
-            fit.add(row)
-        return fit.fitted()
-
     def save(self, path: Path) -> None:
         arrays: dict[str, NDArray[np.float64] | NDArray[np.int64] | NDArray[np.str_]] = {
             "hours": np.array([self.hours]),
@@ -554,69 +529,6 @@ def scored(
             )
         )
     return cells, unscored
-
-
-def compared(
-    cells: Sequence[ScoredCell], label: str, rng: np.random.Generator, resamples: int = RESAMPLES
-) -> Comparison:
-    """Mean losses over ``cells``, with 95 % intervals from resampling whole windows.
-
-    Raises:
-        ValueError: If no cell is given.
-    """
-    if not cells:
-        raise ValueError(f"no cell to compare under {label!r}")
-    windows = np.array([cell.window for cell in cells])
-    losses = np.array([cell.losses for cell in cells])
-    ids, inverse = np.unique(windows, return_inverse=True)
-    sums = np.zeros((len(ids), len(ANSWERS)))
-    np.add.at(sums, inverse, losses)
-    counts = np.bincount(inverse).astype(np.float64)
-    draws = rng.integers(0, len(ids), (resamples, len(ids)))
-    boot = sums[draws].sum(axis=1) / counts[draws].sum(axis=1)[:, None]
-    point = sums.sum(axis=0) / counts.sum()
-    low, high = np.quantile(boot, [0.025, 0.975], axis=0)
-    differences = []
-    for k in range(1, len(ANSWERS)):
-        d_low, d_high = np.quantile(boot[:, 0] - boot[:, k], [0.025, 0.975])
-        differences.append((float(point[0] - point[k]), float(d_low), float(d_high)))
-    return Comparison(
-        label=label,
-        windows=len(ids),
-        cells=len(cells),
-        means=tuple(float(m) for m in point),
-        intervals=tuple((float(a), float(b)) for a, b in zip(low, high, strict=True)),
-        differences=tuple(differences),
-    )
-
-
-def table(comparisons: Sequence[Comparison]) -> str:
-    heads = ["Decoder", "Last reading", "Median of history", "Same phase", "Ridge", "Window ridge"]
-    lines = [
-        "| Cells | Windows | Cells scored | "
-        + " | ".join(heads)
-        + " | "
-        + " | ".join(f"Decoder - {h.lower()}" for h in heads[1:])
-        + " |",
-        "| --- | --- | --- | " + " | ".join("---" for _ in range(2 * len(heads) - 1)) + " |",
-    ]
-    for c in comparisons:
-        means = [
-            f"{m:.4f} [{lo:.4f}; {hi:.4f}]"
-            for m, (lo, hi) in zip(c.means, c.intervals, strict=True)
-        ]
-        diffs = [f"{d:+.4f} [{lo:+.4f}; {hi:+.4f}]" for d, lo, hi in c.differences]
-        lines.append(f"| {c.label} | {c.windows} | {c.cells} | " + " | ".join(means + diffs) + " |")
-    return "\n".join(lines)
-
-
-def comparisons_of(cells: Sequence[ScoredCell], rng: np.random.Generator) -> list[Comparison]:
-    """Every cell together, then each axis on its own."""
-    axes = sorted({cell.axis for cell in cells})
-    return [
-        compared(cells, "all", rng),
-        *(compared([c for c in cells if c.axis == axis], axis, rng) for axis in axes),
-    ]
 
 
 def lags(cells: Sequence[ScoredCell]) -> str:
@@ -928,13 +840,10 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
             unscored += missed
     write_cells(arguments.out / f"answers-{label}.csv", cells)
     write_context(arguments.out / f"context-{label}.csv", cells, bins - 1)
-    rng = np.random.default_rng(READ_SEED)
     print(
         f"{len(chosen)} windows, {len(cells)} hidden cells scored, {unscored} with no earlier "
-        f"reading in the window; Huber (delta {delta:g}) over the five values, 95 % intervals "
-        f"from {RESAMPLES} resamples of whole windows"
+        f"reading in the window; Huber (delta {delta:g}) over the five values"
     )
-    print(table(comparisons_of(cells, rng)))
     print(lags(cells))
 
 

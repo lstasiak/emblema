@@ -119,11 +119,7 @@ def test_the_arm_is_the_mean_of_the_pretrainings_ratios_and_reads_a_level(
     assert by[("seed2", "decoder", "ridge", "huber_five")]["ratio"] == pytest.approx(0.7)
     arm = by[("arm", "decoder", "ridge", "huber_five")]
     assert arm["ratio"] == pytest.approx(0.6)
-    # The cells are identical across windows, so the resampling adds nothing: T is the spread's.
-    spread = arm["spread"]
-    assert isinstance(spread, float)
-    assert spread == pytest.approx(np.std([0.5, 0.7], ddof=1))
-    assert arm["threshold"] == pytest.approx(2 * np.sqrt(spread**2 / 4))
+    assert arm["spread"] == pytest.approx(np.std([0.5, 0.7], ddof=1))
     assert arm["level"] == "at least the least gain"
     beside = by[("seed1", "decoder", "window_ridge", "huber_five")]
     assert beside["ratio"] == pytest.approx(0.01 / 0.015)

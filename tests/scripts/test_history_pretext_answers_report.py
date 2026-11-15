@@ -10,20 +10,17 @@ import pytest
 
 from emblema.shared.adapters.arrays.binned_tokens import BinnedTokens
 from scripts.history_pretext_answers_report import (
-    ANSWERS,
     COLUMNS,
     ChannelRidge,
     FitRow,
+    RidgeFit,
     ScoredCell,
     WindowSet,
-    compared,
-    comparisons_of,
     fitting_rows,
     huber,
     lags,
     same_phase,
     scored,
-    table,
     write_cells,
     write_context,
 )
@@ -152,68 +149,16 @@ def test_the_huber_loss_is_the_objectives_knee_at_one() -> None:
     assert huber(np.array([0.5, -2.0]), delta=0.25) == pytest.approx([0.09375, 0.46875])
 
 
-def test_windows_are_resampled_whole_and_the_differences_are_paired() -> None:
-    # Two windows: the decoder beats the median by exactly 0.1 on every cell.
+def test_each_axis_reports_the_periods_its_cells_chose() -> None:
     cells = [
-        ScoredCell(
-            window=w,
-            axis="M1",
-            channel=c,
-            target_mean=0.0,
-            losses=(0.1 * w, 0.5, 0.1 * w + 0.1, 0.5, 0.3, 0.2),
-            means=(0.0,) * 6,
-        )
-        for w in (1, 2)
-        for c in (1, 2, 3)
+        ScoredCell(0, "M1", 1, 0.0, (0.1,) * 6, (0.0,) * 6, lag=3),
+        ScoredCell(1, "M2", 9, 0.0, (0.4,) * 6, (0.0,) * 6),
     ]
 
-    result = compared(cells, "all", np.random.default_rng(0), resamples=200)
-
-    assert (result.windows, result.cells) == (2, 6)
-    assert result.means == pytest.approx((0.15, 0.5, 0.25, 0.5, 0.3, 0.2))
-    difference, low, high = result.differences[1]
-    assert (difference, low, high) == pytest.approx((-0.1, -0.1, -0.1))
-    assert result.differences[3][0] == pytest.approx(-0.15)
-
-
-def test_each_axis_is_compared_on_its_own_beside_all_of_them() -> None:
-    cells = [
-        ScoredCell(
-            window=0,
-            axis="M1",
-            channel=1,
-            target_mean=0.0,
-            losses=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6),
-            means=(0.0,) * 6,
-            lag=3,
-        ),
-        ScoredCell(
-            window=1,
-            axis="M2",
-            channel=9,
-            target_mean=0.0,
-            losses=(0.4, 0.2, 0.3, 0.4, 0.5, 0.6),
-            means=(0.0,) * 6,
-        ),
-    ]
-
-    labels = [c.label for c in comparisons_of(cells, np.random.default_rng(0))]
-
-    assert labels == ["all", "M1", "M2"]
-    assert len(ANSWERS) == 6
-    text = table(comparisons_of(cells, np.random.default_rng(0)))
-    assert "| Ridge | Window ridge |" in text
-    assert "Decoder - ridge | Decoder - window ridge |" in text
-    assert "| M2 | 1 | 1 |" in text
     assert lags(cells).splitlines() == [
         "M1: 0 of 1 cells fell back; periods chosen most: 3 h 100%",
         "M2: 1 of 1 cells fell back; periods chosen most: none",
     ]
-
-
-def test_no_cell_to_compare_is_refused() -> None:
-    with pytest.raises(ValueError, match="no cell"):
-        compared([], "M1", np.random.default_rng(0))
 
 
 def hours_of(series: list[float]) -> np.ndarray:
@@ -293,11 +238,19 @@ def linear_rows(
     return rows
 
 
+def fitted(hours: int, corpus: str, rows: list[FitRow], *, window: bool = False) -> ChannelRidge:
+    """The ridges fitted on ``rows`` through the same accumulator the report uses."""
+    fit = RidgeFit(ChannelRidge(hours, corpus, window))
+    for row in rows:
+        fit.add(row)
+    return fit.fitted()
+
+
 def test_the_ridge_recovers_a_linear_rule_per_channel() -> None:
     rng = np.random.default_rng(0)
     rows = linear_rows(rng, 400, 1, 2.0) + linear_rows(rng, 400, 2, -3.0)
 
-    ridge = ChannelRidge.fitted(2, "abc", rows)
+    ridge = fitted(2, "abc", rows)
 
     history = np.zeros((2, FEATURES))
     history[-1, MEAN] = 0.5
@@ -311,7 +264,7 @@ def test_the_ridge_recovers_a_linear_rule_per_channel() -> None:
 
 def test_an_answer_clips_each_feature_to_the_range_the_fit_saw() -> None:
     rows = linear_rows(np.random.default_rng(0), 400, 1, 2.0)
-    ridge = ChannelRidge.fitted(2, "abc", rows)
+    ridge = fitted(2, "abc", rows)
     greatest = max(row.history[-1, MEAN] for row in rows)
 
     at_edge, far_out = (np.zeros((2, FEATURES)) for _ in range(2))
@@ -326,8 +279,8 @@ def test_an_answer_clips_each_feature_to_the_range_the_fit_saw() -> None:
 def test_the_window_ridge_reads_what_another_channel_tells() -> None:
     rows = linear_rows(np.random.default_rng(0), 400, 1, 0.0, other=(2, 3.0))
 
-    alone = ChannelRidge.fitted(2, "abc", rows)
-    window = ChannelRidge.fitted(2, "abc", rows, window=True)
+    alone = fitted(2, "abc", rows)
+    window = fitted(2, "abc", rows, window=True)
 
     history = np.zeros((2, FEATURES))
     row = asked(1, history, {2: np.array([0.0, 0.5])})
@@ -347,15 +300,15 @@ def test_the_window_ridge_reads_what_another_channel_tells() -> None:
         window.described(FitRow(1, history, np.zeros((2, 2)), np.array([2]), np.zeros(5), 0))
     wider = linear_rows(np.random.default_rng(1), 4, 1, 0.0, other=(3, 1.0))
     with pytest.raises(ValueError, match=r"not fitted with channels \[3\]"):
-        ChannelRidge.fitted(2, "abc", rows + wider, window=True)
+        fitted(2, "abc", rows + wider, window=True)
 
 
 def test_rows_flushed_in_batches_fit_the_same_ridge(monkeypatch: pytest.MonkeyPatch) -> None:
     rows = linear_rows(np.random.default_rng(0), 300, 1, 2.0, other=(2, 1.0))
-    whole = ChannelRidge.fitted(2, "abc", rows, window=True)
+    whole = fitted(2, "abc", rows, window=True)
 
     monkeypatch.setattr(ChannelRidge, "FLUSH_ENTRIES", 500)
-    batched = ChannelRidge.fitted(2, "abc", rows, window=True)
+    batched = fitted(2, "abc", rows, window=True)
 
     assert batched.weights[1] == pytest.approx(whole.weights[1])
     assert batched.penalties == whole.penalties
@@ -370,11 +323,9 @@ def test_a_channel_seen_in_one_half_takes_the_middle_penalty() -> None:
         for row in linear_rows(np.random.default_rng(1), 50, 5, 1.0)
     ]
 
-    ridge = ChannelRidge.fitted(2, "abc", rows)
+    ridge = fitted(2, "abc", rows)
 
-    assert ridge.penalties[5] == ChannelRidge.PENALTIES[len(ChannelRidge.PENALTIES) // 2]
-    assert len(ChannelRidge.PENALTIES) == 7
-    assert ridge.penalties[5] == 10.0
+    assert ridge.penalties[5] == ChannelRidge.PENALTIES[len(ChannelRidge.PENALTIES) // 2] == 10.0
 
 
 def test_the_ridge_refuses_a_history_of_another_shape_and_a_channel_never_fitted() -> None:
@@ -388,7 +339,7 @@ def test_the_ridge_refuses_a_history_of_another_shape_and_a_channel_never_fitted
 
 def test_the_ridge_saved_is_the_ridge_loaded(tmp_path: Path) -> None:
     rows = linear_rows(np.random.default_rng(0), 100, 3, 1.5, other=(4, 1.0))
-    ridge = ChannelRidge.fitted(2, "abc", rows, window=True)
+    ridge = fitted(2, "abc", rows, window=True)
 
     ridge.save(tmp_path / "ridge.npz")
     loaded = ChannelRidge.load(tmp_path / "ridge.npz")
