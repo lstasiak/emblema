@@ -1,0 +1,53 @@
+# One arm of the pilot of finer cells on the intensive-care stays, at the tier a laptop runs:
+# the small shape and the pretext of backbone-cells-physionet2012-s.toml over cells of 6 bins,
+# a cell spanning eight hours of a stay's 48. The arms differ in the bins alone, six being the layout
+# the stays chose from nothing, so what a finer cell does to the mechanics — the loss, the
+# scale of the three terms, the cost of a step — is read beside it and not against a memory.
+# A pilot at this tier settles nothing about the representation.
+#
+# Every 2012 stay of set A and a tenth of the 2019 stays, about as many. Batches of eight whose
+# gradients are summed four at a time: the step of a batch of 32, which the finest cells do
+# not fit in memory, since the error is summed over a group and divided by its hidden cells.
+name = "backbone-cells-clinical-bins6-s"
+tier = "S"
+corpora = ["physionet2012", "physionet2019"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[fraction]
+physionet2012 = 1.0
+physionet2019 = 0.1
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 6
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 4
+batch_size = 8
+accumulation_steps = 4
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 200

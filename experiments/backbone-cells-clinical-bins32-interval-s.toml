@@ -1,0 +1,52 @@
+# The arm of backbone-cells-clinical-bins32-s.toml whose hidden span is one interval of the
+# window in every channel at once, in place of a block placed for each channel apart: the same
+# rate and the same half of the window, so the share of hidden cells stays and only their
+# alignment across channels moves. Under it no other channel shows the hidden moment, which is
+# where the answers without a model read most of a cell's presence. A pilot at this tier
+# settles the mechanics alone.
+name = "backbone-cells-clinical-bins32-interval-s"
+tier = "S"
+corpora = ["physionet2012", "physionet2019"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[fraction]
+physionet2012 = 1.0
+physionet2019 = 0.1
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 32
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.0
+block_span = 0.5
+token_rate = 0.1
+interval_rate = 0.6
+interval_min_span = 0.5
+interval_max_span = 0.5
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 4
+batch_size = 8
+accumulation_steps = 4
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 200
