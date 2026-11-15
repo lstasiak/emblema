@@ -19,8 +19,8 @@ Last updated 2026-11-15.
   ([note](verification/composition-screen.md)). The +0.016 at 50 stays read earlier on the raw
   input was what the robust score gives the network from scratch (+0.028 at 20, +0.012 at 50,
   [note](verification/clinical-input.md)): fine-tuning reads the same on either input, and over
-  the fourteen pretrainings over cells none exceeds that control by more than 0.009 at any
-  budget. The registered confirmation on sixteen pretrainings is not run; the leg is reformulated
+  the twelve pretrainings of the recipe over cells none exceeds that control by more than 0.009
+  at any budget. The registered confirmation on sixteen pretrainings is not run; the leg is reformulated
   before another pretraining.
 - **Pretraining over cells leaves a representation above its initialisation.** A frozen probe
   gains 0.060 to 0.091 over the same encoder untrained at 500 stays (+0.061 on the settled
@@ -269,7 +269,10 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
    fine-tuning reads (cells of eight hours are a table with six columns of time), the pretext (a
    cell's mean, which interpolation answers on a grid) and the scale of data in the tasks'
    regime (credentialed MIMIC-IV or the full eICU).
-2. Read the telemetry pretext as a forecaster against persistence on unread months, since
-   forecasting is the use of a pretrained backbone the telemetry literature shows.
-3. Read channels added without labels on sepsis, across pretrainings that never read 2019.
+2. Read the telemetry pretext as a forecaster against a per-channel linear forecaster over the
+   same history and, descriptively, a published zero-shot model, on months it never read. It
+   already beats the last reading carried forward, the history's median and the channel's own
+   cycle ([note](verification/telemetry-history-pretext.md)); the classical bar is unread.
+3. If it passes, onboard the channels of a third mission the backbone never read, without labels,
+   and read its forecast there against the same bars.
 4. Open the frozen test side once.
