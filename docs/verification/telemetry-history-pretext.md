@@ -458,3 +458,113 @@ and its size is not measured. The rare nominal events are counted as the benchma
 them. The Mission2 reading is descriptive. Hourly cells were chosen for the forecast's
 residual, not for the events' length; whether the local events the detectors miss survive the
 hour's summary is not read here.
+
+## 2026-11-15 — declared before the run: the forecast against a ridge per channel on months the pretraining never read, the published forecaster beside
+
+**Question.** On the first mission's months the pretraining never read, does the decoder's
+loss for the hidden hour lie under a ridge per channel over the same 47 hours by at least the
+least gain the register sets, a ratio of 0.80? Beside, descriptively: the read and held months,
+the second mission, the answers with no model, a ridge that also reads the window's other
+channels, and Chronos-2 zero-shot on the hour's mean.
+
+**Conditions.**
+
+| | |
+|---|---|
+| Commit | the one that adds this section; the instrument at `d5e474f7`, the register's task and row at `3da677bd` |
+| Machine | Mac (M1 Pro, MPS, fp32); Chronos-2 in its own environment (`chronos-forecasting` 2.3.2, torch 2.15, MPS) |
+| Pretrainings | arm A of 2026-11-09: `5a0ffd31…` (seed 1, result `aafb98f8…`, weights `4f89bca9…`) and `03a53a6d…` (seed 2, result `3af4817a…`, weights `1214d12a…`); 2 × 64, 48 bins over 48 joined hours, 13 epochs, Huber knee one; both `ready` and in the store on 2026-11-15 |
+| Months | read: the training months of the pretraining corpus `e926af17…` (81 of Mission1, 18 of Mission2); held: its validation months, the last three of each first half; unread: the second-half months the detection tasks validate on, from `f1d0b0f2…` (Mission1 2007-01 to 2013-12 less 28 frozen months, 56 left; Mission2 2001-10 to 2003-06 less 7, 14 left), the frozen months listed in `data/report/l51/frozen-units.txt` and left unread |
+| Draw | 1,500 windows per mission and set, seed 1, among windows whose 47 hours hold no hour in which no channel read (188 training windows and no held one were such in the trial) |
+| Ridges | `ChannelRidge` in `history_pretext_answers_report.py`: 424 coefficients per channel (every feature of the 47 hours and an intercept), fitted on up to 20,000 training windows per mission drawn by seed 2 outside the 1,500 read (the second mission has fewer, so all of its remaining ones), the penalty chosen among 0.01 to 10,000 by decades between halves of the fitting months on their rows unclipped, each feature it answers clipped to the fit's range; fitted once, on seed 1's run, read by both pretrainings. Beside it the ridge over the window: the same features and the hourly means of the window's other channels (2,633 coefficients on the first mission, 894 on the second), fitted the same way on the same rows; a window lacking a channel gives it zeros, as the layout gives an absent hour |
+| Published forecaster | `chronos2_answers.py`: `amazon/chronos-2` (119M parameters), the channels of a window handed together, its median for the 48th hour's mean from the 47 hourly means in the corpus's units, on the decoder's cells |
+| Reading | `history_forecast_reading.py`: 10,000 resamples of whole windows, seed 1, least gain 0.80, floor 0.02, Huber knee 1.0; `data/report/l51/run.sh` runs the whole |
+
+**Rules.**
+
+- *The verdict* is the arm's ratio on the first mission's unread months, decoder over ridge in
+  mean Huber loss over the five values on the same cells, the arm the mean of the two
+  pretrainings; T = 2·√(SE² + (s²/2)/2), s the larger of 0.02 and the two ratios' spread. An
+  interval covering one is less than about T either way; an upper edge under one but above 0.80
+  real and small; at or under 0.80 at least the least gain; a lower edge above one harm.
+- *Everything else is descriptive*: the read and held months, the second mission, the answers
+  with no model, the ridge over the window, the median over windows of decoder over ridge, the
+  mean's squared error, and Chronos-2 by that error alone. The ridge over the window says
+  whether a gain over the bar is the other channels' hours; the median over windows whether the
+  typical window agrees with a mean a few windows can carry.
+
+| Outcome | What follows |
+|---|---|
+| At least the least gain | the forecaster is the leg's candidate; the onboarding of a third mission is read next |
+| Real and small, noise, harm | the pretext is no foundation forecaster on this telemetry; the leg stays the channel-local detector with its few-shot readouts, and no third mission is read |
+
+**Predictions**, from the trial's intervals at the edge nearer one, the trial's ridges fitted
+on a tenth of the windows the run fits on:
+
+| | Predicted | Source |
+|---|---|---|
+| Mission1, unread, decoder over ridge | at most 0.96; the outcome real and small or noise, not the least gain | the trial: read months 0.92 [0.80; 0.96], held 0.69 [0.55; 0.86] with two of 100 windows carrying 0.15 of it |
+| Mission1, unread, median over windows of decoder over ridge | 0.80 to 0.96 | the trial: 0.85 [0.81; 0.90] read, 0.88 [0.82; 0.96] held |
+| Mission1, unread, decoder over the ridge over the window | at most 0.97, nearer one than against the bar | the trial: 0.94 [0.83; 0.97] read, 0.83 [0.77; 0.89] held |
+| Mission2, unread, decoder over ridge | at most 1.02 | the trial: held 0.95 [0.79; 1.02], read 0.69 [0.57; 0.83] |
+| Mission1, unread, decoder − median of history, Huber | at most −0.10 | 2026-11-09, −0.114 and −0.114 on the held months |
+| Ridge on the held months, Mission1 | under 0.0099 | the trial's ridge on 2,000 windows; ten times the windows fit it better, not worse |
+| Decoder over Chronos-2, squared error of the mean, Mission1 unread | 1.0 to 2.5: the published forecaster no worse | the trial: 1.06 [1.03; 1.26] read, 1.65 [1.07; 2.48] held |
+
+**Power.** The first mission's ratio spread 0.041 (its resampling standard deviation) over 100
+read windows and 0.081 over 100 held windows; over 1,500 windows about 0.011 to 0.021, so T,
+with s floored at 0.02, is 0.03 to 0.05, and the least gain lies four to seven T under one. A
+true ratio near one reads noise and closes the direction; a true 0.75 reads at least the least
+gain in most worlds, a true 0.80 about half the time.
+
+**Trial, before this declaration.** `data/report/l51/trial.sh` on seed 1: the exact commands
+on 100 windows per mission of the read months, both ridges fitted on 2,000 training windows per
+mission outside them, then the held months under those ridges; Chronos-2 on every cell; the
+reading script whole on both sets. The read and held months were read on 2026-11-09, so their
+numbers are shown. The trial ran twice: the first ridge, unclipped and on a narrower grid,
+answered one held window's channel at −9.3 against −0.13, and two such windows carried the held
+months' ratio from 0.82 to 0.58; the ridge below is the one declared.
+
+Huber loss over the five values, 100 windows a set and mission:
+
+| Set | Mission | Decoder | Last reading | Median of history | Same phase | Ridge | Ridge over the window |
+|---|---|---|---|---|---|---|---|
+| read | Mission1 | 0.0158 | 0.1633 | 0.1271 | 0.0275 | 0.0172 | 0.0168 |
+| read | Mission2 | 0.0172 | 0.0998 | 0.2046 | 0.3518 | 0.0248 | 0.0263 |
+| held | Mission1 | 0.0069 | 0.1558 | 0.1211 | 0.0191 | 0.0099 | 0.0082 |
+| held | Mission2 | 0.0522 | 0.1509 | 0.1363 | 0.4057 | 0.0548 | 0.0535 |
+
+The ratios read, 95 % intervals from 2,000 resamples of whole windows:
+
+| Set | Mission | Decoder over ridge | Median over windows | Decoder over the ridge over the window | Decoder over Chronos-2, squared error of the mean |
+|---|---|---|---|---|---|
+| read | Mission1 | 0.92 [0.80; 0.96] | 0.85 [0.81; 0.90] | 0.94 [0.83; 0.97] | 1.06 [1.03; 1.26] |
+| read | Mission2 | 0.69 [0.57; 0.83] | 0.77 [0.72; 0.80] | 0.65 [0.53; 0.81] | 0.91 [0.56; 1.64] |
+| held | Mission1 | 0.69 [0.55; 0.86] | 0.88 [0.82; 0.96] | 0.83 [0.77; 0.89] | 1.65 [1.07; 2.48] |
+| held | Mission2 | 0.95 [0.79; 1.02] | 1.01 [0.92; 1.06] | 0.98 [0.84; 1.04] | 2.65 [1.91; 3.97] |
+
+- The halves were 48 and 51 months. The bar chose a penalty of 10 for 35 of the 59 channels
+  and the grid's edges for three (0.01 for channel 408, 10,000 for 426 and 427, whose weights
+  beyond the intercept stay near 0.1 there, so a wider grid would move them little); the ridge
+  over the window chose 100 for 40. The second mission has 12,933 training windows outside the
+  ones read, so the run fits on all of them. The bar is the strongest answer with no
+  pretraining by far: a ninth of the last reading's miss and 0.6 of the cycle's on the first
+  mission's read months. On the held months two windows, a channel falling to −1.5 and back,
+  still carry 0.15 of the ratio after the clipping, which the median over windows does not
+  follow; the ridge over the window closes about half the decoder's gap there. The decoder's
+  held-month loss (0.0069 [0.0065; 0.0073]) matches 2026-11-09's 0.0073 on another draw.
+- Chronos-2 loaded in 2 s and answered 5,900 cells in 5 s; a context with a missing hour is
+  answered, one with no hour read is refused, and no cell of the reading is such. On the mean's
+  squared error it matches the decoder on the months the decoder trained on and beats it on the
+  held months of both missions, from the same 47 hourly means and no training on this telemetry.
+- Cost: loading and joining a publication's windows about 100 s; scoring 200 windows about
+  15 s; both ridges fitted on 4,000 windows about two minutes, the ridge over the window holding 11 to 12 GB at its peak over two runs. The whole run, six readings of 3,000 windows, the fit on 33,000 windows,
+  three passes of Chronos-2 and the tables, stays under two hours.
+
+**Limitations declared.** Two pretrainings. The bar reads one channel at a time where the
+backbone reads the window together; the ridge over the window is descriptive. Chronos-2 scales
+every series inside besides the corpus's scaling and is read on the mean alone. The unread
+months are the detection tasks' validation months, read before by detectors though by no
+pretraining; the test months stay frozen. One loss, normalised units. The ridges' 20,000
+windows per mission are a size chosen for cost. The second mission has eleven channels and
+fourteen months left to read.
