@@ -22,6 +22,9 @@ context's; what is here is which rows they read and the shape of a note.
   exceeds T at one of the deciding budgets and lies below -T at none.
 - *Null pairs.* The network from nothing does not read the backbone, so its pairs between
   campaigns must lie within a bound; one outside stops the reading until it is explained.
+- *Family.* The budgets named one family (``--family 20 50``) carry one claim: a gain there is
+  a gain only where Holm over the family's bootstrap p-values rejects it too, so the levels of
+  a family hold the family-wise error; a budget outside the family is read alone.
 
 Each arm is read at one candidate, or at the one its rule chose at each budget
 (``--tuned 20=CANDIDATE 50=CANDIDATE ...``); the network from nothing may then be read from a
@@ -52,6 +55,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from emblema.evaluation.domain.statistics.bootstrap_interval import BootstrapInterval
 from emblema.evaluation.domain.statistics.contrast_reading import ContrastReading
 from emblema.evaluation.domain.statistics.detection_threshold import DetectionThreshold
+from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection
 from emblema.evaluation.domain.statistics.outcome_level import OutcomeLevel
 from emblema.evaluation.domain.statistics.paired_reading import PairedReading
 from emblema.evaluation.domain.statistics.pretraining_spread import PretrainingSpread
@@ -80,6 +84,7 @@ class Pair:
     se: float
     low: float
     high: float
+    p_value: float
 
     @property
     def reading(self) -> PairedReading:
@@ -103,6 +108,7 @@ def read_pairs(path: Path) -> list[Pair]:
                 se=float(row["seed_reduction_se"]),
                 low=float(row["low"]),
                 high=float(row["high"]),
+                p_value=float(row["p_value"]),
             )
             for row in csv.DictReader(handle)
         ]
@@ -185,12 +191,18 @@ def parse_choice(values: Sequence[str]) -> Choice:
 
 @dataclass(frozen=True, kw_only=True)
 class Gain:
-    """Fine-tuning less the network from nothing under n pretrainings at one budget."""
+    """Fine-tuning less the network from nothing under n pretrainings at one budget.
+
+    Attributes:
+        rejected: Whether Holm over the gain's family rejects this budget's pair; ``None`` for
+            a budget read alone.
+    """
 
     label: str
     pair: Pair
     n: int
     spread: PretrainingSpread
+    rejected: bool | None = None
 
     @property
     def threshold(self) -> DetectionThreshold:
@@ -200,7 +212,14 @@ class Gain:
 
     @property
     def level(self) -> OutcomeLevel:
-        return self.pair.reading.level(self.threshold, least_gain=LEAST_GAIN)
+        """The reading's level; a gain its family does not reject is noise."""
+        level = self.pair.reading.level(self.threshold, least_gain=LEAST_GAIN)
+        if self.rejected is False and level in (
+            OutcomeLevel.LEAST_GAIN,
+            OutcomeLevel.REAL_AND_SMALL,
+        ):
+            return OutcomeLevel.NOISE
+        return level
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -256,19 +275,24 @@ def screen(
     deciding: Sequence[str],
     scratch_campaign: str | None = None,
     null_candidate: str | None = None,
+    family: Sequence[str] = (),
 ) -> Screen:
     """Every declared pair read by the rule.
 
     The gains read the network from nothing under ``scratch_campaign`` where one is given, and
     under the gain's own campaigns otherwise; the null pairs read ``null_candidate``, or the
-    network from nothing where one candidate stands for every budget.
+    network from nothing where one candidate stands for every budget. The gains of each recipe
+    at the ``family`` budgets are one Holm family.
 
     Raises:
         ValueError: If a declared pair was not compared, no spread pair is given, a budget read
-            has no candidate chosen, or null pairs are asked for with no candidate to read.
+            has no candidate chosen, null pairs are asked for with no candidate to read, or the
+            family names a budget not read.
     """
     if nulls and null_candidate is None and not isinstance(scratch, str):
         raise ValueError("null pairs over a network chosen per budget need a null candidate")
+    if not set(family) <= set(budgets):
+        raise ValueError("the family's budgets must be among the budgets read")
     null = null_candidate if null_candidate is not None else scratch
     spread = PretrainingSpread.of(
         [
@@ -278,6 +302,22 @@ def screen(
         ],
         floor=FLOOR,
     )
+    gain_pairs = {
+        (label, budget): pairs.find(
+            scratch_campaign or campaigns,
+            chosen_at(scratch, budget),
+            campaigns,
+            chosen_at(tuned, budget),
+            budget,
+        )
+        for budget in budgets
+        for label, campaigns in gains
+    }
+    rejections: dict[tuple[str, str], bool] = {}
+    for label, _ in gains:
+        if family:
+            verdicts = HolmCorrection().rejected([gain_pairs[(label, b)].p_value for b in family])
+            rejections.update(zip(((label, b) for b in family), verdicts, strict=True))
     return Screen(
         spread=spread,
         nulls=tuple(
@@ -288,15 +328,10 @@ def screen(
         gains=tuple(
             Gain(
                 label=label,
-                pair=pairs.find(
-                    scratch_campaign or campaigns,
-                    chosen_at(scratch, budget),
-                    campaigns,
-                    chosen_at(tuned, budget),
-                    budget,
-                ),
+                pair=gain_pairs[(label, budget)],
                 n=count(campaigns),
                 spread=spread,
+                rejected=rejections.get((label, budget)),
             )
             for budget in budgets
             for label, campaigns in gains
@@ -340,6 +375,7 @@ def render(result: Screen) -> str:
             _interval(g.pair),
             f"{g.threshold.value:.4f}",
             g.level.value,
+            "" if g.rejected is None else "rejected" if g.rejected else "held",
         ]
         for g in result.gains
     ]
@@ -378,7 +414,7 @@ def render(result: Screen) -> str:
     ]
     sections += [
         f"**Gains of fine-tuning over the network from nothing** (least gain {LEAST_GAIN}).\n\n"
-        + table(["budget", "recipe", "n", "gain ± SE", "interval", "T", "level"], gains),
+        + table(["budget", "recipe", "n", "gain ± SE", "interval", "T", "level", "Holm"], gains),
     ]
     elsewhere = any(g.pair.control_campaign != g.pair.candidate_campaign for g in result.gains)
     if elsewhere or len({(g.pair.candidate, g.pair.control) for g in result.gains}) > 1:
@@ -438,11 +474,16 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--budgets", nargs="+", default=list(BUDGETS))
     parser.add_argument("--deciding", nargs="+", default=list(DECIDING))
+    parser.add_argument(
+        "--family", nargs="+", default=[], help="budgets whose gains are one Holm family"
+    )
     arguments = parser.parse_args(argv)
     if not arguments.gain and not arguments.contrast:
         parser.error("give a gain or a contrast to read")
     if not set(arguments.deciding) <= set(arguments.budgets):
         parser.error("the deciding budgets must be among the budgets read")
+    if not set(arguments.family) <= set(arguments.budgets):
+        parser.error("the family's budgets must be among the budgets read")
     for name in ("scratch", "tuned"):
         try:
             choice = parse_choice(getattr(arguments, name))
@@ -474,6 +515,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - the c
         deciding=arguments.deciding,
         scratch_campaign=arguments.scratch_campaign,
         null_candidate=arguments.null_candidate,
+        family=arguments.family,
     )
     print(render(result))
 

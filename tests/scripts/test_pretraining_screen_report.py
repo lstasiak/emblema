@@ -35,6 +35,7 @@ def pair(
     control: str = SCRATCH,
     candidate_campaign: str = A1,
     candidate: str = TUNED,
+    p_value: float = 0.001,
 ) -> Pair:
     return Pair(
         control_campaign=control_campaign,
@@ -46,6 +47,7 @@ def pair(
         se=se,
         low=mean - half,
         high=mean + half,
+        p_value=p_value,
     )
 
 
@@ -156,6 +158,7 @@ def test_the_pairs_are_read_from_the_comparisons_the_pairs_report_wrote(tmp_path
                 "seed_reduction_se": "0.005",
                 "low": "0.02",
                 "high": "0.04",
+                "p_value": "0.004",
             }
         )
 
@@ -171,6 +174,7 @@ def test_the_pairs_are_read_from_the_comparisons_the_pairs_report_wrote(tmp_path
         se=0.005,
         low=0.02,
         high=0.04,
+        p_value=0.004,
     )
 
 
@@ -402,3 +406,103 @@ def test_the_command_line_refuses_an_extra_budget_and_nulls_with_nothing_to_read
 
     assert arguments.scratch == {"50": SCRATCH, "200": SCRATCH_LOW}
     assert arguments.null_candidate == SCRATCH
+
+
+def family_comparisons(p_values: dict[str, float]) -> list[Pair]:
+    """Two budgets whose gains clear the threshold alone, each with the p-value given."""
+    return [
+        pair(
+            0.03,
+            budget=budget,
+            control_campaign=f"{A1}+{A2}",
+            candidate_campaign=f"{A1}+{A2}",
+            p_value=p_values[budget],
+        )
+        for budget in p_values
+    ] + [
+        pair(0.002, budget=budget, control=TUNED, control_campaign=A1, candidate_campaign=A2)
+        for budget in p_values
+    ]
+
+
+def test_a_gain_of_a_family_is_a_gain_only_where_holm_rejects_it() -> None:
+    read = lambda p_values: screen(  # noqa: E731 - the same reading, other p-values
+        Pairs(family_comparisons(p_values)),
+        scratch=SCRATCH,
+        tuned=TUNED,
+        gains=[("a", f"{A1}+{A2}")],
+        contrasts=[],
+        spreads=[(A1, A2)],
+        nulls=[],
+        budgets=["20", "50"],
+        deciding=["20", "50"],
+        family=["20", "50"],
+    )
+
+    # 0.03 alone would pass at 0.05; held to 0.025 as the smallest of two, it fails and stops.
+    held = read({"20": 0.03, "50": 0.04})
+    assert [g.rejected for g in held.gains] == [False, False]
+    assert [g.level for g in held.gains] == [OutcomeLevel.NOISE, OutcomeLevel.NOISE]
+    assert "| held |" in render(held)
+
+    rejected = read({"20": 0.01, "50": 0.04})
+    assert [g.rejected for g in rejected.gains] == [True, True]
+    assert [g.level for g in rejected.gains] == [OutcomeLevel.LEAST_GAIN] * 2
+    assert "| rejected |" in render(rejected)
+
+
+def test_a_budget_outside_the_family_is_read_alone() -> None:
+    result = screen(
+        Pairs(family_comparisons({"20": 0.5, "200": 0.5})),
+        scratch=SCRATCH,
+        tuned=TUNED,
+        gains=[("a", f"{A1}+{A2}")],
+        contrasts=[],
+        spreads=[(A1, A2)],
+        nulls=[],
+        budgets=["20", "200"],
+        deciding=["200"],
+        family=["20"],
+    )
+
+    assert [g.rejected for g in result.gains] == [False, None]
+    assert [g.level for g in result.gains] == [OutcomeLevel.NOISE, OutcomeLevel.LEAST_GAIN]
+
+
+def test_a_family_names_only_budgets_read() -> None:
+    with pytest.raises(ValueError, match="family"):
+        screen(
+            Pairs(family_comparisons({"20": 0.5})),
+            scratch=SCRATCH,
+            tuned=TUNED,
+            gains=[("a", f"{A1}+{A2}")],
+            contrasts=[],
+            spreads=[(A1, A2)],
+            nulls=[],
+            budgets=["20"],
+            deciding=["20"],
+            family=["50"],
+        )
+    with pytest.raises(SystemExit):
+        parse_arguments(
+            [
+                "--comparisons",
+                ".",
+                "--scratch",
+                SCRATCH,
+                "--tuned",
+                TUNED,
+                "--gain",
+                "a",
+                A1,
+                "--spread",
+                A1,
+                A2,
+                "--budgets",
+                "20",
+                "--deciding",
+                "20",
+                "--family",
+                "50",
+            ]
+        )

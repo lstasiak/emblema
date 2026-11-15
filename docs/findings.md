@@ -6,22 +6,25 @@ by a rule registered before its run ([preregistration](preregistration.md)); eac
 note that holds its evidence ([`verification/`](verification/README.md)). A row states direction
 and size; conditions and caveats are in its note.
 
-Last updated 2026-11-12.
+Last updated 2026-11-15.
 
 ## Status
 
-- **The claim is not confirmed; a screen of four pretrainings gains 0.016 at 50 stays.** Full
-  fine-tuning of a small encoder over cells, pretrained on intensive-care stays, the eICU demo and
-  raw satellite telemetry, gains +0.016 [+0.007; +0.025] at 50 stays over the network from scratch
-  at its chosen rate, the same at 20 within the noise threshold, and +0.004 [−0.007; +0.015] at
-  200. At the lower edge the registered confirmation has power below 0.25
-  ([note](verification/composition-screen.md)). That control read the raw values: cleaned and
-  normalised by the robust score, the network from scratch itself gains +0.028 [+0.021; +0.036]
-  at 20 stays and +0.012 [+0.005; +0.018] at 50, about the screen's gain there (another campaign
-  and seeds, unpaired), so the pretrainings and the confirmation read that input ([note](verification/clinical-input.md)).
+- **The claim is not confirmed; on the input the stage settled, fine-tuning gains nothing the
+  screen can see.** Full fine-tuning of a small encoder over cells, pretrained twice on the
+  cleaned, robustly normalised intensive-care stays, the eICU demo and the satellite telemetry
+  under the robust score, reads −0.013 [−0.022; −0.005] at 20 stays, +0.009 [−0.004; +0.021] at
+  50 and +0.007 [−0.004; +0.017] at 200 against the network from scratch at its chosen rate on the
+  same input, each within the noise threshold of 0.02 to 0.03
+  ([note](verification/composition-screen.md)). The +0.016 at 50 stays read earlier on the raw
+  input was what the robust score gives the network from scratch (+0.028 at 20, +0.012 at 50,
+  [note](verification/clinical-input.md)): fine-tuning reads the same on either input, and over
+  the fourteen pretrainings over cells none exceeds that control by more than 0.009 at any
+  budget. The registered confirmation on sixteen pretrainings is not run; the leg is reformulated
+  before another pretraining.
 - **Pretraining over cells leaves a representation above its initialisation.** A frozen probe
-  gains 0.060 to 0.091 over the same encoder untrained at 500 stays, and still reads about 0.03
-  below the trees ([note](verification/cell-pretraining.md)).
+  gains 0.060 to 0.091 over the same encoder untrained at 500 stays (+0.061 on the settled
+  input), and still reads about 0.03 below the trees ([note](verification/cell-pretraining.md)).
 - **Classical models lead at few labels.** Trees over per-channel summaries match or beat every
   network from 200 labels up on both tasks, except that a small encoder from scratch over cells
   meets them at 200 stays (+0.003 [−0.011; +0.017]), leads by 0.028 at 50, and reads 0.008 below
@@ -67,7 +70,11 @@ Last updated 2026-11-12.
   The first mission's verdict is the events found at 1 % false alarms beyond chance, against the
   best of twelve departure detectors (32.4 of 61), least gain 10.6 events; trees taught the events
   pass it (+10.0 [+3.1; +17.0]), and the benchmark's F-score, which they cannot pass, is reported
-  beside ([note](verification/telemetry-channel-local.md)).
+  beside ([note](verification/telemetry-channel-local.md)). Under the robust publication the
+  pretrained states on the second mission read 0.05 against 0.45 for the untrained encoder and
+  0.79 for the summaries: the mission's fitting months, which the pretraining read, hold the same
+  rare events, and a reference contaminated with them is no reference for a distance over states
+  ([note](verification/composition-screen.md)).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
   task's own domain, the adaptation recipe, and six variants of the pretext.
 - **What transfers is the encoder's machinery.** Fitting only the channel rows of an unread corpus
@@ -131,6 +138,8 @@ The small encoder over cells, pretrained without labels, each arm at its chosen 
 | Fine-tuning, stays + eICU demo + satellites ([note](verification/composition-screen.md)) | 0.63 | 0.67 | 0.74 | |
 | Network from scratch, its chosen rate | 0.62 | 0.65 | 0.74 | |
 | Network from scratch, robust input, seeds 2–31 ([note](verification/clinical-input.md)) | 0.63 | 0.67 | 0.75 | |
+| Fine-tuning, robust input, two pretrainings ([note](verification/composition-screen.md)) | 0.63 | 0.68 | 0.75 | |
+| Network from scratch, robust input, the same campaigns and seeds | 0.64 | 0.67 | 0.74 | |
 | Probe, pretrained / untrained (composition) | | | | 0.76 / 0.67 |
 | Trees per channel | 0.62 | 0.63 | 0.74 | **0.79** |
 
@@ -217,6 +226,8 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | The departure bar, chosen on months no detector was read on (2000–2003, a class nearly absent later left out), then read forwards on the validation months | beyond chance at 1 %: mean over 72 hours 14.6 of 42 against 5.2 for the bar chosen by area; beyond chance the order turns on validation (Spearman −0.03), best 32.4 of 61, so the bar is the best of twelve in each reading | [telemetry-channel-local](verification/telemetry-channel-local.md) |
 | The oracle and trees taught the events against both bars on the validation months | beyond chance: trees over `bins-24h` **+10.0** [+3.1; +17.0] over the best of twelve, the 6-hour trees +3.3 and +5.4 unresolved; F-score at the own alarm: trees 0.15 to 0.28 against 0.269, the 6-hour trees below it, as they raise 344 to 367 false runs; at the best alarm, chosen on the months read, trees 0.71 to 0.81 against 0.53 to 0.69; the verdict becomes the excess alone | [telemetry-channel-local](verification/telemetry-channel-local.md) |
 | The raw telemetry's input: the fitting side's scale per channel, and whether the channel-local detector reads it | the labelled events set the standard score's scale (44 to 94 % of the variance of ten Mission1 channels from 0.3 to 1.1 % of their readings; Mission2's channels 18 to 20 with a standard deviation of 534, 22 and 9 robust deviations, read as constant); the telemetry takes the robust score held to 100, which clips five normal readings in 50 million; the detector's value summaries are invariant to the scale, its readings-count summary is not and carries 50 to 71 % of its top-1 % windows (0.5 to 2 % of the verdict arms' move under the exact change of score) | [telemetry-input](verification/telemetry-input.md) |
+| The twelve departure arms on the telemetry published under the robust score, the verdict's bar | the best of twelve finds 32.4 of 61 events beyond chance on either publication and the least gain of 10.6 stands; ten arms move by under one event, the two over 72 hours by up to 4.7 through the readings-count floor | [telemetry-channel-local](verification/telemetry-channel-local.md) |
+| States and pretext of two pretrainings over the robust publication | M1 states less initialisation +0.019 [−0.005; +0.041], pretext's error less interpolation +0.007 [−0.011; +0.047], the leg's conditions unmet as before; M2 states 0.05 against 0.45 untrained and 0.79 summaries (−0.40 [−0.60; −0.34]); the encoder answers M2's channels 19 and 20 above interpolation, channel 18 below it under either score | [composition-screen](verification/composition-screen.md) |
 
 ### What the failures have in common
 
@@ -254,8 +265,11 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 
 ## Next
 
-1. Confirm the gain at 50 stays on fresh pretrainings of the robust input, against the network
-   from scratch on the same input, in a design with power at the screen's lower edge, and read
-   there whether the order of pretrainings holds across tasks and detectors.
-2. Read channels added without labels on sepsis, across pretrainings that never read 2019.
-3. Open the frozen test side once.
+1. Reformulate the clinical leg before another pretraining. The named causes: the input
+   fine-tuning reads (cells of eight hours are a table with six columns of time), the pretext (a
+   cell's mean, which interpolation answers on a grid) and the scale of data in the tasks'
+   regime (credentialed MIMIC-IV or the full eICU).
+2. Read the telemetry pretext as a forecaster against persistence on unread months, since
+   forecasting is the use of a pretrained backbone the telemetry literature shows.
+3. Read channels added without labels on sepsis, across pretrainings that never read 2019.
+4. Open the frozen test side once.

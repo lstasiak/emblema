@@ -1,0 +1,48 @@
+# The network from nothing on the sepsis task at 400 and 4,000 patients of half the tuning side,
+# run once under the publication of the 2019 stays as read and once under the one cleaned by
+# bounds and normalised by the robust score (ADR-0078, ADR-0079): the reading of how the values
+# are prepared, which docs/verification/clinical-input.md settled on the stays of 2012 alone. The
+# network is the small shape over six-bin cells, each publication choosing its own rate from the
+# grid that reading used, since a value of another scale may want another rate.
+#
+# Scored on the half held out by seed 101 over seeds 1 to 10, as the sepsis reader's probes are,
+# so the cells pair by patient and seed across the publications and beside the probes. A campaign
+# divided this way chooses nothing. The network reads no weights, so the campaign is defined under
+# any backbone of the six-bin shape whose vocabulary holds PhysioNet 2019's channels.
+#
+# Committed before the campaign runs, for the reason every campaign file is.
+name = "clinical-input-physionet2019"
+purpose = "selection"
+tier = "M"
+measure = "auroc_shortfall"
+
+[selection]
+one_in = 2
+division_seed = 101
+
+[candidates]
+competing = [
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.003,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.000333,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.0001,width=64",
+    "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.00003,width=64",
+]
+control = "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,learning_rate=0.0001,width=64"
+endpoint = "from_scratch@bins=6,feedforward_width=128,heads=16,layers=2,width=64"
+
+[budgets]
+labels = ["400", "4000"]
+endpoint = "4000"
+seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+[rules]
+minimum_absolute_reduction = 0.06
+absolute_floor = 0.035
+alpha = 0.05
+secondary_family_size = 7
+
+[bootstrap]
+resamples = 10000
+seed = 1
+level = 0.95

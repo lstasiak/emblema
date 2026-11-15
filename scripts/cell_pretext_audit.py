@@ -367,6 +367,11 @@ class PerChannelRidge:
         return answers
 
 
+def channel_kind(channel: int) -> str:
+    """The kind naming the cells of one channel, beside the kinds of mask."""
+    return f"channel={channel}"
+
+
 @dataclass(frozen=True)
 class ScoreRow:
     """The summed loss of one answer on one target, over the hidden cells of one kind."""
@@ -491,13 +496,25 @@ def scored(
     answers: Mapping[str, NDArray[np.float64]],
     *,
     presence_rate: float,
+    by_channel: bool = False,
 ) -> list[ScoreRow]:
-    """The losses summed per kind, target and answer, beside the trivial predictor's."""
+    """The losses summed per kind, target and answer, beside the trivial predictor's.
+
+    With ``by_channel`` the cells are partitioned again by the channel they lie on, one kind
+    ``channel=<id>`` each beside the kinds of mask, so a channel's own fit is read without the
+    others'.
+    """
     targets = scoring.array("targets")
     kinds = np.asarray(scoring.kind)
+    channels = np.asarray(scoring.channel)
+    partitions: list[tuple[str, NDArray[np.bool_]]] = [
+        (kind, np.ones(len(scoring), dtype=bool) if kind == "all" else kinds == kind)
+        for kind in KINDS
+    ]
+    if by_channel:
+        partitions += [(channel_kind(int(c)), channels == c) for c in np.unique(channels)]
     rows = []
-    for kind in KINDS:
-        of_kind = np.ones(len(scoring), dtype=bool) if kind == "all" else kinds == kind
+    for kind, of_kind in partitions:
         if not of_kind.any():
             continue
         for index, target in enumerate(TARGETS):
@@ -545,10 +562,12 @@ def audit_corpus(
     strategy: MaskingStrategy,
     model: CellReconstruction | None = None,
     device: str = "cpu",
+    by_channel: bool = False,
 ) -> tuple[list[ScoreRow], CellsRow]:
     """Every answer on every target of the corpus's hidden cells, scored on validation windows.
 
     A ``model`` answers the validation windows' hidden cells alone: it is fitted on nothing here.
+    With ``by_channel`` the scores are kept per channel too.
 
     Raises:
         ValueError: If the fitting, the stacking or the scoring windows hold no hidden cell.
@@ -572,7 +591,11 @@ def audit_corpus(
         np.mean([*fitting.array("targets")[:, 0], *stacking.array("targets")[:, 0]])
     )
     rows = scored(
-        corpus, scoring, answered(fitting, stacking, scoring), presence_rate=presence_rate
+        corpus,
+        scoring,
+        answered(fitting, stacking, scoring),
+        presence_rate=presence_rate,
+        by_channel=by_channel,
     )
     counts = CellsRow(
         corpus=corpus,
@@ -814,6 +837,7 @@ def measure_published(
         strategy=stated.masking,
         model=None,
         device="cpu",
+        by_channel=arguments.by_channel,
     )
     out = arguments.out or WORKSPACE / f"{arguments.corpus}-{arguments.masks.stem}"
     out.mkdir(parents=True, exist_ok=True)
@@ -926,6 +950,11 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
         help="score on the training units of --corpus the backbone's run left unread",
     )
     parser.add_argument("--out", type=Path, help="directory the CSV files are written to")
+    parser.add_argument(
+        "--by-channel",
+        action="store_true",
+        help="keep the scores per channel too, as kinds channel=<id> beside the kinds of mask",
+    )
     parser.add_argument("--training-windows", type=int, default=TRAINING_WINDOWS)
     parser.add_argument("--validation-windows", type=int, default=VALIDATION_WINDOWS)
     parser.add_argument(
@@ -1065,6 +1094,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - the c
             strategy=strategy,
             model=model,
             device=arguments.device,
+            by_channel=arguments.by_channel,
         )
         scores.extend(rows)
         counts.append(cells)

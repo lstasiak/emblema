@@ -1004,3 +1004,60 @@ excess's least gain only just: a detector with no label must find about as much 
 70 events to be confirmed with power 0.8. That is the resolution 61 events give, not a property of
 the measure. The best alarms lie at the grid's edge for seven arms, so their best F-score may be
 higher. The ceiling uses three arms of trees, read on months the 2026-11-06 run had read.
+
+## 2026-11-12 — measured: on the telemetry published under the robust score the twelve departure arms read as before, and the bar stands
+
+**Question.** The telemetry is now published under the robust score held to 100 (ADR-0080,
+`telemetry-input.md`). Do the twelve no-model departure arms, which the verdict's bar is the
+best of, read the validation months as they did on the standard publication, and does the least
+gain of 10.6 events stand?
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `0ba0449a`, `telemetry_context_report.py`, `telemetry_channel_local_report.py` and `telemetry_verdict_measure_report.py` unchanged since the 2026-11-11 readings; the Mac, cells on CPU, the control's states on MPS |
+| Data | the first mission's task over the robust publication `durable/sha256/490c1547…` (task `60bbbcf4…`), the published cells laid anew (197 s); 102,412 windows loaded, 41,088 read on the validation months, 1,704 not read within 72 hours of a month's start, 99 events in the pool, as on the standard publication |
+| Commands | `measure --section lay`; `measure --section refit` of every arm, the 2026-11-06 grid (hour and bins over 6, 24 and 72 hours, seeds 1 to 3), the hour summaries and each arm's context statistics computed from the new cells, not linked (the untracked `data/report/l32b6/telemetry/`, 1,388 s for `bins-72h`, 27 to 467 s for the others); `family --resamples 10000` on the new answers and, the same draws, on the 2026-11-11 answers of the standard publication (`data/report/l47/validation`) |
+| Blind | the arms are the bar, read as the rule of 2026-11-11 reads them; no candidate was read |
+
+**The twelve arms on the validation months** (events of 61 found at 1 % of normal windows
+flagged, less those found with every month's scores turned; the spread of each arm less the best
+of the other eleven over 10,000 draws of months):
+
+| Arm | Beyond chance at 1 %, robust | Standard | Change | SD against the best of the rest, robust | Standard |
+| --- | --- | --- | --- | --- | --- |
+| `max`, `hour-6h` | 22.5 | 22.4 | +0.1 | 3.44 | 3.45 |
+| `mean`, `hour-6h` | 27.2 | 27.1 | +0.1 | 2.58 | 2.57 |
+| `max`, `hour-24h` | 19.9 | 20.1 | -0.2 | 3.82 | 3.82 |
+| `mean`, `hour-24h` | 30.4 | 30.4 | -0.0 | 2.64 | 2.52 |
+| `max`, `hour-72h` | 16.9 | 16.6 | +0.3 | 3.79 | 3.77 |
+| `mean`, `hour-72h` | 14.7 | 14.6 | +0.0 | 3.45 | 3.44 |
+| `max`, `bins-6h` | 15.2 | 15.2 | -0.0 | 3.64 | 3.63 |
+| `mean`, `bins-6h` | 26.7 | 25.8 | +0.9 | 2.07 | 2.30 |
+| `max`, `bins-24h` | 29.0 | 27.9 | +1.1 | 1.50 | 1.71 |
+| `mean`, `bins-24h` | 32.4 | 32.4 | -0.0 | 2.16 | 2.25 |
+| `max`, `bins-72h` | 17.2 | 16.6 | +0.6 | 3.79 | 3.64 |
+| `mean`, `bins-72h` | 4.7 | 9.4 | -4.7 | 4.09 | 3.87 |
+
+The best arm is `mean`, `bins-24h` on both publications: 32.4 against
+32.4. The least gain, the median spread times the quantiles for the
+97.5 % level and power 0.8: **10.63** events on the robust
+publication, 10.62 on the standard one. `family` on the standard
+publication's answers reproduces the 2026-11-11 reading to the digit.
+
+**Conclusions.**
+
+- The bar stands: the best of the twelve arms finds 32.4 events beyond chance on either
+  publication, and the least gain of 10.6 events registered on 2026-11-11 is unchanged.
+- Ten arms move by less than one event. The two that move most are over 72 hours: `mean`,
+  `bins-72h` falls from 9.4 to 4.7 and `max`, `bins-72h` rises from 16.6 to 17.2. Neither is the
+  bar. The move is the readings-count summary's, whose floor is in the values' units
+  (`telemetry-input.md`, 2026-11-12), and is queued as the instrument's own change.
+- The telemetry leg of the confirmation reads its candidates against these answers
+  (`data/report/l32b6/telemetry/validation`), not against the standard publication's.
+
+**Limitations.** The bar is read on the months it is used on, as the rule accepts. The taught
+cells and the controls were measured with the arms, by the script's section, and not read. The
+readings-count floor is unchanged here; once it is, the arms are measured again on this
+publication and the bar read anew.
