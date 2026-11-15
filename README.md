@@ -112,10 +112,13 @@ Preliminary, on validation data; each task's test data is used once, at the end.
   first mission, where a tree model trained on labelled events finds about 10 more; on the
   second, a PR-AUC of 0.885 against 0.627. A pretext forecasting each channel's next hour reads
   no better than that departure, and the departures miss too few events on that mission to
-  justify a perturbation term.
+  justify a perturbation term. Read as a forecaster on the same mission's later years, that
+  pretext reads level with a per-channel ridge and worse on the ordinary window, while a
+  published zero-shot forecaster holds its error across that mission's years.
 
-**Next:** the clinical leg is reformulated before another pretraining; its input, its pretext
-and the scale of in-regime data are the named causes.
+**Next:** both legs are reformulated before another pretraining. The clinic's named causes are
+its input, its pretext and the scale of in-regime data; the telemetry's forecaster must hold
+across the years of its own mission, which a published forecaster already does on the first.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 

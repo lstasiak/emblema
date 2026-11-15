@@ -58,6 +58,14 @@ Last updated 2026-11-15.
   every detector referenced to its own history ranks an event's first hour high and its later
   hours at chance, so the event-weighted area reads the tail: an onset-only oracle would read
   0.30 here, these read 0.12 to 0.21
+  ([note](verification/telemetry-history-pretext.md)). Read as a forecaster against a ridge per
+  channel over the same 47 hours, that pretext beats the ridge by 13 to 16 % on the months it
+  read or held out, but on the first mission's later years (2007 to 2013) the declared rule reads
+  **noise** (1.00 [0.94; 1.06]): 1 % of cells at values the publication now bounds carry 98 to
+  99 % of both losses, and on the ordinary window the decoder reads two to three times the ridge
+  and grows worse with the years, while the ridge, the answers with no model and Chronos-2
+  zero-shot hold their loss there. The pretrained forecaster does not transfer across the years
+  of its own mission; on that mission a published forecaster that normalises each series does
   ([note](verification/telemetry-history-pretext.md)).
   At 1 % false alarms the departures leave little room: they miss 13 of 61, too
   few for the rule to reopen the perturbation term (at most 10.67 beyond chance, 11 required), and
@@ -221,6 +229,7 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | The same detector in the package, a campaign cell against the report's answers | every month ranked alike, least Spearman 1.00000 (M2) and 0.99998 (M1), top 1 % held; M2 the same to the bit; area and recall at 1 % equal at four decimals (M1 0.179, 0.607; M2 0.885, 0.996) | [telemetry-channel-local](verification/telemetry-channel-local.md) |
 | Windows of 6, 24, 72 hours ending at the scored hour, untrained encoder, layout chosen on later fitting months, against the hour | no layout chosen; read beside, 6x6 under the direction **−0.130** [−0.195; −0.066], under the whitened distance **−0.059** [−0.136; −0.008]; smoothing the hour's scores −0.18 to −0.23; pooling the previous hours' states −0.006 [−0.037; +0.021]; trees over the cells with 24 hours +0.023 [−0.037; +0.060]; none of the 11 unfound events found, which are local (10 of 11), touch 3 channels of 48 (median) and last 5.5 hours against 12 channels and 15 hours for the found | [telemetry-context](verification/telemetry-context.md) |
 | The pretext that forecasts each channel's hour from the 47 before it, two pretrainings, its error read by the largest channel | against `channel_local` −0.018 [−0.074; +0.039], against the last hour carried forward +0.036 [−0.033; +0.112]: around or below; recall at 1 % 0.59 against the bar's 0.60, the raw error's 0.67; every history-referenced detector ranks an event's later hours at chance, so the area reads the tail (an onset-only oracle 0.30, these 0.12–0.21); M2 0.889 against the bar 0.886 and the carried hour 0.928 | [telemetry-history-pretext](verification/telemetry-history-pretext.md) |
+| The forecasting pretext against a ridge per channel over the same 47 hours, two pretrainings, on months it read, held out and never read (the first mission's 2007 to 2013), Chronos-2 zero-shot beside | read 0.87 [0.82; 0.92], held 0.84 [0.81; 0.88], **unread 1.00 [0.94; 1.06]: noise**, the direction closed; on the unread months 1 % of cells at values up to 26,000 carry 98 to 99 % of both losses, and on the 1,003 windows with ordinary values the decoder reads 0.020 / 0.030 against the ridge's 0.0098 (2.2 / 3.3 on the median window), growing with the years, while Chronos-2 reads 0.0007 on the mean's squared error there as on the held months (0.0008) and the decoder 0.012 / 0.025; M2 unread 0.92 [0.88; 0.97], Chronos-2 level with the decoder but for eight cells whose history holds a reading of 2·10⁹ | [telemetry-history-pretext](verification/telemetry-history-pretext.md) |
 | Events the channels' departures miss, against other detectors with no label at 1 % false alarms | others find 6 of 13, 3.67 beyond chance, at most 10.67 possible, least 11; stays deferred; fusion +0.131 [+0.037; +0.234] over `channel_local`, +0.066 [−0.052; +0.176] over the mean of the departures | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The 11 events nothing found, on their annotated channels, ten minutes against the hour | one gained, two lost, least 4; not queued; six stand out at the hour beyond chance | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The departure bar, chosen on months no detector was read on (2000–2003, a class nearly absent later left out), then read forwards on the validation months | beyond chance at 1 %: mean over 72 hours 14.6 of 42 against 5.2 for the bar chosen by area; beyond chance the order turns on validation (Spearman −0.03), best 32.4 of 61, so the bar is the best of twelve in each reading | [telemetry-channel-local](verification/telemetry-channel-local.md) |
@@ -269,10 +278,12 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
    fine-tuning reads (cells of eight hours are a table with six columns of time), the pretext (a
    cell's mean, which interpolation answers on a grid) and the scale of data in the tasks'
    regime (credentialed MIMIC-IV or the full eICU).
-2. Read the telemetry pretext as a forecaster against a per-channel linear forecaster over the
-   same history and, descriptively, a published zero-shot model, on months it never read. It
-   already beats the last reading carried forward, the history's median and the channel's own
-   cycle ([note](verification/telemetry-history-pretext.md)); the classical bar is unread.
-3. If it passes, onboard the channels of a third mission the backbone never read, without labels,
-   and read its forecast there against the same bars.
-4. Open the frozen test side once.
+2. Reformulate the telemetry's foundation model before another pretraining: the forecaster
+   read against the ridge did not transfer across the years of its own mission while a
+   published zero-shot forecaster did on that mission
+   ([note](verification/telemetry-history-pretext.md)). The
+   next pretext is read on the later years from its first pilot, against the clipped ridge and
+   the published forecaster; adapting the published forecaster to the telemetry is read beside
+   as the leg's other candidate. The onboarding of a third mission waits for a forecaster that
+   passes.
+3. Open the frozen test side once.
