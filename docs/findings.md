@@ -278,12 +278,9 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
    fine-tuning reads (cells of eight hours are a table with six columns of time), the pretext (a
    cell's mean, which interpolation answers on a grid) and the scale of data in the tasks'
    regime (credentialed MIMIC-IV or the full eICU).
-2. Reformulate the telemetry's foundation model before another pretraining: the forecaster
-   read against the ridge did not transfer across the years of its own mission while a
-   published zero-shot forecaster did on that mission
-   ([note](verification/telemetry-history-pretext.md)). The
-   next pretext is read on the later years from its first pilot, against the clipped ridge and
-   the published forecaster; adapting the published forecaster to the telemetry is read beside
-   as the leg's other candidate. The onboarding of a third mission waits for a forecaster that
-   passes.
+2. Reformulate the telemetry's foundation model before another pretraining
+   ([note](verification/telemetry-history-pretext.md)): the next pretext is read on the later
+   years from its first pilot, against the clipped ridge and the published forecaster; adapting
+   the published forecaster to the telemetry is read beside as the leg's other candidate. The
+   onboarding of a third mission waits for a forecaster that passes.
 3. Open the frozen test side once.

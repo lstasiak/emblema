@@ -118,7 +118,7 @@ Preliminary, on validation data; each task's test data is used once, at the end.
 
 **Next:** both legs are reformulated before another pretraining. The clinic's named causes are
 its input, its pretext and the scale of in-regime data; the telemetry's forecaster must hold
-across the years of its own mission, which a published forecaster already does on the first.
+across the years of its own mission.
 
 Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
 
