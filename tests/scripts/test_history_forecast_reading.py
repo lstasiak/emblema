@@ -79,7 +79,7 @@ def published_file(path: Path, windows: range = range(6)) -> Path:
 def test_the_levels_read_the_arms_interval_against_one_and_the_least_gain() -> None:
     assert level_of(1.05, 1.2, 0.8) == "harm"
     assert level_of(0.9, 1.1, 0.8) == "noise: less than about the threshold either way"
-    assert level_of(0.85, 0.95, 0.8) == "real but small"
+    assert level_of(0.85, 0.95, 0.8) == "real and small"
     assert level_of(0.6, 0.8, 0.8) == "at least the least gain"
 
 

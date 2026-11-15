@@ -186,7 +186,7 @@ def level_of(low: float, high: float, least_gain: float) -> str:
         return "noise: less than about the threshold either way"
     if high <= least_gain:
         return "at least the least gain"
-    return "real but small"
+    return "real and small"
 
 
 def threshold(boot_arm: Floats, ratios: Sequence[float], floor: float) -> tuple[float, float]:
