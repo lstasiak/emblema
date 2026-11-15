@@ -5,6 +5,7 @@ import pytest
 
 from emblema.pretraining.adapters.training.exceptions import UnreadableTrainedModelError
 from emblema.pretraining.domain.exceptions import IncompatibleStartError
+from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from emblema.pretraining.domain.training.contrastive_term import ContrastiveTerm
 from emblema.pretraining.domain.training.objective_loss import LossKind, ObjectiveLoss
 from emblema.pretraining.domain.training.objective_target import ObjectiveTarget
@@ -264,6 +265,33 @@ def test_a_bounded_loss_is_read_back_with_its_knee() -> None:
     stored = TrainedModel.read(TrainedModel.of(stated, CHANNELS, trained).to_bytes())
 
     assert stored.loss == ObjectiveLoss(kind=LossKind.HUBER, huber_delta=1.5)
+
+
+def test_an_interval_is_read_back_and_a_model_that_draws_none_writes_none() -> None:
+    aligned = configuration(
+        architecture=CELLS,
+        observation=OBSERVATION,
+        masking=MaskingStrategy(
+            channel_rate=0.15,
+            block_rate=0.0,
+            block_span=0.5,
+            token_rate=0.1,
+            interval_rate=0.6,
+            interval_min_span=0.5,
+            interval_max_span=0.5,
+        ),
+    )
+    plain = configuration(architecture=CELLS, observation=OBSERVATION)
+    torch.manual_seed(6)
+
+    stored = TrainedModel.read(
+        TrainedModel.of(aligned, CHANNELS, ObjectiveShape.of(aligned, CHANNELS).build()).to_bytes()
+    )
+    without = TrainedModel.of(plain, CHANNELS, ObjectiveShape.of(plain, CHANNELS).build())
+
+    assert stored.masking == aligned.masking
+    assert b"interval" not in without.to_bytes()
+    assert TrainedModel.read(without.to_bytes()).masking == plain.masking
 
 
 def test_bytes_over_cells_written_before_the_masks_were_kept_read_back_without_them() -> None:

@@ -36,13 +36,14 @@ def diagnostic(
 
 def masks_of_every_kind(batch: TokenTensors) -> TokenMasks:
     """Channel 1 hidden whole, a block of channel 2 in the middle, a single token of channel 3,
-    the tail of channel 4."""
+    the tail of channel 4, the last moment of channel 3 as an interval."""
     ids, times = batch.channel_ids, batch.timestamps
     return TokenMasks(
         channel=ids == 1,
         block=(ids == 2) & (times > 0.3) & (times < 0.7),
         token=(ids == 3) & (times == 0.0),
         horizon=(ids == 4) & (times > 0.75),
+        interval=(ids == 3) & (times == 1.0),
     )
 
 
@@ -78,8 +79,9 @@ def test_each_kind_is_tallied_against_its_matched_and_its_linear_baseline() -> N
 
     tallies = by_kind(diagnostic().observe(batch, masks, one_group(batch), **predictions).tallies())
 
-    channel, block, token, horizon = (tallies[kind] for kind in MaskKind)
+    channel, block, token, horizon, interval = (tallies[kind] for kind in MaskKind)
     assert (channel.tokens, block.tokens, token.tokens, horizon.tokens) == (2 * 11, 2 * 3, 2, 2 * 3)
+    assert interval.tokens == 2
     assert channel.matched == pytest.approx(9.0 * channel.tokens)
     assert channel.linear == pytest.approx(9.0 * channel.tokens)
     assert block.matched == pytest.approx(4.0 * block.tokens)
@@ -88,6 +90,8 @@ def test_each_kind_is_tallied_against_its_matched_and_its_linear_baseline() -> N
     assert token.linear == pytest.approx(16.0 * token.tokens)
     assert horizon.matched == pytest.approx(4.0 * horizon.tokens)
     assert horizon.linear == pytest.approx(16.0 * horizon.tokens)
+    assert interval.matched == pytest.approx(4.0 * interval.tokens)
+    assert interval.linear == pytest.approx(16.0 * interval.tokens)
     assert all(tally.model == pytest.approx(tally.tokens) for tally in tallies.values())
 
 
@@ -188,6 +192,7 @@ def test_channels_reported_apart_get_tallies_of_their_own_after_the_rest() -> No
         (MaskKind.BLOCK, False),
         (MaskKind.TOKEN, False),
         (MaskKind.HORIZON, False),
+        (MaskKind.INTERVAL, False),
         (MaskKind.CHANNEL, True),
     ]
 
@@ -242,7 +247,13 @@ def test_padding_is_not_tallied_whatever_the_masks_say() -> None:
         torch.ones_like(batch.padding_mask),
     )
     everything = torch.ones_like(batch.padding_mask)
-    masks = TokenMasks(channel=everything, block=everything, token=everything, horizon=everything)
+    masks = TokenMasks(
+        channel=everything,
+        block=everything,
+        token=everything,
+        horizon=everything,
+        interval=everything,
+    )
     predictions = shifted(batch, model=0.0, interpolation=0.0, ridge=0.0, combined=0.0)
 
     assert diagnostic().observe(padded, masks, ["unit"], **predictions).tallies() == ()

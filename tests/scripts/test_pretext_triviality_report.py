@@ -90,6 +90,7 @@ WITH_TAIL = MaskingStrategy(
     horizon_min_span=0.15,
     horizon_max_span=0.5,
 )
+DRAWN = {kind for kind in MaskKind if WITH_TAIL.draws(kind)}
 WITHOUT_TAIL = MaskingStrategy(channel_rate=0.15, block_rate=0.3, block_span=0.5, token_rate=0.1)
 
 
@@ -146,7 +147,7 @@ def test_every_drawn_kind_the_tail_included_is_tallied_against_a_baseline(
     )
 
     summed = totals(tallies)
-    assert set(summed) == set(MaskKind)
+    assert set(summed) == DRAWN
     for kind, tally in summed.items():
         assert tally.tokens > 0, kind
         assert tally.matched > 0.0, kind
@@ -181,7 +182,7 @@ def test_the_summaries_bootstrap_each_corpus_on_its_own_units(control: Control) 
     rows = kinds_of([("a", tally) for tally in tallies] + [("b", tally) for tally in tallies])
 
     assert [row.corpus for row in rows] == ["a"] * (len(rows) // 2) + ["b"] * (len(rows) // 2)
-    assert {row.summary.kind for row in rows if row.corpus == "a"} == set(MaskKind)
+    assert {row.summary.kind for row in rows if row.corpus == "a"} == DRAWN
     for row in rows:
         assert row.summary.units == 4
         assert row.summary.matched_excess.low <= row.summary.matched_excess.high

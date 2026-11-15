@@ -139,6 +139,32 @@ def test_the_tail_travels_inside_the_masking_and_only_where_it_is_drawn() -> Non
     assert "horizon" not in plain
 
 
+def test_the_interval_travels_inside_the_masking_and_only_where_it_is_drawn() -> None:
+    aligned = configuration(
+        masking=MaskingStrategy(
+            channel_rate=0.15,
+            block_rate=0.0,
+            block_span=0.5,
+            token_rate=0.1,
+            interval_rate=0.6,
+            interval_min_span=0.5,
+            interval_max_span=0.5,
+        )
+    )
+
+    document = CODEC.encode(aligned)
+
+    masking = document["masking"]
+    assert isinstance(masking, dict)
+    assert masking["interval"] == {"rate": 0.6, "min_span": 0.5, "max_span": 0.5}
+    assert CODEC.decode(json.loads(json.dumps(document))) == aligned
+    assert aligned.parameters()["interval_rate"] == 0.6
+    plain = CODEC.encode(configuration())["masking"]
+    assert isinstance(plain, dict)
+    assert "interval" not in plain
+    assert "interval_rate" not in configuration().parameters()
+
+
 def test_a_document_listing_its_corpora_in_another_order_states_the_same_configuration() -> None:
     # JSONB keeps the keys of an object shortest first, so the registry hands back the corpora of
     # a configuration in an order the file that stated them never had.

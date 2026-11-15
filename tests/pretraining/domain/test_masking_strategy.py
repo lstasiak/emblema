@@ -126,6 +126,42 @@ def test_a_tail_alone_is_a_strategy_and_one_of_fixed_length_is_too() -> None:
     assert alone.expected_ratio == pytest.approx(0.3)
 
 
+def interval(rate: float = 1.0, shortest: float = 0.25, longest: float = 0.75) -> MaskingStrategy:
+    return strategy(
+        block_rate=0.0,
+        token_rate=0.0,
+        interval_rate=rate,
+        interval_min_span=shortest,
+        interval_max_span=longest,
+    )
+
+
+def test_the_interval_hides_its_mean_span_at_its_rate() -> None:
+    assert interval().has_interval
+    assert not strategy().has_interval
+    assert interval().expected_ratio == pytest.approx(1.0 - 0.85 * (1.0 - 0.5))
+    assert interval(rate=0.6).expected_ratio == pytest.approx(1.0 - 0.85 * (1.0 - 0.6 * 0.5))
+
+
+@pytest.mark.parametrize(("shortest", "longest"), [(0.0, 0.5), (0.4, 0.3), (0.2, 1.0), (-0.1, 0.5)])
+def test_interval_spans_outside_the_window_or_out_of_order_are_rejected(
+    shortest: float, longest: float
+) -> None:
+    with pytest.raises(InvalidMaskingStrategyError, match="interval spans"):
+        interval(shortest=shortest, longest=longest)
+
+
+@pytest.mark.parametrize("rate", [-0.1, 1.5])
+def test_an_interval_rate_outside_the_unit_interval_is_rejected(rate: float) -> None:
+    with pytest.raises(InvalidMaskingStrategyError, match="interval_rate"):
+        interval(rate=rate)
+
+
+def test_an_interval_that_is_never_drawn_states_no_spans() -> None:
+    with pytest.raises(InvalidMaskingStrategyError, match="an interval that is never drawn"):
+        strategy(interval_min_span=0.1, interval_max_span=0.2)
+
+
 def test_a_strategy_draws_the_kinds_whose_rates_are_positive() -> None:
     assert [kind for kind in MaskKind if strategy().draws(kind)] == [
         MaskKind.CHANNEL,
@@ -135,4 +171,8 @@ def test_a_strategy_draws_the_kinds_whose_rates_are_positive() -> None:
     assert [kind for kind in MaskKind if tail().draws(kind)] == [
         MaskKind.CHANNEL,
         MaskKind.HORIZON,
+    ]
+    assert [kind for kind in MaskKind if interval().draws(kind)] == [
+        MaskKind.CHANNEL,
+        MaskKind.INTERVAL,
     ]

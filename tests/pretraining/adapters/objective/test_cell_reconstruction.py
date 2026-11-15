@@ -70,7 +70,9 @@ def irregular(count: int, *, seed: int) -> list[TokenWindow]:
 
 def masks_hiding(hidden: Tensor) -> TokenMasks:
     nothing = torch.zeros_like(hidden)
-    return TokenMasks(channel=nothing, block=nothing, token=hidden, horizon=nothing)
+    return TokenMasks(
+        channel=nothing, block=nothing, token=hidden, horizon=nothing, interval=nothing
+    )
 
 
 def test_the_prediction_answers_seven_things_per_position(strategy: MaskingStrategy) -> None:

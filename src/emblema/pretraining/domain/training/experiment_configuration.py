@@ -226,6 +226,15 @@ class ExperimentConfiguration:
             if masking.has_horizon
             else {}
         )
+        interval = (
+            {
+                "interval_rate": float(masking.interval_rate),
+                "interval_min_span": float(masking.interval_min_span),
+                "interval_max_span": float(masking.interval_max_span),
+            }
+            if masking.has_interval
+            else {}
+        )
         target: dict[str, str | int | float] = (
             {
                 "target": str(self.target.kind),
@@ -283,6 +292,7 @@ class ExperimentConfiguration:
             "block_span": float(masking.block_span),
             "token_rate": float(masking.token_rate),
             **horizon,
+            **interval,
             "expected_hidden_ratio": float(masking.expected_ratio),
             "loss": str(self.loss.kind),
             "huber_delta": float(self.loss.huber_delta),

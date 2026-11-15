@@ -132,6 +132,16 @@ class TrainedModel:
                     if self.masking is not None
                     else {}
                 ),
+                # Written only where drawn, so a model stored without one is the bytes it was.
+                **(
+                    {
+                        "interval_rate": self.masking.interval_rate,
+                        "interval_min_span": self.masking.interval_min_span,
+                        "interval_max_span": self.masking.interval_max_span,
+                    }
+                    if self.masking is not None and self.masking.has_interval
+                    else {}
+                ),
                 **(
                     {"loss": str(self.loss.kind), "huber_delta": self.loss.huber_delta}
                     if self.loss is not None
@@ -189,6 +199,9 @@ class TrainedModel:
                         horizon_rate=stored["horizon_rate"],
                         horizon_min_span=stored["horizon_min_span"],
                         horizon_max_span=stored["horizon_max_span"],
+                        interval_rate=stored.get("interval_rate", 0.0),
+                        interval_min_span=stored.get("interval_min_span", 0.0),
+                        interval_max_span=stored.get("interval_max_span", 0.0),
                     )
                     if "channel_rate" in stored
                     else None

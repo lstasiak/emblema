@@ -53,6 +53,7 @@ def masks_hiding(hidden: Tensor) -> TokenMasks:
         block=hidden,
         token=torch.zeros_like(hidden),
         horizon=torch.zeros_like(hidden),
+        interval=torch.zeros_like(hidden),
     )
 
 

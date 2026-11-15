@@ -55,6 +55,7 @@ WITH_TAIL = MaskingStrategy(
     horizon_min_span=0.15,
     horizon_max_span=0.5,
 )
+DRAWN = {kind for kind in MaskKind if WITH_TAIL.draws(kind)}
 
 
 @pytest.fixture(scope="module")
@@ -111,7 +112,7 @@ def test_every_drawn_kind_is_tallied_against_the_line_the_nearest_and_the_visibl
     )
 
     by_kind = totals(tallies)
-    assert set(by_kind) == set(MaskKind)
+    assert set(by_kind) == DRAWN
     for kind, tally in by_kind.items():
         assert tally.tokens > 0, kind
         for name in ("model", "matched", "linear", "mean"):

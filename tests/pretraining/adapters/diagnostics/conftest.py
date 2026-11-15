@@ -58,6 +58,7 @@ def hiding(
         block=nothing,
         token=single & ~batch.padding_mask,
         horizon=nothing,
+        interval=nothing,
     )
 
 

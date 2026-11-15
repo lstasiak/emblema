@@ -80,7 +80,7 @@ class _Input(_Section):
 
 
 class _Masking(_Section):
-    """What the objective hides; a file that says nothing of a tail hides none."""
+    """What the objective hides; a file that says nothing of a tail or an interval hides none."""
 
     channel_rate: float
     block_rate: float
@@ -89,6 +89,9 @@ class _Masking(_Section):
     horizon_rate: float = 0.0
     horizon_min_span: float = 0.0
     horizon_max_span: float = 0.0
+    interval_rate: float = 0.0
+    interval_min_span: float = 0.0
+    interval_max_span: float = 0.0
 
     def strategy(self) -> MaskingStrategy:
         return MaskingStrategy(
@@ -99,6 +102,9 @@ class _Masking(_Section):
             horizon_rate=self.horizon_rate,
             horizon_min_span=self.horizon_min_span,
             horizon_max_span=self.horizon_max_span,
+            interval_rate=self.interval_rate,
+            interval_min_span=self.interval_min_span,
+            interval_max_span=self.interval_max_span,
         )
 
 

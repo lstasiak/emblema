@@ -52,6 +52,17 @@ class ExperimentConfigurationDocument:
             if masking.has_horizon
             else {}
         )
+        interval: Document = (
+            {
+                "interval": {
+                    "rate": masking.interval_rate,
+                    "min_span": masking.interval_min_span,
+                    "max_span": masking.interval_max_span,
+                }
+            }
+            if masking.has_interval
+            else {}
+        )
         # And the target: a run that predicts values writes the objective it always wrote.
         target: Document = (
             {
@@ -126,6 +137,7 @@ class ExperimentConfigurationDocument:
                 "block_span": masking.block_span,
                 "token_rate": masking.token_rate,
                 **horizon,
+                **interval,
             },
             "objective": {
                 "kind": str(configuration.loss.kind),
@@ -171,6 +183,7 @@ class ExperimentConfigurationDocument:
         passes = fields.optional_fields("passes")
         fraction = fields.optional_fields("fraction")
         horizon = masking.optional_fields("horizon")
+        interval = masking.optional_fields("interval")
         target = objective.optional_fields("target")
         contrast = objective.optional_fields("contrast")
         summary = objective.optional_fields("summary")
@@ -206,6 +219,15 @@ class ExperimentConfigurationDocument:
                         "horizon_rate": horizon.number("rate"),
                         "horizon_min_span": horizon.number("min_span"),
                         "horizon_max_span": horizon.number("max_span"),
+                    }
+                ),
+                **(
+                    {}
+                    if interval is None
+                    else {
+                        "interval_rate": interval.number("rate"),
+                        "interval_min_span": interval.number("min_span"),
+                        "interval_max_span": interval.number("max_span"),
                     }
                 ),
             ),

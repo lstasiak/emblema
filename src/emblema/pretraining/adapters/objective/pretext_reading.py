@@ -276,6 +276,7 @@ class PretextReading:
             block=padded(drawn.block),
             token=padded(drawn.token),
             horizon=padded(drawn.horizon),
+            interval=padded(drawn.interval),
         )
 
     def _tail_alone(self, laid: TokenTensors, tokens: int) -> TokenMasks:
@@ -284,7 +285,7 @@ class PretextReading:
         horizon = last & ~laid.timeless & ~laid.padding_mask
         padded = torch.nn.functional.pad(horizon, (0, tokens - horizon.shape[1]), value=False)
         none = torch.zeros_like(padded)
-        return TokenMasks(channel=none, block=none, token=none, horizon=padded)
+        return TokenMasks(channel=none, block=none, token=none, horizon=padded, interval=none)
 
     @staticmethod
     def _stacked(masks: Sequence[TokenMasks]) -> TokenMasks:
@@ -293,4 +294,5 @@ class PretextReading:
             block=torch.cat([m.block for m in masks]),
             token=torch.cat([m.token for m in masks]),
             horizon=torch.cat([m.horizon for m in masks]),
+            interval=torch.cat([m.interval for m in masks]),
         )
