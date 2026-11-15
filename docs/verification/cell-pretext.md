@@ -221,3 +221,84 @@ training loss bounds them (Huber), the audit does not. A stack fitted on another
 below its parts where the cells are few or the target degenerate (ESA-AD's maximum, SKAB's
 channel kind). The pilots read mechanics alone. The spread is on a fifth of the tuning side, as
 the registered least gains were.
+
+## 2026-11-15 — declared before the run: finer cells and an interval hidden in every channel, answered without a model and piloted
+
+**Questions.** (1) On each corpus of the composition the stage pretrains over — the stays of
+2012 and 2019, the eICU demo and the raw satellite telemetry, as published under the robust
+score — how much of a hidden cell does the strongest linear answer without a model read at 6,
+12, 24, 32 and 48 bins under the masks in force, and at 6, 32 and 48 bins where the block of
+each channel gives way to one interval hidden in every channel at once
+([ADR-0081](../adr/0081-an-interval-of-the-window-hidden-in-every-channel.md))? (2) Does the
+objective train end to end on the stays at each of those eight settings at tier S — the loss
+falls, nothing diverges, each term has a scale against its trivial cost, the hidden cells of
+each kind are answered — and what does an epoch cost? Nothing about the representation is read.
+
+**Conditions.**
+
+- *Commit*: the one that adds this section; the interval's draw and the eight experiment files
+  are in the commits before it. *Machine*: M1 Pro; the audit on the CPU, the pilots on MPS, fp32, tier S.
+- *Audit* (`scripts/cell_pretext_audit.py --manifest`): the publications the last screen read
+  (`composition-screen.md`, 2026-11-12) — 2012 `d2d86d29…`, 2019 `79364c26…`, the eICU demo
+  `5f24d626…`, the raw telemetry `490c1547…` — 2,000 training and 2,000 validation windows
+  each, spread evenly, the demo all of its windows; the bins and masks of
+  `experiments/backbone-cells-clinical-bins{6,12,24,32,48}-s.toml` (channel 0.15, block 0.6 over
+  half the window, cell 0.1) and of `…-bins{6,32,48}-interval-s.toml` (the block's rate and span
+  given to the interval); the answers, penalties and scores as on 2026-10-24.
+
+      uv run --env-file .env.r2 scripts/cell_pretext_audit.py --manifest <key> <checksum> \
+          --corpus <corpus> --masks experiments/<file>.toml --out data/report/l52/audit/<corpus>-<file>
+
+- *Pilots*: the eight files over every 2012 stay of set A and a tenth of the 2019 stays
+  (3,997 and 4,658 training windows), four epochs, batches of eight summed four to a step;
+  ordered, run on MPS and accepted by the `pretrain` command line, one after another; read in
+  the run's log and MLflow, not downstream.
+
+**Trial, and what was seen before this section.** The cost of a step was timed on MPS over the
+2012 stays and the telemetry: a stay is 164 / 325 / 647 / 862 / 1,323 cells at 6 / 12 / 24 / 32 /
+48 bins, a telemetry window 249 to 1,904; a batch of 32 stays at 48 bins does not fit the
+machine's memory, a batch of eight takes 0.59 s a step. The audit's command ran on 200 training
+and 200 validation windows, a tenth of what it reads: the 2012 stays at 6 and 48 bins under both
+sets of masks, the other three corpora at 48 bins under the masks in force. It printed, for the
+stack: 2012 at 6 bins presence 0.49 and mean 0.46, at 48 bins 0.61 and 0.41, the mean, minimum
+and maximum within 0.01 of one another there; 2019 at 48 bins presence 0.73, mean 0.27, the
+count read exactly by every answer; the demo 0.68 and 0.39; the telemetry 0.71 and 0.62 with
+0.89 of its cells holding a reading. Under the interval the stack read the 2012 presence of the
+interval's cells at 0.23 (6 bins) and 0.38 (48 bins), where `cross` read 0.16 and 0.31. Eight
+steps of the 48-bin interval arm ran on MPS without error. The predictions below name what the
+trial showed, so that nothing reads as foreseen that was seen; the pilots were not run.
+
+**Predictions.**
+
+| Reading | Prediction | Source |
+| --- | --- | --- |
+| 2012 at 6 bins, masks in force, stack | presence in [0.45, 0.62], mean in [0.30, 0.55] | presence 0.59 on the publication before the robust score (2026-10-24), 0.49 in the trial; the mean 0.12 then, 0.46 in the trial, the robust score having bounded the excursions the squared error was read by |
+| Stays, 12 to 32 bins, stack | presence and mean between the readings at 6 and 48 bins, within 0.05 | nothing but the bin changes; the trial's two ends |
+| Stays at 48 bins, stack | presence in [0.55, 0.78], below 0.90 on both corpora; mean in [0.20, 0.50]; mean, minimum and maximum within 0.03 of one another | the trial; a cell of one hour holds one reading |
+| 2019, count at 24 bins and finer | read at 0.99 or above by `carry` alone | the 2019 stream is hourly; the trial at 48 bins |
+| Telemetry at every count | held share above 0.80; mean read by `interpolation` at 0.45 or above | the trial at 48 bins: held 0.89, 0.53 |
+| Interval's cells, stays, presence | `cross` at least 0.15 below its reading on the block's cells of the same bins; the stack below 0.45 | the trial: 0.16 against 0.44 at 6 bins, 0.31 against 0.58 at 48; the tail's cells read 0.22 on 2026-10-24 |
+| Interval's cells, stays, mean | `interpolation` within 0.15 of its reading on the block's cells | either leaves the channel's own readings on both sides of a span of half the window |
+| Pilots, every arm | no non-finite loss; on 2012 the reconstruction's share of its trivial cost below 1 by the fourth epoch, the presence's below 0.90 | six bins on 2012: 0.93 → 0.88 and 0.87 → 0.60 over four epochs of 125 steps (2026-10-24); here about 270 steps an epoch over both corpora |
+| Pilots, finer cells | the presence's share at the fourth epoch no higher at 48 bins than at 6 | more of the presence is answerable without a model at 48 bins (0.61 against 0.49) |
+| Pilots, the interval | the presence's share on the interval's cells above the block arm's on the block's cells, and below 1 | the answers without a model read half as much there |
+| Pilots, count on 2019 at 48 bins | its trivial cost below a hundredth of its cost at 6 bins | one reading a cell, so the count is a constant |
+| Cost | an epoch with its validation within a factor of two of 2 / 3 / 6 / 8 / 15 min at 6 / 12 / 24 / 32 / 48 bins | 8 to 74 ms a 2012 stay on MPS in batches of eight; validation scores 15,232 windows an epoch |
+
+**What follows.** The audit and the pilots decide the design of the screen that follows, by a
+declaration of its own; they close nothing. Where the stack reads the stays' presence at 0.90 or
+above at a count, the presence is a shortcut there and that count is not screened under the
+masks in force; where it reads the mean at 0.90 or above, the cells are interpolated and the
+count is not screened. A count whose pilot diverges, or whose reconstruction stays at or above
+its trivial cost on both corpora after four epochs, is not screened until that is explained. A
+term whose trivial cost is near zero is judged by its own loss beside the reconstruction's, not
+by its share; where the count is a constant on a corpus its weight is a question for the
+screen's files. No count is dropped for its cost. The interval enters the screen as a family of
+its own if its pilots train. The pilots are read for mechanics and cost, as a dose; no reading
+of the representation is drawn from them.
+
+**Limitations.** The audit's answers are linear maps per channel on a few thousand cells: a
+floor on what a model has left, not a measurement of it. The trial printed the tables on a
+tenth of the windows, so the predictions for those cells are informed. R² under the squared
+error follows the heaviest values. The pilots read a tenth of the 2019 stays at tier S, on
+MPS; the cost on the accelerator the screen will run on is measured there before its order.
