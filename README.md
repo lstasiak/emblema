@@ -88,7 +88,7 @@ Preliminary, on validation data; each task's test data is used once, at the end.
 
 **The research question: does pretraining without labels pay off at few labels?**
 
-- Not shown. On turbofan remaining life (NASA C-MAPSS) and on death in hospital (PhysioNet
+- Not so far. On turbofan remaining life (NASA C-MAPSS) and on death in hospital (PhysioNet
   2012) no pretrained arm beats the same network trained from scratch beyond the noise of the
   comparison. On the cleaned, robustly normalised stays two fresh pretrainings fine-tune to
   −0.013 / +0.009 / +0.007 in area at 20 / 50 / 200 labelled stays against the network from
@@ -112,15 +112,11 @@ Preliminary, on validation data; each task's test data is used once, at the end.
   first mission, where a tree model trained on labelled events finds about 10 more; on the
   second, a PR-AUC of 0.885 against 0.627. A pretext forecasting each channel's next hour reads
   no better than that departure, and the departures miss too few events on that mission to
-  justify a perturbation term. Read as a forecaster on the same mission's later years, that
-  pretext reads level with a per-channel ridge and worse on the ordinary window, while a
-  published zero-shot forecaster holds its error across that mission's years.
+  justify a perturbation term. Read as a forecaster on years it never saw, that pretext does no
+  better than a per-channel linear model, while a published zero-shot forecaster keeps its
+  accuracy there.
 
-**Next:** both legs are reformulated before another pretraining. The clinic's named causes are
-its input, its pretext and the scale of in-regime data; the telemetry's forecaster must hold
-across the years of its own mission.
-
-Numbers, intervals and limitations: [`docs/findings.md`](docs/findings.md).
+Numbers, intervals, limitations and what is read next: [`docs/findings.md`](docs/findings.md).
 
 ![Validation RMSE of the network arms and classical baselines by number of labelled windows, and each pretrained arm's reduction against training from scratch](docs/verification/figures/label-efficiency-curve.png)
 
