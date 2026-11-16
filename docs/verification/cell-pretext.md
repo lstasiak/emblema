@@ -461,3 +461,68 @@ corpora keeps 24 bins out of the screen until explained.
 
 **Limitations.** As on 2026-11-15. The predictions for the 2019 stays under the rule rest on
 readings of the layout before it.
+
+## 2026-11-16 — M1 Pro, CPU and MPS, fp32: under the rule for the edges the 2019 stays fill every bin, and 24 bins with the interval trains
+
+**Question.** As declared above: the audit and the pilots at the counts the screen can use,
+under [ADR-0082](../adr/0082-a-reading-on-the-edge-of-a-bin-belongs-to-the-bin-it-opens.md).
+
+**Conditions.** Declaration `25bc09b8`, the code of every run; 20 audits, four pilots ordered as
+run `pilot-s-edge`, their decoders scored on the audit's cells
+(`data/report/l52/{audit,pilot,kinds}-edge/`). Validation side, tier S.
+
+**The 2019 stays' bins against an even share**: 0.97 to 1.02 at 6 bins, 0.96 to 1.08 at 12,
+0.78 to 1.17 at 24, none empty (before: 0.72 to 1.24, 0.47 to 1.51, 7 of 24 empty).
+
+**The stack on every hidden cell.**
+
+| corpus | bins | held | presence | `schedule` on presence | mean | count by `carry` |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2012 | 6 / 12 / 24 | 0.62 / 0.49 / 0.36 | 0.591 / 0.646 / 0.647 | 0.238 / 0.307 / 0.342 | 0.482 / 0.480 / 0.454 | 0.881 / 0.903 / 0.923 |
+| 2019 | 6 / 12 / 24 | 0.52 / 0.40 / 0.32 | 0.653 / 0.686 / 0.710 | 0.351 / 0.434 / 0.490 | 0.372 / 0.384 / 0.401 | 0.927 / 0.968 / 1.000 |
+| demo | 6 / 12 / 24 | 0.51 / 0.37 / 0.26 | 0.628 / 0.663 / 0.671 | 0.258 / 0.327 / 0.363 | 0.445 / 0.470 / 0.452 | 0.870 / 0.897 / 0.918 |
+
+The telemetry reads as before the rule at every count.
+
+**Presence on the cells of the block and of the interval.**
+
+| corpus | bins | block: `cross` | block: stack | interval: `cross` | interval: stack |
+| --- | --- | --- | --- | --- | --- |
+| 2012 | 6 | 0.522 | 0.589 | 0.190 | 0.258 |
+| 2012 | 24 | 0.596 | 0.652 | 0.297 | 0.373 |
+| 2019 | 6 | 0.607 | 0.645 | 0.339 | 0.351 |
+| 2019 | 24 | 0.674 | 0.712 | 0.476 | 0.510 |
+
+**The pilots**, each term as a share of its trivial cost after the first and fourth epoch, and
+the decoder against the stack on the cells of the arm's own span (presence).
+
+| arm | s / epoch | 2012 reconstruction | 2012 presence | 2019 reconstruction | 2019 presence | 2012 stack / decoder | 2019 stack / decoder |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 6 bins | 71 | 0.94 → 0.84 | 0.83 → 0.36 | 0.97 → 0.85 | 0.72 → 0.32 | 0.589 / 0.671 | 0.645 / 0.720 |
+| 6, interval | 70 | 0.94 → 0.80 | 0.85 → 0.68 | 0.97 → 0.81 | 0.73 → 0.66 | 0.258 / 0.306 | 0.351 / 0.359 |
+| 24 | 317 | 0.96 → 0.77 | 0.86 → 0.75 | 0.97 → 0.73 | 0.73 → 0.68 | 0.652 / 0.431 | 0.712 / 0.524 |
+| 24, interval | 311 | 0.96 → 0.78 | 0.88 → 0.79 | 0.97 → 0.74 | 0.74 → 0.70 | 0.373 / 0.392 | 0.510 / 0.518 |
+
+No loss was non-finite. The count's trivial cost on the 2019 stays at 24 bins is below 2·10⁻⁶.
+
+**Predictions.** One missed: the 2012 reconstruction's share at 24 bins, 0.77 against within
+0.05 of 0.82. The others held: no empty bin; at 24 bins on the 2019 stays 0.32 of cells held,
+the count read exactly, the stack at 0.710 and `schedule` at 0.490; 6 and 12 bins and the
+other corpora within their bounds; the interval's cells on 2012 at 24 bins with `cross` 0.30
+below the block's and the stack at 0.373; the pilots at 6 bins within 0.05; the interval's
+decoder at 24 bins 0.02 above the stack.
+
+**Conclusions.**
+
+1. **The rule removes the comb.** The 2019 stays fill every bin at 6, 12 and 24, and at 24 bins
+   each cell that holds anything holds one row, so the count is a constant there.
+2. **24 bins pass the audit**: the stack reads the stays' presence at 0.65 to 0.71 and the mean
+   at 0.40 to 0.45, and what the channel's own rhythm reads of the 2019 presence falls from
+   0.55 over the comb to 0.49.
+3. **All four arms train**, the 2019 presence at 24 bins now learnt from 0.73 to 0.68 of its
+   trivial cost where the comb had given 0.60 to 0.50 by its pattern. As before, at 24 bins the
+   decoder is below the stack on the block's cells and at it on the interval's.
+4. **The screen reads 6 and 24 bins under the block and under the interval**, by a declaration
+   of its own, with the epochs of each new recipe read off a run of its own.
+
+**Limitations.** As on 2026-11-15: mechanics and cost at tier S, one seed, four epochs.
