@@ -1,0 +1,55 @@
+# The run that sets how long the base recipe trains over cells of 24 bins, before any
+# pretraining of it is ordered.
+# The recipe of backbone-cells-composition-budget-m.toml with that one change: the same four
+# publications, shares, passes, shape, terms and step, a seed no screened run uses, a cap of 24
+# epochs. The epochs are read off this run's validation by scripts/pretraining_budget_report.py:
+# every term has stopped learning, a term that is a constant on a corpus left out there. The
+# backbone is read on no task.
+name = "backbone-cells-composition-bins24-budget-m"
+tier = "M"
+corpora = ["physionet2012", "physionet2019", "eicu_demo", "esa_ad_raw"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[fraction]
+physionet2012 = 0.5
+physionet2019 = 0.5
+
+[passes]
+physionet2012 = 6
+physionet2019 = 2
+eicu_demo = 10
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 24
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.6
+block_span = 0.5
+token_rate = 0.1
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 24
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 0
+
+[checkpoint]
+every_steps = 2000
