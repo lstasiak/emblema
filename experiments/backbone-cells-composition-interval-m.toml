@@ -1,0 +1,58 @@
+# The base recipe of the screen over the composition with its hidden span one interval in
+# every channel at once, in the block's place and at its rate and length: the one change from
+# backbone-cells-composition-m.toml, whose corpora, shares, passes, shape, terms and step it
+# keeps. The 12 epochs were read off
+# backbone-cells-composition-interval-budget-m.toml's validation by the rule
+# written before it ran (every term had stopped learning by the twelfth). Two seeds: a
+# recipe is screened under two pretrainings.
+name = "backbone-cells-composition-interval-m"
+tier = "M"
+corpora = ["physionet2012", "physionet2019", "eicu_demo", "esa_ad_raw"]
+precision = "fp32"
+dropout = 0.0
+decoder_layers = 1
+
+[fraction]
+physionet2012 = 0.5
+physionet2019 = 0.5
+
+[passes]
+physionet2012 = 6
+physionet2019 = 2
+eicu_demo = 10
+
+[shape]
+width = 64
+heads = 16
+layers = 2
+feedforward_width = 128
+
+[input]
+bins = 6
+
+[masking]
+channel_rate = 0.15
+block_rate = 0.0
+block_span = 0.5
+token_rate = 0.1
+interval_rate = 0.6
+interval_min_span = 0.5
+interval_max_span = 0.5
+
+[objective]
+kind = "huber"
+huber_delta = 1.0
+presence_weight = 1.0
+count_weight = 0.5
+
+[budget]
+epochs = 12
+batch_size = 32
+accumulation_steps = 1
+learning_rate = 1e-3
+warmup_epochs = 0.5
+final_lr_fraction = 0.01
+seed = 1
+
+[checkpoint]
+every_steps = 2000
