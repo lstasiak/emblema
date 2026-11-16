@@ -423,3 +423,41 @@ read here had it been asked. The 2019 readings at 24 bins and finer are of the l
 ADR-0082 and are not repeated under it in this section; the 2012, demo and telemetry readings
 move by at most 2 % of readings. Backbones over cells pretrained before the rule read the
 2019 stays one bin early at the edges, alike in pretraining and evaluation.
+
+## 2026-11-16 — declared before the run: the audit and the pilots at 6, 12 and 24 bins under the rule for the bins' edges
+
+**Question.** Under [ADR-0082](../adr/0082-a-reading-on-the-edge-of-a-bin-belongs-to-the-bin-it-opens.md),
+what do the readings of 2026-11-15's declaration give at the counts the screen can use — 6, 12
+and 24 bins under the masks in force, 6 and 24 under the interval — and does the arm not yet
+run, 24 bins under the interval, train?
+
+**Conditions.** The commit that adds this section and
+`experiments/backbone-cells-clinical-bins24-interval-s.toml`; otherwise as declared on
+2026-11-15: the four publications, 2,000 and 2,000 windows, the same answers; the pilots at 6
+and 24 bins, each under both sets of masks, four epochs on MPS; each pilot's decoder scored on
+the audit's cells. The edges are counted again by `data/report/l52/bin_aliasing.py` with the
+layout's rule.
+
+**What was seen before this section.** Everything in the section above. Under the rule, the
+unit tests of the layout; the audit's command ran on 200 and 200 windows of the 2012 stays under
+the new file, to files left unopened.
+
+**Predictions.**
+
+| Reading | Prediction | Source |
+| --- | --- | --- |
+| 2019 stays, bins against an even share | no bin under a tenth at 6, 12 or 24; 0.9 to 1.1 at 6 and 12 unless the hours are unevenly charted | every reading sits on an hourly edge and now falls in the hour it opens |
+| 2019 at 24 bins | cells holding a reading in [0.28, 0.40]; count read at 0.99 or above by `carry`; presence: stack in [0.60, 0.74], `schedule` below 0.50 | held 0.25 with 7 of 24 bins empty; the stack 0.65 at 6 bins and 0.74 over the comb, `schedule` 0.55 over it |
+| 2019 at 6 and 12 bins, stack | within 0.03 of 0.652 / 0.682 (presence) and 0.367 / 0.384 (mean) | the same rows, evenly binned |
+| 2012, demo, telemetry, every count | within 0.01 of the section above | under 1 % of their readings sit on an edge |
+| Interval's cells, 2012 at 24 bins | `cross` at least 0.15 below the block's; the stack below 0.45 | 0.31 against 0.60 and 0.385 at 32 bins |
+| Pilots at 6 bins | every share within 0.05 of the section above | the 2012 stays unchanged, the 2019 stays evenly binned |
+| Pilots at 24 bins | no non-finite loss; 2012 shares within 0.05 of 0.82 and 0.75; the 2019 presence's share above 0.50; an epoch within a factor of 1.5 of 309 s | the pilot over the comb read 0.50 on 2019, part of it the comb's pattern |
+| 24 bins, interval | trains; the decoder within 0.05 of the stack on the interval's cells of 2012 | 0.39 against 0.385 at 32 bins |
+
+**What follows.** As declared on 2026-11-15, read at 24 bins: a stack at 0.90 or above on the
+stays' presence or mean, a divergence, or a reconstruction at or above its trivial cost on both
+corpora keeps 24 bins out of the screen until explained.
+
+**Limitations.** As on 2026-11-15. The predictions for the 2019 stays under the rule rest on
+readings of the layout before it.
