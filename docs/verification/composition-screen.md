@@ -502,3 +502,57 @@ the tasks' regime.
 stays chose the grid's edge, so its area there may be understated and the gain overstated. The
 second mission's reading compares publications, not paired. The comparison across screens sets
 fine-tuning's areas from three campaigns against one control, unpaired. Validation side, tier M.
+
+## 2026-11-16 — declared before the run: cells of 6 and of 24 bins under the block and under the interval, two pretrainings each, read on the 2012 stays
+
+**Questions.** (1) Does hiding one interval in every channel at once (ADR-0081), or cells of
+24 bins in place of 6, give fine-tuning a gain over the network from nothing that the base
+recipe did not read on 2026-11-13? Four recipes, two pretrainings each: the base, the interval,
+24 bins, and both; all under the rule for a bin's edges (ADR-0082), so the base is a
+replication. (2) Over 24 bins, is a gain the pretraining's or the finer cells'? (3) Do finer
+cells alone help the network from nothing?
+
+**Conditions.** As declared on 2026-11-12 for the 2012 stays (input, task, seeds, worker,
+campaigns per backbone and every step of the reading), with these differences:
+
+| | |
+| --- | --- |
+| Code | the commit adding this section; the pretrainings ordered from `f4fc16ea` and `eb173c70` |
+| Epochs | by `scripts/pretraining_budget_report.py` on a run of 24 epochs at seed 0 for each new recipe: 12 for the interval, 17 for 24 bins, 18 for both; the base keeps 17 |
+| Pretrainings, seeds 1 and 2 | base `6692d1d2`, `6b230d5d`; interval `e131dae0`, `faf37540`; 24 bins `3593635e`, `cd5aafb8`; both `9f2475d6`, `c7f647d6`; Colab G4, fp32, batch 32 |
+| Campaigns, once | `composition-scratch-physionet2012` and `composition-scratch-bins24-physionet2012`, each network from nothing over its six rates |
+| Reading | `data/report/l52/read.sh`: per recipe, the gain against the network from nothing over 6 bins, 20 and 50 stays one family under Holm within the recipe; the same against the network over 24 bins; the network over 24 bins less the one over 6 |
+
+The base's two pretrainings had ended and the other six were running when this was written;
+none had been read on a task. A trial of every campaign family at seed 1 (64 cells, 381 s)
+ran under two of the runs that set the epochs, which the screen does not read; the reading ran
+whole on it, its tables unopened.
+
+**The rule.** A recipe goes to a confirmation if its gain over the network from nothing over 6
+bins at 20 or 50 stays is at the least gain and held under Holm and, over 24 bins, its gain
+against the network over the same cells is not negative with the interval clear of zero. If
+more than one qualifies, the larger gain at 50 stays goes. The four recipes are not corrected
+across each other, so the outcome is a confirmation on fresh pretrainings, not a claim. If none
+qualifies, the size of the cells and the span hidden are closed as levers on this task at this
+shape. The network over 24 bins ahead of the one over 6 by more than 0.02 at 20 or 50 stays,
+the interval clear of zero, moves the control to 24 bins by a declaration of its own.
+
+**Power.** With two pretrainings and the spread at its floor of 0.014, the threshold read
+0.027, 0.029 and 0.020 at 20, 50 and 200 stays on 2026-11-13. The screen sees a gain of about
+0.03 and cannot see 0.010.
+
+**Predictions** (from earlier intervals, the lower edge where a gain is claimed).
+
+| Reading | Prediction | Source |
+| --- | --- | --- |
+| The base, gain at 20 / 50 / 200 | noise, inside [−0.030, +0.005] / [−0.010, +0.025] / [−0.010, +0.020] | 2026-11-13: −0.013 [−0.022; −0.005], +0.009 [−0.004; +0.021], +0.007 [−0.004; +0.017] |
+| The three new recipes, gain at 50 | inside [−0.004, +0.035]; at least one at the least gain | the base's interval; the published ablation behind ADR-0081; no measurement of ours |
+| The three new recipes, gain at 20 | inside [−0.022, +0.015] | the base's interval, its sign not assumed |
+| Network over 24 bins less over 6 | noise, inside [−0.015, +0.015] at every budget | no earlier reading |
+| Network over 6 bins, areas | within 0.010 of 0.640 / 0.670 / 0.739 at 20 / 50 / 200 | 2026-11-13 |
+| Spread between a recipe's pretrainings | under 0.025 | 0.007 and 0.009 in the two earlier screens |
+| Probe at 500 | the base inside [+0.040, +0.082]; the others above +0.020 | +0.061 [+0.040; +0.082] |
+
+**Limitations.** Two pretrainings a recipe. The epochs differ between recipes by the rule that
+set them, so a recipe is its mask, its cells and its length together. One task; the telemetry
+is not read. Validation side, tier M.
