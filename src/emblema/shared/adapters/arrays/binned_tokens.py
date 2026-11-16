@@ -6,6 +6,7 @@ import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
 from emblema.shared.adapters.arrays.laid_window import LaidWindow
+from emblema.shared.adapters.arrays.steps import steps_of
 from emblema.shared.adapters.arrays.token_batch import TokenBatch
 from emblema.shared.kernel.tokens import N_CELL_FEATURES, PADDING_CHANNEL_ID, TokenWindow
 
@@ -192,7 +193,7 @@ class BinnedTokens:
         )
 
     def _bin_of(self, times: NDArray[np.float64]) -> NDArray[np.int64]:
-        return np.minimum(np.floor(times * self.bins).astype(np.int64), self.bins - 1)
+        return steps_of(times, self.bins)
 
     def _static_cells(
         self, ids: NDArray[np.int64], values: NDArray[np.float64], *, rows: NDArray[np.int64]
@@ -243,8 +244,9 @@ class BinnedTokens:
                 last.flat[filled] = values[ends]
                 offset.flat[filled] = times[ends] * bins - filled % bins
         # The bin a reading at the window's very end falls in is the last one, so its offset
-        # may reach one; the bins before it never do.
-        offset = np.minimum(offset, 1.0)
+        # may reach one; the bins before it never do. A reading stored a hair before the edge of
+        # the bin it opens stands at that bin's start.
+        offset = np.clip(offset, 0.0, 1.0)
         latest = np.maximum.accumulate(np.where(observed, np.arange(bins), -1), axis=1)
         held = np.where(latest >= 0, np.take_along_axis(last, np.maximum(latest, 0), axis=1), 0.0)
         since = np.where(latest >= 0, np.arange(bins) - latest, np.arange(bins) + 1) / bins

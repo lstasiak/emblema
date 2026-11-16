@@ -1,7 +1,8 @@
-"""Which step of an equal grid over a window an instant falls in, stated once for every grid.
+"""Which step of an equal division of a window an instant falls in, stated once for every layout.
 
-A rule shared by the grid that lays a window out as an array and the one that hands it back as
-tokens, so a reading lands in the same step whichever form a method reads.
+A rule shared by the grids that lay a window out as an array or hand it back as tokens and by
+the cells of channel and time bin, so a reading lands in the same step whichever form a method
+reads, and a corpus sampled on the very edges of the steps is not laid out by its rounding.
 """
 
 import numpy as np

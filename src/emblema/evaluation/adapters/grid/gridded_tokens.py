@@ -2,7 +2,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from emblema.evaluation.adapters.grid.steps import steps_of
+from emblema.shared.adapters.arrays.steps import steps_of
 from emblema.shared.kernel.tokens import TokenWindow
 
 
