@@ -6,7 +6,7 @@ by a rule registered before its run ([preregistration](preregistration.md)); eac
 note that holds its evidence ([`verification/`](verification/README.md)). A row states direction
 and size; conditions and caveats are in its note.
 
-Last updated 2026-11-15.
+Last updated 2026-11-16.
 
 ## Status
 
@@ -159,6 +159,8 @@ The small encoder over cells, pretrained without labels, each arm at its chosen 
 | The network from scratch in two campaigns | differs by at most 0.005 | [verdict-statistics](verification/verdict-statistics.md) |
 | Gain on stays the backbone read, less on those it did not | −0.007 / −0.003 / −0.010 at 20 / 50 / 200: no gain from having read them | [cell-pretraining](verification/cell-pretraining.md) |
 | Pretext over cells answered without a model | stays: mean 0.12, presence 0.59, under a tail 0.22; on grids interpolated at 0.53 to 0.80 | [cell-pretext](verification/cell-pretext.md) |
+| The same at 6 to 48 bins, under the robust score | stays: presence 0.60 to 0.77, mean 0.37 to 0.48 at every count; under an interval hidden in every channel the same-bin answer falls from 0.53–0.61 to 0.19–0.34 on the 2012 stays | [cell-pretext](verification/cell-pretext.md) |
+| How the cells lay out a corpus on a clock | the 2019 stays' hourly rows sat on the bins' edges and fell a bin early by rounding: 0.24 of readings at 6 bins, 7 of 24 bins empty at 24; fixed by the grids' rule ([ADR-0082](adr/0082-a-reading-on-the-edge-of-a-bin-belongs-to-the-bin-it-opens.md)) | [cell-pretext](verification/cell-pretext.md) |
 | Added data measured as the stays are | eICU demo matches the 2012 stays; the Water Quality Portal lies nearer a grid | [task-regime-sources](verification/task-regime-sources.md) |
 
 ### What changes the backbone
