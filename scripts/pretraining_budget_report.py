@@ -5,7 +5,10 @@ every epoch the log states each validation corpus's loss per term beside the tri
 predictor's — the hidden values (``reconstruction``) and, where the objective asks for them, the
 cells' ``presence`` and ``count``. A term's cost at an epoch is the mean over corpora of its loss
 over the trivial predictor's, as the run's own validation is a mean over corpora, so that no
-corpus decides by the size of its values.
+corpus decides by the size of its values. A term whose trivial predictor costs next to nothing
+on a corpus is a constant there — the count of a cell on rows read once an hour, or on a
+satellite's regular packets — and leaves nothing to learn, while its ratio is noise over a
+vanishing number: that corpus is left out of the term's mean, and named.
 
 A term has stopped learning at the first epoch whose cost none of the next ``WINDOW`` epochs
 lowers by more than ``TOLERANCE`` of itself. The budget is the latest such epoch over the terms:
@@ -47,6 +50,9 @@ WINDOW = 3
 TOLERANCE = 0.01
 # How many epochs the kept epoch may fall before the presence stops learning without a word.
 KEPT_LAG = 2
+# A trivial cost below this is a term that is a constant on its corpus. The counts that vary
+# cost their trivial predictor 0.007 to 0.045; the ones that do not, 4·10⁻⁶ or nothing.
+CONSTANT = 1e-4
 VALUES = "reconstruction"
 PRESENCE = "presence"
 
@@ -71,6 +77,11 @@ class CostRow:
     @property
     def cost(self) -> float:
         return self.loss / self.trivial
+
+    @property
+    def constant(self) -> bool:
+        """Whether the term is a constant on this corpus, so that its cost says nothing."""
+        return self.trivial < CONSTANT
 
 
 def costs_of(lines: Iterable[str]) -> list[CostRow]:
@@ -108,10 +119,11 @@ def costs_of(lines: Iterable[str]) -> list[CostRow]:
 
 
 def mean_costs(rows: Iterable[CostRow]) -> dict[str, dict[int, float]]:
-    """Each term's cost at each epoch, the mean over corpora."""
+    """Each term's cost at each epoch, the mean over the corpora where the term varies."""
     gathered: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
     for row in rows:
-        gathered[row.term][row.epoch].append(row.cost)
+        if not row.constant:
+            gathered[row.term][row.epoch].append(row.cost)
     return {
         term: {epoch: sum(costs) / len(costs) for epoch, costs in sorted(by_epoch.items())}
         for term, by_epoch in gathered.items()
@@ -220,10 +232,16 @@ def render(rows: Sequence[CostRow]) -> str:
             kept += f" — more than {KEPT_LAG}: the kept epoch would leave the presence unlearnt"
     elif budget.lag is not None:
         kept += f", {-budget.lag} after the presence stops learning"
+    constants = sorted({f"{row.term} on {row.corpus}" for row in rows if row.constant})
+    left_out = (
+        f" Left out as constants (trivial cost under {CONSTANT:g}): {', '.join(constants)}."
+        if constants
+        else ""
+    )
     return "\n\n".join(
         [
             f"**Each term's validation cost, the mean over corpora of its loss over the trivial "
-            f"predictor's.**\n\n{table(['epoch', *terms], lines)}",
+            f"predictor's.**{left_out}\n\n{table(['epoch', *terms], lines)}",
             f"Stops learning (no lower by over {TOLERANCE:.0%} within {WINDOW} epochs): {stops}.",
             f"{verdict}; {kept}.",
         ]

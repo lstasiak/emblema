@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from scripts.pretraining_budget_report import (
+    CONSTANT,
     KEPT_LAG,
     CostRow,
     budget_of,
@@ -15,6 +16,9 @@ from scripts.pretraining_budget_report import (
     render,
     stops_learning,
     write_costs,
+)
+from scripts.pretraining_budget_report import (
+    VALUES as VALUES_TERM,
 )
 
 PREFIX = (
@@ -166,3 +170,34 @@ def test_reading_needs_a_log_and_rendering_a_directory() -> None:
         parse_arguments([])
     assert parse_arguments(["--log", "run.log"]).log == Path("run.log")
     assert parse_arguments(["--report-only", "d"]).report_only == Path("d")
+
+
+def test_a_term_that_is_a_constant_on_a_corpus_is_read_on_the_others() -> None:
+    rows = [
+        CostRow(1, "hourly", "count", 0.00016, 0.0),
+        CostRow(1, "stays", "count", 0.5, 1.0),
+        CostRow(1, "hourly", VALUES_TERM, 0.9, 1.0),
+        CostRow(1, "stays", VALUES_TERM, 0.7, 1.0),
+    ]
+
+    costs = mean_costs(rows)
+
+    assert costs["count"] == {1: 0.5}
+    assert costs[VALUES_TERM] == {1: pytest.approx(0.8)}
+    assert "count on hourly" in render(rows)
+
+
+def test_a_term_that_is_a_constant_everywhere_sets_no_budget() -> None:
+    falling = {epoch: 1.0 - 0.1 * min(epoch, 3) for epoch in range(1, 9)}
+    rows = [CostRow(epoch, "stays", VALUES_TERM, cost, 1.0) for epoch, cost in falling.items()]
+    rows += [CostRow(epoch, "stays", "count", 1e-4 / epoch, 4e-6) for epoch in falling]
+
+    budget = budget_of(rows)
+
+    assert budget.stops == {VALUES_TERM: 3}
+    assert budget.epochs == 3
+
+
+def test_a_term_just_above_the_floor_is_still_read() -> None:
+    assert not CostRow(1, "stays", "count", 0.001, CONSTANT).constant
+    assert CostRow(1, "stays", "count", 0.001, CONSTANT / 2).constant
