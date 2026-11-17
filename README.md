@@ -93,7 +93,9 @@ Preliminary, on validation data; each task's test data is used once, at the end.
   comparison. On the cleaned, robustly normalised stays two fresh pretrainings fine-tune to
   −0.013 / +0.009 / +0.007 in area at 20 / 50 / 200 labelled stays against the network from
   scratch on the same input; the 0.016 read earlier at 50 stays was what that normalisation
-  gives the network from scratch. A linear probe reads 0.06 above the untrained encoder at 500
+  gives the network from scratch. A further screen of four recipes read +0.02 to +0.03 at 50
+  stays in three of them, one past its threshold, and nothing reliable at 20; a confirmation on
+  fresh pretrainings is next. A linear probe reads 0.06 above the untrained encoder at 500
   stays, still below the trees.
 - Ruled out: more pretraining data (up to about 10⁹ values), a five times larger model,
   continuing on the task's own domain, the adaptation recipe and six variants of the pretext.
