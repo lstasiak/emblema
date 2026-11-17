@@ -632,3 +632,62 @@ than under seed 1; the seed also picks the half of the 2012 stays the pretrainin
 the two are not told apart here. The network from nothing matches 2026-11-13 in its means, not
 seed by seed, so the four pretrainings of the base are pooled across two layouts of the edges.
 Fine-tuning over 24 bins costs eight times the card time of 6. Validation side, tier M.
+
+## 2026-11-17 — declared before the run: the base recipe under eight fresh pretrainings, confirmed on set B
+
+**Question.** Does fine-tuning the base recipe (a block hidden per channel, cells of 6 bins)
+gain over the network from nothing on set B at 20, 50 and 200 stays?
+
+**Why the base and not the recipe the screen named.** The screen of 2026-11-17 named the block
+over 24 bins: +0.029 at 50 stays against the base's +0.026, past a threshold of 0.023 where the
+base's was 0.031. The two recipes differ by +0.003 at 50 stays and by −0.011 at 200, each
+within the noise, and fine-tuning over 24 bins costs eight times the card time. Set B is read
+once, so it is read for the recipe the product would keep; the base's estimate at 50 stays
+reaches the least gain, so the register's rule of 2026-11-15 does not close it. Whether 24
+bins add to 6 is a comparison of two recipes and stays open on the half; the block over 24
+bins is not confirmed on set B.
+
+**Conditions.** As registered for the confirmation of the screen over the composition: eight
+fresh pretrainings, 30 seeds, taught on labels drawn from set A, scored on set B, each arm at
+the setting the half chose at each budget.
+
+| | |
+| --- | --- |
+| Code | the commit adding this section; the register's row of the same day |
+| Pretrainings | `backbone-cells-composition-m` at seeds 3 to 10, 17 epochs, the input and step of 2026-11-16; none read by a screen |
+| Settings, from the half on 2026-11-17 | fine-tuning at 0.0001 / 0.00003 / 0.00003 / the rate in force at 20 / 50 / 100 / 200 stays; the network from nothing over 6 bins at the rate in force / 0.003 / 0.003 / 0.0001 |
+| Campaigns | per backbone, fine-tuning at its settings; once, the network from nothing at its rates; both at the rate in force and 100 stays beside, descriptively |
+| Platform | Colab G4, fp32, as the screen: the pretrainings on one card, the campaigns in 24 lanes |
+| Reading | `data/report/l52/confirm/read.sh`; the spread from the pretrainings paired by seed, 3 with 4, 5 with 6, 7 with 8, 9 with 10 |
+
+Set B holds no stay a pretraining trained on: every pretraining draws its half from set A, and
+set B's windows only keep its epoch, without labels. On the half the screen's backbones gained
+more on the stays they had not read (+0.039 against +0.020 at 50 stays for the base, the gap
+−0.019 [−0.038; −0.001]), under two draws of the half only.
+
+Seen before this section: the reading (`data/report/l52/confirm/read.sh`) ran whole, every step
+exit 0, on the screen's eight campaigns in the eight pretrainings' place; one order of three
+cells at seed 31, outside the confirmation's seeds, ran on the Mac and scored set B's 3,994
+stays, its areas unread.
+
+**The rule.** The registered one: the recipe is confirmed where its gain is real and small or
+at the least gain, at 200 stays as one comparison and at 20 and 50 stays as one family under
+Holm. If it is confirmed at no budget, pretraining over cells is closed on this task at this
+shape. Set B is not read again before set C.
+
+**Power.** By the register's simulation (`cell-pretraining.md`, 2026-10-29): for a gain of
+0.02, 0.95 at 200 stays and 0.72 at 50; for 0.01, 0.41 at most.
+
+**Predictions** (from earlier intervals, the lower edge where a gain is claimed).
+
+| Reading | Prediction | Source |
+| --- | --- | --- |
+| Gain at 50 stays | inside [+0.002, +0.040] | +0.018 ± 0.008 over four pretrainings on the half; +0.039 on the stays unread |
+| Gain at 200 stays | inside [+0.003, +0.036] | +0.013 ± 0.005 over the same four; +0.036 on the stays unread |
+| Gain at 20 stays | noise, inside [−0.020, +0.017] | −0.020 to +0.017 over the four |
+| Spread between pretrainings | under 0.025 | 0.013 over four recipes on the half |
+| Gain at the rate in force, 200 stays | inside [+0.016, +0.040] | +0.027 [+0.016; +0.038] on the half, the control's rate not its own |
+
+**Limitations.** One task and one shape. The settings were chosen on the half under two
+pretrainings. Naming the base after the screen read is a choice made after the fact; the
+confirmation's own data are untouched by it. Validation side, tier M.
