@@ -10,8 +10,8 @@ Last updated 2026-11-17.
 
 ## Status
 
-- **The claim is not confirmed; one recipe of four passes a screen at 50 stays and waits for a
-  confirmation.** Full fine-tuning of a small encoder over cells, pretrained twice on the
+- **The claim is not confirmed; one recipe of four passes a screen at 50 stays, and the base
+  recipe is confirmed on set B next.** Full fine-tuning of a small encoder over cells, pretrained twice on the
   cleaned, robustly normalised intensive-care stays, the eICU demo and the satellite telemetry
   under the robust score, reads −0.013 [−0.022; −0.005] at 20 stays, +0.009 [−0.004; +0.021] at
   50 and +0.007 [−0.004; +0.017] at 200 against the network from scratch at its chosen rate on the
@@ -22,8 +22,9 @@ Last updated 2026-11-17.
   the twelve pretrainings of the recipe over cells none exceeds that control by more than 0.009
   at any budget. A second screen of four recipes, two pretrainings each, then read +0.020 to
   +0.029 at 50 stays in three of them, the block over cells of 24 bins alone past its threshold,
-  and nothing reliable at 20 ([note](verification/composition-screen.md)). Its confirmation on
-  fresh pretrainings, the base recipe beside it, is next.
+  and nothing reliable at 20 ([note](verification/composition-screen.md)). The base
+  recipe, level with it within the noise at an eighth of the card time, is confirmed on set B
+  next.
 - **Pretraining over cells leaves a representation above its initialisation.** A frozen probe
   gains 0.060 to 0.091 over the same encoder untrained at 500 stays (+0.061 on the settled
   input), and still reads about 0.03 below the trees ([note](verification/cell-pretraining.md)).
@@ -281,9 +282,9 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 
 ## Next
 
-1. Confirm the block over 24 bins on fresh pretrainings, the base recipe beside it, with the
-   pretraining's seed and its draw of stays varied separately. Nothing gains reliably at 20
-   stays; the named causes there remain the
+1. Confirm the base recipe on set B under eight fresh pretrainings
+   ([declared](verification/composition-screen.md)); whether cells of 24 bins add to it stays a
+   comparison on the half. Nothing gains reliably at 20 stays; the named causes there remain the
    pretext (a cell's mean, which interpolation answers on a grid) and the scale of data in the
    tasks' regime (credentialed MIMIC-IV or the full eICU).
 2. Reformulate the telemetry's foundation model before another pretraining
