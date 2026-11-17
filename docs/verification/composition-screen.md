@@ -556,3 +556,79 @@ the interval clear of zero, moves the control to 24 bins by a declaration of its
 **Limitations.** Two pretrainings a recipe. The epochs differ between recipes by the rule that
 set them, so a recipe is its mask, its cells and its length together. One task; the telemetry
 is not read. Validation side, tier M.
+
+## 2026-11-17 — Colab G4, fp32: three of four recipes gain 0.020 to 0.029 at 50 stays, the block over 24 bins alone passes the rule, and the interval over 24 bins loses at 20
+
+**Question.** As declared above: four recipes, two pretrainings each, against the network from
+nothing over 6 bins and over 24.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `37b3d39e`, the declaration's commit, for every campaign cell and the reading |
+| Pretrainings | Colab G4, three to a card: 6,427 to 6,457 s for the base, 5,182 and 5,185 s for the interval, 10,653 to 11,268 s over 24 bins; in the runs that set the epochs validation took 202 to 246 s after each epoch, more than an epoch's training over 6 bins |
+| Campaigns | 18 orders in 126 lanes on Colab G4 cards, 24 lanes a card, no lane run again: a card's cell took 1,080 s for two backbones over 6 bins, 8,389 and 8,410 s over 24; 13 results accepted at the second attempt, after the Docker disk holding the registry filled |
+| Reading | `data/report/l52/read.sh`, every step exit 0; null pairs within ±0.0002 |
+
+**Gains of fine-tuning over the network from nothing over 6 bins**, each arm at its chosen
+setting (`pretraining_screen_report.py`; s the larger of 0.014 and the recipe's own spread):
+
+| Recipe | 20 stays | 50 stays | 200 stays | Own spread | T at 50 | Level at 50 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Base (block, 6 bins) | +0.004 [−0.007; +0.014] | +0.026 [+0.014; +0.038] | +0.018 [+0.007; +0.029] | 0.019 | 0.031 | noise |
+| Interval, 6 bins | +0.001 [−0.008; +0.009] | +0.020 [+0.009; +0.031] | +0.015 [+0.004; +0.025] | 0.009 | 0.029 | noise |
+| Block, 24 bins | +0.005 [−0.004; +0.014] | **+0.029** [+0.017; +0.042] | +0.008 [−0.004; +0.019] | 0.004 | 0.023 | at the least gain, Holm rejects |
+| Interval, 24 bins | −0.014 [−0.024; −0.004] | −0.003 [−0.015; +0.007] | +0.007 [−0.003; +0.017] | 0.000 | 0.023 | noise |
+
+Bold: at the least gain of 0.02, Holm over 20 and 50 stays rejecting no difference. No other
+cell of the table reaches a level. The network from nothing over 6 bins reads 0.640 / 0.670 /
+0.739 at 20 / 50 / 200 stays, as on 2026-11-13.
+
+**The same cells, and finer cells alone.** The block over 24 bins against the network from
+nothing over 24 bins: −0.006 [−0.016; +0.003], +0.030 [+0.018; +0.041] and +0.008
+[−0.003; +0.020] at 20, 50 and 200 stays. The interval over 24 bins against it: −0.025
+[−0.036; −0.015] at 20. The network over 24 bins less the one over 6, each at its chosen rate:
++0.011 [+0.007; +0.016] at 20 stays; −0.000, +0.003 and −0.001 at 50, 100 and 200, their
+intervals spanning zero. The lead at 20 is under 0.02, so the control stays over 6 bins.
+
+**Each pretraining apart**, its gain at the chosen settings (seed 1 / seed 2):
+
+| Recipe | 20 stays | 50 stays | 200 stays |
+| --- | --- | --- | --- |
+| Base | −0.010 / +0.017 | +0.013 / +0.040 | +0.018 / +0.019 |
+| Interval, 6 bins | −0.010 / +0.012 | +0.014 / +0.026 | +0.015 / +0.014 |
+| Block, 24 bins | +0.007 / +0.003 | +0.018 / +0.040 | +0.008 / +0.007 |
+| Interval, 24 bins | −0.008 / −0.020 | +0.003 / −0.010 | +0.008 / +0.007 |
+| Base on 2026-11-13 | −0.007 / −0.020 | +0.005 / +0.013 | +0.014 / −0.001 |
+
+**Probe at 500 stays**, the frozen encoder less the one at its initialisation: +0.079
+[+0.057; +0.102], +0.077 [+0.053; +0.100], +0.074 [+0.052; +0.096] and +0.066
+[+0.044; +0.088] in the table's order. The encoder at its initialisation reads raw tokens under
+every backbone (0.689 under all eight), so this pair mixes the pretraining with the input's
+layout.
+
+**Conclusions.**
+
+1. By the rule, the block over 24 bins goes to a confirmation on fresh pretrainings: +0.029 at
+   50 stays against the network from nothing over 6 bins, +0.030 against the one over 24.
+2. Its lead over the base is not a finding. At 50 stays its two pretrainings differ by 0.022,
+   the base's by 0.028; its smaller spread comes from 20 stays. With the spread at its floor
+   the base's threshold at 50 stays is 0.029, so the base's +0.026 stays within the noise.
+3. The interval is closed: no gain over 6 bins beyond the base's, and over 24 bins a loss at 20
+   stays against either control, its interval clear of zero and inside the rule's threshold.
+4. All eight pretrainings gain at 200 stays (mean +0.012). At 50 the six of the three recipes
+   other than the interval over 24 bins gain (mean +0.025; +0.018 over all eight). None gains
+   reliably at 20. The base over four pretrainings, two of 2026-11-13 and two here: +0.018 ±
+   0.008 at 50 and +0.013 ± 0.005 at 200, mean and standard error over pretrainings. These
+   groupings are made after the fact and decide nothing.
+5. All predictions but two are met. The base at 50 stays reads +0.026 against an upper edge of
+   +0.025, and finer cells alone, predicted noise, give the network from nothing +0.011 at 20
+   stays.
+
+**Limitations.** Two pretrainings a recipe; each recipe's spread rests on one difference per
+budget and is itself uncertain. Under seed 2 the three recipes gain more at 50 stays
+than under seed 1; the seed also picks the half of the 2012 stays the pretraining reads, and
+the two are not told apart here. The network from nothing matches 2026-11-13 in its means, not
+seed by seed, so the four pretrainings of the base are pooled across two layouts of the edges.
+Fine-tuning over 24 bins costs eight times the card time of 6. Validation side, tier M.
