@@ -691,3 +691,54 @@ shape. Set B is not read again before set C.
 **Limitations.** One task and one shape. The settings were chosen on the half under two
 pretrainings. Naming the base after the screen read is a choice made after the fact; the
 confirmation's own data are untouched by it. Validation side, tier M.
+
+## 2026-11-18 — Colab G4, fp32: on set B the base recipe gains 0.016 at 20 and at 50 stays, real and small, and nothing at 200
+
+**Question.** As declared above: fine-tuning the base recipe under eight fresh pretrainings
+against the network from nothing on set B.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `56fcd15d`, the declaration's commit, for the pretrainings, every campaign cell and the reading |
+| Pretrainings | seeds 3 to 10 on one Colab G4, eight at once, 6,560 to 6,631 s each, the card 44 % busy |
+| Campaigns | 9 orders in 44 lanes on one G4, 36 processes of one thread, 4,200 cells in 6,595 s; four lanes ended on a failed upload to the store and were continued from their last answer, every campaign complete at 30 seeds |
+| Reading | `data/report/l52/confirm/read.sh`, every step exit 0; the network from nothing at the rate in force within 0.0001 under all nine campaigns |
+
+**Gains of fine-tuning over the network from nothing on set B** (areas the mean over seeds, and
+over the eight pretrainings for fine-tuning; T with the spread at its floor of 0.014, the
+recipe's own 0.003):
+
+| Stays | Fine-tuning | Network from nothing | Gain, settings from the half | T | Level | Gain, both at the rate in force |
+| --- | --- | --- | --- | --- | --- | --- |
+| 20 | 0.638 | 0.622 | **+0.016** [+0.010; +0.022] | 0.015 | real and small | +0.014 [+0.009; +0.020], T 0.014 |
+| 50 | 0.686 | 0.670 | **+0.016** [+0.008; +0.024] | 0.014 | real and small | +0.010 [+0.004; +0.016], T 0.012 |
+| 100 | 0.723 | 0.699 | +0.024 [+0.017; +0.032] | | beside | +0.022 [+0.016; +0.028] |
+| 200 | 0.754 | 0.751 | +0.003 [−0.003; +0.009] | 0.010 | noise | +0.019 [+0.014; +0.025], the control's rate not its own |
+
+Bold: confirmed by the registered rule, Holm over 20 and 50 stays rejecting no difference
+(p = 0.0002 each). Every pretraining gains at 20, 50 and 100 stays (+0.010 to +0.024, +0.007 to
++0.024, +0.014 to +0.031); seven of eight at 200.
+
+**Conclusions.**
+
+1. The base recipe is confirmed at 20 and at 50 stays as real and small, below the least gain
+   of 0.02; at 200 stays it gains nothing. The registered claim at the least gain is not met.
+2. At 50 stays the size turns on the control's rate. The rate the half chose for the network
+   from nothing, 0.003 at the grid's edge, reads 0.670 on set B where the rate in force reads
+   0.679; with both arms at the rate in force the gain is +0.010, inside its threshold.
+   At 20 stays the two readings agree.
+3. The largest gain is at 100 stays, +0.020 to +0.024 under either pairing, read beside the
+   declared budgets and so not part of the confirmation.
+4. The gain is a mean over draws of labels: fine-tuning is ahead in 19 of 30 draws at 20 stays
+   and in 22 at 50.
+5. The half read another curve under two pretrainings (2026-11-17: nothing at 20 stays, +0.026
+   at 50, +0.018 at 200). Of the predictions, the gains at 50 and 200 stays, the spread and the
+   rate in force are met; at 20 stays noise was predicted and a gain read.
+6. With no gain at 200 stays the larger shape the register holds for that case is not run.
+
+**Limitations.** One task, one shape, validation side, tier M. The settings came from the
+half under two pretrainings and ten seeds. Each pretraining keeps its epoch by a loss over set
+B's windows, without labels, which the network from nothing has no use for. The base was named
+after the screen was read.
