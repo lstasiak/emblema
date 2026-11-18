@@ -19,7 +19,8 @@ class FulfilCampaignOrderCommand:
         order: The order to run.
         git_commit: Revision of the code on this machine.
         resume: The last result an interrupted session of the same order reported; its cells
-            are kept and not run again. ``None`` to start from the first cell.
+            are kept and not run again. ``None``, or progress the store no longer keeps, to
+            start from the first cell.
         lane: Which of several processes sharing the order this one is, taking only the cells
             that fall to it; ``None`` to run the whole order.
     """
@@ -39,9 +40,10 @@ class FulfilCampaignOrder:
 
     Every cell answered is reported at once, as a result holding all cells so far, because the
     platforms this runs on end sessions without warning: whatever was finished is then behind
-    the last reference reported, and a session started again from it runs only the rest. A
-    lane runs the order's cells that fall to it and reports them as any run reports, so the
-    lanes of one order leave as many results as there are lanes, each accepted on its own.
+    the last reference reported, and a session started again from it runs only the rest. These
+    are progress; once every cell is answered the whole is reported once more as the result to
+    accept. A lane runs the order's cells that fall to it and reports them as any run reports,
+    so the lanes of one order leave as many results as there are lanes, each accepted on its own.
     """
 
     def __init__(
@@ -68,11 +70,7 @@ class FulfilCampaignOrder:
         order = self._handoff.read_order(command.order)
         order.require_commit(command.git_commit)
         evaluations = order.evaluations if command.lane is None else order.lane_of(command.lane)
-        answered = (
-            []
-            if command.resume is None
-            else list(self._resumed(command.order, command.resume).results)
-        )
+        answered = [] if command.resume is None else self._resumed(command.order, command.resume)
         outside = {result.cell for result in answered} - {e.cell for e in evaluations}
         if outside:
             raise CampaignOrderRejectedError(
@@ -83,9 +81,7 @@ class FulfilCampaignOrder:
             if any(result.cell == evaluation.cell for result in answered):
                 continue
             answered.append(self._candidates.evaluate(evaluation))
-            self._handoff.report(self._result(command, order, answered))
-        # Everything was reported cell by cell already; this names the whole, and stores
-        # nothing new unless the order was resumed with every cell answered.
+            self._handoff.report_progress(self._result(command, order, answered))
         return self._handoff.report(self._result(command, order, answered))
 
     @staticmethod
@@ -99,15 +95,20 @@ class FulfilCampaignOrder:
             results=tuple(answered),
         )
 
-    def _resumed(self, order: ArtifactRef, resume: ArtifactRef) -> CampaignOrderResult:
-        """The result an interrupted session left, held to the order it claims to answer.
+    def _resumed(self, order: ArtifactRef, resume: ArtifactRef) -> list[CellResult]:
+        """The cells an interrupted session answered, held to the order they claim to answer.
+
+        Progress the store no longer keeps answers nothing, so the run starts from its first
+        cell.
 
         Raises:
             CampaignOrderRejectedError: If it answers another order.
         """
-        earlier = self._handoff.read_result(resume)
+        earlier = self._handoff.read_progress(resume)
+        if earlier is None:
+            return []
         if earlier.order != order:
             raise CampaignOrderRejectedError(
                 f"the result resumed from answers order {earlier.order.key}, not {order.key}"
             )
-        return earlier
+        return list(earlier.results)

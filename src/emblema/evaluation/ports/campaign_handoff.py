@@ -28,10 +28,33 @@ class CampaignHandoff(Protocol):
         """
         ...
 
-    def report(self, result: CampaignOrderResult) -> ArtifactRef:
+    def report_progress(self, result: CampaignOrderResult) -> ArtifactRef:
         """Store what has been answered so far and return the reference that names it.
 
-        Reporting the same result again stores nothing and returns the same reference.
+        Progress is what a run resumes from when its session ends early, so it is kept only
+        long enough for that: once the run reports its whole result, every earlier progress
+        report is dead weight. Reporting the same progress again stores nothing and returns the
+        same reference.
+        """
+        ...
+
+    def report(self, result: CampaignOrderResult) -> ArtifactRef:
+        """Store the result a run ends with and return the reference that is accepted.
+
+        Kept until removed on purpose, since acceptance may come long after the run. Reporting
+        the same result again stores nothing and returns the same reference.
+        """
+        ...
+
+    def read_progress(self, ref: ArtifactRef) -> CampaignOrderResult | None:
+        """The progress stored under ``ref``, or ``None`` once it is no longer stored.
+
+        A run's log keeps the reference longer than the store keeps the progress, so a missing
+        document here is the expected end of progress, not a fault.
+
+        Raises:
+            UnreadableCampaignDocumentError: If what is stored there is not a result of an order.
+            ArtifactIntegrityError: If what is stored does not hash to the reference's checksum.
         """
         ...
 
