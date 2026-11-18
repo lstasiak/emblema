@@ -215,9 +215,9 @@
 | src/emblema/evaluation/adapters/features/window\_statistics.py                            |       37 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/grid/gridded\_tokens.py                                   |       28 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/grid/regular\_grid.py                                     |       44 |        0 |        6 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/handoff/artifact\_store\_campaign\_handoff.py             |       24 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/handoff/artifact\_store\_campaign\_handoff.py             |       34 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/in\_memory/adaptation\_runtime.py                         |       33 |        0 |        2 |        0 |    100% |           |
-| src/emblema/evaluation/adapters/in\_memory/campaign\_handoff.py                           |       36 |        0 |        4 |        0 |    100% |           |
+| src/emblema/evaluation/adapters/in\_memory/campaign\_handoff.py                           |       46 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/in\_memory/campaign\_listing.py                           |       32 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/in\_memory/candidate\_provider.py                         |       43 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/adapters/in\_memory/classical\_runtime.py                          |       40 |        0 |        4 |        0 |    100% |           |
@@ -310,7 +310,7 @@
 | src/emblema/evaluation/application/use\_cases/draw\_detection\_windows.py                 |       48 |        0 |        6 |        0 |    100% |           |
 | src/emblema/evaluation/application/use\_cases/draw\_label\_budget.py                      |       25 |        1 |        2 |        1 |     93% |        64 |
 | src/emblema/evaluation/application/use\_cases/draw\_run\_labels.py                        |       45 |        0 |        8 |        0 |    100% |           |
-| src/emblema/evaluation/application/use\_cases/fulfil\_campaign\_order.py                  |       42 |        1 |        8 |        1 |     96% |       110 |
+| src/emblema/evaluation/application/use\_cases/fulfil\_campaign\_order.py                  |       44 |        1 |       10 |        1 |     96% |       111 |
 | src/emblema/evaluation/application/use\_cases/list\_campaign\_runs.py                     |       35 |        0 |        4 |        0 |    100% |           |
 | src/emblema/evaluation/application/use\_cases/list\_campaigns.py                          |       34 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/application/use\_cases/open\_test\_split.py                        |       23 |        0 |        0 |        0 |    100% |           |
@@ -452,7 +452,7 @@
 | src/emblema/evaluation/domain/tuning/one\_standard\_error\_rule.py                        |       20 |        1 |        4 |        1 |     92% |        55 |
 | src/emblema/evaluation/domain/tuning/tuned\_choice.py                                     |       10 |        0 |        2 |        0 |    100% |           |
 | src/emblema/evaluation/ports/adaptation\_runtime.py                                       |        9 |        0 |        0 |        0 |    100% |           |
-| src/emblema/evaluation/ports/campaign\_handoff.py                                         |        9 |        0 |        0 |        0 |    100% |           |
+| src/emblema/evaluation/ports/campaign\_handoff.py                                         |       11 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/ports/campaign\_listing.py                                         |       10 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/ports/candidate\_catalogue.py                                      |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/evaluation/ports/candidate\_provider.py                                       |        8 |        0 |        0 |        0 |    100% |           |
@@ -681,7 +681,7 @@
 | src/emblema/shared/adapters/storage/files.py                                              |       58 |        0 |       12 |        0 |    100% |           |
 | src/emblema/shared/adapters/storage/layout.py                                             |       11 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/storage/local\_directory.py                                   |       55 |        0 |       10 |        0 |    100% |           |
-| src/emblema/shared/adapters/storage/s3.py                                                 |       71 |        0 |       16 |        1 |     99% |   80-\>85 |
+| src/emblema/shared/adapters/storage/s3.py                                                 |       72 |        0 |       16 |        1 |     99% |   85-\>90 |
 | src/emblema/shared/adapters/synthetic/dials.py                                            |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/synthetic/draws.py                                            |       16 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/synthetic/latent\_factor\_process.py                          |       26 |        0 |        2 |        0 |    100% |           |
@@ -731,7 +731,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **22907** |  **185** | **4670** |  **123** | **99%** |           |
+| **TOTAL**                                                                                 | **22932** |  **185** | **4672** |  **123** | **99%** |           |
 
 133 empty files skipped.
 
