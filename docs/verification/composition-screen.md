@@ -742,3 +742,32 @@ Bold: confirmed by the registered rule, Holm over 20 and 50 stays rejecting no d
 half under two pretrainings and ten seeds. Each pretraining keeps its epoch by a loss over set
 B's windows, without labels, which the network from nothing has no use for. The base was named
 after the screen was read.
+
+## 2026-11-18 — declared before the run: the trees per channel on set B beside the confirmation
+
+**Question.** Where do gradient-boosted trees per channel read on set B at the confirmation's
+budgets and draws of labels, beside fine-tuning and the network from nothing? Descriptive: the
+confirmation above is read and stands as it is; this reading decides nothing.
+
+**Conditions.** `campaigns/composition-confirmation-trees-physionet2012.toml`: the trees at
+their default setting and at the setting the tuning side chose at every stay, 20, 50, 100 and
+200 stays drawn from set A, scored on set B, seeds 1 to 30, the Mac's CPU. Set B is read a
+second time for this bar, by the register's row of the same day. Seen before: one order of
+two cells at seed 31, outside the draws read, scored set B's 3,994 stays in 15 s and was
+exported and joined to the confirmation's export by `data/report/l52/confirm/read-trees.sh`,
+its areas unread; the pairs are of the shape the confirmation's reading ran.
+
+**Reading.** Fine-tuning under the eight pretrainings, at the confirmation's settings, less
+the trees at each of their two settings, paired by stay and seed (10,000 resamples), against
+the threshold of the confirmation; the network from nothing less the trees beside. The bar at
+a budget is the higher of the trees' two settings, chosen on set B and so against
+fine-tuning.
+
+**Predictions.**
+
+| Reading | Prediction | Source |
+| --- | --- | --- |
+| Trees at their default setting, areas at 20 / 50 / 200 | within 0.015 of 0.601 / 0.644 / 0.738 | the half, 30 seeds (`clinical-input.md`, 2026-11-12) |
+| Fine-tuning less the trees | inside [+0.015, +0.055] at 20, [+0.020, +0.060] at 50, [−0.005, +0.035] at 200 | 0.638 / 0.686 / 0.754 on set B less the half's trees, across two designs, so ±0.02 |
+
+**Limitations.** Declared after the confirmation was read. One task; validation side, tier M.
