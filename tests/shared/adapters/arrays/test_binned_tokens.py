@@ -307,6 +307,7 @@ def test_readings_on_the_bins_edges_fall_in_the_bins_they_open() -> None:
     assert hourly[:, COUNT].tolist() == pytest.approx([math.log1p(1)] * 24)
     assert hourly[:, MEAN].tolist() == pytest.approx(list(range(24)))
     assert hourly[:, OFFSET].tolist() == pytest.approx([0.0] * 24, abs=1e-5)
+    assert hourly[:, OFFSET].min() >= 0.0
     assert by_four[:, COUNT].tolist() == pytest.approx([math.log1p(4)] * 6)
     assert by_four[:, FIRST].tolist() == pytest.approx([0.0, 4.0, 8.0, 12.0, 16.0, 20.0])
 
