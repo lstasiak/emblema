@@ -712,8 +712,8 @@ recipe's own 0.003):
 
 | Stays | Fine-tuning | Network from nothing | Gain, settings from the half | T | Level | Gain, both at the rate in force |
 | --- | --- | --- | --- | --- | --- | --- |
-| 20 | 0.638 | 0.622 | **+0.016** [+0.010; +0.022] | 0.015 | real and small | +0.014 [+0.009; +0.020], T 0.014 |
-| 50 | 0.686 | 0.670 | **+0.016** [+0.008; +0.024] | 0.014 | real and small | +0.010 [+0.004; +0.016], T 0.012 |
+| 20 | 0.638 | 0.622 | **+0.016** [+0.010; +0.022] | 0.015 | real and small | +0.014 [+0.009; +0.020], T 0.014, noise |
+| 50 | 0.686 | 0.670 | **+0.016** [+0.008; +0.024] | 0.014 | real and small | +0.010 [+0.004; +0.016], T 0.012, noise |
 | 100 | 0.723 | 0.699 | +0.024 [+0.017; +0.032] | | beside | +0.022 [+0.016; +0.028] |
 | 200 | 0.754 | 0.751 | +0.003 [−0.003; +0.009] | 0.010 | noise | +0.019 [+0.014; +0.025], the control's rate not its own |
 
@@ -728,14 +728,16 @@ Bold: confirmed by the registered rule, Holm over 20 and 50 stays rejecting no d
 2. At 50 stays the size turns on the control's rate. The rate the half chose for the network
    from nothing, 0.003 at the grid's edge, reads 0.670 on set B where the rate in force reads
    0.679; with both arms at the rate in force the gain is +0.010, inside its threshold.
-   At 20 stays the two readings agree.
-3. The largest gain is at 100 stays, +0.020 to +0.024 under either pairing, read beside the
+   At 20 stays the two readings agree in size (+0.016 and +0.014); at the rate in force
+   neither budget exceeds its threshold.
+3. The largest gain is at 100 stays, +0.022 to +0.024 under either pairing, read beside the
    declared budgets and so not part of the confirmation.
 4. The gain is a mean over draws of labels: fine-tuning is ahead in 19 of 30 draws at 20 stays
    and in 22 at 50.
 5. The half read another curve under two pretrainings (2026-11-17: nothing at 20 stays, +0.026
-   at 50, +0.018 at 200). Of the predictions, the gains at 50 and 200 stays, the spread and the
-   rate in force are met; at 20 stays noise was predicted and a gain read.
+   at 50, +0.018 at 200). Of the predictions, the gain at 50 stays, the spread and the
+   rate in force are met; the gain at 200 stays sits at the lower edge of its range (+0.0031
+   against +0.003) and reads noise; at 20 stays noise was predicted and a gain read.
 6. With no gain at 200 stays the larger shape the register holds for that case is not run.
 
 **Limitations.** One task, one shape, validation side, tier M. The settings came from the
@@ -771,3 +773,37 @@ fine-tuning.
 | Fine-tuning less the trees | inside [+0.015, +0.055] at 20, [+0.020, +0.060] at 50, [−0.005, +0.035] at 200 | 0.638 / 0.686 / 0.754 on set B less the half's trees, across two designs, so ±0.02 |
 
 **Limitations.** Declared after the confirmation was read. One task; validation side, tier M.
+
+## 2026-11-18 — M1 Pro, CPU: on set B fine-tuning is ahead of the trees per channel at 20, 50 and 100 stays and level with them at 200
+
+**Question.** As declared above: the trees per channel on set B at the confirmation's budgets
+and draws of labels.
+
+**Conditions.** `394d6960`, the declaration's commit; one order of 240 cells on the Mac's CPU,
+4,188 s, of which the fits took 249 s; all 240 cells accepted, 30 seeds per setting and budget;
+`data/report/l52/confirm/read-trees.sh`, every step exit 0.
+
+**Areas on set B and gains over the trees at the setting the tuning side chose**, the higher
+of their two settings at every budget (10,000 resamples; T by the confirmation's formula for
+fine-tuning, twice the standard error over seeds for the network from nothing):
+
+| Stays | Trees, default | Trees, chosen setting | Fine-tuning | Fine-tuning less the trees | T | Network from nothing less the trees | T |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 20 | 0.596 | 0.612 | 0.638 | +0.026 [+0.019; +0.033] | 0.023 | +0.010 [+0.001; +0.018] | 0.025 |
+| 50 | 0.647 | 0.649 | 0.686 | +0.038 [+0.029; +0.046] | 0.018 | +0.022 [+0.013; +0.030] | 0.012 |
+| 100 | 0.700 | 0.706 | 0.723 | +0.017 [+0.008; +0.025] | 0.011 | −0.007 [−0.015; +0.000] | 0.013 |
+| 200 | 0.750 | 0.754 | 0.754 | −0.000 [−0.008; +0.007] | 0.010 | −0.003 [−0.012; +0.005] | 0.010 |
+
+**Conclusions.**
+
+1. Fine-tuning reads above the trees by more than its threshold at 20, 50 and 100 stays; at 200
+   stays the two are level.
+2. The network from nothing is above the trees at 50 stays alone; at 20 its lead is inside its
+   threshold, and from 100 stays it is level with them or behind. At 20 and 100 stays the lead
+   over the trees comes from the pretraining; at 50 it adds 0.016 to a lead the network from
+   nothing already has.
+3. Both predictions are met: the trees at their default setting read within 0.012 of the half's
+   areas, and fine-tuning less those trees +0.043, +0.039 and +0.004 at 20, 50 and 200 stays.
+
+**Limitations.** Descriptive and declared after the confirmation was read; the bar's setting
+is the higher on set B, against fine-tuning. One task, validation side, tier M.
