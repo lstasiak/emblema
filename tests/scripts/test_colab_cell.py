@@ -43,6 +43,7 @@ STUBS = {
     'echo "$EMBLEMA_WORKER__BACKBONE card=${CUDA_VISIBLE_DEVICES:-shared} $*" >> "$CALLS"\n'
     '[ -n "${HOLD:-}" ] && sleep "$HOLD"\n'
     'case "$*" in *"${FAIL:-@none@}"*) exit 3;; esac\n'
+    'echo "1 cell answered: transient/sha256/res sha256:res" >&2\n'
     'echo "1 cell answered: durable/sha256/res sha256:res" >&2\n'
     "echo durable/sha256/res sha256:res\n",
     "nvidia-smi": 'case "$*" in *-l*) exec sleep 100000;; esac\necho "card, 1 MiB"\n',
@@ -471,12 +472,12 @@ def test_the_last_answer_is_taken_from_the_newest_log(tmp_path: Path) -> None:
     (results / "results.txt").unlink()
     (results / "first-0.log.1000").write_text("1 cell answered: durable/sha256/aaa sha256:aaa\n")
     (results / "first-0.log.2000").write_text("1 cell answered: durable/sha256/bbb sha256:bbb\n")
-    (results / "first-0.log").write_text("1 cell answered: durable/sha256/ccc sha256:ccc\n")
+    (results / "first-0.log").write_text("1 cell answered: transient/sha256/ccc sha256:ccc\n")
     (tmp_path / "calls.txt").unlink()
 
     run_cell(tmp_path, plan)
 
-    assert "--resume durable/sha256/ccc sha256:ccc" in calls_of(tmp_path)[0]
+    assert "--resume transient/sha256/ccc sha256:ccc" in calls_of(tmp_path)[0]
 
 
 def test_a_piece_still_running_past_the_grace_is_stopped_and_not_tried_again(
