@@ -29,6 +29,10 @@ class S3ArtifactStore:
     # Codes an S3-compatible service returns for a missing object: HeadObject carries only the
     # HTTP status, GetObject names the condition.
     _NOT_FOUND_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
+    # A remote bucket answers bursts of 503 for longer than the SDK's default three attempts
+    # outlast, and a lost upload ends a platform session; ten attempts with the standard
+    # mode's capped, jittered back-off wait out a minute or two of that.
+    _ATTEMPTS = 10
 
     def __init__(self, client: "S3Client", bucket: str, key_prefix: str) -> None:
         if not key_prefix or key_prefix != key_prefix.strip().strip("/"):
@@ -65,6 +69,7 @@ class S3ArtifactStore:
                 s3={"addressing_style": "path"},
                 request_checksum_calculation="when_required",
                 response_checksum_validation="when_required",
+                retries={"mode": "standard", "total_max_attempts": cls._ATTEMPTS},
             ),
         )
         return cls(client, bucket, key_prefix)

@@ -1,10 +1,10 @@
 """What any place orders of campaign cells pass through owes, whether a dictionary or a bucket.
 
 What is placed comes back equal, an order is never read as a result nor a result as an order,
-and the same result reported twice is one reference — the property a run that reports after
-every cell and once more at the end relies on. The store-backed adapter round-trips through
-JSON, so equality here is the codec's too: a task, a candidate and a unit's error read back as
-exactly what was written.
+and the same result reported twice is one reference. Progress and the result to accept read
+back alike but are stored apart, so the store can let the first expire and keep the second.
+The store-backed adapter round-trips through JSON, so equality here is the codec's too: a
+task, a candidate and a unit's error read back as exactly what was written.
 """
 
 from collections.abc import Callable
@@ -24,6 +24,7 @@ from emblema.evaluation.ports.campaign_handoff import CampaignHandoff
 from emblema.shared.adapters.in_memory.artifact_store import InMemoryArtifactStore
 from emblema.shared.kernel.artifacts import ArtifactRef
 from emblema.shared.kernel.checksums import Checksum
+from emblema.shared.kernel.retention import Retention
 from emblema.shared.ports.exceptions import ArtifactNotFoundError
 from tests.evaluation.support import CAMPAIGN, artifact, campaign, result, selection, task
 
@@ -74,10 +75,51 @@ def test_a_result_comes_back_as_it_was_reported_to_the_last_bit(handoff: Campaig
     assert handoff.read_result(handoff.report(reported)) == reported
 
 
+def test_progress_comes_back_as_it_was_reported(handoff: CampaignHandoff) -> None:
+    reported = a_result(handoff.place(an_order()))
+
+    assert handoff.read_progress(handoff.report_progress(reported)) == reported
+
+
+def test_progress_no_longer_stored_reads_as_none(handoff: CampaignHandoff) -> None:
+    gone = ArtifactRef("transient/sha256/gone", Checksum.of_bytes(b"gone"))
+
+    assert handoff.read_progress(gone) is None
+
+
+def test_progress_that_is_not_a_result_is_still_refused(handoff: CampaignHandoff) -> None:
+    with pytest.raises(UnreadableCampaignDocumentError):
+        handoff.read_progress(handoff.place(an_order()))
+
+
 def test_the_same_result_reported_twice_is_one_reference(handoff: CampaignHandoff) -> None:
     reported = a_result(handoff.place(an_order()))
 
     assert handoff.report(reported) == handoff.report(reported)
+    assert handoff.report_progress(reported) == handoff.report_progress(reported)
+
+
+def test_progress_and_the_result_to_accept_are_kept_apart(handoff: CampaignHandoff) -> None:
+    reported = a_result(handoff.place(an_order()))
+
+    progress = handoff.report_progress(reported)
+    final = handoff.report(reported)
+
+    assert progress != final
+    assert handoff.read_result(progress) == handoff.read_result(final)
+
+
+def test_in_the_store_progress_is_transient_and_the_result_to_accept_durable() -> None:
+    store = InMemoryArtifactStore()
+    handoff = ArtifactStoreCampaignHandoff(store)
+    reported = a_result(handoff.place(an_order()))
+
+    progress = handoff.report_progress(reported)
+    final = handoff.report(reported)
+
+    assert progress.key.startswith(f"{Retention.TRANSIENT}/")
+    assert final.key.startswith(f"{Retention.DURABLE}/")
+    assert progress.checksum == final.checksum
 
 
 def test_an_order_is_not_read_as_a_result_nor_a_result_as_an_order(

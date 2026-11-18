@@ -83,6 +83,7 @@ from emblema.shared.adapters.queues.immediate_job_queue import ImmediateJobQueue
 from emblema.shared.jobs.job_argument import JobArgument
 from emblema.shared.jobs.worker_pool import WorkerPool
 from emblema.shared.kernel.artifacts import ArtifactRef
+from emblema.shared.kernel.checksums import Checksum
 from emblema.shared.kernel.compute import ComputeTier
 from tests.evaluation.support import (
     BOOTSTRAP,
@@ -457,9 +458,12 @@ def test_every_cell_is_reported_as_it_is_answered(running: Campaign) -> None:
 
     answered = [len(handoff.read_result(ref).results) for ref in handoff.reported]
     cells = len(running.campaigns.get(campaign_id).design.cells())
-    # One report per cell, then the whole once more, which names what the last one did.
+    # Progress after every cell, then the whole once more as the result to accept.
     assert answered == [*range(1, cells + 1), cells]
-    assert handoff.reported[-1] == handoff.reported[-2]
+    assert [ref.key.split("/")[0] for ref in handoff.reported] == [
+        *["transient"] * cells,
+        "durable",
+    ]
 
 
 def test_a_run_resumed_from_its_last_report_runs_only_the_cells_that_are_left(
@@ -482,6 +486,25 @@ def test_a_run_resumed_from_its_last_report_runs_only_the_cells_that_are_left(
 
     cells = running.campaigns.get(campaign_id).design.cells()
     assert len(asked) == len(cells) - 2
+    assert handoff.read_result(resumed).cells == frozenset(cells)
+
+
+def test_a_run_resumed_from_progress_no_longer_stored_runs_every_cell(
+    running: Campaign,
+) -> None:
+    campaign_id = running.declared()
+    handoff = InMemoryCampaignHandoff()
+    order = ordered(running, handoff, campaign_id)
+    expired = ArtifactRef("transient/campaign-result/gone", Checksum.of_bytes(b"gone"))
+    asked: list[CampaignCell] = []
+    counting = FulfilCampaignOrder(
+        handoff, InMemoryDownstreamTaskRepository(), Counting(running.candidates, asked)
+    )
+
+    resumed = counting(FulfilCampaignOrderCommand(order=order, git_commit="abc123", resume=expired))
+
+    cells = running.campaigns.get(campaign_id).design.cells()
+    assert len(asked) == len(cells)
     assert handoff.read_result(resumed).cells == frozenset(cells)
 
 

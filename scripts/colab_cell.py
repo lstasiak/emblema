@@ -337,9 +337,9 @@ CARDS={cards}
 {cutoff}
 # Many processes on one machine: each keeps to a few threads rather than all of them.
 export OMP_NUM_THREADS={threads} MKL_NUM_THREADS={threads}
-last_ref() {{  # name: the newest result answered in its logs, for a resume
+last_ref() {{  # name: the newest result answered in its logs (progress is transient)
   cat "$W/$1".log.* "$W/$1".log 2>/dev/null \\
-    | grep -oE "answered: durable/[^ ]+ sha256:[0-9a-f]+" \\
+    | grep -oE "answered: (transient|durable)/[^ ]+ sha256:[0-9a-f]+" \\
     | tail -1 | cut -d' ' -f2-
 }}
 finished() {{ grep -q "^\\[$1\\] exit 0" $W/results.txt 2>/dev/null; }}

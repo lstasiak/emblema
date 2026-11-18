@@ -98,3 +98,4 @@ status. The full text as first written is in commit `5f14447`, e.g.
 | [0080](0080-the-satellite-telemetry-takes-the-robust-score-held-to-a-bound-the-publication-names.md) | The satellite telemetry takes the robust score held to a bound of 100 robust deviations, and a publication names the bound of its robust score; a manifest naming none is held to 10 | accepted |
 | [0081](0081-an-interval-of-the-window-hidden-in-every-channel.md) | An interval of the window hidden in every channel at once, as a fifth draw of the masking strategy, written only where drawn | accepted |
 | [0082](0082-a-reading-on-the-edge-of-a-bin-belongs-to-the-bin-it-opens.md) | A reading on the edge of a bin belongs to the bin it opens, by one tolerant rule shared by the grids and the cells | accepted |
+| [0083](0083-a-lane-reports-its-progress-transient-and-its-result-durable.md) | A lane reports its progress transient and its result durable; the store client makes ten attempts | accepted |
