@@ -88,15 +88,13 @@ Preliminary, on validation data; each task's test data is used once, at the end.
 
 **The research question: does pretraining without labels pay off at few labels?**
 
-- Not so far. On turbofan remaining life (NASA C-MAPSS) and on death in hospital (PhysioNet
-  2012) no pretrained arm beats the same network trained from scratch beyond the noise of the
-  comparison. On the cleaned, robustly normalised stays two fresh pretrainings fine-tune to
-  −0.013 / +0.009 / +0.007 in area at 20 / 50 / 200 labelled stays against the network from
-  scratch on the same input; the 0.016 read earlier at 50 stays was what that normalisation
-  gives the network from scratch. A further screen of four recipes read +0.02 to +0.03 at 50
-  stays in three of them, one past its threshold, and nothing reliable at 20; a confirmation on
-  fresh pretrainings is next. A linear probe reads 0.06 above the untrained encoder at 500
-  stays, still below the trees.
+- On one task, by a small margin. On death in hospital (PhysioNet 2012), with eight fresh
+  pretrainings scored on held-out stays, fine-tuning the pretrained encoder gains 0.016 in area
+  over the same network trained from scratch at 20 and at 50 labelled stays, confirmed by the
+  registered rule but below the 0.02 the claim asks for, and nothing at 200; at 50 the gain is
+  0.010 when both run at the default rate. Against gradient-boosted trees, read beside, it is
+  ahead by 0.03 to 0.04 at 20 and 50 stays and level at 200. On turbofan remaining life (NASA
+  C-MAPSS) no pretrained arm beats the network from scratch beyond the noise of the comparison.
 - Ruled out: more pretraining data (up to about 10⁹ values), a five times larger model,
   continuing on the task's own domain, the adaptation recipe and six variants of the pretext.
 
