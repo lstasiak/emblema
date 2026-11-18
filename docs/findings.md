@@ -6,27 +6,29 @@ by a rule registered before its run ([preregistration](preregistration.md)); eac
 note that holds its evidence ([`verification/`](verification/README.md)). A row states direction
 and size; conditions and caveats are in its note.
 
-Last updated 2026-11-15.
+Last updated 2026-11-18.
 
 ## Status
 
-- **The claim is not confirmed; on the input the stage settled, fine-tuning gains nothing the
-  screen can see.** Full fine-tuning of a small encoder over cells, pretrained twice on the
-  cleaned, robustly normalised intensive-care stays, the eICU demo and the satellite telemetry
-  under the robust score, reads −0.013 [−0.022; −0.005] at 20 stays, +0.009 [−0.004; +0.021] at
-  50 and +0.007 [−0.004; +0.017] at 200 against the network from scratch at its chosen rate on the
-  same input, each within the noise threshold of 0.02 to 0.03
-  ([note](verification/composition-screen.md)). The +0.016 at 50 stays read earlier on the raw
-  input was what the robust score gives the network from scratch (+0.028 at 20, +0.012 at 50,
-  [note](verification/clinical-input.md)): fine-tuning reads the same on either input, and over
-  the twelve pretrainings of the recipe over cells none exceeds that control by more than 0.009
-  at any budget. The registered confirmation on sixteen pretrainings is not run; the leg is reformulated
-  before another pretraining.
+- **Pretraining gives a small confirmed gain at 20 and 50 stays on one task, short of the
+  registered least gain.** On set B, under eight fresh
+  pretrainings and 30 draws of labels, full fine-tuning of a small encoder over cells gains
+  +0.016 [+0.010; +0.022] at 20 stays and +0.016 [+0.008; +0.024] at 50 over the network from
+  scratch: real and small by the registered rule, below the least gain of 0.02, so the claim at
+  that gain is not met. It gains +0.024 at 100 stays, read beside, and nothing at 200 (+0.003).
+  At 50 stays the size turns on the control's rate: +0.010 with both arms at the rate in force.
+  Against gradient-boosted trees per channel on the same draws, read beside and declared after
+  the confirmation, fine-tuning reads +0.026, +0.038 and +0.017 at 20, 50 and 100 stays and
+  level at 200 ([note](verification/composition-screen.md)). Two screens on the half had read the recipe
+  inside their noise under two pretrainings each; of the variants screened beside it, one
+  interval hidden in every channel adds nothing and cells of 24 bins read level with it at
+  eight times the card time.
 - **Pretraining over cells leaves a representation above its initialisation.** A frozen probe
   gains 0.060 to 0.091 over the same encoder untrained at 500 stays (+0.061 on the settled
   input), and still reads about 0.03 below the trees ([note](verification/cell-pretraining.md)).
-- **Classical models lead at few labels.** Trees over per-channel summaries match or beat every
-  network from 200 labels up on both tasks, except that a small encoder from scratch over cells
+- **Classical models lead from 200 labels up.** Below that the fine-tuned small encoder is ahead
+  of the trees on set B. Trees over per-channel summaries match or beat every network from 200
+  labels up on both tasks, except that a small encoder from scratch over cells
   meets them at 200 stays (+0.003 [−0.011; +0.017]), leads by 0.028 at 50, and reads 0.008 below
   the tuned trees on set B, not shown no worse by 0.015
   ([note](verification/encoder-candidates.md)).
@@ -83,7 +85,8 @@ Last updated 2026-11-15.
   rare events, and a reference contaminated with them is no reference for a distance over states
   ([note](verification/composition-screen.md)).
 - **Ruled out as levers:** more pretraining data, a five times larger model, continuing on the
-  task's own domain, the adaptation recipe, and six variants of the pretext.
+  task's own domain, the adaptation recipe, six variants of the pretext, and one interval hidden in every
+  channel.
 - **What transfers is the encoder's machinery.** Fitting only the channel rows of an unread corpus
   brings the pretext to within 0.006 of a backbone that read it, and carries part of a task
   (+0.031 on sepsis at 4,000 patients) ([note](verification/task-transfer.md)).
@@ -147,6 +150,10 @@ The small encoder over cells, pretrained without labels, each arm at its chosen 
 | Network from scratch, robust input, seeds 2–31 ([note](verification/clinical-input.md)) | 0.63 | 0.67 | 0.75 | |
 | Fine-tuning, robust input, two pretrainings ([note](verification/composition-screen.md)) | 0.63 | 0.68 | 0.75 | |
 | Network from scratch, robust input, the same campaigns and seeds | 0.64 | 0.67 | 0.74 | |
+| Fine-tuning, the same recipe under the rule for a bin's edges, two pretrainings ([note](verification/composition-screen.md)) | 0.64 | 0.70 | 0.76 | |
+| Fine-tuning, cells of 24 bins, two pretrainings | 0.65 | 0.70 | 0.75 | |
+| Set B, 30 draws: fine-tuning, eight pretrainings ([note](verification/composition-screen.md)) | 0.64 | 0.69 | 0.75 | |
+| Set B, 30 draws: network from scratch / trees per channel at their tuned setting | 0.62 / 0.61 | 0.67 / 0.65 | 0.75 / 0.75 | |
 | Probe, pretrained / untrained (composition) | | | | 0.76 / 0.67 |
 | Trees per channel | 0.62 | 0.63 | 0.74 | **0.79** |
 
@@ -159,6 +166,8 @@ The small encoder over cells, pretrained without labels, each arm at its chosen 
 | The network from scratch in two campaigns | differs by at most 0.005 | [verdict-statistics](verification/verdict-statistics.md) |
 | Gain on stays the backbone read, less on those it did not | −0.007 / −0.003 / −0.010 at 20 / 50 / 200: no gain from having read them | [cell-pretraining](verification/cell-pretraining.md) |
 | Pretext over cells answered without a model | stays: mean 0.12, presence 0.59, under a tail 0.22; on grids interpolated at 0.53 to 0.80 | [cell-pretext](verification/cell-pretext.md) |
+| The same at 6 to 48 bins, under the robust score | stays: presence 0.60 to 0.77, mean 0.37 to 0.48 at every count; under an interval hidden in every channel the same-bin answer falls from 0.53–0.61 to 0.19–0.34 on the 2012 stays | [cell-pretext](verification/cell-pretext.md) |
+| How the cells lay out a corpus on a clock | the 2019 stays' hourly rows sat on the bins' edges, where rounding put a reading a bin early: 0.24 of readings on an edge at 6 bins, 7 of 24 bins empty at 24; fixed by the grids' rule ([ADR-0082](adr/0082-a-reading-on-the-edge-of-a-bin-belongs-to-the-bin-it-opens.md)) | [cell-pretext](verification/cell-pretext.md) |
 | Added data measured as the stays are | eICU demo matches the 2012 stays; the Water Quality Portal lies nearer a grid | [task-regime-sources](verification/task-regime-sources.md) |
 
 ### What changes the backbone
@@ -177,6 +186,8 @@ in force, s = max(0.014, the recipe's own): about 0.024 for one pretraining, 0.0
 | Masks over three quarters of a window | 1 | +0.008 ± 0.005 | [layer-readout](verification/layer-readout.md) |
 | Masks over the forecast tail | 1 | −0.019 ± 0.005 | [layer-readout](verification/layer-readout.md) |
 | Water Quality Portal added | 2 | −0.014 on the probe, threshold 0.020 | [composition-screen](verification/composition-screen.md) |
+| One interval hidden in every channel; fine-tuning's gain over the network from scratch at 50 stays | 2 | +0.020 beside the base's +0.026 over 6 bins; −0.003 over 24, −0.014 at 20 stays | [composition-screen](verification/composition-screen.md) |
+| Cells of 24 bins; the same reading | 2 | **+0.029** [+0.017; +0.042], threshold 0.023, beside the base's +0.026 [+0.014; +0.038], threshold 0.031 | [composition-screen](verification/composition-screen.md) |
 | Decoder of four blocks | 2 | **−0.037** | [pretext-variants](verification/pretext-variants.md) |
 | Predicting a teacher's states | 2 | **−0.055** | [pretext-variants](verification/pretext-variants.md) |
 | Contrast between a window's halves | 2 | **−0.103** [−0.125; −0.081] | [pretext-variants](verification/pretext-variants.md) |
@@ -267,16 +278,19 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 - **Two main tasks.** The intensive-care task learns from set A only, so its levels are not
   comparable with published benchmarks.
 - **Controls' rates.** The network from scratch and fine-tuning chose the lowest rate on their grid;
-  a lower one was not read. Between two runs the network moved by 0.011 at 200 stays.
+  a lower one was not read. Between two runs the network moved by 0.011 at 200 stays. In the
+  confirmation on set B the network from scratch ran at 0.003 at 50 and 100 stays, the upper
+  edge the half chose, which reads 0.009 below the default rate there.
 - **Accelerators.** Arms ran on Colab G4, A100 and Kaggle T4; between them an arm drifts by up to
   0.7 RMSE.
 
 ## Next
 
-1. Reformulate the clinical leg before another pretraining. The named causes: the input
-   fine-tuning reads (cells of eight hours are a table with six columns of time), the pretext (a
-   cell's mean, which interpolation answers on a grid) and the scale of data in the tasks'
-   regime (credentialed MIMIC-IV or the full eICU).
+1. The clinical leg is confirmed at 20 and 50 stays and reads nothing at 200, so the larger
+   shape, held for a confirmed gain at 200 stays, is not run. Whether cells of 24 bins add to
+   the base stays a comparison on the half. The named levers for a larger gain remain the
+   pretext (a cell's mean, which interpolation answers on a grid) and the scale of data in the
+   tasks' regime (credentialed MIMIC-IV or the full eICU).
 2. Reformulate the telemetry's foundation model before another pretraining
    ([note](verification/telemetry-history-pretext.md)): the next pretext is read on the later
    years from its first pilot, against the ridge clipped to its training range and the published

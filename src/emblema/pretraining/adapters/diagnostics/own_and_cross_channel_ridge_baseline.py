@@ -19,9 +19,10 @@ from emblema.pretraining.domain.mask_kind import MaskKind
 from emblema.shared.adapters.tensors.token_tensors import TokenTensors
 
 # The kinds of mask that leave a token's own channel something to interpolate from, or in the
-# tail to carry forward. A channel hidden whole has nothing of its own left, and its strongest
-# linear answer is the cross-channel regression alone.
-KINDS = (MaskKind.BLOCK, MaskKind.TOKEN, MaskKind.HORIZON)
+# tail to carry forward; across an interval the other channels' nearest values lie outside it.
+# A channel hidden whole has nothing of its own left, and its strongest linear answer is the
+# cross-channel regression alone.
+KINDS = (MaskKind.BLOCK, MaskKind.TOKEN, MaskKind.HORIZON, MaskKind.INTERVAL)
 
 
 @dataclass(frozen=True)
@@ -81,7 +82,7 @@ class OwnAndCrossChannelRidgeBaseline:
         return cls({kind: solved(gram[kind], moment[kind], penalty) for kind in KINDS})
 
     def predict(self, batch: TokenTensors, masks: TokenMasks) -> Tensor:
-        """The baseline's value at every hidden token of a block, a single draw or the tail.
+        """The baseline's value at every hidden token whose channel still shows something.
 
         Zero elsewhere.
         A token of a channel hidden whole is left at zero: the cross-channel baseline answers it.

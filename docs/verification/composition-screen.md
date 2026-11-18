@@ -502,3 +502,310 @@ the tasks' regime.
 stays chose the grid's edge, so its area there may be understated and the gain overstated. The
 second mission's reading compares publications, not paired. The comparison across screens sets
 fine-tuning's areas from three campaigns against one control, unpaired. Validation side, tier M.
+
+## 2026-11-16 — declared before the run: cells of 6 and of 24 bins under the block and under the interval, two pretrainings each, read on the 2012 stays
+
+**Questions.** (1) Does hiding one interval in every channel at once (ADR-0081), or cells of
+24 bins in place of 6, give fine-tuning a gain over the network from nothing that the base
+recipe did not read on 2026-11-13? Four recipes, two pretrainings each: the base, the interval,
+24 bins, and both; all under the rule for a bin's edges (ADR-0082), so the base is a
+replication. (2) Over 24 bins, is a gain the pretraining's or the finer cells'? (3) Do finer
+cells alone help the network from nothing?
+
+**Conditions.** As declared on 2026-11-12 for the 2012 stays (input, task, seeds, worker,
+campaigns per backbone and every step of the reading), with these differences:
+
+| | |
+| --- | --- |
+| Code | the commit adding this section; the pretrainings ordered from `f4fc16ea` and `eb173c70` |
+| Epochs | by `scripts/pretraining_budget_report.py` on a run of 24 epochs at seed 0 for each new recipe: 12 for the interval, 17 for 24 bins, 18 for both; the base keeps 17 |
+| Pretrainings, seeds 1 and 2 | base `6692d1d2`, `6b230d5d`; interval `e131dae0`, `faf37540`; 24 bins `3593635e`, `cd5aafb8`; both `9f2475d6`, `c7f647d6`; Colab G4, fp32, batch 32 |
+| Campaigns, once | `composition-scratch-physionet2012` and `composition-scratch-bins24-physionet2012`, each network from nothing over its six rates |
+| Reading | `data/report/l52/read.sh`: per recipe, the gain against the network from nothing over 6 bins, 20 and 50 stays one family under Holm within the recipe; the same against the network over 24 bins; the network over 24 bins less the one over 6 |
+
+The base's two pretrainings had ended and the other six were running when this was written;
+none had been read on a task. A trial of every campaign family at seed 1 (64 cells, 381 s)
+ran under two of the runs that set the epochs, which the screen does not read; the reading ran
+whole on it, its tables unopened.
+
+**The rule.** A recipe goes to a confirmation if its gain over the network from nothing over 6
+bins at 20 or 50 stays is at the least gain and held under Holm and, over 24 bins, its gain
+against the network over the same cells is not negative with the interval clear of zero. If
+more than one qualifies, the larger gain at 50 stays goes. The four recipes are not corrected
+across each other, so the outcome is a confirmation on fresh pretrainings, not a claim. If none
+qualifies, the size of the cells and the span hidden are closed as levers on this task at this
+shape. The network over 24 bins ahead of the one over 6 by more than 0.02 at 20 or 50 stays,
+the interval clear of zero, moves the control to 24 bins by a declaration of its own.
+
+**Power.** With two pretrainings and the spread at its floor of 0.014, the threshold read
+0.027, 0.029 and 0.020 at 20, 50 and 200 stays on 2026-11-13. The screen sees a gain of about
+0.03 and cannot see 0.010.
+
+**Predictions** (from earlier intervals, the lower edge where a gain is claimed).
+
+| Reading | Prediction | Source |
+| --- | --- | --- |
+| The base, gain at 20 / 50 / 200 | noise, inside [−0.030, +0.005] / [−0.010, +0.025] / [−0.010, +0.020] | 2026-11-13: −0.013 [−0.022; −0.005], +0.009 [−0.004; +0.021], +0.007 [−0.004; +0.017] |
+| The three new recipes, gain at 50 | inside [−0.004, +0.035]; at least one at the least gain | the base's interval; the published ablation behind ADR-0081; no measurement of ours |
+| The three new recipes, gain at 20 | inside [−0.022, +0.015] | the base's interval, its sign not assumed |
+| Network over 24 bins less over 6 | noise, inside [−0.015, +0.015] at every budget | no earlier reading |
+| Network over 6 bins, areas | within 0.010 of 0.640 / 0.670 / 0.739 at 20 / 50 / 200 | 2026-11-13 |
+| Spread between a recipe's pretrainings | under 0.025 | 0.007 and 0.009 in the two earlier screens |
+| Probe at 500 | the base inside [+0.040, +0.082]; the others above +0.020 | +0.061 [+0.040; +0.082] |
+
+**Limitations.** Two pretrainings a recipe. The epochs differ between recipes by the rule that
+set them, so a recipe is its mask, its cells and its length together. One task; the telemetry
+is not read. Validation side, tier M.
+
+## 2026-11-17 — Colab G4, fp32: three of four recipes gain 0.020 to 0.029 at 50 stays, the block over 24 bins alone passes the rule, and the interval over 24 bins loses at 20
+
+**Question.** As declared above: four recipes, two pretrainings each, against the network from
+nothing over 6 bins and over 24.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `37b3d39e`, the declaration's commit, for every campaign cell and the reading |
+| Pretrainings | Colab G4, three to a card: 6,427 to 6,457 s for the base, 5,182 and 5,185 s for the interval, 10,653 to 11,268 s over 24 bins; in the runs that set the epochs validation took 202 to 246 s after each epoch, more than an epoch's training over 6 bins |
+| Campaigns | 18 orders in 126 lanes on Colab G4 cards, 24 lanes a card, no lane run again: a card's cell took 1,080 s for two backbones over 6 bins, 8,389 and 8,410 s over 24; 13 results accepted at the second attempt, after the Docker disk holding the registry filled |
+| Reading | `data/report/l52/read.sh`, every step exit 0; null pairs within ±0.0002 |
+
+**Gains of fine-tuning over the network from nothing over 6 bins**, each arm at its chosen
+setting (`pretraining_screen_report.py`; s the larger of 0.014 and the recipe's own spread):
+
+| Recipe | 20 stays | 50 stays | 200 stays | Own spread | T at 50 | Level at 50 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Base (block, 6 bins) | +0.004 [−0.007; +0.014] | +0.026 [+0.014; +0.038] | +0.018 [+0.007; +0.029] | 0.019 | 0.031 | noise |
+| Interval, 6 bins | +0.001 [−0.008; +0.009] | +0.020 [+0.009; +0.031] | +0.015 [+0.004; +0.025] | 0.009 | 0.029 | noise |
+| Block, 24 bins | +0.005 [−0.004; +0.014] | **+0.029** [+0.017; +0.042] | +0.008 [−0.004; +0.019] | 0.004 | 0.023 | at the least gain, Holm rejects |
+| Interval, 24 bins | −0.014 [−0.024; −0.004] | −0.003 [−0.015; +0.007] | +0.007 [−0.003; +0.017] | 0.000 | 0.023 | noise |
+
+Bold: at the least gain of 0.02, Holm over 20 and 50 stays rejecting no difference. No other
+cell of the table reaches a level. The network from nothing over 6 bins reads 0.640 / 0.670 /
+0.739 at 20 / 50 / 200 stays, as on 2026-11-13.
+
+**The same cells, and finer cells alone.** The block over 24 bins against the network from
+nothing over 24 bins: −0.006 [−0.016; +0.003], +0.030 [+0.018; +0.041] and +0.008
+[−0.003; +0.020] at 20, 50 and 200 stays. The interval over 24 bins against it: −0.025
+[−0.036; −0.015] at 20. The network over 24 bins less the one over 6, each at its chosen rate:
++0.011 [+0.007; +0.016] at 20 stays; −0.000, +0.003 and −0.001 at 50, 100 and 200, their
+intervals spanning zero. The lead at 20 is under 0.02, so the control stays over 6 bins.
+
+**Each pretraining apart**, its gain at the chosen settings (seed 1 / seed 2):
+
+| Recipe | 20 stays | 50 stays | 200 stays |
+| --- | --- | --- | --- |
+| Base | −0.010 / +0.017 | +0.013 / +0.040 | +0.018 / +0.019 |
+| Interval, 6 bins | −0.010 / +0.012 | +0.014 / +0.026 | +0.015 / +0.014 |
+| Block, 24 bins | +0.007 / +0.003 | +0.018 / +0.040 | +0.008 / +0.007 |
+| Interval, 24 bins | −0.008 / −0.020 | +0.003 / −0.010 | +0.008 / +0.007 |
+| Base on 2026-11-13 | −0.007 / −0.020 | +0.005 / +0.013 | +0.014 / −0.001 |
+
+**Probe at 500 stays**, the frozen encoder less the one at its initialisation: +0.079
+[+0.057; +0.102], +0.077 [+0.053; +0.100], +0.074 [+0.052; +0.096] and +0.066
+[+0.044; +0.088] in the table's order. The encoder at its initialisation reads raw tokens under
+every backbone (0.689 under all eight), so this pair mixes the pretraining with the input's
+layout.
+
+**Conclusions.**
+
+1. By the rule, the block over 24 bins goes to a confirmation on fresh pretrainings: +0.029 at
+   50 stays against the network from nothing over 6 bins, +0.030 against the one over 24.
+   (2026-11-17, later: the confirmation was declared for the base recipe in its place; see
+   the next section.)
+2. Its lead over the base is not a finding. At 50 stays its two pretrainings differ by 0.022,
+   the base's by 0.028; its smaller spread comes from 20 stays. With the spread at its floor
+   the base's threshold at 50 stays is 0.029, so the base's +0.026 stays within the noise.
+3. The interval is closed: no gain over 6 bins beyond the base's, and over 24 bins a loss at 20
+   stays against either control, its interval clear of zero and inside the rule's threshold.
+4. All eight pretrainings gain at 200 stays (mean +0.012). At 50 the six of the three recipes
+   other than the interval over 24 bins gain (mean +0.025; +0.018 over all eight). None gains
+   reliably at 20. The base over four pretrainings, two of 2026-11-13 and two here: +0.018 ±
+   0.008 at 50 and +0.013 ± 0.005 at 200, mean and standard error over pretrainings. These
+   groupings are made after the fact and decide nothing.
+5. All predictions but two are met. The base at 50 stays reads +0.026 against an upper edge of
+   +0.025, and finer cells alone, predicted noise, give the network from nothing +0.011 at 20
+   stays.
+
+**Limitations.** Two pretrainings a recipe; each recipe's spread rests on one difference per
+budget and is itself uncertain. Under seed 2 the three recipes gain more at 50 stays
+than under seed 1; the seed also picks the half of the 2012 stays the pretraining reads, and
+the two are not told apart here. The network from nothing matches 2026-11-13 in its means, not
+seed by seed, so the four pretrainings of the base are pooled across two layouts of the edges.
+Fine-tuning over 24 bins costs eight times the card time of 6. Validation side, tier M.
+
+## 2026-11-17 — declared before the run: the base recipe under eight fresh pretrainings, confirmed on set B
+
+**Question.** Does fine-tuning the base recipe (a block hidden per channel, cells of 6 bins)
+gain over the network from nothing on set B at 20, 50 and 200 stays?
+
+**Why the base and not the recipe the screen named.** The screen of 2026-11-17 named the block
+over 24 bins: +0.029 at 50 stays against the base's +0.026, past a threshold of 0.023 where the
+base's was 0.031. The two recipes differ by +0.003 at 50 stays and by −0.011 at 200, each
+within the noise, and fine-tuning over 24 bins costs eight times the card time. Set B is read
+once, so it is read for the recipe the product would keep; the base's estimate at 50 stays
+reaches the least gain, so the register's rule of 2026-11-15 does not close it. Whether 24
+bins add to 6 is a comparison of two recipes and stays open on the half; the block over 24
+bins is not confirmed on set B.
+
+**Conditions.** As registered for the confirmation of the screen over the composition: eight
+fresh pretrainings, 30 seeds, taught on labels drawn from set A, scored on set B, each arm at
+the setting the half chose at each budget.
+
+| | |
+| --- | --- |
+| Code | the commit adding this section; the register's row of the same day |
+| Pretrainings | `backbone-cells-composition-m` at seeds 3 to 10, 17 epochs, the input and step of 2026-11-16; none read by a screen |
+| Settings, from the half on 2026-11-17 | fine-tuning at 0.0001 / 0.00003 / 0.00003 / the rate in force at 20 / 50 / 100 / 200 stays; the network from nothing over 6 bins at the rate in force / 0.003 / 0.003 / 0.0001 |
+| Campaigns | per backbone, fine-tuning at its settings; once, the network from nothing at its rates; both at the rate in force and 100 stays beside, descriptively |
+| Platform | Colab G4, fp32, as the screen: the pretrainings on one card, the campaigns in 24 lanes |
+| Reading | `data/report/l52/confirm/read.sh`; the spread from the pretrainings paired by seed, 3 with 4, 5 with 6, 7 with 8, 9 with 10 |
+
+Set B holds no stay a pretraining trained on: every pretraining draws its half from set A, and
+set B's windows only keep its epoch, without labels. On the half the screen's backbones gained
+more on the stays they had not read (+0.039 against +0.020 at 50 stays for the base, the gap
+−0.019 [−0.038; −0.001]), under two draws of the half only.
+
+Seen before this section: the reading (`data/report/l52/confirm/read.sh`) ran whole, every step
+exit 0, on the screen's eight campaigns in the eight pretrainings' place; one order of three
+cells at seed 31, outside the confirmation's seeds, ran on the Mac and scored set B's 3,994
+stays, its areas unread.
+
+**The rule.** The registered one: the recipe is confirmed where its gain is real and small or
+at the least gain, at 200 stays as one comparison and at 20 and 50 stays as one family under
+Holm. If it is confirmed at no budget, pretraining over cells is closed on this task at this
+shape. Set B is not read again before set C.
+
+**Power.** By the register's simulation (`cell-pretraining.md`, 2026-10-29): for a gain of
+0.02, 0.95 at 200 stays and 0.72 at 50; for 0.01, 0.41 at most.
+
+**Predictions** (from earlier intervals, the lower edge where a gain is claimed).
+
+| Reading | Prediction | Source |
+| --- | --- | --- |
+| Gain at 50 stays | inside [+0.002, +0.040] | +0.018 ± 0.008 over four pretrainings on the half; +0.039 on the stays unread |
+| Gain at 200 stays | inside [+0.003, +0.036] | +0.013 ± 0.005 over the same four; +0.036 on the stays unread |
+| Gain at 20 stays | noise, inside [−0.020, +0.017] | −0.020 to +0.017 over the four |
+| Spread between pretrainings | under 0.025 | 0.013 over four recipes on the half |
+| Gain at the rate in force, 200 stays | inside [+0.016, +0.040] | +0.027 [+0.016; +0.038] on the half, the control's rate not its own |
+
+**Limitations.** One task and one shape. The settings were chosen on the half under two
+pretrainings. Naming the base after the screen read is a choice made after the fact; the
+confirmation's own data are untouched by it. Validation side, tier M.
+
+## 2026-11-18 — Colab G4, fp32: on set B the base recipe gains 0.016 at 20 and at 50 stays, real and small, and nothing at 200
+
+**Question.** As declared above: fine-tuning the base recipe under eight fresh pretrainings
+against the network from nothing on set B.
+
+**Conditions.**
+
+| | |
+| --- | --- |
+| Code | `56fcd15d`, the declaration's commit, for the pretrainings, every campaign cell and the reading |
+| Pretrainings | seeds 3 to 10 on one Colab G4, eight at once, 6,560 to 6,631 s each, the card 44 % busy |
+| Campaigns | 9 orders in 44 lanes on one G4, 36 processes of one thread, 4,200 cells in 6,595 s; four lanes ended on a failed upload to the store and were continued from their last answer, every campaign complete at 30 seeds |
+| Reading | `data/report/l52/confirm/read.sh`, every step exit 0; the network from nothing at the rate in force within 0.0001 under all nine campaigns |
+
+**Gains of fine-tuning over the network from nothing on set B** (areas the mean over seeds, and
+over the eight pretrainings for fine-tuning; T with the spread at its floor of 0.014, the
+recipe's own 0.003):
+
+| Stays | Fine-tuning | Network from nothing | Gain, settings from the half | T | Level | Gain, both at the rate in force |
+| --- | --- | --- | --- | --- | --- | --- |
+| 20 | 0.638 | 0.622 | **+0.016** [+0.010; +0.022] | 0.015 | real and small | +0.014 [+0.009; +0.020], T 0.014, noise |
+| 50 | 0.686 | 0.670 | **+0.016** [+0.008; +0.024] | 0.014 | real and small | +0.010 [+0.004; +0.016], T 0.012, noise |
+| 100 | 0.723 | 0.699 | +0.024 [+0.017; +0.032] | | beside | +0.022 [+0.016; +0.028] |
+| 200 | 0.754 | 0.751 | +0.003 [−0.003; +0.009] | 0.010 | noise | +0.019 [+0.014; +0.025], the control's rate not its own |
+
+Bold: confirmed by the registered rule, Holm over 20 and 50 stays rejecting no difference
+(p = 0.0002 each). Every pretraining gains at 20, 50 and 100 stays (+0.010 to +0.024, +0.007 to
++0.024, +0.014 to +0.031); seven of eight at 200.
+
+**Conclusions.**
+
+1. The base recipe is confirmed at 20 and at 50 stays as real and small, below the least gain
+   of 0.02; at 200 stays it gains nothing. The registered claim at the least gain is not met.
+2. At 50 stays the size turns on the control's rate. The rate the half chose for the network
+   from nothing, 0.003 at the grid's edge, reads 0.670 on set B where the rate in force reads
+   0.679; with both arms at the rate in force the gain is +0.010, inside its threshold.
+   At 20 stays the two readings agree in size (+0.016 and +0.014); at the rate in force
+   neither budget exceeds its threshold.
+3. The largest gain is at 100 stays, +0.022 to +0.024 under either pairing, read beside the
+   declared budgets and so not part of the confirmation.
+4. The gain is a mean over draws of labels: fine-tuning is ahead in 19 of 30 draws at 20 stays
+   and in 22 at 50.
+5. The half read another curve under two pretrainings (2026-11-17: nothing at 20 stays, +0.026
+   at 50, +0.018 at 200). Of the predictions, the gain at 50 stays, the spread and the
+   rate in force are met; the gain at 200 stays sits at the lower edge of its range (+0.0031
+   against +0.003) and reads noise; at 20 stays noise was predicted and a gain read.
+6. With no gain at 200 stays the larger shape the register holds for that case is not run.
+
+**Limitations.** One task, one shape, validation side, tier M. The settings came from the
+half under two pretrainings and ten seeds. Each pretraining keeps its epoch by a loss over set
+B's windows, without labels, which the network from nothing has no use for. The base was named
+after the screen was read.
+
+## 2026-11-18 — declared before the run: the trees per channel on set B beside the confirmation
+
+**Question.** Where do gradient-boosted trees per channel read on set B at the confirmation's
+budgets and draws of labels, beside fine-tuning and the network from nothing? Descriptive: the
+confirmation above is read and stands as it is; this reading decides nothing.
+
+**Conditions.** `campaigns/composition-confirmation-trees-physionet2012.toml`: the trees at
+their default setting and at the setting the tuning side chose at every stay, 20, 50, 100 and
+200 stays drawn from set A, scored on set B, seeds 1 to 30, the Mac's CPU. Set B is read a
+second time for this bar, by the register's row of the same day. Seen before: one order of
+two cells at seed 31, outside the draws read, scored set B's 3,994 stays in 15 s and was
+exported and joined to the confirmation's export by `data/report/l52/confirm/read-trees.sh`,
+its areas unread; the pairs are of the shape the confirmation's reading ran.
+
+**Reading.** Fine-tuning under the eight pretrainings, at the confirmation's settings, less
+the trees at each of their two settings, paired by stay and seed (10,000 resamples), against
+the threshold of the confirmation; the network from nothing less the trees beside. The bar at
+a budget is the higher of the trees' two settings, chosen on set B and so against
+fine-tuning.
+
+**Predictions.**
+
+| Reading | Prediction | Source |
+| --- | --- | --- |
+| Trees at their default setting, areas at 20 / 50 / 200 | within 0.015 of 0.601 / 0.644 / 0.738 | the half, 30 seeds (`clinical-input.md`, 2026-11-12) |
+| Fine-tuning less the trees | inside [+0.015, +0.055] at 20, [+0.020, +0.060] at 50, [−0.005, +0.035] at 200 | 0.638 / 0.686 / 0.754 on set B less the half's trees, across two designs, so ±0.02 |
+
+**Limitations.** Declared after the confirmation was read. One task; validation side, tier M.
+
+## 2026-11-18 — M1 Pro, CPU: on set B fine-tuning is ahead of the trees per channel at 20, 50 and 100 stays and level with them at 200
+
+**Question.** As declared above: the trees per channel on set B at the confirmation's budgets
+and draws of labels.
+
+**Conditions.** `394d6960`, the declaration's commit; one order of 240 cells on the Mac's CPU,
+4,188 s, of which the fits took 249 s; all 240 cells accepted, 30 seeds per setting and budget;
+`data/report/l52/confirm/read-trees.sh`, every step exit 0.
+
+**Areas on set B and gains over the trees at the setting the tuning side chose**, the higher
+of their two settings at every budget (10,000 resamples; T by the confirmation's formula for
+fine-tuning, twice the standard error over seeds for the network from nothing):
+
+| Stays | Trees, default | Trees, chosen setting | Fine-tuning | Fine-tuning less the trees | T | Network from nothing less the trees | T |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 20 | 0.596 | 0.612 | 0.638 | +0.026 [+0.019; +0.033] | 0.023 | +0.010 [+0.001; +0.018] | 0.025 |
+| 50 | 0.647 | 0.649 | 0.686 | +0.038 [+0.029; +0.046] | 0.018 | +0.022 [+0.013; +0.030] | 0.012 |
+| 100 | 0.700 | 0.706 | 0.723 | +0.017 [+0.008; +0.025] | 0.011 | −0.007 [−0.015; +0.000] | 0.013 |
+| 200 | 0.750 | 0.754 | 0.754 | −0.000 [−0.008; +0.007] | 0.010 | −0.003 [−0.012; +0.005] | 0.010 |
+
+**Conclusions.**
+
+1. Fine-tuning reads above the trees by more than its threshold at 20, 50 and 100 stays; at 200
+   stays the two are level.
+2. The network from nothing is above the trees at 50 stays alone; at 20 its lead is inside its
+   threshold, and from 100 stays it is level with them or behind. At 20 and 100 stays the lead
+   over the trees comes from the pretraining; at 50 it adds 0.016 to a lead the network from
+   nothing already has.
+3. Both predictions are met: the trees at their default setting read within 0.012 of the half's
+   areas, and fine-tuning less those trees +0.043, +0.039 and +0.004 at 20, 50 and 200 stays.
+
+**Limitations.** Descriptive and declared after the confirmation was read; the bar's setting
+is the higher on set B, against fine-tuning. One task, validation side, tier M.

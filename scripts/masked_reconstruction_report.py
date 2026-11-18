@@ -685,6 +685,12 @@ def heading(run: Run, published: Published, trained: Trained) -> str:
             if strategy.has_horizon
             else ""
         )
+        + (
+            f", interval {strategy.interval_rate:g} over {strategy.interval_min_span:g} to "
+            f"{strategy.interval_max_span:g} of the window"
+            if strategy.has_interval
+            else ""
+        )
         + f"; expected {strategy.expected_ratio:.1%}, realised {trained.hidden_ratio:.1%} "
         "of observed tokens"
     )

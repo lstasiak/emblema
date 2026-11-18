@@ -243,6 +243,22 @@ def test_a_tail_with_spans_out_of_order_is_refused(tmp_path: Path) -> None:
         ExperimentFile.load(written(disordered, tmp_path)).configuration()
 
 
+def test_a_file_states_the_interval_and_one_that_does_not_hides_none(tmp_path: Path) -> None:
+    aligned = STATED.replace(
+        "token_rate = 0.1",
+        "token_rate = 0.1\ninterval_rate = 0.6\ninterval_min_span = 0.25\ninterval_max_span = 0.5",
+    )
+
+    stated = ExperimentFile.load(written(aligned, tmp_path)).configuration().masking
+
+    assert (stated.interval_rate, stated.interval_min_span, stated.interval_max_span) == (
+        0.6,
+        0.25,
+        0.5,
+    )
+    assert not ExperimentFile.load(written(STATED, tmp_path)).configuration().masking.has_interval
+
+
 def test_a_file_that_states_no_target_predicts_the_token_s_value(tmp_path: Path) -> None:
     text = STATED + '\n[objective]\nkind = "huber"\nhuber_delta = 1.0\n'
 

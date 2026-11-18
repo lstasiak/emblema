@@ -15,6 +15,7 @@ from emblema.pretraining.application.use_cases.assess_reconstruction_run import 
 from emblema.pretraining.domain.assessment.assessment import Assessment
 from emblema.pretraining.domain.assessment.results import Results
 from emblema.pretraining.domain.mask_kind import MaskKind
+from emblema.pretraining.domain.masking_strategy import MaskingStrategy
 from scripts.masked_reconstruction_assessment import (
     INDEX,
     assessment_section,
@@ -64,6 +65,29 @@ def test_a_stored_run_reads_back_into_the_same_assessment(tmp_path: Path) -> Non
         "spectrum.csv",
         "tallies.csv",
     ]
+
+
+def test_a_stored_run_keeps_the_interval_it_drew_and_one_without_writes_none(
+    tmp_path: Path,
+) -> None:
+    aligned = results(
+        strategy=MaskingStrategy(
+            channel_rate=0.15,
+            block_rate=0.0,
+            block_span=0.5,
+            token_rate=0.1,
+            interval_rate=0.6,
+            interval_min_span=0.5,
+            interval_max_span=0.5,
+        )
+    )
+
+    stored = read(store(assess(aligned), figures(), tmp_path / "aligned"))
+    plain = store(assess(results()), figures(), tmp_path / "plain")
+
+    assert stored.strategy == aligned.strategy
+    assert stored.strategy.expected_ratio == pytest.approx(0.4645)
+    assert "interval" not in (plain / "run.csv").read_text()
 
 
 def test_what_a_figure_is_drawn_from_reads_back_as_it_was_stored(tmp_path: Path) -> None:

@@ -289,3 +289,33 @@ def test_without_nothing_hidden_is_the_full_layout() -> None:
 def test_hidden_cells_marked_over_another_count_are_refused() -> None:
     with pytest.raises(ValueError, match="the window has 9 cells"):
         BinnedTokens(4).without(WINDOW, np.zeros(8, dtype=bool))
+
+
+def test_readings_on_the_bins_edges_fall_in_the_bins_they_open() -> None:
+    # Times as a published window stores them: k / 24 in float32, a hair below k / 24 for some
+    # k, where a plain floor would leave that hour's cell empty and double the one before.
+    hours = np.arange(24, dtype=np.float32) / np.float32(24)
+    assert any(float(hour) * 24 < k for k, hour in enumerate(hours))
+    window = TokenWindow.of(
+        [Token(1, float(k), float(hour), 1 / 24 if k else 0.0) for k, hour in enumerate(hours)]
+    )
+
+    hourly = cells(window, BinnedTokens(24))
+    by_four = cells(window, BinnedTokens(6))
+
+    assert hourly[:, PRESENCE].tolist() == [1.0] * 24
+    assert hourly[:, COUNT].tolist() == pytest.approx([math.log1p(1)] * 24)
+    assert hourly[:, MEAN].tolist() == pytest.approx(list(range(24)))
+    assert hourly[:, OFFSET].tolist() == pytest.approx([0.0] * 24, abs=1e-5)
+    assert hourly[:, OFFSET].min() >= 0.0
+    assert by_four[:, COUNT].tolist() == pytest.approx([math.log1p(4)] * 6)
+    assert by_four[:, FIRST].tolist() == pytest.approx([0.0, 4.0, 8.0, 12.0, 16.0, 20.0])
+
+
+def test_a_reading_inside_a_bin_stays_in_it_however_near_the_next() -> None:
+    window = TokenWindow.of([Token(1, 1.0, 0.249, 0.0), Token(1, 2.0, 0.2495, 0.0005)])
+
+    laid = cells(window, BinnedTokens(4))
+
+    assert laid[:, PRESENCE].tolist() == [1.0, 0.0, 0.0, 0.0]
+    assert laid[0, COUNT] == pytest.approx(math.log1p(2))

@@ -36,7 +36,9 @@ PRESENCE, LAST, SINCE = BinnedTokens.PRESENCE, BinnedTokens.VALUE_FEATURES.stop 
 
 def masks_hiding(hidden: Tensor) -> TokenMasks:
     nothing = torch.zeros_like(hidden)
-    return TokenMasks(channel=nothing, block=nothing, token=hidden, horizon=nothing)
+    return TokenMasks(
+        channel=nothing, block=nothing, token=hidden, horizon=nothing, interval=nothing
+    )
 
 
 def test_collated_cells_are_the_layout_s_batch_and_keep_their_windows() -> None:

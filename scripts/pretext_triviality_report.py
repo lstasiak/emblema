@@ -901,6 +901,9 @@ def render(directory: Path) -> str:
             "horizon_rate",
             "horizon_min_span",
             "horizon_max_span",
+            "interval_rate",
+            "interval_min_span",
+            "interval_max_span",
         )
         if key in settings
     )
@@ -1209,7 +1212,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         **{
             key: _number(value)
             for key, value in configuration.parameters().items()
-            if key.startswith(("channel_rate", "block_", "token_rate", "horizon_"))
+            if key.startswith(("channel_rate", "block_", "token_rate", "horizon_", "interval_"))
             and isinstance(value, float)
         },
         "validation_windows": str(arguments.validation_windows),

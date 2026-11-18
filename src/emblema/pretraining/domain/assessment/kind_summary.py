@@ -9,10 +9,11 @@ MATCHED_BASELINE = {
     MaskKind.TOKEN: "interpolation",
     # The same line as interpolation, which past the last visible token carries its value on.
     MaskKind.HORIZON: "last value",
+    MaskKind.INTERVAL: "interpolation",
 }
 # Where nothing of the channel is left, the strongest linear answer is the matched one, and a
 # second comparison would repeat the first.
-BEYOND_LINEAR = (MaskKind.BLOCK, MaskKind.TOKEN, MaskKind.HORIZON)
+BEYOND_LINEAR = (MaskKind.BLOCK, MaskKind.TOKEN, MaskKind.HORIZON, MaskKind.INTERVAL)
 
 
 @dataclass(frozen=True)

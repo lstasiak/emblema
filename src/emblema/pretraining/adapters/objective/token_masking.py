@@ -12,10 +12,11 @@ class TokenMasking:
     A channel-level draw is one number per window and channel, looked up per token by its
     identifier, so a channel is hidden whole or not at all in a few tensor operations. Blocks span
     the window's time, not a count of tokens, as how densely a channel is sampled is what the model
-    may not assume. The tail is drawn last and only by a strategy that has one, so a strategy
-    without it draws the same numbers, and the same masks, as before the tail existed. Every window
-    keeps a visible token: where the draws hide all, the first observed one is uncovered. Numbers
-    are drawn where the generator lives, so a seed gives the same masks on any device.
+    may not assume. The tail and then the interval are drawn last, each only by a strategy that
+    has it, so a strategy without them draws the same numbers, and the same masks, as before
+    either existed. Every window keeps a visible token: where the draws hide all, the first
+    observed one is uncovered. Numbers are drawn where the generator lives, so a seed gives the
+    same masks on any device.
     """
 
     def __init__(self, strategy: MaskingStrategy) -> None:
@@ -57,7 +58,20 @@ class TokenMasking:
                 strategy.horizon_max_span - strategy.horizon_min_span
             )
             tail = losing & ~batch.timeless & (batch.timestamps >= 1.0 - span)
-        hidden = (whole | block | token | tail) & observed
+        interval = torch.zeros_like(token)
+        if strategy.has_interval:
+            losing = per_window() < strategy.interval_rate
+            span = strategy.interval_min_span + per_window() * (
+                strategy.interval_max_span - strategy.interval_min_span
+            )
+            begins = per_window() * (1.0 - span)
+            interval = (
+                losing
+                & ~batch.timeless
+                & (batch.timestamps >= begins)
+                & (batch.timestamps <= begins + span)
+            )
+        hidden = (whole | block | token | tail | interval) & observed
 
         visible = observed & ~hidden
         starved = (visible.sum(dim=1) == 0) & observed.any(dim=1)
@@ -72,5 +86,9 @@ class TokenMasking:
         ).scatter_add(1, ids, visible.long())
         channel = hidden & (visible_per_channel.gather(1, ids) == 0)
         return TokenMasks(
-            channel=channel, block=block & hidden, token=token & hidden, horizon=tail & hidden
+            channel=channel,
+            block=block & hidden,
+            token=token & hidden,
+            horizon=tail & hidden,
+            interval=interval & hidden,
         )

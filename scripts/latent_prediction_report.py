@@ -514,7 +514,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             **{
                 key: _number(value)
                 for key, value in configuration.parameters().items()
-                if key.startswith(("channel_rate", "block_", "token_rate", "horizon_"))
+                if key.startswith(("channel_rate", "block_", "token_rate", "horizon_", "interval_"))
                 and isinstance(value, float)
             },
             "validation_windows": str(arguments.validation_windows),

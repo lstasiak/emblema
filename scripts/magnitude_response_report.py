@@ -44,6 +44,7 @@ from numpy.typing import NDArray
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from emblema.shared.adapters.arrays.steps import steps_of
 from emblema.shared.kernel.ordering import seeded_rank
 from emblema.shared.kernel.tokens import Token, TokenWindow
 from scripts.reporting import table
@@ -100,7 +101,7 @@ def raised(window: TokenWindow, *, scope: str, factor: float, bins: int) -> Toke
     elif scope == "channel":
         chosen = same_channel
     elif scope == "cell":
-        cells = np.minimum(np.floor(times * bins).astype(np.int64), bins - 1)
+        cells = steps_of(times, bins)
         chosen = same_channel & (cells == cells[peak])
     else:
         raise ValueError(f"a scope is one of {SCOPES}, not {scope!r}")

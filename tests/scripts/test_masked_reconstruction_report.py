@@ -171,7 +171,7 @@ def test_an_example_draws_only_the_tokens_its_kind_hid() -> None:
     block = (ids == 1) & (times > 0.3) & (times < 0.7)
     token = (ids == 1) & (times == 0.0)
     nothing = torch.zeros_like(block)
-    masks = TokenMasks(channel=nothing, block=block, token=token, horizon=nothing)
+    masks = TokenMasks(channel=nothing, block=block, token=token, horizon=nothing, interval=nothing)
     prediction = torch.zeros_like(batch.features[..., 0])
 
     examples = pick_examples(

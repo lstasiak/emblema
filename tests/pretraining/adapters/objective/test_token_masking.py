@@ -290,6 +290,143 @@ def test_a_token_in_the_tail_is_of_the_tail_unless_its_channel_is_gone() -> None
     assert not (masks.of_kind(MaskKind.BLOCK) & masks.horizon).any()
 
 
+def interval_only(
+    *, rate: float = 1.0, shortest: float = 0.2, longest: float = 0.4
+) -> MaskingStrategy:
+    return MaskingStrategy(
+        channel_rate=0.0,
+        block_rate=0.0,
+        block_span=0.5,
+        token_rate=0.0,
+        interval_rate=rate,
+        interval_min_span=shortest,
+        interval_max_span=longest,
+    )
+
+
+def test_the_interval_hides_every_channel_over_one_span_inside_the_window() -> None:
+    batch = grid_batch(256, CHANNELS, STEPS, seed=41)
+    timed = ~batch.timeless
+
+    masks = draw(interval_only(), batch)
+
+    inside = 0
+    for row in range(batch.batch_size):
+        hidden = masks.interval[row] & timed[row]
+        times = batch.timestamps[row]
+        start, end = float(times[hidden].min()), float(times[hidden].max())
+        assert torch.equal(hidden, timed[row] & (times >= start) & (times <= end))
+        assert 0.2 - 2.0 / (STEPS - 1) <= end - start <= 0.4 + 1e-6
+        inside += int(start > 0.0 and end < 1.0)
+    assert inside > batch.batch_size // 2
+
+
+def test_an_interval_covers_the_share_of_the_window_it_declares() -> None:
+    batch = grid_batch(2048, CHANNELS, STEPS, seed=42)
+
+    masks = draw(interval_only(), batch)
+
+    expected = interval_only().expected_ratio
+    assert fraction(masks.hidden, ~batch.timeless) == pytest.approx(expected, abs=0.02)
+
+
+def test_an_interval_drawn_at_a_rate_is_lost_by_that_share_of_windows() -> None:
+    batch = grid_batch(2048, CHANNELS, STEPS, seed=43)
+
+    masks = draw(interval_only(rate=0.3), batch)
+
+    assert float(masks.interval.any(dim=1).float().mean()) == pytest.approx(0.3, abs=0.03)
+
+
+def test_the_interval_never_reaches_a_timeless_token_or_padding() -> None:
+    batch = random_batch(64, 40, seed=44, padding=10)
+
+    masks = draw(interval_only(shortest=0.9, longest=0.95), batch)
+
+    assert masks.interval.any()
+    assert not (masks.interval & batch.timeless).any()
+    assert not (masks.interval & batch.padding_mask).any()
+
+
+def test_a_token_in_the_interval_is_of_the_interval_unless_its_channel_or_the_tail_took_it() -> (
+    None
+):
+    batch = grid_batch(256, CHANNELS, STEPS, seed=45)
+    strategy = MaskingStrategy(
+        channel_rate=0.2,
+        block_rate=0.6,
+        block_span=0.5,
+        token_rate=0.3,
+        horizon_rate=0.5,
+        horizon_min_span=0.15,
+        horizon_max_span=0.5,
+        interval_rate=1.0,
+        interval_min_span=0.2,
+        interval_max_span=0.4,
+    )
+
+    masks = draw(strategy, batch)
+
+    kinds = {kind: masks.of_kind(kind) for kind in MaskKind}
+    assert torch.equal(kinds[MaskKind.INTERVAL], masks.interval & ~masks.channel & ~masks.horizon)
+    assert (masks.interval & masks.block).any()
+    assert not (kinds[MaskKind.BLOCK] & masks.interval).any()
+    assert not (kinds[MaskKind.TOKEN] & masks.interval).any()
+    union = torch.zeros_like(masks.hidden)
+    for tokens in kinds.values():
+        assert not (union & tokens).any()
+        union |= tokens
+    assert torch.equal(union, masks.hidden)
+
+
+def test_a_strategy_with_an_interval_draws_the_other_masks_it_drew_without_one(
+    strategy: MaskingStrategy,
+) -> None:
+    batch = grid_batch(64, CHANNELS, STEPS, seed=46)
+    with_interval = replace(
+        strategy, interval_rate=0.5, interval_min_span=0.2, interval_max_span=0.4
+    )
+
+    plain, drawn = draw(strategy, batch, seed=9), draw(with_interval, batch, seed=9)
+
+    assert not plain.interval.any()
+    assert drawn.interval.any()
+    assert torch.equal(plain.block, drawn.block)
+    assert torch.equal(plain.token, drawn.token)
+
+
+def test_an_interval_leaves_the_tail_the_strategy_drew_without_it() -> None:
+    batch = grid_batch(64, CHANNELS, STEPS, seed=47)
+    with_interval = replace(
+        tail_only(), interval_rate=1.0, interval_min_span=0.2, interval_max_span=0.4
+    )
+
+    plain, drawn = draw(tail_only(), batch, seed=9), draw(with_interval, batch, seed=9)
+
+    assert torch.equal(plain.horizon, drawn.horizon)
+
+
+def test_a_window_an_interval_would_hide_whole_keeps_a_visible_token() -> None:
+    batch = grid_batch(64, 1, 3, seed=48)
+    timed = ~batch.timeless & ~batch.padding_mask
+    inner = timed & (batch.timestamps > 0.0) & (batch.timestamps < 1.0)
+    middle_only = TokenTensors(
+        batch.features,
+        batch.channel_ids,
+        batch.timestamps,
+        batch.timeless,
+        batch.padding_mask | ~inner,
+    )
+
+    strategy = interval_only(shortest=0.9, longest=0.95)
+    masks = draw(strategy, middle_only)
+
+    # The same draw over the whole window covers the token this one is left with.
+    assert draw(strategy, batch).interval[inner].all()
+    assert (~middle_only.padding_mask).sum(dim=1).eq(1).all()
+    assert not masks.hidden.any()
+
+
 def test_the_same_seed_draws_the_same_masks(strategy: MaskingStrategy) -> None:
     batch = grid_batch(8, CHANNELS, STEPS, seed=13)
 

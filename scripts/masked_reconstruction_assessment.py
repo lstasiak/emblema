@@ -129,8 +129,10 @@ INDEX = "runs.csv"
 STRATEGY_FIELDS = ("channel_rate", "block_rate", "block_span", "token_rate")
 # Written only where a horizon is drawn, so a run stored before it existed reads as it was.
 HORIZON_FIELDS = ("horizon_rate", "horizon_min_span", "horizon_max_span")
-# The index predates the horizon, and the controls it lists never draw one: a fourth kind would
-# change its header and refuse every index already on disk.
+# Likewise the interval hidden in every channel.
+INTERVAL_FIELDS = ("interval_rate", "interval_min_span", "interval_max_span")
+# The index predates the horizon and the interval, and the controls it lists draw neither:
+# another kind would change its header and refuse every index already on disk.
 INDEX_KINDS = (MaskKind.CHANNEL, MaskKind.BLOCK, MaskKind.TOKEN)
 INDEX_FIELDS = (
     "run",
@@ -258,6 +260,7 @@ def read(directory: Path) -> Results:
     reserved = {
         *STRATEGY_FIELDS,
         *HORIZON_FIELDS,
+        *INTERVAL_FIELDS,
         *BASELINE_FIELDS,
         "realised_ratio",
         "spectrum_fitted",
@@ -273,6 +276,9 @@ def read(directory: Path) -> Results:
             horizon_rate=float(run.get("horizon_rate", "0")),
             horizon_min_span=float(run.get("horizon_min_span", "0")),
             horizon_max_span=float(run.get("horizon_max_span", "0")),
+            interval_rate=float(run.get("interval_rate", "0")),
+            interval_min_span=float(run.get("interval_min_span", "0")),
+            interval_max_span=float(run.get("interval_max_span", "0")),
         ),
         realised_ratio=float(run["realised_ratio"]),
         curve=Curve(
@@ -356,6 +362,15 @@ def _write_measured(results: Results, figures: RunFigures, directory: Path) -> N
                 "horizon_max_span": _number(strategy.horizon_max_span),
             }
             if strategy.has_horizon
+            else {}
+        ),
+        **(
+            {
+                "interval_rate": _number(strategy.interval_rate),
+                "interval_min_span": _number(strategy.interval_min_span),
+                "interval_max_span": _number(strategy.interval_max_span),
+            }
+            if strategy.has_interval
             else {}
         ),
         "realised_ratio": _number(results.realised_ratio),

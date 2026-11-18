@@ -175,6 +175,7 @@ def test_the_loss_is_scored_on_hidden_observed_tokens_and_on_nothing_else() -> N
         block=hidden,
         token=torch.zeros_like(hidden),
         horizon=torch.zeros_like(hidden),
+        interval=torch.zeros_like(hidden),
     )
     scorer = LatentPredictionLoss(SQUARED)
     prediction, target = model(batch, masks), model.targets(batch)

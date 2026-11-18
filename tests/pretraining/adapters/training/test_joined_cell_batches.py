@@ -124,7 +124,9 @@ def test_joined_cells_are_the_cells_of_the_hours_cut_whole_full_and_masked(
         torch.rand(batch.channel_ids.shape, generator=torch.Generator().manual_seed(seed)) < 0.4
     ) & ~batch.padding_mask
     nothing = torch.zeros_like(hidden)
-    masks = TokenMasks(channel=nothing, block=nothing, token=hidden, horizon=nothing)
+    masks = TokenMasks(
+        channel=nothing, block=nothing, token=hidden, horizon=nothing, interval=nothing
+    )
     torch.testing.assert_close(
         joined.scored(batch, masks).visible,
         whole.scored(reference, masks).visible,
@@ -180,7 +182,9 @@ def test_windows_of_one_axis_that_overlap_are_refused() -> None:
 
 def test_a_layout_scores_only_the_batches_it_collated() -> None:
     nothing = torch.zeros((1, 1), dtype=torch.bool)
-    masks = TokenMasks(channel=nothing, block=nothing, token=nothing, horizon=nothing)
+    masks = TokenMasks(
+        channel=nothing, block=nothing, token=nothing, horizon=nothing, interval=nothing
+    )
     other = CellBatches(BinnedTokens(2)).collate([concatenated([None, stream(7, 1, set())[0]])])
 
     with pytest.raises(ValueError, match="joined from"):
@@ -198,7 +202,8 @@ def test_hiding_the_last_bin_leaves_every_earlier_cell_as_it_was() -> None:
     nothing = torch.zeros_like(hidden)
 
     visible = joined.scored(
-        batch, TokenMasks(channel=nothing, block=nothing, token=hidden, horizon=nothing)
+        batch,
+        TokenMasks(channel=nothing, block=nothing, token=hidden, horizon=nothing, interval=nothing),
     ).visible
 
     assert torch.equal(visible[0, : 5 * rows], batch.features[0, : 5 * rows])
@@ -261,7 +266,9 @@ def test_a_channel_read_only_in_the_hidden_bin_keeps_its_row_and_shows_nothing()
     batch, reference = joined.collate([validation[0]]), whole.collate([concatenated([first, last])])
     hidden = torch.tensor([[False, False, True, True]])
     nothing = torch.zeros_like(hidden)
-    masks = TokenMasks(channel=nothing, block=nothing, token=hidden, horizon=nothing)
+    masks = TokenMasks(
+        channel=nothing, block=nothing, token=hidden, horizon=nothing, interval=nothing
+    )
 
     visible = joined.scored(batch, masks).visible
 
