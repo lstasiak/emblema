@@ -612,6 +612,8 @@ layout.
 
 1. By the rule, the block over 24 bins goes to a confirmation on fresh pretrainings: +0.029 at
    50 stays against the network from nothing over 6 bins, +0.030 against the one over 24.
+   (2026-11-17, later: the confirmation was declared for the base recipe in its place; see
+   the next section.)
 2. Its lead over the base is not a finding. At 50 stays its two pretrainings differ by 0.022,
    the base's by 0.028; its smaller spread comes from 20 stays. With the spread at its floor
    the base's threshold at 50 stays is 0.029, so the base's +0.026 stays within the noise.
