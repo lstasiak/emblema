@@ -37,7 +37,7 @@ def stubbed() -> Iterator[Stubbed]:
         responses.assert_no_pending_responses()
 
 
-def test_connect_uses_path_style_and_sends_checksums_only_when_required() -> None:
+def test_connect_uses_path_style_sends_checksums_only_when_required_and_retries() -> None:
     store = S3ArtifactStore.connect(
         endpoint_url="http://127.0.0.1:3900",
         region="garage",
@@ -52,6 +52,7 @@ def test_connect_uses_path_style_and_sends_checksums_only_when_required() -> Non
     assert config.s3 == {"addressing_style": "path"}
     assert config.request_checksum_calculation == "when_required"
     assert config.response_checksum_validation == "when_required"
+    assert config.retries == {"mode": "standard", "total_max_attempts": 10}
 
 
 @pytest.mark.parametrize("prefix", ["", " ", "/dev", "dev/", " dev"])
