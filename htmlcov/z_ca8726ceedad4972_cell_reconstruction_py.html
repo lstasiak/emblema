@@ -67,7 +67,7 @@
             <a id="nextFileLink" class="nav" href="z_ca8726ceedad4972_cell_tensors_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.3">coverage.py v7.17.3</a>,
-            created at 2026-11-18 22:55 +0000
+            created at 2026-11-19 07:00 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -192,7 +192,7 @@
     <p class="run"><span class="n"><a id="t108" href="#t108">108</a></span><span class="t">        <span class="nam">total</span><span class="op">,</span> <span class="nam">trivial_total</span> <span class="op">=</span> <span class="nam">error</span><span class="op">,</span> <span class="nam">trivial</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t109" href="#t109">109</a></span><span class="t">        <span class="com"># The timed cells the encoder saw: what a guess without a model may read.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t110" href="#t110">110</a></span><span class="t">        <span class="nam">visible</span> <span class="op">=</span> <span class="op">~</span><span class="nam">cells</span><span class="op">.</span><span class="nam">padding_mask</span> <span class="op">&amp;</span> <span class="op">~</span><span class="nam">masks</span><span class="op">.</span><span class="nam">hidden</span> <span class="op">&amp;</span> <span class="op">~</span><span class="nam">cells</span><span class="op">.</span><span class="nam">timeless</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t111" href="#t111">111</a></span><span class="t">        <span class="nam">entries</span> <span class="op">=</span> <span class="nam">int</span><span class="op">(</span><span class="nam">cells</span><span class="op">.</span><span class="nam">channel_ids</span><span class="op">.</span><span class="nam">max</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">item</span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span> <span class="num">1</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t111" href="#t111">111</a></span><span class="t">        <span class="nam">entries</span> <span class="op">=</span> <span class="nam">cells</span><span class="op">.</span><span class="nam">channel_entries</span>&nbsp;</span><span class="r"></span></p>
     <p class="par run show_par"><span class="n"><a id="t112" href="#t112">112</a></span><span class="t">        <span class="key">if</span> <span class="nam">self</span><span class="op">.</span><span class="nam">term</span><span class="op">.</span><span class="nam">asks_presence</span><span class="op">:</span>&nbsp;</span><span class="r"><span class="annotate short">112&#x202F;&#x219B;&#x202F;131</span><span class="annotate long">line 112 didn't jump to line 131 because the condition on line 112 was always true</span></span></p>
     <p class="run"><span class="n"><a id="t113" href="#t113">113</a></span><span class="t">            <span class="nam">logits</span> <span class="op">=</span> <span class="nam">prediction</span><span class="op">[</span><span class="op">...</span><span class="op">,</span> <span class="nam">BinnedTokens</span><span class="op">.</span><span class="nam">PRESENCE</span><span class="op">]</span><span class="op">.</span><span class="nam">to</span><span class="op">(</span><span class="nam">dtype</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t114" href="#t114">114</a></span><span class="t">            <span class="nam">was_there</span> <span class="op">=</span> <span class="nam">present</span><span class="op">.</span><span class="nam">to</span><span class="op">(</span><span class="nam">dtype</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -293,7 +293,7 @@
             <a class="nav" href="z_ca8726ceedad4972_cell_tensors_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.3">coverage.py v7.17.3</a>,
-            created at 2026-11-18 22:55 +0000
+            created at 2026-11-19 07:00 +0000
         </p>
     </div>
 </footer>

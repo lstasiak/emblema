@@ -533,7 +533,7 @@
 | src/emblema/pretraining/adapters/training/joined\_sides.py                                |       16 |        0 |        2 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/training/raw\_batches.py                                 |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/pretraining/adapters/training/torch\_precision.py                             |       26 |        0 |        4 |        0 |    100% |           |
-| src/emblema/pretraining/adapters/training/torch\_training\_runtime.py                     |      283 |        0 |       76 |        1 |     99% | 499-\>501 |
+| src/emblema/pretraining/adapters/training/torch\_training\_runtime.py                     |      285 |        0 |       74 |        1 |     99% | 513-\>515 |
 | src/emblema/pretraining/adapters/training/trained\_model.py                               |       70 |        2 |       14 |        2 |     95% |  295, 301 |
 | src/emblema/pretraining/adapters/training/training\_checkpoint.py                         |       42 |        0 |       10 |        0 |    100% |           |
 | src/emblema/pretraining/application/use\_cases/accept\_pretraining\_result.py             |       30 |        0 |        2 |        0 |    100% |           |
@@ -692,7 +692,7 @@
 | src/emblema/shared/adapters/system/id\_generator.py                                       |        5 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/tensors/grown\_parameters.py                                  |        6 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/tensors/masked\_mean\_pooling.py                              |        5 |        0 |        0 |        0 |    100% |           |
-| src/emblema/shared/adapters/tensors/token\_tensors.py                                     |       31 |        0 |        2 |        0 |    100% |           |
+| src/emblema/shared/adapters/tensors/token\_tensors.py                                     |       33 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/adapters/windows/block\_workspace.py                                   |       22 |        0 |        4 |        0 |    100% |           |
 | src/emblema/shared/adapters/windows/exceptions.py                                         |        9 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/adapters/windows/format.py                                             |       29 |        0 |        0 |        0 |    100% |           |
@@ -731,7 +731,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **22932** |  **185** | **4672** |  **123** | **99%** |           |
+| **TOTAL**                                                                                 | **22936** |  **185** | **4672** |  **123** | **99%** |           |
 
 133 empty files skipped.
 
