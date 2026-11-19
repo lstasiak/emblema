@@ -810,10 +810,6 @@ windows of the squared error of the hour's mean, 95 % interval:
 | held | Mission1 | ridge over the window | 0.682 [0.660; 0.703] | descriptive |
 | held | Mission2 | AutoETS | 0.958 [0.930; 0.988] | descriptive |
 
-By the declared rule forecasting is ground for a foundation model on this telemetry: the
-multi-mission corpus and adaptation is read next, and a lead is confirmed on a mission no
-reading has touched before any claim rests on it.
-
 Chronos-2 over each answer, the same measure, descriptive:
 
 | Answer | Mission1 unread | Mission2 unread | Mission1 held | Mission2 held |
