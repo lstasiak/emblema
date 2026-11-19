@@ -379,11 +379,11 @@ def window_log_ratios(cells: CellSet, numerator: str, against: str, measure: str
     Raises:
         ValueError: If either misses by nothing on a window, which leaves no ratio.
     """
-    top, counts = cells.per_window(cells.losses[(numerator, measure)])
+    top, _ = cells.per_window(cells.losses[(numerator, measure)])
     bottom, _ = cells.per_window(cells.losses[(against, measure)])
     if (top == 0).any() or (bottom == 0).any():
         raise ValueError(f"{numerator} or {against} missed by nothing on a window: no ratio")
-    logs: Floats = np.log((top / counts) / (bottom / counts))
+    logs: Floats = np.log(top / bottom)
     return logs
 
 
@@ -402,15 +402,16 @@ def best_bar_rows(
 
     With ``geometric`` the ratio is the geometric mean over windows of the windows' own mean
     losses' ratio, the best answer the one ``numerator`` leads least; without it, the ratio of
-    mean losses. Only the rows of ``verdict_set`` read a level. The answers compared are the same
-    under every pretraining, so the first one's cells are read.
+    mean losses. Only the rows of ``verdict_set`` read a level. The first pretraining's cells are
+    read, and the row names it: the published and classical answers are the same under every
+    pretraining, the decoder is that pretraining's.
 
     Raises:
         ValueError: If, read geometrically, an answer misses by nothing on a window.
     """
     rows: list[dict[str, object]] = []
     seen: set[tuple[str, str]] = set()
-    for (name, axis, _), cells in sorted(sets.items()):
+    for (name, axis, pretraining), cells in sorted(sets.items()):
         if (name, axis) in seen:
             continue
         seen.add((name, axis))
@@ -432,7 +433,7 @@ def best_bar_rows(
             {
                 "set": name,
                 "axis": axis,
-                "pretraining": "none",
+                "pretraining": pretraining,
                 "measure": f"{measure}_window_geometric" if geometric else measure,
                 "of": numerator,
                 "against": bar[best] if len(bar) == 1 else f"best of {len(bar)}: {bar[best]}",
