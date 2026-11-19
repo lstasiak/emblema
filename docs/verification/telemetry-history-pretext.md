@@ -788,15 +788,15 @@ the one of 2026-11-15, before the bound of 100 the telemetry now takes, so extre
 in some windows. The local forecasters see missing hours filled and one season per cell. One draw
 of windows.
 
-## 2026-11-19 — measured: on the first mission's later years the published forecaster's squared error is about half the best classical answer's; on the second it reads level with the local forecasters
+## 2026-11-19 — measured: on the first mission's later years the published forecaster's squared error is about half the best classical answer's; on the second it reads level with the best local forecaster
 
 **Question.** As declared above: on the first mission's unread months, does Chronos-2 zero-shot
 lead the best of nine classical answers by at least a fifth, window by window, and on the second
 mission's is it no worse?
 
 **Conditions.** Instrument `abbfe363`, declaration `3785fb06`, `data/report/l54/read.sh` on the
-Mac (M1 Pro) on 2026-11-19: the local forecasters 1,662 s and 1,732 s on CPU, Chronos-2 98 s and
-63 s on MPS, the tables as declared (10,000 resamples). Cells as declared: held 72,000 on
+Mac (M1 Pro) on 2026-11-19: the local forecasters 1,662 s and 1,732 s (held, unread) on CPU,
+Chronos-2 98 s and 63 s on MPS, the tables as declared (10,000 resamples). Cells as declared: held 72,000 on
 Mission1 and 16,500 on Mission2, unread 71,958 and 16,500, each set's cells, targets and every
 answer of 2026-11-15 identical to that reading's.
 
@@ -853,8 +853,9 @@ to 0.97. The lead on the first mission is the typical window's, not a few window
    local forecasters that follow each window, AutoARIMA and AutoETS, are that best answer: the
    lead of 2026-11-15 over the ridge was not the following of drift alone.
 2. On the second mission, eleven channels with little periodicity (the same-phase answer chose
-   one hour for 42 % of cells), the local forecasters read level with Chronos-2: there its lead
-   over the ridge is what a local forecaster also gives.
+   one hour for 42 % of cells), the best local forecaster, AutoARIMA, reads level with Chronos-2
+   and AutoETS and AutoTheta trail it by 6 to 10 %: there most of its lead over the ridge is what
+   a local forecaster also gives.
 3. From the held months to the later years, each answer's own geometric mean over windows of
    the squared error, post hoc: Chronos-2 6.0·10⁻⁴ → 6.2·10⁻⁴, AutoARIMA 1.45·10⁻³ → 1.31·10⁻³,
    the ridge per channel 1.42·10⁻³ → 4.9·10⁻³, the ridge over the window 8.8·10⁻⁴ → 1.2·10⁻²,

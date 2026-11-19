@@ -1166,16 +1166,15 @@ in this telemetry is the forecast.
 
 **Conclusions.**
 
-1. A published forecaster that keeps its error on these years, and halves the best classical
-   answer's squared error there, gives a detector that finds the events about as the departures
-   with no model do: the forecast error read on 2026-11-09 was not held back by the decoder's
-   failure on these years.
+1. A forecaster with about half the best classical answer's squared error on these years finds
+   about as many events beyond chance as the departures with no model: the forecast error read as
+   a detector on 2026-11-09 was not limited by the decoder's failure there.
 2. The envelope finds more events at 1 % than the bar's arm (48 against 42) but no more beyond
-   chance: its alarms spread over the long events that chance also finds.
+   chance: 18.5 of its 48 are found by chance, against 9.6 of the bar arm's 42.
 3. Fused with the 24-hour bins' departures it reads level with the bar (+0.9), so what the
-   envelope adds to a channel's own recent hours is within an event or two.
+   envelope adds to a channel's own recent hours is at most about four events (+0.9 [−2.9; +3.8]).
 4. At its own alarm every candidate raises more false runs (201 to 478) and reads a lower F0.5
-   (0.11 to 0.19) than the departure arm that leads that score (0.269).
+   (0.11 to 0.19) than the departure arm that leads that score (124 false runs, 0.269).
 
 **Limitations.** The hour's mean alone. One forecaster, zero-shot, one hour ahead. The 61
 validation events resolve about ten events, so a gain of a few events is neither seen nor ruled
