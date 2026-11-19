@@ -693,3 +693,97 @@ now takes (ADR-0080), which the post-hoc bands stand in for. The reading by band
 drift and the clipped re-read are post hoc and descriptive; the one that was declared is the
 first table. 1,363 unread windows were not drawn for an hour no channel read, 188 of the
 training ones. The cause of the decoder's loss on the ordinary later window is not established.
+
+## 2026-11-19 — declared before the run: the published forecaster against the best classical answer, window by window
+
+**Question.** On the first mission's later years, which no pretraining read, does Chronos-2
+zero-shot forecast the hour's mean better than the best classical answer by at least the least
+gain, a fifth, when the classical answers include local statistical forecasters fitted on each
+window's own hours, which follow drift as the ridge fitted once does not? On the second mission's
+unread months, is it no worse?
+
+The reading of 2026-11-15 compared Chronos-2 with the ridge per channel fitted once on the
+training months, and only by the mean over cells, which a few cells of extreme values carry.
+Its lead there, about three times on the ordinary windows of the later years, may be the
+forecaster's or only its following of the windows' drift. These months were read on
+2026-11-15, so this reading is a gate with a stronger bar, not a confirmation: a lead that
+passes is confirmed on a mission no reading has touched before any claim rests on it.
+
+**Conditions.**
+
+| | |
+|---|---|
+| Commit | the one that adds this section; the instrument at `abbfe363` |
+| Machine | Mac (M1 Pro, CPU for the local forecasters, MPS for Chronos-2); validation numbers |
+| Cells | the 1,500 windows per mission and set of 2026-11-15 (seed 1), their contexts written again by the same command (`data/report/l54/contexts.sh`), each set's cells and targets identical to that reading's; held months (the three per mission the corpus kept back) and unread months (Mission1 2007-01 to 2013-12 and Mission2 2001-10 to 2003-06, the 35 frozen test months left unread) |
+| Published forecaster | `amazon/chronos-2` (119M parameters), zero-shot, the 47 hourly means of a window's channels handed together, its median for the hidden hour's mean (`chronos2_answers.py`, `chronos-forecasting` 2.3.2 in its own environment) |
+| Bar, nine classical answers | the ridge per channel and the ridge over the window of 2026-11-15, fitted once on the training months; the hour one period back, the last reading and the median of the history; and four forecasters fitted on each cell's own 47 hours, `statsforecast` AutoETS, AutoARIMA, AutoTheta and seasonal naive, the season the period the same-phase answer chose from those hours (one where it is under two hours or over 23), a missing hour carrying the hour before it and the hours before the first reading taking that reading (`local_forecaster_answers.py`, `statsforecast` 2.1.1 in its own environment) |
+| Beside | the decoder of the forecasting pretext's first pretraining (seed 1 of 2026-11-09) |
+| Measure | each cell's squared error of the hour's mean in normalised units; each window's mean over its cells; for an answer, the geometric mean over windows of Chronos-2's window mean over the answer's, as forecasting benchmarks aggregate relative errors, so a few windows of extreme values weigh no more than their share |
+| Reading | `history_forecast_reading.py --verdict-of chronos2 --verdict-set unread --bar` the nine, only the unread rows reading a level; 10,000 resamples of whole windows, seed 1; the bar in every draw is the answer Chronos-2 leads least, so it is never weaker than any of its members; 95 % percentile interval; `data/report/l54/read.sh` runs the whole |
+
+**Rules.**
+
+- *The verdict* is the ratio over the best of nine on the first mission's unread months. An
+  interval covering one is less than the threshold either way; an upper edge under one but above
+  0.80 is real and small; an upper edge at or under 0.80 is at least the least gain; a lower edge
+  above one is harm. Chronos-2 is one model with no seeds or pretrainings, so no spread is added.
+- *The second condition* is the same ratio on the second mission's unread months, read by its
+  level: anything but harm meets it. Both are needed, so no correction for two readings applies.
+- *Everything else is descriptive*: the held months, the ratio of mean losses, Chronos-2 against
+  each of the nine and against the decoder, and which answer is the best.
+- The least gain stays 0.80, as the register set it for the forecast on 2026-11-15.
+
+| Outcome on the first mission | Second mission | What follows |
+|---|---|---|
+| At least the least gain | not harm | forecasting is ground for a foundation model on this telemetry; the multi-mission corpus and adaptation is read next, confirmed on a mission no reading touched |
+| At least the least gain | harm | the lead is the first mission's; the corpus is read only with that named limitation |
+| Real and small, noise or harm | any | the lead over the ridge was the following of drift, which a local classical forecaster also does; forecasting is no foundation model's ground here unless an operations task is named for it on its own |
+
+**Predictions**, from the trial's intervals (below), the edge nearer one for a lead:
+
+| | Predicted | Source |
+|---|---|---|
+| Mission1 unread, Chronos-2 over the best of nine | at most 0.90: real and small or at least the least gain | the trial on training months, 0.66 [0.49; 0.90] |
+| Mission1, the best of nine | the ridge over the window or a local forecaster (AutoARIMA, AutoETS) | the trial: window ridge 0.66, ridge 0.50, AutoETS 0.48, AutoARIMA 0.52 |
+| Mission2 unread, Chronos-2 over the best of nine | 0.89 to 1.09: noise; the best a local forecaster | the trial, 0.97 [0.89; 1.09] against AutoETS; AutoTheta 0.96, AutoARIMA 0.88 |
+| Ratio of mean losses, Mission1 | above one or wide, carried by few cells | the trial, 28 [0.46; 104] against AutoARIMA |
+
+**Power.** On 100 trial windows the first mission's interval spans a factor of 1.8 (0.30 each
+way on the log scale); on 1,500 windows that falls to about 0.08, an interval of roughly ±8 %
+around the point, a little wider for the best taken in every draw. The upper edge reaches 0.80
+when the point is at or under about 0.74: a true ratio of 0.66 reads at least the least gain in
+nearly every world, 0.70 in about nine in ten, 0.74 in half, 0.80 in about one in forty; a true
+1.0 reads noise.
+
+**Trial, before this declaration.** `data/report/l54/trial.sh` on the first 100 windows per
+mission of the training months, which the pretraining trained on and the reading of 2026-11-15
+read: the local forecasters (198 s for 5,893 cells on eight cores), Chronos-2 (54 s with its
+loading) and the reading script whole. The measure was chosen after the trial and is stated as
+such: on the first mission the ratio of mean losses read 28 [0.46; 104] against AutoARIMA,
+carried by a few cells of extreme values, as the reading of 2026-11-15 found for the ridge (1 %
+of cells, 99 % of the loss), while the geometric mean over windows reads 0.66 [0.49; 0.90] on
+the same cells. It is the aggregate forecasting benchmarks use, and the ratio of means stays
+beside it. No window had an answer missing by nothing, which leaves no ratio and is refused.
+
+Chronos-2 over each answer, geometric mean over windows, 95 % interval:
+
+| Answer | Mission1 | Mission2 |
+|---|---|---|
+| ridge per channel | 0.50 [0.37; 0.69] | 0.26 [0.21; 0.32] |
+| ridge over the window | 0.66 [0.48; 0.90] | 0.21 [0.17; 0.26] |
+| AutoETS | 0.48 [0.39; 0.61] | 0.97 [0.87; 1.07] |
+| AutoARIMA | 0.52 [0.39; 0.74] | 0.88 [0.75; 1.01] |
+| AutoTheta | 0.21 [0.17; 0.27] | 0.96 [0.86; 1.07] |
+| seasonal naive | 0.23 [0.15; 0.34] | 0.35 [0.26; 0.46] |
+| hour one period back | 0.23 [0.15; 0.34] | 0.30 [0.23; 0.41] |
+| median of the history | 0.04 [0.03; 0.06] | 0.11 [0.08; 0.14] |
+| last reading | 0.007 [0.005; 0.010] | 0.008 [0.006; 0.010] |
+| decoder, beside | 0.67 [0.47; 0.97] | 0.40 [0.33; 0.48] |
+| **best of nine** | **0.66 [0.49; 0.90]**, window ridge | **0.97 [0.89; 1.09]**, AutoETS |
+
+**Limitations declared.** The unread months were read on 2026-11-15, so this is a gate. One
+published forecaster; TimesFM and TiRex are not read. The hour's mean only. The publication is
+the one of 2026-11-15, before the bound of 100 the telemetry now takes, so extreme values remain
+in some windows. The local forecasters see missing hours filled and one season per cell. One draw
+of windows.
