@@ -84,3 +84,13 @@ def test_chunks_of_other_contexts_are_refused(tmp_path: Path) -> None:
 
     with pytest.raises(SystemExit, match="chunks of other contexts"):
         run(contexts + 1.0, tmp_path, spread_around_last, QUANTILES, chunk=2)
+
+
+def test_a_change_in_any_chunks_first_window_is_refused(tmp_path: Path) -> None:
+    contexts = np.arange(4 * 2 * 3, dtype=np.float32).reshape(4, 2, 3)
+    run(contexts, tmp_path, spread_around_last, QUANTILES, chunk=2)
+    changed = contexts.copy()
+    changed[2] += 1.0
+
+    with pytest.raises(SystemExit, match="chunks of other contexts"):
+        run(changed, tmp_path, spread_around_last, QUANTILES, chunk=2)

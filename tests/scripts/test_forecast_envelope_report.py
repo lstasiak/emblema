@@ -45,11 +45,17 @@ def test_a_channel_absent_without_an_envelope_or_with_too_little_context_departs
     envelope = np.array([[[0.0, 1.0, 2.0], [np.nan] * 3, [0.0, 1.0, 2.0]]])
     loaded = np.array([[47, 47, LEAST_CONTEXT - 1]])
 
-    departures = envelope_departures(now, envelope, loaded, np.full(3, 0.1), least_context=24)
+    departures = envelope_departures(
+        now, envelope, loaded, np.full(3, 0.1), least_context=LEAST_CONTEXT
+    )
 
     assert departures.tolist() == [[0.0, 0.0, 0.0]]
     at_least = envelope_departures(
-        now, envelope, np.array([[47, 47, LEAST_CONTEXT]]), np.full(3, 0.1), least_context=24
+        now,
+        envelope,
+        np.array([[47, 47, LEAST_CONTEXT]]),
+        np.full(3, 0.1),
+        least_context=LEAST_CONTEXT,
     )
     assert at_least[0, 2] == pytest.approx(2.0 * 2.5631 / 2.0)
     assert LEAST_CONTEXT == 24
