@@ -185,13 +185,233 @@ def test_pretrainings_scored_on_different_windows_are_refused(tmp_path: Path) ->
 def test_a_published_answer_that_misses_a_cell_is_refused(tmp_path: Path) -> None:
     cells = read_answers(answers_file(tmp_path / "a.csv", 0.5))
 
-    with pytest.raises(ValueError, match="misses 2 cells"):
-        CellSet.of(cells, delta=1.0, published={c.key: 0.0 for c in cells[:-2]})
+    with pytest.raises(ValueError, match="chronos2 misses 2 cells"):
+        CellSet.of(cells, delta=1.0, published={"chronos2": {c.key: 0.0 for c in cells[:-2]}})
+    with pytest.raises(ValueError, match="ridge is already an answer"):
+        CellSet.of(cells, delta=1.0, published={"ridge": {c.key: 0.0 for c in cells}})
     with pytest.raises(ValueError, match="no cell"):
         CellSet.of([], delta=1.0, published=None)
+
+
+def local_file(path: Path, offsets: dict[str, float], windows: range = range(6)) -> Path:
+    """Answers per cell from another file: each named answer misses the target by its offset."""
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["window", "axis", "channel", *(f"mean_{n}" for n in offsets)])
+        for w in windows:
+            for c in (1, 2):
+                writer.writerow([w, "M1", c, *(float(w) + o for o in offsets.values())])
+    return path
+
+
+@pytest.mark.parametrize(
+    ("bar", "best", "ratio", "level"),
+    [
+        # The ridge misses by the root of 0.04 and same phase of 0.06 on the mean, the local
+        # ETS by 0.05 (squared 0.0025): against a bar holding it, the published 0.01 is harm.
+        (("ridge", "same_phase", "auto_ets", "auto_theta"), "auto_ets", 4.0, "harm"),
+        (("ridge", "same_phase"), "ridge", 0.25, "at least the least gain"),
+    ],
+)
+def test_a_published_verdict_reads_the_best_classical_answer_in_every_draw(
+    tmp_path: Path, bar: tuple[str, ...], best: str, ratio: float, level: str
+) -> None:
+    answers = answers_file(tmp_path / "a.csv", 0.5)
+    chronos = published_file(tmp_path / "c.csv")
+    local = local_file(tmp_path / "l.csv", {"auto_ets": 0.05, "auto_theta": 0.2})
+
+    _, verdicts = read(
+        [("seed1", "unread", answers)],
+        [("unread", chronos), ("unread", local)],
+        delta=1.0,
+        least_gain=0.8,
+        floor=0.02,
+        resamples=200,
+        seed=1,
+        verdict_of="chronos2",
+        bar=bar,
+        verdict_set="unread",
+    )
+
+    bars = {v["measure"]: v for v in verdicts if str(v["against"]).startswith("best of")}
+    # Every window carries the same losses, so the geometric reading is the ratio of means.
+    geometric, of_means = bars["squared_mean_window_geometric"], bars["squared_mean"]
+    for row in (geometric, of_means):
+        assert row["against"] == f"best of {len(bar)}: {best}"
+        assert row["ratio"] == pytest.approx(ratio)
+        assert (row["low"], row["high"]) == pytest.approx((ratio, ratio))
+    assert geometric["level"] == level
+    assert of_means["level"] == "descriptive"
+    decoder = [v for v in verdicts if v["of"] == "decoder" and v["against"] == "ridge"]
+    assert decoder
+    assert {v["level"] for v in decoder} <= {"", "descriptive"}
+    per_answer = {v["against"]: v["ratio"] for v in verdicts if v["of"] == "chronos2"}
+    assert per_answer["ridge"] == pytest.approx(0.25)
+
+
+@pytest.mark.parametrize(
+    ("verdict_of", "bar", "verdict_set", "message"),
+    [
+        ("chronos2", (), "unread", "against a bar of other answers"),
+        ("chronos2", ("ridge", "chronos2"), "unread", "against a bar of other answers"),
+        ("chronos2", ("ridge",), None, "on one set"),
+        (None, ("ridge",), None, "only with a forecaster's verdict"),
+        (None, (), "unread", "only with a forecaster's verdict"),
+    ],
+)
+def test_a_published_verdict_needs_one_set_and_a_bar_without_itself(
+    tmp_path: Path,
+    verdict_of: str | None,
+    bar: tuple[str, ...],
+    verdict_set: str | None,
+    message: str,
+) -> None:
+    answers = answers_file(tmp_path / "a.csv", 0.5)
+    chronos = published_file(tmp_path / "c.csv")
+    with pytest.raises(ValueError, match=message):
+        read(
+            [("seed1", "unread", answers)],
+            [("unread", chronos)],
+            delta=1.0,
+            least_gain=0.8,
+            floor=0.02,
+            resamples=10,
+            seed=1,
+            verdict_of=verdict_of,
+            bar=bar,
+            verdict_set=verdict_set,
+        )
+
+
+def test_an_answer_given_twice_for_a_set_is_refused(tmp_path: Path) -> None:
+    answers = answers_file(tmp_path / "a.csv", 0.5)
+    chronos = published_file(tmp_path / "c.csv")
+
+    with pytest.raises(ValueError, match="chronos2 is given twice for unread"):
+        read(
+            [("seed1", "unread", answers)],
+            [("unread", chronos), ("unread", chronos)],
+            delta=1.0,
+            least_gain=0.8,
+            floor=0.02,
+            resamples=10,
+            seed=1,
+        )
 
 
 def test_the_table_shows_floats_to_four_places() -> None:
     text = markdown(("a", "b"), [{"a": 0.123456, "b": "x"}])
 
     assert text.splitlines()[-1] == "| 0.1235 | x |"
+
+
+def test_the_geometric_verdict_does_not_follow_one_window_the_bar_failed_on(
+    tmp_path: Path,
+) -> None:
+    # The ridge misses fifty times worse on one window of six: the ratio of means makes the
+    # published answer look ten times better, the geometric mean over windows does not.
+    answers = answers_file(tmp_path / "a.csv", 0.5, ridge_failure=(3, 50.0))
+    chronos = published_file(tmp_path / "c.csv")
+
+    _, verdicts = read(
+        [("seed1", "unread", answers)],
+        [("unread", chronos)],
+        delta=1.0,
+        least_gain=0.8,
+        floor=0.02,
+        resamples=200,
+        seed=1,
+        verdict_of="chronos2",
+        bar=("ridge",),
+        verdict_set="unread",
+    )
+
+    by = {v["measure"]: v for v in verdicts if v["of"] == "chronos2" and v["against"] == "ridge"}
+    beside = [v for v in verdicts if v["of"] == "chronos2" and v["against"] == "decoder"]
+    assert [v["ratio"] for v in beside] == pytest.approx([0.01 / 0.02])
+    ordinary, failed = 0.01 / 0.04, 0.01 / 2.0
+    assert by["squared_mean"]["ratio"] == pytest.approx(0.01 / ((5 * 0.04 + 2.0) / 6))
+    assert by["squared_mean_window_geometric"]["ratio"] == pytest.approx(
+        np.exp((5 * np.log(ordinary) + np.log(failed)) / 6)
+    )
+
+
+@pytest.mark.parametrize(
+    ("verdict_of", "bar"), [("auto_ets", ("ridge",)), ("ridge", ("auto_ets",))]
+)
+def test_an_answer_that_misses_by_nothing_on_a_window_leaves_no_geometric_ratio(
+    tmp_path: Path, verdict_of: str, bar: tuple[str, ...]
+) -> None:
+    answers = answers_file(tmp_path / "a.csv", 0.5)
+    exact = local_file(tmp_path / "l.csv", {"auto_ets": 0.0})
+
+    with pytest.raises(ValueError, match="missed by nothing"):
+        read(
+            [("seed1", "unread", answers)],
+            [("unread", exact)],
+            delta=1.0,
+            least_gain=0.8,
+            floor=0.02,
+            resamples=10,
+            seed=1,
+            verdict_of=verdict_of,
+            bar=bar,
+            verdict_set="unread",
+        )
+
+
+def test_the_best_answer_is_taken_in_every_draw_and_only_the_verdict_set_reads_a_level(
+    tmp_path: Path,
+) -> None:
+    # Two answers that take turns being the better one, window by window: in any draw the bar
+    # is whichever leads there, so its interval lies above either answer's own.
+    answers = answers_file(tmp_path / "a.csv", 0.5)
+    held = answers_file(tmp_path / "h.csv", 0.5)
+    offsets_by_window = {w: (0.05, 0.3) if w % 2 else (0.3, 0.05) for w in range(6)}
+    turns = tmp_path / "t.csv"
+    with turns.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["window", "axis", "channel", "mean_auto_ets", "mean_auto_theta"])
+        for w, (ets, theta) in offsets_by_window.items():
+            for c in (1, 2):
+                writer.writerow([w, "M1", c, float(w) + ets, float(w) + theta])
+    chronos = published_file(tmp_path / "c.csv")
+
+    _, verdicts = read(
+        [("seed1", "unread", answers), ("seed1", "held", held)],
+        [("unread", chronos), ("unread", turns), ("held", chronos), ("held", turns)],
+        delta=1.0,
+        least_gain=0.8,
+        floor=0.02,
+        resamples=500,
+        seed=1,
+        verdict_of="chronos2",
+        bar=("auto_ets", "auto_theta"),
+        verdict_set="unread",
+    )
+
+    rows = [v for v in verdicts if v["of"] == "chronos2" and str(v["measure"]).endswith("metric")]
+    by = {(str(v["set"]), str(v["against"]).split(":")[0]): v for v in rows}
+
+    def edge(key: tuple[str, str], side: str) -> float:
+        value = by[key][side]
+        assert isinstance(value, float)
+        return value
+
+    best = ("unread", "best of 2")
+    for single in (("unread", "auto_ets"), ("unread", "auto_theta")):
+        assert edge(best, "low") >= edge(single, "low")
+        assert edge(best, "high") >= edge(single, "high")
+    # Each answer leads on half the windows, so the best in every draw lies strictly above both.
+    assert edge(best, "low") > max(edge(("unread", s), "low") for s in ("auto_ets", "auto_theta"))
+    assert by[best]["level"] != "descriptive"
+    assert by[("held", "best of 2")]["level"] == "descriptive"
+
+
+def test_an_answer_that_is_not_finite_reads_no_level(tmp_path: Path) -> None:
+    cells = read_answers(answers_file(tmp_path / "a.csv", 0.5))
+
+    with pytest.raises(ValueError, match="not finite"):
+        CellSet.of(cells, delta=1.0, published={"auto_ets": {c.key: float("nan") for c in cells}})
+    with pytest.raises(ValueError, match="reads no level"):
+        level_of(float("nan"), 0.9, 0.8)

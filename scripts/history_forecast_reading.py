@@ -14,10 +14,22 @@ other channels, the decoder and the ridge against the published forecaster on th
 error, and the median over windows of the decoder's loss over the ridge's within each window,
 which a bar's failure on a few windows cannot carry.
 
+With ``--verdict-of NAME --verdict-set SET --bar NAME...`` the verdict is instead, on that set's
+rows alone, a published forecaster against
+the best of the classical answers named: the geometric mean over windows of its squared error of
+the mean over each answer's, window by window, as forecasting benchmarks aggregate relative
+errors, so a few windows of extreme values carry no more than their share; the best answer is
+the one the forecaster leads least, taken in every draw of windows, so the bar is never weaker
+than any of its answers. The forecaster has no pretrainings, so its level is read off the
+percentile interval of that ratio. The ratio of mean losses stands beside it, and the decoder's
+reading is then descriptive. Further answers come from any file of ``mean_<name>`` columns per
+cell (``--chronos`` or ``--beside``), as the published and the local forecasters write them.
+
     uv run scripts/history_forecast_reading.py \\
         --answers seed1 unread DIR/seed1/answers-unread.csv \\
         --answers seed2 unread DIR/seed2/answers-unread.csv \\
-        [--chronos unread DIR/chronos2-unread.csv] \\
+        [--chronos unread DIR/chronos2-unread.csv] [--beside unread DIR/local-unread.csv] \\
+        [--verdict-of chronos2 --verdict-set unread --bar ridge window_ridge auto_ets ...] \\
         --least-gain 0.8 --floor 0.02 [--delta 1.0] [--resamples 10000] --out DIR
 
 Writes ``losses.csv`` and ``verdicts.csv`` under ``--out`` and prints both as tables.
@@ -97,12 +109,17 @@ def read_answers(path: Path) -> list[CellRow]:
         ]
 
 
-def read_published(path: Path) -> dict[Key, float]:
+def read_published(path: Path) -> dict[str, dict[Key, float]]:
+    """Every ``mean_<name>`` column of a file of answers per cell, by name."""
     with path.open(newline="") as handle:
-        return {
-            (int(row["window"]), row["axis"], int(row["channel"])): float(row[f"mean_{PUBLISHED}"])
-            for row in csv.DictReader(handle)
-        }
+        reader = csv.DictReader(handle)
+        names = [c.removeprefix("mean_") for c in reader.fieldnames or () if c.startswith("mean_")]
+        out: dict[str, dict[Key, float]] = {name: {} for name in names}
+        for row in reader:
+            key = (int(row["window"]), row["axis"], int(row["channel"]))
+            for name in names:
+                out[name][key] = float(row[f"mean_{name}"])
+    return out
 
 
 def huber(error: Floats, delta: float) -> Floats:
@@ -126,12 +143,17 @@ class CellSet:
 
     @classmethod
     def of(
-        cls, cells: Sequence[CellRow], *, delta: float, published: Mapping[Key, float] | None
+        cls,
+        cells: Sequence[CellRow],
+        *,
+        delta: float,
+        published: Mapping[str, Mapping[Key, float]] | None,
     ) -> "CellSet":
-        """The cells laid out, the published answer joined by cell where given.
+        """The cells laid out, the answers from other files joined by cell where given.
 
         Raises:
-            ValueError: If no cell is given, or the published answer misses one of them.
+            ValueError: If no cell is given, or an answer from another file misses one of them,
+                or names an answer the cells already hold, or any loss is not finite.
         """
         if not cells:
             raise ValueError("no cell to read")
@@ -141,14 +163,19 @@ class CellSet:
         answers: dict[str, Floats] = {a: np.array([c.means[a] for c in cells]) for a in ANSWERS}
         for a in ANSWERS:
             losses[(a, "huber_five")] = np.array([c.huber[a] for c in cells])
-        if published is not None:
-            missing = [c.key for c in cells if c.key not in published]
+        for name, by_cell in (published or {}).items():
+            if name in answers:
+                raise ValueError(f"{name} is already an answer of the cells")
+            missing = [c.key for c in cells if c.key not in by_cell]
             if missing:
-                raise ValueError(f"the published answer misses {len(missing)} cells: {missing[0]}")
-            answers[PUBLISHED] = np.array([published[c.key] for c in cells])
+                raise ValueError(f"{name} misses {len(missing)} cells: {missing[0]}")
+            answers[name] = np.array([by_cell[c.key] for c in cells])
         for a, mean in answers.items():
             losses[(a, "huber_mean")] = huber(mean - target, delta)
             losses[(a, "squared_mean")] = (mean - target) ** 2
+        for (a, measure), values in losses.items():
+            if not np.isfinite(values).all():
+                raise ValueError(f"{a} holds a {measure} that is not finite")
         return cls(windows.astype(np.int64), inverse.astype(np.intp), losses)
 
     @property
@@ -179,7 +206,13 @@ def interval(boot: Floats) -> tuple[float, float]:
 
 
 def level_of(low: float, high: float, least_gain: float) -> str:
-    """What the arm's interval around one and the least gain says, a ratio below one a gain."""
+    """What the arm's interval around one and the least gain says, a ratio below one a gain.
+
+    Raises:
+        ValueError: If an edge is not finite, which reads no level.
+    """
+    if not (np.isfinite(low) and np.isfinite(high)):
+        raise ValueError(f"an interval [{low}; {high}] reads no level")
     if low > 1.0:
         return "harm"
     if high >= 1.0:
@@ -340,6 +373,80 @@ def median_ratio_rows(
     return rows
 
 
+def window_log_ratios(cells: CellSet, numerator: str, against: str, measure: str) -> Floats:
+    """Each window's log of ``numerator``'s mean loss over ``against``'s.
+
+    Raises:
+        ValueError: If either misses by nothing on a window, which leaves no ratio.
+    """
+    top, counts = cells.per_window(cells.losses[(numerator, measure)])
+    bottom, _ = cells.per_window(cells.losses[(against, measure)])
+    if (top == 0).any() or (bottom == 0).any():
+        raise ValueError(f"{numerator} or {against} missed by nothing on a window: no ratio")
+    logs: Floats = np.log((top / counts) / (bottom / counts))
+    return logs
+
+
+def best_bar_rows(
+    sets: Mapping[tuple[str, str, str], CellSet],
+    draws: Mapping[tuple[str, str], NDArray[np.int64]],
+    *,
+    numerator: str,
+    bar: Sequence[str],
+    measure: str,
+    least_gain: float,
+    verdict_set: str | None,
+    geometric: bool,
+) -> list[dict[str, object]]:
+    """``numerator`` over the best of ``bar`` by set and axis, the best taken in every draw.
+
+    With ``geometric`` the ratio is the geometric mean over windows of the windows' own mean
+    losses' ratio, the best answer the one ``numerator`` leads least; without it, the ratio of
+    mean losses. Only the rows of ``verdict_set`` read a level. The answers compared are the same
+    under every pretraining, so the first one's cells are read.
+
+    Raises:
+        ValueError: If, read geometrically, an answer misses by nothing on a window.
+    """
+    rows: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    for (name, axis, _), cells in sorted(sets.items()):
+        if (name, axis) in seen:
+            continue
+        seen.add((name, axis))
+        drawn = draws[(name, axis)]
+        if geometric:
+            logs = np.stack([window_log_ratios(cells, numerator, a, measure) for a in bar])
+            points = np.exp(logs.mean(axis=1))
+            best = int(np.argmax(points))
+            ratio = float(points[best])
+            low, high = interval(np.exp(np.max(logs[:, drawn].mean(axis=2), axis=0)))
+        else:
+            top, boot_top = cells.resampled_means(cells.losses[(numerator, measure)], drawn)
+            bottoms = [cells.resampled_means(cells.losses[(a, measure)], drawn) for a in bar]
+            best = int(np.argmin([point for point, _ in bottoms]))
+            boot_best = np.min(np.stack([boot for _, boot in bottoms]), axis=0)
+            ratio = top / bottoms[best][0]
+            low, high = interval(boot_top / boot_best)
+        rows.append(
+            {
+                "set": name,
+                "axis": axis,
+                "pretraining": "none",
+                "measure": f"{measure}_window_geometric" if geometric else measure,
+                "of": numerator,
+                "against": bar[best] if len(bar) == 1 else f"best of {len(bar)}: {bar[best]}",
+                "ratio": ratio,
+                "low": low,
+                "high": high,
+                "spread": "",
+                "threshold": "",
+                "level": level_of(low, high, least_gain) if name == verdict_set else "descriptive",
+            }
+        )
+    return rows
+
+
 def check_same_cells(sets: Mapping[tuple[str, str, str], CellSet]) -> None:
     """The pretrainings of one set and axis must have been scored on the same windows.
 
@@ -383,9 +490,26 @@ def read(
     floor: float,
     resamples: int,
     seed: int,
+    verdict_of: str | None = None,
+    bar: Sequence[str] = (),
+    verdict_set: str | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-    """The two tables from the files: every loss, and every ratio with the arm's verdict."""
-    published_by_set = {name: read_published(path) for name, path in published}
+    """The two tables from the files: every loss, and every ratio with the verdict's level.
+
+    Raises:
+        ValueError: If a verdict of a published forecaster names no bar or no set, or the bar
+            names it, or a bar or set is named without such a verdict.
+    """
+    if verdict_of is None and (bar or verdict_set is not None):
+        raise ValueError("a bar and a verdict's set are read only with a forecaster's verdict")
+    if verdict_of is not None and (not bar or verdict_of in bar or verdict_set is None):
+        raise ValueError(f"{verdict_of} is read on one set against a bar of other answers")
+    published_by_set: dict[str, dict[str, dict[Key, float]]] = {}
+    for name, path in published:
+        for answer, by_cell in read_published(path).items():
+            if answer in published_by_set.setdefault(name, {}):
+                raise ValueError(f"{answer} is given twice for {name}")
+            published_by_set[name][answer] = by_cell
     sets: dict[tuple[str, str, str], CellSet] = {}
     for pretraining, name, path in answers:
         cells = read_answers(path)
@@ -408,8 +532,31 @@ def read(
         measure="huber_five",
         least_gain=least_gain,
         floor=floor,
-        verdict=True,
+        verdict=verdict_of is None,
     )
+    if verdict_of is not None:
+        for geometric in (True, False):
+            verdicts += best_bar_rows(
+                sets,
+                draws,
+                numerator=verdict_of,
+                bar=bar,
+                measure="squared_mean",
+                least_gain=least_gain,
+                verdict_set=verdict_set if geometric else None,
+                geometric=geometric,
+            )
+        for against in (*bar, "decoder"):
+            verdicts += best_bar_rows(
+                sets,
+                draws,
+                numerator=verdict_of,
+                bar=[against],
+                measure="squared_mean",
+                least_gain=least_gain,
+                verdict_set=None,
+                geometric=True,
+            )
     verdicts += median_ratio_rows(
         sets, draws, numerator="decoder", against="ridge", measure="huber_five"
     )
@@ -442,6 +589,10 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
         "--answers", nargs=3, action="append", required=True, metavar=("PRETRAINING", "SET", "PATH")
     )
     parser.add_argument("--chronos", nargs=2, action="append", default=[], metavar=("SET", "PATH"))
+    parser.add_argument("--beside", nargs=2, action="append", default=[], metavar=("SET", "PATH"))
+    parser.add_argument("--verdict-of", help="a published answer read against the bar")
+    parser.add_argument("--bar", nargs="+", default=[], help="classical answers, best taken")
+    parser.add_argument("--verdict-set", help="the set of months whose rows read a level")
     parser.add_argument("--least-gain", type=float, required=True)
     parser.add_argument("--floor", type=float, required=True)
     parser.add_argument("--delta", type=float, default=1.0)
@@ -451,12 +602,15 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     arguments = parser.parse_args(argv)
     losses, verdicts = read(
         [(p, s, Path(path)) for p, s, path in arguments.answers],
-        [(s, Path(path)) for s, path in arguments.chronos],
+        [(s, Path(path)) for s, path in [*arguments.chronos, *arguments.beside]],
         delta=arguments.delta,
         least_gain=arguments.least_gain,
         floor=arguments.floor,
         resamples=arguments.resamples,
         seed=arguments.seed,
+        verdict_of=arguments.verdict_of,
+        bar=arguments.bar,
+        verdict_set=arguments.verdict_set,
     )
     arguments.out.mkdir(parents=True, exist_ok=True)
     write(arguments.out / "losses.csv", LOSS_COLUMNS, losses)
