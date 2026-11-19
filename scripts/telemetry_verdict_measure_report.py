@@ -318,7 +318,7 @@ DESCRIBED = CEILING_COLUMNS[-6:]
 
 
 def ceiling(
-    validation: Path,
+    directory: Path,
     taught: Path | None,
     out: Path,
     *,
@@ -343,9 +343,9 @@ def ceiling(
             taken.
     """
     out.mkdir(parents=True, exist_ok=True)
-    arms = departure_arms(validation, section)
+    arms = departure_arms(directory, section)
     like = next(iter(arms.values()))
-    dropped = read_truncated(validation, section)
+    dropped = read_truncated(directory, section)
     groups: dict[str, list[Key]] = {}
     everything: dict[Key, SideArrays] = dict(arms)
     if references:
