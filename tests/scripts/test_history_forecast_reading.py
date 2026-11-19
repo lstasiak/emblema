@@ -238,7 +238,7 @@ def reading(
         (("ridge", "same_phase"), "ridge", 0.25, "at least the least gain"),
     ],
 )
-def test_a_published_verdict_reads_the_best_classical_answer_in_every_draw(
+def test_a_published_verdict_reads_the_best_classical_answer(
     tmp_path: Path, bar: tuple[str, ...], best: str, ratio: float, level: str
 ) -> None:
     answers = answers_file(tmp_path / "a.csv", 0.5)

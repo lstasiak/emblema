@@ -15,8 +15,8 @@ error, and the median over windows of the decoder's loss over the ridge's within
 which a bar's failure on a few windows cannot carry.
 
 With ``--verdict-of NAME --verdict-set SET --bar NAME...`` the verdict is instead, on that set's
-rows alone, a published forecaster against
-the best of the classical answers named: the geometric mean over windows of its squared error of
+rows alone, a published forecaster against the best of the classical answers named: the
+geometric mean over windows of its squared error of
 the mean over each answer's, window by window, as forecasting benchmarks aggregate relative
 errors, so a few windows of extreme values carry no more than their share; the best answer is
 the one the forecaster leads least, taken in every draw of windows, so the bar is never weaker
@@ -412,7 +412,7 @@ def best_bar_rows(
     rows: list[dict[str, object]] = []
     seen: set[tuple[str, str]] = set()
     for (name, axis, pretraining), cells in sorted(sets.items()):
-        if (name, axis) in seen:
+        if (name, axis) in seen or (numerator, measure) not in cells.losses:
             continue
         seen.add((name, axis))
         drawn = draws[(name, axis)]
@@ -421,7 +421,8 @@ def best_bar_rows(
             points = np.exp(logs.mean(axis=1))
             best = int(np.argmax(points))
             ratio = float(points[best])
-            low, high = interval(np.exp(np.max(logs[:, drawn].mean(axis=2), axis=0)))
+            boots = np.stack([each[drawn].mean(axis=1) for each in logs])
+            low, high = interval(np.exp(boots.max(axis=0)))
         else:
             top, boot_top = cells.resampled_means(cells.losses[(numerator, measure)], drawn)
             bottoms = [cells.resampled_means(cells.losses[(a, measure)], drawn) for a in bar]
