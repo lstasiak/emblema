@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, fields, replace
-from typing import Self
+from typing import Any, Self
 
 import torch
 from torch import Tensor
@@ -76,7 +76,7 @@ class TokenTensors:
     def to(
         self, device: torch.device | str | None = None, dtype: torch.dtype | None = None
     ) -> Self:
-        """The same batch on ``device``, its floating tensors in ``dtype``.
+        """The same batch on ``device``, its floating tensors in ``dtype``, any other field kept.
 
         The move and the change of type are two steps, in that order. Asking an accelerator for
         both at once can give back a tensor that is not the one it holds: on MPS, widening to
@@ -85,8 +85,11 @@ class TokenTensors:
         any device, and costs one pass over a batch.
         """
 
-        def moved(tensor: Tensor) -> Tensor:
-            on_device = tensor.to(device=device)
+        # Any: a subclass's fields are tensors or host facts, and only ``fields`` knows which.
+        def moved(value: Any) -> Any:
+            if not isinstance(value, Tensor):
+                return value
+            on_device = value.to(device=device)
             if dtype is not None and on_device.is_floating_point():
                 return on_device.to(dtype=dtype)
             return on_device

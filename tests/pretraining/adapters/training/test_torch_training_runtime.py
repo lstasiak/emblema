@@ -70,6 +70,7 @@ from emblema.pretraining.adapters.objective.pretraining_objective import (  # no
 from emblema.pretraining.adapters.training.torch_training_runtime import (  # noqa: E402
     TorchTrainingRuntime,
     _duration,
+    _summed,
 )
 from emblema.pretraining.adapters.training.trained_model import TrainedModel  # noqa: E402
 from emblema.pretraining.adapters.training.training_checkpoint import (  # noqa: E402
@@ -128,6 +129,13 @@ def test_the_same_configuration_twice_trains_the_same_weights(objective: dict[st
 
     assert one[-1].training_loss == two[-1].training_loss
     assert one[-1].backbone == two[-1].backbone
+
+
+def test_validation_adds_its_batches_one_after_another() -> None:
+    # A compensated sum would give 1.0; the runs already recorded added in order and gave 0.0.
+    values = [torch.tensor(1e16), torch.tensor(1.0), torch.tensor(-1e16)]
+
+    assert _summed(values) == 0.0
 
 
 def test_a_run_that_hides_the_tail_trains_and_repeats_itself() -> None:

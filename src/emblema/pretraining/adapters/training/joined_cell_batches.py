@@ -84,6 +84,7 @@ class JoinedCellBatches:
             batch.timeless,
             batch.padding_mask,
             visible=torch.from_numpy(visible.features),
+            channel_entries=int(batch.channel_ids.max()) + 1,
         )
 
     def _visible(

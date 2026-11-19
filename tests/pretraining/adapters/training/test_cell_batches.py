@@ -111,6 +111,19 @@ def test_the_scored_batch_holds_the_full_cells_and_the_cells_without_the_hidden_
     assert torch.equal(scored.visible[1], scored.features[1])
 
 
+def test_the_scored_batch_sizes_its_channel_table_on_the_host_and_keeps_it_when_moved() -> None:
+    batches = CellBatches(LAYOUT)
+    # Channels 1 to 3, so a table indexed by channel identifier needs four entries.
+    collated = batches.collate(irregular_windows(3, seed=2, channels=3))
+
+    scored = batches.scored(collated, masks_hiding(torch.zeros_like(collated.padding_mask)))
+
+    assert scored.channel_entries == 4
+    moved = scored.to("cpu", torch.float64)
+    assert moved.channel_entries == 4
+    assert moved.visible.dtype == torch.float64
+
+
 def test_hiding_nothing_lays_the_visible_cells_out_as_the_full_ones() -> None:
     batches = CellBatches(LAYOUT)
     windows = irregular_windows(3, seed=2, channels=3)

@@ -108,7 +108,7 @@ class CellReconstruction(MaskedReconstruction):
         total, trivial_total = error, trivial
         # The timed cells the encoder saw: what a guess without a model may read.
         visible = ~cells.padding_mask & ~masks.hidden & ~cells.timeless
-        entries = int(cells.channel_ids.max().item()) + 1
+        entries = cells.channel_entries
         if self.term.asks_presence:
             logits = prediction[..., BinnedTokens.PRESENCE].to(dtype)
             was_there = present.to(dtype)

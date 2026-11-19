@@ -6,7 +6,9 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Self
 
 import torch
+from torch import Tensor
 
+from emblema.pretraining.adapters.objective.objective_score import ObjectiveScore
 from emblema.pretraining.adapters.objective.objective_shape import ObjectiveShape
 from emblema.pretraining.adapters.objective.pretraining_objective import PretrainingObjective
 from emblema.pretraining.adapters.objective.token_masking import TokenMasking
@@ -119,6 +121,18 @@ class _Progress:
 
 
 _Terms = dict[str, float]
+
+
+def _summed(values: list[Tensor]) -> float:
+    """The values read back to the host in one transfer and added one after another.
+
+    Not ``sum``, whose compensated addition would move the last bits of every validation away
+    from the runs already recorded.
+    """
+    total = 0.0
+    for value in torch.stack(values).to("cpu").tolist():
+        total += value
+    return total
 
 
 def _terms(terms: _Terms, tokens: int, trivial: _Terms | None = None) -> str:
@@ -584,9 +598,9 @@ class TorchTrainingRuntime:
         hidden_tokens_in_all, observed_in_all = 0, 0
         with torch.no_grad():
             for corpus, loader in session.validation:
-                total, trivial, hidden_tokens = 0.0, 0.0, 0
-                terms: _Terms = {}
-                trivial_terms: _Terms = {}
+                # Read back once per corpus: a read per batch would make the host wait for the
+                # device, so the next batch could not be laid out while this one is scored.
+                scores: list[ObjectiveScore] = []
                 for index, on_host in enumerate(loader.batches_of(0)):
                     draws = torch.Generator().manual_seed(
                         session.configuration.budget.seed * VALIDATION_SEED_STRIDE + index
@@ -595,17 +609,20 @@ class TorchTrainingRuntime:
                     batch = session.layout.scored(on_host, masks).to(self._device)
                     drawn = masks.to(self._device)
                     with session.precision.autocast():
-                        score = session.model.score(batch, drawn, session.loss)
-                    scored = int(score.tokens)
-                    error, trivial_error = score.reconstruction
-                    total += float(error)
-                    trivial += float(trivial_error)
-                    hidden_tokens += scored
-                    observed_in_all += int((~batch.padding_mask).sum())
-                    for name, term in score.terms.items():
-                        terms[name] = terms.get(name, 0.0) + float(term)
-                    for name, term in score.trivial_terms.items():
-                        trivial_terms[name] = trivial_terms.get(name, 0.0) + float(term)
+                        scores.append(session.model.score(batch, drawn, session.loss))
+                    observed_in_all += int((~on_host.padding_mask).sum())
+                reconstructions = [score.reconstruction for score in scores]
+                total = _summed([error for error, _ in reconstructions])
+                trivial = _summed([cost for _, cost in reconstructions])
+                hidden_tokens = int(torch.stack([score.tokens for score in scores]).sum())
+                terms = {
+                    name: _summed([score.terms[name] for score in scores])
+                    for name in scores[0].terms
+                }
+                trivial_terms = {
+                    name: _summed([score.trivial_terms[name] for score in scores])
+                    for name in scores[0].trivial_terms
+                }
                 if hidden_tokens > 0 and trivial <= 0.0:
                     raise DivergedRunError(
                         f"the targets of {corpus.name} have collapsed: the trivial predictor "
