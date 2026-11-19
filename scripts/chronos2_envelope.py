@@ -77,9 +77,9 @@ def chunk_path(out: Path, start: int) -> Path:
     return out / f"chunk-{start:07d}.npy"
 
 
-def fingerprint(contexts: Floats) -> dict[str, object]:
+def fingerprint(contexts: Floats, chunk: int) -> dict[str, object]:
     """The contexts' shape and a digest of every chunk's first window, which ties chunks to them."""
-    sample = np.ascontiguousarray(contexts[::CHUNK])
+    sample = np.ascontiguousarray(contexts[::chunk])
     return {"shape": list(contexts.shape), "sha256": hashlib.sha256(sample.tobytes()).hexdigest()}
 
 
@@ -99,7 +99,7 @@ def run(
     """
     out.mkdir(parents=True, exist_ok=True)
     source = out / "contexts.json"
-    held = fingerprint(contexts) | {"chunk": chunk}
+    held = fingerprint(contexts, chunk) | {"chunk": chunk}
     if source.exists() and json.loads(source.read_text()) != held:
         raise SystemExit(f"{out} holds chunks of other contexts")
     source.write_text(json.dumps(held) + "\n")
