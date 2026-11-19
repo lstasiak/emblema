@@ -20,6 +20,10 @@ class CellTensors(TokenTensors):
     Attributes:
         visible: ``[batch, tokens, features]`` — the cells' features with the hidden cells'
             readings left out of the layout.
+        channel_entries: One past the largest channel identifier in the batch, read on the host
+            where the batch is laid out, so a per-channel table is sized without waiting on the
+            device.
     """
 
     visible: Tensor
+    channel_entries: int

@@ -133,6 +133,10 @@ def test_joined_cells_are_the_cells_of_the_hours_cut_whole_full_and_masked(
         atol=1e-6,
         rtol=0,
     )
+    assert (
+        joined.scored(batch, masks).channel_entries
+        == whole.scored(reference, masks).channel_entries
+    )
 
 
 def test_a_window_s_history_is_the_windows_before_it_on_its_axis_whichever_side() -> None:
