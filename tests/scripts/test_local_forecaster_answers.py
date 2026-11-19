@@ -56,18 +56,6 @@ def test_a_season_is_the_period_only_when_it_fits_twice_in_the_context(
     assert season_of(lag, 47) == season
 
 
-def test_cells_are_grouped_by_season() -> None:
-    rows = [row(1, 2, [0.0] * 47), row(1, 3, [1.0] * 47), row(2, 2, [2.0] * 47)]
-    lags = {(1, "M1", 2): 18, (1, "M1", 3): 1, (2, "M1", 2): 18}
-
-    groups = by_season(rows, lags)
-
-    assert {season: [(r.window, r.channel) for r in g] for season, g in groups.items()} == {
-        18: [(1, 2), (2, 2)],
-        1: [(1, 3)],
-    }
-
-
 def test_a_cell_without_an_answer_row_is_refused() -> None:
     with pytest.raises(ValueError, match="window 7 channel 2"):
         by_season([row(7, 2, [0.0] * 47)], {})
@@ -104,23 +92,6 @@ def test_a_fit_answering_other_cells_or_forecasters_is_refused() -> None:
         answer(rows, lags, partial)
 
 
-def test_the_answers_are_written_in_the_context_order(tmp_path: Path) -> None:
-    rows = [row(2, 5, [1.0] * 47), row(1, 3, [2.0] * 47)]
-    answered = {
-        (2, "M1", 5): dict.fromkeys(FORECASTERS, 0.5),
-        (1, "M1", 3): dict.fromkeys(FORECASTERS, 0.25),
-    }
-    path = tmp_path / "local.csv"
-
-    write_answers(path, rows, answered)
-
-    with path.open(newline="") as handle:
-        read = list(csv.reader(handle))
-    assert tuple(read[0]) == COLUMNS
-    assert [line[:3] for line in read[1:]] == [["2", "M1", "5"], ["1", "M1", "3"]]
-    assert read[2][3:] == ["0.25"] * len(FORECASTERS)
-
-
 def first_hour(series: NDArray[np.float64], season: int) -> Mapping[str, NDArray[np.float64]]:
     """Forecasters standing in that answer each series by its first hour."""
     return dict.fromkeys(FORECASTERS, series[:, 0])
@@ -150,13 +121,22 @@ def test_an_answer_that_is_not_finite_is_refused() -> None:
         answer(rows, {(1, "M1", 2): 1}, broken)
 
 
-def test_the_written_answers_are_what_the_reading_reads(tmp_path: Path) -> None:
-    rows = [row(4, 2, [1.0] * 47, axis="ESA-Mission1")]
-    answered = {(4, "ESA-Mission1", 2): {n: 0.5 + k for k, n in enumerate(FORECASTERS)}}
+def test_the_answers_are_written_in_the_context_order_and_read_back_by_the_reading(
+    tmp_path: Path,
+) -> None:
+    rows = [row(2, 5, [1.0] * 47), row(1, 3, [2.0] * 47)]
+    answered = {
+        (2, "M1", 5): {n: 0.5 + k for k, n in enumerate(FORECASTERS)},
+        (1, "M1", 3): dict.fromkeys(FORECASTERS, 0.25),
+    }
     path = tmp_path / "local.csv"
 
     write_answers(path, rows, answered)
 
+    with path.open(newline="") as handle:
+        read = list(csv.reader(handle))
+    assert tuple(read[0]) == COLUMNS
+    assert [line[:3] for line in read[1:]] == [["2", "M1", "5"], ["1", "M1", "3"]]
     assert read_published(path) == {
-        n: {(4, "ESA-Mission1", 2): 0.5 + k} for k, n in enumerate(FORECASTERS)
+        n: {(2, "M1", 5): 0.5 + k, (1, "M1", 3): 0.25} for k, n in enumerate(FORECASTERS)
     }

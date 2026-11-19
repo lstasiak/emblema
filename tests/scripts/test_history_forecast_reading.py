@@ -1,6 +1,7 @@
 """The forecast's reading from the cells written: losses, ratios and the arm's level."""
 
 import csv
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -204,6 +205,30 @@ def local_file(path: Path, offsets: dict[str, float], windows: range = range(6))
     return path
 
 
+def reading(
+    answers: Sequence[tuple[str, str, Path]],
+    published: Sequence[tuple[str, Path]],
+    *,
+    resamples: int,
+    verdict_of: str | None = None,
+    bar: Sequence[str] = (),
+    verdict_set: str | None = None,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """The reading with the declared least gain, floor, knee and seed."""
+    return read(
+        answers,
+        published,
+        delta=1.0,
+        least_gain=0.8,
+        floor=0.02,
+        resamples=resamples,
+        seed=1,
+        verdict_of=verdict_of,
+        bar=bar,
+        verdict_set=verdict_set,
+    )
+
+
 @pytest.mark.parametrize(
     ("bar", "best", "ratio", "level"),
     [
@@ -220,14 +245,10 @@ def test_a_published_verdict_reads_the_best_classical_answer_in_every_draw(
     chronos = published_file(tmp_path / "c.csv")
     local = local_file(tmp_path / "l.csv", {"auto_ets": 0.05, "auto_theta": 0.2})
 
-    _, verdicts = read(
+    _, verdicts = reading(
         [("seed1", "unread", answers)],
         [("unread", chronos), ("unread", local)],
-        delta=1.0,
-        least_gain=0.8,
-        floor=0.02,
         resamples=200,
-        seed=1,
         verdict_of="chronos2",
         bar=bar,
         verdict_set="unread",
@@ -269,14 +290,10 @@ def test_a_published_verdict_needs_one_set_and_a_bar_without_itself(
     answers = answers_file(tmp_path / "a.csv", 0.5)
     chronos = published_file(tmp_path / "c.csv")
     with pytest.raises(ValueError, match=message):
-        read(
+        reading(
             [("seed1", "unread", answers)],
             [("unread", chronos)],
-            delta=1.0,
-            least_gain=0.8,
-            floor=0.02,
             resamples=10,
-            seed=1,
             verdict_of=verdict_of,
             bar=bar,
             verdict_set=verdict_set,
@@ -288,14 +305,10 @@ def test_an_answer_given_twice_for_a_set_is_refused(tmp_path: Path) -> None:
     chronos = published_file(tmp_path / "c.csv")
 
     with pytest.raises(ValueError, match="chronos2 is given twice for unread"):
-        read(
+        reading(
             [("seed1", "unread", answers)],
             [("unread", chronos), ("unread", chronos)],
-            delta=1.0,
-            least_gain=0.8,
-            floor=0.02,
             resamples=10,
-            seed=1,
         )
 
 
@@ -313,14 +326,10 @@ def test_the_geometric_verdict_does_not_follow_one_window_the_bar_failed_on(
     answers = answers_file(tmp_path / "a.csv", 0.5, ridge_failure=(3, 50.0))
     chronos = published_file(tmp_path / "c.csv")
 
-    _, verdicts = read(
+    _, verdicts = reading(
         [("seed1", "unread", answers)],
         [("unread", chronos)],
-        delta=1.0,
-        least_gain=0.8,
-        floor=0.02,
         resamples=200,
-        seed=1,
         verdict_of="chronos2",
         bar=("ridge",),
         verdict_set="unread",
@@ -346,14 +355,10 @@ def test_an_answer_that_misses_by_nothing_on_a_window_leaves_no_geometric_ratio(
     exact = local_file(tmp_path / "l.csv", {"auto_ets": 0.0})
 
     with pytest.raises(ValueError, match="missed by nothing"):
-        read(
+        reading(
             [("seed1", "unread", answers)],
             [("unread", exact)],
-            delta=1.0,
-            least_gain=0.8,
-            floor=0.02,
             resamples=10,
-            seed=1,
             verdict_of=verdict_of,
             bar=bar,
             verdict_set="unread",
@@ -377,20 +382,20 @@ def test_the_best_answer_is_taken_in_every_draw_and_only_the_verdict_set_reads_a
                 writer.writerow([w, "M1", c, float(w) + ets, float(w) + theta])
     chronos = published_file(tmp_path / "c.csv")
 
-    _, verdicts = read(
+    _, verdicts = reading(
         [("seed1", "unread", answers), ("seed1", "held", held)],
         [("unread", chronos), ("unread", turns), ("held", chronos), ("held", turns)],
-        delta=1.0,
-        least_gain=0.8,
-        floor=0.02,
         resamples=500,
-        seed=1,
         verdict_of="chronos2",
         bar=("auto_ets", "auto_theta"),
         verdict_set="unread",
     )
 
-    rows = [v for v in verdicts if v["of"] == "chronos2" and str(v["measure"]).endswith("metric")]
+    rows = [
+        v
+        for v in verdicts
+        if v["of"] == "chronos2" and v["measure"] == "squared_mean_window_geometric"
+    ]
     by = {(str(v["set"]), str(v["against"]).split(":")[0]): v for v in rows}
 
     def edge(key: tuple[str, str], side: str) -> float:

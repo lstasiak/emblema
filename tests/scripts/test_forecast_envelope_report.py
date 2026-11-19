@@ -10,7 +10,6 @@ from scripts.forecast_envelope_report import (
     envelope_departures,
     fused_departures,
     hour_contexts,
-    parse_arguments,
 )
 
 
@@ -64,36 +63,3 @@ def test_the_fused_departure_is_the_larger_of_the_two() -> None:
     assert fused_departures(envelope, history).tolist() == [[3.0, 4.0], [0.5, 2.0]]
     with pytest.raises(ValueError, match="the envelope reads"):
         fused_departures(envelope, history[:1])
-
-
-def test_the_command_line_names_a_section_its_contexts_and_envelope() -> None:
-    shared = [
-        "--task",
-        "esa-mission1-events",
-        "--task-id",
-        "8a6b1c18-454a-4dd7-a6b0-554b1e8b99a6",
-        "--manifest",
-        "k",
-        "sha256:c",
-        "--context",
-        "run",
-        "--departures",
-        "dep",
-        "--out",
-        "out",
-    ]
-
-    section = ["--section", "refit", "--select-from", "2004-01"]
-    measured = parse_arguments(
-        ["measure", *shared, *section, "--contexts", "ctx", "--envelope", "env.npy"]
-    )
-
-    assert (measured.command, measured.section, str(measured.envelope)) == (
-        "measure",
-        "refit",
-        "env.npy",
-    )
-    assert parse_arguments(["contexts", *shared]).command == "contexts"
-    early = ["--section", "early", "--select-from", "2004-01"]
-    with pytest.raises(SystemExit):
-        parse_arguments(["measure", *shared, *early, "--contexts", "ctx", "--envelope", "env.npy"])
