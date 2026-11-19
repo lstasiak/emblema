@@ -26,7 +26,7 @@ from scripts.telemetry_channel_local_report import (
     month_slices,
     rotation_order,
 )
-from scripts.telemetry_context_report import REFIT, TREES
+from scripts.telemetry_context_report import REFIT, SELECT, TREES
 from scripts.telemetry_verdict_measure_report import (
     FLOOR,
     alarms,
@@ -264,7 +264,7 @@ def test_the_ceiling_refuses_a_missing_seed_or_other_windows(tmp_path: Path) -> 
             resamples=5,
         )
 
-    with pytest.raises(SystemExit, match="refit-taught-trees-hour-6h-s3 is missing"):
+    with pytest.raises(SystemExit, match=r"refit-taught-trees-hour-6h-s3\.csv is missing"):
         read()
     name = cell_name(REFIT, TAUGHT, TREES, "hour-6h", 3)
     write_answers(tmp_path / "answers" / f"{name}.csv", answers(1, months=6)[1:])
@@ -355,3 +355,95 @@ def test_a_taught_arm_is_named_detector_then_arm() -> None:
     assert parse_taught("trees:bins-24h") == (TREES, "bins-24h")
     with pytest.raises(argparse.ArgumentTypeError, match="<detector>:<arm>"):
         parse_taught("max:bins-24h")
+
+
+def test_any_detectors_answers_are_read_as_a_candidate_on_the_arms_windows(
+    tmp_path: Path,
+) -> None:
+    a_run(tmp_path)
+    lifted_rows = [
+        replace(p, predicted=p.predicted + 3.0 * (p.target > 0)) for p in answers(1, months=6)
+    ]
+    lifted = tmp_path / "lifted.csv"
+    write_answers(lifted, lifted_rows)
+
+    rows = ceiling(
+        tmp_path,
+        None,
+        tmp_path / "out",
+        candidates=[("envelope", lifted)],
+        rotations=5,
+        resamples=60,
+    )
+
+    readings = {(r["reference"], r["seeds"]): r for r in rows}
+    assert set(readings) == {("envelope", ""), ("oracle", "")}
+    envelope = readings[("envelope", "")]
+    lifted_arrays = SideArrays.of(lifted_rows)
+    assert float(str(envelope["found"])) == tally(lifted_arrays, alarms(lifted_arrays)).found.sum()
+    assert float(str(envelope["difference"])) == pytest.approx(
+        float(str(envelope["value"])) - float(str(envelope["bar"])), abs=2e-4
+    )
+    held = family(tmp_path, tmp_path / "family", rotations=5, resamples=10)
+    assert {str(r["bar"]) for r in rows} == {f"{max(float(str(r['value'])) for r in held):.4f}"}
+
+
+def test_a_candidate_on_other_windows_or_named_twice_or_taught_without_a_run_is_refused(
+    tmp_path: Path,
+) -> None:
+    a_run(tmp_path)
+    shorter = tmp_path / "shorter.csv"
+    write_answers(shorter, answers(1, months=5))
+    whole = tmp_path / "whole.csv"
+    write_answers(whole, answers(1, months=6))
+
+    def read(
+        candidates: Sequence[tuple[str, Path]] = (), references: Sequence[tuple[str, str]] = ()
+    ) -> None:
+        ceiling(
+            tmp_path,
+            None,
+            tmp_path / "out",
+            candidates=candidates,
+            references=references,
+            rotations=2,
+            resamples=5,
+        )
+
+    with pytest.raises(SystemExit, match="other windows or events"):
+        read(candidates=[("envelope", shorter)])
+    with pytest.raises(SystemExit, match="is missing"):
+        read(candidates=[("envelope", tmp_path / "absent.csv")])
+    with pytest.raises(SystemExit, match="two candidates are named envelope"):
+        read(candidates=[("envelope", whole), ("envelope", whole)])
+    with pytest.raises(SystemExit, match="two candidates are named oracle"):
+        read(candidates=[("oracle", whole)])
+    with pytest.raises(SystemExit, match="from the run that taught them"):
+        read(references=[(TREES, "hour-6h")])
+
+
+def test_a_pilot_reads_the_candidates_against_the_arms_of_the_selection_months(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "conditions.json").write_text('{"features": ["hour"], "spans": [6]}')
+    (tmp_path / "answers").mkdir()
+    (tmp_path / f"truncated-{SELECT}.csv").write_text("unit,position,ends_at,target\n")
+    for detector in (MAX, MEAN):
+        name = cell_name(SELECT, LOCAL, detector, "hour-6h", NO_SEED)
+        write_answers(tmp_path / "answers" / f"{name}.csv", answers(2, months=6))
+    candidate = tmp_path / "candidate.csv"
+    write_answers(candidate, [replace(p, predicted=-p.predicted) for p in answers(2, months=6)])
+
+    rows = ceiling(
+        tmp_path,
+        None,
+        tmp_path / "out",
+        candidates=[("envelope", candidate)],
+        section=SELECT,
+        rotations=3,
+        resamples=20,
+    )
+
+    assert {r["reference"] for r in rows} == {"envelope", "oracle"}
+    with pytest.raises(SystemExit, match="refit-local-max-hour-6h is missing"):
+        ceiling(tmp_path, None, tmp_path / "out", rotations=2, resamples=5)

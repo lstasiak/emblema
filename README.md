@@ -114,7 +114,10 @@ Preliminary, on validation data; each task's test data is used once, at the end.
   no better than that departure, and the departures miss too few events on that mission to
   justify a perturbation term. Read as a forecaster on years it never saw, that pretext does no
   better than a per-channel linear model, while a published zero-shot forecaster keeps its
-  accuracy there.
+  accuracy there; on the first mission its squared error is about half that of the best
+  classical forecaster fitted on each window's own hours, on years already used once, so still
+  to be confirmed on another mission. As an event detector its forecast range finds no
+  more events beyond chance than the departures.
 
 Numbers, intervals, limitations and what is read next: [`docs/findings.md`](docs/findings.md).
 

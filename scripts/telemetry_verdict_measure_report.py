@@ -7,11 +7,14 @@ alarm, the satellite benchmark's corrected event-wise F0.5 there (ESA-ADB), its 
 alarms and its share of normal windows flagged. The CSV comes first, the tables from it.
 
     uv run scripts/telemetry_verdict_measure_report.py family --dir RUN --out OUT
-    uv run scripts/telemetry_verdict_measure_report.py ceiling --dir RUN --taught RUN --out OUT
-        --taught-arm trees:hour-6h trees:bins-24h
+    uv run scripts/telemetry_verdict_measure_report.py ceiling --dir RUN --out OUT
+        [--taught RUN --taught-arm trees:hour-6h trees:bins-24h] [--candidate NAME ANSWERS.csv]
+        [--section select]
 
 ``family`` reads each departure arm against the best of the others, which gives the least gain;
-``ceiling`` reads the oracle and detectors taught the events as candidates against the bar.
+``ceiling`` reads the oracle, detectors taught the events and any other detector's answers on the
+same windows as candidates against the bar, on the validation months or, for a pilot, on the
+selection months.
 """
 
 from __future__ import annotations
@@ -44,7 +47,7 @@ from scripts.telemetry_channel_local_report import (
     rotation_order,
     selection_answers,
 )
-from scripts.telemetry_context_report import REFIT, kept, read_truncated
+from scripts.telemetry_context_report import REFIT, SELECT, kept, read_truncated
 
 Floats = NDArray[np.float64]
 Ints = NDArray[np.int64]
@@ -186,9 +189,9 @@ def month_draws(events: Ints, resamples: int, seed: int) -> Floats:
     return counts
 
 
-def departure_arms(directory: Path) -> dict[Key, SideArrays]:
-    """Every no-model departure arm on the validation months; each one is required."""
-    return {key: SideArrays.of(rows) for key, rows in selection_answers(directory, REFIT).items()}
+def departure_arms(directory: Path, section: str = REFIT) -> dict[Key, SideArrays]:
+    """Every no-model departure arm on ``section``; each one is required."""
+    return {key: SideArrays.of(rows) for key, rows in selection_answers(directory, section).items()}
 
 
 FAMILY_COLUMNS = ("arm", "value", "best_of_rest", "sd", "least_gain")
@@ -264,17 +267,29 @@ def taught_answers(
     for seed in seeds if detector in SEEDED else (NO_SEED,):
         name = cell_name(REFIT, TAUGHT, detector, arm, seed)
         path = directory / "answers" / f"{name}.csv"
-        if not path.exists():
-            raise SystemExit(f"{name} is missing")
-        arrays = SideArrays.of(kept(read_answers(path), dropped))
-        if not (
-            np.array_equal(arrays.units, like.units)
-            and np.array_equal(arrays.positions, like.positions)
-            and np.array_equal(arrays.events, like.events)
-        ):
-            raise SystemExit(f"{name} scores other windows or events than the no-model arms")
-        held[(detector, arm if seed == NO_SEED else f"{arm} s{seed}")] = arrays
+        key = (detector, arm if seed == NO_SEED else f"{arm} s{seed}")
+        held[key] = candidate_answers(path, like, dropped)
     return held
+
+
+def candidate_answers(
+    path: Path, like: SideArrays, dropped: Collection[tuple[str, int]]
+) -> SideArrays:
+    """Another detector's answers on the arms' windows, the windows the arms drop left out.
+
+    Raises:
+        SystemExit: If the file is missing, or scores other windows or events than ``like``.
+    """
+    if not path.exists():
+        raise SystemExit(f"{path} is missing")
+    arrays = SideArrays.of(kept(read_answers(path), dropped))
+    if not (
+        np.array_equal(arrays.units, like.units)
+        and np.array_equal(arrays.positions, like.positions)
+        and np.array_equal(arrays.events, like.events)
+    ):
+        raise SystemExit(f"{path} scores other windows or events than the no-model arms")
+    return arrays
 
 
 def oracle_of(like: SideArrays) -> SideArrays:
@@ -303,33 +318,49 @@ DESCRIBED = CEILING_COLUMNS[-6:]
 
 
 def ceiling(
-    validation: Path,
-    taught: Path,
+    directory: Path,
+    taught: Path | None,
     out: Path,
     *,
-    references: Sequence[Key],
+    references: Sequence[Key] = (),
+    candidates: Sequence[tuple[str, Path]] = (),
+    section: str = REFIT,
     seeds: Sequence[int] = TAUGHT_SEEDS,
     rotations: int,
     resamples: int,
     trial: int | None = None,
 ) -> list[dict[str, object]]:
-    """The oracle and detectors taught the events, read as candidates against the bar.
+    """The oracle, detectors taught the events and other detectors, read as candidates.
 
     A reference's excess less the best departure arm's, in every draw of months; confirmed when
     the interval at 97.5 % lies above nought and the gain reaches the floor's fixed part. A seeded
-    detector is read by its seeds' mean in every draw, and each seed beside. With ``trial``,
-    every month's scores are first turned by one offset shared by every detector.
+    detector is read by its seeds' mean in every draw, and each seed beside. A candidate is any
+    detector's answers on the arms' windows, read as one. With ``trial``, every month's scores
+    are first turned by one offset shared by every detector.
+
+    Raises:
+        SystemExit: If taught references are named without their run, or a candidate's name is
+            taken.
     """
     out.mkdir(parents=True, exist_ok=True)
-    arms = departure_arms(validation)
+    arms = departure_arms(directory, section)
     like = next(iter(arms.values()))
-    dropped = read_truncated(validation, REFIT)
+    dropped = read_truncated(directory, section)
     groups: dict[str, list[Key]] = {}
     everything: dict[Key, SideArrays] = dict(arms)
-    for reference in references:
-        each = taught_answers(taught, reference, seeds, like, dropped)
-        groups[" ".join(reference)] = list(each)
-        everything.update(each)
+    if references:
+        if taught is None:
+            raise SystemExit("taught references are read from the run that taught them")
+        for reference in references:
+            each = taught_answers(taught, reference, seeds, like, dropped)
+            groups[" ".join(reference)] = list(each)
+            everything.update(each)
+    for name, path in candidates:
+        key = ("candidate", name)
+        if name in groups or name == ORACLE[0]:
+            raise SystemExit(f"two candidates are named {name}")
+        everything[key] = candidate_answers(path, like, dropped)
+        groups[name] = [key]
     everything[ORACLE] = oracle_of(like)
     groups[ORACLE[0]] = [ORACLE]
     everything = turned(everything, trial)
@@ -448,8 +479,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("family", parents=[shared])
     reading = commands.add_parser("ceiling", parents=[shared])
-    reading.add_argument("--taught", type=Path, required=True)
-    reading.add_argument("--taught-arm", type=parse_taught, nargs="+", required=True)
+    reading.add_argument("--taught", type=Path, help="the run whose answers taught the events")
+    reading.add_argument("--taught-arm", type=parse_taught, nargs="*", default=[])
+    reading.add_argument(
+        "--candidate", nargs=2, action="append", default=[], metavar=("NAME", "ANSWERS")
+    )
+    reading.add_argument("--section", choices=(SELECT, REFIT), default=REFIT)
     reading.add_argument("--seeds", type=int, nargs="+", default=list(TAUGHT_SEEDS))
     reading.add_argument(
         "--trial", type=int, metavar="SEED", help="turn every month's scores first"
@@ -474,6 +509,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         arguments.taught,
         arguments.out,
         references=arguments.taught_arm,
+        candidates=[(name, Path(path)) for name, path in arguments.candidate],
+        section=arguments.section,
         seeds=arguments.seeds,
         rotations=arguments.rotations,
         resamples=arguments.resamples,

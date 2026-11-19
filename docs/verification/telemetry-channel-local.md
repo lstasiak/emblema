@@ -1061,3 +1061,121 @@ publication's answers reproduces the 2026-11-11 reading to the digit.
 cells and the controls were measured with the arms, by the script's section, and not read. The
 readings-count floor is unchanged here; once it is, the arms are measured again on this
 publication and the bar read anew.
+
+## 2026-11-19 — declared before the run: a published forecaster's envelope against the departure bar
+
+**Question.** Does a channel's departure from a published forecaster's envelope, alone or fused
+with its departure from its own recent hours, find more of the first mission's events beyond
+chance at 1 % of normal windows than the best of the twelve departure arms, by the verdict's
+least gain? The forecast error read as a detector on 2026-11-09 came from a decoder that fails on
+these years (`telemetry-history-pretext.md`, 2026-11-15); the forecaster here holds its error
+there at about half the best classical answer's squared error (2026-11-19), so the question
+is open.
+
+**Conditions.**
+
+| | |
+|---|---|
+| Commit | the one that adds this section; the instrument at `062a2d4c` |
+| Machine | Mac (M1 Pro): Chronos-2 on MPS, 2,889 s for 102,412 windows; the rest on CPU |
+| Windows | every loaded window of `esa-mission1-events` as the departure arms read them (the context report's run of 2026-11-05, publication `f1d0b0f2…`); validation months 2007-01 to 2013-12 less the 28 frozen ones, the windows the arms drop dropped too |
+| Envelope | `amazon/chronos-2` zero-shot (`chronos-forecasting` 2.3.2): for each window, the 47 hourly means before it of every channel with a reading, the channels handed together; its 10th, 50th and 90th percentiles of the hour's mean (`chronos2_envelope.py`) |
+| Departure | the hour's mean from the median over (90th − 10th) / 2.5631, a standard deviation for a normal, floored at the departures' floor for the mean from the section's fitting side; nought for a channel absent or with fewer than 24 of the 47 hours read (`forecast_envelope_report.py`) |
+| Fused | each channel's larger departure, from the envelope or from its own previous 24 hours of bins, the arm whose mean over channels read the bar's value on these months |
+| Window score and alarm | the largest departure over channels (`max`) or their mean (`mean`); the alarm set on the fitting side and read against each month as the departure arms set theirs |
+| Reading | `telemetry_verdict_measure_report.py ceiling --candidate`: each candidate's excess at 1 % less the best of the twelve departure arms in every draw of months, 1,000 rotations, 10,000 draws; `data/report/l54/envelope/read.sh` runs the whole |
+
+**Rules.**
+
+- *The verdict* is the register's on this task: confirmed when the interval at 97.5 % lies above
+  nought and the gain reaches one event, read against the least gain of 10.6 events.
+- *The family*, named before any reading or pilot: the envelope's `max` and the fused `mean`,
+  the first as the departures and the forecast error were read, the second as the arm that set the
+  bar. Both are read at 97.5 %, which Holm's first step needs and its second does not, so the
+  family is held at least as strictly as Holm.
+- *Descriptive*: the envelope's `mean`, the fused `max`, and at each own alarm the events found,
+  the excess, the benchmark's F0.5, the false runs and the share flagged.
+
+| Outcome | What follows |
+|---|---|
+| Either confirmed | the forecaster has a role in the event detector: the product reads its envelope, the forecast and the alarm from one model |
+| Neither | the detector stays the departures with no model; the forecaster's role in this telemetry is the forecast |
+
+**Predictions**, from the pilot's intervals (below), scaled by the events, 61 here against 29
+there: neither confirmed; the envelope's `max` between −19 and +12 events from the bar, the fused
+`mean` between −8 and +6.
+
+**Power.** As registered on 2026-11-11: the least gain is 3.08 standard deviations of the paired
+difference to the best arm, power 0.8, about what trees taught 70 events reach (+10.0). A
+candidate short of it is less than about 10 events, not none.
+
+**Pilot, before this declaration**, on the selection months (2004-01 to 2006-12, the fitting
+side, 29 events), the exact commands as a trial (`data/report/l54/envelope/pilot.sh`): the
+answers on the arms' windows, own alarms flagging 0.8 to 1.4 % of normal windows. The bar there
+is 15.8 events beyond chance.
+
+| Candidate | Excess | Less the bar [97.5 %] | Found at 1 % | F0.5 own | False runs |
+|---|---|---|---|---|---|
+| envelope, `max` (declared) | 14.4 | −1.4 [−9.1; +5.5] | 25 | 0.088 | 318 |
+| fused, `mean` (declared) | 15.5 | −0.4 [−3.9; +3.0] | 22 | 0.125 | 189 |
+| envelope, `mean` | 17.7 | +1.8 [−3.8; +7.3] | 26 | 0.111 | 257 |
+| fused, `max` | 12.0 | −3.9 [−9.6; +0.0] | 18 | 0.128 | 149 |
+| oracle | 29.0 | +13.2 [+7.4; +19.1] | 29 | 1.000 | 0 |
+
+The pilot reads the envelope's `mean` highest; the family stays as named before it. Of 4,913,708
+channel hours with a context every one is answered; 243 have the median above the 90th
+percentile (at most 0.06) and 634 no spread, which the floor takes.
+
+**Limitations declared.** The hour's mean alone, where the departures read five summaries,
+among them the count of readings that carries half their top windows. One forecaster,
+zero-shot. The publication of 2026-10-27, before the bound of 100. The fusion's partner is the arm
+that read the bar's value on these months.
+
+## 2026-11-19 — measured: the forecaster's envelope finds no more events beyond chance than the departures; the detector stays the departures
+
+**Question.** As declared above: does the envelope's largest departure, or the fused mean, find
+more of the first mission's events beyond chance at 1 % of normal windows than the best of the
+twelve departure arms, by the least gain of 10.6 events?
+
+**Conditions.** Instrument `062a2d4c`, declaration `1c44e986`, `data/report/l54/envelope/read.sh`
+on the Mac (CPU) on 2026-11-19, on a clean tree at the declaration: 61,324 fitting and 41,088
+validation windows, 1,000 rotations, 10,000 draws of months, as declared.
+
+**The reading**, each candidate's excess at 1 % less the best of the twelve departure arms in
+every draw, 97.5 %; the bar is 32.4 events of 61 beyond chance:
+
+| Candidate | Excess | Less the bar [97.5 %] | Confirmed | Found at 1 % | Found, own alarm | F0.5 own | False runs | Flagged |
+|---|---|---|---|---|---|---|---|---|
+| **envelope, `max`** | 29.5 | **−2.9 [−11.9; +6.2]** | no | 48 | 50 | 0.118 | 456 | 1.4 % |
+| **fused, `mean`** | 33.3 | **+0.9 [−2.9; +3.8]** | no | 43 | 44 | 0.148 | 308 | 1.5 % |
+| envelope, `mean` | 30.0 | −2.4 [−8.8; +4.0] | — | 46 | 49 | 0.111 | 478 | 1.4 % |
+| fused, `max` | 28.9 | −3.5 [−8.5; +0.7] | — | 39 | 39 | 0.189 | 201 | 1.1 % |
+| oracle | 61.0 | +28.6 [+19.7; +37.3] | yes | 61 | 61 | 1.000 | 0 | 0 % |
+
+Neither candidate of the family is confirmed, and both upper edges lie under the least gain:
+by the declared rule the detector stays the departures with no model, and the forecaster's role
+in this telemetry is the forecast.
+
+**Predictions against the outcome.**
+
+| Predicted | Read |
+|---|---|
+| Neither confirmed | neither: held |
+| Envelope `max` −19 to +12 events from the bar | −2.9: held |
+| Fused `mean` −8 to +6 | +0.9: held |
+
+**Conclusions.**
+
+1. A forecaster with about half the best classical answer's squared error on these years finds
+   about as many events beyond chance as the departures with no model: the forecast error read as
+   a detector on 2026-11-09 was not limited by the decoder's failure there.
+2. The envelope finds more events at 1 % than the bar's arm (48 against 42) but no more beyond
+   chance: 18.5 of its 48 are found by chance, against 9.6 of the bar arm's 42.
+3. Fused with the 24-hour bins' departures it reads level with the bar (+0.9), so what the
+   envelope adds to a channel's own recent hours is at most about four events (+0.9 [−2.9; +3.8]).
+4. At its own alarm every candidate raises more false runs (201 to 478) and reads a lower F0.5
+   (0.11 to 0.19) than the departure arm that leads that score (124 false runs, 0.269).
+
+**Limitations.** The hour's mean alone. One forecaster, zero-shot, one hour ahead. The 61
+validation events resolve about ten events, so a gain of a few events is neither seen nor ruled
+out.
