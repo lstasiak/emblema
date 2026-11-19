@@ -216,9 +216,13 @@ class CompositionRoot:
             raise ValueError(
                 f"only the cmapss corpus is read per operating condition, not {corpus!r}"
             )
-        if excluded_units and corpus not in ("physionet2019", "esa_ad_raw"):
+        if excluded_units and corpus not in (
+            "physionet2019",
+            "esa_ad_raw",
+            "esa_ad_raw_counterparts",
+        ):
             raise ValueError(
-                f"only the physionet2019 and esa_ad_raw corpora have units to exclude by name, "
+                f"only the physionet2019 and raw ESA corpora have units to exclude by name, "
                 f"not {corpus!r}"
             )
         collected = corpus is not None and corpus.startswith(UtsdCorpusReader.CORPUS_PREFIX)
@@ -246,6 +250,13 @@ class CompositionRoot:
             case "esa_ad_raw":
                 return EsaAdRawCorpusReader(
                     root, subsets or EsaAdRawCorpusReader.SUBSETS, excluded=excluded_units
+                )
+            case "esa_ad_raw_counterparts":
+                return EsaAdRawCorpusReader(
+                    root,
+                    subsets or EsaAdRawCorpusReader.SUBSETS,
+                    EsaAdRawCorpusReader.COUNTERPARTS,
+                    excluded=excluded_units,
                 )
             case "opssat_ad":
                 return OpssatAdCorpusReader(root, subsets or OpssatAdCorpusReader.SUBSETS)

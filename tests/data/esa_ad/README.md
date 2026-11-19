@@ -3,11 +3,14 @@
 Every channel the two readers of the ESA Anomaly Dataset, version 2, select, thinned to one row
 in every 48 hours and cut to the first 365 rows: the lightweight channels `ESA-Mission1/channels/
 channel_41.zip` to `channel_46.zip` and `ESA-Mission2/channels/channel_18.zip` to `channel_28.zip`,
-which both readers read, and the further Mission1 channels of the raw reader's policy,
+which both readers read, the further Mission1 channels of the raw reader's policies,
 `channel_12.zip` to `channel_40.zip`, `channel_47.zip` to `channel_52.zip` and `channel_70.zip` to
-`channel_76.zip`; fifty-nine archives of about 4 KB each. The lightweight channels of a mission are
-sampled at the same rows, as the published channels of a packet share their instants; the further
-channels keep their own packets' instants, one row in two days of each. The rows are real values at their real
+`channel_76.zip`, and the further Mission2 channels of its counterparts' policy, `channel_58.zip`,
+`channel_59.zip`, `channel_70.zip` to `channel_73.zip`, `channel_75.zip` to `channel_81.zip` and
+`channel_83.zip` to `channel_91.zip`; eighty-one archives of about 4 KB each. The channels of a
+packet are sampled at the same rows, as they share their instants (Mission2's lightweight channels
+and its counterparts are one packet); Mission1's further channels keep their own packets' instants,
+one row in two days of each. The rows are real values at their real
 instants, re-pickled by the pandas the project locks, in the layout the publisher uses: one zip per
 channel holding one member of the channel's name, a data frame of one column indexed by instants.
 Thinned rather than truncated so that a mission's training half spans a year of calendar months —
@@ -46,7 +49,7 @@ OUT = Path("tests/data/esa_ad")
 # rows, 192 of its 900-second rows, 9,600 of Mission2's 18-second rows.
 for mission, numbers in (
     ("ESA-Mission1", [*range(12, 53), *range(70, 77)]),
-    ("ESA-Mission2", range(18, 29)),
+    ("ESA-Mission2", [*range(18, 29), 58, 59, *range(70, 74), *range(75, 82), *range(83, 92)]),
 ):
     for number in numbers:
         frame = pd.read_pickle(RAW / mission / "channels" / f"channel_{number}.zip")

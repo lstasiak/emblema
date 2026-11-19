@@ -59,6 +59,18 @@ CORPORA = [
             find_spec("pandas") is None, reason="the corpora extra is not installed"
         ),
     ),
+    # The same files read with Mission2's counterparts of Mission1's channels beside.
+    pytest.param(
+        "esa_ad_raw_counterparts",
+        ("ESA-Mission1", "ESA-Mission2"),
+        85,
+        81,
+        WindowSpec(length=240.0, stride=120.0),
+        DRAWN,
+        marks=pytest.mark.skipif(
+            find_spec("pandas") is None, reason="the corpora extra is not installed"
+        ),
+    ),
     (
         "physionet2012",
         ("set-a", "set-b"),
@@ -148,7 +160,7 @@ def corpus_root(corpus: str) -> Path:
     """Where a corpus's sample sits: a dataset of the collection sits under its volume."""
     if corpus.startswith("utsd/"):
         return sample("utsd") / "UTSD-12G"
-    if corpus == "esa_ad_raw":
+    if corpus in ("esa_ad_raw", "esa_ad_raw_counterparts"):
         return sample("esa_ad")
     return sample(corpus)
 
@@ -162,6 +174,7 @@ def corpus_root(corpus: str) -> Path:
         "smd",
         "esa_ad",
         "esa_ad_raw",
+        "esa_ad_raw_counterparts",
         "physionet2012",
         "eicu_demo",
         "physionet2019",

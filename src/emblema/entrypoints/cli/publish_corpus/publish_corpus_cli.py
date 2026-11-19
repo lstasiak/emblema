@@ -184,7 +184,7 @@ class PublishCorpusCli:
             help="file naming units to cut from the corpus, one per line: a stay as the corpus "
             "names its file (p000015, not training_setA/p000015) or a satellite's month as its "
             "unit is keyed (ESA-Mission1/2007-01); the months or stays a downstream task reads, "
-            "and only physionet2019 and esa_ad_raw have a reader for it",
+            "and only physionet2019 and the raw ESA corpora have a reader for it",
         )
         parser.add_argument(
             "--channels-independent",
