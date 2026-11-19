@@ -72,7 +72,11 @@ Last updated 2026-11-19.
   that forecaster's squared error is about half theirs on the first mission's later years
   (0.475 [0.454; 0.499] by the geometric mean over windows), and level with the local
   forecasters on the second mission (1.02 [0.93; 1.15]); those months were read before, so this
-  is a gate, not a confirmation ([note](verification/telemetry-history-pretext.md)).
+  is a gate, not a confirmation ([note](verification/telemetry-history-pretext.md)). Read as an
+  event detector, its envelope finds no more events beyond chance than the departures, alone
+  (−2.9 [−11.9; +6.2]) or fused with them (+0.9 [−2.9; +3.8]): the detector stays the
+  departures, and the forecaster's role is the forecast
+  ([note](verification/telemetry-channel-local.md)).
   At 1 % false alarms the departures leave little room: they miss 13 of 61, too
   few for the rule to reopen the perturbation term (at most 10.67 beyond chance, 11 required), and
   other detectors with no label find 3.7 of them beyond chance. Ten-minute cells gain one of the 11
@@ -246,6 +250,7 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | The pretext that forecasts each channel's hour from the 47 before it, two pretrainings, its error read by the largest channel | against `channel_local` −0.018 [−0.074; +0.039], against the last hour carried forward +0.036 [−0.033; +0.112]: around or below; recall at 1 % 0.59 against the bar's 0.60, the raw error's 0.67; every history-referenced detector ranks an event's later hours at chance, so the area reads the tail (an onset-only oracle 0.30, these 0.12–0.21); M2 0.889 against the bar 0.886 and the carried hour 0.928 | [telemetry-history-pretext](verification/telemetry-history-pretext.md) |
 | The forecasting pretext against a ridge per channel over the same 47 hours, two pretrainings, on months it read, held out and never read (the first mission's later years, 2007 to 2013), Chronos-2 zero-shot beside | read 0.87 [0.82; 0.92], held 0.84 [0.81; 0.88], **the later years 1.00 [0.94; 1.06]: noise**, the direction closed; there 1 % of cells at values up to 26,000 carry 99 % of the decoder's loss and 98.5 % of the ridge's, and on the 1,003 windows with ordinary values the decoder reads 0.020 / 0.030 against the ridge's 0.0098 (2.2 / 3.3 on the median window), growing with the years, while Chronos-2 reads 0.0007 on the mean's squared error there as on the held months (0.0008) and the decoder 0.012 / 0.025; M2 unread 0.92 [0.88; 0.97], Chronos-2 level with the decoder but for eight cells whose history holds a reading of 2·10⁹ | [telemetry-history-pretext](verification/telemetry-history-pretext.md) |
 | Chronos-2 zero-shot against the best of nine classical answers (the ridges, the answers with no model, and AutoETS, AutoARIMA, AutoTheta and seasonal naive fitted on each window's own 47 hours), squared error of the hour's mean, geometric mean over windows, on the months read on 2026-11-15 | first mission's later years **0.475** [0.454; 0.499] against AutoARIMA, at least the least gain of 0.80; second mission's unread months 1.020 [0.929; 1.148], level with the local forecasters; held months 0.68 and 0.96. Post hoc: lower than AutoARIMA on 85 % of the later windows; from the held months to the later years Chronos-2's own error holds (6.0·10⁻⁴ → 6.2·10⁻⁴) and AutoARIMA's (1.45·10⁻³ → 1.31·10⁻³), the ridge over the window's grows 14-fold and the decoder's 17-fold | [telemetry-history-pretext](verification/telemetry-history-pretext.md) |
+| Chronos-2's envelope for each channel's hour (10th to 90th percentile from the 47 hours before) as an event detector, alone and fused with the 24-hour bins' departures, against the best of the twelve departure arms, first mission, events beyond chance at 1 % | envelope by its largest channel −2.9 [−11.9; +6.2], fused mean +0.9 [−2.9; +3.8], neither confirmed, both under the least gain of 10.6; the envelope finds 48 events at 1 % against the bar arm's 42, none more beyond chance; more false runs (201 to 478) and a lower F-score at its own alarm (0.11 to 0.19) | [telemetry-channel-local](verification/telemetry-channel-local.md) |
 | Events the channels' departures miss, against other detectors with no label at 1 % false alarms | others find 6 of 13, 3.67 beyond chance, at most 10.67 possible, least 11; stays deferred; fusion +0.131 [+0.037; +0.234] over `channel_local`, +0.066 [−0.052; +0.176] over the mean of the departures | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The 11 events nothing found, on their annotated channels, ten minutes against the hour | one gained, two lost, least 4; not queued; six stand out at the hour beyond chance | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The departure bar, chosen on months no detector was read on (2000–2003, a class nearly absent later left out), then read forwards on the validation months | beyond chance at 1 %: mean over 72 hours 14.6 of 42 against 5.2 for the bar chosen by area; beyond chance the order turns on validation (Spearman −0.03), best 32.4 of 61, so the bar is the best of twelve in each reading | [telemetry-channel-local](verification/telemetry-channel-local.md) |
@@ -297,9 +302,6 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
    the base stays a comparison on the half. The named levers for a larger gain remain the
    pretext (a cell's mean, which interpolation answers on a grid) and the scale of data in the
    tasks' regime (credentialed MIMIC-IV or the full eICU).
-2. Forecasting has passed the gate as the telemetry's ground for a foundation model: on months
-   read before, the published forecaster leads every classical answer on the first mission's
-   later years ([note](verification/telemetry-history-pretext.md)). Next, its forecast envelope
-   is read as an event detector against the departures, and a corpus of several missions adapts
-   it, the lead confirmed on a mission no reading touched.
+2. A corpus of several missions adapts the published forecaster, and its lead is confirmed on
+   a mission no reading touched ([note](verification/telemetry-history-pretext.md)).
 3. Open the frozen test side once.
