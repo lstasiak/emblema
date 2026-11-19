@@ -787,3 +787,89 @@ published forecaster; TimesFM and TiRex are not read. The hour's mean only. The 
 the one of 2026-11-15, before the bound of 100 the telemetry now takes, so extreme values remain
 in some windows. The local forecasters see missing hours filled and one season per cell. One draw
 of windows.
+
+## 2026-11-19 — measured: on the first mission's later years the published forecaster's squared error is about half the best classical answer's; on the second it reads level with the local forecasters
+
+**Question.** As declared above: on the first mission's unread months, does Chronos-2 zero-shot
+lead the best of nine classical answers by at least a fifth, window by window, and on the second
+mission's is it no worse?
+
+**Conditions.** Instrument `abbfe363`, declaration `3785fb06`, `data/report/l54/read.sh` on the
+Mac (M1 Pro) on 2026-11-19: the local forecasters 1,662 s and 1,732 s on CPU, Chronos-2 98 s and
+63 s on MPS, the tables as declared (10,000 resamples). Cells as declared: held 72,000 on
+Mission1 and 16,500 on Mission2, unread 71,958 and 16,500, each set's cells, targets and every
+answer of 2026-11-15 identical to that reading's.
+
+**The verdict and the second condition**, Chronos-2 over the best of nine, geometric mean over
+windows of the squared error of the hour's mean, 95 % interval:
+
+| Set | Mission | Best of nine | Ratio [95 %] | Level |
+|---|---|---|---|---|
+| **unread** | **Mission1** | AutoARIMA | **0.475 [0.454; 0.499]** | **at least the least gain** |
+| unread | Mission2 | AutoARIMA | 1.020 [0.929; 1.148] | noise: not harm, so the condition is met |
+| held | Mission1 | ridge over the window | 0.682 [0.660; 0.703] | descriptive |
+| held | Mission2 | AutoETS | 0.958 [0.930; 0.988] | descriptive |
+
+By the declared rule forecasting is ground for a foundation model on this telemetry: the
+multi-mission corpus and adaptation is read next, and a lead is confirmed on a mission no
+reading has touched before any claim rests on it.
+
+Chronos-2 over each answer, the same measure, descriptive:
+
+| Answer | Mission1 unread | Mission2 unread | Mission1 held | Mission2 held |
+|---|---|---|---|---|
+| AutoARIMA | 0.475 [0.453; 0.499] | 1.020 [0.920; 1.148] | 0.413 [0.395; 0.432] | 0.851 [0.820; 0.884] |
+| AutoETS | 0.460 [0.440; 0.482] | 0.936 [0.904; 0.969] | 0.408 [0.391; 0.425] | 0.958 [0.928; 0.988] |
+| AutoTheta | 0.193 [0.187; 0.198] | 0.902 [0.867; 0.935] | 0.186 [0.180; 0.192] | 0.944 [0.916; 0.974] |
+| seasonal naive | 0.277 [0.262; 0.294] | 0.497 [0.451; 0.553] | 0.272 [0.258; 0.285] | 0.469 [0.441; 0.498] |
+| hour one period back | 0.275 [0.260; 0.291] | 0.486 [0.441; 0.540] | 0.268 [0.255; 0.281] | 0.449 [0.423; 0.478] |
+| ridge per channel | 0.126 [0.112; 0.141] | 0.453 [0.403; 0.517] | 0.423 [0.408; 0.437] | 0.362 [0.341; 0.384] |
+| ridge over the window | 0.052 [0.047; 0.057] | 0.395 [0.351; 0.452] | 0.682 [0.660; 0.703] | 0.327 [0.310; 0.346] |
+| median of the history | 0.036 [0.035; 0.037] | 0.220 [0.192; 0.254] | 0.037 [0.036; 0.038] | 0.075 [0.070; 0.081] |
+| last reading | 0.005 [0.005; 0.006] | 0.023 [0.020; 0.027] | 0.005 [0.005; 0.005] | 0.024 [0.022; 0.026] |
+| decoder, beside | 0.034 [0.032; 0.037] | 0.258 [0.228; 0.297] | 0.555 [0.542; 0.568] | 0.220 [0.207; 0.235] |
+
+The ratio of mean losses, beside, reads the extreme cells as on 2026-11-15: on Mission1's unread
+months 1.015 [1.000; 15,215] against seasonal naive, on Mission2's 1.2·10¹¹ against the ridge,
+carried by the eight cells whose history holds a reading of 2·10⁹, which Chronos-2 answers at
+0.4 to 3.5 million.
+
+**After the reading, post hoc and descriptive** (`data/report/l54/post_hoc.py`). On Mission1's
+unread months Chronos-2 misses less than AutoARIMA on 85 % of windows, AutoETS on 89 %,
+AutoTheta on 99 %, the median window's ratio 0.55, 0.50 and 0.19; on the 1,102 windows whose
+targets all lie within 2 the ratios are 0.46, 0.44 and 0.19, on the 398 others 0.53, 0.53 and
+0.20. On Mission2's unread months it misses less on 55 to 58 % of windows, the median ratios 0.93
+to 0.97. The lead on the first mission is the typical window's, not a few windows'.
+
+**Predictions against the outcome.**
+
+| Predicted | Read |
+|---|---|
+| Mission1 unread, at most 0.90: real and small or at least the least gain | 0.475, at least the least gain: held, beyond the trial's point (0.66) |
+| Mission1, the best of nine a ridge over the window or a local forecaster | AutoARIMA: held |
+| Mission2 unread, 0.89 to 1.09, noise, the best a local forecaster | 1.020, noise, AutoARIMA: held |
+| Ratio of mean losses on Mission1 above one or wide | 1.015 [1.000; 15,215]: held |
+
+**Conclusions.**
+
+1. On the first mission's later years, Chronos-2 zero-shot's squared error is about half the
+   best classical answer's in the typical window (0.475; about 0.69 on the root scale), and the
+   local forecasters that follow each window, AutoARIMA and AutoETS, are that best answer: the
+   lead of 2026-11-15 over the ridge was not the following of drift alone.
+2. On the second mission, eleven channels with little periodicity (the same-phase answer chose
+   one hour for 42 % of cells), the local forecasters read level with Chronos-2: there its lead
+   over the ridge is what a local forecaster also gives.
+3. From the held months to the later years, each answer's own geometric mean over windows of
+   the squared error, post hoc: Chronos-2 6.0·10⁻⁴ → 6.2·10⁻⁴, AutoARIMA 1.45·10⁻³ → 1.31·10⁻³,
+   the ridge per channel 1.42·10⁻³ → 4.9·10⁻³, the ridge over the window 8.8·10⁻⁴ → 1.2·10⁻²,
+   the decoder 1.08·10⁻³ → 1.81·10⁻² (`data/report/l54/own_losses.py`): what was fitted once on
+   the training months loses most; the published and the local forecasters do not.
+4. By the declared rule forecasting is the leg's ground for a foundation model; the lead is
+   measured on months read before, so it is to be confirmed on a mission no reading touched.
+
+**Limitations.** The unread months were read on 2026-11-15, so this is the gate it was declared
+as, not a confirmation. One published forecaster, zero-shot; TimesFM and TiRex were not read. The
+hour's mean only, one hour ahead, from 47 hours. The publication is the standard one of
+2026-11-15, before the bound of 100 the telemetry now takes. The local forecasters fit 47 points
+with one season per cell and filled hours. One draw of windows. The post-hoc bands and wins were
+not declared.
