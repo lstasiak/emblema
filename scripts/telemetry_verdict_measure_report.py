@@ -267,16 +267,8 @@ def taught_answers(
     for seed in seeds if detector in SEEDED else (NO_SEED,):
         name = cell_name(REFIT, TAUGHT, detector, arm, seed)
         path = directory / "answers" / f"{name}.csv"
-        if not path.exists():
-            raise SystemExit(f"{name} is missing")
-        arrays = SideArrays.of(kept(read_answers(path), dropped))
-        if not (
-            np.array_equal(arrays.units, like.units)
-            and np.array_equal(arrays.positions, like.positions)
-            and np.array_equal(arrays.events, like.events)
-        ):
-            raise SystemExit(f"{name} scores other windows or events than the no-model arms")
-        held[(detector, arm if seed == NO_SEED else f"{arm} s{seed}")] = arrays
+        key = (detector, arm if seed == NO_SEED else f"{arm} s{seed}")
+        held[key] = candidate_answers(path, like, dropped)
     return held
 
 
@@ -365,7 +357,7 @@ def ceiling(
             everything.update(each)
     for name, path in candidates:
         key = ("candidate", name)
-        if name in groups or key in everything or name == ORACLE[0]:
+        if name in groups or name == ORACLE[0]:
             raise SystemExit(f"two candidates are named {name}")
         everything[key] = candidate_answers(path, like, dropped)
         groups[name] = [key]

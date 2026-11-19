@@ -264,7 +264,7 @@ def test_the_ceiling_refuses_a_missing_seed_or_other_windows(tmp_path: Path) -> 
             resamples=5,
         )
 
-    with pytest.raises(SystemExit, match="refit-taught-trees-hour-6h-s3 is missing"):
+    with pytest.raises(SystemExit, match=r"refit-taught-trees-hour-6h-s3\.csv is missing"):
         read()
     name = cell_name(REFIT, TAUGHT, TREES, "hour-6h", 3)
     write_answers(tmp_path / "answers" / f"{name}.csv", answers(1, months=6)[1:])
@@ -361,11 +361,11 @@ def test_any_detectors_answers_are_read_as_a_candidate_on_the_arms_windows(
     tmp_path: Path,
 ) -> None:
     a_run(tmp_path)
+    lifted_rows = [
+        replace(p, predicted=p.predicted + 3.0 * (p.target > 0)) for p in answers(1, months=6)
+    ]
     lifted = tmp_path / "lifted.csv"
-    write_answers(
-        lifted,
-        [replace(p, predicted=p.predicted + 3.0 * (p.target > 0)) for p in answers(1, months=6)],
-    )
+    write_answers(lifted, lifted_rows)
 
     rows = ceiling(
         tmp_path,
@@ -379,9 +379,7 @@ def test_any_detectors_answers_are_read_as_a_candidate_on_the_arms_windows(
     readings = {(r["reference"], r["seeds"]): r for r in rows}
     assert set(readings) == {("envelope", ""), ("oracle", "")}
     envelope = readings[("envelope", "")]
-    lifted_arrays = SideArrays.of(
-        [replace(p, predicted=p.predicted + 3.0 * (p.target > 0)) for p in answers(1, months=6)]
-    )
+    lifted_arrays = SideArrays.of(lifted_rows)
     assert float(str(envelope["found"])) == tally(lifted_arrays, alarms(lifted_arrays)).found.sum()
     assert float(str(envelope["difference"])) == pytest.approx(
         float(str(envelope["value"])) - float(str(envelope["bar"])), abs=2e-4

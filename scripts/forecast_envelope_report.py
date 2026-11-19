@@ -38,10 +38,12 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.telemetry_channel_local_report import (  # noqa: E402
     BINS,
+    HOUR,
     MAX,
     MEAN,
     SECTIONS,
     Arm,
+    departures_from,
     window_scores,
 )
 
@@ -54,7 +56,7 @@ HOURS = 48
 # envelope's spread is on the scale the departures' scaled median absolute deviation is.
 SPREAD_OF_DECILES = 2.5631
 # A channel is read only when half the hours before it hold a reading, as the departures ask.
-LEAST_CONTEXT = -(-(HOURS - 1) // 2)
+LEAST_CONTEXT = Arm(HOUR, HOURS).least_context
 ENVELOPE, FUSED = "envelope", "fused"
 FAMILIES = (ENVELOPE, FUSED)
 DETECTORS = (MAX, MEAN)
@@ -83,12 +85,15 @@ def envelope_departures(
     least spread per channel. A channel absent from the hour, without an envelope, or with fewer
     than ``least_context`` hours read before it, departs nought.
     """
-    with np.errstate(invalid="ignore", divide="ignore"):
-        spread = (envelope[..., 2] - envelope[..., 0]) / SPREAD_OF_DECILES
-        scale = np.maximum(np.nan_to_num(spread, nan=0.0), floor[None])
-        departures = np.abs(now - envelope[..., 1]) / scale
-    enough = loaded >= least_context
-    return np.where(enough & np.isfinite(departures), departures, 0.0)
+    spread = (envelope[..., 2] - envelope[..., 0]) / SPREAD_OF_DECILES
+    return departures_from(
+        now[..., None, None],
+        envelope[..., 1:2],
+        spread[..., None],
+        loaded,
+        floor[:, None],
+        least_context=least_context,
+    )
 
 
 def fused_departures(envelope: Floats, history: Floats) -> Floats:
@@ -128,9 +133,6 @@ def contexts(arguments: argparse.Namespace) -> None:  # pragma: no cover - envir
         loaded[start : start + len(indices)] = np.isfinite(part).sum(axis=2)
     held.flush()
     np.save(out / "loaded.npy", loaded)
-    (out / "contexts.json").write_text(
-        json.dumps({"windows": len(means), "rows": int(means.shape[1]), "hours": HOURS - 1}) + "\n"
-    )
     print(f"{len(means)} windows, {int((loaded > 0).sum())} channel hours with a context")
 
 
@@ -145,7 +147,7 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
         refuse_another_commit,
         write_answers,
     )
-    from scripts.telemetry_channel_local_report import Departures, global_floor
+    from scripts.telemetry_channel_local_report import Departures
     from scripts.telemetry_context_report import Reader, refuse_other_conditions
 
     out: Path = arguments.out
@@ -174,19 +176,20 @@ def measure(arguments: argparse.Namespace) -> None:  # pragma: no cover - enviro
     refuse_other_conditions(out / "conditions.json", conditions)
     reader = Reader(bench_of(arguments), arguments.context)
     fit, scored, _ = reader.sides(arguments.section, arguments.select_from)
-    summaries = Departures(reader.cells, arguments.departures).summaries()
+    departures_run = Departures(reader.cells, arguments.departures)
+    summaries = departures_run.summaries()
     envelope = np.load(arguments.envelope)
     loaded = np.load(arguments.contexts / "loaded.npy")
     if envelope.shape[:2] != summaries.shape[:2] or loaded.shape != summaries.shape[:2]:
         raise SystemExit("the envelope or the contexts were laid over other windows")
-    floor = global_floor(summaries[np.asarray(fit, dtype=np.int64)])[:, MEAN_SUMMARY]
+    floor = departures_run.floor(fit)[:, MEAN_SUMMARY]
     now = summaries[..., MEAN_SUMMARY]
     departures = {
         ENVELOPE: envelope_departures(now, envelope, loaded, floor, least_context=LEAST_CONTEXT)
     }
     history = np.load(arguments.departures / f"{arguments.section}-{PARTNER.name}.npy")
     departures[FUSED] = fused_departures(departures[ENVELOPE], history)
-    present = ~np.isnan(now)
+    present = departures_run.present()
     contamination = (
         reader.catalogue.arm_of(CandidateRef("untrained_knn@distance=whitened,reference=unit"))
         .recipe(seed=1)
