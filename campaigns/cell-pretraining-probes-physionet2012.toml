@@ -3,6 +3,11 @@
 # of the stage, read beside fine-tuning and descriptively, since a probe's gain is not what the
 # claim over cells is judged by.
 #
+# The control at its initialisation reads the six bins the backbone was pretrained over, so the
+# probe's gain over it is the pretraining's alone; over the raw readings it would also carry the
+# change of input from readings to cells, which the arm beside it still reads to show that share.
+# Run only under backbones over six bins.
+#
 # Committed before the campaign runs, for the reason every campaign file is.
 name = "cell-pretraining-probes-physionet2012"
 purpose = "selection"
@@ -15,10 +20,11 @@ division_seed = 101
 
 [candidates]
 competing = [
+    "untrained_ridge@bins=6,layer=concat",
     "untrained_ridge@layer=concat",
     "frozen_ridge@layer=concat",
 ]
-control = "untrained_ridge@layer=concat"
+control = "untrained_ridge@bins=6,layer=concat"
 endpoint = "frozen_ridge@layer=concat"
 
 [budgets]
@@ -31,7 +37,7 @@ seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 minimum_absolute_reduction = 0.02
 absolute_floor = 0.02
 alpha = 0.05
-# One contender at one budget leaves no cell beside the endpoint; the rule asks for one.
+# Two contenders at one budget, the endpoint's cell aside.
 secondary_family_size = 1
 
 [bootstrap]
