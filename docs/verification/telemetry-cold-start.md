@@ -200,3 +200,86 @@ lead is not a like-for-like comparison. The local forecasters take the same-phas
 as their season, which weakens them on Mission2; a season each forecaster chooses per cell is the
 bar's next form. Mission2's verdict rests on few independent signals. One draw of hours per day;
 the descriptive rows were not declared as verdicts.
+
+## 2026-11-20 — declared before the run: the channel-local alarms fitted on the first mission's first days
+
+**Question.** The product's alarms stay the channel-local departures, which read each channel's
+hour against its own recent hours and need no history beyond them. What they fit is the floor
+under each channel's spread and the alarm's level, on seven years of the first mission in the
+verdict. Fitted on its first N days instead, how many events do they find on the validation
+months, and how quiet is the alarm? An operator's tool takes a year of nominal data before its
+first alarm (CNES); this reads how much the departures need.
+
+**Conditions.**
+
+| | |
+|---|---|
+| Commit | the one that adds this section; the instrument at `a0fa0382` |
+| Machine | Mac (M1 Pro), CPU; minutes |
+| Data | the departures of 2026-11-06 over the first mission's standard publication (`f1d0b0f2…`, 59 channels; on the robust publication the twelve arms read within about one event of these, but for `mean`, `bins-72h`, 2026-11-12); 102,412 windows; the validation months 2007 to 2013, 39,384 windows read, 61 events |
+| Fitting sides | the fitting windows that end within the mission's first N days, N = 7, 14, 30, 60, 90, 180, 365 (97 to 8,689 windows), no label read; beside, the whole fitting side, 2000 to 2006 (61,253 windows). A fitting window is read only with its 72 hours before inside the mission, as a validation window is only with its 72 hours inside the months loaded, so no fit begins before the fourth day |
+| Detector | the twelve departure arms (the hour's summary or its bins, over 6, 24 or 72 hours; the largest or the mean departure over the channels); the floor a tenth of each channel's spread over the fitting windows; the alarm at 2 % of the fitting windows, each score read against its month, as the verdict's arms; a fit in which no month's scores spread is refused (`channel_local_cold_start.py`) |
+| Readings | as the verdict reads them (2026-11-11): the events of 61 found at 1 % of normal windows flagged, less those found with every month's scores turned (1,000 rotations); at the own alarm the corrected event-wise F0.5, the share of normal windows flagged, the runs of false alarms and the events found. Each first-N fit less the whole side over 2,000 draws of months, those with and without an event drawn apart, 95 % |
+| Command | `data/report/l61/detection/run.sh` |
+
+**What is read**, descriptively, since these months were read by the same arms fitted on the
+whole side: the excess's bar along N (the best of the twelve, and `mean`, `bins-24h`, the whole
+side's best, less the whole side); at the own alarm, `max`, `bins-72h`, the arm the verdict chose
+for the F-score, less the whole side, with its share flagged, false runs and events found.
+
+| Reading | What follows |
+|---|---|
+| `mean`, `bins-24h` within its interval of the whole side at every N | the floor of a few days costs no event: the departures rank from the first days |
+| Its lower edge above nought at some N | a floor fitted on years is wider than one fitted on days and costs events; the floor's rule joins the queued change of the floor |
+| Its upper edge below nought at some N | the floor needs history: a floor carried from another system, or a rule for short history, joins that change |
+| From day N on, the share flagged within 1 to 3 % and the F-score's interval holding nought | the alarms run from day N with no year of history; the product states it, the level set anew as history grows |
+| The share flagged outside 1 to 3 % through the first year | the level is the onboarding problem, not the detector: the product sets it per month, and its first months carry a stated cost in false alarms |
+
+**Seen before this declaration.** An independent review of the instrument ran it on days 2 and 7
+under its first rules, to show the first finding below, and those readings were seen: `mean`,
+`bins-24h` less the whole side +4.4 [+0.3; +9.2] and +4.7 [+0.7; +9.4]; at day 2 an F-score of
+0.573, which that finding explains. The months had been read by these arms before, and the
+reading stays descriptive; the predictions name these readings where they draw on them.
+
+**Predictions**:
+
+| | Predicted | Source |
+|---|---|---|
+| `mean`, `bins-24h` less the whole side, N of 30 or less | +1 to +5, the lower edge near nought | trial, day 5, +1.5 [−1.4; +5.1]; seen, day 7, +4.7 [+0.7; +9.4] |
+| The same, N of 90 or more | within its interval | trial, day 100, +0.1 [−3.2; +3.6] |
+| Share flagged, `max`, `bins-72h`, N = 7 | 2.5 to 5 % | trial, day 5, 3.7 % |
+| Share flagged, N of 90 or more | 1 to 2 % | trial, day 100, 1.5 % |
+| F-score less the whole side, N = 7 | below nought | trial, day 5, −0.195 [−0.359; −0.099] |
+| F-score less the whole side, N of 90 or more | its interval holding nought | trial, day 100, −0.004 [−0.197; +0.328] |
+
+**Trial, before this declaration**, on days outside the grid (`data/report/l61/detection/trial.sh`,
+under two minutes). Fitted on every fitting window, as the verdict was, the twelve arms read the
+validation months as on 2026-11-11 to every digit: events beyond chance, F-score, false runs,
+share flagged, events found. Changed after it, the last two on the review's findings:
+
+- Each month was answered after the windows the verdict does not read had been left out, which
+  rescaled the month's scores; each month is now answered whole first, as the verdict's cells were.
+- At day 2, 36 of the 48 fitting windows departed nought on the 72-hour arms for want of history,
+  their month had no spread, and the alarm fell back to a fixed unit: its level lay in other
+  units than the months it reads. Fitting windows now need their 72 hours inside the mission, and
+  a fit with no month's spread is refused; the whole side loses its first 71 hours.
+- The F-score's column took the stronger of the two arms over 72 hours of bins at each N, against
+  the same arm on the whole side, so its arm changed along the days; it now follows `max`,
+  `bins-72h`.
+
+| Fitted on | Windows | Excess at 1 %, best of 12 | `mean`, `bins-24h`, less the whole side | F0.5 at own alarm, `max`, `bins-72h`, less the whole side | Flagged | False runs | Found |
+|---|---|---|---|---|---|---|---|
+| whole side | 61,253 | 32.4, `mean`, `bins-24h` | 32.4 | 0.276 | 1.92 % | 119 | 39 of 61 |
+| day 5 | 49 | 43.2, `mean`, `hour-24h` | 33.9, +1.5 [−1.4; +5.1] | 0.081, −0.195 [−0.359; −0.099] | 3.71 % | 595 | 44 of 61 |
+| day 100 | 2,329 | 35.0, `mean`, `hour-24h` | 32.5, +0.1 [−3.2; +3.6] | 0.273, −0.004 [−0.197; +0.328] | 1.47 % | 94 | 31 of 61 |
+
+At its own alarm the F-score reads the alarm's level more than the events found (2026-11-11): the
+fewer windows an alarm flags, the higher it scores, whatever it finds.
+
+**Limitations declared.** One mission and the standard publication. The validation months lie 7
+to 13 years after the first days, so the curve reads how much fitting history the floor and the
+level need, not the alarm in the weeks right after them. Each month's scores are read against
+that month whole, as the verdict's alarm reads them; an alarm on line reads the month so far. The
+floor fitted on up to 90 days is about a tenth of the one fitted on seven years, whose spread
+holds the later years' drift (0.41 on a year), so the excess reads the floor's size as much as
+the history behind it.
