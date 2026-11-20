@@ -44,6 +44,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
+from emblema.catalog.adapters.readers.greenbyte import GreenbyteCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
@@ -133,9 +134,10 @@ SOURCES: tuple[Source, ...] = (
     _utsd(f"{UTSD_PREFIX}Web_kaggle_web_traffic_dataset_without_missing_values", 803.0),
 )
 
-# Corpora read in the tasks' regime that no pretraining of the scale curve reads; a stay of the
-# eICU demo and a location of the water quality portal are windowed whole here, since only their
-# unit measures are read.
+# Corpora no pretraining of the scale curve reads, measured when named: the two read in the
+# tasks' regime, where a stay of the eICU demo and a location of the water quality portal are
+# windowed whole since only their unit measures are read, and the two wind farms, whose months of
+# a turbine are windowed by the hour.
 TASK_REGIME_SOURCES: tuple[Source, ...] = (
     Source(
         "eicu_demo",
@@ -144,6 +146,18 @@ TASK_REGIME_SOURCES: tuple[Source, ...] = (
         EicuDemoCorpusReader,
     ),
     Source("wqp", "wqp", WindowSpec(122_712.0, 122_712.0), WaterQualityPortalCorpusReader),
+    Source(
+        "kelmarsh",
+        "kelmarsh",
+        WindowSpec(1.0, 1.0),
+        lambda root: GreenbyteCorpusReader(root, GreenbyteCorpusReader.KELMARSH),
+    ),
+    Source(
+        "penmanshiel",
+        "penmanshiel",
+        WindowSpec(1.0, 1.0),
+        lambda root: GreenbyteCorpusReader(root, GreenbyteCorpusReader.PENMANSHIEL),
+    ),
 )
 
 # The regime each reader declares in its description. Stated here so that the exposure of a
@@ -158,6 +172,8 @@ REGIMES: Mapping[str, SamplingRegime] = {
     "physionet2019": SamplingRegime.IRREGULAR,
     "eicu_demo": SamplingRegime.IRREGULAR,
     "wqp": SamplingRegime.IRREGULAR,
+    "kelmarsh": SamplingRegime.REGULAR,
+    "penmanshiel": SamplingRegime.REGULAR,
 }
 
 

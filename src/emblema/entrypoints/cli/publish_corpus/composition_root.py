@@ -7,6 +7,7 @@ from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
 from emblema.catalog.adapters.readers.esa_ad_raw import EsaAdRawCorpusReader
+from emblema.catalog.adapters.readers.greenbyte import GreenbyteCorpusReader
 from emblema.catalog.adapters.readers.opssat_ad import OpssatAdCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
@@ -220,10 +221,12 @@ class CompositionRoot:
             "physionet2019",
             "esa_ad_raw",
             "esa_ad_raw_counterparts",
+            "kelmarsh",
+            "penmanshiel",
         ):
             raise ValueError(
-                f"only the physionet2019 and raw ESA corpora have units to exclude by name, "
-                f"not {corpus!r}"
+                f"only the physionet2019, raw ESA and wind farm corpora have units to exclude "
+                f"by name, not {corpus!r}"
             )
         collected = corpus is not None and corpus.startswith(UtsdCorpusReader.CORPUS_PREFIX)
         if reading is not None and reading != UtsdReading() and not collected:
@@ -257,6 +260,14 @@ class CompositionRoot:
                     subsets or EsaAdRawCorpusReader.SUBSETS,
                     EsaAdRawCorpusReader.COUNTERPARTS,
                     excluded=excluded_units,
+                )
+            case "kelmarsh":
+                return GreenbyteCorpusReader(
+                    root, GreenbyteCorpusReader.KELMARSH, subsets, excluded=excluded_units
+                )
+            case "penmanshiel":
+                return GreenbyteCorpusReader(
+                    root, GreenbyteCorpusReader.PENMANSHIEL, subsets, excluded=excluded_units
                 )
             case "opssat_ad":
                 return OpssatAdCorpusReader(root, subsets or OpssatAdCorpusReader.SUBSETS)

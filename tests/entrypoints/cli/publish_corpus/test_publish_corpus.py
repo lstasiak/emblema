@@ -16,12 +16,13 @@ from emblema.catalog.adapters.persistence.corpus_repository import SqlAlchemyCor
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad_raw import EsaAdRawCorpusReader
+from emblema.catalog.adapters.readers.greenbyte import GreenbyteCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
 from emblema.catalog.adapters.readers.utsd import UtsdReading, UtsdScale
 from emblema.catalog.adapters.synthetic.synthetic_corpus_reader import SyntheticCorpusReader
 from emblema.catalog.application.use_cases.publish_corpus import PublishCorpusCommand
-from emblema.catalog.domain.channels.channel_schema import ChannelSchema
+from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.channels.normalisation import Normalisation
 from emblema.catalog.domain.cleaning.cleaning_policy import CleaningPolicy
 from emblema.catalog.domain.cleaning.value_bounds import ValueBounds
@@ -404,10 +405,34 @@ def test_the_months_excluded_by_name_reach_the_reader_of_the_raw_telemetry(
     assert len(root.adapters.reader.describe().channel_schema) == channels
 
 
+@pytest.mark.parametrize(
+    ("corpus", "turbines", "first"),
+    [("kelmarsh", ("1", "2"), "1/2016-05"), ("penmanshiel", ("15",), "15/2016-07")],
+)
+def test_the_turbines_named_and_the_months_excluded_reach_the_reader_of_a_wind_farm(
+    tmp_path: Path, corpus: str, turbines: tuple[str, ...], first: str
+) -> None:
+    pytest.importorskip("pyarrow")
+    root = CompositionRoot.over(
+        corpora=InMemoryCorpusRepository(),
+        store=InMemoryArtifactStore(),
+        corpus=corpus,
+        corpus_root=sample(corpus),
+        workspace=tmp_path / "workspace",
+        subsets=turbines,
+        excluded_units=(first,),
+    )
+
+    assert isinstance(root.adapters.reader, GreenbyteCorpusReader)
+    units = [unit.key for unit in root.adapters.reader.read_units()]
+    assert {unit.part for unit in units} == set(turbines)
+    assert first not in map(str, units)
+
+
 def test_excluding_units_of_a_corpus_whose_publisher_drew_the_test_set_is_refused(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(ValueError, match="physionet2019 and raw ESA corpora have units"):
+    with pytest.raises(ValueError, match="raw ESA and wind farm corpora have units"):
         CompositionRoot.over(
             corpora=InMemoryCorpusRepository(),
             store=InMemoryArtifactStore(),
@@ -609,6 +634,15 @@ def test_a_robust_bound_beside_another_normalisation_is_refused_by_the_command_l
         ("physionet2012", Physionet2012CorpusReader.SCHEMA),
         ("physionet2019", Physionet2019CorpusReader.SCHEMA),
         ("eicu_demo", EicuDemoCorpusReader.SCHEMA),
+        # One file for both wind farms, whose turbines carry the same signals.
+        (
+            "wind_farms",
+            ChannelSchema(
+                frozenset(
+                    Channel(signal.name, signal.unit) for signal in GreenbyteCorpusReader.SIGNALS
+                )
+            ),
+        ),
     ],
 )
 def test_the_bounds_files_in_the_repository_bound_channels_their_corpus_declares(

@@ -15,6 +15,7 @@ import pytest
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
+from emblema.catalog.adapters.readers.greenbyte import GreenbyteCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
@@ -141,6 +142,18 @@ def test_a_unit_is_counted_within_its_part() -> None:
         ("tep", lambda: TennesseeEastmanCorpusReader(SAMPLES / "tep")),
         ("eicu_demo", lambda: EicuDemoCorpusReader(SAMPLES / "eicu_demo")),
         ("wqp", lambda: WaterQualityPortalCorpusReader(SAMPLES / "wqp")),
+        (
+            "kelmarsh",
+            lambda: GreenbyteCorpusReader(
+                SAMPLES / "kelmarsh", GreenbyteCorpusReader.KELMARSH, ("1", "2")
+            ),
+        ),
+        (
+            "penmanshiel",
+            lambda: GreenbyteCorpusReader(
+                SAMPLES / "penmanshiel", GreenbyteCorpusReader.PENMANSHIEL, ("01", "15")
+            ),
+        ),
         (
             SCP1,
             lambda: UtsdCorpusReader(

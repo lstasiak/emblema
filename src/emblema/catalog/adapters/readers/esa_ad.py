@@ -7,6 +7,7 @@ from typing import ClassVar
 import numpy as np
 from numpy.typing import NDArray
 
+from emblema.catalog.adapters.readers.file_chunks import chunks_of
 from emblema.catalog.adapters.readers.subsets import chosen_subsets
 from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.exceptions import (
@@ -30,8 +31,6 @@ _NANOSECONDS_PER_SECOND = 1_000_000_000
 _BIN_SECONDS = 30
 _BIN_NANOSECONDS = _BIN_SECONDS * _NANOSECONDS_PER_SECOND
 _NANOSECONDS_PER_HOUR = 3_600_000_000_000.0
-# Files are hashed in pieces of this size, so a channel of a hundred megabytes is never read whole.
-_CHUNK_BYTES = 1 << 20
 
 
 class EsaAdCorpusReader:
@@ -82,7 +81,7 @@ class EsaAdCorpusReader:
             for name in self._subsets:
                 series = []
                 for number, path in self._channel_paths(name):
-                    yield from self._chunks_of(path)
+                    yield from chunks_of(path)
                     series.append((number, self._series_of(path)))
                 mission = _Mission.assemble(name, series)
                 units += len(mission.segments)
@@ -142,12 +141,6 @@ class EsaAdCorpusReader:
             if not path.is_file():
                 raise CorpusDataNotFoundError(f"{path} is missing")
         return paths
-
-    @staticmethod
-    def _chunks_of(path: Path) -> Iterator[bytes]:
-        with path.open("rb") as archive:
-            while chunk := archive.read(_CHUNK_BYTES):
-                yield chunk
 
     @staticmethod
     def _series_of(path: Path) -> "_Series":
