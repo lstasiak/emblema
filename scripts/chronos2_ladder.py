@@ -40,6 +40,12 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+# Run in the forecaster's own environment: only the sibling scripts are reached from the root.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.chronos2_answers import median_index  # noqa: E402
+
 Floats = NDArray[np.float64]
 Key = tuple[int, str, int]
 CONTEXT = 47
@@ -68,15 +74,15 @@ def before(values: Floats, hour: int, length: int) -> Floats:
     return np.concatenate([np.full((values.shape[1], max(-start, 0)), np.nan), seen], axis=1)
 
 
-def laid(series: Floats, meets: int, length: int) -> tuple[Floats, Floats]:
-    """A library series laid against a target of ``length`` hours, and the hour it meets.
+def laid(series: Floats, meets: int) -> tuple[Floats, Floats]:
+    """A library series' 47 hours before ``meets``, laid against the target's, and that hour.
 
-    Its 47 hours before ``meets`` end the past, the hours before them missing.
+    Raises:
+        ValueError: If fewer than 47 hours come before ``meets``.
     """
-    kept = min(CONTEXT, length, meets)
-    past = np.full(length, np.nan)
-    past[length - kept :] = series[meets - kept : meets]
-    return past, series[meets : meets + 1]
+    if meets < CONTEXT:
+        raise ValueError(f"{meets} hours come before the hour met, not {CONTEXT}")
+    return series[meets - CONTEXT : meets], series[meets : meets + 1]
 
 
 @dataclass(frozen=True)
@@ -117,8 +123,7 @@ def rung_inputs(
     """
     if rung == "chronos2_own":
         return before(values, window, min(window, cap)), ()
-    length = CONTEXT
-    target = before(values, window, length)
+    target = before(values, window, CONTEXT)
     if rung == "chronos2_47":
         return target, ()
     chosen = selections["analog" if rung == ORACLE else rung.removeprefix("chronos2_")]
@@ -131,7 +136,7 @@ def rung_inputs(
         else:
             selection = chosen[(window, axis, channel)]
             series, meets = library[:, selection.library_channel], selection.meets
-        past[f"c{channel}"], future[f"c{channel}"] = laid(series, meets, length)
+        past[f"c{channel}"], future[f"c{channel}"] = laid(series, meets)
     return {"target": target, "past_covariates": past, "future_covariates": future}, covered
 
 
@@ -222,13 +227,6 @@ def write(path: Path, cells: Sequence[Key], out: Mapping[str, Mapping[Key, float
         for key in cells:
             shown = (f"{out[r][key]:.6g}" if key in out[r] else "" for r in RUNGS)
             writer.writerow((*key, *shown))
-
-
-def median_index(quantiles: Sequence[float]) -> int:
-    for k, level in enumerate(quantiles):
-        if abs(level - 0.5) < 1e-9:
-            return k
-    raise ValueError(f"the model's quantiles hold no median: {list(quantiles)}")
 
 
 def load(directory: Path, mission: str) -> Floats:

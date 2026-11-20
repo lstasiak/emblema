@@ -33,16 +33,12 @@ def test_hours_before_an_hour_are_each_channels_padded_before_the_first() -> Non
 def test_a_library_series_hands_the_hours_it_was_chosen_on_and_the_hour_it_meets() -> None:
     series = np.arange(100.0)
 
-    past, future = laid(series, 60, CONTEXT + 3)
+    past, future = laid(series, 60)
 
-    assert np.isnan(past[:3]).all()
-    assert past[3:].tolist() == list(np.arange(60.0 - CONTEXT, 60.0))
+    assert past.tolist() == list(np.arange(60.0 - CONTEXT, 60.0))
     assert future.tolist() == [60.0]
-    short, _ = laid(series, 60, 4)
-    assert short.tolist() == [56.0, 57.0, 58.0, 59.0]
-    early, _ = laid(series, 2, 4)
-    assert np.isnan(early[:2]).all()
-    assert early[2:].tolist() == [0.0, 1.0]
+    with pytest.raises(ValueError, match="come before"):
+        laid(series, CONTEXT - 1)
 
 
 def selections_for(cells: Sequence[tuple[int, int]]) -> dict[str, dict[Any, Selection]]:
