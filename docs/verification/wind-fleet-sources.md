@@ -3,7 +3,7 @@
 The onboarding of a system with no history is to be read on many systems of one design, and wind
 turbines are the open data that offers them: farms of identical machines under one weather, and a
 benchmark of labelled faults. This note records what the three sources hold, measured from their
-files before any reader or reading was built on them.
+files before any reading was built on them, and what the two farms' publications hold.
 
 ## 2026-11-20 — measured: two farms are a clean fleet on a ten-minute grid whose latest tables repeat every instant
 
@@ -23,9 +23,9 @@ and a reading know before they touch them?
 | Commands | `scripts/wind_fleet_audit.py farm` per farm, the values on the turbines and years a first publication reads (below); `scripts/regime_coverage_report.py measure --corpus kelmarsh penmanshiel` |
 
 Six turbines and the years 2023 and 2024 are held unread from here on
-([preregistration](../preregistration.md), "The fleet of wind turbines"). The tables' structure
-and each signal's coverage were measured on everything; every statistic of a value on the
-other fourteen turbines before 2023.
+([preregistration](../preregistration.md), "The fleet of wind turbines"). The tables' structure,
+their instants and each signal's coverage were measured on everything; every statistic of a
+value on the other fourteen turbines before 2023.
 
 **The two farms.**
 
@@ -33,7 +33,7 @@ other fourteen turbines before 2023.
 |---|---|---|
 | Turbines | 6 Senvion MM92 | 14 Senvion MM82 (no turbine 03) |
 | First reading | 21 January to 5 February 2016 | 2 June to 27 July 2016, turbine by turbine |
-| Last reading | 31 December 2024 | 31 December 2023 (ten turbines, without January 2023) or 2024 (four) |
+| Last reading | 31 December 2024 | 31 December 2023 (nine turbines, without January 2023) or 2024 (five) |
 | Tables | 54 | 144 |
 | Rows, and distinct instants | 28,305,504 and 2,839,104 | 36,912,986 and 5,758,976 |
 | Tables that repeat an instant | 12, all of 2023 and 2024 | 46, all of 2023 and 2024 |
@@ -42,17 +42,18 @@ other fourteen turbines before 2023.
 | Readings of the sixty signals | 157,169,305 | 308,715,149 |
 | Steps of ten minutes, by turbine | 99.998 % or more | 99.993 % or more |
 
-- A table holds 299 to 372 columns. Sixty are the averages of the signals the manufacturer's
-  mapping names for both farms; the rest are their minima, maxima and deviations and what the
-  export derives (lost production, availability, potential power).
+- A table holds 299 to 372 columns. Up to sixty are the averages of the signals the
+  manufacturer's mapping names for both farms; the rest are their minima, maxima and
+  deviations, a few averages the mapping does not name, and what the export derives (lost
+  production, availability, potential power).
 - The tables of 2023 and 2024 are cumulative. A table restarts its period every few hundred rows
-  and repeats every instant before, with values in its newest rows alone: 41 rows an instant at
-  Kelmarsh, 34 at Penmanshiel. Taken together the rows of an instant hold each signal once and
-  never two values.
+  and repeats every instant before, with values in its newest rows alone: on average 41 rows an
+  instant at Kelmarsh and 34 at Penmanshiel. Taken together the rows of an instant hold each
+  signal once and never two values.
 - The signals grow with time. At Kelmarsh 44 of the sixty read in 2016, 14 more from 2017 and
-  two from 2018; power and wind begin in January 2016, the temperatures on 3 May 2016 at 09:40
-  in all six turbines at once. At Penmanshiel 38 read from the start and 22 from 2018, among
-  them the gearbox oil and main bearing temperatures.
+  two from 2018; power and wind begin in January and February 2016, the temperatures on 3 May
+  2016 at 09:40 in all six turbines at once. At Penmanshiel 38 read from the start and 22 from
+  2018, among them the gear oil and the front and rear bearing temperatures.
 - One signal stands under two spellings of its unit (`mm/ss`, then `mm/s2`) and one title is
   cased otherwise in the tables than in the mapping.
 
@@ -70,14 +71,14 @@ Both are grids: every signal of a turbine is read at the same instants.
 
 - For 50 of the sixty signals at Kelmarsh and 51 at Penmanshiel the standard deviation is 0.7
   to 3.0 times the robust deviation (1.4826 times the median absolute deviation). The others
-  sit at one value most of the time:
-  the three blade angles (17 to 242 times), the energy imported (57 to 59) and the reactive
-  energy exported (341 to 8,982), the grid voltage (24 to 26) and frequency (6 to 14), the power
-  factor (7), the drive train acceleration at Kelmarsh (5) and the metal particle count, whose
-  robust deviation is nought. Under a robust score held to 100, 15 % of Kelmarsh's blade angle
-  readings lie at the bound.
-- The ranges the mapping states are limits of storage (−275 to 200 °C for every temperature),
-  and one is wrong (0 to 360° for a vane that reads −180 to 180°). They bound nothing.
+  sit at one value most of the time: the three blade angles (17 to 242 times), the energy
+  imported (57 to 59) and the reactive energy exported (341 to 8,982), the grid voltage (24 to
+  26) and frequency (6 to 14), the power factor (7), the drive train acceleration at Kelmarsh
+  (5) and the metal particle count, whose robust deviation is nought. Under a robust score held
+  to 100, 15 % of Kelmarsh's blade angle readings lie at the bound.
+- The ranges Penmanshiel's mapping states are limits of storage (−275 to 200 °C for every
+  temperature), and one is wrong (0 to 360° for a vane that reads −180 to 180°); Kelmarsh's
+  states none. They bound nothing.
 - A failed sensor writes a sentinel. Readings outside a wide physical range (−50 to 150 °C,
   0 to 60 m/s, −10 to 2,500 RPM; `*-implausible.csv`):
 
@@ -85,7 +86,7 @@ Both are grids: every signal of a turbine is read at the same instants.
 |---|---|---|
 | Transformer temperature | 6, −273.2 °C, 4 | 122, −273.2 °C, 25 |
 | Transformer cell temperature | 6, −273.2 °C, 4 | 122, −273.2 °C, 25 |
-| Temperature motor axis 1, 2, 3 | 3, 2, 3, 215.0 °C, 2, 1, 2 | 27, 16, 3, 215.0 °C, 10, 7, 1 |
+| Temperature motor axis 1, 2 and 3 | 3, 2 and 3; 215.0 °C; 2, 1 and 2 | 27, 16 and 3; 215.0 °C; 10, 7 and 1 |
 | Ambient temperature (converter) | 1, −113.3 °C, 1 | 2, −104.6 °C, 2 |
 | Stator temperature 1 | 0 | 1, 264.0 °C, 1 |
 | Wind speed Sensor 2 | 409, −15.0 m/s, 87 | 4,327, −15.0 m/s, 769 |
@@ -132,8 +133,8 @@ of a signal's change from one hour to the next between two turbines of a farm, m
 3. All of a farm's turbines start within weeks, Kelmarsh's temperatures within the same ten
    minutes: the real first days are one stretch of weather per farm.
 4. The values need two decisions before a publication, which ADR-0085 takes. A few hundred
-   readings are sentinels of failed sensors with no published bound to remove them by, and ten
-   signals have no robust spread to be scored by.
+   readings are sentinels of failed sensors with no published bound to remove them by, and nine
+   or ten signals of a farm have no robust spread to be scored by.
 
 **Limitations.** The values and the fleet's correlations are read on fourteen of the twenty
 turbines, before 2023. The physical ranges are this note's, wide by choice, and no publisher's.
@@ -146,8 +147,8 @@ are its excerpts laid out, and can they be read as a fleet?
 
 **Conditions.** As above; Zenodo 10.5281/zenodo.15846963 (version 6), CC BY-SA 4.0, one archive
 of 5.50 GB checked against the publisher's MD5; `scripts/wind_fleet_audit.py care`, which
-reads every excerpt's stamps, statuses and wind speed and no other sensor
-(`care-excerpts.csv`, `care-groups.csv`).
+reads every excerpt's stamps and wind speed and no other sensor (`care-excerpts.csv`,
+`care-groups.csv`, `care-sensors.csv`).
 
 95 excerpts of 36 turbines on three farms, each a year of training followed by the window a
 detector is scored on.
@@ -179,7 +180,52 @@ detector is scored on.
    group found from the data.
 2. It is read from its files for a detection reading, its excerpts split by turbine so that no
    scored window lies in another excerpt's training year, and it joins no corpus as it is.
-3. Its faults are slow: an annotated lead-up of a week to two months.
+3. Its faults are slow: an annotated lead-up of two days to two months, a week or more at each
+   farm's median.
 
 **Limitations.** Shared time is inferred from wind alone, at a threshold the gap between 0.55
-and 0.89 leaves free. No sensor value was read, so nothing here says what a detector finds.
+and 0.89 leaves free. No sensor but the wind speed was read, so nothing here says what a
+detector finds.
+
+## 2026-11-21 — measured: the two publications hold the audit's readings less the ones it listed as a failed sensor's
+
+**Question.** Published as decided (ADR-0085), does each farm hold what the audit counted on the
+turbines and years it reads, and does it remove the readings the audit listed and no others?
+
+**Conditions.** Commit `c9a47a0f`, the reader at `7f643708`; Mac (M1 Pro), CPU; 2026-11-20 to 21.
+Per farm, the turbines not held unread and the months before 2023:
+
+    uv run --env-file .env.r2 python -m emblema.entrypoints.cli.publish_corpus --corpus kelmarsh \
+        --subset 1 --subset 3 --subset 4 --subset 5 --exclude-units <the months of 2023 and 2024> \
+        --window 1 --stride 1 --normalisation robust --robust-bound 100 \
+        --cleaning corpora/cleaning/wind_farms.toml --vocabulary-from <the publication before> \
+        --hold-out <the months of 2020 to 2022>
+
+Kelmarsh continues the vocabulary of the raw ESA counterparts' publication (`f5f675bb…`),
+Penmanshiel that of Kelmarsh. The counts below are read from the manifests.
+
+| | Kelmarsh | Penmanshiel |
+|---|---|---|
+| Manifest | `95596b21…` | `451ab8f5…` |
+| Turbines | 4 | 10 |
+| Months of a turbine: fitted on, held out | 191, 144 | 426, 360 |
+| Windows of an hour | 242,582 | 565,407 |
+| Tokens | 79,658,907 | 180,052,542 |
+| Readings the audit counted there | 79,659,773 | 180,057,566 |
+| Readings removed, channels they lie in | 866, 9 | 5,024, 10 |
+| Block | 1.36 GB | 3.08 GB |
+| Time to publish | 10 min | 22 min |
+
+**Conclusions.**
+
+1. Each publication holds exactly the audit's readings less those it removed (79,659,773 − 866
+   and 180,057,566 − 5,024), so the reader and the audit's own count agree on every turbine and
+   year published.
+2. The readings removed are the audit's inventory, channel by channel: at Penmanshiel 122 each
+   of the two transformer temperatures, 27, 16 and 3 of the three axis motors', 4,327 of the
+   second anemometer, 403 of the generator's speed. Nothing was clipped.
+3. All sixty channels have statistics from the fitting side, 2016 to 2019, under the robust
+   score held to 100.
+
+**Limitations.** A check of counts, not of values: no reading has yet read these publications.
+The stray readings between a range's edge and the ordinary values stay (ADR-0085).
