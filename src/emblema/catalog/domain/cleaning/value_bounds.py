@@ -12,7 +12,8 @@ class ValueBounds:
     A value outside the outer pair is one no unit can have — a pH of 735, a temperature of
     minus 18 °C — and is removed, so it becomes a value never measured. A value between an outer and
     an inner bound is possible but extreme and is clipped to the inner one. Bounds are in the
-    unit the corpus records the channel in and are fixed before any data is seen.
+    unit the corpus records the channel in; they are fixed before the publication that applies
+    them and fitted on nothing.
 
     Invariants: the channel is named without surrounding whitespace; every bound is finite;
     removed below ≤ clipped below ≤ clipped above ≤ removed above.

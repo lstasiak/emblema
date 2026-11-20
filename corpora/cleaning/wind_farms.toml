@@ -1,0 +1,189 @@
+# Bounds a publication of a wind farm's turbine tables holds its values to (ADR-0078, ADR-0085):
+# a value below removed_below or above removed_above is removed and reads as never measured.
+# Nothing is clipped, so the inner bounds repeat the outer ones. The bounds are one wide physical
+# range per unit, which no working sensor of a turbine leaves: -50 to 150 degrees Celsius, 0 to
+# 60 metres a second, -10 to 2,500 revolutions a minute. What lies outside is a failed sensor's
+# sentinel (-273.2 degrees, 215.0 degrees, -15.0 metres a second) or a ten-minute average over
+# one. A channel in another unit has no range here and is published as read. Both farms carry
+# the same signals, so one file serves both.
+
+# Degrees Celsius
+
+[[bounds]]
+channel = "Ambient temperature (converter)"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "CPU temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Front bearing temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Gear oil inlet temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Gear oil temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Generator bearing front temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Generator bearing rear temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Hub temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Nacelle ambient temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Nacelle temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Rear bearing temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Rotor bearing temp"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Stator temperature 1"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Temp. top box"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Temperature motor axis 1"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Temperature motor axis 2"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Temperature motor axis 3"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Transformer cell temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+[[bounds]]
+channel = "Transformer temperature"
+removed_below = -50.0
+clipped_below = -50.0
+clipped_above = 150.0
+removed_above = 150.0
+
+# Metres a second
+
+[[bounds]]
+channel = "Wind speed"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 60.0
+removed_above = 60.0
+
+[[bounds]]
+channel = "Wind speed Sensor 1"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 60.0
+removed_above = 60.0
+
+[[bounds]]
+channel = "Wind speed Sensor 2"
+removed_below = 0.0
+clipped_below = 0.0
+clipped_above = 60.0
+removed_above = 60.0
+
+# Revolutions a minute
+
+[[bounds]]
+channel = "Gearbox speed"
+removed_below = -10.0
+clipped_below = -10.0
+clipped_above = 2500.0
+removed_above = 2500.0
+
+[[bounds]]
+channel = "Generator RPM"
+removed_below = -10.0
+clipped_below = -10.0
+clipped_above = 2500.0
+removed_above = 2500.0
+
+[[bounds]]
+channel = "Rotor speed"
+removed_below = -10.0
+clipped_below = -10.0
+clipped_above = 2500.0
+removed_above = 2500.0
