@@ -54,6 +54,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.history_pretext_answers_report import same_phase  # noqa: E402
+from scripts.local_forecaster_answers import filled  # noqa: E402
 
 Floats = NDArray[np.float64]
 Ints = NDArray[np.int64]
@@ -160,19 +161,6 @@ def block_ends(days: Sequence[int]) -> dict[int, int]:
         raise ValueError(f"the days must be distinct and rising, got {list(days)}")
     nexts = [*days[1:], days[-1] + BLOCK_DAYS]
     return dict(zip(days, nexts, strict=True))
-
-
-def filled(hours: Floats) -> Floats:
-    """Missing hours carry the hour before, those before the first reading take that reading."""
-    read = np.isfinite(hours)
-    if not read.any():
-        raise ValueError("no hour holds a reading")
-    last = np.where(read, np.arange(len(hours)), 0)
-    np.maximum.accumulate(last, out=last)
-    out = hours[last]
-    first = int(np.argmax(read))
-    out[:first] = hours[first]
-    return out
 
 
 def no_learning(history: Floats) -> tuple[dict[str, float], int | None]:

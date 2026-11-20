@@ -12,7 +12,6 @@ from scripts.cold_start_cells import (
     block_ends,
     cells_of,
     drawn_hours,
-    filled,
     fitted_ridges,
     nearest,
     random_segment,
@@ -45,12 +44,6 @@ def test_a_channel_is_scored_where_it_read_and_half_the_hours_before_did() -> No
     assert new.scorable(CONTEXT + 1).tolist() == [1]
     assert new.scorable(CONTEXT - 1).size == 0
     assert np.isnan(new.history(3, 0, hours=5)[:2]).all()
-
-
-def test_missing_hours_carry_the_hour_before_and_lead_with_the_first_reading() -> None:
-    assert filled(np.array([np.nan, 2.0, np.nan, 5.0])).tolist() == [2.0, 2.0, 2.0, 5.0]
-    with pytest.raises(ValueError, match="no hour"):
-        filled(np.array([np.nan, np.nan]))
 
 
 def test_a_ridge_learns_a_linear_answer_and_clips_what_it_was_not_fitted_on() -> None:
