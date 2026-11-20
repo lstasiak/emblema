@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
+from emblema.catalog.adapters.readers.file_chunks import chunks_of
 from emblema.catalog.adapters.readers.subsets import chosen_subsets
 from emblema.catalog.adapters.readers.text import fields_of, numbered_lines
 from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
@@ -24,8 +25,6 @@ from emblema.shared.kernel.sampling import SamplingRegime
 
 _FILE = "segments.csv"
 _SEPARATOR = ","
-# Files are hashed in pieces of this size.
-_CHUNK_BYTES = 1 << 20
 
 
 class OpssatAdCorpusReader:
@@ -87,7 +86,7 @@ class OpssatAdCorpusReader:
             channel_schema=ChannelSchema(frozenset(self.CHANNELS)),
             sampling_regime=SamplingRegime.IRREGULAR,
             content=CorpusContent(
-                checksum=Checksum.of_chunks(self._chunks_of(self._path())),
+                checksum=Checksum.of_chunks(chunks_of(self._path())),
                 unit_count=len(segments),
                 observation_count=sum(len(segment.times) for segment in segments.values()),
             ),
@@ -114,12 +113,6 @@ class OpssatAdCorpusReader:
         if not path.is_file():
             raise CorpusDataNotFoundError(f"{path} is missing")
         return path
-
-    @staticmethod
-    def _chunks_of(path: Path) -> Iterator[bytes]:
-        with path.open("rb") as file:
-            while chunk := file.read(_CHUNK_BYTES):
-                yield chunk
 
     def _segments(self) -> dict[UnitKey, "_Segment"]:
         """The selected fragments, parsed once and kept, in the order the file holds them."""

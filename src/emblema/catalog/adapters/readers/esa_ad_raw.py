@@ -7,11 +7,12 @@ from typing import ClassVar
 import numpy as np
 from numpy.typing import NDArray
 
+from emblema.catalog.adapters.readers.excluded_months import ExcludedMonths
+from emblema.catalog.adapters.readers.file_chunks import chunks_of
 from emblema.catalog.adapters.readers.subsets import chosen_subsets
 from emblema.catalog.domain.channels.channel_schema import Channel, ChannelSchema
 from emblema.catalog.domain.exceptions import (
     CorpusDataNotFoundError,
-    InvalidUnitKeyError,
     MalformedCorpusDataError,
     UnknownUnitError,
 )
@@ -32,8 +33,6 @@ _NANOSECONDS_PER_HOUR = 3_600_000_000_000.0
 # an instant on the same axis without unpickling a channel.
 ORIGIN_SECONDS = 946_684_800
 ORIGIN_TEXT = "2000-01-01T00:00:00Z"
-# Files are hashed in pieces of this size, so a channel of a hundred megabytes is never read whole.
-_CHUNK_BYTES = 1 << 20
 
 
 @dataclass(frozen=True)
@@ -144,7 +143,7 @@ class EsaAdRawCorpusReader:
         if unknown:
             raise ValueError(f"the policy selects no channel of {unknown}")
         self._policy = policy
-        self._excluded = frozenset(self._month_keyed(name) for name in excluded)
+        self._excluded = ExcludedMonths(excluded, self._subsets, "mission")
         self._loaded: dict[str, _Mission] = {}
 
     def describe(self) -> CorpusDescription:
@@ -154,18 +153,15 @@ class EsaAdRawCorpusReader:
         def contents() -> Iterator[bytes]:
             nonlocal units, observations
             yield self._policy.statement()
-            if self._excluded:
-                # Another cut of the same files is another version of the data, and a corpus cut
-                # by nothing keeps the checksum it always had.
-                yield f"excluded {','.join(sorted(map(str, self._excluded)))}\n".encode()
+            yield self._excluded.statement()
             for name in self._subsets:
                 series = []
                 for number, path in self._channel_paths(name):
-                    yield from self._chunks_of(path)
+                    yield from chunks_of(path)
                     series.append((number, self._series_of(path)))
                 mission = _Mission.assemble(name, series, self._policy.cap)
                 self._loaded[name] = mission
-                kept = self._kept(mission)
+                kept = self._excluded.kept(name, mission.months())
                 units += len(kept)
                 observations += sum(mission.observation_count_of(segment) for segment in kept)
 
@@ -187,7 +183,7 @@ class EsaAdRawCorpusReader:
 
     def read_units(self) -> Iterator[CorpusUnit]:
         for name in self._subsets:
-            for segment in self._kept(self._mission(name)):
+            for segment in self._excluded.kept(name, self._mission(name).months()):
                 yield CorpusUnit(
                     segment.key, TimeExtent(_hours(segment.start), _hours(segment.end))
                 )
@@ -203,31 +199,6 @@ class EsaAdRawCorpusReader:
         if unit in self._excluded:
             raise UnknownUnitError(f"{unit} is excluded from the corpus")
         return mission.observations_of(segment)
-
-    def _month_keyed(self, name: str) -> UnitKey:
-        """The month an exclusion names, refused unless keyed within a selected mission."""
-        try:
-            key = UnitKey(name)
-        except InvalidUnitKeyError as error:
-            raise ValueError(f"an excluded month must be named, got {name!r}") from error
-        if key.part not in self._subsets:
-            raise ValueError(f"{name!r} is not keyed <mission>/<YYYY-MM> within a selected mission")
-        return key
-
-    def _kept(self, mission: "_Mission") -> tuple["_Segment", ...]:
-        """The mission's months less those excluded.
-
-        Raises:
-            CorpusDataNotFoundError: If an excluded month of the mission lies outside its span:
-                an exclusion that silently missed would let a month meant to stay out be read.
-        """
-        keys = {segment.key for segment in mission.segments}
-        missed = sorted(
-            str(key) for key in self._excluded if key.part == mission.name and key not in keys
-        )
-        if missed:
-            raise CorpusDataNotFoundError(f"{mission.name} has no month {missed} to exclude")
-        return tuple(segment for segment in mission.segments if segment.key not in self._excluded)
 
     def _mission(self, name: str) -> "_Mission":
         """The mission, assembled from its archives unless it was read before."""
@@ -251,12 +222,6 @@ class EsaAdRawCorpusReader:
             if not path.is_file():
                 raise CorpusDataNotFoundError(f"{path} is missing")
         return paths
-
-    @staticmethod
-    def _chunks_of(path: Path) -> Iterator[bytes]:
-        with path.open("rb") as archive:
-            while chunk := archive.read(_CHUNK_BYTES):
-                yield chunk
 
     @staticmethod
     def _series_of(path: Path) -> "_Series":
@@ -405,6 +370,9 @@ class _Mission:
             int(np.diff(np.searchsorted(channel.times, [segment.start, segment.end])).item())
             for _, channel in self.channels
         )
+
+    def months(self) -> dict[UnitKey, _Segment]:
+        return {segment.key: segment for segment in self.segments}
 
     def segment_keyed(self, key: UnitKey) -> _Segment | None:
         return next((segment for segment in self.segments if segment.key == key), None)
