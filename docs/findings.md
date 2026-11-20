@@ -72,19 +72,14 @@ Last updated 2026-11-20.
   that forecaster's squared error is about half theirs on the first mission's later years
   (0.475 [0.454; 0.499] by the geometric mean over windows), and level with the best local
   forecaster, AutoARIMA, on the second mission (1.02 [0.93; 1.15]); those months were read before, so this
-  is a gate, not a confirmation ([note](verification/telemetry-history-pretext.md)). In a
-  satellite's first 30 days, read as a new system, it does not lead on both missions: AutoETS on
-  the same 47 hours misses less on the first (1.29 [1.22; 1.37], harm), Chronos-2 leads on the
-  second (0.75 [0.66; 0.86], real and small; 0.88 against the same forecasters without a
-  season, read after); handed every hour so far it leads on both (0.92, 0.64, descriptive), and
-  another satellite's nearest series of the same kind makes it worse (1.15 [1.07; 1.23]). The
-  departures fitted on the first week find as many events as fitted on seven years, but their
-  alarm holds its level only from the third month: two to three months of the satellite's own
-  data, not a year ([note](verification/telemetry-cold-start.md)). Read as an
+  is a gate, not a confirmation ([note](verification/telemetry-history-pretext.md)). Read as an
   event detector, its envelope finds no more events beyond chance than the departures, alone
   (−2.9 [−11.9; +6.2]) or fused with them (+0.9 [−2.9; +3.8]): the detector stays the
   departures, and the forecaster's role is the forecast
-  ([note](verification/telemetry-channel-local.md)).
+  ([note](verification/telemetry-channel-local.md)). In a satellite's first 30 days it does not
+  lead the classical answers on both missions (1.29, harm; 0.75, real and small), and another
+  satellite's nearest series makes it worse (1.15, harm); the departures' alarm holds its level
+  from the third month, not after a year ([note](verification/telemetry-cold-start.md)).
   At 1 % false alarms the departures leave little room: they miss 13 of 61, too
   few for the rule to reopen the perturbation term (at most 10.67 beyond chance, 11 required), and
   other detectors with no label find 3.7 of them beyond chance. Ten-minute cells gain one of the 11
@@ -312,10 +307,7 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
    the base stays a comparison on the half. The named levers for a larger gain remain the
    pretext (a cell's mean, which interpolation answers on a grid) and the scale of data in the
    tasks' regime (credentialed MIMIC-IV or the full eICU).
-2. A satellite with no history is read: in the first month the local classical forecasters are
-   the bar on the first mission, another satellite's series adds nothing, and the departures'
-   alarm needs two to three months ([note](verification/telemetry-cold-start.md)). The forecasts
-   and a library of other systems are read next on a fleet of wind turbines, systems of one
-   design side by side, before a corpus of several systems adapts the published forecaster
-   where it leaves room.
+2. The forecasts and a library of other systems are read next on a fleet of wind turbines,
+   systems of one design side by side, before a corpus of several systems adapts the published
+   forecaster where it leaves room.
 3. Open the frozen test side once.
