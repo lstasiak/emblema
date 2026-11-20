@@ -30,6 +30,7 @@ from emblema.catalog.adapters.in_memory.corpus_reader import InMemoryCorpusReade
 from emblema.catalog.adapters.readers.cmapss import CmapssCorpusReader
 from emblema.catalog.adapters.readers.eicu_demo import EicuDemoCorpusReader
 from emblema.catalog.adapters.readers.esa_ad import EsaAdCorpusReader
+from emblema.catalog.adapters.readers.greenbyte import GreenbyteCorpusReader
 from emblema.catalog.adapters.readers.physionet2012 import Physionet2012CorpusReader
 from emblema.catalog.adapters.readers.physionet2019 import Physionet2019CorpusReader
 from emblema.catalog.adapters.readers.skab import SkabCorpusReader
@@ -369,6 +370,47 @@ def synthetic(tmp_path: Path) -> Harness:
     return Harness(SyntheticCorpusReader(PROCESS, HOSTILE), change_the_specification)
 
 
+def greenbyte(tmp_path: Path) -> Harness:
+    pytest.importorskip("pyarrow")
+    root = tmp_path / "kelmarsh"
+    shutil.copytree(sample("kelmarsh"), root)
+    path = root / "Kelmarsh_SCADA_2016_3082.zip"
+    table = "Turbine_Data_Kelmarsh_1_2016-01-03_-_2017-01-01_228.csv"
+    turbines = ("1", "2")
+
+    def rewrite(edit: Callable[[list[bytes]], list[bytes]]) -> None:
+        with zipfile.ZipFile(path) as archive:
+            members = {name: archive.read(name) for name in archive.namelist()}
+        members[table] = b"\r\n".join(edit(members[table].split(b"\r\n")))
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+            for name, content in members.items():
+                archive.writestr(name, content)
+
+    # What the format allows and the sample holds none of: an instant on two rows with its
+    # values in one of them, as the cumulative exports write it, and a row that reads nothing.
+    def repeated(lines: list[bytes]) -> list[bytes]:
+        stamp, _, cells = lines[10].partition(b",")
+        empty = b",".join([b"NaN"] * (cells.count(b",") + 1))
+        silent = b"2016-12-31 23:50:00," + empty
+        return [*lines[:11], stamp + b"," + empty, *lines[11:-1], silent, lines[-1]]
+
+    rewrite(repeated)
+
+    def change_one_value() -> CorpusReader:
+        def nudge(lines: list[bytes]) -> list[bytes]:
+            cells = lines[10].split(b",")
+            index = next(i for i, cell in enumerate(cells[1:], 1) if cell != b"NaN")
+            cells[index] = repr(float(cells[index]) + 1.0).encode()
+            return [*lines[:10], b",".join(cells), *lines[11:]]
+
+        rewrite(nudge)
+        return GreenbyteCorpusReader(root, GreenbyteCorpusReader.KELMARSH, turbines)
+
+    return Harness(
+        GreenbyteCorpusReader(root, GreenbyteCorpusReader.KELMARSH, turbines), change_one_value
+    )
+
+
 ADAPTERS: dict[str, Callable[[Path], Harness]] = {
     "in_memory": in_memory,
     "cmapss": cmapss,
@@ -376,6 +418,7 @@ ADAPTERS: dict[str, Callable[[Path], Harness]] = {
     "skab": skab,
     "smd": smd,
     "esa_ad": esa_ad,
+    "greenbyte": greenbyte,
     "eicu_demo": eicu_demo,
     "physionet2012": physionet2012,
     "physionet2019": physionet2019,

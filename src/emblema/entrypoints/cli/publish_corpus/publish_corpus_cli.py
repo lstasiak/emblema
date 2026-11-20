@@ -182,9 +182,10 @@ class PublishCorpusCli:
             type=Path,
             metavar="FILE",
             help="file naming units to cut from the corpus, one per line: a stay as the corpus "
-            "names its file (p000015, not training_setA/p000015) or a satellite's month as its "
-            "unit is keyed (ESA-Mission1/2007-01); the months or stays a downstream task reads, "
-            "and only physionet2019 and the raw ESA corpora have a reader for it",
+            "names its file (p000015, not training_setA/p000015) or a satellite's or a turbine's "
+            "month as its unit is keyed (ESA-Mission1/2007-01, 3/2023-01); the months or stays "
+            "a downstream task reads, and only physionet2019, the raw ESA corpora and the wind "
+            "farms have a reader for it",
         )
         parser.add_argument(
             "--channels-independent",

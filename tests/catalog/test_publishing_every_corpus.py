@@ -71,6 +71,31 @@ CORPORA = [
             find_spec("pandas") is None, reason="the corpora extra is not installed"
         ),
     ),
+    # A wind farm's sample keeps one ten-minute row in four days of two turbines, whose months
+    # are the units, so its windows are twenty days long; the second farm's last turbine starts
+    # in the middle of July, a month too short for one.
+    pytest.param(
+        "kelmarsh",
+        ("1", "2"),
+        16,
+        60,
+        WindowSpec(length=480.0, stride=240.0),
+        DRAWN,
+        marks=pytest.mark.skipif(
+            find_spec("pyarrow") is None, reason="the corpora extra is not installed"
+        ),
+    ),
+    pytest.param(
+        "penmanshiel",
+        ("01", "15"),
+        12,
+        60,
+        WindowSpec(length=480.0, stride=240.0),
+        DRAWN,
+        marks=pytest.mark.skipif(
+            find_spec("pyarrow") is None, reason="the corpora extra is not installed"
+        ),
+    ),
     (
         "physionet2012",
         ("set-a", "set-b"),
@@ -175,6 +200,8 @@ def corpus_root(corpus: str) -> Path:
         "esa_ad",
         "esa_ad_raw",
         "esa_ad_raw_counterparts",
+        "kelmarsh",
+        "penmanshiel",
         "physionet2012",
         "eicu_demo",
         "physionet2019",

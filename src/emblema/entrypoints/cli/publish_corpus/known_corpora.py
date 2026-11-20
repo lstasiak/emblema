@@ -146,6 +146,32 @@ class KnownCorpora:
                     url="https://creativecommons.org/licenses/by/4.0/",
                 ),
             ),
+            # The Zenodo records of both farms state CC BY 4.0, so a derivative may be
+            # redistributed with attribution.
+            KnownCorpus(
+                "kelmarsh",
+                CorpusSource(
+                    "Cubico Sustainable Investments (Plumley, Takeuchi)",
+                    "https://zenodo.org/records/16807551",
+                ),
+                Licence(
+                    "CC-BY-4.0",
+                    permits_derivatives=True,
+                    url="https://creativecommons.org/licenses/by/4.0/",
+                ),
+            ),
+            KnownCorpus(
+                "penmanshiel",
+                CorpusSource(
+                    "Cubico Sustainable Investments (Plumley)",
+                    "https://zenodo.org/records/16807304",
+                ),
+                Licence(
+                    "CC-BY-4.0",
+                    permits_derivatives=True,
+                    url="https://creativecommons.org/licenses/by/4.0/",
+                ),
+            ),
             # PhysioNet publishes the challenge data under the Open Data Commons Attribution
             # licence, so a derivative may be redistributed with attribution.
             KnownCorpus(
