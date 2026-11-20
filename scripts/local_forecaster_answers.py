@@ -51,7 +51,7 @@ def read_lags(path: Path) -> dict[Key, int]:
         }
 
 
-def filled(means: NDArray[np.float32]) -> NDArray[np.float64]:
+def filled(means: NDArray[np.float32] | NDArray[np.float64]) -> NDArray[np.float64]:
     """The hours with each missing one carrying the hour before it, the first reading backwards.
 
     Raises:

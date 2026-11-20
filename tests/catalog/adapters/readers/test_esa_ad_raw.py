@@ -96,6 +96,49 @@ def test_the_policy_in_force_reads_the_target_channels_of_three_packets_and_a_gr
     assert len(POLICY.channels[MISSION]) == 48
 
 
+def test_the_counterparts_policy_reads_mission1_alike_and_adds_22_channels_to_mission2() -> None:
+    counterparts = EsaAdRawCorpusReader.COUNTERPARTS
+
+    assert counterparts.channels[MISSION] == POLICY.channels[MISSION]
+    assert counterparts.channels[OTHER][:11] == POLICY.channels[OTHER]
+    assert len(counterparts.channels[OTHER]) == 33
+    assert counterparts.cap == POLICY.cap
+
+
+def test_the_counterparts_policy_is_another_version_of_the_same_files() -> None:
+    reader = EsaAdRawCorpusReader(SAMPLE, policy=EsaAdRawCorpusReader.COUNTERPARTS)
+    description = reader.describe()
+
+    assert len(description.channel_schema) == 81
+    assert Channel("ESA-Mission2/channel_91") in description.channel_schema.channels
+    assert description.content.checksum != EsaAdRawCorpusReader(SAMPLE).describe().content.checksum
+
+
+def test_mission2s_added_channels_are_its_targets_of_a_kind_mission1_reads() -> None:
+    root = raw_root("esa_ad")
+    if root is None:
+        pytest.skip("the ESA Anomaly Dataset is not downloaded")
+
+    def kinds(mission: str) -> dict[int, tuple[str, str, str]]:
+        frame = pd.read_csv(root / mission / "channels.csv", keep_default_na=False)
+        columns = (frame[name] for name in ("Channel", "Subsystem", "Physical Unit", "Target"))
+        return {
+            int(channel.removeprefix("channel_")): (subsystem, unit, target)
+            for channel, subsystem, unit, target in zip(*columns, strict=True)
+        }
+
+    first, second = kinds(MISSION), kinds(OTHER)
+    read_on_first = {first[number][:2] for number in POLICY.channels[MISSION]}
+    added = set(EsaAdRawCorpusReader.COUNTERPARTS.channels[OTHER]) - set(POLICY.channels[OTHER])
+
+    assert added == {
+        number
+        for number, (subsystem, unit, target) in second.items()
+        if target == "YES" and (subsystem, unit) in read_on_first
+    }
+    assert not {second[number][:2] for number in POLICY.channels[OTHER]} & read_on_first
+
+
 def test_channels_are_the_policys_named_by_their_mission(reader: EsaAdRawCorpusReader) -> None:
     schema = reader.describe().channel_schema
 

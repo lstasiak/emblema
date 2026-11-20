@@ -109,15 +109,14 @@ Preliminary, on validation data; each task's test data is used once, at the end.
 - On satellite telemetry the features find few events without labels. Each channel's departure
   from its own recent hours, with no model and no label, is part of the package and the bar the
   backbone has to beat: the best find 32 of 61 events beyond chance at 1 % false alarms on the
-  first mission, where a tree model trained on labelled events finds about 10 more; on the
-  second, a PR-AUC of 0.885 against 0.627. A pretext forecasting each channel's next hour reads
-  no better than that departure, and the departures miss too few events on that mission to
-  justify a perturbation term. Read as a forecaster on years it never saw, that pretext does no
-  better than a per-channel linear model, while a published zero-shot forecaster keeps its
-  accuracy there; on the first mission its squared error is about half that of the best
-  classical forecaster fitted on each window's own hours, on years already used once, so still
-  to be confirmed on another mission. As an event detector its forecast range finds no
-  more events beyond chance than the departures.
+  first mission, about 10 fewer than trees trained on labelled events; on the second, a PR-AUC
+  of 0.885 against 0.627. A pretext forecasting each channel's next hour does no better as a
+  detector and does not carry to later years as a forecaster. A published zero-shot forecaster
+  does: on the first mission's later years its squared error is about half the best classical
+  forecaster's, still to be confirmed on another mission. In a satellite's first month it trails
+  a classical forecaster on the first mission and leads a little on the second, and another
+  satellite's data handed as context makes it worse. Its forecast range finds no more events
+  than the departures.
 
 Numbers, intervals, limitations and what is read next: [`docs/findings.md`](docs/findings.md).
 

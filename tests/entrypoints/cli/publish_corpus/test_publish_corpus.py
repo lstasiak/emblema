@@ -379,8 +379,11 @@ def test_the_units_excluded_by_name_reach_the_reader_of_the_corpus_named(tmp_pat
     ]
 
 
+@pytest.mark.parametrize(
+    ("corpus", "channels"), [("esa_ad_raw", 11), ("esa_ad_raw_counterparts", 33)]
+)
 def test_the_months_excluded_by_name_reach_the_reader_of_the_raw_telemetry(
-    tmp_path: Path,
+    tmp_path: Path, corpus: str, channels: int
 ) -> None:
     every = [
         str(unit.key)
@@ -389,7 +392,7 @@ def test_the_months_excluded_by_name_reach_the_reader_of_the_raw_telemetry(
     root = CompositionRoot.over(
         corpora=InMemoryCorpusRepository(),
         store=InMemoryArtifactStore(),
-        corpus="esa_ad_raw",
+        corpus=corpus,
         corpus_root=sample("esa_ad"),
         workspace=tmp_path / "workspace",
         subsets=("ESA-Mission2",),
@@ -398,12 +401,13 @@ def test_the_months_excluded_by_name_reach_the_reader_of_the_raw_telemetry(
 
     assert isinstance(root.adapters.reader, EsaAdRawCorpusReader)
     assert [str(unit.key) for unit in root.adapters.reader.read_units()] == every[1:]
+    assert len(root.adapters.reader.describe().channel_schema) == channels
 
 
 def test_excluding_units_of_a_corpus_whose_publisher_drew_the_test_set_is_refused(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(ValueError, match="physionet2019 and esa_ad_raw corpora have units"):
+    with pytest.raises(ValueError, match="physionet2019 and raw ESA corpora have units"):
         CompositionRoot.over(
             corpora=InMemoryCorpusRepository(),
             store=InMemoryArtifactStore(),

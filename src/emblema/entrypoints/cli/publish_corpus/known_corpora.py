@@ -117,6 +117,21 @@ class KnownCorpora:
                 ),
                 raw_directory="esa_ad",
             ),
+            # The same files read with Mission2's counterparts of Mission1's channels as well:
+            # another selection is another corpus, so the tasks over the first keep their truth.
+            KnownCorpus(
+                "esa_ad_raw_counterparts",
+                CorpusSource(
+                    "European Space Agency (De Canio, Kotowski, Haskamp)",
+                    "https://zenodo.org/records/15237121",
+                ),
+                Licence(
+                    "CC-BY-3.0-IGO",
+                    permits_derivatives=True,
+                    url="https://creativecommons.org/licenses/by/3.0/igo/",
+                ),
+                raw_directory="esa_ad",
+            ),
             # The Zenodo record states CC BY 4.0, so a derivative may be redistributed with
             # attribution.
             KnownCorpus(

@@ -85,11 +85,14 @@ class EsaAdRawCorpusReader:
 
     The policy in force reads the target channels of three packets and one group of Mission1
     (every target channel but those of three sparse packets) and the benchmark's lightweight
-    channels of Mission2, whose other channels all share one packet. Units are the calendar months
-    of a mission's span, keyed ``<mission>/<YYYY-MM>``; the mission stays the independent unit.
-    Channels are named by mission. Observations are placed in hours since midnight UTC of the
-    day the anonymised missions start, on one axis for every mission. Months named in
-    ``excluded`` are left out of the units and the counts as if they were not there: a
+    channels of Mission2, whose other channels all share one packet. The counterparts' policy reads
+    Mission1 alike and adds Mission2's 22 target channels whose subsystem and physical unit a
+    channel Mission1 reads shares, which no lightweight channel does: the benchmark names both alike
+    across missions, so a channel of one mission is matched to its kind on the other. Units are the
+    calendar months of a mission's span, keyed ``<mission>/<YYYY-MM>``; the mission stays the
+    independent unit. Channels are named by mission. Observations are placed in hours since
+    midnight UTC of the day the anonymised missions start, on one axis for every mission. Months
+    named in ``excluded`` are left out of the units and the counts as if they were not there: a
     pretraining corpus cut from the months a downstream task reads, and a name matching no month
     of a selected mission is refused.
 
@@ -98,7 +101,7 @@ class EsaAdRawCorpusReader:
     runs the stream it reads, so the files are trusted as far as the fetch script's checksums
     vouch for them. Every mission read is kept in memory, since describing and then reading a
     publication would otherwise unpickle each one twice; under the policy in force that is about
-    seven gigabytes for both.
+    seven gigabytes for both, and about two more under the counterparts'.
     """
 
     SUBSETS: ClassVar[tuple[str, ...]] = ("ESA-Mission1", "ESA-Mission2")
@@ -108,6 +111,17 @@ class EsaAdRawCorpusReader:
             "ESA-Mission2": tuple(range(18, 29)),
         },
         cap=20_000_000,
+    )
+    COUNTERPARTS: ClassVar[EsaAdRawPolicy] = EsaAdRawPolicy(
+        channels={
+            "ESA-Mission1": POLICY.channels["ESA-Mission1"],
+            "ESA-Mission2": (
+                *POLICY.channels["ESA-Mission2"],
+                *(58, 59, 70, 71, 72, 73, 75, 76, 77, 78, 79, 80, 81),
+                *(83, 84, 85, 86, 87, 88, 89, 90, 91),
+            ),
+        },
+        cap=POLICY.cap,
     )
 
     def __init__(
