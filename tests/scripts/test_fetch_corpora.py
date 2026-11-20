@@ -122,9 +122,16 @@ def count_hashing(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
 class FakeResponse:
     """What ``urlopen`` returns, reduced to the surface ``download`` touches."""
 
-    def __init__(self, status: int, payload: bytes, *, stalls_after: int | None = None) -> None:
+    def __init__(
+        self,
+        status: int,
+        payload: bytes,
+        *,
+        stalls_after: int | None = None,
+        announced: int | None = None,
+    ) -> None:
         self.status = status
-        self.headers = {"Content-Length": str(len(payload))}
+        self.headers = {"Content-Length": str(len(payload) if announced is None else announced)}
         self._buffer = io.BytesIO(payload)
         self._stalls_after = stalls_after
 
@@ -208,6 +215,32 @@ def test_a_server_that_goes_silent_mid_file_ends_the_download_and_leaves_what_ar
         download("https://example.org/file.zip", target)
 
     assert not target.exists()
+    assert target.with_suffix(".zip.part").read_bytes() == b"abcd"
+
+
+def test_a_connection_closed_early_leaves_a_partial_file_to_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    target = tmp_path / "file.zip"
+    serve(monkeypatch, FakeResponse(200, b"abcd", announced=6))
+
+    with pytest.raises(ConnectionError, match="closed at 4 of 6 bytes"):
+        download("https://example.org/file.zip", target)
+
+    assert not target.exists()
+    assert target.with_suffix(".zip.part").read_bytes() == b"abcd"
+
+
+def test_a_resumed_download_that_closes_early_again_keeps_every_byte_that_arrived(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    target = tmp_path / "file.zip"
+    target.with_suffix(".zip.part").write_bytes(b"abc")
+    serve(monkeypatch, FakeResponse(206, b"d", announced=3))
+
+    with pytest.raises(ConnectionError, match="closed at 4 of 6 bytes"):
+        download("https://example.org/file.zip", target)
+
     assert target.with_suffix(".zip.part").read_bytes() == b"abcd"
 
 
@@ -347,6 +380,35 @@ def test_fetch_unpacks_a_file_whose_checksum_matches(
 
     assert (row.ok, row.verdict) == (True, "none published")
     assert (tmp_path / "x" / "file.txt").read_bytes() == b"x"
+
+
+def test_a_corpus_read_compressed_keeps_its_archive_as_downloaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(fetch_corpora, "DATA_ROOT", tmp_path)
+    monkeypatch.setattr(
+        fetch_corpora,
+        "download",
+        lambda url, target: zip_with(target, {"table.csv": b"1,2\n"}),
+    )
+    corpus = Corpus(
+        key="x",
+        title="x",
+        archives=(Archive(url="https://example.org/a.zip", filename="a.zip"),),
+        compressed=True,
+    )
+
+    (row,) = fetch(corpus)
+
+    assert row.ok
+    assert sorted(path.name for path in (tmp_path / "x").iterdir()) == [".digests.json", "a.zip"]
+
+
+def test_a_name_with_a_space_is_quoted_in_the_address_and_kept_on_disk():
+    (archive,) = fetch_corpora.zenodo_archives("https://example.org/files", (("Q3 Q4.zip", "0"),))
+
+    assert archive.url == "https://example.org/files/Q3%20Q4.zip/content"
+    assert (archive.filename, archive.md5) == ("Q3 Q4.zip", "0")
 
 
 COMMIT = re.compile(r"[0-9a-f]{40}")

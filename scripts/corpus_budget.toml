@@ -741,3 +741,105 @@ name = "w200s40"
 unit = "samples"
 length = 200
 stride = 40
+
+# A fleet of wind turbines: systems of one design side by side under one weather. The two British
+# farms are one export format and carry real instants; the third source is a benchmark of yearly
+# excerpts with anonymised instants and is read from its files, by no reader yet.
+[corpora.kelmarsh]
+name = "Kelmarsh wind farm"
+role = "a fleet of one design: six turbines over nine years, ten-minute averages; cold-start forecasts read per turbine"
+regime = "regular"
+publisher = "Cubico Sustainable Investments (Plumley, Takeuchi)"
+source = "https://zenodo.org/records/16807551"
+download_size = "3.7 GB (nine yearly zips of the turbines' tables, two csv files)"
+epochs = 1
+pretraining_split = "undecided: two turbines drawn by seed and the years 2023 and 2024 of every turbine stay unread until a model is read on a system it never saw"
+verdict = "candidate"
+decision = "Published for the cold-start readings; whether it joins a pretraining mix is decided with the multi-system corpus."
+
+[corpora.kelmarsh.licence]
+terms = "CC BY 4.0 (Zenodo record 16807551): attribution required, derivatives and redistribution allowed."
+url = "https://zenodo.org/records/16807551"
+checked_on = 2026-11-20
+publish_results = "yes"
+sample_in_repo = "yes"
+derivatives = "yes"
+
+[corpora.kelmarsh.estimate]
+units = 6
+channels = 60
+series_length = 473184
+basis = "Measured from the downloaded files on 2026-11-20: six Senvion MM92 turbines, ten-minute rows from 2016-01-03 to 2024-12-31, sixty signals of the manufacturer's mapping"
+
+[[corpora.kelmarsh.windows]]
+name = "w6s6"
+unit = "samples"
+length = 6
+stride = 6
+default = true
+
+[corpora.penmanshiel]
+name = "Penmanshiel wind farm"
+role = "a fleet of one design: fourteen turbines that started over eight weeks, ten-minute averages; cold-start forecasts read per turbine"
+regime = "regular"
+publisher = "Cubico Sustainable Investments (Plumley)"
+source = "https://zenodo.org/records/16807304"
+download_size = "7.4 GB (twenty yearly and quarterly zips of the turbines' tables, two description files)"
+epochs = 1
+pretraining_split = "undecided: four turbines drawn by seed and the years 2023 and 2024 of every turbine stay unread until a model is read on a system it never saw"
+verdict = "candidate"
+decision = "Published for the cold-start readings; whether it joins a pretraining mix is decided with the multi-system corpus."
+
+[corpora.penmanshiel.licence]
+terms = "CC BY 4.0 (Zenodo record 16807304): attribution required, derivatives and redistribution allowed."
+url = "https://zenodo.org/records/16807304"
+checked_on = 2026-11-20
+publish_results = "yes"
+sample_in_repo = "yes"
+derivatives = "yes"
+
+[corpora.penmanshiel.estimate]
+units = 14
+channels = 60
+series_length = 412000
+basis = "Measured from the downloaded files on 2026-11-20: fourteen Senvion MM82 turbines, ten-minute rows from June and July 2016 to the end of 2023 (ten turbines, without January 2023) or of 2024 (four), sixty signals of the manufacturer's mapping"
+
+[[corpora.penmanshiel.windows]]
+name = "w6s6"
+unit = "samples"
+length = 6
+stride = 6
+default = true
+
+[corpora.care]
+name = "CARE to Compare"
+role = "labelled faults of wind turbines: 95 yearly excerpts of 36 turbines on three farms, 45 ending in an annotated event; a detection reading only"
+regime = "regular"
+publisher = "Fraunhofer IEE (Gück, Roelofs, Faulstich)"
+source = "https://zenodo.org/records/15846963"
+download_size = "5.5 GB (one zip)"
+epochs = 1
+pretraining_split = "none: the excerpts of one turbine overlap row for row and each ends in the window a detector is scored on, so no pretraining reads them as they are"
+verdict = "downstream-only"
+decision = "Read from its files for the detection reading; no reader, since its instants are anonymised per excerpt and its excerpts overlap."
+
+[corpora.care.licence]
+terms = "CC BY-SA 4.0 (Zenodo record 15846963, version 6): attribution required; a derivative may be redistributed only under the same licence."
+url = "https://zenodo.org/records/15846963"
+checked_on = 2026-11-20
+publish_results = "yes"
+sample_in_repo = "no"
+derivatives = "yes"
+
+[corpora.care.estimate]
+units = 36
+channels = 355
+series_length = 139000
+basis = "Measured from the downloaded files on 2026-11-20: 95 excerpts of about 52,600 ten-minute rows of training and 600 to 14,100 of prediction, 2.6 a turbine; 54, 63 and 238 sensors on the three farms"
+
+[[corpora.care.windows]]
+name = "w6s6"
+unit = "samples"
+length = 6
+stride = 6
+default = true

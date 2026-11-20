@@ -1,9 +1,10 @@
 """Fetch the raw corpora the data spike measures, from their sources of record.
 
 Each archive is downloaded once into ``data/raw/<corpus>/``, hashed with SHA-256, checked against
-the publisher's checksum where one exists (MD5 on Zenodo) and unpacked; a rerun skips finished work
-and resumes interrupted downloads. A file failing its checksum is set aside as ``*.bad``, never
-unpacked, and fetched again; any other failure is reported at the end without stopping the run.
+the publisher's checksum where one exists (MD5 on Zenodo) and unpacked, unless its reader reads it
+compressed; a rerun skips finished work and resumes interrupted downloads. A file failing its
+checksum is set aside as ``*.bad``, never unpacked, and fetched again; any other failure is
+reported at the end without stopping the run.
 
     uv run scripts/fetch_corpora.py                # every corpus
     uv run scripts/fetch_corpora.py cmapss skab    # a selection
@@ -106,12 +107,15 @@ class Corpus:
         title: Human-readable name with the publisher.
         archives: Files or listings to download, in order.
         mirrored: Whether its licence lets the files be copied to the artifact store.
+        compressed: Whether its archives stay as downloaded, for a reader that reads them
+            compressed: a wind farm's tables are ten times their archives.
     """
 
     key: str
     title: str
     archives: tuple[Archive | Listing, ...]
     mirrored: bool = False
+    compressed: bool = False
 
 
 # master of each repository on 2026-09-11; the archive URL below is immutable for a commit.
@@ -121,6 +125,9 @@ PHYSIONET = "https://physionet.org/files/challenge-2012/1.0.0"
 PHYSIONET_2019 = "https://physionet.org/files/challenge-2019/1.0.0/training/"
 ZENODO_ESA_AD_V2 = "https://zenodo.org/api/records/15237121/files"
 ZENODO_OPSSAT_AD = "https://zenodo.org/api/records/12588359/files"
+ZENODO_KELMARSH = "https://zenodo.org/api/records/16807551/files"
+ZENODO_PENMANSHIEL = "https://zenodo.org/api/records/16807304/files"
+ZENODO_CARE = "https://zenodo.org/api/records/15846963/files"
 DATAVERSE = "https://dataverse.harvard.edu/api/access/datafile"
 # The collection's repository on 2025-06-19; a file resolved at a revision is immutable.
 UTSD_REVISION = "7326ff5f4578da73d843fd675d760c6c6054017f"
@@ -142,6 +149,54 @@ def utsd_archives(listing: Path = UTSD_SHARDS) -> tuple[Archive, ...]:
         )
     return tuple(archives)
 
+
+def zenodo_archives(files: str, checksums: tuple[tuple[str, str], ...]) -> tuple[Archive, ...]:
+    """A record's files by name and published MD5; a name may hold a space, so it is quoted."""
+    return tuple(
+        Archive(url=f"{files}/{urllib.parse.quote(name)}/content", filename=name, md5=md5)
+        for name, md5 in checksums
+    )
+
+
+# The turbines' ten-minute tables and the two files that describe them; the substation's and the
+# grid meter's files of the same records are measurements of the site, not of a turbine.
+KELMARSH_FILES = (
+    ("Kelmarsh_WT_static.csv", "af3a038f0f7fddfc1608ad0bfc8cf5ba"),
+    ("Kelmarsh_WT_dataSignalMapping.csv", "ca8fe399ab15ae7111d3214c632efd36"),
+    ("Kelmarsh_SCADA_2016_3082.zip", "ca8efbb6dbcfae3516583937eb5b5402"),
+    ("Kelmarsh_SCADA_2017_3083.zip", "c78263ee52ee0e48e2cb4bbaa1ba211a"),
+    ("Kelmarsh_SCADA_2018_3084.zip", "972e5280172216a5fe76dcab19c741b0"),
+    ("Kelmarsh_SCADA_2019_3085.zip", "14348a1572b722e1be10e53cd145c39a"),
+    ("Kelmarsh_SCADA_2020_3086.zip", "e189e02da98f32e74acc72e8559ef0db"),
+    ("Kelmarsh_SCADA_2021_4456.zip", "4e0ef3d65f067fd3d8f3d30e79ab01ae"),
+    ("Kelmarsh_SCADA_2022_4457.zip", "b695d2b21cd5a236b2e690e0a43df5ab"),
+    ("Kelmarsh_SCADA_2023_5961.zip", "685d9589347d1866f6f2cfe45b9af4f4"),
+    ("Kelmarsh_SCADA_2024_5962.zip", "e9e3318f5b393d8596ff1801f8da0414"),
+)
+PENMANSHIEL_FILES = (
+    ("Penmanshiel_WT_static.csv", "c4cd4191234c1a67a391fe5d2978256b"),
+    ("Penmanshiel_WT_dataSignalMapping.xlsx", "2eae1b84a014619268a6e4f53e6b1c91"),
+    ("Penmanshiel_SCADA_2016_WT01-10_3107.zip", "3819e1b2168b84da195b64e1e9d78b03"),
+    ("Penmanshiel_SCADA_2016_WT11-15_3107.zip", "92c30453d43a38e985af3e2e305eedd4"),
+    ("Penmanshiel_SCADA_2017_WT01-10_3114.zip", "c8279e34a5e33d688e2219aa9abab74e"),
+    ("Penmanshiel_SCADA_2017_WT11-15_3115.zip", "d41874e3d195e88506949492b5758cf6"),
+    ("Penmanshiel_SCADA_2018_WT01-10_3113.zip", "6389e5c4ea59d6565f6712db43a504ce"),
+    ("Penmanshiel_SCADA_2018_WT11-15_3116.zip", "7c40dc00df6d6301427213e15170b927"),
+    ("Penmanshiel_SCADA_2019_WT01-10_3112.zip", "78389603cb4ae20a6a9b878f5a84bc7b"),
+    ("Penmanshiel_SCADA_2019_WT11-15_3117.zip", "92747a976716c5f35d9ee6462958fd7a"),
+    ("Penmanshiel_SCADA_2020_WT01-10_3109.zip", "46f679f2e4ab3d69c04b31c8dc625106"),
+    ("Penmanshiel_SCADA_2020_WT11-15_3118.zip", "c73323f21451c08247dbdb5d1a1434a9"),
+    ("Penmanshiel_SCADA_2021_WT01-10_4460.zip", "7a0839cf3cd5e7044d6ab814fef3c43f"),
+    ("Penmanshiel_SCADA_2021_WT11-15_4461.zip", "f5804b90089ce4d50dc5117fda6f675c"),
+    ("Penmanshiel_SCADA_2022_WT01-10_4462.zip", "91351469cdeb3ca95be1a0414dcfec8f"),
+    ("Penmanshiel_SCADA_2022_WT11-15_4463.zip", "5f4743133a9cf65ad33de139b43f96b4"),
+    ("Penmanshiel_SCADA_2023_02_WT_01-10_5981.zip", "05ac6e90b516fa30db05dfe6361099a7"),
+    ("Penmanshiel_SCADA_2023_03_WT_01-10_5982.zip", "6fae49a3603dd2a503126e5e518eaf55"),
+    ("Penmanshiel_SCADA_2023_Q2_WT_01-10_5977.zip", "7ed1d095183469e399054695b8c4fb5e"),
+    ("Penmanshiel_SCADA_2023_Q3 Q4_WT_01-10_5973.zip", "f201240d4072dd4a5a8492725eb49787"),
+    ("Penmanshiel_SCADA_2023_WT_11-15_5964.zip", "813ad4635cf50b9d96b253ee53175086"),
+    ("Penmanshiel_SCADA_2024_WT_11-15_5966.zip", "e0a700cad1d45f4130272feaef244b12"),
+)
 
 CORPORA: tuple[Corpus, ...] = (
     Corpus(
@@ -255,6 +310,26 @@ CORPORA: tuple[Corpus, ...] = (
             ),
         ),
     ),
+    Corpus(
+        key="kelmarsh",
+        title="Kelmarsh wind farm data (Zenodo 10.5281/zenodo.16807551)",
+        archives=zenodo_archives(ZENODO_KELMARSH, KELMARSH_FILES),
+        compressed=True,
+    ),
+    Corpus(
+        key="penmanshiel",
+        title="Penmanshiel wind farm data (Zenodo 10.5281/zenodo.16807304)",
+        archives=zenodo_archives(ZENODO_PENMANSHIEL, PENMANSHIEL_FILES),
+        compressed=True,
+    ),
+    Corpus(
+        key="care",
+        title="CARE to Compare, wind turbine SCADA for fault detection (Zenodo "
+        "10.5281/zenodo.15846963)",
+        archives=zenodo_archives(
+            ZENODO_CARE, (("CARE_To_Compare.zip", "2547b58c21ac8c242d13232860cf500c"),)
+        ),
+    ),
 )
 
 
@@ -320,6 +395,14 @@ def download(url: str, target: Path, *, quiet: bool = False) -> None:
                     sink.write(chunk)
                     done += len(chunk)
                     progress(target.name, done, expected)
+        # A connection closed early reads as the end of the file, with no error: renaming what
+        # arrived would hand a truncated archive to the checksum, which sets it aside to be
+        # fetched whole again. The partial file stays instead, and the next run resumes from it.
+        if expected is not None and done < expected:
+            sys.stderr.write("\n")
+            raise ConnectionError(
+                f"{target.name}: the connection closed at {done:,} of {expected:,} bytes"
+            )
     except urllib.error.HTTPError as error:
         # The partial file already holds every byte: a run that died between the last chunk and
         # the rename leaves exactly this state behind.
@@ -635,7 +718,7 @@ def fetch_archive(
     if not row.ok:
         forget(target)
         target.replace(target.with_suffix(target.suffix + ".bad"))
-    elif archive.filename.endswith((".zip", ".tar.gz")):
+    elif archive.filename.endswith((".zip", ".tar.gz")) and not corpus.compressed:
         unpack(target, directory)
     return row
 
