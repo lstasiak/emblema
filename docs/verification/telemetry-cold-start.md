@@ -283,3 +283,65 @@ that month whole, as the verdict's alarm reads them; an alarm on line reads the 
 floor fitted on up to 90 days is about a tenth of the one fitted on seven years, whose spread
 holds the later years' drift (0.41 on a year), so the excess reads the floor's size as much as
 the history behind it.
+
+## 2026-11-20 — measured: fitted on the first week the departures find as many events, but their alarm holds its level only from the third month
+
+**Question.** As declared above: fitted on the first mission's first N days, how many events do the
+channel-local departures find on the validation months, and how quiet is their alarm?
+
+**Conditions.** Instrument `a0fa0382`, declaration `b971c0bc`, `data/report/l61/detection/run.sh`
+on the Mac (CPU) on 2026-11-20, 192 s; output in `data/report/l61/detection/run/`.
+
+**The curve**, the validation months, 61 events, each fit less the whole side over 2,000 draws of
+months, 95 %:
+
+| Fitted on | Windows | Excess at 1 %, best of 12 | `mean`, `bins-24h`, less the whole side | F0.5 at own alarm, `max`, `bins-72h`, less the whole side | Flagged | False runs | Found at own alarm |
+|---|---|---|---|---|---|---|---|
+| whole side | 61,253 | 32.4, `mean`, `bins-24h` | 32.4 | 0.276 | 1.92 % | 119 | 39 of 61 |
+| 7 days | 97 | 39.1, `mean`, `hour-24h` | 36.9, **+4.5 [+0.4; +9.3]** | 0.018, −0.259 [−0.428; −0.157] | 13.45 % | 3,192 | 54 |
+| 14 days | 265 | 40.3, `mean`, `hour-24h` | 37.0, **+4.6 [+0.6; +9.4]** | 0.023, −0.254 [−0.421; −0.155] | 10.20 % | 2,435 | 51 |
+| 30 days | 649 | 40.1, `mean`, `hour-24h` | 37.1, **+4.7 [+0.4; +9.4]** | 0.050, −0.226 [−0.386; −0.132] | 4.42 % | 987 | 44 |
+| 60 days | 1,369 | 34.5, `mean`, `bins-24h` | 34.5, +2.1 [−1.0; +5.6] | 0.493, +0.217 [+0.044; +0.366] | 1.16 % | 18 | 22 |
+| 90 days | 2,089 | 36.0, `mean`, `hour-24h` | 33.2, +0.8 [−1.7; +3.8] | 0.327, +0.051 [−0.152; +0.302] | 1.33 % | 57 | 26 |
+| 180 days | 4,249 | 36.0, `mean`, `hour-24h` | 33.8, +1.4 [−1.6; +4.8] | 0.392, +0.115 [−0.091; +0.329] | 1.15 % | 28 | 20 |
+| 365 days | 8,689 | 37.0, `mean`, `hour-24h` | 36.9, **+4.4 [+1.1; +8.5]** | 0.306, +0.029 [−0.166; +0.255] | 1.39 % | 94 | 36 |
+
+Beside, `mean`, `bins-72h` at its own alarm flags 3.3 to 10.6 % of normal windows in the first
+month (592 to 2,438 false runs) and 1.2 to 1.6 % from day 60 (18 or 19), against 2.18 % (188)
+fitted on the whole side.
+
+**Predictions against the outcome.**
+
+| Predicted | Read |
+|---|---|
+| `mean`, `bins-24h` less the whole side, N of 30 or less: +1 to +5, the lower edge near nought | +4.5 to +4.7, lower edges +0.4 to +0.6: held |
+| The same, N of 90 or more: within its interval | +0.8 and +1.4 within; +4.4 [+1.1; +8.5] at a year: missed |
+| Share flagged at day 7: 2.5 to 5 % | 13.45 %: missed; the trial's day 5 fitted on 49 windows read 3.7 % |
+| Share flagged, N of 90 or more: 1 to 2 % | 1.15 to 1.39 %: held |
+| F-score less the whole side at day 7: below nought | −0.259: held |
+| The same, N of 90 or more: its interval holding nought | +0.051, +0.115, +0.029, each holding nought: held |
+
+**Conclusions.**
+
+1. The departures rank the events from the first week. Fitted on 7 to 30 days, `mean`,
+   `bins-24h` finds 4.5 to 4.7 more events beyond chance at 1 % than fitted on seven years, and
+   4.4 more at a year: by the declared table a floor fitted on years costs events. That floor is
+   about ten times one fitted on a few months (2.4 times one fitted on a year). The floor's rule
+   joins the queued change of the floor.
+2. The alarm's level is the onboarding problem. Fitted on the first 7 to 30 days it flags 4.4 to
+   13.5 % of normal windows, 987 to 3,192 runs of false alarms over the validation months, an
+   F-score of 0.02 to 0.05.
+3. From the third month the level holds. Fitted on 60 days or more it flags 1.15 to 1.39 % of
+   normal windows, with 18 to 94 false runs against the whole side's 119. The declared rule (share
+   within 1 to 3 %, the F-score's interval holding nought) is met from day 90 on. Day 60 reads
+   above the whole side (+0.217 [+0.044; +0.366]), a case the rule's wording did not name. Against
+   a year of nominal data (CNES), the departures' alarms need two to three months of the
+   satellite's own; before that, their level must come from elsewhere.
+4. From day 60 the alarm flags fewer windows than fitted on the whole side and finds fewer events
+   at its own level (20 to 36 of 61 against 39). The F-score's rise is the quieter alarm's, as on
+   2026-11-11.
+
+**Limitations.** As declared: one mission, the standard publication, validation months 7 to 13
+years after the fit, each month read whole. A level carried from another system for the first two
+months was not read. The share flagged at day 7 was not predicted: a level set on a few days
+moves with the hours it happens to see (3.7 % on 49 windows, 13.5 % on 97).
