@@ -28,7 +28,7 @@ a level, against one and the least gain; there an answer joins the classical bar
 answers every cell of every pooled day.
 
     uv run scripts/cold_start_reading.py --cells DIR --mission ESA-Mission2 \\
-        --days 2 7 14 30 60 90 180 365 --pool 2 7 14 30 \\
+        --days 2 7 14 30 60 90 180 365 --pool 2 7 14 \\
         --verdict chronos2_47 classical --verdict chronos2_analog chronos2_47 \\
         --least-gain 0.8 [--resamples 10000] --out DIR/read
 
@@ -52,12 +52,14 @@ from numpy.typing import NDArray
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.cold_start_cells import LEARNT, NO_LEARNING  # noqa: E402
 from scripts.history_forecast_reading import (  # noqa: E402
     interval,
     level_of,
     markdown,
     write,
 )
+from scripts.local_forecaster_answers import FORECASTERS  # noqa: E402
 
 Floats = NDArray[np.float64]
 Ints = NDArray[np.int64]
@@ -66,17 +68,7 @@ HOURS_PER_DAY = 24
 # A cell's squared error is floored at this in a ratio of two, so an answer exact to the digit
 # leaves a ratio; far below any error the answers make in normalised units.
 EXACT = 1e-12
-CLASSICAL = (
-    "last_hour",
-    "median_of_history",
-    "same_phase",
-    "auto_ets",
-    "auto_arima",
-    "auto_theta",
-    "seasonal_naive",
-    "ridge",
-    "window_ridge",
-)
+CLASSICAL = (*NO_LEARNING, *FORECASTERS, *LEARNT)
 PUBLISHED = ("chronos2_47", "chronos2_47_each", "chronos2_own")
 LADDER = ("chronos2_unrelated", "chronos2_kind", "chronos2_analog", "chronos2_oracle")
 COMPARISONS = (
