@@ -9,7 +9,7 @@
 The reader of the two wind farms (ADR-0084) reads values raw. Measured on the turbines and years
 a first publication reads ([`wind-fleet-sources.md`](../verification/wind-fleet-sources.md)):
 
-- A failed sensor writes a sentinel: a transformer at −273.2 °C, a pitch motor at exactly
+- A failed sensor writes a sentinel: a transformer at −273.2 °C, an axis motor at exactly
   215.0 °C, an anemometer at −15.0 m/s. Seven of the nineteen temperatures hold such readings,
   at most 122 in 2.4 million, with ten-minute averages over a sensor that failed part-way
   between them and the ordinary range. An hour's mean over one of them is wrong by tens of

@@ -802,7 +802,7 @@ derivatives = "yes"
 units = 14
 channels = 60
 series_length = 412000
-basis = "Measured from the downloaded files on 2026-11-20: fourteen Senvion MM82 turbines, ten-minute rows from June and July 2016 to the end of 2023 (ten turbines, without January 2023) or of 2024 (four), sixty signals of the manufacturer's mapping"
+basis = "Measured from the downloaded files on 2026-11-20: fourteen Senvion MM82 turbines, ten-minute rows from June and July 2016 to the end of 2023 (nine turbines, without January 2023) or of 2024 (five), sixty signals of the manufacturer's mapping"
 
 [[corpora.penmanshiel.windows]]
 name = "w6s6"
