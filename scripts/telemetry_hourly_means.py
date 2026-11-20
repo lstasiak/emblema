@@ -21,17 +21,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
-
-# Run from anywhere: the package is installed, and the store is reached through it.
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
 
 Floats = NDArray[np.float64]
 Ints = NDArray[np.int64]
