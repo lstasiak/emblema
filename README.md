@@ -14,7 +14,7 @@
 | src/emblema/catalog/adapters/readers/cmapss.py                                            |      129 |        0 |       44 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/eicu\_demo.py                                        |      211 |        0 |       70 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/esa\_ad.py                                           |      169 |        0 |       44 |        0 |    100% |           |
-| src/emblema/catalog/adapters/readers/esa\_ad\_raw.py                                      |      207 |        8 |       64 |        4 |     96% |259, 266-271, 278, 282, 290 |
+| src/emblema/catalog/adapters/readers/esa\_ad\_raw.py                                      |      208 |        8 |       64 |        4 |     96% |273, 280-285, 292, 296, 304 |
 | src/emblema/catalog/adapters/readers/opssat\_ad.py                                        |      116 |        0 |       38 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/physionet2012.py                                     |      125 |        0 |       44 |        0 |    100% |           |
 | src/emblema/catalog/adapters/readers/physionet2019.py                                     |      116 |        0 |       40 |        0 |    100% |           |
@@ -128,7 +128,7 @@
 | src/emblema/entrypoints/cli/pretrain/pretrain\_invocation.py                              |       12 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/pretrain/services.py                                          |        7 |        0 |        0 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/adapters.py                                   |        9 |        0 |        0 |        0 |    100% |           |
-| src/emblema/entrypoints/cli/publish\_corpus/composition\_root.py                          |      101 |        0 |       40 |        0 |    100% |           |
+| src/emblema/entrypoints/cli/publish\_corpus/composition\_root.py                          |      103 |        0 |       42 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/known\_corpora.py                             |       26 |        0 |        2 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_cli.py                       |      104 |        0 |       26 |        0 |    100% |           |
 | src/emblema/entrypoints/cli/publish\_corpus/publish\_corpus\_invocation.py                |        9 |        0 |        0 |        0 |    100% |           |
@@ -731,7 +731,7 @@
 | src/emblema/shared/ports/id\_generator.py                                                 |        3 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/identity\_provider.py                                            |        4 |        0 |        0 |        0 |    100% |           |
 | src/emblema/shared/ports/job\_queue.py                                                    |        4 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                                                                                 | **22936** |  **185** | **4672** |  **123** | **99%** |           |
+| **TOTAL**                                                                                 | **22939** |  **185** | **4674** |  **123** | **99%** |           |
 
 133 empty files skipped.
 
