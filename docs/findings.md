@@ -6,7 +6,7 @@ by a rule registered before its run ([preregistration](preregistration.md)); eac
 note that holds its evidence ([`verification/`](verification/README.md)). A row states direction
 and size; conditions and caveats are in its note.
 
-Last updated 2026-11-19.
+Last updated 2026-11-20.
 
 ## Status
 
@@ -72,7 +72,13 @@ Last updated 2026-11-19.
   that forecaster's squared error is about half theirs on the first mission's later years
   (0.475 [0.454; 0.499] by the geometric mean over windows), and level with the best local
   forecaster, AutoARIMA, on the second mission (1.02 [0.93; 1.15]); those months were read before, so this
-  is a gate, not a confirmation ([note](verification/telemetry-history-pretext.md)). Read as an
+  is a gate, not a confirmation ([note](verification/telemetry-history-pretext.md)). In a
+  satellite's first 30 days, read as a new system, it does not lead on both missions: AutoETS on
+  the same 47 hours misses less on the first (1.29 [1.22; 1.37], harm), Chronos-2 leads on the
+  second (0.75 [0.66; 0.86], real and small; 0.88 against the same forecasters without a
+  season, read after); handed every hour so far it leads on
+  both (0.92, 0.64, descriptive), and another satellite's nearest series of the same kind makes
+  it worse (1.15 [1.07; 1.23]) ([note](verification/telemetry-cold-start.md)). Read as an
   event detector, its envelope finds no more events beyond chance than the departures, alone
   (−2.9 [−11.9; +6.2]) or fused with them (+0.9 [−2.9; +3.8]): the detector stays the
   departures, and the forecaster's role is the forecast
@@ -251,6 +257,7 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | The forecasting pretext against a ridge per channel over the same 47 hours, two pretrainings, on months it read, held out and never read (the first mission's later years, 2007 to 2013), Chronos-2 zero-shot beside | read 0.87 [0.82; 0.92], held 0.84 [0.81; 0.88], **the later years 1.00 [0.94; 1.06]: noise**, the direction closed; there 1 % of cells at values up to 26,000 carry 99 % of the decoder's loss and 98.5 % of the ridge's, and on the 1,003 windows with ordinary values the decoder reads 0.020 / 0.030 against the ridge's 0.0098 (2.2 / 3.3 on the median window), growing with the years, while Chronos-2 reads 0.0007 on the mean's squared error there as on the held months (0.0008) and the decoder 0.012 / 0.025; M2 unread 0.92 [0.88; 0.97], Chronos-2 level with the decoder but for eight cells whose history holds a reading of 2·10⁹ | [telemetry-history-pretext](verification/telemetry-history-pretext.md) |
 | Chronos-2 zero-shot against the best of nine classical answers (the ridges, the answers with no model, and AutoETS, AutoARIMA, AutoTheta and seasonal naive fitted on each window's own 47 hours), squared error of the hour's mean, geometric mean over windows, on the months read on 2026-11-15 | first mission's later years **0.475** [0.454; 0.499] against AutoARIMA, at least the least gain of 0.80; second mission's unread months 1.020 [0.929; 1.148] against AutoARIMA, level with it, AutoETS 0.94 and AutoTheta 0.90 trailing; held months 0.68 and 0.96. Post hoc: lower than AutoARIMA on 85 % of the later windows; from the held months to the later years Chronos-2's own error holds (6.0·10⁻⁴ → 6.2·10⁻⁴) and AutoARIMA's (1.45·10⁻³ → 1.31·10⁻³), the ridge over the window's grows 14-fold and the decoder's 17-fold | [telemetry-history-pretext](verification/telemetry-history-pretext.md) |
 | Chronos-2's envelope for each channel's hour (10th to 90th percentile from the 47 hours before) as an event detector, alone and fused with the 24-hour bins' departures, against the best of the twelve departure arms, first mission, events beyond chance at 1 % | envelope by its largest channel −2.9 [−11.9; +6.2], fused mean +0.9 [−2.9; +3.8], neither confirmed, both under the least gain of 10.6; the envelope finds 48 events at 1 % against the bar arm's 42, but fewer beyond chance (29.5 against 32.4); at its own alarm every candidate raises more false runs (201 to 478) and a lower F-score (0.11 to 0.19) than the arm that leads the F-score (124; 0.269) | [telemetry-channel-local](verification/telemetry-channel-local.md) |
+| Chronos-2 zero-shot on 47 hours against the best classical answer in each satellite's first 30 days, read as a new system (the local forecasters on the same hours, the answers with no model); another satellite's nearest series of the same kind handed beside | M1 **1.29** [1.22; 1.37], harm; M2 **0.75** [0.66; 0.86], real and small: the claim of a lead from the first days not met; with every hour so far 0.92 and 0.64, descriptive; the nearest series on M2 **1.15** [1.07; 1.23], harm, though the route carries the hour itself (oracle 0.06) | [telemetry-cold-start](verification/telemetry-cold-start.md) |
 | Events the channels' departures miss, against other detectors with no label at 1 % false alarms | others find 6 of 13, 3.67 beyond chance, at most 10.67 possible, least 11; stays deferred; fusion +0.131 [+0.037; +0.234] over `channel_local`, +0.066 [−0.052; +0.176] over the mean of the departures | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The 11 events nothing found, on their annotated channels, ten minutes against the hour | one gained, two lost, least 4; not queued; six stand out at the hour beyond chance | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The departure bar, chosen on months no detector was read on (2000–2003, a class nearly absent later left out), then read forwards on the validation months | beyond chance at 1 %: mean over 72 hours 14.6 of 42 against 5.2 for the bar chosen by area; beyond chance the order turns on validation (Spearman −0.03), best 32.4 of 61, so the bar is the best of twelve in each reading | [telemetry-channel-local](verification/telemetry-channel-local.md) |
@@ -302,8 +309,10 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
    the base stays a comparison on the half. The named levers for a larger gain remain the
    pretext (a cell's mean, which interpolation answers on a grid) and the scale of data in the
    tasks' regime (credentialed MIMIC-IV or the full eICU).
-2. Measure how quickly forecasts and alarms become useful on a system with no history: the
-   second mission against the first, then a fleet of wind turbines; a corpus of several systems
-   adapts the published forecaster where it leaves room, its lead confirmed on a system no reading
-   touched ([note](verification/telemetry-history-pretext.md)).
+2. Forecasts on a satellite with no history are read: in the first month the local classical
+   forecasters are the bar on the first mission, and another satellite's series adds nothing
+   ([note](verification/telemetry-cold-start.md)). How quickly the alarms become useful is read
+   next on the same missions, then the forecasts and a library of other systems on a fleet of
+   wind turbines, systems of one design side by side, before a corpus of several systems adapts
+   the published forecaster where it leaves room.
 3. Open the frozen test side once.

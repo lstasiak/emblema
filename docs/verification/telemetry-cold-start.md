@@ -99,3 +99,104 @@ scaled by its own undisclosed factor, so the other satellite's series is matched
 time. The normalised units were fitted on later months; they weigh the channels in a window's
 mean and set the bound of 100 for every answer alike. One published forecaster; the hour's mean,
 one hour ahead. A reading held at the bound can throw a ridge; the bar takes the answer led least.
+
+## 2026-11-20 — measured: in a satellite's first month the published forecaster on 47 hours trails the local classical answers on the first mission and leads them a little on the second; another satellite's series makes it worse
+
+**Question.** As declared above: in each satellite's first 30 days, does Chronos-2 zero-shot lead
+the best classical answer, and on the second mission does the other satellite's nearest series
+of the same kind improve its forecast?
+
+**Conditions.** Instrument `55d91cf5`, declaration `abc5cdf4`, `data/report/l61/run.sh` on the Mac
+(M1 Pro) on 2026-11-20. The first start ran out of memory after Chronos-2 had answered Mission2's
+days 2 to 90 (Docker Desktop held 13.6 GB of 32); the run resumed with Chronos-2 handed 2 windows
+a call rather than 32 and the local forecasters after it. Answers differ by at most 10⁻⁵ between
+2 and 32 windows a call (Mission2, day 14). Chronos-2 took 37 to 874 s a day, the local
+forecasters 131 to 457 s. The first 30 days hold 588 windows per mission: 28,224 cells on
+Mission1, 19,404 on Mission2.
+
+**The verdicts**, the first 30 days pooled, geometric mean over windows, 95 % interval over
+whole days:
+
+| Verdict | Mission | Against | Ratio [95 %] | Median over cells | Level |
+|---|---|---|---|---|---|
+| **A** | **Mission1** | AutoETS | **1.293 [1.221; 1.368]** | 1.24 | **harm** |
+| **A** | **Mission2** | AutoETS | **0.752 [0.665; 0.863]** | 0.96 | **real and small** |
+| | | | | | the claim of a lead from the first days: **not met** |
+| **B** | **Mission2** | `chronos2_47` | **1.146 [1.069; 1.232]** | 1.10 | **harm** |
+
+The same days, descriptively (over `chronos2_47` unless named):
+
+| | Mission1 | Mission2 |
+|---|---|---|
+| `_own` over the best classical answer | 0.915 [0.860; 0.977] | 0.635 [0.543; 0.756] |
+| `_own` | 0.707 [0.665; 0.749] | 0.843 [0.767; 0.924] |
+| `_each` | 1.083 [1.042; 1.125] | 1.002 [0.942; 1.063] |
+| `unrelated` | 1.137 [1.104; 1.172] | 1.058 [1.000; 1.121] |
+| `kind` | 1.095 [1.071; 1.120] | 1.044 [0.988; 1.101] |
+| `analog` | 1.091 [1.061; 1.122] | 1.146 [1.069; 1.232] |
+| `analog` over `kind` | 0.996 [0.980; 1.012] | 1.098 [1.029; 1.173] |
+| the oracle | 1.029 [1.006; 1.051] | 0.057 [0.049; 0.067] |
+
+Each day, against the best classical answer (AutoETS but where named), descriptive:
+
+| Day | Mission1, `chronos2_47` | Mission1, `_own` | Mission2, `chronos2_47` | Mission2, `_own` |
+|---|---|---|---|---|
+| 2 | 1.31 [1.20; 1.48] | 1.09 [0.97; 1.25] | 0.94 [0.76; 1.24] | 0.89 [0.71; 1.21] |
+| 7 | 1.22 [1.13; 1.32] | 0.83 [0.79; 0.87] | 0.68 [0.61; 0.84], median of the 47 hours | 0.54 [0.45; 0.72] |
+| 14 | 1.33 [1.21; 1.45] | 0.90 [0.83; 0.99] | 0.75 [0.65; 0.89] | 0.63 [0.52; 0.78] |
+| 30 | 1.08 [0.91; 1.25] | 0.83 [0.73; 0.94] | 0.86 [0.74; 0.99] | 0.60 [0.53; 0.67] |
+| 60 | 1.23 [1.07; 1.41] | 1.05 [0.83; 1.39] | 0.80 [0.72; 0.91] | 0.64 [0.56; 0.76] |
+| 90 | 1.09 [1.00; 1.23], AutoARIMA | 1.45 [1.24; 1.81] | 0.85 [0.77; 0.94] | 0.89 [0.77; 1.05] |
+| 180 | 1.00 [0.92; 1.13], AutoARIMA | 1.12 [1.02; 1.26] | 0.88 [0.77; 1.01] | 0.84 [0.76; 0.93] |
+| 365 | 1.25 [1.17; 1.33] | 1.61 [1.52; 1.72] | 1.05 [0.96; 1.22] | 0.91 [0.84; 1.03] |
+
+On Mission1 the median over cells reads `_own` against `chronos2_47` at 1.44 on day 180 and 2.57
+on day 365: past three months, its longer context costs the typical cell too.
+
+**Predictions against the outcome.**
+
+| Predicted | Read |
+|---|---|
+| A, Mission1: 1.0 to 1.4, noise or harm | 1.293, harm: held |
+| A, Mission2: 0.85 to 1.5, noise | 0.752, real and small: missed; the trials' days were not the first month |
+| The claim of a lead from the first days: not met | not met: held |
+| B, Mission2: 0.8 to 1.45, noise or harm | 1.146, harm: held |
+| Mission2's oracle: 0.03 to 0.07 | 0.057: held |
+
+**Checked after the reading**, descriptive (pooled first 30 days):
+
+| Check | Result |
+|---|---|
+| Recomputed by independent code from the files | every verdict and interval; Chronos-2 re-answered on 12 windows to within 5×10⁻⁶ |
+| Where Mission1's deficit lies | 88 % of cells hold a period within the 47 hours, handed to the local forecasters as their season (18 hours in 68 %): `chronos2_47` over AutoETS 1.42 there, 0.73 elsewhere; `_own` 0.99 there. Leaving out any one channel: 1.26 to 1.33; jumps carry 3 % of its squared error |
+| The local forecasters without a season, Mission2 | they miss 15 to 20 % less than with the period the same-phase answer chose; `chronos2_47` over AutoETS, AutoARIMA, AutoTheta so fitted 0.88, 0.80, 0.84 (on Mission1, AutoETS without a season misses 11 times more) |
+| Mission2's channels | 14 of 33 move together (median correlation of hourly changes 0.996) and carry about 80 % of the windows' squared error |
+| What the library carries | the nearest series' next hour moves with the target's at 0.02 on Mission2, yet Chronos-2's answer follows it at 0.23; the mean of the 200 nearest of the same kind moves with the target at −0.07 (Mission2) and 0.30 (Mission1), and with `chronos2_47`'s error at 0.04 and 0.07 |
+| The rungs' series | each goes to the whole window's group, so Chronos-2 does not pair a series with its channel; the row above bounds any pairing |
+
+**Conclusions.**
+
+1. In a satellite's first month, Chronos-2 zero-shot on the 47 hours does not lead the classical
+   answers on both missions: on the first, AutoETS fitted on the same 47 hours misses less (1.29,
+   harm), on the second Chronos-2 leads (0.75, real and small; 0.88 against the same forecasters
+   without a season, above). By the declared rule the claim is not met, and the local classical
+   forecasters are the bar a model must beat from day 2; on the first mission they are ahead or
+   level at every day read, while on its later years Chronos-2 led them (0.475, 2026-11-19).
+2. Handed every hour so far, up to 8,192, Chronos-2 leads the best classical answer in the
+   first month on both missions (0.92 and 0.64, descriptive; the local forecasters fit 47
+   hours). On the first mission the long context turns against it from day 90 (1.12 to 1.61).
+3. Another satellite's series never helps. On the second mission the nearest one makes the
+   forecast worse (1.15, harm), and worse than a random series of the same kind (1.10), though
+   the route carries the hour itself (oracle 0.06); on the first the route carries nothing. The
+   library itself holds no next hour that Chronos-2 lacks (above), so no pairing or number of
+   neighbours would help one hour ahead.
+4. By the declared table: a domain model has room from day 2 against the local classical
+   answers, and a library of other systems' series is read next on the turbine fleet, systems of
+   one design side by side, before a multi-system corpus builds on it.
+
+**Limitations.** As declared. The second mission's lead was not predicted: the trials drew days
+5, 100 and 400, not the first month. `_own` sees more hours than the local forecasters, so its
+lead is not a like-for-like comparison. The local forecasters take the same-phase answer's period
+as their season, which weakens them on Mission2; a season each forecaster chooses per cell is the
+bar's next form. Mission2's verdict rests on few independent signals. One draw of hours per day;
+the descriptive rows were not declared as verdicts.
