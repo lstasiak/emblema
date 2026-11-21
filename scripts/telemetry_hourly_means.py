@@ -1,19 +1,22 @@
-r"""Each satellite channel's mean and count of readings per hour, from a publication of hours.
+r"""Each system's channel means and counts of readings per hour, from a publication of hours.
 
-The raw ESA telemetry is published as windows of one hour every hour, so a window's tokens of a
-channel are that channel's readings in the hour, in the publication's normalised units. This
-writes, for one mission, every published hour's mean and count of readings per channel: the
-series the cold-start forecasts read. Nothing is fitted. A window is the hour it starts in: a
-month's windows start at the month's start, and a mission's first month at its first reading's
-whole second, seconds into the axis's first hour. An hour with no reading of any channel holds
-no window, and is absent; months named in ``--frozen`` are not read.
+The raw ESA telemetry and the wind farms are published as windows of one hour every hour, so a
+window's tokens of a channel are that channel's readings in the hour, in the publication's
+normalised units. This writes, for one system — a mission, or a farm's turbine — every
+published hour's mean and count of readings per channel: the series the cold-start forecasts
+read. Nothing is fitted. A window is the hour it starts in: a month's windows start at the
+month's start, and a mission's first month at its first reading's whole second, seconds into
+the axis's first hour. An hour with no reading of any channel holds no window, and is absent;
+months named in ``--frozen`` are not read. A system's months are the units named
+``<system>/...``; its channels are named ``<system>/...`` too, but for ``--shared-channels``,
+where every channel of the corpus is each system's, as a farm's turbines share their signals.
 
     uv run --env-file .env.r2 scripts/telemetry_hourly_means.py --manifest KEY CHECKSUM \\
-        --mission ESA-Mission2 [--frozen UNITS.txt] --out DIR
+        --system ESA-Mission2 [--shared-channels] [--frozen UNITS.txt] --out DIR
 
-Writes ``DIR/hourly-<mission>.npz`` (``hours``, the hour since the missions' origin each row
+Writes ``DIR/hourly-<system>.npz`` (``hours``, the hour since the corpus's origin each row
 starts in; ``channels``, the names; ``means`` per hour and channel, NaN where it read nothing;
-``counts``) and ``DIR/hourly-<mission>.json``: the manifest, the months left out and the
+``counts``) and ``DIR/hourly-<system>.json``: the manifest, the months left out and the
 furthest into its hour a window starts.
 """
 
@@ -87,18 +90,18 @@ def hourly_means(
     return ordered, means, count, furthest
 
 
-def mission_columns(
-    channels: Iterable[tuple[int, str, str]], corpus: str, mission: str
+def system_columns(
+    channels: Iterable[tuple[int, str, str]], corpus: str, system: str, *, shared: bool = False
 ) -> dict[int, int]:
-    """The columns of a mission's channels, by identifier, in identifier order.
+    """The columns of a system's channels, by identifier, in identifier order.
 
     ``channels`` are the manifest's (identifier, corpus, name); a mission's channels are named
-    ``<mission>/channel_<n>``.
+    ``<mission>/channel_<n>``, and with ``shared`` every channel of the corpus is the system's.
     """
     own = sorted(
         channel_id
         for channel_id, owner, name in channels
-        if owner == corpus and name.startswith(f"{mission}/")
+        if owner == corpus and (shared or name.startswith(f"{system}/"))
     )
     return {channel_id: column for column, channel_id in enumerate(own)}
 
@@ -112,7 +115,8 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--manifest", nargs=2, required=True, metavar=("KEY", "CHECKSUM"))
-    parser.add_argument("--mission", required=True)
+    parser.add_argument("--system", "--mission", dest="system", required=True)
+    parser.add_argument("--shared-channels", action="store_true")
     parser.add_argument("--frozen", type=Path, help="units never read, one per line")
     parser.add_argument("--out", type=Path, required=True)
     arguments = parser.parse_args(argv)
@@ -127,14 +131,15 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     read = [
         index
         for index, unit in enumerate(manifest.units)
-        if unit.startswith(f"{arguments.mission}/") and unit not in frozen
+        if unit.startswith(f"{arguments.system}/") and unit not in frozen
     ]
     if not read:
-        raise SystemExit(f"the publication holds no month of {arguments.mission} to read")
-    columns = mission_columns(
+        raise SystemExit(f"the publication holds no month of {arguments.system} to read")
+    columns = system_columns(
         ((c.channel_id, c.corpus, c.channel) for c in manifest.channels),
         manifest.corpus,
-        arguments.mission,
+        arguments.system,
+        shared=arguments.shared_channels,
     )
     _, starts, _ = block.places_of(read)
     windows = block.of_units(read)
@@ -148,23 +153,23 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     names = {c.channel_id: c.channel for c in manifest.channels}
     arguments.out.mkdir(parents=True, exist_ok=True)
     np.savez(
-        arguments.out / f"hourly-{arguments.mission}.npz",
+        arguments.out / f"hourly-{arguments.system}.npz",
         hours=hours,
         channels=np.asarray([names[i] for i in columns]),
         means=means.astype(np.float32),
         counts=counts,
     )
-    (arguments.out / f"hourly-{arguments.mission}.json").write_text(
+    (arguments.out / f"hourly-{arguments.system}.json").write_text(
         json.dumps(
             {
                 "manifest": list(arguments.manifest),
                 "corpus": manifest.corpus,
-                "mission": arguments.mission,
+                "system": arguments.system,
                 "months_read": len(read),
                 "months_frozen": sorted(
                     unit
                     for unit in frozen & set(manifest.units)
-                    if unit.startswith(f"{arguments.mission}/")
+                    if unit.startswith(f"{arguments.system}/")
                 ),
                 "hours": int(hours.size),
                 "latest_start_into_hour": furthest,
@@ -174,7 +179,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
         )
         + "\n"
     )
-    print(f"{arguments.mission}: {hours.size} hours of {len(columns)} channels")
+    print(f"{arguments.system}: {hours.size} hours of {len(columns)} channels")
 
 
 if __name__ == "__main__":  # pragma: no cover

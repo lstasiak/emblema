@@ -12,6 +12,7 @@ from scripts.chronos2_answers import ContextRow
 from scripts.history_forecast_reading import read_published
 from scripts.local_forecaster_answers import (
     COLUMNS,
+    FLAT,
     FORECASTERS,
     answer,
     by_season,
@@ -140,3 +141,33 @@ def test_the_answers_are_written_in_the_context_order_and_read_back_by_the_readi
     assert read_published(path) == {
         n: {(2, "M1", 5): 0.5 + k, (1, "M1", 3): 0.25} for k, n in enumerate(FORECASTERS)
     }
+
+
+def test_with_flat_the_seasonal_forecasters_answer_again_with_no_season_and_are_written(
+    tmp_path: Path,
+) -> None:
+    rows = [row(1, 2, [0.0] * 46 + [5.0]), row(1, 3, [0.0] * 46 + [7.0])]
+    lags = {(1, "M1", 2): 18, (1, "M1", 3): 1}
+    seasons: list[int] = []
+
+    def counted(series: NDArray[np.float64], season: int) -> Mapping[str, NDArray[np.float64]]:
+        seasons.append(season)
+        return last_hour(series, season)
+
+    answered = answer(rows, lags, counted, flat=True)
+    path = tmp_path / "local.csv"
+    write_answers(path, rows, answered, flat=True)
+
+    assert sorted(seasons) == [1, 1, 18]
+    assert answered[(1, "M1", 2)] == {
+        "auto_ets": 185.0,
+        "auto_arima": 186.0,
+        "auto_theta": 187.0,
+        "seasonal_naive": 188.0,
+        "auto_ets_flat": 15.0,
+        "auto_arima_flat": 16.0,
+        "auto_theta_flat": 17.0,
+    }
+    assert answered[(1, "M1", 3)]["auto_ets_flat"] == answered[(1, "M1", 3)]["auto_ets"]
+    assert read_published(path)["auto_theta_flat"] == {(1, "M1", 2): 17.0, (1, "M1", 3): 19.0}
+    assert set(FLAT) <= set(read_published(path))
