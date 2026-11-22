@@ -92,8 +92,9 @@ from scripts.fleet_hours import (  # noqa: E402
     Turbine,
     axis_of,
     hour_of,
-    loaded,
+    loaded_farm,
 )
+from scripts.local_forecaster_answers import filled  # noqa: E402
 
 Floats = NDArray[np.float64]
 Ints = NDArray[np.int64]
@@ -250,7 +251,7 @@ def local_arx(history: Floats, conditions: Floats, now: Floats, penalty: float) 
     """
     if not np.isfinite(now).all():
         return None
-    level = filled_rows(history[None, :])[0]
+    level = filled(history)
     rows = np.c_[level[:-1], conditions[1:]]
     kept = np.isfinite(rows).all(axis=1) & np.isfinite(history[1:]) & np.isfinite(history[:-1])
     if kept.sum() < ROWS_PER_FEATURE * rows.shape[1]:
@@ -512,10 +513,13 @@ class Cell:
     answers: Mapping[str, float | None]
 
 
-def own_ridges(new: Turbine, start: int, before: int) -> dict[str, dict[int, Ridge]]:
-    """The ridges fitted on the new turbine's hours from its start to ``before``."""
-    scored = scorable(new.values)
-    recent = latest(new.values)
+def own_ridges(
+    new: Turbine, start: int, before: int, scored: Mask, recent: Floats
+) -> dict[str, dict[int, Ridge]]:
+    """The ridges fitted on the new turbine's hours from its start to ``before``.
+
+    ``scored`` and ``recent`` are ``scorable`` and ``latest`` of its values.
+    """
     out: dict[str, dict[int, Ridge]] = {kind.name: {} for kind in OWN_ROWS}
     for channel in range(len(TARGETS)):
         hours = np.flatnonzero(scored[start:before, channel]) + start
@@ -536,13 +540,14 @@ def cells_of(
     hours: Ints,
     own: Mapping[str, Mapping[int, Ridge]],
     fleet: FleetFits,
+    scored: Mask,
+    recent: Floats,
 ) -> list[Cell]:
     """The new turbine's cells in ``hours``, a channel's answers given together.
 
-    A ridge answers a cell only where every reading it needs is there.
+    A ridge answers a cell only where every reading it needs is there; ``scored`` and
+    ``recent`` are ``scorable`` and ``latest`` of the turbine's values.
     """
-    scored = scorable(new.values)
-    recent = latest(new.values)
     cells: list[Cell] = []
     for channel in range(len(TARGETS)):
         at = hours[scored[hours, channel]]
@@ -571,7 +576,7 @@ def cells_of(
                 new.values[hour, list(CONDITIONS)],
                 ARX_PENALTY,
             )
-            for name in ANSWERS[len(NO_LEARNING) + 1 :]:
+            for name in (kind.name for kind in (*OWN_ROWS, *FLEET_ROWS)):
                 value = given[name][k] if name in given else np.nan
                 answers[name] = float(value) if np.isfinite(value) else None
             cells.append(
@@ -622,8 +627,8 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     arguments = parser.parse_args(argv)
     years = Years(arguments.read_from, arguments.read_until)
 
-    names = sorted(p.stem.removeprefix("hourly-") for p in arguments.hourly.glob("hourly-*.npz"))
-    turbines = loaded(arguments.hourly, names)
+    turbines = loaded_farm(arguments.hourly)
+    names = [t.name for t in turbines]
     starts = (
         sorted(arguments.start_dates)
         if arguments.start_dates
@@ -641,6 +646,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
             fleet = FleetFits.before(turbines, begin)
             news = [t.before(begin) for t in turbines]
             scored = [scorable(t.values) for t in news]
+            recent = [latest(t.values) for t in news]
             for day in days:
                 hours = drawn_hours(
                     scored,
@@ -649,10 +655,10 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
                     arguments.windows,
                     arguments.seed * 1_000_003 + begin + day,
                 )
-                for new in news:
-                    own = own_ridges(new, begin, begin + day * HOURS_PER_DAY)
+                for new, mask, last in zip(news, scored, recent, strict=True):
+                    own = own_ridges(new, begin, begin + day * HOURS_PER_DAY, mask, last)
                     by_day.setdefault(day, []).extend(
-                        cells_of(new, axis_of(new.name, start), hours, own, fleet)
+                        cells_of(new, axis_of(new.name, start), hours, own, fleet, mask, last)
                     )
             print(f"{arguments.farm} {start}: days {list(days)}", flush=True)
     outside = [

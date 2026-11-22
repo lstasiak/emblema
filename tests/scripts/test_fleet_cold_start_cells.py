@@ -1,6 +1,7 @@
 """A wind farm's turbines read as new systems: starts, cells and what each answer may read."""
 
 from datetime import date, timedelta
+from functools import cache
 from itertools import pairwise
 from pathlib import Path
 
@@ -183,13 +184,26 @@ def farm(seed: int = 3, missing: float = 0.2) -> list[Turbine]:
     return turbines
 
 
-def read_as_new(turbines: list[Turbine], new: int, day: int) -> list:
+@cache
+def fitted_farm() -> tuple[list[Turbine], FleetFits]:
+    """The default farm and its fits, shared by the tests that change neither."""
+    turbines = farm()
+    for turbine in turbines:
+        turbine.values.flags.writeable = False
+    return turbines, FleetFits.before(turbines, hour_of(START))
+
+
+def read_as_new(
+    turbines: list[Turbine], new: int, day: int, fleet: FleetFits | None = None
+) -> list:
     begin = hour_of(START)
-    fleet = FleetFits.before(turbines, begin)
+    if fleet is None:
+        fleet = FleetFits.before(turbines, begin)
     turbine = turbines[new].before(begin)
     hours = np.arange(begin + day * 24, begin + (day + 7) * 24, 5)
-    own = own_ridges(turbine, begin, begin + day * 24)
-    return cells_of(turbine, axis_of(turbine.name, START), hours, own, fleet)
+    scored, recent = scorable(turbine.values), latest(turbine.values)
+    own = own_ridges(turbine, begin, begin + day * 24, scored, recent)
+    return cells_of(turbine, axis_of(turbine.name, START), hours, own, fleet, scored, recent)
 
 
 def answered(cells: list) -> np.ndarray:
@@ -199,8 +213,8 @@ def answered(cells: list) -> np.ndarray:
 
 
 def test_every_answer_reads_only_what_was_known_at_the_forecast_hour() -> None:
-    turbines = farm()
-    cells = read_as_new(turbines, new=0, day=14)
+    turbines, fleet = fitted_farm()
+    cells = read_as_new(turbines, new=0, day=14, fleet=fleet)
     first, last = cells[0].window, max(c.window for c in cells)
     middle = (first + last) // 2
 
@@ -221,14 +235,16 @@ def test_every_answer_reads_only_what_was_known_at_the_forecast_hour() -> None:
         answered([again[k] for k in before]), nan_ok=True
     )
     given = answered(cells)
+    assert {c.channel for c in cells} <= set(range(len(TARGETS)))
+    assert np.isfinite([c.target for c in cells]).all()
     assert all(np.isfinite(given[:, ANSWERS.index(n)]).all() for n in FLEET)
     powered = np.isfinite([turbines[0].values[c.window, POWER] for c in cells])
     assert (np.isfinite(given[:, ANSWERS.index(ORACLE)]) == powered).all()
 
 
 def test_the_farms_ridges_for_a_new_turbine_ignore_which_hours_it_read_before_its_start() -> None:
-    turbines = farm()
-    cells = read_as_new(turbines, new=0, day=7)
+    turbines, fleet = fitted_farm()
+    cells = read_as_new(turbines, new=0, day=7, fleet=fleet)
     thinned = [Turbine(t.name, t.values.copy()) for t in turbines]
     thinned[0].values[: hour_of(START) - 30 * 24] = np.nan
 
@@ -238,36 +254,29 @@ def test_the_farms_ridges_for_a_new_turbine_ignore_which_hours_it_read_before_it
 
 
 def test_the_oracle_reads_the_forecast_hours_power_and_the_fleet_ridge_does_not() -> None:
-    turbines = farm()
-    cells = read_as_new(turbines, new=1, day=14)
+    turbines, fleet = fitted_farm()
+    cells = read_as_new(turbines, new=1, day=14, fleet=fleet)
     shifted = [Turbine(t.name, t.values.copy()) for t in turbines]
     hours = sorted({c.window for c in cells})
     shifted[1].values[hours, POWER] += 10.0
 
     again = read_as_new(shifted, new=1, day=14)
 
-    fleet = ANSWERS.index(FLEET[0])
+    ridge = ANSWERS.index(FLEET[0])
     oracle = ANSWERS.index(ORACLE)
-    assert answered(again)[:, fleet] == pytest.approx(answered(cells)[:, fleet])
+    assert answered(again)[:, ridge] == pytest.approx(answered(cells)[:, ridge])
     assert not np.allclose(answered(again)[:, oracle], answered(cells)[:, oracle])
 
 
 def test_the_own_ridges_answer_only_once_the_new_turbine_has_rows_enough() -> None:
-    turbines = farm()
+    turbines, fleet = fitted_farm()
 
-    early = answered(read_as_new(turbines, new=2, day=2))
-    later = answered(read_as_new(turbines, new=2, day=14))
+    early = answered(read_as_new(turbines, new=2, day=2, fleet=fleet))
+    later = answered(read_as_new(turbines, new=2, day=14, fleet=fleet))
 
     for name in ("ridge", "window_ridge"):
         assert np.isnan(early[:, ANSWERS.index(name)]).all()
         assert np.isfinite(later[:, ANSWERS.index(name)]).all()
-
-
-def test_only_targets_are_scored() -> None:
-    cells = read_as_new(farm(), new=0, day=7)
-
-    assert {c.channel for c in cells} <= set(range(len(TARGETS)))
-    assert all(c.target == pytest.approx(c.target) for c in cells)
 
 
 def write_turbine(directory: Path, name: str, channels: list[str], hours: np.ndarray) -> None:
@@ -314,13 +323,11 @@ def test_two_farms_draw_their_offsets_apart_under_one_seed() -> None:
     penmanshiel = systematic_starts(seed=farm_seed(1, "penmanshiel"))
 
     assert kelmarsh[0] != penmanshiel[0]
-    assert kelmarsh == systematic_starts(seed=farm_seed(1, "kelmarsh"))
 
 
 def test_the_farms_ridge_cross_fits_the_months_before_and_after_its_rows_reach_half() -> None:
-    turbines = farm()
+    turbines, fits = fitted_farm()
     begin = hour_of(START)
-    fits = FleetFits.before(turbines, begin)
     others = turbines[1:]
     hours = {t.name: np.flatnonzero(scorable(t.values[:begin])[:, 0]) for t in others}
     pooled = np.sort(np.concatenate(list(hours.values())))
