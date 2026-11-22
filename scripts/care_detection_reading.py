@@ -429,8 +429,8 @@ class View(enum.Enum):
 def settling_of(name: str) -> int:
     """How many hours before an hour must all hold a score for the hour to count as settled.
 
-    Over the fitted years an hour within a day of an unscored one stands above a settled hour,
-    by half and more in the first hours after a stop and by a tenth to a quarter a day on, for
+    Over the fitted years a score in the three hours after a stop of six hours or more stands
+    1.1 to 2.6 times a settled hour's, and 13 to 24 hours after it still up to 1.4 times, for
     the departures and the models of normal behaviour alike; later it does not. The answer with
     no model has no history and no such hours.
     """
