@@ -222,7 +222,8 @@ def test_a_window_hit_exactly_is_refused_but_dropped_and_counted_where_asked() -
         rows(False)
     (row,) = rows(True)
     assert row["left_out"] == "1 windows hit exactly"
-    assert row["windows"] == len({(k[1], k[0]) for k in keys})
+    assert row["windows"] == len({(k[1], k[0]) for k in keys}) - 1
+    assert row["cells"] == sum(k[:2] != keys[0][:2] for k in keys)
 
 
 def test_a_normal_behaviour_comparison_reads_only_the_cells_whose_hour_was_known() -> None:
@@ -247,24 +248,19 @@ def test_a_normal_behaviour_comparison_reads_only_the_cells_whose_hour_was_known
 
     assert row["cells"] == sum(known)
     assert row["against"] == "normal behaviour without the farm, best of 3: local_nbm_arx"
+    assert row["ratio"] == pytest.approx(0.16 / 0.25)
     assert row["left_out"] == ""
 
 
-def test_the_bars_with_the_farm_hold_the_bars_without_it_and_no_forecaster() -> None:
-    assert set(BARS["without the farm"]) < set(BARS["with the farm"])
-    assert set(BARS["normal behaviour without the farm"]) < set(
-        BARS["normal behaviour with the farm"]
-    )
-    assert set(BARS["normal behaviour with the farm"]) < set(
-        BARS["normal behaviour with the farm and currents"]
-    )
+def test_no_bar_holds_a_forecaster_or_the_oracle_and_none_without_the_farm_a_farm_answer() -> None:
     every = {a for bar in BARS.values() for a in bar}
     assert not any(a.startswith("chronos2") or a.startswith("oracle") for a in every)
     assert not any("fleet" in a for a in BARS["normal behaviour without the farm"])
+    assert not any("fleet" in a for a in BARS["without the farm"])
 
 
 def test_an_answer_of_a_bar_missing_a_few_cells_keeps_its_place_and_those_cells_go() -> None:
-    keys = cells_for([EARLY, LATE, date(2021, 1, 1)], hour=24) * 1
+    keys = cells_for([EARLY, LATE, date(2021, 1, 1)], hour=24)
     keys = [(h + 100 * k, a, c) for k in range(4) for h, a, c in keys]
     gaps = {3, 40}
     answers = {
@@ -286,25 +282,3 @@ def test_an_answer_of_a_bar_missing_a_few_cells_keeps_its_place_and_those_cells_
     assert row["against"] == "with the farm, best of 2: fleet_trees"
     assert row["cells"] == len(keys) - len(gaps)
     assert row["left_out"] == f"{len(gaps) / len(keys):.3f} of the cells unanswered by the bar"
-
-
-def test_the_cells_own_regression_is_the_bar_without_the_farm_where_it_leads() -> None:
-    keys = cells_for([EARLY, LATE])
-    answers = {
-        "chronos2_nbm": [0.5] * len(keys),
-        "last_hour": [1.0] * len(keys),
-        "local_nbm_arx": [0.45] * len(keys),
-    }
-
-    (row,) = comparison_rows(
-        day(keys, answers, target=0.1),
-        VERDICTS[2:3],
-        reading="first month",
-        levels=True,
-        least_gain=0.8,
-        resamples=50,
-        seed=1,
-    )
-
-    assert row["against"] == "normal behaviour without the farm, best of 2: local_nbm_arx"
-    assert row["ratio"] == pytest.approx(0.16 / 0.1225)

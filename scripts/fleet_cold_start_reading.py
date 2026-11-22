@@ -16,7 +16,7 @@ start, as the satellites' bar was; and one with the farm, which adds the ridges 
 on the other turbines before the start. The normal-behaviour bars add the answers that know the
 forecast hour's operating conditions, and their comparisons read only the cells where those
 conditions were read. The ridges on the turbine's own hours join a bar only where they answer
-every cell of the comparison, since they cannot answer before they have rows enough; every other
+every cell the comparison reads, since they cannot answer before they have rows enough; every other
 answer of a bar always keeps its place, and the comparison reads the cells all of them answer.
 
 - The verdicts read the first 30 days of every start, days 2, 7 and 14 together, each a level
@@ -65,7 +65,12 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.cold_start_cells import NO_LEARNING  # noqa: E402
 from scripts.cold_start_reading import EXACT, Day, geometric, joined, pooled  # noqa: E402
-from scripts.fleet_chronos2_answers import RUNGS  # noqa: E402
+from scripts.fleet_chronos2_answers import (  # noqa: E402
+    NBM,
+    NBM_CURRENTS,
+    NBM_OWN,
+    RUNGS,
+)
 from scripts.fleet_cold_start_cells import (  # noqa: E402
     CURVE_DAYS,
     FLEET,
@@ -89,21 +94,18 @@ PAST_ALONE = (*NO_LEARNING, *FORECASTERS, *FLAT, *OWN)
 PAST_FLEET = (*PAST_ALONE, *FLEET, "fleet_trees")
 NBM_ALONE = (*PAST_ALONE, LOCAL_NBM, OWN_NBM)
 NBM_FLEET = (*PAST_FLEET, LOCAL_NBM, OWN_NBM, FLEET_NBM, "fleet_nbm_trees")
-NBM_CURRENTS = (*NBM_FLEET, FLEET_NBM_CURRENTS, "fleet_nbm_trees_currents")
+NBM_FLEET_CURRENTS = (*NBM_FLEET, FLEET_NBM_CURRENTS, "fleet_nbm_trees_currents")
 BARS = {
     "without the farm": PAST_ALONE,
     "with the farm": PAST_FLEET,
     "normal behaviour without the farm": NBM_ALONE,
     "normal behaviour with the farm": NBM_FLEET,
-    "normal behaviour with the farm and currents": NBM_CURRENTS,
+    "normal behaviour with the farm and currents": NBM_FLEET_CURRENTS,
 }
-CLASSICAL = NBM_CURRENTS
+CLASSICAL = NBM_FLEET_CURRENTS
 # The answers fitted on the turbine's own hours, which join a bar only where they answer every
 # cell of the comparison.
 OWN_HISTORY = (*OWN, OWN_NBM)
-NBM = "chronos2_nbm"
-NBM_WITH_CURRENTS = "chronos2_nbm_currents"
-NBM_OWN = "chronos2_nbm_own"
 
 
 @dataclass(frozen=True)
@@ -142,8 +144,8 @@ COMPARISONS = (
     Comparison("chronos2_neighbours_concurrent", "chronos2_47"),
     Comparison("fleet_nbm_trees", "normal behaviour without the farm", NBM),
     Comparison(NBM, "chronos2_47", NBM),
-    Comparison(NBM_WITH_CURRENTS, "normal behaviour with the farm and currents", NBM_WITH_CURRENTS),
-    Comparison(NBM_WITH_CURRENTS, NBM, NBM_WITH_CURRENTS),
+    Comparison(NBM_CURRENTS, "normal behaviour with the farm and currents", NBM_CURRENTS),
+    Comparison(NBM_CURRENTS, NBM, NBM_CURRENTS),
     Comparison(NBM_OWN, "normal behaviour without the farm", NBM_OWN),
     Comparison(NBM_OWN, "normal behaviour with the farm", NBM_OWN),
     Comparison(NBM_OWN, NBM, NBM_OWN),
@@ -300,12 +302,13 @@ def comparison_rows(
             left_out.append(f"{int((~kept).sum())} windows hit exactly")
         else:
             kept[:] = True
+        counted = kept[windows.index]
         ratio, low, high, best = geometric(
             top[kept],
             [b[kept] for b in bottoms],
             windows.weights(resamples, seed)[:, kept],
         )
-        cell_median = float(np.median((error + EXACT) / (errors[best] + EXACT)))
+        cell_median = float(np.median(((error + EXACT) / (errors[best] + EXACT))[counted]))
         rows.append(
             {
                 "farm": day.mission,
@@ -316,8 +319,8 @@ def comparison_rows(
                     f"{comparison.against}, best of {len(bar)}: {bar[best]}" if named else bar[0]
                 ),
                 "starts": int(windows.starts.max()) + 1,
-                "windows": len(windows.starts),
-                "cells": int(cells.sum()),
+                "windows": int(kept.sum()),
+                "cells": int(counted.sum()),
                 "ratio": ratio,
                 "low": low,
                 "high": high,
