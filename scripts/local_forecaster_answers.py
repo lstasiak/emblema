@@ -45,7 +45,6 @@ FORECASTERS = ("auto_ets", "auto_arima", "auto_theta", "seasonal_naive")
 # The forecasters fitted a second time with no season, and the names they write then.
 SEASONAL = FORECASTERS[:3]
 FLAT = tuple(f"{name}_flat" for name in SEASONAL)
-COLUMNS = ("window", "axis", "channel", *(f"mean_{name}" for name in FORECASTERS))
 # Fits a batch of series sharing a season: ``[series, hours]`` in, one answer per forecaster out.
 Fit = Callable[[NDArray[np.float64], int], Mapping[str, NDArray[np.float64]]]
 
@@ -154,7 +153,7 @@ def write_answers(
     names = (*FORECASTERS, *FLAT) if flat else FORECASTERS
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow((*COLUMNS, *(f"mean_{name}" for name in FLAT)) if flat else COLUMNS)
+        writer.writerow(("window", "axis", "channel", *(f"mean_{name}" for name in names)))
         for row in rows:
             values = answered[(row.window, row.axis, row.channel)]
             writer.writerow(

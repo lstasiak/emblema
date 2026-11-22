@@ -129,3 +129,9 @@ def loaded(directory: Path, turbines: Sequence[str]) -> list[Turbine]:
         values[hours] = means[:, [channels.index(c) for c in CHANNELS]]
         out.append(Turbine(name, values))
     return out
+
+
+def loaded_farm(directory: Path) -> list[Turbine]:
+    """Every turbine whose hourly means ``directory`` holds, by name."""
+    names = sorted(p.stem.removeprefix("hourly-") for p in directory.glob("hourly-*.npz"))
+    return loaded(directory, names)

@@ -1,6 +1,8 @@
 """The published forecaster's rungs: contexts before the hour, library series laid against it."""
 
+import csv
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -16,6 +18,7 @@ from scripts.chronos2_ladder import (
     dense,
     laid,
     rung_inputs,
+    write,
 )
 
 AXIS = "M"
@@ -115,3 +118,21 @@ def test_a_model_answering_other_variates_is_refused() -> None:
 
     with pytest.raises(ValueError, match="answered 1 variates for 2"):
         answered([(150, AXIS, 0)], values, np.zeros((10, 1)), {}, one, median=1, cap=64)
+
+
+def test_the_file_holds_the_rungs_named_and_leaves_a_cell_blank_where_a_rung_gave_none(
+    tmp_path: Path,
+) -> None:
+    cells = [(150, AXIS, 0), (151, AXIS, 1)]
+    out = {"a": {cells[0]: 1.25, cells[1]: 2.0}, "b": {cells[1]: 3.0}, "c": {cells[0]: 9.0}}
+    path = tmp_path / "answers.csv"
+
+    write(path, cells, out, ("b", "a"))
+
+    with path.open(newline="") as handle:
+        read = list(csv.reader(handle))
+    assert read == [
+        ["window", "axis", "channel", "mean_b", "mean_a"],
+        ["150", AXIS, "0", "", "1.25"],
+        ["151", AXIS, "1", "3", "2"],
+    ]

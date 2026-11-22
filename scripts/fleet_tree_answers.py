@@ -18,14 +18,13 @@ macOS:
 
     uv run scripts/fleet_tree_answers.py --farm kelmarsh --hourly DIR --cells DIR [--seed 1]
 
-Reads ``starts-<farm>.csv`` and ``answers-<farm>-N<days>.csv`` from ``--cells`` and writes
-``trees-<farm>-N<days>.csv`` beside them: window, axis, channel and each answer.
+Reads ``answers-<farm>-N<days>.csv`` from ``--cells`` and writes ``trees-<farm>-N<days>.csv``
+beside them: window, axis, channel and each answer.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -39,8 +38,8 @@ from numpy.typing import NDArray
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.chronos2_ladder import read_cells  # noqa: E402
-from scripts.cold_start_cells import shown  # noqa: E402
+from scripts.chronos2_ladder import read_cells, write  # noqa: E402
+from scripts.cold_start_cells import ROWS_PER_FEATURE  # noqa: E402
 from scripts.fleet_cold_start_cells import (  # noqa: E402
     FLEET,
     FLEET_NBM,
@@ -50,7 +49,7 @@ from scripts.fleet_cold_start_cells import (  # noqa: E402
     latest,
     scorable,
 )
-from scripts.fleet_hours import TARGETS, Turbine, hour_of, loaded, parsed_axis  # noqa: E402
+from scripts.fleet_hours import TARGETS, Turbine, hour_of, loaded_farm, parsed_axis  # noqa: E402
 
 Floats = NDArray[np.float64]
 Ints = NDArray[np.int64]
@@ -65,7 +64,6 @@ TREES = {
 ROWS: Mapping[str, Rows] = {
     tree: next(r for r in FLEET_ROWS if r.name == ridge) for tree, ridge in TREES.items()
 }
-COLUMNS = ("window", "axis", "channel", *(f"mean_{name}" for name in TREES))
 MOST_ROWS = 100_000
 # A model fitted on rows and targets, answering rows.
 Fit = Callable[[Floats, Floats, int], Callable[[Floats], Floats]]
@@ -81,8 +79,8 @@ def fleet_rows(
     kind: Rows,
     channel: int,
     until: int,
-) -> dict[str, tuple[Ints, Floats, Floats]]:
-    """Per turbine, its rows of the channel before ``until``: hours, rows and targets.
+) -> dict[str, tuple[Floats, Floats]]:
+    """Per turbine, its rows of the channel before ``until`` and their targets.
 
     An hour is kept where the channel is scored and every reading the rows need is there.
     ``read`` holds each turbine's ``scorable`` and ``latest``, which read no hour after their
@@ -94,7 +92,7 @@ def fleet_rows(
         hours = np.flatnonzero(scored[:until, channel])
         rows = kind.of(turbine.values, recent, hours, channel)
         kept = np.isfinite(rows).all(axis=1)
-        out[turbine.name] = (hours[kept], rows[kept], turbine.values[hours[kept], channel])
+        out[turbine.name] = (rows[kept], turbine.values[hours[kept], channel])
     return out
 
 
@@ -140,10 +138,10 @@ def answered(
                     others = [v for t, v in rows_of.items() if t != name]
                     if not wanted or not others:
                         continue
-                    rows = np.concatenate([r for _, r, _ in others])
-                    if len(rows) < 2 * rows.shape[1]:
+                    rows = np.concatenate([r for r, _ in others])
+                    if len(rows) < ROWS_PER_FEATURE * rows.shape[1]:
                         continue
-                    targets = np.concatenate([y for _, _, y in others])
+                    targets = np.concatenate([y for _, y in others])
                     model = fit(*drawn(rows, targets, seed + channel), seed)
                     answer_cells(out[tree], by_name[name], kind, channel, wanted, model)
             say(
@@ -175,14 +173,6 @@ def answer_cells(
             (k for k, w in zip(mine, kept, strict=True) if w), given, strict=True
         ):
             out[key] = float(value)
-
-
-def write(path: Path, cells: Sequence[Key], out: Mapping[str, Mapping[Key, float]]) -> None:
-    with path.open("w", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(COLUMNS)
-        for key in cells:
-            writer.writerow((*key, *(shown(out[t].get(key)) for t in TREES)))
 
 
 def xgboost_fit(jobs: int) -> Fit:  # pragma: no cover - needs XGBoost
@@ -218,8 +208,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     if "torch" in sys.modules:
         raise SystemExit("torch is loaded: XGBoost's OpenMP must not share its process")
 
-    names = sorted(p.stem.removeprefix("hourly-") for p in arguments.hourly.glob("hourly-*.npz"))
-    turbines = loaded(arguments.hourly, names)
+    turbines = loaded_farm(arguments.hourly)
     files = sorted(arguments.cells.glob(f"answers-{arguments.farm}-N*.csv"))
     by_file = {path: read_cells(path) for path in files}
     every = [k for keys in by_file.values() for k in keys]
@@ -232,7 +221,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     )
     for path, keys in by_file.items():
         label = path.stem.removeprefix("answers-")
-        write(arguments.cells / f"trees-{label}.csv", keys, out)
+        write(arguments.cells / f"trees-{label}.csv", keys, out, tuple(TREES))
         print(f"{label}: {len(keys)} cells")
 
 

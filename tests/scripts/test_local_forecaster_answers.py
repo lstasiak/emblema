@@ -11,7 +11,6 @@ from numpy.typing import NDArray
 from scripts.chronos2_answers import ContextRow
 from scripts.history_forecast_reading import read_published
 from scripts.local_forecaster_answers import (
-    COLUMNS,
     FLAT,
     FORECASTERS,
     answer,
@@ -136,7 +135,7 @@ def test_the_answers_are_written_in_the_context_order_and_read_back_by_the_readi
 
     with path.open(newline="") as handle:
         read = list(csv.reader(handle))
-    assert tuple(read[0]) == COLUMNS
+    assert read[0] == ["window", "axis", "channel", *(f"mean_{n}" for n in FORECASTERS)]
     assert [line[:3] for line in read[1:]] == [["2", "M1", "5"], ["1", "M1", "3"]]
     assert read_published(path) == {
         n: {(2, "M1", 5): 0.5 + k, (1, "M1", 3): 0.25} for k, n in enumerate(FORECASTERS)

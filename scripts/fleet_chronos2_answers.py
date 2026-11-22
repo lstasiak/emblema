@@ -32,7 +32,6 @@ Writes one row per cell: window, axis, channel and each rung's forecast of the h
 """
 
 import argparse
-import csv
 import faulthandler
 import sys
 import time
@@ -48,7 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.chronos2_answers import median_index  # noqa: E402
-from scripts.chronos2_ladder import CONTEXT, before, read_cells  # noqa: E402
+from scripts.chronos2_ladder import CONTEXT, Input, Predict, before, read_cells, write  # noqa: E402
 from scripts.fleet_hours import (  # noqa: E402
     CONDITIONS,
     CURRENTS,
@@ -56,7 +55,7 @@ from scripts.fleet_hours import (  # noqa: E402
     WINDOW,
     Turbine,
     hour_of,
-    loaded,
+    loaded_farm,
     parsed_axis,
 )
 
@@ -72,11 +71,7 @@ NBM_OWN = "chronos2_nbm_own"
 # Each normal-behaviour rung's covariates, read before and in the forecast hour.
 KNOWN = {NBM: CONDITIONS, NBM_CURRENTS: (*CONDITIONS, *CURRENTS), NBM_OWN: CONDITIONS}
 RUNGS = ("chronos2_47", EACH, OWN, NEIGHBOURS, CONCURRENT, NBM, NBM_CURRENTS, NBM_OWN)
-COLUMNS = ("window", "axis", "channel", *(f"mean_{rung}" for rung in RUNGS))
 STARTUP_SECONDS = 300
-# Chronos-2's inputs: an array of variates, or a dict of target and covariates.
-Input = Any
-Predict = Callable[[Sequence[Input]], list[NDArray[np.float32]]]
 
 
 def neighbours_mean(turbines: Sequence[Turbine], new: str) -> Floats:
@@ -236,15 +231,6 @@ def alone(
     return out
 
 
-def write(path: Path, cells: Sequence[Key], out: Mapping[str, Mapping[Key, float]]) -> None:
-    with path.open("w", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(COLUMNS)
-        for key in cells:
-            shown = (f"{out[r][key]:.6g}" if key in out[r] else "" for r in RUNGS)
-            writer.writerow((*key, *shown))
-
-
 def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs the model
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--hourly", type=Path, required=True, help="the farm's hourly means")
@@ -261,8 +247,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
     import chronos  # type: ignore[import-not-found,unused-ignore]  # ty: ignore[unresolved-import]
     import torch  # type: ignore[import-not-found,unused-ignore]
 
-    names = sorted(p.stem.removeprefix("hourly-") for p in arguments.hourly.glob("hourly-*.npz"))
-    turbines = loaded(arguments.hourly, names)
+    turbines = loaded_farm(arguments.hourly)
     cells = read_cells(arguments.cells)
     started = time.monotonic()
     pipeline = chronos.Chronos2Pipeline.from_pretrained(
@@ -287,7 +272,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
         say=lambda text: print(text, file=sys.stderr, flush=True),
     )
     arguments.out.parent.mkdir(parents=True, exist_ok=True)
-    write(arguments.out, cells, out)
+    write(arguments.out, cells, out, RUNGS)
     print(f"{len(cells)} cells answered in {time.monotonic() - started:.0f} s, context up to {cap}")
 
 

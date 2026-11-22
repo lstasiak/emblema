@@ -11,7 +11,6 @@ from numpy.typing import NDArray
 from scripts.chronos2_ladder import CONTEXT
 from scripts.fleet_chronos2_answers import (
     CONCURRENT,
-    EACH,
     NBM,
     NBM_CURRENTS,
     NBM_OWN,
@@ -88,7 +87,6 @@ def test_every_rung_answers_every_scored_cell_and_only_those() -> None:
     assert set(out) == set(RUNGS)
     for rung in RUNGS:
         assert out[rung] == dict.fromkeys(cells, 1.0)
-    assert EACH in out
 
 
 def test_a_cell_of_a_turbine_not_loaded_or_an_answer_of_other_variates_is_refused() -> None:
