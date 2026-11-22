@@ -6,14 +6,19 @@ AutoTheta and the seasonal naive answer of ``statsforecast`` — so each adapts 
 where the ridge per channel was fitted once on the training months. A cell's season is the
 period the same-phase answer chose from the same hours (the ``lag`` column of
 ``answers-<label>.csv``), and one where that period is shorter than two hours or longer than
-half the context. The forecasters take no missing hour, so an hour the channel did not read
-carries the hour before it, and the hours before its first reading take that reading.
+half the context. Each forecaster chooses within that season by its own criterion — AutoETS by
+AICc among models with and without a seasonal component, AutoARIMA by a seasonal test and AICc,
+AutoTheta by a seasonal test — and on the second satellite those choices forecast worse than
+no season (``telemetry-cold-start.md``, 2026-11-20); with ``--flat``, the three are also fitted
+with no season, as ``<name>_flat``, so the classical bar holds both. The forecasters take
+no missing hour, so an hour the channel did not read carries the hour before it, and the hours
+before its first reading take that reading.
 
 The forecasters are not dependencies of this package, so this runs in its own environment:
 
     uv run --isolated --no-project --python 3.12 --with statsforecast==2.1.1 \\
         scripts/local_forecaster_answers.py --context DIR/context-<label>.csv \\
-        --answers DIR/answers-<label>.csv --out DIR/local-<label>.csv
+        --answers DIR/answers-<label>.csv --out DIR/local-<label>.csv [--flat]
 
 Writes one row per cell: window, axis, channel and each forecaster's answer for the hour's mean.
 """
@@ -37,7 +42,9 @@ from scripts.chronos2_answers import ContextRow, read_context  # noqa: E402
 Key = tuple[int, str, int]
 # The forecasters by the column each writes, in the order the file holds them.
 FORECASTERS = ("auto_ets", "auto_arima", "auto_theta", "seasonal_naive")
-COLUMNS = ("window", "axis", "channel", *(f"mean_{name}" for name in FORECASTERS))
+# The forecasters fitted a second time with no season, and the names they write then.
+SEASONAL = FORECASTERS[:3]
+FLAT = tuple(f"{name}_flat" for name in SEASONAL)
 # Fits a batch of series sharing a season: ``[series, hours]`` in, one answer per forecaster out.
 Fit = Callable[[NDArray[np.float64], int], Mapping[str, NDArray[np.float64]]]
 
@@ -89,50 +96,68 @@ def by_season(rows: Sequence[ContextRow], lags: Mapping[Key, int]) -> dict[int, 
     return groups
 
 
-def answer(
-    rows: Sequence[ContextRow],
-    lags: Mapping[Key, int],
-    fit: Fit,
-    *,
-    say: Callable[[str], None] = lambda _: None,
-) -> dict[Key, dict[str, float]]:
-    """Every cell's answer from each forecaster, the cells of one season fitted together.
+def fitted(fit: Fit, series: NDArray[np.float64], season: int) -> Mapping[str, NDArray[np.float64]]:
+    """``fit``'s answers, checked.
 
     Raises:
         ValueError: If ``fit`` answers another number of cells or forecasters than asked, or an
             answer that is not finite.
     """
+    outputs = fit(series, season)
+    if set(outputs) != set(FORECASTERS):
+        raise ValueError(f"the fit answered {sorted(outputs)}, not {list(FORECASTERS)}")
+    for name, values in outputs.items():
+        if len(values) != len(series):
+            raise ValueError(f"{name} answered {len(values)} cells for {len(series)} handed")
+        if not np.isfinite(values).all():
+            raise ValueError(f"{name} answered a value that is not finite at season {season}")
+    return outputs
+
+
+def answer(
+    rows: Sequence[ContextRow],
+    lags: Mapping[Key, int],
+    fit: Fit,
+    *,
+    flat: bool = False,
+    say: Callable[[str], None] = lambda _: None,
+) -> dict[Key, dict[str, float]]:
+    """Every cell's answer from each forecaster, the cells of one season fitted together.
+
+    With ``flat``, the seasonal forecasters' answers with no season too, fitted again only
+    where the cell's season is longer than an hour.
+    """
     answered: dict[Key, dict[str, float]] = {}
     started = time.monotonic()
     for season, group in sorted(by_season(rows, lags).items()):
         series = np.stack([filled(row.means) for row in group])
-        outputs = fit(series, season)
-        if set(outputs) != set(FORECASTERS):
-            raise ValueError(f"the fit answered {sorted(outputs)}, not {list(FORECASTERS)}")
-        for name, values in outputs.items():
-            if len(values) != len(group):
-                raise ValueError(f"{name} answered {len(values)} cells for {len(group)} handed")
-            if not np.isfinite(values).all():
-                raise ValueError(f"{name} answered a value that is not finite at season {season}")
+        outputs = fitted(fit, series, season)
+        plain = outputs if season == 1 or not flat else fitted(fit, series, 1)
         for k, row in enumerate(group):
-            answered[(row.window, row.axis, row.channel)] = {
-                name: float(outputs[name][k]) for name in FORECASTERS
-            }
+            values = {name: float(outputs[name][k]) for name in FORECASTERS}
+            if flat:
+                values |= {f"{name}_flat": float(plain[name][k]) for name in SEASONAL}
+            answered[(row.window, row.axis, row.channel)] = values
         say(f"season {season}: {len(group)} cells, {time.monotonic() - started:.0f} s")
     return answered
 
 
 def write_answers(
-    path: Path, rows: Sequence[ContextRow], answered: Mapping[Key, Mapping[str, float]]
+    path: Path,
+    rows: Sequence[ContextRow],
+    answered: Mapping[Key, Mapping[str, float]],
+    *,
+    flat: bool = False,
 ) -> None:
-    """One row per cell, in the context file's order."""
+    """One row per cell, in the context file's order; with ``flat`` the flat answers too."""
+    names = (*FORECASTERS, *FLAT) if flat else FORECASTERS
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(COLUMNS)
+        writer.writerow(("window", "axis", "channel", *(f"mean_{name}" for name in names)))
         for row in rows:
             values = answered[(row.window, row.axis, row.channel)]
             writer.writerow(
-                (row.window, row.axis, row.channel, *(f"{values[n]:.6g}" for n in FORECASTERS))
+                (row.window, row.axis, row.channel, *(f"{values[n]:.6g}" for n in names))
             )
 
 
@@ -182,6 +207,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
     parser.add_argument("--answers", type=Path, required=True, help="the cells' same-phase lags")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--jobs", type=int, default=-1, help="processes; all cores by default")
+    parser.add_argument("--flat", action="store_true", help="the seasonal ones with no season too")
     arguments = parser.parse_args(argv)
 
     rows = read_context(arguments.context)
@@ -191,10 +217,11 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
         rows,
         lags,
         statsforecast_fit(arguments.jobs),
+        flat=arguments.flat,
         say=lambda text: print(text, file=sys.stderr),
     )
     arguments.out.parent.mkdir(parents=True, exist_ok=True)
-    write_answers(arguments.out, rows, answered)
+    write_answers(arguments.out, rows, answered, flat=arguments.flat)
     print(f"{len(answered)} cells answered in {time.monotonic() - started:.0f} s")
 
 

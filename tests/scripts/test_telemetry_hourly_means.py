@@ -1,9 +1,9 @@
-"""Each channel's hourly mean and count from published hours, and a mission's columns."""
+"""Each channel's hourly mean and count from published hours, and a system's columns."""
 
 import numpy as np
 import pytest
 
-from scripts.telemetry_hourly_means import Hour, hourly_means, mission_columns
+from scripts.telemetry_hourly_means import Hour, hourly_means, system_columns
 
 
 def test_each_hour_holds_its_channels_mean_and_count_in_hour_order() -> None:
@@ -46,4 +46,15 @@ def test_a_missions_columns_are_its_own_channels_in_identifier_order() -> None:
         (12, "esa_ad_raw", "ESA-Mission2/channel_18"),
     ]
 
-    assert mission_columns(channels, "esa_ad_raw", "ESA-Mission2") == {12: 0, 41: 1}
+    assert system_columns(channels, "esa_ad_raw", "ESA-Mission2") == {12: 0, 41: 1}
+
+
+def test_a_turbines_columns_are_every_channel_its_farm_shares() -> None:
+    channels = [
+        (9, "kelmarsh", "Wind speed"),
+        (2, "kelmarsh", "Power"),
+        (5, "penmanshiel", "Power"),
+    ]
+
+    assert system_columns(channels, "kelmarsh", "1", shared=True) == {2: 0, 9: 1}
+    assert system_columns(channels, "kelmarsh", "1") == {}

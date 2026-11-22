@@ -54,7 +54,6 @@ OWN = ("chronos2_47", EACH, "chronos2_own")
 LADDER = ("unrelated", "kind", "analog")
 ORACLE = "chronos2_oracle"
 RUNGS = (*OWN, *(f"chronos2_{rung}" for rung in LADDER), ORACLE)
-COLUMNS = ("window", "axis", "channel", *(f"mean_{rung}" for rung in RUNGS))
 # Chronos-2's inputs: an array of variates, or a dict of target and covariates.
 Input = Any
 Predict = Callable[[Sequence[Input]], list[NDArray[np.float32]]]
@@ -220,12 +219,18 @@ def alone(
     return out
 
 
-def write(path: Path, cells: Sequence[Key], out: Mapping[str, Mapping[Key, float]]) -> None:
+def write(
+    path: Path,
+    cells: Sequence[Key],
+    out: Mapping[str, Mapping[Key, float]],
+    rungs: Sequence[str],
+) -> None:
+    """One row per cell: its key and each of ``rungs``' answers, blank where it gave none."""
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(COLUMNS)
+        writer.writerow(("window", "axis", "channel", *(f"mean_{rung}" for rung in rungs)))
         for key in cells:
-            shown = (f"{out[r][key]:.6g}" if key in out[r] else "" for r in RUNGS)
+            shown = (f"{out[r][key]:.6g}" if key in out[r] else "" for r in rungs)
             writer.writerow((*key, *shown))
 
 
@@ -279,7 +284,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
         say=lambda text: print(text, file=sys.stderr, flush=True),
     )
     arguments.out.parent.mkdir(parents=True, exist_ok=True)
-    write(arguments.out, cells, out)
+    write(arguments.out, cells, out, RUNGS)
     print(f"{len(cells)} cells answered in {time.monotonic() - started:.0f} s, context up to {cap}")
 
 
