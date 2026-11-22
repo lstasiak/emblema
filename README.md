@@ -115,8 +115,9 @@ Preliminary, on validation data; each task's test data is used once, at the end.
   does: on the first mission's later years its squared error is about half the best classical
   forecaster's, still to be confirmed on another mission. In a satellite's first month it trails
   a classical forecaster on the first mission and leads a little on the second, and another
-  satellite's data handed as context makes it worse. Its forecast range finds no more events
-  than the departures.
+  satellite's data handed as context makes it worse. On a wind turbine read as new it trails the
+  farm's own models, and with the hour's operating conditions it at best matches a simple
+  regression. Its forecast range finds no more events than the departures.
 
 Numbers, intervals, limitations and what is read next: [`docs/findings.md`](docs/findings.md).
 
