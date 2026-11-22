@@ -8,7 +8,8 @@ The channels are a farm's averages but its angles and counters, each scored as a
 scores a channel, from its median in robust deviations over the fitted year, so the floor under
 a channel's spread does not hang on another channel's unit. An hour is scored where it is whole
 and half its history holds a reading; nothing of the scored window enters the scale or the
-floor.
+floor. In the farm whose status says nothing of a scored window every hour of that window is
+read, the stopped turbine's among them.
 
 Beside the twelve, descriptively, by the hour's summary alone: the same over the component
 temperatures, which a model of normal behaviour answers; the same with the scale and the floor
@@ -20,7 +21,8 @@ have them; and the answer with no model, the share of an hour's rows not of norm
 
 Writes ``departures-<farm>-<event>.npz`` per excerpt: ``arms``, ``scores`` (``[arms, hours]``,
 missing where an hour is not scored), the hours ``fitted``, ``first`` and ``last``, and per row
-of the file its hour, whether it is fitted and whether it is of normal operation.
+of the file its hour, whether it is fitted and, as ``row_normal``, whether it is read: of normal
+operation, or any scored row of the farm whose status says nothing there.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -146,21 +149,31 @@ def excerpt_scores(excerpt: Excerpt, sensors: Sensors) -> tuple[Hours, dict[str,
     return hours, scores
 
 
+def arrays_of(excerpt: Excerpt, hours: Hours, scores: dict[str, Floats]) -> dict[str, Any]:
+    """What an excerpt's file holds: its scores by detector, its hours and its rows.
+
+    The arrays are of several types, and numpy's writer takes them as keywords of any.
+    """
+    names = sorted(scores)
+    return {
+        "arms": np.asarray(names),
+        "scores": np.stack([scores[name] for name in names]).astype(np.float32),
+        "fitted": np.asarray(hours.fitted),
+        "first": np.asarray(hours.first),
+        "last": np.asarray(hours.last),
+        "row_hour": hours.of_row,
+        "row_fitted": excerpt.fitted,
+        # The rows a detector reads, which in the first farm's scored window is every row.
+        "row_normal": excerpt.read,
+        "row_id": excerpt.ids,
+    }
+
+
 def written(root: Path, event: Event, out: Path) -> str:  # pragma: no cover - reads files
     excerpt = read_excerpt(root, event)
     hours, scores = excerpt_scores(excerpt, sensors_of(root, event.farm))
-    names = sorted(scores)
     np.savez_compressed(
-        out / f"departures-{event.farm}-{event.event}.npz",
-        arms=np.asarray(names),
-        scores=np.stack([scores[name] for name in names]).astype(np.float32),
-        fitted=hours.fitted,
-        first=hours.first,
-        last=hours.last,
-        row_hour=hours.of_row,
-        row_fitted=excerpt.fitted,
-        row_normal=excerpt.normal,
-        row_id=excerpt.ids,
+        out / f"departures-{event.farm}-{event.event}.npz", **arrays_of(excerpt, hours, scores)
     )
     answered = int((~np.isnan(scores[f"{FAMILY}/{names_of_family()[0]}"])).sum())
     return (

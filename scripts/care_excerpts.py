@@ -9,9 +9,12 @@ Half of each farm's turbines are held unread, the first half in the project's se
 the two farms' turbines were held; this module names them and refuses their files, so that no
 script of the reading can open one by an argument's mistake.
 
-An excerpt is read on the axis of its clock hours. An hour is whole when it holds its six rows
-and all are of normal operation (status 0 or 2); the detectors read whole hours only, so the
-count of a channel's readings in an hour is the same everywhere and says nothing of the status.
+An excerpt is read on the axis of its clock hours. A row is read when it is of normal operation
+(status 0 or 2). In the first farm the status was derived from the failure logs, marks a fault's
+whole lead-up as not normal, and by its publisher is to be ignored when a scored window is
+read; there every row of the scored window is read, and the fitted year still by its status.
+An hour is whole when it holds its six rows and all are read; the detectors read whole hours
+only, so the count of a channel's readings in an hour is the same everywhere.
 A reading is missing where the file holds none and in a row with half its averages or more at
 exactly nought, which is how two farms' loggers wrote a dropped row; a channel is read in an
 hour only when all six of its readings are.
@@ -53,6 +56,9 @@ ANOMALY = "anomaly"
 INSIDE_A_FAULT = frozenset({("B", 87)})
 TRAINING = "train"
 NORMAL_STATUSES = (0, 2)
+# The farms whose status says nothing of a scored window: derived from the failure logs, it
+# marks the lead-up to a fault itself, and the publisher has it ignored there.
+STATUS_UNREAD_WHEN_SCORED = frozenset({"A"})
 ROWS_PER_HOUR = 6
 # The share of a row's averages at exactly nought from which the row is a logger's dropped one.
 DROPPED_ROW = 0.5
@@ -252,7 +258,9 @@ class Excerpt:
         stamps: When each row was written, to the second.
         ids: Each row's number in the file, by which the event is placed.
         fitted: Whether a row belongs to the year a detector is fitted on.
-        normal: Whether a row is of normal operation.
+        normal: Whether a row is of normal operation, by its status.
+        read: Whether a detector reads the row and the benchmark's score counts it: of normal
+            operation, or any row of the scored window in a farm whose status says nothing there.
         values: ``[rows, columns]``, missing where a reading is.
     """
 
@@ -262,6 +270,7 @@ class Excerpt:
     ids: Ints
     fitted: Bools
     normal: Bools
+    read: Bools
     values: Floats
 
     @classmethod
@@ -290,13 +299,15 @@ class Excerpt:
                 f"excerpt {event.event} of farm {event.farm} holds fitted rows after scored ones"
             )
         dropped = (values == 0.0).mean(axis=1) >= DROPPED_ROW
+        normal = np.isin(status, NORMAL_STATUSES)
         return cls(
             event=event,
             columns=tuple(columns),
             stamps=stamps,
             ids=ids,
             fitted=fitted,
-            normal=np.isin(status, NORMAL_STATUSES),
+            normal=normal,
+            read=normal | ~fitted if event.farm in STATUS_UNREAD_WHEN_SCORED else normal,
             values=np.where(dropped[:, None], np.nan, values),
         )
 
@@ -339,7 +350,7 @@ class Hours:
         slot: Each row's place among its hour's six.
         count: How many hours the axis holds.
         fitted: How many hours, from the first, hold no scored row.
-        whole: Per hour, whether it holds six rows, all of normal operation.
+        whole: Per hour, whether it holds six rows, all read.
         first: The hour of the event's first row.
         last: The hour of its last row.
     """
@@ -366,7 +377,7 @@ class Hours:
         slot = (seconds % 3600) // 600
         count = int(of_row[-1]) + 1
         rows = np.bincount(of_row, minlength=count)
-        normal = np.bincount(of_row, weights=excerpt.normal, minlength=count)
+        read = np.bincount(of_row, weights=excerpt.read, minlength=count)
         scored = of_row[~excerpt.fitted]
         inside = (excerpt.ids >= excerpt.event.first_row) & (excerpt.ids <= excerpt.event.last_row)
         if not inside.any():
@@ -386,7 +397,7 @@ class Hours:
             slot=slot,
             count=count,
             fitted=fitted,
-            whole=(rows == ROWS_PER_HOUR) & (normal == ROWS_PER_HOUR),
+            whole=(rows == ROWS_PER_HOUR) & (read == ROWS_PER_HOUR),
             first=first,
             last=last,
         )

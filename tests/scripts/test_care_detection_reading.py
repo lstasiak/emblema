@@ -11,16 +11,20 @@ from scripts.care_detection_reading import (
     Family,
     Layout,
     Ranking,
+    Reading,
     Scored,
+    View,
     area_rows,
     care_rows,
     excerpt_rows,
     flat,
-    largest_in_blocks,
     missing_files,
+    operators_farms,
     passes,
     power_rows,
     running_medians,
+    settled,
+    settling_of,
     shift_of,
     shuffled_labels,
     size_rows,
@@ -69,26 +73,86 @@ def test_a_span_with_too_few_scored_hours_has_no_median() -> None:
     assert np.isnan(running_medians(short)[-1])
 
 
-def test_a_block_reads_only_the_spans_lying_inside_it() -> None:
-    medians = running_medians(np.arange(30.0))
+def test_a_rows_level_is_the_median_of_its_values_present_and_its_peak_their_largest() -> None:
+    rows = np.array(
+        [[1.0, 5.0, 3.0, np.nan], [4.0, np.nan, np.nan, 2.0], [np.nan] * 4, [7.0, 7.0, 1.0, 9.0]]
+    )
 
-    largest = largest_in_blocks(medians, 15)
+    level, peak = Reading.LEVEL.of(rows), Reading.PEAK.of(rows)
 
-    # The first block's last span ends at hour 14, its median 8.5.
-    assert largest[0] == 8.5
-    assert len(largest) == 30 - 15 + 1
+    assert level[[0, 1, 3]].tolist() == [3.0, 3.0, 7.0]
+    assert peak[[0, 1, 3]].tolist() == [5.0, 4.0, 9.0]
+    assert np.isnan(level[2])
+    assert np.isnan(peak[2])
 
 
-def test_blocks_with_no_scored_span_are_left_out() -> None:
-    scores = np.ones(60)
-    scores[:30] = np.nan
+def test_a_block_is_read_through_the_events_own_gaps() -> None:
+    # A year that climbs, and an event that repeats its last stretch with a stop cut into it:
+    # read through the same stop, that stretch alone is as high as the event.
+    year = np.arange(600.0)
+    event = year[-100:].copy()
+    event[30:70] = np.nan
+    scores = np.concatenate([year, event])
 
-    assert len(largest_in_blocks(running_medians(scores), 15)) < 60 - 15 + 1
+    for reading in Reading:
+        read = unusualness(scores, fitted=600, first=600, last=699, reading=reading)
+        assert read == pytest.approx(1.0 - 1 / 501), reading
+
+
+def test_an_events_gaps_say_nothing_of_its_statistic() -> None:
+    for reading in Reading:
+        drawn = []
+        for seed in range(80):
+            scores = excerpt(seed, YEAR + 24 * 14)
+            scores[YEAR + 60 : YEAR + 240] = np.nan
+            drawn.append(
+                unusualness(
+                    scores, fitted=YEAR, first=YEAR, last=YEAR + 24 * 14 - 1, reading=reading
+                )
+            )
+
+        assert np.mean([value for value in drawn if value is not None]) == pytest.approx(
+            0.5, abs=0.1
+        ), reading
+
+
+def test_a_year_block_holding_fewer_than_half_the_events_hours_is_left_out() -> None:
+    # A quiet year with one tall stretch between two stops, a third of the event's length:
+    # every block over it holds too few of the event's hours to be set beside it.
+    year = np.zeros(900)
+    year[220:420] = np.nan
+    year[300:340] = 9.0
+    event = np.full(120, 5.0)
+    scores = np.concatenate([year, event])
+
+    assert unusualness(scores, fitted=900, first=900, last=1019) == 1.0
+    # The same stretch with no stop round it is as high as the event and is set beside it.
+    whole = scores.copy()
+    whole[220:420] = 9.0
+    read = unusualness(whole, fitted=900, first=900, last=1019)
+    assert read is not None
+    assert read < 1.0
+
+
+def test_a_lasting_lift_moves_the_level_and_one_spell_the_peak() -> None:
+    lasting = excerpt(7)
+    lasting[EVENT[0] : EVENT[1] + 1] += 0.4
+    spell = excerpt(7)
+    spell[EVENT[0] + 20 : EVENT[0] + 34] += 6.0
+
+    def read(scores: np.ndarray, reading: Reading) -> float:
+        value = unusualness(scores, fitted=YEAR, first=EVENT[0], last=EVENT[1], reading=reading)
+        assert value is not None
+        return value
+
+    assert read(lasting, Reading.LEVEL) > 0.95
+    assert read(spell, Reading.PEAK) == 1.0
+    assert read(spell, Reading.LEVEL) < read(lasting, Reading.LEVEL)
 
 
 def test_an_event_that_stands_above_its_year_is_wholly_unusual() -> None:
     scores = excerpt(1)
-    scores[EVENT[0] : EVENT[0] + 24] += 10.0
+    scores[EVENT[0] : EVENT[1] + 1] += 10.0
 
     assert unusualness(scores, fitted=YEAR, first=EVENT[0], last=EVENT[1]) == 1.0
 
@@ -245,33 +309,32 @@ def test_the_best_of_a_family_is_held_to_the_best_of_each_shuffle() -> None:
     assert (alone.shuffled_areas(500, seed=3)[:, 0] >= best).sum() < reached
 
 
-def test_the_smaller_chance_is_held_to_the_level_over_both_verdicts() -> None:
-    assert passes({"channel_local": 0.012, "normal_behaviour": 0.02}) == {
-        "channel_local": True,
-        "normal_behaviour": True,
-    }
-    assert passes({"channel_local": 0.02, "normal_behaviour": 0.02}) == {
-        "channel_local": False,
-        "normal_behaviour": False,
-    }
-    assert passes({"channel_local": 0.03, "normal_behaviour": 0.012}) == {
-        "channel_local": False,
-        "normal_behaviour": True,
-    }
+def test_each_chance_is_held_to_the_level_over_the_verdicts_still_standing() -> None:
+    names = ("channel_local", "normal_behaviour", "normal_behaviour_fleet")
+
+    def passed(*chances: float) -> list[bool]:
+        return list(passes(dict(zip(names, chances, strict=True))).values())
+
+    # A third of the level for the smallest chance, a half for the next, the level for the last.
+    assert passed(0.008, 0.012, 0.02) == [True, True, True]
+    assert passed(0.009, 0.012, 0.02) == [False, False, False]
+    assert passed(0.008, 0.013, 0.02) == [True, False, False]
+    assert passed(0.03, 0.012, 0.008) == [False, True, True]
 
 
-def test_a_verdict_read_alone_keeps_the_level_both_would_give_it() -> None:
-    assert passes({"channel_local": 0.02}) == {"channel_local": False}
-    assert passes({"channel_local": 0.012}) == {"channel_local": True}
+def test_a_verdict_read_alone_keeps_the_level_all_three_would_give_it() -> None:
+    assert passes({"channel_local": 0.009}) == {"channel_local": False}
+    assert passes({"channel_local": 0.008}) == {"channel_local": True}
 
 
 def test_the_power_table_holds_what_a_family_must_reach_and_how_often_it_does() -> None:
     rows = power_rows(layout(), draws=200, seed=1, areas=(0.6, 0.9))
 
-    assert len(rows) == 2 * (1 + 4 * 2)
+    assert len(rows) == 3 * (1 + 4 * 2)
     assert all(len(row) == 5 + 2 for row in rows)
     bars = {(row[0], row[1], row[2]): float(row[3]) for row in rows}
     assert 0.5 < bars["1", "0.5", "2.50 %"] < bars["1", "0.5", "1.25 %"] < 1.0
+    assert bars["1", "0.5", "1.25 %"] < bars["1", "0.5", "0.83 %"]
     assert bars["12", "0.5", "1.25 %"] > bars["1", "0.5", "1.25 %"]
     every = next(row for row in rows if row[:3] == ["12", "0.5", "2.50 %"] and row[4] == "every")
     assert float(every[5]) < float(every[6])
@@ -281,7 +344,7 @@ def test_the_size_table_reads_both_levels_at_each_share_of_a_turbines_variance()
     rows = size_rows(layout(), draws=5, seed=1)
 
     assert [row[0] for row in rows] == ["0.0", "0.2", "0.4"]
-    assert all(len(row) == 3 and row[1].endswith(" %") for row in rows)
+    assert all(len(row) == 4 and row[1].endswith(" %") for row in rows)
 
 
 def test_the_layout_ranks_no_excerpt_lying_inside_a_fault() -> None:
@@ -365,6 +428,11 @@ def test_an_excerpts_files_are_joined_by_detector_and_its_event_placed_in_the_sc
     assert joined.rows == (60 * 6, 150 * 6 - 1)
 
 
+def test_an_event_with_no_row_in_the_scored_window_is_refused() -> None:
+    with pytest.raises(ValueError, match="holds no row of its event"):
+        Scored.joined(Event("A", 1, 1, True, 5, 9), files(1))
+
+
 def test_files_that_place_an_excerpts_hours_differently_are_refused() -> None:
     first, second = files(1)
     second["first"] = np.asarray(FIRST + 1)
@@ -401,7 +469,7 @@ def test_a_detector_that_scored_no_hour_of_the_year_flags_nothing() -> None:
     joined = Scored.joined(event(3), [first, second])
 
     assert not joined.flagged(DETECTORS[1], 0.02).any()
-    assert joined.statistic(DETECTORS[1]) == 0.0
+    assert joined.statistic(DETECTORS[1]) is None
 
 
 def test_the_events_length_stands_in_for_a_detector_that_reads_nothing_else() -> None:
@@ -424,18 +492,107 @@ def test_a_trials_labels_are_shuffled_inside_each_farm_and_replay() -> None:
     ]
 
 
-def test_an_event_a_detector_cannot_read_takes_the_lowest_statistic_and_stays_ranked() -> None:
-    read = excerpts(count=8)
-    unscored_first, unscored_second = files(99, lift=50.0)
-    unscored_first["scores"][1, FIRST : LAST + 1] = np.nan
-    read.append(Scored.joined(event(99, farm="A"), [unscored_first, unscored_second]))
+def unreadable(number: int = 99) -> Scored:
+    """An excerpt with a fault whose event one detector scored no hour of."""
+    first, second = files(number, lift=50.0)
+    first["scores"][1, FIRST : LAST + 1] = np.nan
+    return Scored.joined(event(number, farm="A"), [first, second])
+
+
+def test_an_event_a_detector_cannot_read_leaves_its_familys_ranking_and_is_counted() -> None:
+    read = [*excerpts(count=8), unreadable()]
 
     family = Family.of(DETECTORS[1:3], read)
 
-    assert len(family.excerpts) == 9
-    assert family.unread == 1
+    assert len(family.excerpts) == 8
+    assert family.left_out == 1
+    assert read[-1].statistic(DETECTORS[1]) is None
+    assert read[-1].statistic(DETECTORS[2]) == 1.0
+
+
+def test_beside_the_verdict_an_unreadable_event_is_ranked_lowest() -> None:
+    read = [*excerpts(count=8), unreadable()]
+
+    family = Family.of(DETECTORS[1:3], read, unread_lowest=True)
+
+    assert (len(family.excerpts), family.left_out) == (9, 0)
     assert family.ranking.statistics[:, -1].tolist() == [0.0, 1.0]
-    assert not read[-1].read_by(DETECTORS[1])
+
+
+def test_an_hour_is_settled_when_the_hours_before_it_all_hold_a_score() -> None:
+    scores = np.arange(12.0)
+    scores[5] = np.nan
+
+    kept = settled(scores, 3)
+
+    # The first three hours have no three before them; the three after the gap have the gap.
+    assert np.isnan(kept[:3]).all()
+    assert kept[3:5].tolist() == [3.0, 4.0]
+    assert np.isnan(kept[5:9]).all()
+    assert kept[9:].tolist() == [9.0, 10.0, 11.0]
+    assert settled(scores, 0) is scores
+
+
+def test_every_detector_settles_over_a_day_and_the_answer_with_no_model_at_once() -> None:
+    assert settling_of("channel_local/max-bins-72h") == 24
+    assert settling_of("normal_behaviour_fleet/mean") == 24
+    assert settling_of("availability") == 0
+
+
+def test_the_verdict_reads_settled_hours_and_the_view_beside_every_hour() -> None:
+    first, second = files(5)
+    # A stop, and after it a day of hours standing high: the verdict's view leaves them out.
+    first["scores"][1, FIRST + 10 : FIRST + 20] = np.nan
+    first["scores"][1, FIRST + 20 : FIRST + 44] += 30.0
+    joined = Scored.joined(event(5), [first, second])
+
+    by_settled = joined.statistic(DETECTORS[1])
+    by_every_hour = joined.statistic(DETECTORS[1], View.EVERY_HOUR)
+
+    assert by_settled is not None
+    assert by_every_hour is not None
+    assert by_settled < 0.99
+    assert joined.statistic(DETECTORS[1], View.PEAK) == by_settled or by_settled < 1.0
+    assert by_every_hour > by_settled
+
+
+def test_the_last_week_alone_is_read_beside(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The fixture's event lasts 90 hours, so its "week" is cut to two days here.
+    monkeypatch.setattr("scripts.care_detection_reading.LAST_WEEK", 48)
+    first, second = files(6)
+    first["scores"][1, FIRST : LAST - 48 + 1] += 30.0
+    joined = Scored.joined(event(6), [first, second])
+
+    whole = joined.statistic(DETECTORS[1])
+    last_week = joined.statistic(DETECTORS[1], View.LAST_WEEK)
+
+    assert whole is not None
+    assert last_week is not None
+    # The lift ends before the last seven days.
+    assert whole == 1.0
+    assert last_week < 0.99
+
+
+def test_a_spell_lifts_the_peak_and_not_the_level() -> None:
+    first, second = files(7)
+    first["scores"][1, FIRST + 30 : FIRST + 44] += 30.0
+    joined = Scored.joined(event(7), [first, second])
+
+    level, peak = joined.statistic(DETECTORS[1]), joined.statistic(DETECTORS[1], View.PEAK)
+
+    assert peak == 1.0
+    assert level is not None
+    assert level < 0.99
+
+
+def test_the_share_of_an_events_rows_not_read_stands_in_for_a_detector() -> None:
+    first, second = files(8)
+    first["row_normal"][FIRST * 6 : FIRST * 6 + 135] = False
+
+    joined = Scored.joined(event(8), [first, second])
+
+    assert joined.statistic("event_unread_share") == pytest.approx(0.25)
+    assert Scored.joined(event(9), files(9)).statistic("event_unread_share") == 0.0
 
 
 def test_the_excerpt_lying_inside_a_fault_is_ranked_by_no_family() -> None:
@@ -473,14 +630,31 @@ def test_a_planted_fault_passes_its_familys_verdict_and_noise_does_not() -> None
 
 def test_every_detector_has_its_own_area_inside_an_interval_over_turbines_drawn_again() -> None:
     # A lift small enough that the faults stand above the quiet excerpts often, not always.
-    rows = {row.detector: row for row in area_rows(excerpts(lift=0.3), 500, seed=1)}
+    rows = {row.detector: row for row in area_rows(excerpts(lift=0.12), 500, seed=1)}
 
-    assert set(rows) == {*DETECTORS, "event_length"}
+    assert set(rows) == {*DETECTORS, "event_length", "event_unread_share"}
     for name in DETECTORS[1:]:
-        assert 0.5 < rows[name].area < 1.0
+        assert 0.4 < rows[name].area < 1.0
         assert rows[name].low < rows[name].area < rows[name].high
         assert rows[name].high - rows[name].low > 0.05
         assert set(rows[name].by_farm) == {"A", "B"}
+        assert rows[name].left_out == 0
+
+
+def test_a_detector_that_follows_the_events_length_is_shown_to() -> None:
+    read = [
+        Scored.joined(
+            event(number, anomaly=number % 2 == 0, turbine=number, last=LAST - 30 * (number % 3)),
+            files(number, lift=1.0 - 0.4 * (number % 3), last=LAST - 30 * (number % 3)),
+        )
+        for number in range(12)
+    ]
+
+    rows = {row.detector: row for row in area_rows(read, 200, seed=1)}
+
+    # The longer the event, the larger its lift here, so the statistic follows the length.
+    assert rows["normal_behaviour/mean"].follows_length > 0.5
+    assert rows["event_length"].follows_length == pytest.approx(1.0)
 
 
 def test_the_events_length_alone_is_ranked_beside_the_detectors() -> None:
@@ -502,13 +676,77 @@ def test_an_event_beyond_every_block_of_its_year_is_counted() -> None:
     rows = {row.detector: row for row in area_rows(excerpts(lift=50.0, count=8), 200, seed=1)}
 
     assert rows["normal_behaviour/max"].beyond_the_year == 4
-    assert rows["normal_behaviour/max"].unread == 0
+    assert rows["normal_behaviour/max"].left_out == 0
+
+
+def test_a_verdicts_best_is_shown_by_every_reading_beside() -> None:
+    read = [*excerpts(lift=3.0, count=8), unreadable()]
+    # The unreadable excerpt has a fault: ranked lowest, it costs its detectors pairs.
+
+    row = next(row for row in verdict_rows(read, 500, seed=1) if row.family == "channel_local")
+
+    assert (row.excerpts, row.left_out) == (8, 1)
+    assert row.best_area == 1.0
+    assert row.unread_lowest < 1.0
+    assert row.every_hour == row.peak == row.last_week == 1.0
+    # The first farm's status is not its operator's: beside, the other farms alone.
+    assert row.operators_status == 1.0
+    assert {"operators_status", "every_hour", "peak", "last_week", "unread_lowest"} <= set(
+        flat(row)
+    )
+
+
+def test_the_first_farms_status_is_not_its_operators() -> None:
+    assert operators_farms(excerpts(count=4)) == ["B"]
+
+
+def test_families_are_ranked_by_their_events_levels() -> None:
+    read = excerpts(lift=0.0, count=16, turbines=16)
+    for number, excerpt in enumerate(read):
+        scores = excerpt.series[DETECTORS[3]].copy()
+        if excerpt.event.anomaly:
+            scores[FIRST : LAST + 1] += 1.0
+        else:
+            scores[FIRST + 30 : FIRST + 44] += 40.0
+        read[number] = Scored.joined(excerpt.event, with_series(excerpt, DETECTORS[3], scores))
+
+    # Every fault is lifted throughout, every quiet event holds one tall spell.
+    by_level = Family.of([DETECTORS[3]], read)
+    by_peak = Family.of([DETECTORS[3]], read, view=View.PEAK)
+
+    assert by_level.area_or_none() > 0.8
+    assert by_peak.area_or_none() < 0.6
+    assert [row[DETECTORS[3]] for row in excerpt_rows(read)] == [
+        excerpt.statistic(DETECTORS[3], View.SETTLED) for excerpt in read
+    ]
 
 
 def test_a_tables_row_is_written_with_its_farms_areas_as_columns() -> None:
     (row, *_) = area_rows(excerpts(lift=1.0, count=8), 200, seed=1)
 
-    assert {"detector", "area", "own_chance", "area_A", "area_B"} <= set(flat(row))
+    assert {"detector", "area", "follows_unread", "own_chance", "area_A", "area_B"} <= set(
+        flat(row)
+    )
+
+
+def with_series(excerpt: Scored, name: str, scores: np.ndarray) -> list[dict]:
+    """An excerpt's files again, one detector's scores replaced."""
+    rows = np.arange((FITTED + SCORED_HOURS) * 6)
+    return [
+        {
+            "arms": np.asarray(list(excerpt.series)),
+            "scores": np.stack(
+                [scores if own == name else excerpt.series[own] for own in excerpt.series]
+            ),
+            "row_hour": rows // 6,
+            "row_fitted": rows < FITTED * 6,
+            "row_normal": np.ones(len(rows), dtype=np.bool_),
+            "row_id": rows,
+            "fitted": np.asarray(FITTED),
+            "first": np.asarray(FIRST),
+            "last": np.asarray(LAST),
+        }
+    ]
 
 
 def lifted(read: list[Scored], name: str) -> list[Scored]:
@@ -518,29 +756,7 @@ def lifted(read: list[Scored], name: str) -> list[Scored]:
         scores = excerpt.series[name].copy()
         if excerpt.event.anomaly:
             scores[FIRST : LAST + 1] += 3.0
-        out.append(
-            Scored.joined(
-                excerpt.event,
-                [
-                    {
-                        "arms": np.asarray(list(excerpt.series)),
-                        "scores": np.stack(
-                            [
-                                scores if own == name else excerpt.series[own]
-                                for own in excerpt.series
-                            ]
-                        ),
-                        "row_hour": np.arange((FITTED + SCORED_HOURS) * 6) // 6,
-                        "row_fitted": np.arange((FITTED + SCORED_HOURS) * 6) < FITTED * 6,
-                        "row_normal": np.ones((FITTED + SCORED_HOURS) * 6, dtype=np.bool_),
-                        "row_id": np.arange((FITTED + SCORED_HOURS) * 6),
-                        "fitted": np.asarray(FITTED),
-                        "first": np.asarray(FIRST),
-                        "last": np.asarray(LAST),
-                    }
-                ],
-            )
-        )
+        out.append(Scored.joined(excerpt.event, with_series(excerpt, name, scores)))
     return out
 
 

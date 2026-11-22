@@ -8,6 +8,7 @@ from scripts.care_departure_scores import (
     FAMILY,
     FIRST_DAYS,
     TEMPERATURES,
+    arrays_of,
     departure_scores,
     excerpt_scores,
     first_days,
@@ -113,10 +114,14 @@ def twelve_days(seed: int = 4) -> tuple[np.ndarray, Sensors]:
     return values, Sensors(channels=columns, temperatures=columns[:2], conditions=columns[2:])
 
 
-def read(values: np.ndarray, status: np.ndarray | None = None) -> Excerpt:
+def read(values: np.ndarray, status: np.ndarray | None = None, farm: str = "B") -> Excerpt:
     rows = len(values)
     return excerpt(
-        values, fitted_rows=rows - 6 * 48, event_rows=(rows - 6 * 40, rows - 1), status=status
+        values,
+        fitted_rows=rows - 6 * 48,
+        event_rows=(rows - 6 * 40, rows - 1),
+        status=status,
+        farm=farm,
     )
 
 
@@ -141,6 +146,42 @@ def test_an_excerpt_is_scored_by_every_family_beside_the_answer_with_no_model() 
     assert scores[AVAILABILITY][100] == 0.5
     assert np.isnan(scores[f"{FAMILY}/max-window-6h"][100])
     assert not np.isnan(scores[AVAILABILITY]).any()
+
+
+def test_the_first_farms_stopped_hours_are_scored_and_still_counted_as_stops() -> None:
+    values, sensors = twelve_days()
+    status = np.zeros(len(values), dtype=np.int64)
+    stopped = slice(len(values) - 6 * 30, len(values) - 6 * 20)
+    status[stopped] = 4
+    hour = (len(values) - 6 * 25) // 6
+
+    _, first = excerpt_scores(read(values, status, farm="A"), sensors)
+    _, other = excerpt_scores(read(values, status, farm="B"), sensors)
+
+    arm = f"{FAMILY}/max-window-6h"
+    assert not np.isnan(first[arm][hour])
+    assert np.isnan(other[arm][hour])
+    assert first[AVAILABILITY][hour] == other[AVAILABILITY][hour] == 1.0
+
+
+def test_an_excerpts_file_holds_the_rows_read_not_their_status() -> None:
+    values, sensors = twelve_days()
+    status = np.zeros(len(values), dtype=np.int64)
+    status[len(values) - 6 * 30 : len(values) - 6 * 20] = 4
+    first = read(values, status, farm="A")
+    hours, scores = excerpt_scores(first, sensors)
+
+    arrays = arrays_of(first, hours, scores)
+
+    assert np.array_equal(arrays["row_normal"], first.read)
+    assert not np.array_equal(arrays["row_normal"], first.normal)
+    assert arrays["scores"].shape == (len(scores), hours.count)
+    assert arrays["arms"].tolist() == sorted(scores)
+    assert (int(arrays["fitted"]), int(arrays["first"]), int(arrays["last"])) == (
+        hours.fitted,
+        hours.first,
+        hours.last,
+    )
 
 
 def test_no_family_takes_its_scale_or_floor_from_the_scored_window() -> None:

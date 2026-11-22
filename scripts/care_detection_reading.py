@@ -2,16 +2,32 @@ r"""Whether a detector's scores set the benchmark's faults apart from its quiet 
 
 An excerpt of the fault benchmark holds one event, the lead-up to a fault or a stretch without
 one, so the reading ranks excerpts. An excerpt's statistic is how unusual its event looks beside
-its own year: the largest median of the hourly score over twelve hours running inside the event,
-read as the share of the blocks of the event's length, slid over the year the detector was
-fitted on, that hold a median as large. Twelve hours is the span the benchmark's own counter
-needs to call a fault found, and the median over them asks that most of those hours stand high,
-as that counter does, so one hour's spike moves nothing. Reading the event against blocks of its
-own length takes the length out, which nearly spells the label here, and reading it against its
-own year takes the turbine's level out. An event no block reaches ties with every other such.
-An event a detector cannot read, no twelve hours of it holding nine scored, takes the lowest
-statistic there is: the detector found nothing in it, so a fault there is missed and a quiet
-excerpt rightly left alone, and no excerpt leaves the ranking by how its turbine ran.
+its own year. The event is read by the medians of the hourly score over twelve hours running,
+twelve hours being the span the benchmark's own counter needs to call a fault found, a median
+asking that most of those hours stand high. Its level is the median of those medians: a fault
+that grows over days lifts the level through its lead-up, where a single spell lifts one span.
+The statistic is one less the share of the blocks of the event's length, slid over the year the
+detector was fitted on, whose level is as high.
+
+A block is read through the event's own gaps: only at the hours, counted from its start, where
+the event holds a median. An event broken by stops is then set beside blocks broken alike, and
+how much of an event a detector could read says nothing of its statistic; read whole against
+whole blocks, the events with stops, which are mostly faults, stood low for their gaps alone.
+Reading the event against blocks of its own length takes the length out, which nearly spells
+the label here, and reading it against its own year takes the turbine's level out. An event no
+block reaches ties with every other such.
+
+Only settled hours are read, in the year and in the event alike: an hour whose 24 hours before
+all hold a score. An hour after a stop is scored against a shorter and older history, or
+answered by a model that does not know the turbine is warming up, and stands higher than a
+settled one, so events with stops, which are mostly faults, would stand high for their stops.
+An event with no settled span of twelve hours gives an early detector nothing to judge its
+turbine by and leaves the ranking, counted.
+
+Beside the verdict's reading: every scored hour read, those after a gap among them; the peak,
+the largest of the event's medians; the event's last seven days alone, which makes the events
+nearly as long as one another; the unreadable events ranked lowest; and the farms alone whose
+status is the operator's.
 
 The verdict is the area under the curve of that statistic between the excerpts with a fault and
 those without, pairs taken inside a farm only, for the best detector of a family; its chance is
@@ -20,17 +36,17 @@ interval that covers as it claims, so the shuffle alone decides and the interval
 approximate.
 
 Beside the verdict, descriptively: every detector's own area and its approximate interval over
-turbines drawn again; the answer with no model and the event's length alone, which a detector
-must stand above to have read a fault and not a stop or the benchmark's layout; two named
-detectors' difference, its chance from swapping them inside each turbine; each family's best
-with the excerpt no ranking reads ranked too; and the benchmark's
-own score at alarms set on the fitted year, from a half to ten hours in a hundred above, none
-of them chosen.
+turbines drawn again, and how far its statistic follows the event's length and the share of the
+event's rows not read; the answer with no model, the event's length and that share alone, which
+a detector must stand above to have read a fault and not a stop or the benchmark's layout;
+named detectors' differences, their chance from swapping the two inside each turbine; each
+family's best with the excerpt no ranking reads ranked too; and the benchmark's own score at
+alarms set on the fitted year, from a half to ten hours in a hundred above, none of them chosen.
 
     uv run scripts/care_detection_reading.py power --root data/raw/care/CARE_To_Compare \\
         [--draws 20000] [--seed 1]
     uv run scripts/care_detection_reading.py read --root data/raw/care/CARE_To_Compare \\
-        --scores DIR --out DIR/read [--pair NAME NAME] [--trial SEED]
+        --scores DIR --out DIR/read [--pair NAME NAME]... [--trial SEED]
 
 ``power`` reads only the benchmark's tables of events: on the layout of the excerpts read it
 draws scores with no fault in them and with a planted one, and prints what area a family's best
@@ -49,17 +65,18 @@ from __future__ import annotations
 
 import argparse
 import csv
+import enum
 import math
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from statistics import NormalDist
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from numpy.typing import NDArray
-from scipy.stats import rankdata
+from scipy.stats import rankdata, spearmanr
 
 # Run from anywhere: the sibling script modules live in this directory's package at the root.
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -67,7 +84,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from emblema.evaluation.domain.statistics.holm_correction import HolmCorrection  # noqa: E402
 from scripts import care_departure_scores, care_normal_behaviour_scores  # noqa: E402
-from scripts.care_excerpts import Event, read_events  # noqa: E402
+from scripts.care_excerpts import STATUS_UNREAD_WHEN_SCORED, Event, read_events  # noqa: E402
 from scripts.care_score import CareReading, CareScore  # noqa: E402
 from scripts.reporting import table  # noqa: E402
 
@@ -83,13 +100,22 @@ SHUFFLES = 10_000
 # One-sided, over the families a verdict reads, the smaller p-value first.
 LEVEL = 0.025
 # The families a verdict reads, as the scripts that score them name them.
-VERDICTS = (care_departure_scores.FAMILY, care_normal_behaviour_scores.FAMILY)
+VERDICTS = (
+    care_departure_scores.FAMILY,
+    care_normal_behaviour_scores.FAMILY,
+    care_normal_behaviour_scores.FLEET,
+)
 FAMILIES = len(VERDICTS)
-# The level the smaller of the verdicts' chances is held to, and the level itself.
-LEVELS = (LEVEL / FAMILIES, LEVEL)
+# The levels the verdicts' chances are held to, from the smallest chance's to the largest's.
+LEVELS = tuple(LEVEL / remaining for remaining in range(FAMILIES, 0, -1))
 AVAILABILITY = care_departure_scores.AVAILABILITY
 KINDS = ("departures", "behaviour")
 LENGTH = "event_length"
+UNREAD = "event_unread_share"
+# The hours before an hour that must all hold a score for a detector's hour to be read.
+SETTLING = 24
+# The hours of an event's end that the reading of its last week takes.
+LAST_WEEK = 7 * 24
 # The shares of the fitted year's scored hours an alarm stands above, for the benchmark's score.
 ALARMS = (0.005, 0.01, 0.02, 0.05, 0.10)
 RESAMPLES = 2000
@@ -112,26 +138,45 @@ def running_medians(scores: Floats) -> Floats:
     return medians
 
 
-def largest_in_blocks(medians: Floats, length: int) -> Floats:
-    """The largest median of every block of ``length`` hours, the blocks with none left out.
+class Reading(enum.Enum):
+    """What of an event's running medians is set beside the year's blocks.
 
-    A block's spans are those lying wholly inside it, so a block of ``length`` hours reads
-    ``length - SPAN + 1`` medians.
+    Attributes:
+        LEVEL: Their median, which a fault growing through its lead-up lifts.
+        PEAK: Their largest, which one spell lifts.
     """
-    reach = length - SPAN + 1
-    inside = medians[SPAN - 1 :]
-    if reach < 1 or len(inside) < reach:
-        return np.zeros(0)
-    blocks = sliding_window_view(np.where(np.isnan(inside), -np.inf, inside), reach)
-    largest: Floats = blocks.max(axis=1)
-    return largest[np.isfinite(largest)]
+
+    LEVEL = "level"
+    PEAK = "peak"
+
+    def of(self, rows: Floats) -> Floats:
+        """Per row, the median or the largest of the values present; missing where none is."""
+        if self is Reading.PEAK:
+            with np.errstate(invalid="ignore"):
+                largest: Floats = np.where(
+                    np.isnan(rows).all(axis=1),
+                    np.nan,
+                    np.where(np.isnan(rows), -np.inf, rows).max(axis=1),
+                )
+            return largest
+        # Sorted, the missing values stand last, so the middle of the values present is found
+        # by their count.
+        ordered = np.sort(rows, axis=1)
+        present = (~np.isnan(rows)).sum(axis=1)
+        lower = np.take_along_axis(ordered, np.maximum(present - 1, 0)[:, None] // 2, axis=1)
+        upper = np.take_along_axis(ordered, (present // 2)[:, None], axis=1)
+        middle: Floats = (lower[:, 0] + upper[:, 0]) / 2.0
+        return middle
 
 
-def unusualness(scores: Floats, *, fitted: int, first: int, last: int) -> float | None:
+def unusualness(
+    scores: Floats, *, fitted: int, first: int, last: int, reading: Reading = Reading.LEVEL
+) -> float | None:
     """How unusual an event's scores are beside the year before it.
 
-    One less the share of the year's blocks of the event's length that reach the event's
-    largest running median.
+    One less the share of the year's blocks of the event's length whose reading is as high as
+    the event's, each block read at the hours, from its start, where the event holds a running
+    median, and left out where it holds one at fewer than half of them.
 
     Args:
         scores: The detector's hourly scores over the excerpt, missing where an hour is not
@@ -139,9 +184,10 @@ def unusualness(scores: Floats, *, fitted: int, first: int, last: int) -> float 
         fitted: How many hours, from the first, are the year the detector was fitted on.
         first: The event's first hour.
         last: The event's last hour.
+        reading: What of the running medians is compared.
 
     Returns:
-        ``None`` where the event holds no span scored, or the year no block of its length.
+        ``None`` where the event holds no span scored, or the year no block to set beside it.
 
     Raises:
         ValueError: If the event starts inside the fitted year or lies outside the scores.
@@ -151,12 +197,18 @@ def unusualness(scores: Floats, *, fitted: int, first: int, last: int) -> float 
             f"the event's hours {first} to {last} do not follow {fitted} fitted hours of "
             f"{len(scores)}"
         )
-    length = last - first + 1
-    event = largest_in_blocks(running_medians(scores[first : last + 1]), length)
-    year = largest_in_blocks(running_medians(scores[:fitted]), length)
-    if not len(event) or not len(year):
+    reach = last - first + 1 - SPAN + 1
+    event = running_medians(scores[first : last + 1])[SPAN - 1 :]
+    held = np.flatnonzero(~np.isnan(event))
+    year = running_medians(scores[:fitted])[SPAN - 1 :]
+    if not len(held) or reach < 1 or len(year) < reach:
         return None
-    return 1.0 - float((year >= event[0]).mean())
+    blocks = sliding_window_view(year, reach)[:, held]
+    alike = blocks[(~np.isnan(blocks)).sum(axis=1) * 2 >= len(held)]
+    if not len(alike):
+        return None
+    of_event = reading.of(event[None, held])[0]
+    return 1.0 - float((reading.of(alike) >= of_event).mean())
 
 
 @dataclass(frozen=True)
@@ -330,7 +382,7 @@ def power_rows(layout: Layout, *, draws: int, seed: int, areas: Sequence[float])
 def size_rows(layout: Layout, *, draws: int, seed: int) -> list[list[str]]:
     """How often the shuffle passes a family of twelve with no fault in it.
 
-    Read at the level and at the stricter one the smaller of two chances is held to, where the
+    Read at each level a verdict's chance can be held to, where the
     excerpts of a turbine share a part of their score, which the shuffle of excerpts does not
     know.
     """
@@ -357,6 +409,46 @@ def size_rows(layout: Layout, *, draws: int, seed: int) -> list[list[str]]:
 # --- the reading -----------------------------------------------------------------------------
 
 
+class View(enum.Enum):
+    """How an event is set beside its year.
+
+    Attributes:
+        SETTLED: The verdict's: the event's level over its settled hours.
+        EVERY_HOUR: Its level over every scored hour, those after a gap among them.
+        PEAK: Its peak over its settled hours.
+        LAST_WEEK: Its level over the settled hours of its last seven days, which makes the
+            events nearly as long as one another.
+    """
+
+    SETTLED = "settled"
+    EVERY_HOUR = "every_hour"
+    PEAK = "peak"
+    LAST_WEEK = "last_week"
+
+
+def settling_of(name: str) -> int:
+    """How many hours before an hour must all hold a score for the hour to count as settled.
+
+    Over the fitted years an hour within a day of an unscored one stands above a settled hour,
+    by half and more in the first hours after a stop and by a tenth to a quarter a day on, for
+    the departures and the models of normal behaviour alike; later it does not. The answer with
+    no model has no history and no such hours.
+    """
+    return 0 if name == AVAILABILITY else SETTLING
+
+
+def settled(scores: Floats, before: int) -> Floats:
+    """The scores of the hours whose ``before`` hours before all hold a score; the rest missing."""
+    if not before:
+        return scores
+    held = ~np.isnan(scores)
+    count = np.concatenate([[0], np.cumsum(held)])
+    hours = np.arange(len(scores))
+    whole = hours >= before
+    whole[before:] &= count[hours[before:]] - count[hours[before:] - before] == before
+    return np.where(whole, scores, np.nan)
+
+
 @dataclass(frozen=True)
 class Scored:
     """One excerpt's score files joined.
@@ -364,31 +456,33 @@ class Scored:
     Attributes:
         event: The excerpt's event, its label shuffled in a trial.
         series: Each detector's hourly scores, named by family and detector.
-        beside_year: Each detector's statistic of the event; ``None`` where it cannot read it.
         fitted: How many hours, from the first, are the fitted year.
         first: The event's first hour.
         last: Its last hour.
         row_hour: Per row of the scored window, its hour.
-        row_normal: Per row of the scored window, whether it is of normal operation.
+        row_read: Per row of the scored window, whether a detector reads it and the benchmark's
+            score counts it.
         rows: The positions of the event's first and last rows in the scored window.
+        read: Each statistic once it has been asked for; a store, no part of the excerpt.
     """
 
     event: Event
     series: Mapping[str, Floats]
-    beside_year: Mapping[str, float | None]
     fitted: int
     first: int
     last: int
     row_hour: Ints
-    row_normal: Bools
+    row_read: Bools
     rows: tuple[int, int]
+    read: dict[tuple[str, View], float | None] = field(default_factory=dict, compare=False)
 
     @classmethod
     def joined(cls, event: Event, files: Sequence[Mapping[str, NDArray[np.generic]]]) -> Scored:
         """An excerpt from its files, the first of which holds its rows.
 
         Raises:
-            ValueError: If two files place the excerpt's hours differently.
+            ValueError: If two files place the excerpt's hours differently, or the scored
+                window holds no row of the event.
         """
         placed = {(int(file["fitted"]), int(file["first"]), int(file["last"])) for file in files}
         if len(placed) != 1:
@@ -401,38 +495,60 @@ class Scored:
         scored = ~rows["row_fitted"].astype(np.bool_)
         ids = rows["row_id"].astype(np.int64)[scored]
         inside = np.flatnonzero((ids >= event.first_row) & (ids <= event.last_row))
-        series = {
-            str(name): file["scores"][index].astype(np.float64)
-            for file in files
-            for index, name in enumerate(file["arms"].tolist())
-        }
+        if not len(inside):
+            raise ValueError(
+                f"the scored window of excerpt {event.event} of farm {event.farm} holds no row "
+                "of its event"
+            )
         return cls(
             event=event,
-            series=series,
-            beside_year={
-                name: unusualness(scores, fitted=fitted, first=first, last=last)
-                for name, scores in series.items()
+            series={
+                str(name): file["scores"][index].astype(np.float64)
+                for file in files
+                for index, name in enumerate(file["arms"].tolist())
             },
             fitted=fitted,
             first=first,
             last=last,
             row_hour=rows["row_hour"][scored].astype(np.int64),
-            row_normal=rows["row_normal"][scored].astype(np.bool_),
+            row_read=rows["row_normal"][scored].astype(np.bool_),
             rows=(int(inside[0]), int(inside[-1])),
         )
 
-    def read_by(self, name: str) -> bool:
-        """Whether the detector has a statistic of the excerpt's event."""
-        return name == LENGTH or self.beside_year[name] is not None
+    def beside_year(self, name: str, view: View = View.SETTLED) -> float | None:
+        """A detector's statistic of the event; ``None`` where it cannot read the event."""
+        if (name, view) not in self.read:
+            scores = self.series[name]
+            if view is not View.EVERY_HOUR:
+                scores = settled(scores, settling_of(name))
+            first = self.first
+            if view is View.LAST_WEEK:
+                first = max(first, self.last - LAST_WEEK + 1)
+            self.read[name, view] = unusualness(
+                scores,
+                fitted=self.fitted,
+                first=first,
+                last=self.last,
+                reading=Reading.PEAK if view is View.PEAK else Reading.LEVEL,
+            )
+        return self.read[name, view]
 
-    def statistic(self, name: str) -> float:
-        """A detector's statistic of the excerpt; the event's length for ``LENGTH``.
+    def unread_share(self) -> float:
+        """The share of the event's rows no detector reads, by their status or for none held."""
+        first, last = self.rows
+        return 1.0 - float(self.row_read[first : last + 1].mean())
 
-        Nought, the lowest there is, where the detector cannot read the event.
+    def statistic(self, name: str, view: View = View.SETTLED) -> float | None:
+        """What ranks the excerpt: a detector's statistic, or what stands in for a detector.
+
+        ``LENGTH`` is the event's length and ``UNREAD`` the share of its rows not read; either
+        ranks an excerpt with no detector at all.
         """
         if name == LENGTH:
             return float(self.last - self.first + 1)
-        return self.beside_year[name] or 0.0
+        if name == UNREAD:
+            return self.unread_share()
+        return self.beside_year(name, view)
 
     def flagged(self, name: str, share: float) -> Bools:
         """Per row of the scored window, whether its hour stands above the detector's alarm.
@@ -471,37 +587,75 @@ def shuffled_labels(excerpts: Sequence[Scored], seed: int) -> list[Scored]:
 
 @dataclass(frozen=True)
 class Family:
-    """Detectors' rankings of the excerpts a ranking reads.
+    """Detectors' rankings of the excerpts all of them read.
 
     Attributes:
         names: The detectors.
         excerpts: The excerpts ranked.
-        unread: How many excerpts hold an event one of the detectors cannot read.
+        left_out: How many excerpts hold an event one of the detectors cannot read: with no
+            settled span of twelve hours, a turbine that kept stopping gives an early detector
+            nothing to judge it by.
         ranking: Their ranking.
     """
 
     names: tuple[str, ...]
     excerpts: tuple[Scored, ...]
-    unread: int
+    left_out: int
     ranking: Ranking
 
     @classmethod
-    def of(cls, names: Sequence[str], excerpts: Sequence[Scored], *, every: bool = False) -> Family:
-        """The detectors' ranking of the excerpts a ranking reads, or of ``every`` excerpt."""
-        ranked = [excerpt for excerpt in excerpts if every or excerpt.event.ranked]
+    def of(
+        cls,
+        names: Sequence[str],
+        excerpts: Sequence[Scored],
+        *,
+        view: View = View.SETTLED,
+        every: bool = False,
+        unread_lowest: bool = False,
+        farms: Sequence[str] | None = None,
+    ) -> Family:
+        """The detectors' ranking of the excerpts.
+
+        Args:
+            names: The detectors.
+            excerpts: The excerpts read.
+            view: How each event is set beside its year.
+            every: Whether the excerpts no ranking reads are ranked too.
+            unread_lowest: Whether an event a detector cannot read takes the lowest statistic
+                instead of leaving the ranking.
+            farms: The farms ranked; all where ``None``.
+        """
+        ranked = [
+            excerpt
+            for excerpt in excerpts
+            if (every or excerpt.event.ranked) and (farms is None or excerpt.event.farm in farms)
+        ]
+        values = [[excerpt.statistic(name, view) for name in names] for excerpt in ranked]
+        kept = [
+            at
+            for at, row in enumerate(values)
+            if unread_lowest or all(value is not None for value in row)
+        ]
         return cls(
             names=tuple(names),
-            excerpts=tuple(ranked),
-            unread=sum(not all(excerpt.read_by(name) for name in names) for excerpt in ranked),
+            excerpts=tuple(ranked[at] for at in kept),
+            left_out=len(ranked) - len(kept),
             ranking=Ranking(
                 statistics=np.asarray(
-                    [[excerpt.statistic(name) for excerpt in ranked] for name in names],
+                    [[values[at][column] or 0.0 for at in kept] for column in range(len(names))],
                     dtype=np.float64,
                 ),
-                anomaly=np.asarray([excerpt.event.anomaly for excerpt in ranked], dtype=np.bool_),
-                farms=[excerpt.event.farm for excerpt in ranked],
+                anomaly=np.asarray([ranked[at].event.anomaly for at in kept], dtype=np.bool_),
+                farms=[ranked[at].event.farm for at in kept],
             ),
         )
+
+    def area_or_none(self, detector: int = 0) -> float:
+        """A detector's area; missing where no farm holds both labels among the excerpts."""
+        try:
+            return float(self.ranking.areas()[detector])
+        except ValueError:
+            return float("nan")
 
     def turbines(self) -> list[tuple[str, int]]:
         return [(excerpt.event.farm, excerpt.event.turbine) for excerpt in self.excerpts]
@@ -558,6 +712,13 @@ class Family:
             reached += abs(drawn) >= abs(observed) - 1e-12
         return observed, float((1 + reached) / (1 + swaps))
 
+    def follows(self, other: str, detector: int = 0) -> float:
+        """The rank correlation of a detector's statistic with what stands in for a detector."""
+        beside = [excerpt.statistic(other) or 0.0 for excerpt in self.excerpts]
+        if len(set(beside)) < 2 or len(set(self.ranking.statistics[detector].tolist())) < 2:
+            return float("nan")
+        return float(spearmanr(self.ranking.statistics[detector], beside).statistic)
+
 
 def families_of(excerpts: Sequence[Scored]) -> dict[str, list[str]]:
     """The detectors every excerpt's files hold, by family.
@@ -576,58 +737,73 @@ def families_of(excerpts: Sequence[Scored]) -> dict[str, list[str]]:
 
 @dataclass(frozen=True)
 class DetectorArea:
-    """One detector's own ranking of the excerpts.
+    """One detector's own ranking of the excerpts it reads.
 
     Attributes:
-        detector: The detector, or ``LENGTH``.
+        detector: The detector, or what stands in for one.
         excerpts: How many excerpts it ranks.
-        unread: How many hold an event it cannot read.
+        left_out: How many hold an event it cannot read.
         beyond_the_year: How many hold an event no block of the fitted year reaches; they tie.
         area: Its area under the curve.
         low: The interval's lower end over turbines drawn again; approximate.
         high: Its upper end.
         own_chance: How often shuffled labels reach the area, the detector taken alone.
+        follows_length: The rank correlation of its statistic with the event's length.
+        follows_unread: The same with the share of the event's rows not read.
+        operators_status: The area in the farms whose status is the operator's.
         by_farm: The area inside each farm.
     """
 
     detector: str
     excerpts: int
-    unread: int
+    left_out: int
     beyond_the_year: int
     area: float
     low: float
     high: float
     own_chance: float
+    follows_length: float
+    follows_unread: float
+    operators_status: float
     by_farm: Mapping[str, float]
 
 
 @dataclass(frozen=True)
 class FamilyVerdict:
-    """A family's best detector against the best of shuffled labels.
+    """A family's best detector against the best of shuffled labels, and that detector beside.
 
     Attributes:
         family: The family.
         detectors: How many detectors it holds.
-        excerpts: How many excerpts all of them rank.
-        unread: How many excerpts hold an event one of them cannot read.
+        excerpts: How many excerpts all of them read.
+        left_out: How many excerpts hold an event one of them cannot read.
         best: The detector with the largest area.
         best_area: That area.
-        with_every_excerpt: The same detector's area with the excerpts no ranking reads ranked
-            too.
         chance: How often the best area of shuffled labels reaches it.
-        confirmed: Whether the family passes, the two verdicts' smaller chance held to half the
-            level; ``None`` for a family no verdict reads.
+        confirmed: Whether the family passes, each verdict's chance held to its level;
+            ``None`` for a family no verdict reads.
+        operators_status: The best detector's area in the farms whose status is the operator's.
+        every_hour: Its area with the hours after a gap read too.
+        peak: Its area by the events' peaks.
+        last_week: Its area by the events' last seven days.
+        unread_lowest: Its area with the events it cannot read ranked lowest.
+        with_every_excerpt: Its area with the excerpts no ranking reads ranked too.
     """
 
     family: str
     detectors: int
     excerpts: int
-    unread: int
+    left_out: int
     best: str
     best_area: float
-    with_every_excerpt: float
     chance: float
     confirmed: bool | None
+    operators_status: float
+    every_hour: float
+    peak: float
+    last_week: float
+    unread_lowest: float
+    with_every_excerpt: float
 
 
 @dataclass(frozen=True)
@@ -639,64 +815,77 @@ class DetectorCare:
     reading: CareReading
 
 
+def operators_farms(excerpts: Sequence[Scored]) -> list[str]:
+    """The farms whose status is the operator's, so that it says what the turbine did."""
+    return [
+        farm
+        for farm in dict.fromkeys(excerpt.event.farm for excerpt in excerpts)
+        if farm not in STATUS_UNREAD_WHEN_SCORED
+    ]
+
+
 def area_rows(excerpts: Sequence[Scored], shuffles: int, seed: int) -> list[DetectorArea]:
     """Every detector's own area, its farms' areas, its approximate interval and own chance."""
     rows: list[DetectorArea] = []
     names = [name for family in families_of(excerpts).values() for name in family]
-    for name in (*names, LENGTH):
+    for name in (*names, LENGTH, UNREAD):
         family = Family.of([name], excerpts)
-        (area,) = family.ranking.areas().tolist()
         (low, high) = family.intervals(seed=seed)[0].tolist()
-        farms: dict[str, float] = {}
-        for farm in dict.fromkeys(family.ranking.farms):
-            kept = [at for at, own in enumerate(family.ranking.farms) if own == farm]
-            part = Ranking(
-                family.ranking.statistics[:, kept],
-                family.ranking.anomaly[kept],
-                [farm] * len(kept),
-            )
-            farms[farm] = float(part.areas()[0])
         rows.append(
             DetectorArea(
                 detector=name,
                 excerpts=len(family.excerpts),
-                unread=family.unread,
+                left_out=family.left_out,
                 beyond_the_year=int((family.ranking.statistics[0] == 1.0).sum()),
-                area=area,
+                area=family.area_or_none(),
                 low=low,
                 high=high,
                 own_chance=family.ranking.best_beyond_chance(shuffles, seed)[1],
-                by_farm=farms,
+                follows_length=family.follows(LENGTH),
+                follows_unread=family.follows(UNREAD),
+                operators_status=Family.of(
+                    [name], excerpts, farms=operators_farms(excerpts)
+                ).area_or_none(),
+                by_farm={
+                    farm: Family.of([name], excerpts, farms=[farm]).area_or_none()
+                    for farm in dict.fromkeys(excerpt.event.farm for excerpt in excerpts)
+                },
             )
         )
     return rows
 
 
 def verdict_rows(excerpts: Sequence[Scored], shuffles: int, seed: int) -> list[FamilyVerdict]:
-    """Each family's best area and its chance; the two verdicts' passes under the stepped level.
+    """Each family's best area and its chance; the verdicts' passes under the stepped levels.
 
     A detector that is its own family, as the answer with no model is, stands in the table of
     areas alone.
     """
     read: list[FamilyVerdict] = []
+    operators = operators_farms(excerpts)
     for name, detectors in families_of(excerpts).items():
         if len(detectors) < 2 and name not in VERDICTS:
             continue
         family = Family.of(detectors, excerpts)
         areas = family.ranking.areas()
         best, chance = family.ranking.best_beyond_chance(shuffles, seed)
-        every = Family.of(detectors, excerpts, every=True).ranking.areas()
+        leader = [detectors[int(areas.argmax())]]
         read.append(
             FamilyVerdict(
                 family=name,
                 detectors=len(detectors),
                 excerpts=len(family.excerpts),
-                unread=family.unread,
-                best=detectors[int(areas.argmax())],
+                left_out=family.left_out,
+                best=leader[0],
                 best_area=best,
-                with_every_excerpt=float(every[int(areas.argmax())]),
                 chance=chance,
                 confirmed=None,
+                operators_status=Family.of(leader, excerpts, farms=operators).area_or_none(),
+                every_hour=Family.of(leader, excerpts, view=View.EVERY_HOUR).area_or_none(),
+                peak=Family.of(leader, excerpts, view=View.PEAK).area_or_none(),
+                last_week=Family.of(leader, excerpts, view=View.LAST_WEEK).area_or_none(),
+                unread_lowest=Family.of(leader, excerpts, unread_lowest=True).area_or_none(),
+                with_every_excerpt=Family.of(leader, excerpts, every=True).area_or_none(),
             )
         )
     passed = passes({row.family: row.chance for row in read if row.family in VERDICTS})
@@ -732,7 +921,7 @@ def care_rows(excerpts: Sequence[Scored]) -> list[DetectorCare]:
                             event=excerpt.event.event,
                             anomaly=excerpt.event.anomaly,
                             flagged=excerpt.flagged(name, share),
-                            normal=excerpt.row_normal,
+                            normal=excerpt.row_read,
                             first=excerpt.rows[0],
                             last=excerpt.rows[1],
                         )
@@ -761,18 +950,22 @@ def flat(row: DetectorArea | FamilyVerdict | DetectorCare) -> dict[str, object]:
 def excerpt_rows(excerpts: Sequence[Scored]) -> list[dict[str, object]]:
     """Every excerpt's statistic by every detector: what the tables are made from."""
     names = [name for family in families_of(excerpts).values() for name in family]
-    return [
-        {
+    rows: list[dict[str, object]] = []
+    for excerpt in excerpts:
+        row: dict[str, object] = {
             "farm": excerpt.event.farm,
             "event": excerpt.event.event,
             "turbine": excerpt.event.turbine,
             "anomaly": excerpt.event.anomaly,
             "ranked": excerpt.event.ranked,
             "event_hours": excerpt.last - excerpt.first + 1,
-            **{name: excerpt.statistic(name) if excerpt.read_by(name) else "" for name in names},
+            "unread_share": round(excerpt.unread_share(), 4),
         }
-        for excerpt in excerpts
-    ]
+        for name in names:
+            value = excerpt.statistic(name)
+            row[name] = "" if value is None else value
+        rows.append(row)
+    return rows
 
 
 def missing_files(events: Sequence[Event], scores: Path) -> list[Path]:
@@ -839,18 +1032,19 @@ def read(arguments: argparse.Namespace) -> None:  # pragma: no cover - reads fil
         "areas": [flat(row) for row in area_rows(excerpts, arguments.shuffles, arguments.seed)],
         "care": [flat(row) for row in care_rows(excerpts)],
     }
-    if arguments.pair:
-        pair = Family.of(arguments.pair, excerpts)
+    for names in arguments.pair:
+        pair = Family.of(names, excerpts)
         difference, chance = pair.difference(seed=arguments.seed)
-        tables["pair"] = [
+        tables.setdefault("pair", []).append(
             {
-                "first": arguments.pair[0],
-                "second": arguments.pair[1],
+                "first": names[0],
+                "second": names[1],
                 "excerpts": len(pair.excerpts),
+                "left_out": pair.left_out,
                 "difference": round(difference, 4),
                 "chance": round(chance, 5),
             }
-        ]
+        )
     if not trial:
         # The excerpts' statistics are real whatever the labels, so a trial does not write them.
         tables["excerpts"] = excerpt_rows(excerpts)
@@ -874,7 +1068,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     reading.add_argument("--root", type=Path, required=True)
     reading.add_argument("--scores", type=Path, required=True)
     reading.add_argument("--out", type=Path, required=True)
-    reading.add_argument("--pair", nargs=2, metavar="NAME")
+    reading.add_argument("--pair", nargs=2, action="append", default=[], metavar="NAME")
     reading.add_argument("--shuffles", type=int, default=SHUFFLES)
     reading.add_argument("--seed", type=int, default=1)
     reading.add_argument("--trial", type=int, default=None, metavar="SEED")

@@ -141,6 +141,7 @@ def excerpt(
     status: np.ndarray | None = None,
     keep: np.ndarray | None = None,
     starts: np.datetime64 = START,
+    farm: str = "B",
 ) -> Excerpt:
     """Rows every ten minutes from ``starts``, the first ``fitted_rows`` the fitted year."""
     rows = len(values)
@@ -148,7 +149,7 @@ def excerpt(
     stamps = (starts + np.arange(rows) * np.timedelta64(600, "s"))[kept]
     ids = np.arange(rows, dtype=np.int64)[kept]
     return Excerpt.of(
-        Event("B", 1, 3, True, event_rows[0], event_rows[1]),
+        Event(farm, 1, 3, True, event_rows[0], event_rows[1]),
         [f"sensor_{column}_avg" for column in range(values.shape[1])],
         stamps=stamps.astype("datetime64[s]"),
         ids=ids,
@@ -238,6 +239,25 @@ def test_only_statuses_nought_and_two_are_normal_operation() -> None:
     read = excerpt(level(12), fitted_rows=6, event_rows=(6, 11), status=status)
 
     assert read.normal.tolist() == [True, False, True, False, False, False] * 2
+
+
+def test_the_first_farms_scored_rows_are_read_whatever_their_status() -> None:
+    status = np.zeros(24, dtype=np.int64)
+    status[3:5] = 4
+    status[14:20] = 4
+
+    first = excerpt(level(24), fitted_rows=12, event_rows=(12, 23), status=status, farm="A")
+    other = excerpt(level(24), fitted_rows=12, event_rows=(12, 23), status=status, farm="B")
+    third = excerpt(level(24), fitted_rows=12, event_rows=(12, 23), status=status, farm="C")
+
+    # The fitted year is read by its status in every farm; the status itself is kept.
+    assert not first.read[3:5].any()
+    assert first.read[12:].all()
+    assert np.array_equal(first.normal, other.normal)
+    assert np.array_equal(other.read, other.normal)
+    assert np.array_equal(third.read, third.normal)
+    assert Hours.of(first).whole.tolist() == [False, True, True, True]
+    assert Hours.of(other).whole.tolist() == [False, True, False, False]
 
 
 def test_an_hour_is_whole_with_six_rows_all_of_normal_operation() -> None:
