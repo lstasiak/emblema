@@ -106,3 +106,100 @@ farm 7. The normalised units were fitted on 2016 to 2019. The converter's ambien
 be warmed in its cabinet; its hourly change moves with the other turbines' at 0.92 and 0.88, so
 it is read as weather. Between 1 January and the start the farm's ridges see hours its trees do
 not. One published forecaster; the hour's mean, one hour ahead.
+
+## 2026-11-22 — measured: on a new turbine the published forecaster reaches the least gain in no verdict, and the farm's trees about halve the best classical error
+
+**Question.** As declared above: in the first 30 days of each turbine read as new, does Chronos-2
+lead the best classical answer from the past with the farm (A), gain from its neighbours' past
+(B), or lead the best classical answer of normal behaviour without and with the farm (C)?
+
+**Conditions.** Instrument `34c3892b`, declaration `5fc4e1b9`, `data/report/l62b/run.sh` on the
+Mac (M1 Pro) on 2026-11-22: Kelmarsh 2.7 hours, Penmanshiel 6.3 hours, no step run twice. The first
+30 days hold 2,959 windows over 31 starts on Kelmarsh and 7,111 over 30 on Penmanshiel; the
+normal-behaviour verdicts read 2,903 and 7,077 windows, those whose six signals were read less 4
+and 1 with a cell their bar left unanswered. Every answer of the bars answered every cell, except
+the ridges on the turbine's own hours, left out as declared; the normal-behaviour bars missed
+0.1 % and 0.01 % of their cells.
+
+**The verdicts**, days 2, 7 and 14 pooled, geometric mean over windows, 95 % interval over whole
+starts:
+
+| Verdict | Farm | Against | Ratio [95 %] | Median over cells | Level | Predicted |
+|---|---|---|---|---|---|---|
+| **A** | Kelmarsh | the farm's trees | **1.270 [1.189; 1.352]** | 1.31 | **harm** | harm |
+| | Penmanshiel | the farm's trees | **1.262 [1.200; 1.327]** | 1.24 | **harm** | harm |
+| **B** | Kelmarsh | `chronos2_47` | **0.994 [0.991; 0.998]** | 0.99 | **real and small** | noise or real and small |
+| | Penmanshiel | `chronos2_47` | **0.981 [0.977; 0.985]** | 0.99 | **real and small** | noise or real and small |
+| **C without the farm** | Kelmarsh | the cell's own regression | **0.988 [0.954; 1.024]** | 1.04 | **noise** | noise |
+| | Penmanshiel | the cell's own regression | **1.062 [1.020; 1.103]** | 1.07 | **harm** | noise, or harm |
+| **C with the farm** | Kelmarsh | the farm's trees | **1.842 [1.714; 1.973]** | 1.93 | **harm** | harm |
+| | Penmanshiel | the farm's trees | **2.107 [1.975; 2.250]** | 2.02 | **harm** | harm |
+
+No claim holds: no verdict reads the least gain on either farm. Every level and every point,
+the two rows beside included, fell where the trials put them.
+
+The same days, descriptively:
+
+| | Kelmarsh | Penmanshiel |
+|---|---|---|
+| `chronos2_47` against the past without the farm | 0.921 [0.897; 0.947] | 0.984 [0.950; 1.018] |
+| `chronos2_own` against the past with the farm | 1.183 [1.120; 1.252] | 1.191 [1.137; 1.248] |
+| `chronos2_nbm` against `chronos2_47`: what the hour's signals give it | 0.696 [0.676; 0.717] | 0.719 [0.692; 0.746] |
+| `chronos2_nbm_own` against normal behaviour without the farm | 0.833 [0.797; 0.872] | 0.905 [0.866; 0.946] |
+| `chronos2_nbm_own` against normal behaviour with the farm | 1.553 [1.450; 1.657] | 1.797 [1.690; 1.916] |
+| The farm's normal-behaviour trees against normal behaviour without the farm | 0.537 [0.495; 0.584] | 0.504 [0.477; 0.531] |
+| The farm's trees against its window ridge, from the past | 0.724 [0.693; 0.750] | 0.721 [0.699; 0.745] |
+| The neighbours' mean in the hour itself, against `chronos2_47` | 0.765 [0.735; 0.795] | 0.670 [0.641; 0.701] |
+| The oracle that knows the hour's power, against the farm's window ridge | 0.894 [0.876; 0.911] | 0.879 [0.855; 0.902] |
+| The pitch motors' currents, against `chronos2_nbm` | 0.873 [0.854; 0.893] | 0.846 [0.831; 0.862] |
+
+**The curve**, each day on the 20 starts whose year is read (19 on day 2, and for the ridge on
+Penmanshiel's day 7), against normal behaviour without the farm unless named:
+
+| Day | `chronos2_nbm` K | P | `chronos2_nbm_own` K | P | the farm's trees K | P | own ridge over the farm's K | P |
+|---|---|---|---|---|---|---|---|---|
+| 2 | 0.95 | 0.98 | 0.90 | 0.87 | 0.56 | 0.50 | – | – |
+| 7 | 0.96 | 1.10 | 0.80 | 0.96 | 0.51 | 0.50 | 2.73 | 3.02 |
+| 14 | 1.02 | 1.10 | 0.81 | 0.84 | 0.51 | 0.51 | 1.49 | 1.69 |
+| 30 | 0.91 | 1.03 | 0.75 | 0.79 | 0.54 | 0.48 | 1.28 | 1.38 |
+| 60 | 1.03 | 1.12 | 0.77 | 0.79 | 0.57 | 0.46 | 1.13 | 1.16 |
+| 90 | 0.99 | 1.08 | 0.83 | 0.80 | 0.60 | 0.47 | 1.13 | 1.17 |
+| 180 | 0.92 | 0.99 | 0.84 | 0.80 | 0.55 | 0.50 | 1.15 | 1.10 |
+| 365 | 0.97 | 1.17 | 0.83 | 1.03 | 0.50 | 0.59 | 0.98 | 1.01 |
+
+K: Kelmarsh, P: Penmanshiel. The ridge on the turbine's own hours from the past, over the farm's.
+
+**Within the groups of temperatures**, descriptively, C without the farm leads on the stator (0.91
+and 0.77) and the generator bearings (0.88 and 0.90), trails on the transformer (1.42 and 1.35)
+and Penmanshiel's gear oil (1.33; Kelmarsh 1.08 [0.99; 1.18]). With the farm it trails in every
+group (1.16 to 3.63).
+
+**Checked before reading.** The run's conditions name the declared starts, turbines, hours and
+seed; the four verdicts' points recomputed from the files by independent code
+(`data/report/l62b/recheck_run.py`) agree to the third decimal.
+
+**Conclusions.**
+
+1. On 47 hours the published forecaster adds nothing to the regression of the cell's own hours
+   on the hour's operating conditions: it matches it (0.99, noise) or trails it (1.06, harm).
+   From the past it trails the farm's trees by about a quarter (1.27 and 1.26, harm). An
+   onboarding model has to beat that regression and approach the farm's trees.
+2. For a turbine of a known fleet, the farm's history is the bar. With the hour's conditions the
+   farm's trees miss about half as much as the best classical answer from the turbine alone
+   (0.46 to 0.60 from day 2 to day 365); the forecaster misses 1.84 and 2.11 times as much as
+   they do. The ridge on the turbine's own hours reaches the farm's ridge only at day 365 (0.98,
+   1.01); the window ridge reaches it within noise at day 60 and stays there on Penmanshiel.
+3. The neighbours' past adds 0.6 and 1.9 % to the forecaster, real but far from the least gain.
+   Their same hour would add 24 and 33 %, which suggests that what the turbines share is the
+   hour's weather rather than its history.
+4. Descriptively, the forecaster gains with context. On every hour since the start, with the
+   conditions, it leads the regression by 17 and 9 % on the first month, and on every day of the
+   curve but Penmanshiel's days 7 and 365 (0.96, 1.03) by 10 to 25 %. It still trails the farm's
+   trees by 55 and 80 %, the gap a model adapted to the domain has to close.
+
+**Limitations.** Two farms of one maker in the same years; Kelmarsh has four turbines. Turbines
+read as new share their farm's weather, so a start is one sample, not four or ten. The trees and
+the ridges on the farm read the turbine's kind, which a new system of a new design lacks. One
+published forecaster, zero-shot; the hour's mean, one hour ahead. The normalised units were fitted
+on 2016 to 2019 and weigh the channels in a window's mean. The descriptive rows were not declared
+as verdicts.
