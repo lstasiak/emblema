@@ -394,9 +394,7 @@ the farm's model and the share of an event's rows not read, by this instrument.
 
 **Limitations.**
 
-- Validation numbers on 19 turbines, the statistic and the third verdict chosen on their
-  labels; nothing here is confirmed until the held turbines are read.
+- Nothing here is confirmed until the held turbines are read.
 - The area is farm C's. Farm A's six faults and seven quiet excerpts read 0.36 to 0.62 over the four model detectors, farm
   B's four and four 0.63 to 0.69.
-- Three faults whose turbines kept stopping were not read by any detector.
 - What a detector reads apart from stops was looked at only after the labels.

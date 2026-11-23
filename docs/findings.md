@@ -85,11 +85,10 @@ Last updated 2026-11-23.
   operating conditions it matches or trails a regression of the turbine's own 47 hours on them
   (0.99, noise; 1.06, harm) ([note](verification/wind-fleet-cold-start.md)).
   On labelled faults of wind turbines the departures, unchanged, do not rank the excerpts with a
-  fault above those without (0.68 for the best of twelve, chance 0.18), and a model of normal
-  behaviour ranks them at 0.73 whether fitted on the turbine's own year or on the farm's other
-  turbines alone, short of its registered level (chance 0.008 against 0.0083; 0.009 over more
-  shuffles); the share of an event spent out of normal operation ranks them higher with no
-  model, 0.80 ([note](verification/wind-fleet-detection.md)).
+  fault above those without (0.68 for the best of twelve), and a model of normal behaviour ranks
+  them at 0.73 whether fitted on the turbine's own year or on the farm's other turbines alone,
+  short of its registered level; the share of an event spent out of normal operation ranks
+  them higher with no model, 0.80 ([note](verification/wind-fleet-detection.md)).
   At 1 % false alarms the departures leave little room: they miss 13 of 61, too
   few for the rule to reopen the perturbation term (at most 10.67 beyond chance, 11 required), and
   other detectors with no label find 3.7 of them beyond chance. Ten-minute cells gain one of the 11
