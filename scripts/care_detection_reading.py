@@ -11,8 +11,7 @@ detector was fitted on, whose level is as high.
 
 A block is read through the event's own gaps: only at the hours, counted from its start, where
 the event holds a median. An event broken by stops is then set beside blocks broken alike, and
-how much of an event a detector could read says nothing of its statistic; read whole against
-whole blocks, the events with stops, which are mostly faults, stood low for their gaps alone.
+how much of an event a detector could read says nothing of its statistic.
 Reading the event against blocks of its own length takes the length out, which nearly spells
 the label here, and reading it against its own year takes the turbine's level out. An event no
 block reaches ties with every other such.
@@ -201,7 +200,7 @@ def unusualness(
     event = running_medians(scores[first : last + 1])[SPAN - 1 :]
     held = np.flatnonzero(~np.isnan(event))
     year = running_medians(scores[:fitted])[SPAN - 1 :]
-    if not len(held) or reach < 1 or len(year) < reach:
+    if not len(held) or len(year) < reach:
         return None
     blocks = sliding_window_view(year, reach)[:, held]
     alike = blocks[(~np.isnan(blocks)).sum(axis=1) * 2 >= len(held)]
@@ -382,9 +381,8 @@ def power_rows(layout: Layout, *, draws: int, seed: int, areas: Sequence[float])
 def size_rows(layout: Layout, *, draws: int, seed: int) -> list[list[str]]:
     """How often the shuffle passes a family of twelve with no fault in it.
 
-    Read at each level a verdict's chance can be held to, where the
-    excerpts of a turbine share a part of their score, which the shuffle of excerpts does not
-    know.
+    Read at each level a verdict's chance can be held to, where the excerpts of a turbine share
+    a part of their score, which the shuffle of excerpts does not know.
     """
     rows: list[list[str]] = []
     source = np.random.default_rng(seed)
@@ -592,9 +590,7 @@ class Family:
     Attributes:
         names: The detectors.
         excerpts: The excerpts ranked.
-        left_out: How many excerpts hold an event one of the detectors cannot read: with no
-            settled span of twelve hours, a turbine that kept stopping gives an early detector
-            nothing to judge it by.
+        left_out: How many excerpts hold an event one of the detectors cannot read.
         ranking: Their ranking.
     """
 
@@ -650,10 +646,10 @@ class Family:
             ),
         )
 
-    def area_or_none(self, detector: int = 0) -> float:
-        """A detector's area; missing where no farm holds both labels among the excerpts."""
+    def area_or_none(self) -> float:
+        """The first detector's area; missing where no farm holds both labels."""
         try:
-            return float(self.ranking.areas()[detector])
+            return float(self.ranking.areas()[0])
         except ValueError:
             return float("nan")
 
@@ -712,12 +708,12 @@ class Family:
             reached += abs(drawn) >= abs(observed) - 1e-12
         return observed, float((1 + reached) / (1 + swaps))
 
-    def follows(self, other: str, detector: int = 0) -> float:
-        """The rank correlation of a detector's statistic with what stands in for a detector."""
+    def follows(self, other: str) -> float:
+        """The rank correlation of the first detector's statistic with a detector's stand-in."""
         beside = [excerpt.statistic(other) or 0.0 for excerpt in self.excerpts]
-        if len(set(beside)) < 2 or len(set(self.ranking.statistics[detector].tolist())) < 2:
+        if len(set(beside)) < 2 or len(set(self.ranking.statistics[0].tolist())) < 2:
             return float("nan")
-        return float(spearmanr(self.ranking.statistics[detector], beside).statistic)
+        return float(spearmanr(self.ranking.statistics[0], beside).statistic)
 
 
 def families_of(excerpts: Sequence[Scored]) -> dict[str, list[str]]:

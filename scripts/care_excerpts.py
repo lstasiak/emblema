@@ -56,8 +56,7 @@ ANOMALY = "anomaly"
 INSIDE_A_FAULT = frozenset({("B", 87)})
 TRAINING = "train"
 NORMAL_STATUSES = (0, 2)
-# The farms whose status says nothing of a scored window: derived from the failure logs, it
-# marks the lead-up to a fault itself, and the publisher has it ignored there.
+# The farms whose status says nothing of a scored window.
 STATUS_UNREAD_WHEN_SCORED = frozenset({"A"})
 ROWS_PER_HOUR = 6
 # The share of a row's averages at exactly nought from which the row is a logger's dropped one.

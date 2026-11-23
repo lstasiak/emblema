@@ -295,7 +295,6 @@ def written(
     """One excerpt's score file from its hours and the other turbines'."""
     if "torch" in sys.modules:
         raise SystemExit("torch is loaded: XGBoost's OpenMP must not share its process")
-    # One thread a fit: the fits are small, and the excerpts run side by side.
     fit = xgboost_fit(1) if form == "trees" else ridge_fit
     held = np.load(own)
     hourly = Hourly(held["features"], held["targets"], int(held["fitted"]))

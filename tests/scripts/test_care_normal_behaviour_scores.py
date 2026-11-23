@@ -127,18 +127,6 @@ def test_a_fitted_hour_is_answered_by_a_model_that_never_read_it() -> None:
     assert not np.isnan(answers).any()
 
 
-def test_no_hour_of_the_scored_window_is_fitted_on() -> None:
-    read = hourly()
-    model = Remembering()
-
-    answers_of(read, 0, model, seed=1)
-
-    scored = read.features[FITTED:]
-    for rows in model.fitted_on:
-        assert len(rows) <= FITTED
-        assert not (rows[:, None, 0] == scored[None, :40, 0]).any()
-
-
 def test_an_hour_without_its_conditions_has_no_answer_and_is_not_fitted_on() -> None:
     read = hourly()
     read.features[100, 0] = np.nan

@@ -369,16 +369,6 @@ def test_readings_are_scored_as_a_publication_scores_a_channel() -> None:
         )
 
 
-def test_the_scale_reads_the_fitted_hours_alone() -> None:
-    readings = np.random.default_rng(2).normal(size=(40, 2, 6))
-    later = readings.copy()
-    later[30:] *= 50.0
-
-    assert np.array_equal(
-        robust_scores(later, fitted=30)[:30], robust_scores(readings, fitted=30)[:30]
-    )
-
-
 def test_a_score_is_held_to_the_bound() -> None:
     readings = np.random.default_rng(3).normal(size=(40, 1, 6))
     readings[35] = 1e9

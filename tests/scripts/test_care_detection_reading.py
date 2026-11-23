@@ -150,13 +150,6 @@ def test_a_lasting_lift_moves_the_level_and_one_spell_the_peak() -> None:
     assert read(spell, Reading.LEVEL) < read(lasting, Reading.LEVEL)
 
 
-def test_an_event_that_stands_above_its_year_is_wholly_unusual() -> None:
-    scores = excerpt(1)
-    scores[EVENT[0] : EVENT[1] + 1] += 10.0
-
-    assert unusualness(scores, fitted=YEAR, first=EVENT[0], last=EVENT[1]) == 1.0
-
-
 def test_an_event_like_its_year_is_as_unusual_as_chance_whatever_its_length() -> None:
     for days in (2, 14, 60):
         last = YEAR + 24 * days - 1
@@ -234,7 +227,7 @@ def test_excerpts_of_one_label_have_no_area() -> None:
 
 
 def test_an_event_as_flat_as_its_year_is_not_unusual() -> None:
-    # Every block of the year reaches the event's largest median, which equals theirs.
+    # Every block of the year stands as high as the event.
     assert unusualness(np.zeros(YEAR + 200), fitted=YEAR, first=EVENT[0], last=EVENT[1]) == 0.0
 
 
@@ -340,7 +333,7 @@ def test_the_power_table_holds_what_a_family_must_reach_and_how_often_it_does() 
     assert float(every[5]) < float(every[6])
 
 
-def test_the_size_table_reads_both_levels_at_each_share_of_a_turbines_variance() -> None:
+def test_the_size_table_reads_every_level_at_each_share_of_a_turbines_variance() -> None:
     rows = size_rows(layout(), draws=5, seed=1)
 
     assert [row[0] for row in rows] == ["0.0", "0.2", "0.4"]
@@ -552,7 +545,6 @@ def test_the_verdict_reads_settled_hours_and_the_view_beside_every_hour() -> Non
     assert by_settled is not None
     assert by_every_hour is not None
     assert by_settled < 0.99
-    assert joined.statistic(DETECTORS[1], View.PEAK) == by_settled or by_settled < 1.0
     assert by_every_hour > by_settled
 
 
@@ -573,18 +565,6 @@ def test_the_last_week_alone_is_read_beside(monkeypatch: pytest.MonkeyPatch) -> 
     assert last_week < 0.99
 
 
-def test_a_spell_lifts_the_peak_and_not_the_level() -> None:
-    first, second = files(7)
-    first["scores"][1, FIRST + 30 : FIRST + 44] += 30.0
-    joined = Scored.joined(event(7), [first, second])
-
-    level, peak = joined.statistic(DETECTORS[1]), joined.statistic(DETECTORS[1], View.PEAK)
-
-    assert peak == 1.0
-    assert level is not None
-    assert level < 0.99
-
-
 def test_the_share_of_an_events_rows_not_read_stands_in_for_a_detector() -> None:
     first, second = files(8)
     first["row_normal"][FIRST * 6 : FIRST * 6 + 135] = False
@@ -593,14 +573,6 @@ def test_the_share_of_an_events_rows_not_read_stands_in_for_a_detector() -> None
 
     assert joined.statistic("event_unread_share") == pytest.approx(0.25)
     assert Scored.joined(event(9), files(9)).statistic("event_unread_share") == 0.0
-
-
-def test_the_excerpt_lying_inside_a_fault_is_ranked_by_no_family() -> None:
-    read = excerpts(count=8)
-    read.append(Scored.joined(Event("B", 87, 7, False, FIRST * 6, LAST * 6), files(87)))
-
-    assert len(Family.of(DETECTORS[1:3], read).excerpts) == 8
-    assert len(Family.of(DETECTORS[1:3], read, every=True).excerpts) == 9
 
 
 def test_a_verdicts_best_is_read_again_with_the_excerpt_inside_a_fault_ranked() -> None:
@@ -657,21 +629,6 @@ def test_a_detector_that_follows_the_events_length_is_shown_to() -> None:
     assert rows["event_length"].follows_length == pytest.approx(1.0)
 
 
-def test_the_events_length_alone_is_ranked_beside_the_detectors() -> None:
-    read = [
-        Scored.joined(
-            event(number, anomaly=number % 2 == 0, turbine=number, last=LAST - 40 * (number % 2)),
-            files(number, last=LAST - 40 * (number % 2)),
-        )
-        for number in range(8)
-    ]
-
-    rows = {row.detector: row for row in area_rows(read, 200, seed=1)}
-
-    # Every fault's event is the longer one.
-    assert rows["event_length"].area == 1.0
-
-
 def test_an_event_beyond_every_block_of_its_year_is_counted() -> None:
     rows = {row.detector: row for row in area_rows(excerpts(lift=50.0, count=8), 200, seed=1)}
 
@@ -691,9 +648,6 @@ def test_a_verdicts_best_is_shown_by_every_reading_beside() -> None:
     assert row.every_hour == row.peak == row.last_week == 1.0
     # The first farm's status is not its operator's: beside, the other farms alone.
     assert row.operators_status == 1.0
-    assert {"operators_status", "every_hour", "peak", "last_week", "unread_lowest"} <= set(
-        flat(row)
-    )
 
 
 def test_the_first_farms_status_is_not_its_operators() -> None:

@@ -8,8 +8,7 @@ The channels are a farm's averages but its angles and counters, each scored as a
 scores a channel, from its median in robust deviations over the fitted year, so the floor under
 a channel's spread does not hang on another channel's unit. An hour is scored where it is whole
 and half its history holds a reading; nothing of the scored window enters the scale or the
-floor. In the farm whose status says nothing of a scored window every hour of that window is
-read, the stopped turbine's among them.
+floor.
 
 Beside the twelve, descriptively, by the hour's summary alone: the same over the component
 temperatures, which a model of normal behaviour answers; the same with the scale and the floor

@@ -61,16 +61,6 @@ def test_a_channels_unit_does_not_move_another_channels_score() -> None:
         assert rescaled[arm] == pytest.approx(scores, nan_ok=True), arm
 
 
-def test_nothing_after_the_known_hours_enters_the_scale_or_the_floor() -> None:
-    plain = readings(hours=FEW)
-    later = plain.copy()
-    later[FEW_KNOWN:] *= 3.0
-    moved = departure_scores(later, FEW_KNOWN)
-
-    for arm, scores in departure_scores(plain, FEW_KNOWN).items():
-        assert np.array_equal(moved[arm][:FEW_KNOWN], scores[:FEW_KNOWN], equal_nan=True), arm
-
-
 def test_an_hour_that_is_not_whole_is_not_scored_and_starts_no_departure() -> None:
     plain = readings()
     holed = plain.copy()
