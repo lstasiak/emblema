@@ -117,7 +117,9 @@ Preliminary, on validation data; each task's test data is used once, at the end.
   a classical forecaster on the first mission and leads a little on the second, and another
   satellite's data handed as context makes it worse. On a wind turbine read as new it trails the
   farm's own models, and with the hour's operating conditions it at best matches a simple
-  regression. Its forecast range finds no more events than the departures.
+  regression. Its forecast range finds no more events than the departures. On wind turbines'
+  labelled faults the departures do not carry over, and a simple model of normal behaviour
+  ranks the faults at 0.73, short of its registered level.
 
 Numbers, intervals, limitations and what is read next: [`docs/findings.md`](docs/findings.md).
 

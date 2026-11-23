@@ -6,7 +6,7 @@ by a rule registered before its run ([preregistration](preregistration.md)); eac
 note that holds its evidence ([`verification/`](verification/README.md)). A row states direction
 and size; conditions and caveats are in its note.
 
-Last updated 2026-11-22.
+Last updated 2026-11-23.
 
 ## Status
 
@@ -84,6 +84,12 @@ Last updated 2026-11-22.
   from the past it trails the farm's boosted trees (1.27 and 1.26, harm), and handed the hour's
   operating conditions it matches or trails a regression of the turbine's own 47 hours on them
   (0.99, noise; 1.06, harm) ([note](verification/wind-fleet-cold-start.md)).
+  On labelled faults of wind turbines the departures, unchanged, do not rank the excerpts with a
+  fault above those without (0.68 for the best of twelve, chance 0.18), and a model of normal
+  behaviour ranks them at 0.73 whether fitted on the turbine's own year or on the farm's other
+  turbines alone, short of its registered level (chance 0.008 against 0.0083; 0.009 over more
+  shuffles); the share of an event spent out of normal operation ranks them higher with no
+  model, 0.80 ([note](verification/wind-fleet-detection.md)).
   At 1 % false alarms the departures leave little room: they miss 13 of 61, too
   few for the rule to reopen the perturbation term (at most 10.67 beyond chance, 11 required), and
   other detectors with no label find 3.7 of them beyond chance. Ten-minute cells gain one of the 11
@@ -261,6 +267,7 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | Chronos-2 zero-shot on 47 hours against the best classical answer in each satellite's first 30 days, read as a new system (the local forecasters on the same hours, the answers with no model); another satellite's nearest series of the same kind handed beside | M1 **1.29** [1.22; 1.37], harm; M2 **0.75** [0.66; 0.86], real and small: the claim of a lead from the first days not met; with every hour so far 0.92 and 0.64, descriptive; the nearest series on M2 **1.15** [1.07; 1.23], harm, though the route carries the hour itself (oracle 0.06) | [telemetry-cold-start](verification/telemetry-cold-start.md) |
 | The departures' floor and alarm fitted on the first mission's first 7 to 365 days instead of seven years, read on the validation months | at 1 %, fitted on 7 to 30 days `mean`, `bins-24h` finds **+4.5 to +4.7** events beyond chance over the whole side (lower edges +0.4 to +0.6), +4.4 [+1.1; +8.5] at a year: the floor fitted on years costs events; at its own alarm, fitted on 7 to 30 days, flags 4.4 to 13.5 % of normal windows (987 to 3,192 false runs), from day 60 1.15 to 1.39 % (18 to 94; whole side 1.92 %, 119) with the F-score at or above the whole side's | [telemetry-cold-start](verification/telemetry-cold-start.md) |
 | Chronos-2 zero-shot on each turbine of two wind farms read as new, first 30 days: from the past against the best classical answer with the farm's ridges and trees (A); with its neighbours' past (B); with six operating signals of the hour against the best classical answer that knows them, without the farm's models and with them (C) | A **1.27** [1.19; 1.35] and **1.26** [1.20; 1.33], harm; B **0.994** [0.991; 0.998] and **0.981** [0.977; 0.985], real and small; C without the farm **0.99** [0.95; 1.02], noise, and **1.06** [1.02; 1.10], harm, against the cell's own regression; C with the farm **1.84** [1.71; 1.97] and **2.11** [1.98; 2.25], harm; descriptive: on every hour since the start 0.83 and 0.91 without the farm, the farm's trees 0.54 and 0.50 | [wind-fleet-cold-start](verification/wind-fleet-cold-start.md) |
+| Labelled faults of wind turbines (19 turbines of three farms, 24 excerpts with a fault and 27 without; the area between them, pairs inside a farm): the telemetry's twelve departures, a model of normal behaviour per component temperature, and that model fitted on the farm's other turbines alone; a first reading void for its instrument, the corrected one chosen on its labels | departures 0.68 (chance 0.18); normal behaviour 0.73 (0.0097); the farm's model **0.73** [0.56; 0.87] (0.0084 against a level of 0.0083, 0.0094 over two million shuffles): none confirmed. With no model, the share of an event's rows out of normal operation 0.80 | [wind-fleet-detection](verification/wind-fleet-detection.md) |
 | Events the channels' departures miss, against other detectors with no label at 1 % false alarms | others find 6 of 13, 3.67 beyond chance, at most 10.67 possible, least 11; stays deferred; fusion +0.131 [+0.037; +0.234] over `channel_local`, +0.066 [−0.052; +0.176] over the mean of the departures | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The 11 events nothing found, on their annotated channels, ten minutes against the hour | one gained, two lost, least 4; not queued; six stand out at the hour beyond chance | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The departure bar, chosen on months no detector was read on (2000–2003, a class nearly absent later left out), then read forwards on the validation months | beyond chance at 1 %: mean over 72 hours 14.6 of 42 against 5.2 for the bar chosen by area; beyond chance the order turns on validation (Spearman −0.03), best 32.4 of 61, so the bar is the best of twelve in each reading | [telemetry-channel-local](verification/telemetry-channel-local.md) |
@@ -312,7 +319,8 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
    the base stays a comparison on the half. The named levers for a larger gain remain the
    pretext (a cell's mean, which interpolation answers on a grid) and the scale of data in the
    tasks' regime (credentialed MIMIC-IV or the full eICU).
-2. The turbines' labelled faults are read next by the departures and a model of normal behaviour.
-   A corpus of several systems then adapts the published forecaster, read against the farm's
-   trees, which with the hour's conditions miss about half as much as it does on a new turbine.
+2. A corpus of several systems adapts the published forecaster, read against the farm's trees,
+   which with the hour's conditions miss about half as much as it does on a new turbine. On the
+   turbines held unread its residuals are then read as a detector of their faults, against the
+   farm's model of normal behaviour and the share of an event spent out of normal operation.
 3. Open the frozen test side once.

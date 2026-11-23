@@ -313,3 +313,90 @@ sizes of its tables; its files were deleted unopened.
 - In farm A no answer with no model exists: its status is the label.
 - Events left out for want of a settled span are mostly faults; what a detector does there is
   not read.
+
+## 2026-11-23 — measured: the corrected reading
+
+**Question.** As declared above: by the corrected instrument, do the departures, a model of
+normal behaviour, and that model fitted with none of the turbine's own rows rank the excerpts
+with a fault above those without?
+
+**Conditions.** Declaration `a779180f`, instrument `dcd38225` and `c08aab6a`; Mac (M1 Pro), CPU;
+validation numbers, the statistic chosen on these labels. Farm A's 13 excerpts scored anew
+(`data/report/l62c/rerun.sh`); the 78 score files of farms B and C are the first run's, equal to
+the byte. Read once (`read.sh data/report/l62c/run2`). Every detector read 48 of the 51 ranked
+excerpts; three faults of farm C left the ranking, their turbines out of normal operation for
+78 to 87 % of the event.
+
+| Verdict | Best detector | Area | Approximate interval | Chance | Held to | |
+|---|---|---|---|---|---|---|
+| The farm's model, two | mean residual | 0.731 | 0.56 to 0.87 | 0.0084 | 0.0083 | not confirmed |
+| Normal behaviour, two | largest residual | 0.727 | 0.55 to 0.85 | 0.0097 | 0.0125 | not confirmed: the step before failed |
+| Departures, twelve | largest over channels of the hour's readings, 6 hours | 0.680 | 0.46 to 0.86 | 0.179 | 0.025 | not confirmed |
+
+| The best detector beside | Farms B and C | Every hour | Peak | Last week | Unreadable lowest | With excerpt 87 | Follows the length |
+|---|---|---|---|---|---|---|---|
+| The farm's model | 0.755 | 0.723 | 0.733 | 0.706 | 0.606 | 0.723 | +0.25 |
+| Normal behaviour | 0.789 | 0.633 | 0.686 | 0.677 | 0.603 | 0.727 | +0.52 |
+| Departures | 0.672 | 0.677 | 0.536 | 0.606 | 0.569 | 0.685 | −0.05 |
+
+| With no model | Area | Farms B and C | In A, B, C |
+|---|---|---|---|
+| The share of an event's rows not read | 0.798 | 0.850 | 0.50, 0.63, 0.87 |
+| The share of an hour's rows not of normal operation, by its level | 0.647 | 0.600 | 0.92, 0.50, 0.61 |
+| The event's length | 0.574 | 0.623 | 0.30, 0.75, 0.61 |
+
+Beside:
+
+- Per farm the farm's model reads 0.62, 0.63 and 0.77, normal behaviour 0.44, 0.69 and 0.80: the
+  area is farm C's, 11 faults and 16 quiet excerpts.
+- The twelve departures read 0.45 to 0.68 each; over the temperatures alone their best of six
+  reads 0.65, scaled on a turbine's first 7, 30 and 90 days 0.60, 0.63 and 0.67.
+- Normal behaviour's mean residual against the departures' named detector: +0.145 (chance
+  0.24). The farm's model against the excerpt's own: +0.013 (chance 0.89).
+- The benchmark's score at an alarm of 2 %: the farm's model 0.57 and 0.58 (8 faults found of
+  24, 1 and 3 quiet excerpts falsely), normal behaviour 0.54 and 0.58, the departures 0 to 0.48
+  (at most 5 found; the detector that ranks best finds none). The largest over every detector
+  and alarm is 0.60. A coin scores 0.5 and the authors' autoencoder 0.66 over all 95 excerpts.
+
+**Checked after the reading.**
+
+| | Read |
+|---|---|
+| The chances over 2,000,000 shuffles (`posthoc2_shuffles.py`) | the farm's model 0.0094, normal behaviour 0.0098, departures 0.171, each ±0.0001 or less: the 0.0084 of the declared 10,000 lay on the low side of its own error, and the verdict fails clear of the level |
+| Sibling faults' hours left out of the fitted years (`sibling_faults.py`; 6 of 24 faults and 9 of 27 quiet excerpts hold such hours) | the farm's model 0.735, normal behaviour 0.727, departures 0.680: unchanged to 0.005 |
+| The inputs | 52 and 52 score files; the areas counted again from `excerpts.csv` by pairs, with none of the reading's code, agree to four places |
+
+**Seen after the reading, on its labels** (`posthoc2_stops.py`). Among the events with at most
+a tenth of their rows not read, 17 faults and 25 quiet, the four model detectors read 0.73 to
+0.75 and the status by its level 0.61. The sum of a detector's rank and the rank of the share
+not read reads 0.78 to 0.83, where that share alone reads 0.76 on the same excerpts.
+
+**Conclusions.**
+
+- No verdict is confirmed at the registered level. Both models of normal behaviour rank the
+  faults at 0.73 with a chance of 0.009 to 0.010. Three verdicts hold the smallest chance to
+  0.0083; the two verdicts first declared would have held normal behaviour's to 0.0125.
+- A model that never read the turbine ranks its faults as the model fitted on its own year
+  does. A year of the turbine's history adds nothing here to the farm's.
+- The telemetry's departures, unchanged, do not rank the faults: 0.68 is where the best of
+  twelve stands by chance one time in six. Slower histories, and departures of a model's
+  residuals, were not read.
+- Stops say more than any detector. The share of an event's rows not read ranks the faults at
+  0.85 in farms B and C, above every best detector there, so by the declared check even a pass
+  would not have been read as faults seen early.
+- Part of the models' area is the events' length: their statistic follows it at +0.25 to +0.52,
+  and by the last seven days alone they read 0.71 and 0.68.
+
+**What follows.** The declared row for no pass kept detection for new systems on the
+satellites. With two families a hair from their level, the faults of turbines stay a task for
+the model of new systems instead (decided 2026-11-23): on the held turbines it is read against
+the farm's model and the share of an event's rows not read, by this instrument.
+
+**Limitations.**
+
+- Validation numbers on 19 turbines, the statistic and the third verdict chosen on their
+  labels; nothing here is confirmed until the held turbines are read.
+- The area is farm C's. Farm A's six faults and seven quiet excerpts read 0.36 to 0.62 over the four model detectors, farm
+  B's four and four 0.63 to 0.69.
+- Three faults whose turbines kept stopping were not read by any detector.
+- What a detector reads apart from stops was looked at only after the labels.
