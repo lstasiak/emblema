@@ -14,6 +14,7 @@ from pathlib import Path
 LONGEST_LINE = 90
 NETWORK_STEP = re.compile(
     r"git clone|git fetch|pip3? install|fetch_corpora|curl |wget |python .*fetch_published"
+    r"|python .*put_archive|hf download"
 )
 # A killed batch session keeps nothing, so a running piece is stopped this long after the cutoff.
 GRACE_SECONDS = 3600
@@ -129,7 +130,8 @@ def head(platform: Platform, *, title: str, name: str, commit: str, extras: str)
         .replace("@ROOT@", platform.root)
         .replace("@GUARD@", platform.guard)
         .replace("@WORK@", platform.work.replace("@NAME@", name))
-        .replace("@EXTRAS@", extras)
+        # pip refuses ".[]": the package alone is installed as itself.
+        .replace("@PACKAGE@", f'".[{extras}]"' if extras else ".")
     )
 
 
@@ -317,7 +319,7 @@ if ! git checkout -q $C; then echo "commit not on the remote"; exit 0; fi
 git log -1 --format='%h %s'
 INSTALLED=no
 for attempt in 1 2 3; do
-  if timeout $NET pip install -q -e ".[@EXTRAS@]" 2>/dev/null; then
+  if timeout $NET pip install -q -e @PACKAGE@ 2>/dev/null; then
     INSTALLED=yes; break
   fi
   echo "install attempt $attempt did not finish"
