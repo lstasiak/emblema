@@ -245,7 +245,7 @@ def fit(arguments: argparse.Namespace) -> None:  # pragma: no cover - needs the 
         finetuned_ckpt_name="checkpoint",
         seed=arguments.seed,
         data_seed=arguments.seed,
-        optim=arguments.optim,
+        optim="adamw_torch_fused",
         logging_steps=max(arguments.steps // 20, 1),
         lr_scheduler_type=arguments.schedule,
         **saving(arguments.save_every),
@@ -326,7 +326,6 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
         "--batch", type=int, default=128, help="rows per step: a series' targets and covariates"
     )
     fitting.add_argument("--seed", type=int, default=1)
-    fitting.add_argument("--optim", default="adamw_torch_fused")
     fitting.add_argument("--schedule", choices=("linear", "constant"), default="linear")
     fitting.add_argument("--save-every", type=int, help="keep the adapters every N steps")
     fitting.add_argument("--out", type=Path, required=True)
