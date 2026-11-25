@@ -28,7 +28,7 @@ their own names, written as ``<kind>-<farm>-N<days>.csv``:
   (``_until<year>``);
 - ``--folds K``: the new turbine's whole fold left out with it, as ``fleet_adaptation.folds``
   deals the farm (``_folds``);
-- ``--fleet-from FARM DIR``: fitted on the other farm's turbines, every one, instead of the
+- ``--fleet-from DIR``: fitted on the other farm's turbines, every one, instead of the
   farm's own (``other_farm_`` for ``fleet_``).
 """
 
@@ -236,7 +236,9 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument("--fit-until", type=date.fromisoformat, help="the first day not read")
     parser.add_argument("--folds", type=int, help="leave the new turbine's fold out")
-    parser.add_argument("--fleet-from", nargs=2, metavar=("FARM", "DIR"))
+    parser.add_argument(
+        "--fleet-from", type=Path, metavar="DIR", help="the other farm's hourly means"
+    )
     parser.add_argument("--trees", nargs="+", choices=tuple(TREES), default=tuple(TREES))
     parser.add_argument("--kind", default="trees", help="the written files' prefix")
     arguments = parser.parse_args(argv)
@@ -247,7 +249,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
         raise SystemExit("trees read otherwise are written under a --kind of their own")
 
     turbines = loaded_farm(arguments.hourly)
-    fleet = loaded_farm(Path(arguments.fleet_from[1])) if arguments.fleet_from else None
+    fleet = loaded_farm(arguments.fleet_from) if arguments.fleet_from else None
     left_out = None
     if arguments.folds is not None:
         dealt = folds([t.name for t in turbines], arguments.folds)
