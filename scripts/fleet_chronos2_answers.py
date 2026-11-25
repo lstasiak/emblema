@@ -137,9 +137,10 @@ def answered(
     *,
     cap: int,
     batch: int = 32,
+    rungs: Sequence[str] = RUNGS,
     say: Callable[[str], None] = lambda _: None,
 ) -> dict[str, dict[Key, float]]:
-    """Every rung's median for every cell.
+    """Each of ``rungs``' median for every cell.
 
     Raises:
         ValueError: If a cell's axis names a turbine not loaded, the forecaster answers another
@@ -160,9 +161,9 @@ def answered(
         news[axis] = (start, by_name[name].before(start).values)
         if name not in means:
             means[name] = neighbours_mean(turbines, name)
-    out: dict[str, dict[Key, float]] = {rung: {} for rung in RUNGS}
+    out: dict[str, dict[Key, float]] = {rung: {} for rung in rungs}
     started = time.monotonic()
-    for rung in RUNGS:
+    for rung in rungs:
         if rung == EACH:
             out[rung] = alone(cells, news, predict, median, batch=batch * len(WINDOW))
         else:
@@ -239,6 +240,7 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
     parser.add_argument("--model", default="amazon/chronos-2")
     parser.add_argument("--device", default="mps")
     parser.add_argument("--batch", type=int, default=32, help="windows handed at once")
+    parser.add_argument("--rungs", nargs="+", choices=RUNGS, default=RUNGS)
     arguments = parser.parse_args(argv)
 
     # A start has sometimes waited on a lock for half an hour before the model loaded; past
@@ -269,10 +271,11 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
         median_index(pipeline.quantiles),
         cap=cap,
         batch=arguments.batch,
+        rungs=arguments.rungs,
         say=lambda text: print(text, file=sys.stderr, flush=True),
     )
     arguments.out.parent.mkdir(parents=True, exist_ok=True)
-    write(arguments.out, cells, out, RUNGS)
+    write(arguments.out, cells, out, arguments.rungs)
     print(f"{len(cells)} cells answered in {time.monotonic() - started:.0f} s, context up to {cap}")
 
 

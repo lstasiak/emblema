@@ -52,7 +52,7 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -114,7 +114,7 @@ class Comparison:
 
     Attributes:
         of: The answer read.
-        against: The answer it is read against, or the bar's name in ``BARS``.
+        against: The answer it is read against, or a bar's name.
         scope: The answer whose cells the comparison reads; every cell when empty.
         verdict: Whether the first month reads a level for it.
     """
@@ -123,10 +123,6 @@ class Comparison:
     against: str
     scope: str = ""
     verdict: bool = False
-
-    @property
-    def bar(self) -> tuple[str, ...]:
-        return BARS.get(self.against, (self.against,))
 
 
 VERDICTS = (
@@ -257,8 +253,11 @@ def comparison_rows(
     resamples: int,
     seed: int,
     drop_exact: bool = False,
+    bars: Mapping[str, tuple[str, ...]] = BARS,
 ) -> list[dict[str, object]]:
     """The comparisons' rows on the day's cells; with ``levels``, the verdicts read a level.
+
+    A comparison's ``against`` names an answer, or a bar in ``bars``, read at its best member.
 
     A window an answer hits exactly leaves no ratio, and is refused; with ``drop_exact``, as for
     a few channels read alone, whose hourly mean can stand still on a quantised sensor, it is
@@ -269,7 +268,7 @@ def comparison_rows(
     """
     rows: list[dict[str, object]] = []
     for comparison in comparisons:
-        of, against = comparison.of, comparison.bar
+        of, against = comparison.of, bars.get(comparison.against, (comparison.against,))
         read = day
         if comparison.scope:
             if comparison.scope not in day.answers:
@@ -277,7 +276,7 @@ def comparison_rows(
             read = restricted(day, day.covered([comparison.scope]))
         if of not in read.answers or not read.keys:
             continue
-        named = comparison.against in BARS
+        named = comparison.against in bars
         present = [a for a in against if a in read.answers]
         bar = (
             [a for a in present if a not in OWN_HISTORY or read.covered([a]).all()]
@@ -336,10 +335,12 @@ def comparison_rows(
     return rows
 
 
-def loss_rows(day: Day, resamples: int, seed: int) -> list[dict[str, object]]:
+def loss_rows(
+    day: Day, resamples: int, seed: int, names: Sequence[str] = (*CLASSICAL, *RUNGS, ORACLE)
+) -> list[dict[str, object]]:
     """Each answer's geometric mean over windows of its window losses, on the cells it answers."""
     rows: list[dict[str, object]] = []
-    for name in (*CLASSICAL, *RUNGS, ORACLE):
+    for name in names:
         if name not in day.answers:
             continue
         cells = day.covered([name])

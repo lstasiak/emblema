@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from scripts.fleet_hours import CHANNELS, CONDITIONS, READ_UNTIL, Turbine, axis_of, hour_of
-from scripts.fleet_tree_answers import MOST_ROWS, TREES, answered, drawn
+from scripts.fleet_tree_answers import MOST_ROWS, TREES, answered, drawn, named_as
 
 START = date(2021, 3, 1)
 YEAR = hour_of(date(2021, 1, 1))
@@ -85,3 +85,55 @@ def test_a_fit_reads_at_most_its_rows_drawn_by_seed_in_their_order() -> None:
 def test_a_cell_of_a_turbine_not_loaded_is_refused() -> None:
     with pytest.raises(ValueError, match="not loaded"):
         answered(farm(), [(hour_of(START) + 200, axis_of("9", START), 0)], mean_of_targets, seed=1)
+
+
+def test_under_a_cut_the_trees_read_nothing_from_it_nor_of_the_fold() -> None:
+    turbines = farm()
+    cut = date(2020, 12, 1)
+    keys = cells(range(hour_of(START) + 200, hour_of(START) + 260, 7))
+    first = answered(turbines, keys, mean_of_targets, seed=1, cut=cut, left_out={"1": ("2",)})
+
+    changed = [Turbine(t.name, t.values.copy()) for t in turbines]
+    changed[1].values[:] += 40.0
+    # Between the cut and the start's year: read by the trees of that year, not under the cut.
+    changed[2].values[hour_of(cut) : YEAR] -= 9.0
+    again = answered(changed, keys, mean_of_targets, seed=1, cut=cut, left_out={"1": ("2",)})
+    moved = answered(changed, keys, mean_of_targets, seed=1, left_out={"1": ("2",)})
+
+    assert first["fleet_nbm_trees"]
+    assert again["fleet_nbm_trees"] == pytest.approx(first["fleet_nbm_trees"])
+    assert moved["fleet_nbm_trees"] != pytest.approx(first["fleet_nbm_trees"])
+    with pytest.raises(ValueError, match="before the trees' cut"):
+        answered(turbines, keys, mean_of_targets, seed=1, cut=date(2021, 6, 1))
+
+
+def test_trees_from_another_farm_read_none_of_the_new_turbines_farm() -> None:
+    turbines, other = farm(), farm(seed=9)
+    renamed = [Turbine(f"0{t.name}", t.values) for t in other]
+    keys = cells(range(hour_of(START) + 200, hour_of(START) + 230))
+
+    first = answered(
+        turbines, keys, mean_of_targets, seed=1, fleet=renamed, trees=["fleet_nbm_trees"]
+    )
+    turbines[1].values[:] += 40.0
+    again = answered(
+        turbines, keys, mean_of_targets, seed=1, fleet=renamed, trees=["fleet_nbm_trees"]
+    )
+
+    assert set(first) == {"fleet_nbm_trees"}
+    assert first["fleet_nbm_trees"]
+    assert again["fleet_nbm_trees"] == pytest.approx(first["fleet_nbm_trees"])
+
+
+def test_trees_read_otherwise_answer_under_names_of_their_own() -> None:
+    cut = date(2020, 1, 1)
+
+    assert named_as("fleet_nbm_trees", cut=None, folds=False, other=False) == "fleet_nbm_trees"
+    assert (
+        named_as("fleet_nbm_trees", cut=cut, folds=True, other=False)
+        == "fleet_nbm_trees_folds_until2020"
+    )
+    assert (
+        named_as("fleet_nbm_trees", cut=cut, folds=False, other=True)
+        == "other_farm_nbm_trees_until2020"
+    )

@@ -71,6 +71,10 @@ POWER = CHANNELS.index("Power")
 ORIGIN = date(2016, 1, 1)
 READ_UNTIL = date(2023, 1, 1)
 HOURS_PER_DAY = 24
+# The turbines held unread for one final reading, as ``wind_fleet_audit.py held`` draws them with
+# seed 1; written out because this module must load where the package does not, and pinned to
+# that draw by a test. The two farms name their turbines in different forms, so one set serves.
+HELD_UNREAD = frozenset({"2", "6", "05", "09", "11", "12"})
 
 
 def hour_of(day: date) -> int:
@@ -111,9 +115,12 @@ def loaded(directory: Path, turbines: Sequence[str]) -> list[Turbine]:
     """The turbines' hourly means of the window's channels, on one axis to the end read.
 
     Raises:
-        ValueError: If a turbine lacks a channel of the window or holds an hour past the years
-            read.
+        ValueError: If a turbine is held unread, lacks a channel of the window or holds an hour
+            past the years read.
     """
+    held = sorted(HELD_UNREAD.intersection(turbines))
+    if held:
+        raise ValueError(f"turbines {held} are held unread")
     end = hour_of(READ_UNTIL)
     out = []
     for name in turbines:

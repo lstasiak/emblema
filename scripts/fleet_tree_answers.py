@@ -20,6 +20,16 @@ macOS:
 
 Reads ``answers-<farm>-N<days>.csv`` from ``--cells`` and writes ``trees-<farm>-N<days>.csv``
 beside them: window, axis, channel and each answer.
+
+The fine-tuned forecaster's pilot reads trees on the same footing as its fits, under answers of
+their own names, written as ``<kind>-<farm>-N<days>.csv``:
+
+- ``--fit-until DAY``: every tree fitted on the hours before that day, whatever the start's year
+  (``_until<year>``);
+- ``--folds K``: the new turbine's whole fold left out with it, as ``fleet_adaptation.folds``
+  deals the farm (``_folds``);
+- ``--fleet-from DIR``: fitted on the other farm's turbines, every one, instead of the
+  farm's own (``other_farm_`` for ``fleet_``).
 """
 
 from __future__ import annotations
@@ -40,6 +50,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.chronos2_ladder import read_cells, write  # noqa: E402
 from scripts.cold_start_cells import ROWS_PER_FEATURE  # noqa: E402
+from scripts.fleet_adaptation import folds  # noqa: E402
 from scripts.fleet_cold_start_cells import (  # noqa: E402
     FLEET,
     FLEET_NBM,
@@ -110,12 +121,20 @@ def answered(
     fit: Fit,
     *,
     seed: int,
+    cut: date | None = None,
+    fleet: Sequence[Turbine] | None = None,
+    left_out: Mapping[str, Sequence[str]] | None = None,
+    trees: Sequence[str] = tuple(TREES),
     say: Callable[[str], None] = lambda _: None,
 ) -> dict[str, dict[Key, float]]:
     """Every tree answer for every cell it can answer.
 
+    The trees read the farm's other turbines before the start's year; before ``cut`` instead,
+    when given; ``fleet``'s turbines instead of the farm's, when given; and none that
+    ``left_out`` names beside the new turbine.
+
     Raises:
-        ValueError: If a cell names a turbine not loaded.
+        ValueError: If a cell names a turbine not loaded, or starts before the cut.
     """
     by_name = {t.name: t for t in turbines}
     groups: dict[tuple[str, int], list[Key]] = {}
@@ -123,19 +142,24 @@ def answered(
         name, day = parsed_axis(key[1])
         if name not in by_name:
             raise ValueError(f"{key[1]} names a turbine not loaded")
-        groups.setdefault((name, year_start(day)), []).append(key)
-    out: dict[str, dict[Key, float]] = {tree: {} for tree in TREES}
-    read = {t.name: (scorable(t.values), latest(t.values)) for t in turbines}
+        if cut is not None and day < cut:
+            raise ValueError(f"{key[1]} starts before the trees' cut {cut}")
+        groups.setdefault((name, hour_of(cut) if cut else year_start(day)), []).append(key)
+    source = turbines if fleet is None else fleet
+    out: dict[str, dict[Key, float]] = {tree: {} for tree in trees}
+    read = {t.name: (scorable(t.values), latest(t.values)) for t in source}
     started = time.monotonic()
     for until in sorted({u for _, u in groups}):
-        for tree, kind in ROWS.items():
+        for tree in trees:
+            kind = ROWS[tree]
             for channel in range(len(TARGETS)):
-                rows_of = fleet_rows(turbines, read, kind, channel, until)
+                rows_of = fleet_rows(source, read, kind, channel, until)
                 for (name, year), keys in groups.items():
                     if year != until:
                         continue
                     wanted = [k for k in keys if k[2] == channel]
-                    others = [v for t, v in rows_of.items() if t != name]
+                    unread = {name, *(left_out or {}).get(name, ())}
+                    others = [v for t, v in rows_of.items() if t not in unread]
                     if not wanted or not others:
                         continue
                     rows = np.concatenate([r for r, _ in others])
@@ -175,6 +199,12 @@ def answer_cells(
             out[key] = float(value)
 
 
+def named_as(tree: str, *, cut: date | None, folds: bool, other: bool) -> str:
+    """A tree answer's name when its trees read otherwise than the farm's before the year."""
+    name = tree.replace("fleet_", "other_farm_", 1) if other else tree
+    return name + ("_folds" if folds else "") + (f"_until{cut.year}" if cut else "")
+
+
 def xgboost_fit(jobs: int) -> Fit:  # pragma: no cover - needs XGBoost
     import xgboost as xgb
 
@@ -204,11 +234,26 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     parser.add_argument("--cells", type=Path, required=True, help="fleet_cold_start_cells's")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--jobs", type=int, default=8)
+    parser.add_argument("--fit-until", type=date.fromisoformat, help="the first day not read")
+    parser.add_argument("--folds", type=int, help="leave the new turbine's fold out")
+    parser.add_argument(
+        "--fleet-from", type=Path, metavar="DIR", help="the other farm's hourly means"
+    )
+    parser.add_argument("--trees", nargs="+", choices=tuple(TREES), default=tuple(TREES))
+    parser.add_argument("--kind", default="trees", help="the written files' prefix")
     arguments = parser.parse_args(argv)
     if "torch" in sys.modules:
         raise SystemExit("torch is loaded: XGBoost's OpenMP must not share its process")
+    varied = (arguments.fit_until, arguments.folds, arguments.fleet_from) != (None, None, None)
+    if varied and arguments.kind == "trees":
+        raise SystemExit("trees read otherwise are written under a --kind of their own")
 
     turbines = loaded_farm(arguments.hourly)
+    fleet = loaded_farm(arguments.fleet_from) if arguments.fleet_from else None
+    left_out = None
+    if arguments.folds is not None:
+        dealt = folds([t.name for t in turbines], arguments.folds)
+        left_out = {name: fold for fold in dealt for name in fold}
     files = sorted(arguments.cells.glob(f"answers-{arguments.farm}-N*.csv"))
     by_file = {path: read_cells(path) for path in files}
     every = [k for keys in by_file.values() for k in keys]
@@ -217,11 +262,25 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
         every,
         xgboost_fit(arguments.jobs),
         seed=arguments.seed,
+        cut=arguments.fit_until,
+        fleet=fleet,
+        left_out=left_out,
+        trees=arguments.trees,
         say=lambda text: print(text, file=sys.stderr, flush=True),
     )
+    named = {
+        tree: named_as(
+            tree,
+            cut=arguments.fit_until,
+            folds=arguments.folds is not None,
+            other=bool(arguments.fleet_from),
+        )
+        for tree in arguments.trees
+    }
+    renamed = {named[tree]: answers for tree, answers in out.items()}
     for path, keys in by_file.items():
         label = path.stem.removeprefix("answers-")
-        write(arguments.cells / f"trees-{label}.csv", keys, out, tuple(TREES))
+        write(arguments.cells / f"{arguments.kind}-{label}.csv", keys, renamed, tuple(renamed))
         print(f"{label}: {len(keys)} cells")
 
 

@@ -294,8 +294,8 @@ def test_a_turbine_is_loaded_in_the_windows_channel_order_and_refused_past_the_y
 ) -> None:
     channels = list(reversed(CHANNELS))
     write_turbine(tmp_path, "1", channels, np.array([0, 5]))
-    write_turbine(tmp_path, "2", channels[1:], np.array([0]))
-    write_turbine(tmp_path, "3", channels, np.array([hour_of(READ_UNTIL)]))
+    write_turbine(tmp_path, "3", channels[1:], np.array([0]))
+    write_turbine(tmp_path, "4", channels, np.array([hour_of(READ_UNTIL)]))
 
     (one,) = loaded(tmp_path, ["1"])
 
@@ -303,9 +303,9 @@ def test_a_turbine_is_loaded_in_the_windows_channel_order_and_refused_past_the_y
     assert np.isfinite(one.values[[0, 5]]).all()
     assert np.isnan(one.values[1]).all()
     with pytest.raises(ValueError, match="holds no"):
-        loaded(tmp_path, ["2"])
-    with pytest.raises(ValueError, match="past"):
         loaded(tmp_path, ["3"])
+    with pytest.raises(ValueError, match="past"):
+        loaded(tmp_path, ["4"])
 
 
 def test_a_trials_years_bound_its_starts_and_curves_as_the_held_out_years_do() -> None:

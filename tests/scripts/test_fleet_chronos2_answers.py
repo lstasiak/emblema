@@ -176,3 +176,12 @@ def test_the_normal_behaviour_rungs_answer_the_temperatures_where_the_hour_is_kn
 
     for rung in (NBM, NBM_CURRENTS, NBM_OWN):
         assert out[rung] == {(BEGIN + 50, axis, 0): 1.0}
+
+
+def test_only_the_rungs_asked_for_are_answered() -> None:
+    turbines = [turbine("1", 1.0), turbine("2", 2.0)]
+    cells = [(BEGIN + 50, axis_of("1", START), 0)]
+
+    out = answered(cells, turbines, echo, median=1, cap=8192, rungs=(NBM, NBM_OWN))
+
+    assert set(out) == {NBM, NBM_OWN}
