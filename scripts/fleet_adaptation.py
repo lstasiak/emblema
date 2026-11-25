@@ -7,8 +7,13 @@ telemetry, its channels in groups of at most seventeen as the target alone. Ever
 before one cut, the hour the fit's cells start after. Two kinds of fit read a system as new:
 
 - a turbine of a known farm: the farm's other turbines, the turbines of a fold left out, so
-  that each fit answers the cells of the turbines it never read;
+  that each fit answers the cells of the turbines it never read; in one arm another farm's
+  turbines beside them;
 - a farm: the other farm's turbines, and in one arm the missions beside them.
+
+A cell is answered only where the hour's six conditions all read, and a farm's early years may
+lack one: a fit may read every span, or only those cut from the hours whose conditions all read
+(``complete``).
 
 A cell is answered from at most the thirty days since its turbine's start, so a history is cut
 into spans of thirty days and the hour after, each a series: a training draw then reads the
@@ -67,6 +72,43 @@ def folds(names: Sequence[str], count: int) -> list[tuple[str, ...]]:
     return [tuple(ordered[n::count]) for n in range(count)]
 
 
+def scope_of(
+    farm: str,
+    names: Sequence[str],
+    *,
+    fold: int | None = None,
+    of: int | None = None,
+    other: str | None = None,
+    beside: str | None = None,
+    missions: bool = False,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The farm's turbines a fit answers, and those it must not read, as ``<farm>/<name>``.
+
+    A fit reads the farm without fold ``fold`` of ``of``, with the farm ``beside`` as well when
+    named, and answers the fold; or it reads the farm ``other`` alone, with the missions when
+    asked, and answers every turbine of the farm.
+
+    Raises:
+        ValueError: If neither a fold nor another farm is named, or both; if a farm is read
+            beside no fold; if the missions are read beside a fold; or if the farm itself is
+            named as the other one.
+    """
+    if farm in (other, beside):
+        raise ValueError(f"{farm} is the farm answered, not another one")
+    if other:
+        if fold is not None or of is not None or beside:
+            raise ValueError("a fit reads either a fold's farm or another farm alone, not both")
+        return tuple(names), ()
+    if missions:
+        raise ValueError("missions are read beside another farm alone")
+    if fold is None or of is None:
+        raise ValueError("name a fold of the farm, or another farm")
+    dealt = folds(names, of)
+    if not 0 <= fold < of:
+        raise ValueError(f"the farm is dealt into folds 0 to {of - 1}, not {fold}")
+    return dealt[fold], tuple(f"{farm}/{name}" for name in dealt[fold])
+
+
 def spans(read: NDArray[np.bool_]) -> list[slice]:
     """The spans of ``SPAN`` hours and the hour after, from the first hour ``read`` on.
 
@@ -83,20 +125,24 @@ def spans(read: NDArray[np.bool_]) -> list[slice]:
     return out
 
 
-def turbine_series(turbine: Turbine, until: int) -> list[Series]:
+def turbine_series(turbine: Turbine, until: int, *, complete: bool = False) -> list[Series]:
     """A turbine's spans before ``until`` in the normal-behaviour form.
 
     The conditions are marked known in the forecast hour; in training the forecaster takes
-    their value there from the series itself.
+    their value there from the series itself. With ``complete``, the spans are cut from the
+    hours whose conditions all read: from the first of them on, and kept by their count.
     """
     values = turbine.values[:until, : len(CHANNELS)]
+    read = np.isfinite(values[:, : len(TARGETS)]).any(axis=1)
+    if complete:
+        read &= np.isfinite(values[:, list(CONDITIONS)]).all(axis=1)
     return [
         {
             "target": values[span, : len(TARGETS)].T.copy(),
             "past_covariates": {f"s{i}": values[span, i].copy() for i in CONDITIONS},
             "future_covariates": {f"s{i}": None for i in CONDITIONS},
         }
-        for span in spans(np.isfinite(values[:, : len(TARGETS)]).any(axis=1))
+        for span in spans(read)
     ]
 
 
@@ -138,6 +184,7 @@ class FitRecord:
             23, so 128 draws about six spans.
         save_every: The steps between adapters kept on the way, or 0.
         seed: Seeds the draws and the adapters' start.
+        complete: Whether the turbines' spans are cut from the hours whose conditions all read.
     """
 
     name: str
@@ -160,6 +207,7 @@ class FitRecord:
     batch: int
     save_every: int
     seed: int
+    complete: bool = False
 
     def write(self, directory: Path) -> None:
         (directory / "fit.json").write_text(json.dumps(asdict(self), indent=2) + "\n")
@@ -190,12 +238,13 @@ def training_series(
     missions: Mapping[str, Floats] | None = None,
     share: float = 0.0,
     seed: int = 1,
+    complete: bool = False,
 ) -> TrainingSet:
     """Every series a fit reads.
 
-    ``farms`` holds each farm's turbines by the farm's name; ``left_out`` names the turbines of
-    the farms that must not be read. The missions' series, drawn by ``seed``, are ``share`` of
-    all.
+    ``farms`` holds each farm's turbines by the farm's name; ``left_out`` names the turbines
+    that must not be read, as ``<farm>/<name>``. The missions' series, drawn by ``seed``, are
+    ``share`` of all. With ``complete``, see ``turbine_series``.
 
     Raises:
         ValueError: If the cut lies past the years read, a turbine left out is not loaded, a
@@ -204,7 +253,7 @@ def training_series(
     """
     if until > READ_UNTIL:
         raise ValueError(f"a fit may read nothing from {READ_UNTIL}, not until {until}")
-    loaded = {t.name for turbines in farms.values() for t in turbines}
+    loaded = {f"{farm}/{t.name}" for farm, turbines in farms.items() for t in turbines}
     absent = sorted(set(left_out) - loaded)
     if absent:
         raise ValueError(f"turbines {absent} are left out but not loaded")
@@ -215,9 +264,9 @@ def training_series(
         for turbine in turbines:
             if turbine.name in HELD_UNREAD:
                 raise ValueError(f"turbine {turbine.name} is held unread")
-            if turbine.name in left_out:
+            if f"{farm}/{turbine.name}" in left_out:
                 continue
-            made = turbine_series(turbine, cut)
+            made = turbine_series(turbine, cut, complete=complete)
             if made:
                 series += made
                 read.append(f"{farm}/{turbine.name}")
@@ -236,7 +285,9 @@ def training_series(
 
 def refused(record: FitRecord, cells: Iterable[Key]) -> list[str]:
     """Why the fit may not answer the cells: any it read, or any starting before its cut."""
-    read = {name.partition("/")[2] for name in record.turbines}
+    read = {
+        name for farm, _, name in (t.partition("/") for t in record.turbines) if farm == record.farm
+    }
     cut = date.fromisoformat(record.until)
     out = []
     for axis in sorted({k[1] for k in cells}):

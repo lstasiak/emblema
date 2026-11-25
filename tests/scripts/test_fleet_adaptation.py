@@ -2,6 +2,7 @@
 
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -13,6 +14,7 @@ from scripts.fleet_adaptation import (
     folds,
     mission_series,
     refused,
+    scope_of,
     spans,
     training_series,
     turbine_series,
@@ -30,8 +32,9 @@ def turbine(name: str, level: float = 1.0, first: int = 0) -> Turbine:
     return Turbine(name, values)
 
 
-def record(**changed: object) -> FitRecord:
-    fields: dict[str, object] = {
+def record(**changed: Any) -> FitRecord:
+    # Any: one test changes one field, of whichever type it has.
+    fields: dict[str, Any] = {
         "name": "penmanshiel-fold0",
         "arm": "adapted_fleet",
         "farm": "penmanshiel",
@@ -54,7 +57,7 @@ def record(**changed: object) -> FitRecord:
         "seed": 1,
     }
     fields.update(changed)
-    return FitRecord(**fields)  # type: ignore[arg-type]
+    return FitRecord(**fields)
 
 
 def test_folds_deal_the_sorted_names_in_turn_and_refuse_more_folds_than_names() -> None:
@@ -97,13 +100,13 @@ def test_a_span_reading_too_few_hours_is_left_out() -> None:
 
 def test_the_series_read_nothing_of_the_turbines_left_out_nor_from_the_cut() -> None:
     farm = [turbine("01"), turbine("02", 5.0), turbine("04", 9.0)]
-    trained = training_series({"penmanshiel": farm}, left_out={"02"}, until=CUT)
+    trained = training_series({"penmanshiel": farm}, left_out={"penmanshiel/02"}, until=CUT)
 
     changed = [Turbine(t.name, t.values.copy()) for t in farm]
     changed[1].values[:] = -1.0
     for t in changed:
         t.values[hour_of(CUT) :] = -1.0
-    again = training_series({"penmanshiel": changed}, left_out={"02"}, until=CUT)
+    again = training_series({"penmanshiel": changed}, left_out={"penmanshiel/02"}, until=CUT)
 
     assert trained.turbines == ("penmanshiel/01", "penmanshiel/04")
     assert (
@@ -115,6 +118,65 @@ def test_the_series_read_nothing_of_the_turbines_left_out_nor_from_the_cut() -> 
     assert len(again.series) == len(trained.series)
     for a, b in zip(trained.series, again.series, strict=True):
         assert np.array_equal(a["target"], b["target"])
+
+
+def test_a_turbine_is_left_out_by_its_farm_and_a_farm_beside_is_read_whole() -> None:
+    farms = {"kelmarsh": [turbine("1"), turbine("3", 5.0)], "penmanshiel": [turbine("1", 9.0)]}
+
+    trained = training_series(farms, left_out={"kelmarsh/1"}, until=CUT)
+
+    assert trained.turbines == ("kelmarsh/3", "penmanshiel/1")
+    with pytest.raises(ValueError, match="left out but not loaded"):
+        training_series(farms, left_out={"1"}, until=CUT)
+
+
+def test_complete_spans_are_cut_from_the_hours_whose_conditions_all_read() -> None:
+    first = hour_of(CUT) - 3 * (SPAN + 1)
+    late = turbine("01", first=first)
+    late.values[: first + SPAN + 301, CONDITIONS[3]] = np.nan
+
+    every = turbine_series(late, hour_of(CUT))
+    whole = turbine_series(late, hour_of(CUT), complete=True)
+    trained = training_series({"penmanshiel": [late]}, left_out=(), until=CUT, complete=True)
+
+    assert len(every) == 3
+    assert [s["target"].shape[1] for s in whole] == [SPAN + 1, SPAN + 1 - 300]
+    assert whole[0]["target"][0, 0] == 1.0 + first + SPAN + 301
+    assert all(np.isfinite(s["past_covariates"][f"s{CONDITIONS[3]}"]).all() for s in whole)
+    assert trained.turbine_series == 2
+
+
+def test_a_fit_answers_a_fold_it_leaves_out_or_a_farm_it_reads_nothing_of() -> None:
+    names = ["07", "01", "15", "02"]
+
+    assert scope_of("penmanshiel", names, fold=1, of=2) == (
+        ("02", "15"),
+        ("penmanshiel/02", "penmanshiel/15"),
+    )
+    assert scope_of("penmanshiel", names, fold=0, of=4, beside="kelmarsh")[1] == ("penmanshiel/01",)
+    assert scope_of("penmanshiel", names, other="kelmarsh", missions=True) == (tuple(names), ())
+    farm = "penmanshiel"
+    for refusal, asked in (
+        (
+            "either a fold's farm or another farm",
+            lambda: scope_of(farm, names, fold=0, of=2, other="k"),
+        ),
+        (
+            "either a fold's farm or another farm",
+            lambda: scope_of(farm, names, other="k", beside="x"),
+        ),
+        (
+            "missions are read beside another",
+            lambda: scope_of(farm, names, fold=0, of=2, missions=True),
+        ),
+        ("name a fold of the farm, or another farm", lambda: scope_of(farm, names)),
+        ("name a fold of the farm, or another farm", lambda: scope_of(farm, names, fold=0)),
+        ("folds 0 to 1, not 2", lambda: scope_of(farm, names, fold=2, of=2)),
+        ("is the farm answered", lambda: scope_of(farm, names, other=farm)),
+        ("is the farm answered", lambda: scope_of(farm, names, fold=0, of=2, beside=farm)),
+    ):
+        with pytest.raises(ValueError, match=refusal):
+            asked()
 
 
 def test_the_missions_take_their_share_of_the_series_in_groups_of_at_most_seventeen() -> None:
@@ -142,7 +204,7 @@ def test_a_turbine_held_unread_a_fold_not_loaded_or_a_cut_past_the_years_is_refu
     with pytest.raises(ValueError, match="held unread"):
         training_series({"penmanshiel": [turbine("05")]}, left_out=(), until=CUT)
     with pytest.raises(ValueError, match="left out but not loaded"):
-        training_series({"penmanshiel": [turbine("01")]}, left_out={"09x"}, until=CUT)
+        training_series({"penmanshiel": [turbine("01")]}, left_out={"penmanshiel/09x"}, until=CUT)
     with pytest.raises(ValueError, match="may read nothing from 2023"):
         training_series({"penmanshiel": [turbine("01")]}, left_out=(), until=date(2023, 1, 2))
 
@@ -159,10 +221,18 @@ def test_a_fit_refuses_cells_of_turbines_it_read_does_not_answer_or_that_start_b
     assert any("read turbine 02" in r for r in reasons)
     assert any("does not answer turbine 07" in r for r in reasons)
     assert any("starts before" in r for r in reasons)
+    # Another farm's turbine of the same name was read: the farm's own was not.
+    beside = record(answers=("02",), turbines=("penmanshiel/04", "kelmarsh/02"))
+    assert refused(beside, [(1, axis_of("02", after), 0)]) == []
 
 
 def test_a_fits_record_reads_back_as_written(tmp_path: Path) -> None:
     fit = record(missions=("ESA-Mission1",), share=0.5, mission_series=100)
     fit.write(tmp_path)
 
+    assert FitRecord.read(tmp_path) == fit
+    # A record written before the fits could be cut from complete hours reads as one that was not.
+    kept = (tmp_path / "fit.json").read_text()
+    assert '"complete": false' in kept
+    (tmp_path / "fit.json").write_text(kept.replace(',\n  "complete": false', ""))
     assert FitRecord.read(tmp_path) == fit

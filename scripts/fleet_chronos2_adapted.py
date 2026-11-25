@@ -2,10 +2,11 @@ r"""The published forecaster fine-tuned for a turbine or a farm read as new, and
 
 ``fit`` adapts Chronos-2 by low-rank adapters (``--mode full``: every weight) on the series
 ``fleet_adaptation.py`` builds: the target farm's other turbines (``--fold N --folds K``: the
-fold's turbines are neither read nor answered by any other fit), or the other farm's turbines
-(``--other``), with the missions' hourly means beside them in a share of the series
-(``--missions``). Every series ends before ``--until``; a draw reads at most ``--context``
-hours, by default the thirty days of a span.
+fold's turbines are neither read nor answered by any other fit), with another farm's turbines
+beside them (``--beside``), or the other farm's turbines alone (``--other``), with the
+missions' hourly means beside them in a share of the series (``--missions``). Every series ends
+before ``--until``; a draw reads at most ``--context`` hours, by default the thirty days of a
+span; with ``--complete`` the spans are cut from the hours whose conditions all read.
 ``answer`` hands each cell to the one fit of an arm that may answer it, in the normal-behaviour
 form, on two rungs as ``fleet_chronos2_answers.py`` reads the zero-shot model:
 
@@ -17,7 +18,8 @@ environment and reads nothing of it:
 
     uv run --isolated --no-project --python 3.12 --with chronos-forecasting==2.3.2 \\
         --with peft==0.18.1 python -I scripts/fleet_chronos2_adapted.py fit --farm F \\
-        --hourly DIR (--fold N --folds K | --other NAME DIR) [--missions DIR --share 0.5] \\
+        --hourly DIR (--fold N --folds K [--beside NAME DIR] | --other NAME DIR) \\
+        [--missions DIR --share 0.5] [--complete] \\
         --until 2020-01-01 --arm ARM --out FITS/NAME [--rank 8 --steps 2000 ...]
     uv run ... scripts/fleet_chronos2_adapted.py answer --hourly DIR \\
         --cells DIR/answers-<label>.csv --fits FITS/NAME... --out DIR/<arm>-<label>.csv
@@ -58,12 +60,12 @@ from scripts.fleet_adaptation import (  # noqa: E402
     SPAN,
     FitRecord,
     Series,
-    folds,
     refused,
+    scope_of,
     training_series,
 )
 from scripts.fleet_chronos2_answers import NBM, NBM_OWN, STARTUP_SECONDS, answered  # noqa: E402
-from scripts.fleet_hours import loaded_farm, parsed_axis  # noqa: E402
+from scripts.fleet_hours import another_farm, loaded_farm, parsed_axis  # noqa: E402
 
 RUNGS = {NBM: "_nbm", NBM_OWN: "_nbm_own"}
 # The library's own choice of adapted modules: every attention projection and the output layer.
@@ -97,6 +99,18 @@ def assigned(records: Sequence[FitRecord], cells: Sequence[Key]) -> dict[str, li
     if reasons:
         raise ValueError("; ".join(reasons))
     return out
+
+
+def named_as(records: Sequence[FitRecord], checkpoint: str, named: str | None) -> str:
+    """The answers' name: the fits' arm, or ``named`` for adapters kept on the way.
+
+    Raises:
+        ValueError: If adapters kept on the way are read without a name of their own, or from
+            a fit whose rate was not constant, where they are no fit of fewer steps.
+    """
+    if checkpoint != "checkpoint" and (not named or any(r.schedule != "constant" for r in records)):
+        raise ValueError("adapters kept on the way are read under a constant rate and a name")
+    return named or records[0].arm
 
 
 def prepared(series: Sequence[Series]) -> list[Any]:  # pragma: no cover - needs the model
@@ -156,25 +170,25 @@ def fit(arguments: argparse.Namespace) -> None:  # pragma: no cover - needs the 
             # Without it the library falls back to tuning every weight, with a warning only.
             raise SystemExit("peft is not installed: the fit would tune every weight") from error
 
-    if arguments.other and arguments.fold is not None:
-        raise SystemExit("a fit reads either a fold's farm or another farm, not both")
-    if bool(arguments.mission_names) != bool(arguments.missions) or (
-        arguments.missions and not arguments.other
-    ):
-        raise SystemExit("missions are read beside another farm, named with their directory")
+    if bool(arguments.mission_names) != bool(arguments.missions):
+        raise SystemExit("missions are named with their directory")
     target = loaded_farm(arguments.hourly)
-    names = [t.name for t in target]
     until = date.fromisoformat(arguments.until)
-    if arguments.other:
-        other, directory = arguments.other
-        farms = {other: loaded_farm(Path(directory))}
-        left_out: tuple[str, ...] = ()
-        answers = tuple(names)
-    else:
-        if arguments.fold is None or arguments.folds is None:
-            raise SystemExit("name a fold of the farm, or another farm")
-        farms = {arguments.farm: target}
-        left_out = answers = folds(names, arguments.folds)[arguments.fold]
+    try:
+        answers, left_out = scope_of(
+            arguments.farm,
+            [t.name for t in target],
+            fold=arguments.fold,
+            of=arguments.folds,
+            other=arguments.other[0] if arguments.other else None,
+            beside=arguments.beside[0] if arguments.beside else None,
+            missions=bool(arguments.missions),
+        )
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+    farms = {} if arguments.other else {arguments.farm: target}
+    for name, directory in filter(None, (arguments.other, arguments.beside)):
+        farms[name] = another_farm(Path(directory), arguments.hourly)
     missions = {m: load(arguments.missions, m) for m in arguments.mission_names}
     trained = training_series(
         farms,
@@ -183,6 +197,7 @@ def fit(arguments: argparse.Namespace) -> None:  # pragma: no cover - needs the 
         missions=missions or None,
         share=arguments.share,
         seed=arguments.seed,
+        complete=arguments.complete,
     )
     record = FitRecord(
         name=arguments.out.name,
@@ -205,6 +220,7 @@ def fit(arguments: argparse.Namespace) -> None:  # pragma: no cover - needs the 
         batch=arguments.batch,
         save_every=arguments.save_every or 0,
         seed=arguments.seed,
+        complete=arguments.complete,
     )
     arguments.out.mkdir(parents=True, exist_ok=True)
     if (arguments.out / "fit.json").exists():
@@ -264,11 +280,10 @@ def answer(arguments: argparse.Namespace) -> None:  # pragma: no cover - needs t
     if len(farms) != 1:
         raise SystemExit(f"the fits answer {sorted(farms)}, not one farm")
     by_fit = assigned(records, cells)
-    if arguments.checkpoint != "checkpoint" and (
-        not arguments.named or any(r.schedule != "constant" for r in records)
-    ):
-        raise SystemExit("adapters kept on the way are read under a constant rate and a name")
-    arm = arguments.named or records[0].arm
+    try:
+        arm = named_as(records, arguments.checkpoint, arguments.named)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
     out: dict[str, dict[Key, float]] = {arm + suffix: {} for suffix in RUNGS.values()}
     started = time.monotonic()
     for record, directory in zip(records, arguments.fits, strict=True):
@@ -310,6 +325,10 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
     fitting.add_argument("--fold", type=int)
     fitting.add_argument("--folds", type=int)
     fitting.add_argument("--other", nargs=2, metavar=("FARM", "DIR"), help="read it instead")
+    fitting.add_argument("--beside", nargs=2, metavar=("FARM", "DIR"), help="read it as well")
+    fitting.add_argument(
+        "--complete", action="store_true", help="spans of the hours whose conditions all read"
+    )
     fitting.add_argument("--missions", type=Path, help="the missions' hourly means")
     fitting.add_argument(
         "--mission-names", nargs="*", default=[], help="e.g. ESA-Mission1 ESA-Mission2"

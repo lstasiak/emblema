@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from scripts.fleet_adaptation import FitRecord
-from scripts.fleet_chronos2_adapted import assigned
+from scripts.fleet_chronos2_adapted import assigned, named_as
 from scripts.fleet_hours import axis_of
 from tests.scripts.test_fleet_adaptation import record
 
@@ -40,3 +40,14 @@ def test_two_arms_a_turbine_no_fit_answers_or_a_fit_that_read_it_are_refused() -
         assigned([fit("f0", ("01",), ()), fit("f1", ("01",), ())], cells)
     with pytest.raises(ValueError, match="read turbine 01"):
         assigned([fit("f0", ("01",), ("01",))], cells)
+
+
+def test_adapters_kept_on_the_way_answer_under_a_name_of_their_own_at_a_constant_rate() -> None:
+    constant = [record(schedule="constant", arm="s")]
+
+    assert named_as(constant, "checkpoint", None) == "s"
+    assert named_as(constant, "checkpoint-8000", "s_8000") == "s_8000"
+    with pytest.raises(ValueError, match="constant rate and a name"):
+        named_as(constant, "checkpoint-8000", None)
+    with pytest.raises(ValueError, match="constant rate and a name"):
+        named_as([record(schedule="linear")], "checkpoint-8000", "s_8000")
