@@ -5,7 +5,7 @@ pooled), as ``fleet_cold_start_reading.py`` reads them, by the same statistic: p
 turbine's hour, the mean over its temperatures of the squared error; per comparison, the
 geometric mean over windows of the answer's window loss over the bar's, the bar at its best
 member, with an interval from whole starts drawn again. Each comparison reads the cells its
-first answer gives. Nothing here is a verdict: the pilot's rule is written beside its files.
+first answer gives. Nothing here is a verdict.
 
 Each ``--compare OF AGAINST`` names an answer, and an answer or one of the bars:
 
