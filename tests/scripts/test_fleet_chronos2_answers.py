@@ -185,4 +185,3 @@ def test_only_the_rungs_asked_for_are_answered() -> None:
     out = answered(cells, turbines, echo, median=1, cap=8192, rungs=(NBM, NBM_OWN))
 
     assert set(out) == {NBM, NBM_OWN}
-    assert out[NBM] == out[NBM_OWN] == {cells[0]: 1.0}

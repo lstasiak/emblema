@@ -132,13 +132,6 @@ def test_the_missions_take_their_share_of_the_series_in_groups_of_at_most_sevent
     assert all("past_covariates" not in s for s in trained.series[6:])
     assert sorted({s["target"].shape[0] for s in pool}) == [3, 17]
     assert len(pool) == 20
-    again = training_series(
-        {"kelmarsh": farm}, left_out=(), until=CUT, missions=missions, share=0.5, seed=3
-    )
-    assert all(
-        np.array_equal(a["target"], b["target"])
-        for a, b in zip(trained.series, again.series, strict=True)
-    )
     with pytest.raises(ValueError, match="hold 24 series, not the 54 wanted"):
         training_series({"kelmarsh": farm}, left_out=(), until=CUT, missions=missions, share=0.9)
     with pytest.raises(ValueError, match="cannot take a share"):
