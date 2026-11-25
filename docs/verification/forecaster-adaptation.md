@@ -159,3 +159,98 @@ the runs but not committed. Scaling the steps down with the series cost the smal
 5,900 steps (seed 1 at 8,000 reads 0.736 [0.711; 0.761] against the bar). The fits draw contexts of 47 to 720
 hours and the main reading hands 47. One seed for the folds. Turbines and years held unread are
 untouched.
+
+## 2026-11-25 — declared before the run: classical answers that read a new turbine's own hours, and trees tuned as the forecaster's recipe will be
+
+**Question.** Handed every hour since a turbine's start, the pilot's forecaster led the farm's
+trees, which read 47 hours. Does it still lead once classical answers read the farm and those
+hours too, on a new turbine and on a new farm? And what do the trees gain from tuning of the
+kind the forecaster's recipe is about to get? This section declares one reading of the pilot's
+own answers against new bars. No fit is run for it, and it claims nothing: it decides what the
+next fits are for.
+
+**Found since the pilot.** Penmanshiel's blade angle is unread in 2016 and 2017. Of its target
+hours before 2020, 52 % lack one of the six operating signals; Kelmarsh's lack under 1 %. The
+cells and the trees take only hours with all six, while the pilot's fits read every hour: of
+its 430 series of Penmanshiel about 208 are in the cells' form. Its comparison of a farm's own
+fit with the other farm's therefore mixes form with amount.
+
+**Conditions.**
+
+| | |
+|---|---|
+| Instrument | the commit that adds this section |
+| Cells | the pilot's, the first month of 2020 to 2022: Kelmarsh 2,907 windows over 31 starts, Penmanshiel 7,078 over 30. Every tree ends before 2020. The measure and its interval are the pilot's. |
+| Machine | Mac (M1 Pro), processor only. Validation numbers. |
+| Tried first | Every command below on the 2019 cells of Penmanshiel already read: the plain trees equal the pilot's, each correction answers the same cells. Twenty-four deliberate breakages of the new code, each caught by a test. |
+
+**The classical answers.** Each is fitted on the farm's other turbines before 2020, the new
+turbine's fold left out. Their settings were fixed before any was read on these cells.
+
+| Answer | What it is |
+|---|---|
+| trees | the pilot's: 300 rounds at a rate of 0.1, at most 100,000 rows, each with all six signals |
+| slow | 1,000 rounds at 0.03 |
+| gaps | every row, with those that lack a signal, the gap left missing |
+| both | every row with all six signals, of the farm's other turbines and of the other farm's |
+| offset | the trees, plus the mean of their residuals on the new turbine's own hours so far, shrunk as if a day of hours with no residual had come first |
+| ridge | the trees, plus a ridge of that residual on the trees' answer, the residual of the hour before and the six signals, every coefficient shrunk towards no correction. Of eleven penalties it takes, hour by hour, the one that answered the hours before best |
+| boosted | the trees, plus small trees (100 rounds, depth 3) fitted once a day to the residuals on the trees' rows, once the trees have answered two days of the turbine's hours |
+
+A residual is a reading less the trees' answer for an own hour that could have been a cell. A
+correction reads only hours before its cell's; the small trees those before its cell's day.
+
+**The bars.** A bar is read at the member that reads lowest on the table's cells, per farm,
+which favours the bar.
+
+- *Tuned*, against answers from 47 hours: trees, slow, gaps, both.
+- *With the turbine's history*, against answers from every hour since the start: those four and
+  the three corrections.
+- *For a new farm*, against answers from every hour since the start: the pilot's bar without
+  the farm, the other farm's trees (every unheld turbine of it before 2020, the pilot's
+  settings) and the same three corrections of them.
+
+If slow, gaps or both reads more than 2 % under the trees on a farm (the pooled point), the
+three corrections are also computed on it for that farm and join the second bar; with more
+than one such member, on the lowest.
+
+**The reading.** Each farm apart, days 2, 7 and 14 pooled; the tables by day are read beside
+and decide nothing. The pilot fitted each arm more than once: for a new turbine at its main
+steps and at 8,000, for a new farm in two seeds and at 8,000 steps. A row is read on the fit
+that reads lowest against the bar on that farm, which favours the forecaster.
+
+| The forecaster's answer from every hour since the start, against the bar that reads those hours | What follows |
+|---|---|
+| New turbine: upper edge under 1.0 on both farms | it stays a candidate for the held-out reading |
+| New turbine: point under 1.0 on both farms, an upper edge at 1.0 or above | open; the final recipe's reading decides |
+| New turbine: point at 1.0 or above on either farm | the pilot's lead was the bar's handicap |
+| New farm: the same three outcomes | the same, for the new farm |
+
+*Plausibility, or stop and find the cause:* the plain trees of this run equal the pilot's on
+every cell; each correction answers every cell the trees answer; against the plain trees and
+the pilot's own bars, the pilot's answers read what the pilot's tables hold.
+
+The answers from 47 hours against the tuned bar are read beside: the pilot already read a gap
+there. The next fits, a screen of the recipe's steps, draws and corpus, are declared in a
+section of their own after this reading. If neither row group leaves a candidate or an open
+question, that section first says what a fit is still for.
+
+**Predictions.** The sources are the cells tried: one fold of Penmanshiel in 2019, where the
+trees are fitted on years in which 73 % of hours lack a signal, so they are weaker than here.
+
+| | Prediction | From |
+|---|---|---|
+| The best correction against the trees, new turbine | 0.65 to 0.85 on both farms | the ridge on the cells tried: 0.656 [0.588; 0.720]; stronger trees should leave less to correct |
+| The forecaster against the bar with the turbine's history | Kelmarsh 0.95 to 1.24, Penmanshiel 1.04 to 1.36: the third row | the pilot's 0.807 [0.762; 0.851] and 0.883 [0.847; 0.920] against the trees, divided by the row above; on the cells tried a shorter fit read 1.169 [1.012; 1.300] |
+| The best correction against the other farm's trees | 0.40 to 0.60 | the cells tried: 0.424 [0.403; 0.441] |
+| The forecaster against the new farm's bar | 0.67 to 0.85: a candidate | on the cells tried the zero-shot model read 1.033 [0.990; 1.112] against that bar; the pilot's new-farm fits read 0.646 to 0.744 against the zero-shot model on 47 hours, at most 0.767 at an upper edge |
+| Slow, gaps and both against the trees | 0.95 to 1.04 each | the cells tried: 0.994, 0.963 and 1.034 |
+
+**Limitations.** The corrections' settings are fixed, not tuned. The forecaster is not given
+the same correction of its own residuals: that needs its answer for every own hour, which the
+pilot's files do not hold. The bar's member is chosen on the cells read, and so is the pilot's
+fit; the first favours the bar, the second the forecaster. Before this section was committed,
+a reviewer of the code ran the trees and the ridge on four starts of two Kelmarsh turbines in
+these years, to compare a ridge clipped to its fitted range with the one declared. One number
+came of it, the difference between the two (1 to 2 % of the squared error); the ridge stays as
+declared, and no answer of the forecaster was read.
