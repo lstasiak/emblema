@@ -138,6 +138,18 @@ def loaded(directory: Path, turbines: Sequence[str]) -> list[Turbine]:
     return out
 
 
+def another_farm(directory: Path, own: Path) -> list[Turbine]:
+    """Every turbine of a farm read beside or instead of the farm answered, by name.
+
+    Raises:
+        ValueError: If ``directory`` is ``own``, the farm answered: its turbines would be read
+            under another farm's name, the new turbine among them.
+    """
+    if directory.resolve() == own.resolve():
+        raise ValueError(f"{directory} is the farm answered, not another one")
+    return loaded_farm(directory)
+
+
 def loaded_farm(directory: Path) -> list[Turbine]:
     """Every turbine whose hourly means ``directory`` holds, by name."""
     names = sorted(p.stem.removeprefix("hourly-") for p in directory.glob("hourly-*.npz"))

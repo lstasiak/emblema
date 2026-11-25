@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from emblema.catalog.adapters.readers.greenbyte import GreenbyteCorpusReader
-from scripts.fleet_hours import CHANNELS, HELD_UNREAD, loaded, loaded_farm
+from scripts.fleet_hours import CHANNELS, HELD_UNREAD, another_farm, loaded, loaded_farm
 from scripts.wind_fleet_audit import held_out
 
 
@@ -40,3 +40,13 @@ def test_a_turbine_held_unread_is_refused_before_its_file_is_opened(tmp_path: Pa
     with pytest.raises(ValueError, match="held unread"):
         loaded(tmp_path, ["6"])
     assert [t.name for t in loaded(tmp_path, ["07"])] == ["07"]
+
+
+def test_the_farm_answered_is_refused_as_another_farm_under_any_path(tmp_path: Path) -> None:
+    own, other = tmp_path / "kelmarsh", tmp_path / "penmanshiel"
+    own.mkdir()
+    other.mkdir()
+
+    assert another_farm(other, own) == []
+    with pytest.raises(ValueError, match="is the farm answered"):
+        another_farm(tmp_path / "penmanshiel" / ".." / "kelmarsh", own)

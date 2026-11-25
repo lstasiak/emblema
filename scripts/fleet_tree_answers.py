@@ -30,6 +30,14 @@ their own names, written as ``<kind>-<farm>-N<days>.csv``:
   deals the farm (``_folds``);
 - ``--fleet-from DIR``: fitted on the other farm's turbines, every one, instead of the
   farm's own (``other_farm_`` for ``fleet_``).
+
+The trees are handed the tuning the forecaster's recipe is, each setting an answer of its own,
+named by ``--variant`` (``_<variant>``): more rounds at a lower rate (``--rounds``,
+``--rate``), every row or another most (``--most-rows``, nought for every row), the rows whose
+operating conditions are not all read, which the forecaster's fits read too (``--gaps``), and
+the other farm's turbines beside the farm's own (``--fleet-beside DIR``). With ``--history``
+each tree answer is also written corrected by the new turbine's own hours since its start
+(``fleet_history_answers.py``: ``_offset``, ``_ridge``, ``_boosted``).
 """
 
 from __future__ import annotations
@@ -60,7 +68,16 @@ from scripts.fleet_cold_start_cells import (  # noqa: E402
     latest,
     scorable,
 )
-from scripts.fleet_hours import TARGETS, Turbine, hour_of, loaded_farm, parsed_axis  # noqa: E402
+from scripts.fleet_history_answers import SUFFIXES, corrected, history_of  # noqa: E402
+from scripts.fleet_history_answers import Fit as Fit  # noqa: E402
+from scripts.fleet_hours import (  # noqa: E402
+    TARGETS,
+    Turbine,
+    another_farm,
+    hour_of,
+    loaded_farm,
+    parsed_axis,
+)
 
 Floats = NDArray[np.float64]
 Ints = NDArray[np.int64]
@@ -76,8 +93,6 @@ ROWS: Mapping[str, Rows] = {
     tree: next(r for r in FLEET_ROWS if r.name == ridge) for tree, ridge in TREES.items()
 }
 MOST_ROWS = 100_000
-# A model fitted on rows and targets, answering rows.
-Fit = Callable[[Floats, Floats, int], Callable[[Floats], Floats]]
 
 
 def year_start(day: date) -> int:
@@ -90,10 +105,13 @@ def fleet_rows(
     kind: Rows,
     channel: int,
     until: int,
+    *,
+    gaps: bool = False,
 ) -> dict[str, tuple[Floats, Floats]]:
     """Per turbine, its rows of the channel before ``until`` and their targets.
 
-    An hour is kept where the channel is scored and every reading the rows need is there.
+    An hour is kept where the channel is scored and every reading the rows need is there;
+    with ``gaps``, wherever the channel is scored, a reading the rows lack left missing.
     ``read`` holds each turbine's ``scorable`` and ``latest``, which read no hour after their
     own, so one pass serves every year.
     """
@@ -102,16 +120,16 @@ def fleet_rows(
         scored, recent = read[turbine.name]
         hours = np.flatnonzero(scored[:until, channel])
         rows = kind.of(turbine.values, recent, hours, channel)
-        kept = np.isfinite(rows).all(axis=1)
+        kept = np.ones(len(rows), dtype=np.bool_) if gaps else np.isfinite(rows).all(axis=1)
         out[turbine.name] = (rows[kept], turbine.values[hours[kept], channel])
     return out
 
 
-def drawn(rows: Floats, targets: Floats, seed: int) -> tuple[Floats, Floats]:
-    """At most ``MOST_ROWS`` of the rows, drawn by ``seed``, in their order."""
-    if len(rows) <= MOST_ROWS:
+def drawn(rows: Floats, targets: Floats, seed: int, most: int = MOST_ROWS) -> tuple[Floats, Floats]:
+    """At most ``most`` of the rows, drawn by ``seed``, in their order; every row at nought."""
+    if not most or len(rows) <= most:
         return rows, targets
-    keep = np.sort(np.random.default_rng(seed).choice(len(rows), MOST_ROWS, replace=False))
+    keep = np.sort(np.random.default_rng(seed).choice(len(rows), most, replace=False))
     return rows[keep], targets[keep]
 
 
@@ -125,16 +143,24 @@ def answered(
     fleet: Sequence[Turbine] | None = None,
     left_out: Mapping[str, Sequence[str]] | None = None,
     trees: Sequence[str] = tuple(TREES),
+    beside: Sequence[Turbine] = (),
+    most: int = MOST_ROWS,
+    gaps: bool = False,
+    small: Fit | None = None,
     say: Callable[[str], None] = lambda _: None,
 ) -> dict[str, dict[Key, float]]:
     """Every tree answer for every cell it can answer.
 
     The trees read the farm's other turbines before the start's year; before ``cut`` instead,
-    when given; ``fleet``'s turbines instead of the farm's, when given; and none that
-    ``left_out`` names beside the new turbine.
+    when given; ``fleet``'s turbines instead of the farm's, when given, and ``beside``'s with
+    them; and none that ``left_out`` names beside the new turbine. A fit reads at most ``most``
+    rows, and with ``gaps`` those too whose conditions are not all read. With ``small``, the
+    fit of the small trees, each answer is also given corrected by the new turbine's own hours,
+    under ``<tree><suffix>`` for each of ``fleet_history_answers.SUFFIXES``.
 
     Raises:
-        ValueError: If a cell names a turbine not loaded, or starts before the cut.
+        ValueError: If a cell names a turbine not loaded, or starts before the cut, or two
+            turbines the trees read share a name.
     """
     by_name = {t.name: t for t in turbines}
     groups: dict[tuple[str, int], list[Key]] = {}
@@ -145,15 +171,18 @@ def answered(
         if cut is not None and day < cut:
             raise ValueError(f"{key[1]} starts before the trees' cut {cut}")
         groups.setdefault((name, hour_of(cut) if cut else year_start(day)), []).append(key)
-    source = turbines if fleet is None else fleet
-    out: dict[str, dict[Key, float]] = {tree: {} for tree in trees}
+    source = [*(turbines if fleet is None else fleet), *beside]
+    if len({t.name for t in source}) != len(source):
+        raise ValueError("two turbines the trees read share a name")
+    suffixes = ("", *SUFFIXES) if small else ("",)
+    out: dict[str, dict[Key, float]] = {tree + s: {} for tree in trees for s in suffixes}
     read = {t.name: (scorable(t.values), latest(t.values)) for t in source}
     started = time.monotonic()
     for until in sorted({u for _, u in groups}):
         for tree in trees:
             kind = ROWS[tree]
             for channel in range(len(TARGETS)):
-                rows_of = fleet_rows(source, read, kind, channel, until)
+                rows_of = fleet_rows(source, read, kind, channel, until, gaps=gaps)
                 for (name, year), keys in groups.items():
                     if year != until:
                         continue
@@ -166,8 +195,11 @@ def answered(
                     if len(rows) < ROWS_PER_FEATURE * rows.shape[1]:
                         continue
                     targets = np.concatenate([y for _, y in others])
-                    model = fit(*drawn(rows, targets, seed + channel), seed)
-                    answer_cells(out[tree], by_name[name], kind, channel, wanted, model)
+                    model = fit(*drawn(rows, targets, seed + channel, most), seed)
+                    into = {s: out[tree + s] for s in suffixes}
+                    answer_cells(
+                        into, by_name[name], kind, channel, wanted, model, small=small, seed=seed
+                    )
             say(
                 f"{tree} before {until}: {len(out[tree])} cells, {time.monotonic() - started:.0f} s"
             )
@@ -175,46 +207,83 @@ def answered(
 
 
 def answer_cells(
-    out: dict[Key, float],
+    out: Mapping[str, dict[Key, float]],
     turbine: Turbine,
     kind: Rows,
     channel: int,
     keys: Sequence[Key],
     model: Callable[[Floats], Floats],
+    *,
+    small: Fit | None = None,
+    seed: int = 0,
 ) -> None:
-    """The model's answer for each of the new turbine's cells whose rows are whole."""
+    """The model's answer for each of the new turbine's cells whose rows are whole.
+
+    ``out`` holds the answers by suffix: the model's own under the empty one and, with
+    ``small``, each correction by the turbine's own hours before the cell.
+    """
     for axis in sorted({k[1] for k in keys}):
         start = hour_of(parsed_axis(axis)[1])
         new = turbine.before(start)
         mine = [k for k in keys if k[1] == axis]
         hours = np.asarray([k[0] for k in mine], dtype=np.int64)
-        rows = kind.of(new.values, latest(new.values), hours, channel)
+        recent = latest(new.values)
+        rows = kind.of(new.values, recent, hours, channel)
         kept = np.isfinite(rows).all(axis=1)
         if not kept.any():
             continue
-        given = model(rows[kept])
-        for key, value in zip(
-            (k for k, w in zip(mine, kept, strict=True) if w), given, strict=True
-        ):
-            out[key] = float(value)
+        hours, rows = hours[kept], rows[kept]
+        given = {"": model(rows)}
+        if small:
+            end = int(hours.max())
+            own = history_of(new.values, recent, kind, channel, start, end, model)
+            conditions = new.values[hours][:, list(kind.conditions)]
+            given |= corrected(
+                own, hours, rows, given[""], conditions, start=start, small=small, seed=seed
+            )
+        answered_keys = [k for k, w in zip(mine, kept, strict=True) if w]
+        for suffix, values in given.items():
+            for key, value in zip(answered_keys, values, strict=True):
+                out[suffix][key] = float(value)
 
 
-def named_as(tree: str, *, cut: date | None, folds: bool, other: bool) -> str:
+def named_as(
+    tree: str, *, cut: date | None, folds: bool, other: bool, variant: str = "", suffix: str = ""
+) -> str:
     """A tree answer's name when its trees read otherwise than the farm's before the year."""
     name = tree.replace("fleet_", "other_farm_", 1) if other else tree
-    return name + ("_folds" if folds else "") + (f"_until{cut.year}" if cut else "")
+    name += ("_folds" if folds else "") + (f"_until{cut.year}" if cut else "")
+    return name + (f"_{variant}" if variant else "") + suffix
 
 
-def xgboost_fit(jobs: int) -> Fit:  # pragma: no cover - needs XGBoost
+def other_farm(directory: Path, own: Path) -> list[Turbine]:  # pragma: no cover - reads the data
+    """Another farm's turbines, named under their directory so that none shares a name."""
+    return [Turbine(f"{directory.name}/{t.name}", t.values) for t in another_farm(directory, own)]
+
+
+def small_fit() -> Fit:  # pragma: no cover - needs XGBoost
+    """The small trees fitted to a new turbine's own residuals.
+
+    They read several hundred rows of a first month, so they are shallow and slow, each round
+    reads a share of the rows, and 32 bins hold a feature; one thread, as a fit takes
+    milliseconds.
+    """
+    return xgboost_fit(1, rounds=100, rate=0.05, max_depth=3, subsample=0.8, max_bin=32)
+
+
+def xgboost_fit(
+    jobs: int, *, rounds: int = 300, rate: float = 0.1, **settings: float
+) -> Fit:  # pragma: no cover - needs XGBoost
     import xgboost as xgb
 
     def fit(rows: Floats, targets: Floats, seed: int) -> Callable[[Floats], Floats]:
         model = xgb.XGBRegressor(
-            n_estimators=300,
-            learning_rate=0.1,
+            n_estimators=rounds,
+            learning_rate=rate,
             tree_method="hist",
             n_jobs=jobs,
             random_state=seed,
+            **settings,
         )
         model.fit(rows, targets)
 
@@ -239,17 +308,33 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     parser.add_argument(
         "--fleet-from", type=Path, metavar="DIR", help="the other farm's hourly means"
     )
+    parser.add_argument("--fleet-beside", type=Path, metavar="DIR", help="read it as well")
+    parser.add_argument("--rounds", type=int, default=300)
+    parser.add_argument("--rate", type=float, default=0.1)
+    parser.add_argument("--most-rows", type=int, default=MOST_ROWS, help="0: every row")
+    parser.add_argument("--gaps", action="store_true", help="fit rows lacking a condition too")
+    parser.add_argument("--variant", default="", help="names the answers of trees tuned otherwise")
+    parser.add_argument("--history", action="store_true", help="corrected by own hours too")
     parser.add_argument("--trees", nargs="+", choices=tuple(TREES), default=tuple(TREES))
     parser.add_argument("--kind", default="trees", help="the written files' prefix")
     arguments = parser.parse_args(argv)
     if "torch" in sys.modules:
         raise SystemExit("torch is loaded: XGBoost's OpenMP must not share its process")
+    tuned = (
+        arguments.rounds,
+        arguments.rate,
+        arguments.most_rows,
+        arguments.gaps,
+        arguments.fleet_beside,
+    ) != (300, 0.1, MOST_ROWS, False, None)
+    if tuned != bool(arguments.variant):
+        raise SystemExit("trees tuned otherwise are named by --variant, and no others")
     varied = (arguments.fit_until, arguments.folds, arguments.fleet_from) != (None, None, None)
-    if varied and arguments.kind == "trees":
+    if (varied or tuned or arguments.history) and arguments.kind == "trees":
         raise SystemExit("trees read otherwise are written under a --kind of their own")
 
     turbines = loaded_farm(arguments.hourly)
-    fleet = loaded_farm(arguments.fleet_from) if arguments.fleet_from else None
+    fleet = other_farm(arguments.fleet_from, arguments.hourly) if arguments.fleet_from else None
     left_out = None
     if arguments.folds is not None:
         dealt = folds([t.name for t in turbines], arguments.folds)
@@ -260,24 +345,32 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     out = answered(
         turbines,
         every,
-        xgboost_fit(arguments.jobs),
+        xgboost_fit(arguments.jobs, rounds=arguments.rounds, rate=arguments.rate),
         seed=arguments.seed,
         cut=arguments.fit_until,
         fleet=fleet,
         left_out=left_out,
         trees=arguments.trees,
+        beside=(
+            other_farm(arguments.fleet_beside, arguments.hourly) if arguments.fleet_beside else ()
+        ),
+        most=arguments.most_rows,
+        gaps=arguments.gaps,
+        small=small_fit() if arguments.history else None,
         say=lambda text: print(text, file=sys.stderr, flush=True),
     )
-    named = {
-        tree: named_as(
+    renamed = {
+        named_as(
             tree,
             cut=arguments.fit_until,
             folds=arguments.folds is not None,
             other=bool(arguments.fleet_from),
-        )
+            variant=arguments.variant,
+            suffix=suffix,
+        ): out[tree + suffix]
         for tree in arguments.trees
+        for suffix in (("", *SUFFIXES) if arguments.history else ("",))
     }
-    renamed = {named[tree]: answers for tree, answers in out.items()}
     for path, keys in by_file.items():
         label = path.stem.removeprefix("answers-")
         write(arguments.cells / f"{arguments.kind}-{label}.csv", keys, renamed, tuple(renamed))
