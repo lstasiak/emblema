@@ -6,7 +6,7 @@ by a rule registered before its run ([preregistration](preregistration.md)); eac
 note that holds its evidence ([`verification/`](verification/README.md)). A row states direction
 and size; conditions and caveats are in its note.
 
-Last updated 2026-11-23.
+Last updated 2026-11-25.
 
 ## Status
 
@@ -83,7 +83,11 @@ Last updated 2026-11-23.
   turbine of two wind farms read as new it reaches the least gain in no verdict in the first month:
   from the past it trails the farm's boosted trees (1.27 and 1.26, harm), and handed the hour's
   operating conditions it matches or trails a regression of the turbine's own 47 hours on them
-  (0.99, noise; 1.06, harm) ([note](verification/wind-fleet-cold-start.md)).
+  (0.99, noise; 1.06, harm) ([note](verification/wind-fleet-cold-start.md)). With those
+  conditions it misses 1.75 and 1.97 times what the farm's trees miss; fine-tuned on the farm's
+  other turbines, 1.16 and 1.24 (a pilot). Most of the gain carries to a farm it never read, and
+  satellite series beside the turbines add nothing
+  ([note](verification/forecaster-adaptation.md)).
   On labelled faults of wind turbines the departures, unchanged, do not rank the excerpts with a
   fault above those without (0.68 for the best of twelve), and a model of normal behaviour ranks
   them at 0.73 whether fitted on the turbine's own year or on the farm's other turbines alone,
@@ -267,6 +271,7 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
 | The departures' floor and alarm fitted on the first mission's first 7 to 365 days instead of seven years, read on the validation months | at 1 %, fitted on 7 to 30 days `mean`, `bins-24h` finds **+4.5 to +4.7** events beyond chance over the whole side (lower edges +0.4 to +0.6), +4.4 [+1.1; +8.5] at a year: the floor fitted on years costs events; at its own alarm, fitted on 7 to 30 days, flags 4.4 to 13.5 % of normal windows (987 to 3,192 false runs), from day 60 1.15 to 1.39 % (18 to 94; whole side 1.92 %, 119) with the F-score at or above the whole side's | [telemetry-cold-start](verification/telemetry-cold-start.md) |
 | Chronos-2 zero-shot on each turbine of two wind farms read as new, first 30 days: from the past against the best classical answer with the farm's ridges and trees (A); with its neighbours' past (B); with six operating signals of the hour against the best classical answer that knows them, without the farm's models and with them (C) | A **1.27** [1.19; 1.35] and **1.26** [1.20; 1.33], harm; B **0.994** [0.991; 0.998] and **0.981** [0.977; 0.985], real and small; C without the farm **0.99** [0.95; 1.02], noise, and **1.06** [1.02; 1.10], harm, against the cell's own regression; C with the farm **1.84** [1.71; 1.97] and **2.11** [1.98; 2.25], harm; descriptive: on every hour since the start 0.83 and 0.91 without the farm, the farm's trees 0.54 and 0.50 | [wind-fleet-cold-start](verification/wind-fleet-cold-start.md) |
 | Labelled faults of wind turbines (19 turbines of three farms, 24 excerpts with a fault and 27 without; the area between them, pairs inside a farm): the telemetry's twelve departures, a model of normal behaviour per component temperature, and that model fitted on the farm's other turbines alone; a first reading void for its instrument, the corrected one chosen on its labels | departures 0.68 (chance 0.18); normal behaviour 0.73 (0.0097); the farm's model **0.73** [0.56; 0.87] (0.0084 against a level of 0.0083, 0.0094 over two million shuffles): none confirmed. With no model, the share of an event's rows out of normal operation 0.80 | [wind-fleet-detection](verification/wind-fleet-detection.md) |
+| Chronos-2 fine-tuned by low-rank adapters for a turbine read as new (on the farm's other turbines, before 2020) and for a farm read as new (on the other farm alone, two seeds; with satellite series beside), first 30 days of 2020 to 2022, with the hour's operating signals; a pilot under rules written before the runs but not registered | new turbine against the farm's trees fitted before 2020 with the turbine's fold left out 1.16 [1.08; 1.25] and 1.24 [1.18; 1.31] (zero-shot 1.75 and 1.97; against the row above's trees 1.23 and 1.33): a gap remains, largest on the stator, the pitch motors and the transformer; against zero-shot 0.67 and 0.63. New farm against the best answer without the farm 0.65 and 0.64, 0.76 and 0.79 [0.76; 0.82] by seed: a descriptive gain, one upper edge over 0.80. Satellites beside the turbines 1.04 to 1.07 on Kelmarsh, 0.98 to 1.04 on Penmanshiel: nothing. Longer fits read lower in three of four comparisons (0.91 to 0.97). After the run: on every hour since the start it leads the classical bar from day 7 and day 14 (0.82, 0.86), a bar in which no answer reads the farm and more than 47 hours of the turbine | [forecaster-adaptation](verification/forecaster-adaptation.md) |
 | Events the channels' departures miss, against other detectors with no label at 1 % false alarms | others find 6 of 13, 3.67 beyond chance, at most 10.67 possible, least 11; stays deferred; fusion +0.131 [+0.037; +0.234] over `channel_local`, +0.066 [−0.052; +0.176] over the mean of the departures | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The 11 events nothing found, on their annotated channels, ten minutes against the hour | one gained, two lost, least 4; not queued; six stand out at the hour beyond chance | [telemetry-ceiling](verification/telemetry-ceiling.md) |
 | The departure bar, chosen on months no detector was read on (2000–2003, a class nearly absent later left out), then read forwards on the validation months | beyond chance at 1 %: mean over 72 hours 14.6 of 42 against 5.2 for the bar chosen by area; beyond chance the order turns on validation (Spearman −0.03), best 32.4 of 61, so the bar is the best of twelve in each reading | [telemetry-channel-local](verification/telemetry-channel-local.md) |
@@ -318,8 +323,11 @@ Frozen encoder against its initialisation; M1, M2 = the two satellite missions.
    the base stays a comparison on the half. The named levers for a larger gain remain the
    pretext (a cell's mean, which interpolation answers on a grid) and the scale of data in the
    tasks' regime (credentialed MIMIC-IV or the full eICU).
-2. A corpus of several systems adapts the published forecaster, read against the farm's trees,
-   which with the hour's conditions miss about half as much as it does on a new turbine. On the
-   turbines held unread its residuals are then read as a detector of their faults, against the
-   farm's model of normal behaviour and the share of an event spent out of normal operation.
+2. The fine-tuned forecaster misses 16 and 24 % more than the farm's trees on a new turbine and its fits
+   were not saturated. Next the recipe is settled on validation years: longer fits, draws matched
+   to the 47 hours read, both farms as one corpus, and a classical bar that reads the farm and
+   the turbine's whole history. Synthetic systems with known operating conditions are then tried
+   as fine-tuning data. One declared reading follows on the turbines and years held unread, and
+   there the forecaster's residuals are read as a detector of faults, against the farm's model
+   of normal behaviour and the share of an event spent out of normal operation.
 3. Open the frozen test side once.
