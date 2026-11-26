@@ -8,9 +8,9 @@ is ``fleet_chronos2_adapted.py`` with the plan's arguments, ``@IN@`` standing fo
 answers run, as many at once, once the fits have ended; an answer reads its fit's checkpoints
 (``--fits @F@/fits/<fit's label>``) only once that fit ended well, and again after the fit is
 redone. A cell run again skips what is done and redoes what failed or was cut short, a fit from its
-first step. What came of it, the weights left out, goes back to the store as one transient
-archive, whose key is printed to paste back. Every network step runs under a limit and the cell
-never exits non-zero.
+first step. What came of it, with each checkpoint's adapters but no full weights or optimiser
+states, goes back to the store as one transient archive, whose key is printed to paste back.
+Every network step runs under a limit and the cell never exits non-zero.
 
 The plan:
 
@@ -51,8 +51,10 @@ from scripts.cell_parts import (  # noqa: E402
 COMMIT = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
 PIECE = re.compile(r"[A-Za-z0-9_.-]+")
-# The adapters and models stay on Drive; what is read on the Mac goes back.
-WEIGHTS = ("*.safetensors", "*.bin", "*.pt", "*.pth")
+# A full model's weights and the optimiser's states stay on the machine; the adapters, a few MB a
+# checkpoint, go back, so that a fit can be answered again without being run again.
+WEIGHTS = ("*/model.safetensors", "*.bin", "*.pt", "*.pth")
+ADAPTERS = "adapter_model.safetensors"
 FORECASTER = ("chronos-forecasting==2.3.2", "peft==0.18.1")
 
 
@@ -153,7 +155,8 @@ def cell_of(plan: AdaptationPlan) -> str:
         .replace("@MONITOR@", start.strip("\n"))
         .replace("@STOP@", stop)
         .replace("@UTILISATION@", utilisation.strip("\n"))
-        .replace("@WEIGHTS@", " ".join(f"'{glob}'" for glob in WEIGHTS)),
+        .replace("@WEIGHTS@", " ".join(f"'{glob}'" for glob in WEIGHTS))
+        .replace("@ADAPTERS@", ADAPTERS),
     ]
     return "\n".join(part.strip("\n") for part in parts if part) + "\n"
 
@@ -269,8 +272,9 @@ while read line; do
   if ! current "$label" "$rest"; then echo "$label"; LEFT=$(( LEFT + 1 )); fi
 done < <(cat $W/fits.txt $W/answers.txt)
 [ "$LEFT" -eq 0 ] && echo none
-# The fits' records beside the answers; their weights stay on the machine.
-( cd $F && find fits -name '*.json' -exec cp --parents {} $W/ \; )
+# The fits' records and adapters beside the answers; the copy keeps paths on BSD and GNU.
+( cd $F && find fits \( -name '*.json' -o -name @ADAPTERS@ \) \
+  | while read -r kept; do mkdir -p "$W/${kept%/*}" && cp "$kept" "$W/$kept"; done )
 GOT=no
 for attempt in 1 2 3; do
   if timeout $NET python scripts/put_archive.py --root $W answers fits logs results.txt \

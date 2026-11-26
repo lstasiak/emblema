@@ -9,6 +9,8 @@ import pytest
 
 from scripts.adaptation_cell import (
     _WORK,
+    ADAPTERS,
+    WEIGHTS,
     AdaptationPlan,
     cell_of,
     main,
@@ -17,6 +19,7 @@ from scripts.adaptation_cell import (
     wrapped,
 )
 from scripts.cell_parts import faults_of
+from scripts.put_archive import files_of
 
 COMMIT = "a" * 40
 INPUTS = "b" * 64
@@ -53,7 +56,7 @@ def test_the_plan_reads_its_pieces_and_the_cell_keeps_its_rules(tmp_path: Path) 
     assert "chronos-forecasting==2.3.2 peft==0.18.1" in cell
     assert "export HF_HUB_OFFLINE=1" in cell
     assert "nvidia-cuda-mps-control -d" in cell
-    assert "--exclude '*.safetensors'" in cell
+    assert "--exclude '*/model.safetensors' '*.bin' '*.pt' '*.pth'" in cell
     assert "pip install -q -e . 2>" in cell
     assert "nvidia-cuda-mps-control -d" not in cell_of(read_plan(plan_files(tmp_path, per_card=1)))
 
@@ -122,6 +125,7 @@ def work(tmp_path: Path, plan: AdaptationPlan, *, failing: str = "") -> list[str
         .replace("@STOP@", "")
         .replace("@UTILISATION@", "")
         .replace("@WEIGHTS@", "'*.bin'")
+        .replace("@ADAPTERS@", ADAPTERS)
     )
     script = f"set -u\nW={work}\nF={tmp_path / 'f'}\nI=/inputs\nT=$(mktemp -d)\nSTART=0\nNET=5\n"
     environment = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "FAILING": failing}
@@ -191,4 +195,35 @@ def test_a_failed_fit_holds_its_answers_and_a_run_again_redoes_only_what_is_not_
     ]
     assert after_refit == [
         f"answer --fits {tmp_path}/f/fits/f1 --out {tmp_path}/w/answers/a1.csv --device cuda"
+    ]
+
+
+def test_each_checkpoints_adapters_and_records_go_back_and_no_full_weights(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "f" / "fits" / "f1" / "checkpoint-8000"
+    checkpoint.mkdir(parents=True)
+    for name in (
+        "adapter_config.json",
+        ADAPTERS,
+        "optimizer.pt",
+        "rng_state.pth",
+        "model.safetensors",
+    ):
+        (checkpoint / name).write_text("x")
+    (checkpoint.parent / "fit.json").write_text("{}")
+
+    work(tmp_path, PLAN)
+    back = sorted(str(f.relative_to(tmp_path / "w")) for f in (tmp_path / "w" / "fits").rglob("*"))
+
+    assert back == [
+        "fits/f1",
+        "fits/f1/checkpoint-8000",
+        "fits/f1/checkpoint-8000/adapter_config.json",
+        f"fits/f1/checkpoint-8000/{ADAPTERS}",
+        "fits/f1/fit.json",
+    ]
+    # The archive's own exclusions would hold a full model back even if it were copied.
+    assert files_of(checkpoint.parent.parent.parent, ["fits"], WEIGHTS) == [
+        "fits/f1/checkpoint-8000/adapter_config.json",
+        f"fits/f1/checkpoint-8000/{ADAPTERS}",
+        "fits/f1/fit.json",
     ]
