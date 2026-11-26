@@ -31,6 +31,11 @@ their own names, written as ``<kind>-<farm>-N<days>.csv``:
 - ``--fleet-from DIR``: fitted on the other farm's turbines, every one, instead of the
   farm's own (``other_farm_`` for ``fleet_``).
 
+Each farm is published scored by its own statistics, so the same reading in degrees or kilowatts
+is another score on each farm. The other farm's hours, read instead of the farm's or beside them,
+are first scored as the farm's own would be: ``--units OWN OTHER`` names the two publications'
+manifests, each the one its farm's hourly means were read from.
+
 The trees are handed the tuning the forecaster's recipe is, each setting an answer of its own,
 named by ``--variant`` (``_<variant>``): more rounds at a lower rate (``--rounds``,
 ``--rate``), every row or another most (``--most-rows``, nought for every row), the rows whose
@@ -43,6 +48,8 @@ each tree answer is also written corrected by the new turbine's own hours since 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -56,6 +63,14 @@ from numpy.typing import NDArray
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from emblema.catalog.application.assemblers.published_corpus_manifest_assembler import (  # noqa: E402
+    PublishedCorpusManifestAssembler,
+)
+from emblema.catalog.contracts.published_corpus_manifest_json import (  # noqa: E402
+    PublishedCorpusManifestJson,
+)
+from emblema.catalog.domain.channels.channel_statistics import ChannelStatistics  # noqa: E402
+from emblema.catalog.domain.channels.normalisation import Normalisation  # noqa: E402
 from scripts.chronos2_ladder import read_cells, write  # noqa: E402
 from scripts.cold_start_cells import ROWS_PER_FEATURE  # noqa: E402
 from scripts.fleet_adaptation import folds  # noqa: E402
@@ -71,6 +86,7 @@ from scripts.fleet_cold_start_cells import (  # noqa: E402
 from scripts.fleet_history_answers import SUFFIXES, corrected, history_of  # noqa: E402
 from scripts.fleet_history_answers import Fit as Fit  # noqa: E402
 from scripts.fleet_hours import (  # noqa: E402
+    CHANNELS,
     TARGETS,
     Turbine,
     another_farm,
@@ -256,9 +272,73 @@ def named_as(
     return name + (f"_{variant}" if variant else "") + suffix
 
 
-def other_farm(directory: Path, own: Path) -> list[Turbine]:  # pragma: no cover - reads the data
-    """Another farm's turbines, named under their directory so that none shares a name."""
-    return [Turbine(f"{directory.name}/{t.name}", t.values) for t in another_farm(directory, own)]
+def publication_scores(manifest: Path, hourly: Path) -> dict[str, ChannelStatistics]:
+    """Each channel read's statistics in the publication a farm's hourly means were read from.
+
+    Raises:
+        ValueError: If the hourly means name another manifest, or the manifest scores no channel
+            read of their corpus.
+    """
+    data = manifest.read_bytes()
+    digest = f"sha256:{hashlib.sha256(data).hexdigest()}"
+    stated = [json.loads(p.read_text()) for p in sorted(hourly.glob("hourly-*.json"))]
+    named = {s["manifest"][1] for s in stated}
+    if named != {digest}:
+        raise ValueError(f"{hourly} was read from {sorted(named)}, not {manifest} ({digest})")
+    (corpus,) = {s["corpus"] for s in stated}
+    published = PublishedCorpusManifestJson().decode(data)
+    scheme = PublishedCorpusManifestAssembler().restore_scheme(published.channels)
+    scores = {
+        c.channel: scheme.statistics_of(c.channel_id)
+        for c in published.channels
+        if c.corpus == corpus and c.channel in CHANNELS and c.statistics is not None
+    }
+    missing = [c for c in CHANNELS if c not in scores]
+    if missing:
+        raise ValueError(f"{manifest} scores no {missing} of {corpus}")
+    return scores
+
+
+def rescored(
+    turbines: Sequence[Turbine],
+    source: Mapping[str, ChannelStatistics],
+    target: Mapping[str, ChannelStatistics],
+) -> list[Turbine]:
+    """The turbines' hours, scored by ``source``'s statistics, in the scores of ``target``'s.
+
+    Both scores are affine in the raw value within their bounds, so each channel maps by one
+    line; a value held at the source's bound comes back as the raw value at that bound, and every
+    value is held to the target's bound, as the target's own hours are.
+
+    Raises:
+        ValueError: If a channel's score is not affine in the raw value, as a quantile score is.
+    """
+    affine = (Normalisation.STANDARD, Normalisation.ROBUST)
+    bent = [c for c in CHANNELS if {source[c].normalisation, target[c].normalisation} - set(affine)]
+    if bent:
+        raise ValueError(f"{bent} are not scored affinely: no line maps one score to the other")
+    slopes, shifts, lows, highs = (np.empty(len(CHANNELS)) for _ in range(4))
+    for i, name in enumerate(CHANNELS):
+        a, b = source[name], target[name]
+        raw_zero, raw_one = a.denormalise(0.0), a.denormalise(1.0)
+        own_zero, own_one = b.denormalise(0.0), b.denormalise(1.0)
+        slopes[i] = (raw_one - raw_zero) / (own_one - own_zero)
+        shifts[i] = (raw_zero - own_zero) / (own_one - own_zero)
+        lows[i], highs[i] = b.normalise(-np.finfo(float).max), b.normalise(np.finfo(float).max)
+    return [Turbine(t.name, np.clip(t.values * slopes + shifts, lows, highs)) for t in turbines]
+
+
+def other_farm(
+    directory: Path, own: Path, units: Sequence[Path]
+) -> list[Turbine]:  # pragma: no cover - reads the data
+    """Another farm's turbines in the farm's own scores, named under their directory."""
+    own_units, other_units = units
+    turbines = rescored(
+        another_farm(directory, own),
+        publication_scores(other_units, directory),
+        publication_scores(own_units, own),
+    )
+    return [Turbine(f"{directory.name}/{t.name}", t.values) for t in turbines]
 
 
 def small_fit() -> Fit:  # pragma: no cover - needs XGBoost
@@ -309,6 +389,9 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
         "--fleet-from", type=Path, metavar="DIR", help="the other farm's hourly means"
     )
     parser.add_argument("--fleet-beside", type=Path, metavar="DIR", help="read it as well")
+    parser.add_argument(
+        "--units", nargs=2, type=Path, metavar=("OWN", "OTHER"), help="the farms' manifests"
+    )
     parser.add_argument("--rounds", type=int, default=300)
     parser.add_argument("--rate", type=float, default=0.1)
     parser.add_argument("--most-rows", type=int, default=MOST_ROWS, help="0: every row")
@@ -333,8 +416,15 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
     if (varied or tuned or arguments.history) and arguments.kind == "trees":
         raise SystemExit("trees read otherwise are written under a --kind of their own")
 
+    other = arguments.fleet_from or arguments.fleet_beside
+    if bool(other) != bool(arguments.units):
+        raise SystemExit("the other farm's hours are read in the farm's scores, by --units")
     turbines = loaded_farm(arguments.hourly)
-    fleet = other_farm(arguments.fleet_from, arguments.hourly) if arguments.fleet_from else None
+    fleet = (
+        other_farm(arguments.fleet_from, arguments.hourly, arguments.units)
+        if arguments.fleet_from
+        else None
+    )
     left_out = None
     if arguments.folds is not None:
         dealt = folds([t.name for t in turbines], arguments.folds)
@@ -352,7 +442,9 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - reads
         left_out=left_out,
         trees=arguments.trees,
         beside=(
-            other_farm(arguments.fleet_beside, arguments.hourly) if arguments.fleet_beside else ()
+            other_farm(arguments.fleet_beside, arguments.hourly, arguments.units)
+            if arguments.fleet_beside
+            else ()
         ),
         most=arguments.most_rows,
         gaps=arguments.gaps,

@@ -1,11 +1,19 @@
 """The farm's trees for a new turbine: fitted on the others before the start's year."""
 
+import hashlib
+import json
 from collections.abc import Callable
 from datetime import date
+from pathlib import Path
 
 import numpy as np
 import pytest
 
+from emblema.catalog.contracts.published_channel import PublishedChannel
+from emblema.catalog.contracts.published_channel_statistics import PublishedChannelStatistics
+from emblema.catalog.contracts.published_corpus_manifest_json import PublishedCorpusManifestJson
+from emblema.catalog.domain.channels.channel_statistics import ChannelStatistics
+from emblema.catalog.domain.channels.normalisation import Normalisation
 from scripts.cold_start_cells import CONTEXT
 from scripts.fleet_cold_start_cells import FLEET_NBM, FLEET_ROWS, latest, scorable
 from scripts.fleet_history_answers import SUFFIXES
@@ -17,7 +25,10 @@ from scripts.fleet_tree_answers import (
     drawn,
     fleet_rows,
     named_as,
+    publication_scores,
+    rescored,
 )
+from tests.catalog.contracts.support import manifest
 
 START = date(2021, 3, 1)
 YEAR = hour_of(date(2021, 1, 1))
@@ -253,3 +264,71 @@ def test_trees_that_read_no_condition_are_corrected_too() -> None:
 
     assert set(out) == {"fleet_trees", *(f"fleet_trees{suffix}" for suffix in SUFFIXES)}
     assert all(cell in answers for answers in out.values())
+
+
+def robust(median: float, mad: float, bound: float = 100.0) -> ChannelStatistics:
+    return ChannelStatistics(
+        10, median, 3.0, Normalisation.ROBUST, median=median, mad=mad, bound=bound
+    )
+
+
+def test_the_other_farms_hours_are_scored_as_the_farms_own_would_be() -> None:
+    # The same raw reading, 52 degrees, scored by each farm's statistics.
+    source = {c: robust(40.0, 2.0) for c in CHANNELS}
+    target = {c: robust(50.0, 1.0) for c in CHANNELS}
+    target[CHANNELS[1]] = ChannelStatistics(10, 45.0, 4.0, Normalisation.STANDARD)
+    values = np.full((3, len(CHANNELS)), (52.0 - 40.0) / (1.4826 * 2.0))
+    values[1, 0] = np.nan
+    values[2, 0] = 100.0
+
+    (out,) = rescored([Turbine("t", values)], source, target)
+
+    assert out.values[0, 0] == pytest.approx((52.0 - 50.0) / 1.4826)
+    assert out.values[0, 1] == pytest.approx((52.0 - 45.0) / 4.0)
+    assert np.isnan(out.values[1, 0])
+    # At the source's bound the reading is 40 + 100 robust deviations of 2.97: past the target's.
+    assert out.values[2, 0] == pytest.approx(100.0)
+    assert out.values[0, 0] == pytest.approx(target[CHANNELS[0]].normalise(52.0))
+
+
+def test_a_score_no_line_maps_is_refused() -> None:
+    source = {c: robust(40.0, 2.0) for c in CHANNELS}
+    target = dict(source)
+    target[CHANNELS[3]] = ChannelStatistics(
+        10, 0.0, 1.0, Normalisation.QUANTILE, quantiles=tuple(np.linspace(-3.0, 3.0, 1001))
+    )
+    with pytest.raises(ValueError, match="not scored affinely"):
+        rescored([], source, target)
+
+
+def published(path: Path, hourly: Path, channels: tuple[str, ...] = CHANNELS) -> None:
+    statistics = PublishedChannelStatistics(
+        10, 5.0, 3.0, normalisation="robust", median=5.0, mad=1.0, bound=100.0
+    )
+    stated = tuple(
+        PublishedChannel(channel_id=i + 1, corpus="alpha", channel=c, statistics=statistics)
+        for i, c in enumerate(channels)
+    )
+    data = PublishedCorpusManifestJson().encode(manifest(channels=stated))
+    path.write_bytes(data)
+    hourly.mkdir(exist_ok=True)
+    digest = f"sha256:{hashlib.sha256(data).hexdigest()}"
+    for turbine in ("1", "2"):
+        (hourly / f"hourly-{turbine}.json").write_text(
+            json.dumps({"manifest": [f"durable/{digest}", digest], "corpus": "alpha"})
+        )
+
+
+def test_a_farms_scores_come_from_the_manifest_its_hours_were_read_from(tmp_path: Path) -> None:
+    published(tmp_path / "m.json", tmp_path / "h")
+
+    scores = publication_scores(tmp_path / "m.json", tmp_path / "h")
+
+    assert sorted(scores) == sorted(CHANNELS)
+    assert scores[CHANNELS[0]].normalise(5.0 + 1.4826) == pytest.approx(1.0)
+    published(tmp_path / "other.json", tmp_path / "g", channels=(*CHANNELS, "Extra"))
+    with pytest.raises(ValueError, match="was read from"):
+        publication_scores(tmp_path / "other.json", tmp_path / "h")
+    published(tmp_path / "short.json", tmp_path / "s", channels=CHANNELS[:-1])
+    with pytest.raises(ValueError, match="scores no"):
+        publication_scores(tmp_path / "short.json", tmp_path / "s")
