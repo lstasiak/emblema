@@ -1,6 +1,6 @@
 # ADR-0085: A wind farm's publication removes readings outside a wide physical range and fits its statistics on the fleet's first four years
 
-- Status: accepted
+- Status: accepted; the consequence that the signals with no robust spread saturate at the bound is replaced by ADR-0086 (2026-11-26), since the blade angle is read as an operating condition
 - Date: 2026-11-20
 - Extends ADR-0078 to a corpus with no published bounds, and ADR-0080 to the wind farms
 
