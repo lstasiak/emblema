@@ -53,19 +53,20 @@ class SlidingWindowTokeniser:
         scheme: TokenisationScheme,
         normalisation: Normalisation = Normalisation.STANDARD,
         robust_bound: float = ROBUST_BOUND,
+        robust_floor: float | None = None,
     ) -> TokenisationScheme:
         entries = _entries_by_channel(scheme, corpus)
         moments: dict[int, _RunningMoments] = {}
         for observation in observations:
             entry = _entry(entries, corpus, observation.channel, timeless=False)
-            moments.setdefault(entry.channel_id, _RunningMoments(normalisation, robust_bound)).add(
-                observation.value
-            )
+            moments.setdefault(
+                entry.channel_id, _RunningMoments(normalisation, robust_bound, robust_floor)
+            ).add(observation.value)
         for feature in static_features:
             entry = _entry(entries, corpus, feature.channel, timeless=True)
-            moments.setdefault(entry.channel_id, _RunningMoments(normalisation, robust_bound)).add(
-                feature.value
-            )
+            moments.setdefault(
+                entry.channel_id, _RunningMoments(normalisation, robust_bound, robust_floor)
+            ).add(feature.value)
         for channel_id in sorted(moments):
             scheme = scheme.with_statistics(channel_id, moments[channel_id].statistics())
         return scheme
@@ -197,12 +198,15 @@ class _RunningMoments:
     exactly.
     """
 
-    def __init__(self, normalisation: Normalisation, robust_bound: float) -> None:
+    def __init__(
+        self, normalisation: Normalisation, robust_bound: float, robust_floor: float | None
+    ) -> None:
         self.count = 0
         self.mean = 0.0
         self.m2 = 0.0
         self._normalisation = normalisation
         self._robust_bound = robust_bound
+        self._robust_floor = robust_floor
         self._values: array[float] | None = (
             None if normalisation is Normalisation.STANDARD else array("d")
         )
@@ -231,6 +235,7 @@ class _RunningMoments:
                 median=median,
                 mad=mad,
                 bound=self._robust_bound,
+                floor=self._robust_floor,
             )
         # Interpolating between equal neighbours can round a knot a place below the one before
         # it; the running maximum keeps them in the order the statistics require.

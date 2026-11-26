@@ -46,6 +46,8 @@ class PublishCorpusCommand:
         normalisation: How the statistics fitted here normalise a value.
         robust_bound: How far from the median a robust score may lie, in robust deviations;
             ``None`` holds it to the usual bound.
+        robust_floor: The least robust deviation as a share of the standard deviation;
+            ``None`` names none.
     """
 
     name: str
@@ -58,6 +60,7 @@ class PublishCorpusCommand:
     cleaning: CleaningPolicy | None = None
     normalisation: Normalisation = Normalisation.STANDARD
     robust_bound: float | None = None
+    robust_floor: float | None = None
 
 
 class PublishCorpus:
@@ -97,8 +100,9 @@ class PublishCorpus:
             WindowNotArchivableError: If a window cannot be stored at the archive's precision.
             UnknownChannelError: If the cleaning policy bounds a channel the corpus does not
                 declare.
-            InvalidTokenisationSchemeError: If a normalisation or a bound is named beside
-                adopted statistics, or a bound beside another normalisation than the robust score.
+            InvalidTokenisationSchemeError: If a normalisation, a bound or a floor is named
+                beside adopted statistics, a bound or a floor beside another normalisation than
+                the robust score, or either lies outside its range.
         """
         vocabulary = (
             ChannelVocabulary()
@@ -117,6 +121,7 @@ class PublishCorpus:
                 cleaning=command.cleaning,
                 normalisation=command.normalisation,
                 robust_bound=command.robust_bound,
+                robust_floor=command.robust_floor,
             )
         )
 

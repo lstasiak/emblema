@@ -65,10 +65,14 @@ EVEN = tuple(float(i) for i in range(QUANTILE_KNOTS))
 
 
 def robust(
-    median: float = 4.0, mad: float = 1.0, std: float = 3.0, bound: float = ROBUST_BOUND
+    median: float = 4.0,
+    mad: float = 1.0,
+    std: float = 3.0,
+    bound: float = ROBUST_BOUND,
+    floor: float | None = None,
 ) -> ChannelStatistics:
     return ChannelStatistics(
-        10, 5.0, std, Normalisation.ROBUST, median=median, mad=mad, bound=bound
+        10, 5.0, std, Normalisation.ROBUST, median=median, mad=mad, bound=bound, floor=floor
     )
 
 
@@ -91,10 +95,40 @@ def test_a_channel_mostly_at_one_value_measures_robust_scores_in_standard_deviat
     assert robust(mad=0.0, std=2.0).normalise(8.0) == pytest.approx(2.0)
 
 
-def test_the_robust_score_comes_back_as_the_raw_value() -> None:
-    statistics = robust()
+# A blade angle recorded near nought most of the time, with sensor noise around it: its median
+# and absolute deviation are both 0.0245 degrees, its standard deviation 15.17.
+BLADE_ANGLE: dict[str, float] = {"median": 0.0245, "mad": 0.0245, "std": 15.17, "bound": 100.0}
 
-    assert statistics.denormalise(statistics.normalise(6.3)) == pytest.approx(6.3)
+
+def test_a_floored_deviation_keeps_a_noisy_channels_departures_short_of_the_bound() -> None:
+    floored = robust(**BLADE_ANGLE, floor=0.05)
+
+    assert floored.normalise(30.0) == pytest.approx((30.0 - 0.0245) / (0.05 * 15.17))
+    assert floored.normalise(30.0) == pytest.approx(39.52, abs=0.01)
+    assert floored.normalise(90.0) == 100.0
+    assert robust(**BLADE_ANGLE).normalise(30.0) == 100.0
+
+
+def test_a_floor_below_the_robust_deviation_leaves_the_score_as_it_was() -> None:
+    assert robust(floor=0.1).normalise(4.0 + 1.4826) == pytest.approx(1.0)
+
+
+def test_a_floor_leaves_a_vanished_robust_deviation_to_the_standard_one() -> None:
+    floored, unfloored = robust(mad=0.0, std=2.0, floor=0.05), robust(mad=0.0, std=2.0)
+
+    assert floored.normalise(8.0) == unfloored.normalise(8.0) == pytest.approx(2.0)
+    assert floored.denormalise(2.0) == unfloored.denormalise(2.0) == pytest.approx(8.0)
+
+
+def test_a_floored_channel_that_never_varied_keeps_deviations_in_raw_units() -> None:
+    assert robust(mad=0.0, std=0.0, floor=0.05).normalise(6.0) == pytest.approx(2.0)
+
+
+@pytest.mark.parametrize("floor", [None, 0.05], ids=["unfloored", "floored"])
+def test_the_robust_score_comes_back_as_the_raw_value(floor: float | None) -> None:
+    statistics = robust(**BLADE_ANGLE, floor=floor)
+
+    assert statistics.denormalise(statistics.normalise(0.3)) == pytest.approx(0.3)
 
 
 def test_the_median_knot_has_a_quantile_score_of_zero() -> None:
@@ -144,6 +178,10 @@ MISMATCHED: dict[str, Callable[[], ChannelStatistics]] = {
     ),
     "standard with quantiles": lambda: ChannelStatistics(1, 0.0, 1.0, STANDARD, quantiles=EVEN),
     "standard with a bound": lambda: ChannelStatistics(1, 0.0, 1.0, STANDARD, bound=10.0),
+    "quantile with a floor": lambda: ChannelStatistics(
+        1, 0.0, 1.0, QUANTILE, quantiles=EVEN, floor=0.05
+    ),
+    "standard with a floor": lambda: ChannelStatistics(1, 0.0, 1.0, STANDARD, floor=0.05),
 }
 
 
@@ -177,3 +215,15 @@ def test_a_robust_deviation_that_is_negative_or_not_finite_is_refused(mad: float
 def test_a_bound_that_is_not_positive_and_finite_is_refused(bound: float) -> None:
     with pytest.raises(InvalidChannelStatisticsError, match="bound"):
         robust(bound=bound)
+
+
+@pytest.mark.parametrize("floor", [0.0, -0.05, 1.5, float("nan"), float("inf")])
+def test_a_floor_that_is_not_a_share_above_nought_and_at_most_one_is_refused(
+    floor: float,
+) -> None:
+    with pytest.raises(InvalidChannelStatisticsError, match="floor"):
+        robust(floor=floor)
+
+
+def test_a_floor_of_the_whole_standard_deviation_is_a_floor() -> None:
+    assert robust(mad=0.5, std=2.0, floor=1.0).normalise(8.0) == pytest.approx(2.0)

@@ -62,6 +62,7 @@ def test_a_robust_fit_keeps_the_median_and_its_absolute_deviation_beside_the_mom
     fitted = scheme.statistics_of(scheme.vocabulary.id_of(CORPUS, "pressure"))
     assert fitted.normalisation is Normalisation.ROBUST
     assert fitted.bound == ROBUST_BOUND
+    assert fitted.floor is None
     assert fitted.mean == pytest.approx(statistics.fmean(SKEWED))
     assert fitted.median == pytest.approx(statistics.median(SKEWED))
     assert fitted.mad == pytest.approx(
@@ -80,6 +81,21 @@ def test_a_robust_fit_keeps_the_bound_it_was_given() -> None:
     )
 
     assert scheme.statistics_of(scheme.vocabulary.id_of(CORPUS, "pressure")).bound == 100.0
+
+
+def test_a_robust_fit_keeps_the_floor_it_was_given() -> None:
+    scheme = TOKENISER.fit(
+        CORPUS,
+        [Observation("pressure", float(t), v) for t, v in enumerate(SKEWED)],
+        (),
+        scheme_for(),
+        Normalisation.ROBUST,
+        100.0,
+        0.05,
+    )
+
+    fitted = scheme.statistics_of(scheme.vocabulary.id_of(CORPUS, "pressure"))
+    assert (fitted.bound, fitted.floor) == (100.0, 0.05)
 
 
 def test_a_quantile_fit_keeps_every_thousandth_of_rank_lowest_first() -> None:

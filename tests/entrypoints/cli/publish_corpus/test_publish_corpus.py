@@ -627,6 +627,23 @@ def test_a_robust_bound_beside_another_normalisation_is_refused_by_the_command_l
         command("--normalisation", str(normalisation), "--robust-bound", "100")
 
 
+def test_the_command_line_states_the_robust_floor_it_was_given() -> None:
+    parsed = command("--normalisation", "robust", "--robust-bound", "100", "--robust-floor", "0.05")
+
+    assert (parsed.robust_bound, parsed.robust_floor) == (100.0, 0.05)
+    assert command("--normalisation", "robust").robust_floor is None
+
+
+@pytest.mark.parametrize("normalisation", [Normalisation.STANDARD, Normalisation.QUANTILE])
+def test_a_robust_floor_beside_another_normalisation_is_refused_by_the_command_line(
+    normalisation: Normalisation, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit):
+        command("--normalisation", str(normalisation), "--robust-floor", "0.05")
+
+    assert "--robust-floor belongs to --normalisation robust" in capsys.readouterr().err
+
+
 @pytest.mark.skipif(not (Path("corpora") / "cleaning").is_dir(), reason="run from the repository")
 @pytest.mark.parametrize(
     ("corpus", "schema"),

@@ -27,6 +27,8 @@ class PublishedChannelStatistics:
             normalisation is by quantile.
         bound: How far from the median a robust score may lie, in robust deviations, where the
             normalisation is robust.
+        floor: The least robust deviation as a share of the standard deviation, where the
+            normalisation is robust and the publication named one.
     """
 
     count: int
@@ -37,3 +39,4 @@ class PublishedChannelStatistics:
     mad: float | None = None
     quantiles: tuple[float, ...] = ()
     bound: float | None = None
+    floor: float | None = None

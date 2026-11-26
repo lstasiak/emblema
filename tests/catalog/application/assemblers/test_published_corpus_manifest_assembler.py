@@ -15,7 +15,7 @@ from emblema.catalog.domain.channels.normalisation import Normalisation
 from emblema.catalog.domain.cleaning.cleaning_policy import CleaningPolicy
 from emblema.catalog.domain.cleaning.cleaning_record import ChannelCleaning, CleaningRecord
 from emblema.catalog.domain.cleaning.value_bounds import ValueBounds
-from emblema.catalog.domain.exceptions import InvalidUnitSplitError
+from emblema.catalog.domain.exceptions import InvalidChannelStatisticsError, InvalidUnitSplitError
 from emblema.catalog.domain.identifiers import UnitKey
 from emblema.catalog.domain.tokenisation.archived_corpus import ArchivedCorpus
 from emblema.catalog.domain.tokenisation.tokenisation_manifest import TokenisationManifest
@@ -152,6 +152,47 @@ def test_a_robust_score_held_to_another_bound_restores_as_it_went_out(
     assert published.statistics is not None
     assert published.statistics.bound == 100.0
     assert assembler.restore(message) == bounded
+
+
+FLOORED = ChannelStatistics(
+    8, 0.5, 0.25, Normalisation.ROBUST, median=0.4, mad=0.1, bound=100.0, floor=0.05
+)
+
+
+def floored_manifest() -> TokenisationManifest:
+    pressure = VOCABULARY.id_of(CORPUS, "pressure")
+    return replace(
+        MANIFEST,
+        scheme=TokenisationScheme.for_vocabulary(VOCABULARY).with_statistics(pressure, FLOORED),
+    )
+
+
+def test_a_floored_robust_deviation_restores_as_it_went_out(
+    assembler: PublishedCorpusManifestAssembler,
+) -> None:
+    floored = floored_manifest()
+
+    message = assembler.assemble(floored)
+
+    published = next(channel for channel in message.channels if channel.channel == "pressure")
+    assert published.statistics is not None
+    assert published.statistics.floor == 0.05
+    assert assembler.restore(message) == floored
+
+
+def test_a_published_floor_that_is_not_a_share_is_refused_on_restoring(
+    assembler: PublishedCorpusManifestAssembler,
+) -> None:
+    message = assembler.assemble(floored_manifest())
+    channels = tuple(
+        replace(channel, statistics=replace(channel.statistics, floor=2.0))
+        if channel.statistics is not None and channel.statistics.floor is not None
+        else channel
+        for channel in message.channels
+    )
+
+    with pytest.raises(InvalidChannelStatisticsError, match="floor"):
+        assembler.restore(replace(message, channels=channels))
 
 
 def test_the_published_vocabulary_of_normalisations_is_the_catalogs() -> None:

@@ -29,13 +29,15 @@ class Tokeniser(Protocol):
         scheme: TokenisationScheme,
         normalisation: Normalisation = Normalisation.STANDARD,
         robust_bound: float = ROBUST_BOUND,
+        robust_floor: float | None = None,
     ) -> TokenisationScheme:
         """The scheme with statistics fitted for every channel of ``corpus`` the data holds.
 
         The caller streams the observations and static features of the training units only, all
         of them, whether or not a window will later cover them: the statistics describe the data,
         not the windowing. Each channel's statistics serve ``normalisation`` and hold the facts
-        it reads; a robust score is held to ``robust_bound`` deviations from the median.
+        it reads; a robust score is held to ``robust_bound`` deviations from the median, and its
+        deviation, where ``robust_floor`` is given, to at least that share of the standard one.
 
         Raises:
             UnknownChannelError: If a value names a channel the scheme's vocabulary has not

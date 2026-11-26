@@ -1,6 +1,7 @@
 """The publishing process as one use case, over adapters that reach nothing outside."""
 
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
@@ -21,6 +22,7 @@ from emblema.catalog.application.use_cases.register_corpus import RegisterCorpus
 from emblema.catalog.application.use_cases.register_corpus_version import RegisterCorpusVersion
 from emblema.catalog.application.use_cases.tokenise_corpus_version import TokeniseCorpusVersion
 from emblema.catalog.domain.channels.channel_schema import ChannelSchema
+from emblema.catalog.domain.channels.normalisation import Normalisation
 from emblema.catalog.domain.measurements.corpus_unit import CorpusUnit
 from emblema.catalog.domain.measurements.observation import Observation
 from emblema.catalog.domain.registry.corpus import Corpus
@@ -120,6 +122,25 @@ def test_publishing_takes_a_corpus_from_raw_data_to_a_manifest(registry: Registr
     assert (len(manifest.split.training), len(manifest.split.validation)) == (3, 1)
     assert registry.store.exists(manifest.block)
     assert manifest.corpus_version == registered(registry).versions[0].id
+
+
+def test_publishing_hands_the_robust_scores_bound_and_floor_to_the_fit(
+    registry: Registry,
+) -> None:
+    publish = publisher(registry, SCHEMA, measured_units(4))
+
+    ref = publish(
+        replace(
+            command(), normalisation=Normalisation.ROBUST, robust_bound=100.0, robust_floor=0.05
+        )
+    )
+
+    scheme = registry.archive.read_manifest(ref).scheme
+    fitted = [
+        scheme.statistics_of(entry.channel_id) for entry in scheme.vocabulary.entries_of("alpha")
+    ]
+    assert fitted
+    assert {(each.bound, each.floor) for each in fitted} == {(100.0, 0.05)}
 
 
 def test_publishing_the_same_data_twice_yields_the_same_manifest(registry: Registry) -> None:

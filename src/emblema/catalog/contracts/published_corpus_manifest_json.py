@@ -43,6 +43,10 @@ class PublishedCorpusManifestJson:
     # earlier robust manifest was held to: a reader that knew only that bound would clip a
     # served value wrongly without noticing, so it must refuse such a manifest too.
     VERSION_ROBUST_BOUND: Final = 3
+    # The version of a manifest whose robust deviation is floored at a share of the standard one:
+    # a reader that knew no floor would measure a served value in the wrong deviation without
+    # noticing, so it must refuse such a manifest, whatever bound the manifest also states.
+    VERSION_ROBUST_FLOOR: Final = 4
 
     def encode(self, manifest: PublishedCorpusManifest) -> bytes:
         document: _Document = {
@@ -97,6 +101,7 @@ class PublishedCorpusManifestJson:
             self.VERSION,
             self.VERSION_OTHER_NORMALISATION,
             self.VERSION_ROBUST_BOUND,
+            self.VERSION_ROBUST_FLOOR,
         ):
             raise MalformedManifestError(
                 f"manifest is a {document.get('format')!r} of version {version!r}"
@@ -113,13 +118,17 @@ class PublishedCorpusManifestJson:
                 f"version {self.VERSION_OTHER_NORMALISATION} is written exactly where a channel is "
                 f"normalised otherwise than by the standard score and version "
                 f"{self.VERSION_ROBUST_BOUND} where a robust score is held to another bound than "
-                f"{ROBUST_BOUND_UNSTATED:g}; version {version} states {other or 'none'}"
+                f"{ROBUST_BOUND_UNSTATED:g} and version {self.VERSION_ROBUST_FLOOR} where a robust "
+                f"deviation is floored; version {version} states {other or 'none'}"
                 + (" and a bound" if self._bounds_stated(manifest) else "")
+                + (" and a floor" if self._floors_stated(manifest) else "")
             )
         return manifest
 
     @classmethod
     def _version_of(cls, manifest: PublishedCorpusManifest) -> int:
+        if cls._floors_stated(manifest):
+            return cls.VERSION_ROBUST_FLOOR
         if cls._bounds_stated(manifest):
             return cls.VERSION_ROBUST_BOUND
         if cls._other_normalisations(manifest):
@@ -132,6 +141,13 @@ class PublishedCorpusManifestJson:
             channel.statistics is not None
             and channel.statistics.bound is not None
             and channel.statistics.bound != ROBUST_BOUND_UNSTATED
+            for channel in manifest.channels
+        )
+
+    @staticmethod
+    def _floors_stated(manifest: PublishedCorpusManifest) -> bool:
+        return any(
+            channel.statistics is not None and channel.statistics.floor is not None
             for channel in manifest.channels
         )
 
@@ -225,6 +241,8 @@ class PublishedCorpusManifestJson:
             document["quantiles"] = list(statistics.quantiles)
         if statistics.bound is not None and statistics.bound != ROBUST_BOUND_UNSTATED:
             document["bound"] = statistics.bound
+        if statistics.floor is not None:
+            document["floor"] = statistics.floor
         return document
 
     @classmethod
@@ -267,6 +285,10 @@ class PublishedCorpusManifestJson:
                 f"a bound of {ROBUST_BOUND_UNSTATED:g} is the one a robust score is held to "
                 "unless stated, and is never written"
             )
+        if fields.has("floor") and not robust:
+            raise MalformedManifestError(
+                f"a floor belongs to a robust normalisation, not a {normalisation!r} one"
+            )
         return PublishedChannelStatistics(
             fields.integer("count"),
             fields.number("mean"),
@@ -278,6 +300,7 @@ class PublishedCorpusManifestJson:
             bound=(fields.number("bound") if fields.has("bound") else ROBUST_BOUND_UNSTATED)
             if robust
             else None,
+            floor=fields.number("floor") if fields.has("floor") else None,
         )
 
     @staticmethod

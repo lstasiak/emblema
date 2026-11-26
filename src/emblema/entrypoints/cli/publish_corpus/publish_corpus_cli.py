@@ -101,6 +101,11 @@ class PublishCorpusCli:
             and Normalisation(arguments.normalisation) is not Normalisation.ROBUST
         ):
             parser.error("--robust-bound belongs to --normalisation robust")
+        if (
+            arguments.robust_floor is not None
+            and Normalisation(arguments.normalisation) is not Normalisation.ROBUST
+        ):
+            parser.error("--robust-floor belongs to --normalisation robust")
         known = self._known.named(arguments.corpus)
         return PublishCorpusInvocation(
             command=PublishCorpusCommand(
@@ -116,6 +121,7 @@ class PublishCorpusCli:
                 cleaning=cleaning,
                 normalisation=Normalisation(arguments.normalisation),
                 robust_bound=arguments.robust_bound,
+                robust_floor=arguments.robust_floor,
             ),
             corpus_root=arguments.root or RAW / known.raw_directory,
             workspace=arguments.workspace,
@@ -273,6 +279,14 @@ class PublishCorpusCli:
             metavar="DEVIATIONS",
             help="how far from the median a robust score may lie, in robust deviations; "
             f"{ROBUST_BOUND:g} unless given, and only with --normalisation {Normalisation.ROBUST}",
+        )
+        parser.add_argument(
+            "--robust-floor",
+            type=float,
+            metavar="SHARE",
+            help="the least robust deviation as a share of the standard deviation, above 0 and at "
+            "most 1; none unless given, and only with --normalisation "
+            f"{Normalisation.ROBUST}",
         )
         parser.add_argument(
             "--workspace",

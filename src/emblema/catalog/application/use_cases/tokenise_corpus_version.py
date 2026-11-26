@@ -54,6 +54,8 @@ class TokeniseCorpusVersionCommand:
             from another manifest bring their own.
         robust_bound: How far from the median a robust score may lie, in robust deviations;
             ``None`` holds it to the usual bound, and a bound belongs to the robust score alone.
+        robust_floor: The least robust deviation as a share of the standard deviation;
+            ``None`` names none, and a floor belongs to the robust score alone.
     """
 
     corpus_id: CorpusId
@@ -65,6 +67,7 @@ class TokeniseCorpusVersionCommand:
     cleaning: CleaningPolicy | None = None
     normalisation: Normalisation = Normalisation.STANDARD
     robust_bound: float | None = None
+    robust_floor: float | None = None
 
 
 class TokeniseCorpusVersion:
@@ -107,19 +110,22 @@ class TokeniseCorpusVersion:
             WindowNotArchivableError: If a window cannot be stored at the archive's precision.
             UnknownChannelError: If the cleaning policy bounds a channel the corpus does not
                 declare, most likely a misspelt one.
-            InvalidTokenisationSchemeError: If a normalisation, a bound or a cleaning policy is
-                named for statistics adopted from another manifest, which bring their own, a
-                bound is named beside a normalisation other than the robust score, or a bound
-                is not finite and positive.
+            InvalidTokenisationSchemeError: If a normalisation, a bound, a floor or a cleaning
+                policy is named for statistics adopted from another manifest, which bring their
+                own, a bound or a floor is named beside a normalisation other than the robust
+                score, a bound is not finite and positive, or a floor is not a share above
+                nought and at most one.
         """
         if command.statistics_from is not None and (
             command.normalisation is not Normalisation.STANDARD
             or command.cleaning is not None
             or command.robust_bound is not None
+            or command.robust_floor is not None
         ):
             raise InvalidTokenisationSchemeError(
                 "statistics adopted from another manifest bring their own normalisation, its "
-                "bound and the bounds their values were held to; none can be named beside them"
+                "bound and floor and the bounds their values were held to; none can be named "
+                "beside them"
             )
         if command.robust_bound is not None and command.normalisation is not Normalisation.ROBUST:
             raise InvalidTokenisationSchemeError(
@@ -132,6 +138,17 @@ class TokeniseCorpusVersion:
         ):
             raise InvalidTokenisationSchemeError(
                 f"a robust score is held to a finite positive bound, not {command.robust_bound}"
+            )
+        if command.robust_floor is not None and command.normalisation is not Normalisation.ROBUST:
+            raise InvalidTokenisationSchemeError(
+                f"a floor belongs to the robust score, not to the {command.normalisation} one"
+            )
+        if command.robust_floor is not None and not (
+            math.isfinite(command.robust_floor) and 0 < command.robust_floor <= 1
+        ):
+            raise InvalidTokenisationSchemeError(
+                "a robust deviation is floored at a share of the standard one above nought and "
+                f"at most one, not {command.robust_floor}"
             )
         source = (
             None
@@ -175,6 +192,7 @@ class TokeniseCorpusVersion:
                 fitting,
                 command.normalisation,
                 ROBUST_BOUND if command.robust_bound is None else command.robust_bound,
+                command.robust_floor,
             )
             if source is None
             else unfitted.adopting(corpus.name, source.scheme)
@@ -207,6 +225,7 @@ class TokeniseCorpusVersion:
         cleaning: "_Cleaning",
         normalisation: Normalisation,
         robust_bound: float,
+        robust_floor: float | None,
     ) -> TokenisationScheme:
         """The scheme this corpus is tokenised under, fitted on the training units alone."""
         training = [cleaning.unit(unit) for unit in units if unit.key in split.training]
@@ -217,6 +236,7 @@ class TokeniseCorpusVersion:
             unfitted,
             normalisation,
             robust_bound,
+            robust_floor,
         )
 
     def _observations(self, keys: Iterable[UnitKey]) -> Iterator[Observation]:

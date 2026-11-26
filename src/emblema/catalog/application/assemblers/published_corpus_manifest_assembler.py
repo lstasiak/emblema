@@ -125,6 +125,7 @@ class PublishedCorpusManifestAssembler:
                 mad=statistics.mad,
                 quantiles=statistics.quantiles,
                 bound=statistics.bound,
+                floor=statistics.floor,
             ),
         )
 
@@ -152,6 +153,7 @@ class PublishedCorpusManifestAssembler:
             mad=published.mad,
             quantiles=published.quantiles,
             bound=published.bound,
+            floor=published.floor,
         )
 
     @staticmethod

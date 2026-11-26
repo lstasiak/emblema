@@ -1,3 +1,4 @@
+import hashlib
 import json
 from dataclasses import replace
 from typing import Any
@@ -54,8 +55,12 @@ def test_bytes_that_are_not_a_manifest_object_are_refused(raw: bytes) -> None:
 
 @pytest.mark.parametrize(
     ("key", "value"),
-    [("format", "emblema.something-else"), ("version", 9)],
-    ids=["another format", "another version"],
+    [
+        ("format", "emblema.something-else"),
+        ("version", 9),
+        ("version", PublishedCorpusManifestJson.VERSION_ROBUST_FLOOR + 1),
+    ],
+    ids=["another format", "another version", "the version after the last"],
 )
 def test_another_format_or_version_is_refused(key: str, value: object) -> None:
     document = document_of()
@@ -202,6 +207,32 @@ ROBUST_TO_A_HUNDRED = replace(
         8, 0.5, 0.25, normalisation=NORMALISATION_ROBUST, median=0.4, mad=0.1, bound=100.0
     ),
 )
+ROBUST_FLOORED = replace(
+    PRESSURE,
+    statistics=PublishedChannelStatistics(
+        8,
+        0.5,
+        0.25,
+        normalisation=NORMALISATION_ROBUST,
+        median=0.4,
+        mad=0.1,
+        bound=10.0,
+        floor=0.05,
+    ),
+)
+ROBUST_TO_A_HUNDRED_FLOORED = replace(
+    PRESSURE,
+    statistics=PublishedChannelStatistics(
+        8,
+        0.5,
+        0.25,
+        normalisation=NORMALISATION_ROBUST,
+        median=0.4,
+        mad=0.1,
+        bound=100.0,
+        floor=0.05,
+    ),
+)
 BY_QUANTILE = replace(
     PRESSURE,
     statistics=PublishedChannelStatistics(
@@ -221,8 +252,8 @@ BOUNDED = PublishedValueBounds(
 
 @pytest.mark.parametrize(
     "channel",
-    [ROBUST, ROBUST_TO_A_HUNDRED, BY_QUANTILE],
-    ids=["robust", "robust to a hundred", "quantile"],
+    [ROBUST, ROBUST_TO_A_HUNDRED, ROBUST_FLOORED, ROBUST_TO_A_HUNDRED_FLOORED, BY_QUANTILE],
+    ids=["robust", "robust to a hundred", "floored", "floored to a hundred", "quantile"],
 )
 def test_statistics_of_another_normalisation_come_back_as_they_went_in(
     channel: PublishedChannel,
@@ -288,6 +319,69 @@ def test_a_manifest_whose_version_does_not_say_whether_a_bound_is_stated_is_refu
         JSON.decode(encoded(document))
 
 
+@pytest.mark.parametrize(
+    "channel", [ROBUST_FLOORED, ROBUST_TO_A_HUNDRED_FLOORED], ids=["usual bound", "another bound"]
+)
+def test_a_manifest_with_a_floor_is_of_a_version_an_older_reader_refuses(
+    channel: PublishedChannel,
+) -> None:
+    raw = JSON.encode(replace(MANIFEST, channels=(channel, TEMPERATURE)))
+
+    document = json.loads(raw)
+    assert document["version"] == PublishedCorpusManifestJson.VERSION_ROBUST_FLOOR
+    assert document["channels"][0]["statistics"]["floor"] == 0.05
+    assert JSON.encode(JSON.decode(raw)) == raw
+
+
+# Digests of the bytes these manifests were stored as before a floor could be stated.
+UNFLOORED_DIGESTS = {
+    "standard": "91263f1b048628b050fb31e7e6c02e9a9279806fe1fc944ae1c9a81d8f873ba0",
+    "robust": "d09531354dfdd0fc860478593259cda3c5b16faa030bf703b9df3735bfd780b8",
+    "robust to a hundred": "7db820d7a31597b38a8495bffa06af367ce128e6a3babd1aa4dc4bb81785ab40",
+}
+
+
+@pytest.mark.parametrize(
+    ("channel", "digest"),
+    [
+        (PRESSURE, UNFLOORED_DIGESTS["standard"]),
+        (ROBUST, UNFLOORED_DIGESTS["robust"]),
+        (ROBUST_TO_A_HUNDRED, UNFLOORED_DIGESTS["robust to a hundred"]),
+    ],
+    ids=UNFLOORED_DIGESTS.keys(),
+)
+def test_a_manifest_without_a_floor_keeps_its_bytes(channel: PublishedChannel, digest: str) -> None:
+    raw = JSON.encode(replace(MANIFEST, channels=(channel, TEMPERATURE)))
+
+    assert hashlib.sha256(raw).hexdigest() == digest
+    assert b"floor" not in raw
+
+
+@pytest.mark.parametrize(
+    ("channel", "version"),
+    [
+        (ROBUST_FLOORED, PublishedCorpusManifestJson.VERSION_OTHER_NORMALISATION),
+        (ROBUST_TO_A_HUNDRED_FLOORED, PublishedCorpusManifestJson.VERSION_ROBUST_BOUND),
+        (ROBUST, PublishedCorpusManifestJson.VERSION_ROBUST_FLOOR),
+        (ROBUST_TO_A_HUNDRED, PublishedCorpusManifestJson.VERSION_ROBUST_FLOOR),
+    ],
+    ids=[
+        "a floor claiming the second",
+        "a floor and a bound claiming the third",
+        "no floor claiming the fourth",
+        "a bound without a floor claiming the fourth",
+    ],
+)
+def test_a_manifest_whose_version_does_not_say_whether_a_floor_is_stated_is_refused(
+    channel: PublishedChannel, version: int
+) -> None:
+    document = json.loads(JSON.encode(replace(MANIFEST, channels=(channel, TEMPERATURE))))
+    document["version"] = version
+
+    with pytest.raises(MalformedManifestError, match="robust deviation is floored"):
+        JSON.decode(encoded(document))
+
+
 def test_cleaning_alone_keeps_the_first_version() -> None:
     document = json.loads(JSON.encode(replace(MANIFEST, cleaning=(BOUNDED,))))
 
@@ -315,6 +409,9 @@ def test_a_first_version_manifest_claiming_another_normalisation_is_refused() ->
         ({"normalisation": "quantile", "quantiles": [0.0] * 1001, "bound": 100.0}, "belongs to"),
         ({"bound": 100.0}, "belongs to"),
         ({"normalisation": "robust", "median": 0.4, "mad": 0.1, "bound": 10.0}, "never written"),
+        ({"normalisation": "quantile", "quantiles": [0.0] * 1001, "floor": 0.05}, "belongs to"),
+        ({"floor": 0.05}, "belongs to"),
+        ({"normalisation": "robust", "median": 0.4, "mad": 0.1, "floor": "a"}, "number"),
     ],
     ids=[
         "unknown",
@@ -326,6 +423,9 @@ def test_a_first_version_manifest_claiming_another_normalisation_is_refused() ->
         "a bound on the quantile score",
         "a bound on the standard score",
         "the usual bound written",
+        "a floor on the quantile score",
+        "a floor on the standard score",
+        "a floor that is not a number",
     ],
 )
 def test_statistics_that_do_not_fit_their_normalisation_are_refused(

@@ -108,6 +108,7 @@ class Fixture:
         cleaning: CleaningPolicy | None = None,
         normalisation: Normalisation = Normalisation.STANDARD,
         robust_bound: float | None = None,
+        robust_floor: float | None = None,
     ) -> ArtifactRef:
         return self.tokenise(
             TokeniseCorpusVersionCommand(
@@ -120,6 +121,7 @@ class Fixture:
                 cleaning=cleaning,
                 normalisation=normalisation,
                 robust_bound=robust_bound,
+                robust_floor=robust_floor,
             )
         )
 
@@ -376,6 +378,7 @@ def test_the_normalisation_named_is_fitted_and_survives_the_archive(
         assert statistics.median == pytest.approx(4.5)
         assert statistics.mad == pytest.approx(2.0)
         assert statistics.bound == ROBUST_BOUND
+        assert statistics.floor is None
     else:
         assert len(statistics.quantiles) == QUANTILE_KNOTS
         assert statistics.quantiles[0] == 1.0
@@ -415,20 +418,56 @@ def test_a_bound_that_cannot_hold_a_score_is_refused(
         fixture.run(normalisation=Normalisation.ROBUST, robust_bound=bound)
 
 
+def test_the_floor_named_holds_the_robust_deviation_and_survives_the_archive(
+    wired: Callable[..., Fixture],
+) -> None:
+    fixture = wired(registered(UNITS))
+
+    manifest = fixture.archive.read_manifest(
+        fixture.run(normalisation=Normalisation.ROBUST, robust_bound=100.0, robust_floor=0.05)
+    )
+
+    channel = manifest.scheme.vocabulary.id_of("corpus", "temperature")
+    statistics = manifest.scheme.statistics_of(channel)
+    assert (statistics.bound, statistics.floor) == (100.0, 0.05)
+
+
+@pytest.mark.parametrize("normalisation", [Normalisation.STANDARD, Normalisation.QUANTILE])
+def test_a_floor_beside_another_normalisation_than_the_robust_score_is_refused(
+    wired: Callable[..., Fixture], normalisation: Normalisation
+) -> None:
+    fixture = wired(registered(UNITS))
+
+    with pytest.raises(InvalidTokenisationSchemeError, match="belongs to the robust score"):
+        fixture.run(normalisation=normalisation, robust_floor=0.05)
+
+
+@pytest.mark.parametrize("floor", [0.0, -0.05, 1.5, math.inf, math.nan])
+def test_a_floor_that_is_not_a_share_of_the_standard_deviation_is_refused(
+    wired: Callable[..., Fixture], floor: float
+) -> None:
+    fixture = wired(registered(UNITS))
+
+    with pytest.raises(InvalidTokenisationSchemeError, match="above nought and at most one"):
+        fixture.run(normalisation=Normalisation.ROBUST, robust_floor=floor)
+
+
 @pytest.mark.parametrize(
-    ("normalisation", "cleaning", "robust_bound"),
+    ("normalisation", "cleaning", "robust_bound", "robust_floor"),
     [
-        (Normalisation.QUANTILE, None, None),
-        (Normalisation.STANDARD, PRESSURE_HELD, None),
-        (Normalisation.STANDARD, None, 100.0),
+        (Normalisation.QUANTILE, None, None, None),
+        (Normalisation.STANDARD, PRESSURE_HELD, None, None),
+        (Normalisation.STANDARD, None, 100.0, None),
+        (Normalisation.STANDARD, None, None, 0.05),
     ],
-    ids=["normalisation", "cleaning", "bound"],
+    ids=["normalisation", "cleaning", "bound", "floor"],
 )
 def test_what_adopted_statistics_bring_cannot_be_named_beside_them(
     wired: Callable[..., Fixture],
     normalisation: Normalisation,
     cleaning: CleaningPolicy | None,
     robust_bound: float | None,
+    robust_floor: float | None,
 ) -> None:
     fixture = wired(registered(UNITS))
     earlier = fixture.run()
@@ -439,6 +478,7 @@ def test_what_adopted_statistics_bring_cannot_be_named_beside_them(
             normalisation=normalisation,
             cleaning=cleaning,
             robust_bound=robust_bound,
+            robust_floor=robust_floor,
         )
 
 

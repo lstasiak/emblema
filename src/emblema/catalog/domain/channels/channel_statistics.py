@@ -36,9 +36,9 @@ class ChannelStatistics:
     instead, so a value that does depart later stays finite and honest about how far it strayed.
 
     Invariants: the count is positive; every figure is finite; the deviations are not negative;
-    a robust normalisation has a median, its deviation and a positive bound and no quantiles, a
-    quantile one has ``QUANTILE_KNOTS`` quantiles in order and none of those, a standard one has
-    neither.
+    a robust normalisation has a median, its deviation and a positive bound and no quantiles, and
+    may have a floor above nought and at most one, a quantile one has ``QUANTILE_KNOTS``
+    quantiles in order and none of those, a standard one has neither.
 
     Attributes:
         count: Values the statistics were computed over.
@@ -51,6 +51,10 @@ class ChannelStatistics:
             the normalisation is by quantile.
         bound: How far from the median a robust score may lie, in robust deviations, where the
             normalisation is robust; a publication chooses it for the tails its channels have.
+        floor: The least robust deviation as a share of the standard deviation, where the
+            normalisation is robust and the publication names one; it keeps a channel recorded
+            at one value most of the time, with noise around it, from measuring its real
+            departures in units of that noise.
     """
 
     count: int
@@ -61,6 +65,7 @@ class ChannelStatistics:
     mad: float | None = None
     quantiles: tuple[float, ...] = ()
     bound: float | None = None
+    floor: float | None = None
 
     def __post_init__(self) -> None:
         if self.count < 1:
@@ -84,6 +89,14 @@ class ChannelStatistics:
         if self.bound is not None and not (math.isfinite(self.bound) and self.bound > 0):
             raise InvalidChannelStatisticsError(
                 f"bound must be finite and positive, got {self.bound}"
+            )
+        if self.floor is not None and not robust:
+            raise InvalidChannelStatisticsError(
+                f"a floor belongs to a robust normalisation, not a {self.normalisation} one"
+            )
+        if self.floor is not None and not (math.isfinite(self.floor) and 0 < self.floor <= 1):
+            raise InvalidChannelStatisticsError(
+                f"floor must be a share above nought and at most one, got {self.floor}"
             )
         if self.median is not None and not math.isfinite(self.median):
             raise InvalidChannelStatisticsError(f"median must be finite, got {self.median}")
@@ -155,6 +168,10 @@ class ChannelStatistics:
         A channel recorded at one value most of the time has no absolute deviation from its
         median, and measuring its rare departures in raw units would make their size depend on
         the unit the source chose; its standard deviation still says how far the values spread.
+        Where the deviation does not vanish and the publication names a floor, it is at least that
+        share of the standard one, because sensor noise around the usual value gives a deviation
+        too small to tell a real departure from the bound; where it vanishes the standard
+        deviation stands in, floor or none.
         """
         if (
             self.median is None or self.mad is None or self.bound is None
@@ -163,7 +180,11 @@ class ChannelStatistics:
                 "only robust statistics have a median, a MAD and a bound"
             )
         robust = MAD_TO_DEVIATION * self.mad
-        return self.median, robust if robust > 0.0 else self._standard_scale, self.bound
+        if robust == 0.0:
+            return self.median, self._standard_scale, self.bound
+        if self.floor is not None:
+            robust = max(robust, self.floor * self.std)
+        return self.median, robust, self.bound
 
     def _rank(self, value: float) -> float:
         """The share of training values below ``value``, read off the quantiles.
