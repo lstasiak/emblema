@@ -142,6 +142,20 @@ def saving(every: int | None) -> dict[str, object]:
     return {"save_strategy": "steps", "save_steps": every, "save_total_limit": None}
 
 
+def speeding(compiled: bool, workers: int) -> dict[str, object]:
+    """The trainer's settings that run the same fit faster on a card, or none.
+
+    Raises:
+        ValueError: If ``workers`` is negative.
+    """
+    if workers < 0:
+        raise ValueError(f"{workers} loader workers")
+    return {
+        **({"torch_compile": True} if compiled else {}),
+        **({"dataloader_num_workers": workers} if workers else {}),
+    }
+
+
 def said(name: str) -> Callable[[str], None]:
     def say(text: str) -> None:
         print(f"{name} {text}", file=sys.stderr, flush=True)
@@ -221,6 +235,8 @@ def fit(arguments: argparse.Namespace) -> None:  # pragma: no cover - needs the 
         save_every=arguments.save_every or 0,
         seed=arguments.seed,
         complete=arguments.complete,
+        compiled=arguments.compile,
+        loader_workers=arguments.loader_workers,
     )
     arguments.out.mkdir(parents=True, exist_ok=True)
     if (arguments.out / "fit.json").exists():
@@ -265,6 +281,7 @@ def fit(arguments: argparse.Namespace) -> None:  # pragma: no cover - needs the 
         logging_steps=max(arguments.steps // 20, 1),
         lr_scheduler_type=arguments.schedule,
         **saving(arguments.save_every),
+        **speeding(arguments.compile, arguments.loader_workers),
     )
     print(f"{record.name} fitted in {time.monotonic() - started:.0f} s")
 
@@ -347,6 +364,10 @@ def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - needs
     fitting.add_argument("--seed", type=int, default=1)
     fitting.add_argument("--schedule", choices=("linear", "constant"), default="linear")
     fitting.add_argument("--save-every", type=int, help="keep the adapters every N steps")
+    fitting.add_argument("--compile", action="store_true", help="compile the model for the card")
+    fitting.add_argument(
+        "--loader-workers", type=int, default=0, help="processes drawing the batches"
+    )
     fitting.add_argument("--out", type=Path, required=True)
     answering = commands.add_parser("answer")
     answering.add_argument("--hourly", type=Path, required=True)

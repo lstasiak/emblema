@@ -231,8 +231,10 @@ def test_a_fits_record_reads_back_as_written(tmp_path: Path) -> None:
     fit.write(tmp_path)
 
     assert FitRecord.read(tmp_path) == fit
-    # A record written before the fits could be cut from complete hours reads as one that was not.
+    # A record written before the fits could be cut from complete hours, compiled or fed by
+    # loader workers reads as one that was none of these.
     kept = (tmp_path / "fit.json").read_text()
-    assert '"complete": false' in kept
-    (tmp_path / "fit.json").write_text(kept.replace(',\n  "complete": false', ""))
+    older = ',\n  "complete": false,\n  "compiled": false,\n  "loader_workers": 0'
+    assert older in kept
+    (tmp_path / "fit.json").write_text(kept.replace(older, ""))
     assert FitRecord.read(tmp_path) == fit

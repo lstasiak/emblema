@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from scripts.fleet_adaptation import FitRecord
-from scripts.fleet_chronos2_adapted import assigned, named_as
+from scripts.fleet_chronos2_adapted import assigned, named_as, saving, speeding
 from scripts.fleet_hours import axis_of
 from tests.scripts.test_fleet_adaptation import record
 
@@ -51,3 +51,14 @@ def test_adapters_kept_on_the_way_answer_under_a_name_of_their_own_at_a_constant
         named_as(constant, "checkpoint-8000", None)
     with pytest.raises(ValueError, match="constant rate and a name"):
         named_as([record(schedule="linear")], "checkpoint-8000", "s_8000")
+
+
+def test_the_trainer_is_told_to_keep_adapters_and_run_faster_only_when_asked() -> None:
+    assert saving(None) == {}
+    assert saving(8000) == {"save_strategy": "steps", "save_steps": 8000, "save_total_limit": None}
+    assert speeding(False, 0) == {}
+    assert speeding(True, 0) == {"torch_compile": True}
+    assert speeding(False, 2) == {"dataloader_num_workers": 2}
+    assert speeding(True, 4) == {"torch_compile": True, "dataloader_num_workers": 4}
+    with pytest.raises(ValueError, match="-1 loader workers"):
+        speeding(False, -1)

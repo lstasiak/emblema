@@ -185,6 +185,9 @@ class FitRecord:
         save_every: The steps between adapters kept on the way, or 0.
         seed: Seeds the draws and the adapters' start.
         complete: Whether the turbines' spans are cut from the hours whose conditions all read.
+        compiled: Whether the model was compiled for the card; the same model, run faster.
+        loader_workers: Processes drawing the batches beside the trainer's, 0 for none; with any,
+            each draws from its own seeded stream, so the draws differ from those of none.
     """
 
     name: str
@@ -208,6 +211,8 @@ class FitRecord:
     save_every: int
     seed: int
     complete: bool = False
+    compiled: bool = False
+    loader_workers: int = 0
 
     def write(self, directory: Path) -> None:
         (directory / "fit.json").write_text(json.dumps(asdict(self), indent=2) + "\n")
