@@ -345,3 +345,92 @@ ridge gives the trees within a day; what remains is the response to the hour's l
 forecaster was not given the corrections the bar was. The post hoc split was read on the first
 reading's answers, before the fixes. Before this reading was declared, a reviewer of the code
 ran the trees and the ridge on four starts of Kelmarsh (disclosed above).
+
+## 2026-11-27 — declared before the run: a screen of the forecaster's recipe on the fixed publications
+
+**Question.** On a new turbine of a known farm the forecaster trails the trees corrected by the
+turbine's own hours (the section above). This screen fits one change of the recipe at a time:
+more steps, complete hours, a larger adapter, draws of 47 hours, the other farm beside. On fold
+0 it chooses the recipe, its steps and its switches, and reads where the forecaster still
+trails. It also fits the new farm's answers again on the fixed publications. Whether the gap is
+the recipe's is decided on every fold, in a run declared later. This section claims nothing.
+
+**Conditions.**
+
+| | |
+|---|---|
+| Instrument | the commit that adds this section; publications Kelmarsh `f147f8b1…`, Penmanshiel `f12c42c9…`. The rules below are applied by reading scripts kept with the run's files. |
+| Cells | the first month of 2020 to 2022 rebuilt on those publications (Kelmarsh 2,907 windows over 31 starts, Penmanshiel 7,078 over 30). A new turbine is read on fold 0 (Kelmarsh 1; Penmanshiel 01 and 08), a new farm on every turbine. Every fit and tree ends before 2020. The measure and its interval are the pilot's. |
+| Machines | tier M: two sessions on a Colab card (RTX PRO 6000), four compiled fits at once (1.7 times as fast as uncompiled, timed on this card); the reading on the Mac (M1 Pro). Validation numbers. |
+| Tried first | a fit of 20 steps of each new arm on the Mac, every cell answered from a kept adapter; the reading run whole on stand-in answers of known ratios, which it returns |
+
+**The fits.** Seeds 1 and 2; adapters of rank 8 at a constant rate of 10⁻⁴; batch 128; draws of
+47 to 720 hours; 64,000 steps, the adapters kept every 8,000 and each answered.
+
+| Arm | Read on | What it changes |
+|---|---|---|
+| s | a new turbine | nothing: the pilot's recipe, longer |
+| sf | a new turbine (Penmanshiel) | spans cut from hours with all six signals (Kelmarsh lacks under 1 %) |
+| r64 | a new turbine | adapters of rank 64 |
+| c47 | a new turbine | every draw exactly 47 hours |
+| b | a new turbine | every unheld turbine of the other farm beside |
+| o | a new farm | the other farm's unheld turbines alone |
+| of | a new farm (Kelmarsh) | o from hours with all six signals |
+
+**Rules.** An arm's value on a farm and rung is the mean over its seeds of the log ratio against
+the zero-shot model on the same cells.
+
+- *Plausibility, or stop and find the cause.* On Penmanshiel, whose data did not change, s in
+  seed 1 at 8,000 steps reads within 0.03 of the pilot's fit of 8,000 steps against the trees on
+  fold 0, from every hour since the start: the same recipe, compiled. Every fit reaches its
+  steps with its adapters kept, finite losses, and its last five logged losses under its first
+  five (checked on the records the card returns). Every cell is answered, or the reading
+  refuses.
+- *Plateau.* On each farm and rung, the fewest steps within 2 % of the arm's best kept adapter.
+  Under a constant rate a curve can rise 2–3 % between kept adapters (the pilot's dose of rank 8
+  at 3·10⁻⁴: 0.725, then 0.746), so a plateau is read against the best, not the previous one.
+  The longest fit reading more than 2 % above the best is named as harm.
+- *A switch* is adopted where it leads its base by 3 % or more with both seeds on the same side
+  in a test, and trails by 3 % or more, both seeds on the same side, in none. Seed 2 against
+  seed 1 read 0.982 [0.961; 1.001] and 1.038 [1.019; 1.057] in the pilot, so 3 % with both
+  seeds agreeing is above one seed's noise. Each arm is read at its own plateau, which can lie
+  up to 2 % above its best: the cheaper point is chosen on purpose.
+- *Tests*, both rungs unless named: sf against s on Penmanshiel; r64 against s and b against s
+  on both farms; c47 against s on both farms, on 47 hours alone; of against o on Kelmarsh.
+- *The recipe.* For a new turbine, s with each adopted switch among sf, r64 and b; its steps are
+  the largest plateau of those arms over both farms and rungs. If c47 is adopted, the rung from
+  47 hours is answered by c47, at its largest plateau over both farms. Switches adopted together
+  are first fitted together in the final recipe's run; here each is read apart. For a new farm,
+  of on Kelmarsh if adopted, else o; its steps are the largest plateau over both farms and
+  rungs. An answer is the mean of the two seeds.
+
+**Readings,** each farm apart, days 2, 7 and 14 pooled, all descriptive.
+
+- The curves, the switches and the recipe, by the rules.
+- Each arm at its plateau: from every hour since the start against the bar with history; from
+  47 hours against the tuned trees; a new farm's arms against the new farm's bar.
+- Where the gap lies, for the recipe's arms: the ratio of mean squared errors per temperature,
+  for the six that follow load and pitch against the rest, and per fifth of the hour's change,
+  as in the section above.
+
+The forecaster's answers on its own hours, corrected as the trees' are, and the new farm's
+verdict on them, are declared in a section of their own before that run.
+
+**Predictions.** Where an interval was read before, the range comes from it; other rows name
+what they rest on.
+
+| | Prediction | From |
+|---|---|---|
+| s's plateau, each farm and rung | 16,000 to 48,000 steps | the pilot's losses still falling at 8,000 steps; 4,400 to 8,000 steps took 7.8 % off on Kelmarsh, 8,000 to 11,200 1.6 % on Penmanshiel |
+| sf against s, each rung | 0.90 to 1.00: adopted or level | judgement: the pitch motors trail by 1.63–1.66 on Penmanshiel, whose fits read half their hours without the blade angle, and by 1.26–1.33 on Kelmarsh |
+| r64 against s | 0.97 to 1.03: not adopted | rank 64 against 8 at 10⁻⁴ in the pilot's dose, one seed: 1.00, 0.99, 1.03, 1.06 from 1,000 to 8,000 steps |
+| b against s | 0.95 to 1.03: not adopted | a farm's fit against the other farm's in the pilot: 1.012 [0.986; 1.039] and 0.882 [0.865; 0.899]; the trees with the other farm beside: 0.938 and 0.992 |
+| c47 against s, 47 hours | 0.90 to 1.02 | no earlier reading |
+| A new turbine, s at its plateau against the bar with history | Kelmarsh 0.82 to 0.97, Penmanshiel 1.02 to 1.18 | each farm's lowest pilot fit on every fold, 0.927 [0.891; 0.965] and 1.148 [1.111; 1.183], less up to 8 % from steps; Kelmarsh's read on the cut blade angle; fold 0 alone may lie outside (Penmanshiel's turbines 0.94–1.33) |
+| A new farm, o at its plateau against the new farm's bar | 0.64 to 0.71 | the lowest of the pilot's new-farm fits, 0.516–0.558 and 0.555–0.604, times the bar's strengthening read on the zero-shot model (1.25, 1.17) |
+
+**Limitations.** Fold 0 holds one turbine of Kelmarsh and two of Penmanshiel, so the switches are
+read with the width of those cells. The plateaus, the switches and the new farm's arm are chosen
+on the cells these readings read, which favours the forecaster as the bar's best member favours
+the bar. Compiled fits are not bit-identical to the pilot's; the plausibility row bounds the
+difference. The new farm's cells were read before. Both farms are of one maker.
