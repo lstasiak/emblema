@@ -254,3 +254,94 @@ a reviewer of the code ran the trees and the ridge on four starts of two Kelmars
 these years, to compare a ridge clipped to its fitted range with the one declared. One number
 came of it, the difference between the two (1 to 2 % of the squared error); the ridge stays as
 declared, and no answer of the forecaster was read.
+
+## 2026-11-27 — measured: the forecaster against trees that read a turbine's own hours
+
+**Question.** As declared above (2026-11-25): does the pilot's forecaster, handed every hour
+since a turbine's start, still lead once the trees read those hours too, on a new turbine and on
+a new farm?
+
+**Conditions.** Declared at `35a22c6f7`. The pilot's answers, the cells of the first month of
+2020 to 2022, every tree fitted before 2020, on the Mac's processor (M1 Pro). Validation numbers.
+The plausibility rows held: the plain trees equal the pilot's on every cell, each correction
+answers the cells the trees answer, and the pilot's rows against its own bars repeat its tables.
+Both on Kelmarsh and gaps on Penmanshiel read more than 2 % under the trees, so their
+corrections joined the bar with history, as declared.
+
+**The declared rows.** Each farm's lowest fit, days 2, 7 and 14 pooled.
+
+| | Kelmarsh | Penmanshiel | Row |
+|---|---|---|---|
+| New turbine, from the start, against the bar with history | 0.927 [0.891; 0.965] | 1.148 [1.111; 1.183] | the pilot's lead was the bar's handicap |
+| New farm, from the start, against the new farm's bar | 0.532 [0.516; 0.558] | 0.577 [0.555; 0.604] | stays a candidate |
+
+**The classical answers** against the trees (the other farm's trees for the last row).
+
+| | Kelmarsh | Penmanshiel |
+|---|---|---|
+| slow / gaps / both | 0.982 / 0.991 / 0.964 | 0.989 / 0.970 / 1.024 |
+| offset / ridge / boosted | 0.883 / 0.803 / 0.902 | 0.886 / 0.791 / 0.887 |
+| the other farm's trees, ridge | 0.666 [0.615; 0.714] | 0.416 [0.396; 0.437] |
+
+On a new turbine the forecaster's ratio of mean squared errors is 1.075 on Kelmarsh and 1.126
+on Penmanshiel. By day it falls with the turbine's hours: 1.021, 0.903, 0.866 on Kelmarsh and
+1.272, 1.121, 1.064 on Penmanshiel (days 2, 7, 14). Penmanshiel's turbines read 0.94 to 1.33.
+
+**Found after the reading, and fixed.**
+
+| Defect | Effect | Fix |
+|---|---|---|
+| Kelmarsh's blade angle, an operating condition every answer reads, cut at 3.7° by the robust score's bound: 11 % of its hours at the bound | pitching above rated wind read as blades at rest | both farms published again with the robust deviation floored (ADR-0086); the other signals keep their hourly means to the bit |
+| The other farm's trees read the answered farm's hours in their own farm's units | the new farm's bar weaker than it is | the hours scored as the trees' farm scores them |
+
+Read again on the fixed data, the classical side changes only where these reach. On Kelmarsh
+the ridge reads 0.805 and both 0.938. The other farm's trees with the ridge read 0.390
+[0.359; 0.427] on Kelmarsh and 0.253 [0.232; 0.275] on Penmanshiel against those trees alone.
+The zero-shot model from the start reads 1.179 and 1.199 against the new farm's bar, where it
+read 0.945 and 1.028: that bar is now 17–25 % stronger. Every row of Penmanshiel that reads
+nothing of Kelmarsh repeats to the digit, and its new-turbine row stands at 1.148. The pilot's
+fits that read Kelmarsh cannot be answered again: the card kept no adapters. So the new-farm
+row and Kelmarsh's new-turbine row are read again on new fits (the next section).
+
+**Where the forecaster trails, read after the reading (post hoc).** On a new turbine against the
+bar with history, each cell's error by the size of the hour's change in its target:
+
+| Fifth of the hour's change | 1 (calmest) | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| Kelmarsh | 0.84 | 0.90 | 1.03 | 0.96 | 1.18 |
+| Penmanshiel | 0.95 | 0.99 | 1.09 | 1.12 | 1.17 |
+
+The largest fifth holds 52 % and 57 % of the bar's loss. Neither side misses a level: the mean
+signed error is near nought on every day. Per temperature the forecaster trails on the six that
+follow load and pitch: stator (1.43, 1.52), transformer (1.92, 1.50), three pitch motors
+(1.26–1.33, 1.63–1.66) and hub (1.49, 1.40). It leads on the controller's and the top box's
+(0.62–0.80). The pilot's lead from the start came from knowing the turbine's level, which the
+ridge gives the trees within a day; what remains is the response to the hour's load.
+
+**Predictions against outcomes.**
+
+| Prediction | Outcome | Why missed |
+|---|---|---|
+| best correction 0.65–0.85 | 0.803, 0.791 | — |
+| new turbine: Kelmarsh 0.95–1.24, Penmanshiel 1.04–1.36 | 0.927, 1.148 | Kelmarsh: derived from the main fit, while the row reads the lowest (0.745 / 0.803 = 0.928) |
+| the other farm's correction 0.40–0.60 | 0.666, 0.416 | Kelmarsh: carried over from a trial on Penmanshiel alone, and the units' defect |
+| new farm 0.67–0.85 | 0.532, 0.577 | a gain on 47 hours carried over to the rung from the start; the bar's defect |
+| tuned members 0.95–1.04 | 0.964–1.024 | — |
+
+**Conclusions.**
+
+1. On a new turbine of a known farm, the pilot's forecaster no longer leads once the trees are
+   corrected by the turbine's own hours: it trails on Penmanshiel, and on Kelmarsh leads by the
+   declared measure but trails in the mean squared error. Its lead from the start was the bar's
+   handicap.
+2. The gap lies in the hours of largest change and the temperatures that follow load, not in
+   level.
+3. The new farm's lead does not stand as read: its bar was weakened by the units' defect, and its
+   answers read the cut blade angle.
+4. Two data defects reached every reading of the farms' conditions; both are fixed at the
+   publication and in the trees.
+
+**Limitations.** The bar's member and the forecaster's fit were each chosen on these cells. The
+forecaster was not given the corrections the bar was. The post hoc split was read on the first
+reading's answers, before the fixes. Before this reading was declared, a reviewer of the code
+ran the trees and the ridge on four starts of Kelmarsh (disclosed above).
