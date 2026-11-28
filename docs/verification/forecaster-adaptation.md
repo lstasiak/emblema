@@ -543,3 +543,71 @@ plateaus and switches it is read on. The recipe's answer is the mean of two seed
 single fit. Kelmarsh's curve had not saturated. The predictions of s's plateau and of s and o against
 their bars missed on the forecaster's side, by the steps and, for s and o, the mean of the
 seeds; c47 beat its judged range; sf missed the other way; r64 and b held.
+
+## 2026-11-28 — declared before the run: the recipe on every fold, and the forecaster corrected by a turbine's own hours
+
+**Question.** On fold 0 the recipe the screen chose led the trees with a turbine's history (the
+section above). Does it lead on the folds that did not choose it, from every hour since the
+start and from 47 hours? On a new farm, does it lead the new farm's bar once it is given the
+same correction by the turbine's own hours as the trees? And do the steps saturate on fold 0
+within twice as many?
+
+**Conditions.**
+
+| | |
+|---|---|
+| Instrument | the commit that adds this section; the publications and cells of the screen. The rules below are applied by reading scripts kept with the run's files. |
+| Fits | the recipe, s (draws of 47 to 720 hours) for answers from the start and c47 (draws of exactly 47 hours) for the 47-hour rung: rank 8, a constant rate of 10⁻⁴, 64,000 steps, seeds 1 and 2, on Kelmarsh's folds 1 to 3 and Penmanshiel's 1 to 4; fold 0's and the new farm's fits are the screen's. s128: fold 0, seed 1, 128,000 steps kept every 16,000. |
+| Answers | every cell of every turbine by its fold's fit, at each kept adapter; the answer is the mean of the two seeds. Every own hour before each start's last cell (Kelmarsh 78,019 windows, Penmanshiel 192,004) by s at 64,000 and by o at 56,000. |
+| Machines | tier M: two sessions on a Colab card (RTX PRO 6000), four compiled fits at once; the reading and the corrections on the Mac. Validation numbers. |
+| Tried first | a fit of 20 steps of each of Kelmarsh's four folds on the Mac, every turbine's cells and own hours answered by the fits together; the reading, with the corrections, run whole on stand-in answers |
+
+**The correction.** Each seed's answer for a cell is corrected by its own residuals on the
+turbine's hours before the cell, exactly as the trees' are: an offset, a ridge and small trees.
+The corrected answer is the mean of the two seeds' corrections. One correction is fixed before
+the run: the ridge, the trees' best on both farms. The other two are read beside it, for s and
+for o.
+
+**The declared rows**, each farm apart, days 2, 7 and 14 pooled.
+
+| Row | Answer | Against | Cells |
+|---|---|---|---|
+| 1. A new turbine, from the start | s at 64,000 | the bar with history | folds 1 to 3 and 1 to 4 |
+| 2. A new turbine, 47 hours | c47 at 64,000 | the tuned trees | the same |
+| 3. A new farm, from the start | o at 56,000 with the ridge | the new farm's bar | every turbine |
+
+| Each row on both farms | What follows |
+|---|---|
+| upper edge under 1.0 on both | a candidate for the held-out reading |
+| point under 1.0 on both, an upper edge at 1.0 or above | open: the held-out reading's declaration names it as uncertain |
+| point at 1.0 or above on either | no lead: the rung is no candidate |
+
+*Plausibility, or stop and find the cause;* the reading checks each and stops on a breach.
+Fold 0's answers, from the screen's adapters, agree with the screen's within 0.001 on every cell
+at every kept adapter. Every fit reaches the steps its record names with its adapters kept,
+finite losses, and its last five logged losses under its first five. Every cell and every own
+hour is answered (the card refuses otherwise). Each correction answers every cell its answer
+answers.
+
+**Read beside** (descriptive): rows 1 and 2 on every fold; s with each of its corrections against
+the bar with history, and each against s plain; o plain against the new farm's bar, and o's
+ridge against o; s from 47 hours against the tuned trees; the curves of s on every fold, and of
+s128 on fold 0, against the zero-shot model; where the gap lies, per temperature and per fifth
+of the hour's change, on every fold and on the folds other than 0.
+
+**Predictions.**
+
+| | Prediction | From |
+|---|---|---|
+| Row 1 | Kelmarsh 0.55 to 0.84, Penmanshiel 0.68 to 1.02: a candidate, open or no lead, as Penmanshiel decides | fold 0's 0.652–0.728 and 0.799–0.883, each edge moved out by 15 %: the pilot's turbines spread from 0.94 to 1.33 around 1.15 on Penmanshiel, and pooling three or eight turbines narrows that (judgement) |
+| Row 2 | Kelmarsh 0.60 to 0.91, Penmanshiel 0.68 to 1.03: a candidate, open or no lead, as Penmanshiel decides | fold 0's 0.700–0.790 and 0.801–0.896, widened alike |
+| Row 3 | 0.46 to 0.59: a candidate | o plain, 0.506–0.559 and 0.535–0.592, times the ridge's take below |
+| The ridge against s plain, and against o plain | 0.90 to 1.00 | judgement: the forecaster already reads the turbine's level, which is what the corrections mostly gave the trees (the trees' ridge 0.79–0.81) |
+| s128 at 128,000 against 64,000, fold 0 from the start | 0.91 to 1.03 on each farm | the screen's doublings from 8,000 to 64,000 took 9.0, 9.3 and 9.3 % off on Kelmarsh and 7.7, 6.9 and 8.6 % on Penmanshiel; one more takes at most the last's (judgement), and a curve can rise 2–3 % between kept adapters |
+
+**Limitations.** Kelmarsh's folds 1 to 3 are three turbines and Penmanshiel's 1 to 4 eight. The
+new farm's steps and arm were chosen on the cells row 3 reads. Each bar is read at its member
+that reads lowest on the cells of its table, which favours the bar. The recipe's answer is the
+mean of two seeds, the bar a single fit. The screen's predictions of the steps' gain missed on
+the forecaster's side, so rows 1 to 3 may be pessimistic too. A rehearsal of the held-out
+reading on a cut at 2022 is declared after this run.
