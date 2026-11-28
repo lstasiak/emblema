@@ -434,3 +434,112 @@ read with the width of those cells. The plateaus, the switches and the new farm'
 on the cells these readings read, which favours the forecaster as the bar's best member favours
 the bar. Compiled fits are not bit-identical to the pilot's; the plausibility row bounds the
 difference. The new farm's cells were read before. Both farms are of one maker.
+
+## 2026-11-28 — measured: fitted eight times longer, the forecaster leads the trees with a turbine's history on fold 0
+
+**Question.** As declared above (2026-11-27): which change of the recipe helps on fold 0, where
+do the steps saturate, and where does the forecaster still trail?
+
+**Conditions.** Declared at `cd2785b9d`. Two sessions on one Colab card each (RTX PRO 6000),
+four compiled fits at once: 5.7 and 4.6 hours, the card 98–99 % busy. Results archives
+`0383b7e0…` and `1a6be9cf…`, each fit's adapters kept. The reading on the Mac. Validation
+numbers, tier M.
+
+*Plausibility.* Every fit reached 64,000 steps with eight adapters kept, finite losses and a
+falling loss (per fit, the first five logs' mean 0.071–0.127, the last five's 0.060–0.104). Every cell was answered. On
+Penmanshiel, s in seed 1 at 8,000 steps reads 0.799 against the trees on fold 0, against the
+pilot's 0.784: within the declared 0.03.
+
+**The curves**, each arm against the zero-shot model on the same cells, the mean of two seeds.
+
+| | Rung | 8,000 | 16,000 | 32,000 | 48,000 | 64,000 | Plateau, its value |
+|---|---|---|---|---|---|---|---|
+| s, Kelmarsh | from the start | 0.520 | 0.473 | 0.429 | 0.409 | 0.389 | 64,000, 0.389 |
+| s, Kelmarsh | 47 hours | 0.583 | 0.530 | 0.504 | 0.501 | 0.476 | 40,000, 0.485 |
+| s, Penmanshiel | from the start | 0.517 | 0.477 | 0.444 | 0.402 | 0.406 | 48,000, 0.402 |
+| s, Penmanshiel | 47 hours | 0.645 | 0.599 | 0.558 | 0.533 | 0.526 | 40,000, 0.529 |
+| c47, Kelmarsh | 47 hours | 0.524 | 0.471 | 0.418 | 0.408 | 0.385 | 64,000, 0.385 |
+| c47, Penmanshiel | 47 hours | 0.570 | 0.546 | 0.485 | 0.456 | 0.458 | 56,000, 0.443 |
+| o, Kelmarsh | from the start | 0.609 | 0.558 | 0.532 | 0.505 | 0.482 | 56,000, 0.484 |
+| o, Penmanshiel | from the start | 0.554 | 0.547 | 0.528 | 0.511 | 0.497 | 56,000, 0.503 |
+
+From 8,000 steps to the plateau s loses 17–25 % of its ratio, and Kelmarsh's curve from the
+start still falls at 64,000. c47 on Penmanshiel rises 3 % past its best by 64,000 steps, which
+the rules name as harm; so does c47 read from the start, a rung it is not fitted for.
+
+**The switches**, each arm at its plateau against its base at its own, the mean of two seeds
+(each seed).
+
+| Switch | Kelmarsh | Penmanshiel | Read |
+|---|---|---|---|
+| complete hours (sf), 47 hours / from the start | | 1.058 (1.076, 1.039) / 1.026 | not adopted: trails on 47 hours |
+| rank 64 (r64), 47 hours / from the start | 1.035 / 1.030 | 0.999 / 1.053 (1.045, 1.062) | not adopted: trails |
+| draws of 47 hours (c47), 47 hours | 0.794 (0.805, 0.784) | 0.837 (0.849, 0.825) | **adopted** |
+| the other farm beside (b), 47 hours / from the start | 1.027 / 1.065 (1.034, 1.096) | 0.967 (0.994, 0.940) / 0.979 | not adopted: trails on Kelmarsh |
+| complete hours for a new farm (of), 47 hours / from the start | 1.049 (1.063, 1.035) / 1.035 | | not adopted: trails |
+
+The recipe: s at 64,000 steps, and c47 at 64,000 for the 47-hour rung. For a new farm: o at
+56,000.
+
+**The recipe against the bars**, fold 0 (descriptive: fold 0 chose the recipe).
+
+| | Kelmarsh | Penmanshiel |
+|---|---|---|
+| s from the start, against the bar with history | 0.686 [0.652; 0.728] | 0.839 [0.799; 0.883] |
+| the same, the ratio of mean squared errors | 0.670 | 0.736 |
+| the same, each seed alone | 0.748, 0.741 | 0.895, 0.901 |
+| c47 from 47 hours, against the tuned trees | 0.742 [0.700; 0.790] | 0.848 [0.801; 0.896] |
+| o from the start, against the new farm's bar | 0.531 [0.506; 0.559] | 0.564 [0.535; 0.592] |
+
+The other arms at their own plateaus, the mean of two seeds (descriptive):
+
+| | Kelmarsh | Penmanshiel |
+|---|---|---|
+| s from 47 hours, against the tuned trees | 0.947 | 0.991 |
+| r64 / b / sf from the start, against the bar with history | 0.673 / 0.720 / — | 0.825 / 0.813 / 0.846 |
+| r64 / b / sf from 47 hours, against the tuned trees | 0.923 / 0.972 / — | 0.940 / 0.945 / 1.039 |
+| of from the start, against the new farm's bar | 0.554 | — |
+
+**Where the gap lies**, s at 64,000 from the start against the bar with history:
+
+| | Kelmarsh | Penmanshiel |
+|---|---|---|
+| the six temperatures that follow load and pitch | 0.96 | 1.17 |
+| the other eleven | 0.55 | 0.56 |
+| fifths of the hour's change, calmest to largest | 0.29, 0.54, 0.72, 0.73, 0.74 | 0.78, 0.73, 0.81, 0.77, 0.71 |
+
+The forecaster now leads in the hours of largest change on both farms, where the pilot trailed
+(1.18 and 1.17). On Penmanshiel it still trails on the pitch motors (1.20–1.29), the transformer
+(1.44), the hub (1.18) and the stator (1.07); on Kelmarsh on the hub (1.24), one pitch motor
+(1.14) and the transformer (1.11).
+
+**Predictions against outcomes.**
+
+| Prediction | Outcome | Why missed |
+|---|---|---|
+| s's plateau 16,000 to 48,000 | 40,000 to 64,000; Kelmarsh still falling | the pilot's gain from 4,400 to 8,000 steps, carried over, understated a curve this long |
+| sf 0.90 to 1.00 | 1.058, 1.026 | the hours without the blade angle did not hold the fits back |
+| r64 not adopted | not adopted | — |
+| b not adopted | not adopted | — |
+| c47 0.90 to 1.02 | 0.794, 0.837 | no earlier reading; a 47-hour adapter gains more than judged |
+| s against the bar with history: Kelmarsh 0.82–0.97, Penmanshiel 1.02–1.18 | 0.686, 0.839 at the recipe's 64,000 (0.830 at Penmanshiel's plateau) | the steps' gain assumed at most 8 %, it is 21–25 %; the mean of two seeds takes 7–8 % more |
+| o against the new farm's bar 0.64–0.71 | 0.531, 0.564 | the steps, and the seeds' mean, as above |
+
+**Conclusions.**
+
+1. The forecaster trailed the trees with a turbine's history because it was fitted too short:
+   at 64,000 steps, the mean of two seeds leads that bar on fold 0 by 16–31 %, and a single seed
+   leads too.
+2. Draws of exactly 47 hours make the 47-hour rung's adapter: it leads the tuned trees by 15–26 %.
+3. A larger adapter, complete hours and the other farm beside do not help on both farms: the
+   other farm beside leads Penmanshiel's 47-hour rung (0.967) but trails Kelmarsh's from the
+   start (1.065).
+4. The lead is smallest on the temperatures that follow load and pitch (0.96 on Kelmarsh), and
+   on Penmanshiel the forecaster trails there (1.17); in the hours of change it now leads.
+5. On a new farm, fitted longer, the forecaster leads the corrected bar by 44–47 %.
+
+**Limitations.** Fold 0 holds one turbine of Kelmarsh and two of Penmanshiel, and chose the
+plateaus and switches it is read on. The recipe's answer is the mean of two seeds, the bar a
+single fit. Kelmarsh's curve had not saturated. The predictions of s's plateau and of s and o against
+their bars missed on the forecaster's side, by the steps and, for s and o, the mean of the
+seeds; c47 beat its judged range; sf missed the other way; r64 and b held.
