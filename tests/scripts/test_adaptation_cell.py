@@ -227,3 +227,30 @@ def test_each_checkpoints_adapters_and_records_go_back_and_no_full_weights(tmp_p
         f"fits/f1/checkpoint-8000/{ADAPTERS}",
         "fits/f1/fit.json",
     ]
+
+
+TWO = AdaptationPlan(
+    name="n",
+    commit=COMMIT,
+    inputs=INPUTS,
+    per_card=2,
+    fits=("f1 fit --out @F@/fits/f1", "f2 fit --out @F@/fits/f2"),
+    answers=(
+        "a answer --fits @F@/fits/f1 @F@/fits/f2 @IN@/fits/f0 --checkpoint c --out @W@/a.csv",
+    ),
+)
+
+
+def test_an_answer_of_several_fits_waits_on_each_and_follows_any_redone(tmp_path: Path) -> None:
+    first = work(tmp_path, TWO, failing="f2")
+    again = work(tmp_path, TWO)
+    with (tmp_path / "w" / "results.txt").open("a") as results:
+        results.write("[f2] exit 0 in 1 s\n")
+    after_refit = work(tmp_path, TWO)
+
+    # Its second fit failed: the answer waits, though the first ended well.
+    assert sorted(c.split()[0] for c in first) == ["fit", "fit"]
+    assert [c.split()[0] for c in again] == ["fit", "answer"]
+    # The second fit was redone after the answer: the answer is redone too.
+    assert [c.split()[0] for c in after_refit] == ["answer"]
+    assert work(tmp_path, TWO) == []

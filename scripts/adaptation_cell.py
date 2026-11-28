@@ -5,12 +5,12 @@ archive ``put_archive.py`` wrote; the forecaster's weights are fetched once, und
 every process after runs offline. Fits run several to a card under CUDA MPS; each piece's command
 is ``fleet_chronos2_adapted.py`` with the plan's arguments, ``@IN@`` standing for the inputs,
 ``@F@`` for the fits on the machine's disk and ``@W@`` for the directory of results on Drive. The
-answers run, as many at once, once the fits have ended; an answer reads its fit's checkpoints
-(``--fits @F@/fits/<fit's label>``) only once that fit ended well, and again after the fit is
-redone. A cell run again skips what is done and redoes what failed or was cut short, a fit from its
-first step. What came of it, with each checkpoint's adapters but no full weights or optimiser
-states, goes back to the store as one transient archive, whose key is printed to paste back.
-Every network step runs under a limit and the cell never exits non-zero.
+answers run, as many at once, once the fits have ended; an answer reads its fits' checkpoints
+(``--fits @F@/fits/<fit's label>...``) only once each of those fits ended well, and again after
+any of them is redone. A cell run again skips what is done and redoes what failed or was cut
+short, a fit from its first step. What came of it, with each checkpoint's adapters but no full
+weights or optimiser states, goes back to the store as one transient archive, whose key is
+printed to paste back. Every network step runs under a limit and the cell never exits non-zero.
 
 The plan:
 
@@ -224,13 +224,27 @@ done_at() {
   grep -n "^\[$1\] exit" $W/results.txt | tail -1 \
     | awk -F: '/\] exit 0 / { print $1; found = 1 } END { if (!found) print 0 }'
 }
-fit_of() { [[ $1 =~ --fits\ @F@/fits/([^ ]+) ]] && echo "${BASH_REMATCH[1]}"; }
-# A fit is done once it ends well; an answer once it ended well after its fit last did.
+# The fits of this cell an answer reads: each @F@ path after --fits, up to the next flag.
+fits_of() {
+  local tail=${1#*--fits } path
+  [ "$tail" = "$1" ] && return 0
+  set -f
+  for path in ${tail%% --*}; do
+    case $path in @F@/fits/*) echo "${path#@F@/fits/}" ;; esac
+  done
+  set +f
+}
+# A fit is done once it ends well; an answer once it ended well after all its fits did.
 current() {  # label rest
   local fit at
   at=$(done_at "$1")
-  fit=$(fit_of "$2")
-  [ "$at" -gt 0 ] && { [ -z "$fit" ] || [ "$at" -gt "$(done_at "$fit")" ]; }
+  [ "$at" -gt 0 ] || return 1
+  for fit in $(fits_of "$2"); do [ "$at" -gt "$(done_at "$fit")" ] || return 1; done
+}
+# Whether every fit an answer reads has ended well.
+ready() {  # rest
+  local fit
+  for fit in $(fits_of "$1"); do [ "$(done_at "$fit")" -gt 0 ] || return 1; done
 }
 piece() {  # kind label arguments...
   local kind=$1 label=$2 start status
@@ -242,14 +256,13 @@ piece() {  # kind label arguments...
   echo "[$label] exit $status in $(( $(date +%s) - start )) s" >> $W/results.txt
 }
 worker() {  # list
-  local line label rest args fit
+  local line label rest args
   # Without -r: a backslash at a line's end joins a piece written over several lines.
   while read line; do
     label=${line%% *}; rest=${line#* }
     current "$label" "$rest" && continue
-    fit=$(fit_of "$rest")
-    # An answer waits on a fit that ended well; its own line says why it did not run.
-    if [ -n "$fit" ] && [ "$(done_at "$fit")" -eq 0 ]; then continue; fi
+    # An answer waits on its fits ending well; their own lines say why it did not run.
+    ready "$rest" || continue
     # The shell's exclusive create: uutils mkdir (Ubuntu 26.04) lets two through.
     ( set -C; : > $T/claimed/$label ) 2>/dev/null || continue
     args=${rest//@IN@/$I}; args=${args//@W@/$W}; args=${args//@F@/$F}
